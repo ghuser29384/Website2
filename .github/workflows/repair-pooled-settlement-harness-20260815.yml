@@ -1,0 +1,346 @@
+name: Repair pooled-settlement QA harness 20260815
+
+on:
+  push:
+    branches:
+      - qa/repair-pooled-settlement-harness-20260815
+    paths:
+      - .github/workflows/repair-pooled-settlement-harness-20260815.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pooled-settlement-harness-20260815
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_BRANCH: qa/pooled-settlement-authenticated-e2e-20260814
+      EXPECTED_OLD_HEAD: d63c61239e59fbbf064d736b340a491313005a9b
+      FEATURE_HEAD: 9c4363e5e6713163df5b7a8b51981af585d2f0a9
+    steps:
+      - name: Check out exact target branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa/pooled-settlement-authenticated-e2e-20260814
+          fetch-depth: 0
+
+      - name: Verify target identity before repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_OLD_HEAD"
+          test "$(git rev-parse HEAD^)" = "$FEATURE_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$EXPECTED_OLD_HEAD"
+
+      - name: Apply narrow fail-closed harness corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          contract = ".github/scripts/pooled-settlement-qa-contract.mjs"
+          replace_once(
+              contract,
+              '''function referencesProject(value, projectRef) {
+            return present(value) && String(value).toLowerCase().includes(projectRef.toLowerCase());
+          }
+          ''',
+              '''function referencesProject(value, projectRef) {
+            return present(value) && String(value).toLowerCase().includes(projectRef.toLowerCase());
+          }
+
+          export function databaseUrlTargetsProject(value, projectRef) {
+            if (!present(value)) return false;
+            try {
+              const databaseUrl = new URL(value);
+              const hostname = databaseUrl.hostname.toLowerCase();
+              const username = decodeURIComponent(databaseUrl.username).toLowerCase();
+              const ref = String(projectRef).toLowerCase();
+              return (
+                (hostname === `db.${ref}.supabase.co` && username === "postgres") ||
+                (hostname.endsWith(".pooler.supabase.com") && username === `postgres.${ref}`)
+              );
+            } catch {
+              return false;
+            }
+          }
+          ''',
+          )
+          replace_once(
+              contract,
+              '''  if (present(env.QA_SUPABASE_DB_URL) && !referencesProject(env.QA_SUPABASE_DB_URL, QA_PROJECT_REF)) {
+              unsafe.push("QA_SUPABASE_DB_URL does not identify the canonical isolated QA project.");
+            }
+          ''',
+              '''  if (present(env.QA_SUPABASE_DB_URL) && !databaseUrlTargetsProject(env.QA_SUPABASE_DB_URL, QA_PROJECT_REF)) {
+              unsafe.push("QA_SUPABASE_DB_URL does not identify the canonical isolated QA project.");
+            }
+          ''',
+          )
+
+          harness = ".github/scripts/pooled-settlement-qa-e2e.mjs"
+          replace_once(
+              harness,
+              '''  createPartnerMetadata,
+            emptyScenarioResults,
+          ''',
+              '''  createPartnerMetadata,
+            databaseUrlTargetsProject,
+            emptyScenarioResults,
+          ''',
+          )
+          replace_once(
+              harness,
+              '''let initialGateRows = [];
+          let browser;
+          let databaseContract = null;
+          ''',
+              '''let initialGateRows = [];
+          let baselinePoolCounts = null;
+          let browser;
+          let databaseContract = null;
+          ''',
+          )
+          replace_once(
+              harness,
+              '''async function dynamicPoolCounts() {
+            const tables = [
+              "trade_donation_pool_obligations",
+              "trade_donation_pool_bundles",
+              "trade_donation_pool_bundle_items",
+              "trade_donation_pool_ledger_journals",
+              "trade_donation_pool_ledger_lines",
+              "trade_donation_pool_stripe_events",
+              "trade_donation_pool_audit_events",
+            ];
+            const counts = {};
+            for (const table of tables) {
+              const result = await admin.from(table).select("*", { count: "exact", head: true });
+              if (result.error) throw new Error(`${table} count: ${result.error.message}`);
+              counts[table] = result.count;
+            }
+            return counts;
+          }
+          ''',
+              '''async function dynamicPoolCounts() {
+            const tables = [
+              "trade_donation_pool_obligations",
+              "trade_donation_pool_bundles",
+              "trade_donation_pool_bundle_items",
+              "trade_donation_pool_ledger_journals",
+              "trade_donation_pool_ledger_lines",
+              "trade_donation_pool_stripe_events",
+              "trade_donation_pool_audit_events",
+            ];
+            const counts = {};
+            for (const table of tables) {
+              const result = await admin.from(table).select("*", { count: "exact", head: true });
+              if (result.error) throw new Error(`${table} count: ${result.error.message}`);
+              counts[table] = result.count;
+            }
+            return counts;
+          }
+
+          function mutableRuntimeCounts(counts) {
+            const { trade_donation_pool_audit_events: _persistentAuditHistory, ...runtime } = counts;
+            return runtime;
+          }
+
+          function poolCountsEqual(left, right) {
+            if (!left || !right) return false;
+            const keys = Object.keys(left).sort();
+            return (
+              keys.length === Object.keys(right).length &&
+              keys.every((key) => right[key] === left[key])
+            );
+          }
+          ''',
+          )
+          replace_once(
+              harness,
+              '''function postgresEnvironment() {
+            const databaseUrl = new URL(process.env.QA_SUPABASE_DB_URL);
+            assert.ok(databaseUrl.hostname.includes(QA_PROJECT_REF));
+            return {
+          ''',
+              '''function postgresEnvironment() {
+            const databaseUrl = new URL(process.env.QA_SUPABASE_DB_URL);
+            assert.ok(
+              databaseUrlTargetsProject(process.env.QA_SUPABASE_DB_URL, QA_PROJECT_REF),
+              "QA_SUPABASE_DB_URL must target the canonical QA project through its direct host or Supavisor username.",
+            );
+            return {
+          ''',
+          )
+          replace_once(
+              harness,
+              '''  const baselineCounts = await dynamicPoolCounts();
+            assert.ok(
+              Object.values(baselineCounts).every((count) => count === 0),
+              `QA pooled-settlement dynamic tables were not empty: ${JSON.stringify(baselineCounts)}`,
+            );
+            initialGateRows = unwrap(
+              await admin.from("trade_donation_pool_gate_status").select("*").eq("environment", "test"),
+              "snapshot test gate rows",
+            );
+            record("Isolated QA baseline contains zero pooled runtime records", "passed", { counts: baselineCounts });
+          ''',
+              '''  const baselineCounts = await dynamicPoolCounts();
+            baselinePoolCounts = baselineCounts;
+            const baselineRuntimeCounts = mutableRuntimeCounts(baselineCounts);
+            assert.ok(
+              Object.values(baselineRuntimeCounts).every((count) => count === 0),
+              `QA pooled-settlement mutable runtime tables were not empty: ${JSON.stringify(baselineRuntimeCounts)}`,
+            );
+            initialGateRows = unwrap(
+              await admin.from("trade_donation_pool_gate_status").select("*").eq("environment", "test"),
+              "snapshot test gate rows",
+            );
+            record("Isolated QA baseline contains zero mutable pooled runtime records", "passed", {
+              counts: baselineRuntimeCounts,
+              persistentAuditEventCount: baselineCounts.trade_donation_pool_audit_events,
+            });
+          ''',
+          )
+          replace_once(
+              harness,
+              '''    cleanupCounts = await dynamicPoolCounts();
+              assert.ok(Object.values(cleanupCounts).every((count) => count === 0));
+              record("Current-run QA database fixtures removed with zero pooled runtime residue", "passed", { counts: cleanupCounts });
+          ''',
+              '''    cleanupCounts = await dynamicPoolCounts();
+              assert.ok(
+                poolCountsEqual(cleanupCounts, baselinePoolCounts),
+                `Post-cleanup pooled counts did not return to the exact baseline: ${JSON.stringify({ baselinePoolCounts, cleanupCounts })}`,
+              );
+              record("Current-run QA database fixtures removed and exact pooled baseline restored", "passed", {
+                baselineCounts: baselinePoolCounts,
+                cleanupCounts,
+              });
+          ''',
+          )
+          replace_once(
+              harness,
+              '''  cleanup: { status: cleanupCounts && Object.values(cleanupCounts).every((count) => count === 0) ? "passed" : "failed", counts: cleanupCounts },
+          ''',
+              '''  cleanup: {
+              status: poolCountsEqual(cleanupCounts, baselinePoolCounts) ? "passed" : "failed",
+              baselineCounts: baselinePoolCounts,
+              counts: cleanupCounts,
+            },
+          ''',
+          )
+          replace_once(
+              harness,
+              '''console.log("PASS: authenticated pooled-settlement QA completed all 19 scenarios with zero QA database residue.");
+          ''',
+              '''console.log("PASS: authenticated pooled-settlement QA completed all 19 scenarios and restored the exact QA baseline.");
+          ''',
+          )
+
+          tests = ".github/scripts/pooled-settlement-qa-e2e.test.mjs"
+          replace_once(
+              tests,
+              '''  createPartnerMetadata,
+            emptyScenarioResults,
+          ''',
+              '''  createPartnerMetadata,
+            databaseUrlTargetsProject,
+            emptyScenarioResults,
+          ''',
+          )
+          replace_once(
+              tests,
+              '''test("sanitized evidence redacts secrets, credentials, and signed material", () => {
+          ''',
+              '''test("database URL binding accepts direct and Supavisor QA URLs and rejects wrong targets", () => {
+            const direct = `postgresql://postgres:placeholder@db.${QA_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`;
+            const pooler = `postgresql://postgres.${QA_PROJECT_REF}:placeholder@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require`;
+            assert.equal(databaseUrlTargetsProject(direct, QA_PROJECT_REF), true);
+            assert.equal(databaseUrlTargetsProject(pooler, QA_PROJECT_REF), true);
+            assert.equal(
+              databaseUrlTargetsProject(
+                "postgresql://postgres.jnpoxvalyjtdghnperyu:placeholder@aws-0-us-west-1.pooler.supabase.com:6543/postgres",
+                QA_PROJECT_REF,
+              ),
+              false,
+            );
+            assert.equal(databaseUrlTargetsProject("not-a-database-url", QA_PROJECT_REF), false);
+            assert.equal(classifyEnvironment({ ...readyEnvironment, QA_SUPABASE_DB_URL: pooler }).authenticatedE2EReady, true);
+          });
+
+          test("sanitized evidence redacts secrets, credentials, and signed material", () => {
+          ''',
+          )
+          replace_once(
+              tests,
+              '''  assert.match(harness, /session_replication_role = replica/);
+            assert.match(harness, /where id = any\\(\\$\\{obligationIds\\}\\)/);
+            assert.match(harness, /Object\\.values\\(cleanupCounts\\)\\.every\\(\\(count\\) => count === 0\\)/);
+            assert.doesNotMatch(harness, /sk_live_|pk_live_|rk_live_/);
+          ''',
+              '''  assert.match(harness, /session_replication_role = replica/);
+            assert.match(harness, /where id = any\\(\\$\\{obligationIds\\}\\)/);
+            assert.match(harness, /databaseUrlTargetsProject/);
+            assert.match(harness, /baselinePoolCounts = baselineCounts/);
+            assert.match(harness, /poolCountsEqual\\(cleanupCounts, baselinePoolCounts\\)/);
+            assert.doesNotMatch(harness, /Object\\.values\\(cleanupCounts\\)\\.every\\(\\(count\\) => count === 0\\)/);
+            assert.doesNotMatch(harness, /sk_live_|pk_live_|rk_live_/);
+          ''',
+          )
+          PY
+
+      - name: Validate corrected harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/pooled-settlement-qa-contract.mjs
+          node --check .github/scripts/pooled-settlement-qa-e2e.mjs
+          node --test .github/scripts/pooled-settlement-qa-e2e.test.mjs
+          git diff --check
+          actual="$(git diff --name-only | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-qa-contract.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.test.mjs' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+
+      - name: Rewrite target as one corrected commit on the validated parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/scripts/pooled-settlement-qa-contract.mjs \
+            .github/scripts/pooled-settlement-qa-e2e.mjs \
+            .github/scripts/pooled-settlement-qa-e2e.test.mjs
+          tree="$(git write-tree)"
+          new_commit="$(printf '%s\n' 'Repair QA database binding and baseline restoration' | git commit-tree "$tree" -p "$FEATURE_HEAD")"
+          test "$(git rev-parse "${new_commit}^")" = "$FEATURE_HEAD"
+          actual="$(git diff --name-only "$FEATURE_HEAD" "$new_commit" | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-qa-contract.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.test.mjs' \
+            '.github/workflows/pooled-settlement-authenticated-e2e-20260814.yml' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$EXPECTED_OLD_HEAD"
+          git push \
+            --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_OLD_HEAD" \
+            origin "$new_commit:refs/heads/$TARGET_BRANCH"
+          echo "Corrected target head: $new_commit"
