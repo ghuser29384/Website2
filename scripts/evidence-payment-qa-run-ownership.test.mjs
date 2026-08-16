@@ -17,6 +17,7 @@ const PATHS = {
   generator: "scripts/evidence-payment-qa-namespace.mjs",
   generatorTest: "scripts/evidence-payment-qa-namespace.test.mjs",
   contractTest: "scripts/evidence-payment-qa-run-ownership.test.mjs",
+  twoWriter: "scripts/evidence-payment-qa-two-writer.mjs",
   preflight: "supabase/tests/evidence_weighted_payment_browser_preflight.sql",
   fixture: "supabase/tests/evidence_weighted_payment_browser_fixture.sql",
   cleanup: "supabase/tests/evidence_weighted_payment_browser_cleanup.sql",
@@ -88,6 +89,8 @@ test("current revisions use one repository-global queue while run ownership rema
     /node scripts\/evidence-payment-qa-namespace\.mjs[\s\S]*--github-env "\$cleanup_env"/,
   );
   assert.match(workflow, /steps\.namespace\.outputs\.handle/);
+  assert.match(workflow, /scripts\/evidence-payment-qa-two-writer\.mjs/);
+  assert.match(workflow, /Run deterministic two-writer Auth and database isolation proof/);
 });
 
 test("every persistent fixture identity is parameterized and legacy fixed identities are absent", () => {
@@ -143,7 +146,7 @@ test("fixture creation fails closed instead of discovering, replacing, or cleani
   assert.doesNotMatch(fixture, /like\s+'(?:evidence-payment|epqa)-%'/i);
   assert.match(fixture, /'qa_namespace',\s*:'qa_namespace_handle'/);
   assert.match(fixture, /'qa_namespace_sha256',\s*:'qa_namespace_hash'/);
-  assert.match(fixture, /provider_reference = 'qa-admin-fallback-' \|\| :'qa_namespace_handle'/);
+  assert.match(fixture, /provider_reference = 'qa-admin-fallback-' \||| :'qa_namespace_handle'/);
 });
 
 test("cleanup is exact-ID scoped, ownership-checked, idempotent, and machine-readable", () => {
@@ -190,6 +193,32 @@ test("two run namespaces and the actual stale fixed-identity cleanup sets are di
   for (const value of ownedB) assert.equal(simulatedStore.has(value), true);
 });
 
+
+test("the live two-writer proof interleaves Auth, database, stale-style, and cleanup boundaries", () => {
+  const proof = sources.twoWriter;
+
+  assert.match(proof, /manifestFor\("a"\)/);
+  assert.match(proof, /manifestFor\("b"\)/);
+  assert.match(proof, /namespace A fixture/);
+  assert.match(proof, /namespace B fixture/);
+  assert.match(proof, /authenticateNamespace\(namespaceA/);
+  assert.match(proof, /authenticateNamespace\(namespaceB/);
+  assert.match(proof, /proveAuthorization\(actorsA, actorsB\)/);
+  assert.match(proof, /namespace A cleanup/);
+  assert.match(proof, /B after A cleanup/);
+  assert.match(proof, /namespace A idempotent cleanup/);
+  assert.match(proof, /freshPasswordSignIns/);
+  assert.match(proof, /namespace B cleanup/);
+  assert.match(proof, /final-zero-residue/);
+  assert.match(proof, /e0ed0d206687dae17882260313152846b2d2bd22/);
+  assert.match(proof, /STALE_USER_IDS/);
+  assert.match(proof, /STALE_AGREEMENT_IDS/);
+  assert.match(proof, /liveRunOwnedUsersMatchingStaleIds/);
+  assert.match(proof, /emergency cleanup/);
+  assert.match(proof, /evidence-payment-two-writer\.json/);
+  assert.doesNotMatch(proof, /console\.log\([^)]*(password|secret|access_token|refresh_token)/i);
+});
+
 test("repository-only sources contain no credential material or unsafe global fixture selectors", () => {
   const combined = [
     sources.workflow,
@@ -198,6 +227,7 @@ test("repository-only sources contain no credential material or unsafe global fi
     sources.fixture,
     sources.cleanup,
     sources.browser,
+    sources.twoWriter,
   ].join("\n");
   assert.doesNotMatch(combined, /(?:sk_live|sk_test|service_role|postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@)/i);
   assert.doesNotMatch(combined, /select[\s\S]{0,120}from public\.profiles[\s\S]{0,120}order by[\s\S]{0,80}limit\s+6/i);

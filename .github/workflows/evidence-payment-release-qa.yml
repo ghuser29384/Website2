@@ -9,6 +9,7 @@ on:
       - "scripts/evidence-payment-qa-namespace.mjs"
       - "scripts/evidence-payment-qa-namespace.test.mjs"
       - "scripts/evidence-payment-qa-run-ownership.test.mjs"
+      - "scripts/evidence-payment-qa-two-writer.mjs"
       - "src/app/admin/trade-review/**"
       - "src/app/trade-agreements/**"
       - "src/app/trade-review/**"
@@ -136,6 +137,7 @@ jobs:
           node --check scripts/evidence-payment-qa-namespace.mjs
           node --check scripts/evidence-payment-qa-namespace.test.mjs
           node --check scripts/evidence-payment-qa-run-ownership.test.mjs
+          node --check scripts/evidence-payment-qa-two-writer.mjs
           node --test \
             scripts/evidence-payment-qa-namespace.test.mjs \
             scripts/evidence-payment-qa-run-ownership.test.mjs \
@@ -198,6 +200,13 @@ jobs:
             --set ON_ERROR_STOP=1 \
             --file supabase/tests/evidence_weighted_payment_lifecycle.sql \
             | tee evidence-payment-lifecycle.log
+
+      - name: Run deterministic two-writer Auth and database isolation proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/evidence-payment-qa-two-writer.mjs \
+            | tee evidence-payment-two-writer.log
 
       - name: Preflight and create run-owned authenticated fixtures
         shell: bash
