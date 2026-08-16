@@ -6,6 +6,7 @@ on:
       - ops/pr740-dac-current-main-integration-uat-20260816
     paths:
       - ".github/workflows/bootstrap-pr740-dac-current-main-integration-uat-20260816.yml"
+      - "ops/pr740-bootstrap-controller.py"
 
 permissions:
   contents: write
@@ -26,167 +27,18 @@ jobs:
           ref: ops/pr740-dac-current-main-integration-uat-20260816
           fetch-depth: 0
 
-      - name: Verify inherited controller source and materialize the audited integration workflow
+      - name: Materialize and validate the audited exact-head controller
+        run: python3 ops/pr740-bootstrap-controller.py
+
+      - name: Commit and push the one-use integration controller
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "3befd6a886cf56622b2f19a69555d33388f19d92"
-          test "$(git hash-object .github/workflows/pr689-isolated-qa-preview-uat-20260814.yml)" = "b049e47521c17960a3dc7ecd0b94f048e944fb9e"
-          test "$(git hash-object ops/pr689-uat702/owner-uat.spec.ts)" = "3c3ba551ea4b7890acf6efa954f0b2da68012590"
-
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          old_path = Path('.github/workflows/pr689-isolated-qa-preview-uat-20260814.yml')
-          new_path = Path('.github/workflows/pr740-dac-current-main-integration-uat-20260816.yml')
-          source = old_path.read_text(encoding='utf-8')
-
-          replacements = {
-              'name: PR 689 isolated-QA protected Preview owner UAT 20260814':
-                  'name: PR 740 current-main DAC integration protected Preview owner UAT 20260816',
-              '      - ops/pr689-isolated-qa-preview-uat-20260814':
-                  '      - ops/pr740-dac-current-main-integration-uat-20260816',
-              '      - ".github/workflows/pr689-isolated-qa-preview-uat-20260814.yml"':
-                  '      - ".github/workflows/pr740-dac-current-main-integration-uat-20260816.yml"',
-              '  group: pr689-isolated-qa-preview-uat-20260814':
-                  '  group: mpgf-dac-product-lifecycle-shared-qa',
-              '          name: pr689-isolated-qa-owner-uat-${{ github.run_id }}-${{ env.CANDIDATE_HEAD_SHA }}':
-                  '          name: pr740-dac-current-main-integration-owner-uat-${{ github.run_id }}-${{ env.CANDIDATE_HEAD_SHA }}',
-          }
-          for old, new in replacements.items():
-              count = source.count(old)
-              if count != 1:
-                  raise SystemExit(f'Refusing workflow patch: expected one occurrence of {old!r}, found {count}.')
-              source = source.replace(old, new, 1)
-
-          env_pattern = re.compile(
-              r'  ADMIN_EMAILS: dac-product-reviewer@qa\.invalid\n'
-              r'  CANDIDATE_BASE_SHA: .*?\n'
-              r'  CANDIDATE_PRE_REPAIR_SHA: .*?\n'
-              r'  CANDIDATE_ORDERING_REPAIR_SHA: .*?\n'
-              r'  CANDIDATE_TERMINAL_GUARD_REPAIR_SHA: .*?\n'
-              r'  CANDIDATE_HEAD_SHA: .*?\n'
-              r'  CANDIDATE_TREE_SHA: .*?\n'
-              r'  CONTROLLER_BRANCH: .*?\n',
-              re.DOTALL,
-          )
-          env_replacement = '''  ADMIN_EMAILS: dac-product-reviewer@qa.invalid
-  CANDIDATE_BASE_SHA: 4587e8c418621440835940d6924f32c02ba3f2d1
-  SOURCE_PR689_BASE_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
-  SOURCE_PR689_PRE_REPAIR_SHA: 5faef28f76ea20097af18a3d5dab6d1c8dfb116c
-  SOURCE_PR689_ORDERING_REPAIR_SHA: b9598f3d5c812df6648fd86ff81d74858ba0bfc1
-  SOURCE_PR689_TERMINAL_GUARD_REPAIR_SHA: 04cf9466be288f92c7569f8c871c711269e40ded
-  SOURCE_PR689_HEAD_SHA: 1456027e1ebaf9e99ea2d03f5e223de4ef510e23
-  CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328
-  CANDIDATE_TREE_SHA: 2d00b09d2077857fcbf6437f79b7b1abcadd9827
-  CONTROLLER_BRANCH: ops/pr740-dac-current-main-integration-uat-20260816
-  INTEGRATION_PR_NUMBER: "740"
-'''
-          source, count = env_pattern.subn(env_replacement, source, count=1)
-          if count != 1:
-              raise SystemExit(f'Refusing workflow patch: candidate identity env block count was {count}.')
-
-          identity_pattern = re.compile(
-              r'      - name: Revalidate exact GitHub and Git identity before any external mutation\n.*?'
-              r'(?=      - name: Install exact application dependencies and browser/database clients)',
-              re.DOTALL,
-          )
-          identity_replacement = '''      - name: Revalidate exact integration, source PRs, and owner boundary before any external mutation
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
-          test "$(git -C app rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
-          test "$(git -C app rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
-          test "$(git -C app rev-parse HEAD^1)" = "$CANDIDATE_BASE_SHA"
-          test "$(git -C app rev-parse HEAD^2)" = "$SOURCE_PR689_HEAD_SHA"
-          observed_main_sha="$(git -C app rev-parse origin/main)"
-          test "$observed_main_sha" = "$CANDIDATE_BASE_SHA"
-          test "$(git -C app merge-base HEAD origin/main)" = "$CANDIDATE_BASE_SHA"
-          test "$(git -C app status --porcelain)" = ""
-
-          gh api repos/ghuser29384/Website2/pulls/740 > "$RUNNER_TEMP/pr740.json"
-          gh api repos/ghuser29384/Website2/pulls/689 > "$RUNNER_TEMP/pr689.json"
-          gh api repos/ghuser29384/Website2/pulls/640 > "$RUNNER_TEMP/pr640.json"
-          gh api repos/ghuser29384/Website2/issues/697 > "$RUNNER_TEMP/issue697.json"
-          gh api repos/ghuser29384/Website2/issues/702 > "$RUNNER_TEMP/issue702.json"
-
-          jq -e --arg head "$CANDIDATE_HEAD_SHA" --arg base "$CANDIDATE_BASE_SHA" '
-            .state == "open" and .draft == true and .merged == false
-              and .head.sha == $head and .base.sha == $base
-          ' "$RUNNER_TEMP/pr740.json" > /dev/null
-          jq -e --arg head "$SOURCE_PR689_HEAD_SHA" '
-            .state == "open" and .draft == true and .merged == false and .head.sha == $head
-          ' "$RUNNER_TEMP/pr689.json" > /dev/null
-          jq -e '.state == "open" and .draft == true and .merged == false' "$RUNNER_TEMP/pr640.json" > /dev/null
-          jq -e '.state == "open"' "$RUNNER_TEMP/issue697.json" > /dev/null
-          jq -e '.state == "closed"' "$RUNNER_TEMP/issue702.json" > /dev/null
-
-          mkdir -p evidence
-          jq -n \
-            --arg head "$CANDIDATE_HEAD_SHA" \
-            --arg tree "$CANDIDATE_TREE_SHA" \
-            --arg firstParent "$CANDIDATE_BASE_SHA" \
-            --arg secondParent "$SOURCE_PR689_HEAD_SHA" \
-            --arg sourceBase "$SOURCE_PR689_BASE_SHA" \
-            --arg sourcePreRepair "$SOURCE_PR689_PRE_REPAIR_SHA" \
-            --arg orderingRepair "$SOURCE_PR689_ORDERING_REPAIR_SHA" \
-            --arg terminalGuardRepair "$SOURCE_PR689_TERMINAL_GUARD_REPAIR_SHA" \
-            --arg observedMain "$observed_main_sha" \
-            '{integration:{pr:740,open:true,draft:true,merged:false,head:$head,tree:$tree,firstParent:$firstParent,secondParent:$secondParent},sourcePr689:{open:true,draft:true,merged:false,head:$secondParent,historicalBase:$sourceBase,preRepair:$sourcePreRepair,orderingRepair:$orderingRepair,terminalGuardRepair:$terminalGuardRepair},repository:{observedMain:$observedMain,exactMainIsFirstParent:true},pr640:{open:true,draft:true,merged:false},issues:{"697":"open","702":"closed_completed"}}' \
-            > evidence/exact-state.json
-
-'''
-          source, count = identity_pattern.subn(identity_replacement, source, count=1)
-          if count != 1:
-              raise SystemExit(f'Refusing workflow patch: identity step count was {count}.')
-
-          forbidden_stale = [
-              'CANDIDATE_PRE_REPAIR_SHA',
-              'CANDIDATE_ORDERING_REPAIR_SHA',
-              'CANDIDATE_TERMINAL_GUARD_REPAIR_SHA',
-              'issues:{"697":"open","702":"open"}',
-              'ops/pr689-isolated-qa-preview-uat-20260814',
-          ]
-          for fragment in forbidden_stale:
-              if fragment in source:
-                  raise SystemExit(f'Refusing workflow patch: stale fragment remains: {fragment}')
-
-          if source.count('group: mpgf-dac-product-lifecycle-shared-qa') != 1:
-              raise SystemExit('The integration UAT must use the permanent shared-QA serialization group exactly once.')
-
-          new_path.write_text(source, encoding='utf-8')
-
-          owner_path = Path('ops/pr689-uat702/owner-uat.spec.ts')
-          owner = owner_path.read_text(encoding='utf-8')
-          viewport_marker = '''  const viewports = [
-    { name: "390x844", width: 390, height: 844 },
-    { name: "320x568", width: 320, height: 568 },
-  ];'''
-          viewport_replacement = '''  const viewports = [
-    { name: "1024x768", width: 1024, height: 768 },
-    { name: "390x844", width: 390, height: 844 },
-    { name: "320x568", width: 320, height: 568 },
-  ];'''
-          if owner.count(viewport_marker) != 1:
-              raise SystemExit('Refusing owner-UAT patch: required viewport marker drifted.')
-          owner = owner.replace(viewport_marker, viewport_replacement, 1)
-          owner_path.write_text(owner, encoding='utf-8')
-          PY
-
-          git diff --check
           test -f .github/workflows/pr740-dac-current-main-integration-uat-20260816.yml
           grep -Fq 'CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328' .github/workflows/pr740-dac-current-main-integration-uat-20260816.yml
           grep -Fq 'group: mpgf-dac-product-lifecycle-shared-qa' .github/workflows/pr740-dac-current-main-integration-uat-20260816.yml
           grep -Fq '{ name: "1024x768", width: 1024, height: 768 }' ops/pr689-uat702/owner-uat.spec.ts
-
-      - name: Commit the one-use audited integration controller
-        shell: bash
-        run: |
-          set -euo pipefail
+          git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/pr740-dac-current-main-integration-uat-20260816.yml ops/pr689-uat702/owner-uat.spec.ts
