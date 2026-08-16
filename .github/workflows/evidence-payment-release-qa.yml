@@ -263,7 +263,7 @@ jobs:
                 `Synthetic Auth sign-in failed for ${role}: ${error?.message ?? "no session"}`,
               );
             }
-            if (data.user?.user_metada.itemeta?.qa_namespace !==
+            if (data.user?.user_metadata?.qa_namespace !==
                 process.env.EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE) {
               throw new Error(`Synthetic Auth ownership marker mismatch for ${role}.`);
             }
