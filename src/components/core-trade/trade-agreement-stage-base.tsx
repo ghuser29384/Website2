@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
+import { FullNavigationActionForm } from "@/components/core-trade/full-navigation-action-form";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { TradeFlowIcon, type TradeFlowIconName } from "@/components/core-trade/trade-flow-icons";
 import { LocalDateTime } from "@/components/ui/local-date-time";
@@ -341,7 +342,10 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
         </div>
         <div className={styles.confirmActions}>
           {props.canConfirm ? (
-            <form action={props.confirmAction} className={styles.confirmActions}>
+            <FullNavigationActionForm
+              action={props.confirmAction}
+              className={styles.confirmActions}
+            >
               <input name="agreement_id" type="hidden" value={props.agreementId} />
               <input
                 name="agreement_version_id"
@@ -361,7 +365,7 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
                 Confirm version {props.version.version}
                 <TradeFlowIcon name="arrow" />
               </PendingSubmitButton>
-            </form>
+            </FullNavigationActionForm>
           ) : props.viewerConfirmed ? (
             <span className={styles.waitingState}>You confirmed · waiting for {props.counterpartLabel}</span>
           ) : null}
