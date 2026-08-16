@@ -1,0 +1,77 @@
+name: PR654 normalized migration chain diagnostic v2
+
+on:
+  push:
+    branches:
+      - qa/pr654-recovery-forensics-export-20260816
+    paths:
+      - .github/workflows/pr654-normalized-chain-diagnostic-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out QA-only harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact product head with full history
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          path: product
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+
+      - name: Run local-only normalized chain diagnostic
+        working-directory: product
+        shell: bash
+        env:
+          EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          HISTORICAL_BASE_COMMIT: 4c95052ff97d55b42486cac47b7430896946f124
+          SUPABASE_CLI_VERSION: 2.110.0
+        run: |
+          cp ../harness/.github/scripts/pr654-normalized-chain-diagnostic.sh "$RUNNER_TEMP/pr654-normalized-v2.sh"
+          python3 - "$RUNNER_TEMP/pr654-normalized-v2.sh" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          needle = """  source=\"supabase/migrations/$filename\"\n  candidate=\"$EVIDENCE_DIR/patched/$filename\"\n  cp \"$source\" \"$candidate\"\n  patch='none'\n"""
+          replacement = """  source=\"supabase/migrations/$filename\"\n  candidate=\"$EVIDENCE_DIR/patched/$filename\"\n  cp \"$source\" \"$candidate\"\n  patch='none'\n  if [[ \"$filename\" == '20260714150500_launch_performance_bonds_and_verification_badges.sql' ]]; then\n    printf '%s\\tSKIP\\t%s\\t%s\\t%s\\t%s\\n' \"$ordinal\" \"$filename\" \"$(sha256sum \"$candidate\" | awk '{print $1}')\" 'superseded by earlier canonical bond and badge migrations' \"$reason\" | tee -a \"$EVIDENCE_DIR/manifests/replay.tsv\"\n    previous=\"$filename (skipped as superseded)\"\n    continue\n  fi\n"""
+          if needle not in text:
+              raise SystemExit('diagnostic patch anchor missing')
+          path.write_text(text.replace(needle, replacement, 1))
+          PY
+          bash -n "$RUNNER_TEMP/pr654-normalized-v2.sh"
+          export EVIDENCE_DIR="$RUNNER_TEMP/evidence-pr654-normalized-chain-v2"
+          bash "$RUNNER_TEMP/pr654-normalized-v2.sh"
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-normalized-chain-v2.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-normalized-chain-v2.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-normalized-chain-v2.tar.gz.sha256"
+
+      - name: Upload credential-free evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-normalized-chain-v2-${{ github.run_id }}
+          path: |
+            pr654-normalized-chain-v2.tar.gz
+            pr654-normalized-chain-v2.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
