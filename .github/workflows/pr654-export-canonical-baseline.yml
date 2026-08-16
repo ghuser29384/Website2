@@ -1,0 +1,144 @@
+name: PR654 canonical baseline catalog export
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/scripts/pr654-export-canonical-baseline.sh
+      - .github/workflows/pr654-export-canonical-baseline.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr654-canonical-baseline-catalog-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+      QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      QA_POOLER_USER: postgres.hvmxfjjbdcgjjudmthdz
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out QA-only harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact product head detached
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          path: product
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client-17
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: Run read-only production and QA export
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$QA_SUPABASE_DB_URL"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          export PRODUCT_DIR="$GITHUB_WORKSPACE/product"
+          export EVIDENCE_DIR="$RUNNER_TEMP/pr654-canonical-baseline-export"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          src = Path('harness/.github/scripts/pr654-export-canonical-baseline.sh')
+          dst = Path('/home/runner/work/_temp/pr654-export-canonical-baseline.sh')
+          text = src.read_text(encoding='utf-8')
+          text = '\n'.join(line for line in text.splitlines() if '::add-mask::' not in line) + '\n'
+          text = text.replace(
+              '  local label="$1" url="$2" out="$EVIDENCE_DIR/$label"',
+              '  local label="$1"\n  local url="$2"\n  local out="$EVIDENCE_DIR/$label"',
+          )
+          text = text.replace(
+              'psql "$url" -X -v ON_ERROR_STOP=1 -Atq > "$out/connection.json" <<\'SQL\'\nselect jsonb_build_object(',
+              'psql "$url" -X -v ON_ERROR_STOP=1 -Atq > "$out/connection.json" <<\'SQL\'\nbegin transaction isolation level repeatable read read only;\nselect jsonb_build_object(',
+              1,
+          )
+          text = text.replace(
+              ')::text;\nSQL\n  python3 - "$out/connection.json"',
+              ')::text;\ncommit;\nSQL\n  python3 - "$out/connection.json"',
+              1,
+          )
+          text = text.replace("assert data['default_transaction_read_only']=='on', data\n", '')
+          text = text.replace(
+              '    --schema-only \\\n    --no-owner',
+              '    --schema-only \\\n    --serializable-deferrable \\\n    --no-owner',
+          )
+          dst.write_text(text, encoding='utf-8')
+          PY
+
+          chmod 700 "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
+          bash -n "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
+          bash "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
+
+          export PGCONNECT_TIMEOUT=15
+          export PGSSLMODE=require
+          export PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=120000 -c lock_timeout=5000'
+          for label in prod qa; do
+            if [[ "$label" == prod ]]; then url="$PROD_SUPABASE_DB_URL"; else url="$QA_SUPABASE_DB_URL"; fi
+            psql "$url" -X -v ON_ERROR_STOP=1 -AtF $'\t' > "$EVIDENCE_DIR/$label/policy-semantic-manifest.tsv" <<'SQL'
+          begin transaction isolation level repeatable read read only;
+          select n.nspname||'.'||c.relname||'.'||p.polname as key,
+                 case when p.polpermissive then 'PERMISSIVE' else 'RESTRICTIVE' end as permissive,
+                 array_to_string(array(select r.rolname from unnest(p.polroles) role_oid join pg_roles r on r.oid=role_oid order by r.rolname), ',') as roles,
+                 p.polcmd,
+                 encode(digest(coalesce(pg_get_expr(p.polqual,p.polrelid,true),''),'sha256'),'hex') as using_sha256,
+                 encode(digest(coalesce(pg_get_expr(p.polwithcheck,p.polrelid,true),''),'sha256'),'hex') as check_sha256
+          from pg_policy p
+          join pg_class c on c.oid=p.polrelid
+          join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname in ('public','moral_trade_private')
+          order by key;
+          commit;
+          SQL
+          done
+
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-canonical-baseline-export.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-canonical-baseline-export.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-canonical-baseline-export.tar.gz.sha256"
+
+      - name: Upload credential-free evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-canonical-baseline-export-${{ github.run_id }}
+          path: |
+            pr654-canonical-baseline-export.tar.gz
+            pr654-canonical-baseline-export.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14

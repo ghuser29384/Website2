@@ -1,0 +1,49 @@
+name: PR654 export Supabase 2.110.0 default config
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/workflows/pr654-export-default-config.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out QA-only workflow
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Generate exact default config
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr654-config"
+          cd "$RUNNER_TEMP/pr654-config"
+          npx --yes supabase@2.110.0 init --force
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('supabase/config.toml')
+          text=p.read_text(encoding='utf-8')
+          text=text.replace('project_id = "pr654-config"','project_id = "moral-trade-canonical"')
+          text=text.replace('major_version = 15','major_version = 17')
+          p.write_text(text,encoding='utf-8')
+          PY
+          cp supabase/config.toml "$GITHUB_WORKSPACE/canonical-config.toml"
+          sha256sum "$GITHUB_WORKSPACE/canonical-config.toml" > "$GITHUB_WORKSPACE/canonical-config.toml.sha256"
+      - name: Upload config
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-canonical-config-${{ github.run_id }}
+          path: |
+            canonical-config.toml
+            canonical-config.toml.sha256
+          if-no-files-found: error
+          retention-days: 14
