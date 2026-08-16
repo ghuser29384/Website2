@@ -1,0 +1,65 @@
+name: PR 726 final release classification validation 20260816
+
+on:
+  push:
+    branches:
+      - ops/pr726-compact-v2-integration-qa-preview-20260816
+    paths:
+      - ".github/workflows/pr726-release-classification-validation-20260816.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CANDIDATE_HEAD_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+      CANDIDATE_TREE_SHA: 80772fa5e02c357eb59fc83286f3a668447de25d
+      CANDIDATE_BASE_SHA: 26d5a2f15fe49392d9af4b17c372dc630d690b12
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate exact candidate and final PR body
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
+          gh api repos/ghuser29384/Website2/pulls/726 > pr726.json
+          jq -e --arg head "$CANDIDATE_HEAD_SHA" --arg base "$CANDIDATE_BASE_SHA" '
+            .state == "open" and .draft == true and .merged == false
+            and .head.sha == $head and .base.sha == $base
+          ' pr726.json >/dev/null
+          jq -r '.body' pr726.json > pr-body.md
+          node scripts/validate-release-pr-body.mjs --body-file pr-body.md --json | tee release-classification.json
+          jq -e '
+            .valid == true
+            and .parsed.classification == "Runtime-affecting"
+            and (.parsed.dispositions == ["Do not merge or deploy yet; blockers remain"])
+            and (.parsed.productionClaims | length) == 0
+          ' release-classification.json >/dev/null
+          git diff --check "$CANDIDATE_BASE_SHA" "$CANDIDATE_HEAD_SHA"
+
+      - name: Upload validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr726-final-release-classification-${{ github.run_id }}-${{ env.CANDIDATE_HEAD_SHA }}
+          path: |
+            pr-body.md
+            release-classification.json
+          if-no-files-found: error
+          retention-days: 30
