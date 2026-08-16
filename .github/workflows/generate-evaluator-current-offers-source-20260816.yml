@@ -36,38 +36,70 @@ jobs:
 
           source_path = Path('tests/evaluator-core-loop-authenticated.source.ts')
           output_path = Path('evaluator-core-loop-authenticated.corrected.ts')
-          text = source_path.read_text()
+          lines = source_path.read_text().splitlines()
 
-          old_heading = '''      await expect(
-            evaluatorOfferCard.getByRole("heading", { level: 4 }),
-          ).toHaveText(
-            /Evaluator core-loop verification\\s*↔\\s*Private QA response verification/,
-          );'''
-          current_heading = '''      const evaluatorHeading = evaluatorOfferCard.getByRole("heading", {
-            level: 4,
-            name: /Evaluator core-loop verification\\s+Private QA response verification/i,
-          });
-          await expect(evaluatorHeading).toHaveText(
-            /Evaluator core-loop verification\\s*\\/\\s*Private QA response verification/,
-          );'''
-          if text.count(old_heading) != 1:
-              raise SystemExit(f'Expected one stale heading assertion, found {text.count(old_heading)}')
-          text = text.replace(old_heading, current_heading, 1)
+          heading_markers = [
+              index
+              for index, line in enumerate(lines)
+              if line.strip()
+              == r'/Evaluator core-loop verification\s*↔\s*Private QA response verification/,'
+          ]
+          if len(heading_markers) != 1:
+              raise SystemExit(
+                  f'Expected one stale heading marker, found {len(heading_markers)}'
+              )
+          marker = heading_markers[0]
+          start = marker - 3
+          end = marker + 2
+          if [line.strip() for line in lines[start:end]] != [
+              'await expect(',
+              'evaluatorOfferCard.getByRole("heading", { level: 4 }),',
+              ').toHaveText(',
+              r'/Evaluator core-loop verification\s*↔\s*Private QA response verification/,',
+              ');',
+          ]:
+              raise SystemExit('The stale heading assertion shape changed unexpectedly.')
+          indent = lines[start][:-len(lines[start].lstrip())]
+          lines[start:end] = [
+              f'{indent}const evaluatorHeading = evaluatorOfferCard.getByRole("heading", {{',
+              f'{indent}  level: 4,',
+              f'{indent}  name: /Evaluator core-loop verification\\s+Private QA response verification/i,',
+              f'{indent}}});',
+              f'{indent}await expect(evaluatorHeading).toHaveText(',
+              f'{indent}  /Evaluator core-loop verification\\s*\\/\\s*Private QA response verification/,',
+              f'{indent});',
+          ]
 
-          old_link = '''      await evaluatorOfferCard
-            .getByRole("link", { exact: true, name: "Open full terms ↗" })
-            .click();'''
-          current_link = '''      await evaluatorOfferCard
-            .getByText("Exact terms & more actions", { exact: true })
-            .click();
-          await evaluatorOfferCard
-            .getByRole("link", { exact: true, name: "Open full terms" })
-            .click();'''
-          if text.count(old_link) != 1:
-              raise SystemExit(f'Expected one stale full-terms assertion, found {text.count(old_link)}')
-          text = text.replace(old_link, current_link, 1)
+          link_markers = [
+              index
+              for index, line in enumerate(lines)
+              if line.strip()
+              == '.getByRole("link", { exact: true, name: "Open full terms ↗" })'
+          ]
+          if len(link_markers) != 1:
+              raise SystemExit(
+                  f'Expected one stale full-terms marker, found {len(link_markers)}'
+              )
+          marker = link_markers[0]
+          start = marker - 1
+          end = marker + 2
+          if [line.strip() for line in lines[start:end]] != [
+              'await evaluatorOfferCard',
+              '.getByRole("link", { exact: true, name: "Open full terms ↗" })',
+              '.click();',
+          ]:
+              raise SystemExit('The stale full-terms assertion shape changed unexpectedly.')
+          indent = lines[start][:-len(lines[start].lstrip())]
+          lines[start:end] = [
+              f'{indent}await evaluatorOfferCard',
+              f'{indent}  .getByText("Exact terms & more actions", {{ exact: true }})',
+              f'{indent}  .click();',
+              f'{indent}await evaluatorOfferCard',
+              f'{indent}  .getByRole("link", {{ exact: true, name: "Open full terms" }})',
+              f'{indent}  .click();',
+          ]
 
-          output_path.write_text(text)
+          output_path.write_text('\n'.join(lines) + '\n')
           PY
           test -s evaluator-core-loop-authenticated.corrected.ts
           grep -F 'Exact terms & more actions' evaluator-core-loop-authenticated.corrected.ts
@@ -76,7 +108,7 @@ jobs:
             echo 'Stale full-terms assertion remains.' >&2
             exit 1
           fi
-          if grep -Fq 'verification\\s*↔' evaluator-core-loop-authenticated.corrected.ts; then
+          if grep -Fq 'verification\s*↔' evaluator-core-loop-authenticated.corrected.ts; then
             echo 'Stale heading assertion remains.' >&2
             exit 1
           fi
