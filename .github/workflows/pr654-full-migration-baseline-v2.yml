@@ -25,7 +25,6 @@ jobs:
       EXPECTED_BASE: 75fd512e6cf82e2c51df53e211b854c0263109c3
       PRODUCT_BRANCH: qa/pooled-settlement-payer-fix-candidate-20260813
       SUPABASE_CLI_VERSION: 2.110.0
-      EVIDENCE_DIR: ${{ runner.temp }}/pr654-migration-baseline-v2-evidence
     steps:
       - name: Check out QA-only harness
         uses: actions/checkout@v4
@@ -55,6 +54,8 @@ jobs:
         continue-on-error: true
         working-directory: product
         shell: bash
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/pr654-migration-baseline-v2-evidence
         run: bash ../harness/.github/scripts/pr654-full-migration-baseline-v2.sh
 
       - name: Upload credential-free evidence
