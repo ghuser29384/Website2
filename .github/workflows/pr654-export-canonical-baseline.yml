@@ -58,7 +58,7 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client-17
-          pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_dump --version
 
       - name: Run read-only production and QA export
         shell: bash
@@ -68,11 +68,16 @@ jobs:
           test -n "${QA_SUPABASE_DB_URL:-}"
           echo "::add-mask::$PROD_SUPABASE_DB_URL"
           echo "::add-mask::$QA_SUPABASE_DB_URL"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
           export PRODUCT_DIR="$GITHUB_WORKSPACE/product"
           export EVIDENCE_DIR="$RUNNER_TEMP/pr654-canonical-baseline-export"
-          sed '/::add-mask/d' harness/.github/scripts/pr654-export-canonical-baseline.sh \
+          sed \
+            -e '/::add-mask/d' \
+            -e 's/local label="$1" url="$2" out="$EVIDENCE_DIR\/$label"/local label="$1"\n  local url="$2"\n  local out="$EVIDENCE_DIR\/$label"/' \
+            harness/.github/scripts/pr654-export-canonical-baseline.sh \
             > "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
           chmod 700 "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
+          bash -n "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
           bash "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
           tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
             "$GITHUB_WORKSPACE/pr654-canonical-baseline-export.tar.gz" \
