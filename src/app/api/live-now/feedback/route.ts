@@ -117,6 +117,16 @@ function privateJson(body: unknown, status = 200) {
   });
 }
 
+function privateNoContent() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Cache-Control": "private, no-store, max-age=0",
+      Vary: "Cookie",
+    },
+  });
+}
+
 function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return cookieStore
     .getAll()
@@ -157,6 +167,23 @@ function normalizeEvent(value: FeedbackEventInput): NormalizedFeedbackEvent | nu
   };
 }
 
+function isAnonymousPassiveFeedback(body: Record<string, unknown>) {
+  if (Object.keys(body).some((key) => key !== "events")) return false;
+  if (
+    !Array.isArray(body.events) ||
+    body.events.length === 0 ||
+    body.events.length > MAX_EVENTS_PER_REQUEST
+  ) {
+    return false;
+  }
+
+  return body.events.every((event) => {
+    if (!event || typeof event !== "object") return false;
+    const normalized = normalizeEvent(event as FeedbackEventInput);
+    return Boolean(normalized && PASSIVE_EVENT_TYPES.has(normalized.eventType));
+  });
+}
+
 function safeCause(value: string | null | undefined) {
   return (value ?? "").trim().slice(0, 120);
 }
@@ -175,22 +202,29 @@ function uniqueCauses(...groups: Array<readonly string[] | null | undefined>) {
 }
 
 async function requireFeedbackViewer() {
+  if (!hasSupabaseEnv()) return null;
   const cookieStore = await cookies();
-  if (!hasSupabaseEnv() || !hasSupabaseAuthCookie(cookieStore)) return null;
+  if (!hasSupabaseAuthCookie(cookieStore)) return null;
   return getViewer();
 }
 
 export async function POST(request: Request) {
-  const viewer = await requireFeedbackViewer();
-  if (!viewer) return privateJson({ authenticated: false }, 401);
-
   let body: Record<string, unknown>;
+  let invalidJson = false;
   try {
     const parsed = await request.json();
     body = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
   } catch {
-    return privateJson({ error: "Invalid JSON payload." }, 400);
+    body = {};
+    invalidJson = true;
   }
+
+  const viewer = await requireFeedbackViewer();
+  if (!viewer) {
+    if (!invalidJson && isAnonymousPassiveFeedback(body)) return privateNoContent();
+    return privateJson({ authenticated: false }, 401);
+  }
+  if (invalidJson) return privateJson({ error: "Invalid JSON payload." }, 400);
 
   const supabase = await createClient();
   const typedSupabase = supabase as any;
