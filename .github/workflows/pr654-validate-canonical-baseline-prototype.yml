@@ -103,6 +103,11 @@ jobs:
               1,
           )
           text=text.replace(
+              '  local label="$1" out="$EVIDENCE_DIR/$label" db\n',
+              '  local label="$1"\n  local out="$EVIDENCE_DIR/$label"\n  local db\n',
+              1,
+          )
+          text=text.replace(
               'test "$status" -eq 0\n',
               '''if [[ "$status" -ne 0 ]]; then
             printf 'Supabase start failed with exit %s. Redacted tail follows.\\n' "$status" >&2
