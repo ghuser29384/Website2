@@ -1,0 +1,99 @@
+name: Patch evaluator for current Offers directory
+
+on:
+  push:
+    branches:
+      - integration/evaluator-core-loop-current-main-20260815
+    paths:
+      - .github/workflows/patch-evaluator-current-offers-20260816.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-evaluator-current-offers-20260816
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration/evaluator-core-loop-current-main-20260815
+          fetch-depth: 0
+
+      - name: Guard exact starting head and patch one stale Offers assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/integration/evaluator-core-loop-current-main-20260815)"
+          test "$(git rev-parse HEAD^)" = "4d4e8e76904a0843425a21cfdc5259c33f3bb0a2"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/evaluator-core-loop-authenticated.spec.ts")
+          text = path.read_text()
+          old = '''      await expect(
+                evaluatorOfferCard.getByRole("heading", { level: 4 }),
+              ).toHaveText(
+                /Evaluator core-loop verification\\s*↔\\s*Private QA response verification/,
+              );'''
+          if old not in text:
+              old = '''      await expect(
+                evaluatorOfferCard.getByRole("heading", { level: 4 }),
+              ).toHaveText(
+                /Evaluator core-loop verification\\s*↔\\s*Private QA response verification/,
+              );'''
+          # Match the repository's exact six-space indentation independently of YAML indentation.
+          old = '''      await expect(
+        evaluatorOfferCard.getByRole("heading", { level: 4 }),
+      ).toHaveText(
+        /Evaluator core-loop verification\\s*↔\\s*Private QA response verification/,
+      );'''
+          new = '''      const evaluatorHeading = evaluatorOfferCard.getByRole("heading", {
+        level: 4,
+        name: /Evaluator core-loop verification\\s+Private QA response verification/i,
+      });
+      await expect(evaluatorHeading).toHaveText(
+        /Evaluator core-loop verification\\s*\\/\\s*Private QA response verification/,
+      );'''
+          if text.count(old) != 1:
+              raise SystemExit(f"Expected exactly one stale heading assertion; found {text.count(old)}")
+          text = text.replace(old, new, 1)
+
+          old_link = '''      await evaluatorOfferCard
+        .getByRole("link", { exact: true, name: "Open full terms ↗" })
+        .click();'''
+          new_link = '''      await evaluatorOfferCard
+        .getByText("Exact terms & more actions", { exact: true })
+        .click();
+      await evaluatorOfferCard
+        .getByRole("link", { exact: true, name: "Open full terms" })
+        .click();'''
+          if text.count(old_link) != 1:
+              raise SystemExit(f"Expected exactly one stale full-terms link assertion; found {text.count(old_link)}")
+          text = text.replace(old_link, new_link, 1)
+          path.write_text(text)
+          PY
+          rm .github/workflows/patch-evaluator-current-offers-20260816.yml
+          git diff --check
+          git diff --name-only | sort | tee /tmp/changed.txt
+          printf '%s\n' \
+            .github/workflows/patch-evaluator-current-offers-20260816.yml \
+            tests/evaluator-core-loop-authenticated.spec.ts \
+            | sort > /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/changed.txt
+
+      - name: Commit exact harness reconciliation and remove patcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/evaluator-core-loop-authenticated.spec.ts
+          git rm .github/workflows/patch-evaluator-current-offers-20260816.yml
+          git commit -m "Align evaluator discovery with current Offers disclosure"
+          git push origin HEAD:integration/evaluator-core-loop-current-main-20260815
