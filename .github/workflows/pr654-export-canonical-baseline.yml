@@ -71,11 +71,36 @@ jobs:
           export PATH="/usr/lib/postgresql/17/bin:$PATH"
           export PRODUCT_DIR="$GITHUB_WORKSPACE/product"
           export EVIDENCE_DIR="$RUNNER_TEMP/pr654-canonical-baseline-export"
-          sed \
-            -e '/::add-mask/d' \
-            -e 's/local label="$1" url="$2" out="$EVIDENCE_DIR\/$label"/local label="$1"\n  local url="$2"\n  local out="$EVIDENCE_DIR\/$label"/' \
-            harness/.github/scripts/pr654-export-canonical-baseline.sh \
-            > "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          src = Path('harness/.github/scripts/pr654-export-canonical-baseline.sh')
+          dst = Path('/home/runner/work/_temp/pr654-export-canonical-baseline.sh')
+          text = src.read_text(encoding='utf-8')
+          text = '\n'.join(line for line in text.splitlines() if '::add-mask::' not in line) + '\n'
+          text = text.replace(
+              '  local label="$1" url="$2" out="$EVIDENCE_DIR/$label"',
+              '  local label="$1"\n  local url="$2"\n  local out="$EVIDENCE_DIR/$label"',
+          )
+          text = text.replace(
+              'psql "$url" -X -v ON_ERROR_STOP=1 -Atq > "$out/connection.json" <<\'SQL\'\nselect jsonb_build_object(',
+              'psql "$url" -X -v ON_ERROR_STOP=1 -Atq > "$out/connection.json" <<\'SQL\'\nbegin transaction isolation level repeatable read read only;\nselect jsonb_build_object(',
+              1,
+          )
+          text = text.replace(
+              ')::text;\nSQL\n  python3 - "$out/connection.json"',
+              ')::text;\ncommit;\nSQL\n  python3 - "$out/connection.json"',
+              1,
+          )
+          text = text.replace("assert data['default_transaction_read_only']=='on', data\n", '')
+          text = text.replace(
+              '    --schema-only \\\n    --no-owner',
+              '    --schema-only \\\n    --serializable-deferrable \\\n    --no-owner',
+          )
+          dst.write_text(text, encoding='utf-8')
+          PY
+
           chmod 700 "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
           bash -n "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
           bash "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
