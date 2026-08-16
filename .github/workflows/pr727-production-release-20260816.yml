@@ -1,0 +1,290 @@
+name: PR 727 exact-main production release
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-release-20260816
+    paths:
+      - .github/workflows/pr727-production-release-20260816.yml
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: pr727-exact-main-production-release
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr727-production-release-20260816
+  EXPECTED_PREVIOUS_MAIN_SHA: 26d5a2f15fe49392d9af4b17c372dc630d690b12
+  EXPECTED_PR_HEAD_SHA: 95f9b470982f29c55d8a1b806bc05b68217eea13
+  EXPECTED_MAIN_SHA: 4587e8c418621440835940d6924f32c02ba3f2d1
+  EXPECTED_TREE_SHA: d3a64e38a90f9b5a4d1953fcc7c93eda4f78b1c9
+  PRODUCT_PR: '727'
+  RELEASE_WORKFLOW: vercel-release.yml
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  STATUS_CONTEXT: production-release / PR 727
+  EVIDENCE_DIR: /tmp/pr727-production-release
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Initialize immutable evidence and pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg controller_run "$GITHUB_RUN_ID" \
+            --arg previous_main "$EXPECTED_PREVIOUS_MAIN_SHA" \
+            --arg pr_head "$EXPECTED_PR_HEAD_SHA" \
+            --arg merged_main "$EXPECTED_MAIN_SHA" \
+            --arg tree "$EXPECTED_TREE_SHA" \
+            '{repository:$repository,controllerRun:$controller_run,previousMain:$previous_main,prHead:$pr_head,mergedMain:$merged_main,tree:$tree}' \
+            > "$EVIDENCE_DIR/identity.json"
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_MAIN_SHA" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description='Running exact-main gated production release for PR 727' \
+            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
+
+      - name: Check out the one-shot controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact merge, controller-only scope, and idle release lane
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = "refs/heads/$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git show -s --format=%T "$EXPECTED_MAIN_SHA")" = "$EXPECTED_TREE_SHA"
+
+          mapfile -t parents < <(git show -s --format=%P "$EXPECTED_MAIN_SHA" | tr ' ' '\n')
+          test "${#parents[@]}" = 2
+          test "${parents[0]}" = "$EXPECTED_PREVIOUS_MAIN_SHA"
+          test "${parents[1]}" = "$EXPECTED_PR_HEAD_SHA"
+
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PRODUCT_PR")"
+          test "$(jq -r .state <<<"$pr")" = closed
+          test "$(jq -r .merged <<<"$pr")" = true
+          test "$(jq -r .draft <<<"$pr")" = false
+          test "$(jq -r .head.sha <<<"$pr")" = "$EXPECTED_PR_HEAD_SHA"
+          test "$(jq -r .merge_commit_sha <<<"$pr")" = "$EXPECTED_MAIN_SHA"
+          printf '%s\n' "$pr" > "$EVIDENCE_DIR/pr727.json"
+
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+          git diff --name-only "$EXPECTED_MAIN_SHA" HEAD | tee "$EVIDENCE_DIR/controller-files.txt"
+          printf '%s\n' '.github/workflows/pr727-production-release-20260816.yml' \
+            > "$EVIDENCE_DIR/expected-controller-files.txt"
+          diff -u "$EVIDENCE_DIR/expected-controller-files.txt" "$EVIDENCE_DIR/controller-files.txt"
+
+          for status in queued in_progress; do
+            count="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?status=$status&per_page=20" --jq '.total_count')"
+            test "$count" = 0
+          done
+
+      - name: Dispatch exact-SHA production release
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow "$RELEASE_WORKFLOW" \
+            --event workflow_dispatch --limit 100 --json databaseId \
+            | jq -r '.[].databaseId' | sort -n > "$EVIDENCE_DIR/release-runs-before.txt"
+
+          gh workflow run "$RELEASE_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main \
+            -f target=production \
+            -f ref=main \
+            -f expected_sha="$EXPECTED_MAIN_SHA" \
+            -f synthetic_auth_fixture_url=''
+
+          release_run_id=''
+          for attempt in $(seq 1 60); do
+            candidates="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$RELEASE_WORKFLOW" \
+              --event workflow_dispatch --branch main --limit 100 \
+              --json databaseId,headSha,createdAt,url,status,conclusion)"
+            while IFS= read -r candidate; do
+              [[ -n "$candidate" ]] || continue
+              if ! grep -qx "$candidate" "$EVIDENCE_DIR/release-runs-before.txt"; then
+                release_run_id="$candidate"
+                break
+              fi
+            done < <(jq -r --arg sha "$EXPECTED_MAIN_SHA" \
+              '[.[] | select(.headSha == $sha)] | sort_by(.createdAt) | reverse | .[].databaseId' \
+              <<<"$candidates")
+            [[ -n "$release_run_id" ]] && break
+            sleep 5
+          done
+
+          test -n "$release_run_id"
+          printf '%s\n' "$release_run_id" | tee "$EVIDENCE_DIR/release-run-id.txt"
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Monitor release and cancel on main drift
+        id: monitor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ steps.dispatch.outputs.release_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          while true; do
+            remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+            if [[ "$remote_main" != "$EXPECTED_MAIN_SHA" ]]; then
+              printf 'main drifted to %s; cancelling release %s\n' "$remote_main" "$RELEASE_RUN_ID" \
+                | tee "$EVIDENCE_DIR/main-drift.txt"
+              gh run cancel "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" || true
+              exit 1
+            fi
+
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+            printf '%s\n' "$run_json" > "$EVIDENCE_DIR/release-run-latest.json"
+            status="$(jq -r .status <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+            printf '%s %s\n' "$status" "$conclusion"
+            if [[ "$status" == completed ]]; then
+              test "$conclusion" = success
+              break
+            fi
+            sleep 20
+          done
+
+      - name: Capture release logs, artifact, deployment, and alias evidence
+        id: evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ steps.dispatch.outputs.release_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" \
+            > "$EVIDENCE_DIR/release-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/jobs?per_page=100" \
+            > "$EVIDENCE_DIR/release-jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/artifacts?per_page=100" \
+            > "$EVIDENCE_DIR/release-artifacts.json"
+          gh run view "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" --log \
+            > "$EVIDENCE_DIR/release.log"
+
+          mapfile -t artifact_ids < <(jq -r \
+            '[.artifacts[] | select(.name | startswith("gated-vercel-release-production-"))] | .[].id' \
+            "$EVIDENCE_DIR/release-artifacts.json")
+          test "${#artifact_ids[@]}" = 1
+          artifact_id="${artifact_ids[0]}"
+          printf '%s\n' "$artifact_id" | tee "$EVIDENCE_DIR/release-artifact-id.txt"
+          mkdir -p "$EVIDENCE_DIR/release-artifact"
+          gh run download "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "gated-vercel-release-production-$RELEASE_RUN_ID" \
+            --dir "$EVIDENCE_DIR/release-artifact"
+
+          detail="$(find "$EVIDENCE_DIR/release-artifact" -name deployment-detail.json -print -quit)"
+          canonical_detail="$(find "$EVIDENCE_DIR/release-artifact" -name canonical-deployment-detail.json -print -quit)"
+          apex="$(find "$EVIDENCE_DIR/release-artifact" -path '*/aliases/moraltrade-org.json' -print -quit)"
+          www="$(find "$EVIDENCE_DIR/release-artifact" -path '*/aliases/www-moraltrade-org.json' -print -quit)"
+          static_json="$(find "$EVIDENCE_DIR/release-artifact" -name static-artifact-integrity.json -print -quit)"
+          deployment_url_file="$(find "$EVIDENCE_DIR/release-artifact" -name deployment-url.txt -print -quit)"
+          test -n "$detail"
+          test -n "$canonical_detail"
+          test -n "$apex"
+          test -n "$www"
+          test -n "$static_json"
+          test -n "$deployment_url_file"
+
+          deployment_id="$(jq -r '.id // .uid // empty' "$detail")"
+          deployment_host="$(jq -r '.url // empty' "$detail")"
+          deployment_url="$(tr -d '\r\n' < "$deployment_url_file")"
+          critical_sha256="$(jq -r '.critical.sha256 // empty' "$static_json")"
+          file_count="$(jq -r '.fileCount // 0' "$static_json")"
+          test -n "$deployment_id"
+          test -n "$deployment_host"
+          test "$deployment_url" = "https://$deployment_host"
+          test -n "$critical_sha256"
+          test "$file_count" -gt 0
+
+          jq -e \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_MAIN_SHA" \
+            --arg deployment "$deployment_id" '
+              ((.id // .uid) == $deployment)
+              and ((.projectId // .project.id // "") == $project)
+              and (.target == "production")
+              and ((.readyState // .state // "") == "READY")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $sha)
+            ' "$canonical_detail" >/dev/null
+
+          for tuple in "moraltrade.org:$apex" "www.moraltrade.org:$www"; do
+            alias_name="${tuple%%:*}"
+            alias_file="${tuple#*:}"
+            jq -e \
+              --arg alias "$alias_name" \
+              --arg project "$VERCEL_PROJECT_ID" \
+              --arg deployment "$deployment_id" '
+                (.alias == $alias)
+                and (.projectId == $project)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+              ' "$alias_file" >/dev/null
+          done
+
+          jq -n \
+            --arg release_run "$RELEASE_RUN_ID" \
+            --arg artifact_id "$artifact_id" \
+            --arg main_sha "$EXPECTED_MAIN_SHA" \
+            --arg deployment_id "$deployment_id" \
+            --arg deployment_url "$deployment_url" \
+            --arg critical_sha256 "$critical_sha256" \
+            --argjson file_count "$file_count" \
+            '{releaseRun:($release_run|tonumber),artifactId:($artifact_id|tonumber),mainSha:$main_sha,deploymentId:$deployment_id,deploymentUrl:$deployment_url,criticalSha256:$critical_sha256,publicFileCount:$file_count,aliases:["moraltrade.org","www.moraltrade.org"]}' \
+            > "$EVIDENCE_DIR/verified-release-summary.json"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Upload controller evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr727-production-release-controller-${{ github.run_id }}
+          path: /tmp/pr727-production-release
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish terminal exact-main status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == success && -f "$EVIDENCE_DIR/verified-release-summary.json" ]]; then
+            state=success
+            description='Exact-main guarded production release and alias verification passed'
+          else
+            state=failure
+            description='PR 727 production release failed closed; production status requires inspection'
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_MAIN_SHA" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
