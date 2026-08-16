@@ -1,0 +1,89 @@
+name: PR654 synthetic migration semantics
+
+on:
+  push:
+    branches:
+      - qa/pr654-recovery-forensics-export-20260816
+    paths:
+      - .github/scripts/pr654-synthetic-migration-semantics.sh
+      - .github/workflows/pr654-synthetic-migration-semantics.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr654-synthetic-migration-semantics
+  cancel-in-progress: false
+
+jobs:
+  semantics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SUPABASE_CLI_VERSION: 2.110.0
+      EVIDENCE_DIR: ${{ runner.temp }}/pr654-synthetic-migration-semantics
+    steps:
+      - name: Check out QA-only probe
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+
+      - name: Unset remote-capable environment
+        shell: bash
+        run: |
+          for name in \
+            SUPABASE_ACCESS_TOKEN \
+            SUPABASE_DB_PASSWORD \
+            SUPABASE_PROJECT_ID \
+            SUPABASE_PROJECT_REF \
+            SUPABASE_URL \
+            SUPABASE_SERVICE_ROLE_KEY \
+            NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+            DATABASE_URL \
+            DIRECT_URL \
+            POSTGRES_URL \
+            STRIPE_SECRET_KEY \
+            STRIPE_WEBHOOK_SECRET \
+            EVERY_ORG_WEBHOOK_SECRET
+          do
+            unset "$name"
+          done
+          env | cut -d= -f1 \
+            | grep -E '^(SUPABASE_ACCESS_TOKEN|SUPABASE_DB_PASSWORD|SUPABASE_PROJECT_ID|SUPABASE_PROJECT_REF|DATABASE_URL|DIRECT_URL|POSTGRES_URL)$' \
+            && exit 1 || true
+
+      - name: Run local-only semantics probe
+        shell: bash
+        run: bash .github/scripts/pr654-synthetic-migration-semantics.sh
+
+      - name: Package credential-free evidence
+        if: always()
+        shell: bash
+        run: |
+          if [[ -d "$EVIDENCE_DIR" ]]; then
+            tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+              "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz" \
+              "$(basename "$EVIDENCE_DIR")"
+            sha256sum "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz" \
+              > "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz.sha256"
+          fi
+
+      - name: Upload credential-free evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-synthetic-migration-semantics-${{ github.run_id }}
+          path: |
+            pr654-synthetic-migration-semantics.tar.gz
+            pr654-synthetic-migration-semantics.tar.gz.sha256
+          if-no-files-found: warn
+          retention-days: 14
