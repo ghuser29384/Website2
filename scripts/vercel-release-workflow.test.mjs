@@ -321,7 +321,15 @@ test("release evidence is retained without credentials", async () => {
   const source = await workflow();
   assert.match(source, /uses: actions\/upload-artifact@v4/);
   assert.match(source, /name: gated-vercel-release-\$\{\{ inputs\.target \}\}-\$\{\{ github\.run_id \}\}/);
-  assert.match(source, /path: \$\{\{ env\.RELEASE_EVIDENCE_DIR \}\}/);
+  const evidenceStart = source.indexOf("- name: Upload immutable release evidence");
+  const evidenceEnd = source.indexOf("- name: Record immutable release evidence", evidenceStart);
+  assert.notEqual(evidenceStart, -1);
+  assert.notEqual(evidenceEnd, -1);
+  const evidenceStep = source.slice(evidenceStart, evidenceEnd);
+  assert.match(evidenceStep, /if: always\(\)/);
+  assert.match(evidenceStep, /path: \|\n\s+\$\{\{ env\.RELEASE_EVIDENCE_DIR \}\}/);
+  assert.match(evidenceStep, /^\s+test-results\s*$/m);
+  assert.match(evidenceStep, /^\s+playwright-report\s*$/m);
   assert.match(source, /retention-days: 30/);
   assert.doesNotMatch(source, /\.env\.production\.local/);
 });

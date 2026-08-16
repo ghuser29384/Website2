@@ -680,7 +680,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
               <div className={densityStyles.activeState}>
                 <span>{activeFilterLabels.length ? activeFilterLabels.join(" · ") : "All proposal types"}</span>
-                {hasFilters ? <Link href={buildLiveHref({})}>Clear all</Link> : null}
+                {hasFilters ? <a href={buildLiveHref({})}>Clear all</a> : null}
               </div>
             </div>
 
@@ -767,15 +767,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {!livePage.error && (livePage.hasPreviousPage || livePage.hasNextPage) ? (
               <nav className={densityStyles.pagination} aria-label="Live proposal pages">
                 {livePage.hasPreviousPage ? (
-                  <Link href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}>
+                  <a href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}>
                     Previous
-                  </Link>
+                  </a>
                 ) : <span />}
                 <span>Page {page} of {pageCount}</span>
                 {livePage.hasNextPage ? (
-                  <Link href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}>
+                  <a href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}>
                     Next
-                  </Link>
+                  </a>
                 ) : <span />}
               </nav>
             ) : null}
