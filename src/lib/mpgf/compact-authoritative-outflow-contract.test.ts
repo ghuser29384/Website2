@@ -4,10 +4,13 @@ import { join } from "node:path";
 import test from "node:test";
 
 const root = process.cwd();
-const migration = [
+const migrationPaths = [
   "supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql",
   "supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql",
-]
+  "supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql",
+  "supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql",
+];
+const migration = migrationPaths
   .map((path) => readFileSync(join(root, path), "utf8"))
   .join("\n");
 const document = readFileSync(
@@ -21,7 +24,7 @@ const component = readFileSync(
 
 function functionBody(name: string) {
   const marker = `create or replace function ${name}`;
-  const start = migration.indexOf(marker);
+  const start = migration.lastIndexOf(marker);
   assert.notEqual(start, -1, `Missing ${name}`);
   const end = migration.indexOf("$function$;", start);
   assert.notEqual(end, -1, `Unterminated ${name}`);
@@ -37,6 +40,9 @@ const freezeCoverage = functionBody(
 const freezeFinancial = functionBody(
   "public.freeze_mpgf_public_goods_financial_cycle_v2",
 );
+const requireOperator = functionBody(
+  "moral_trade_private.require_compact_outflow_operator_v1",
+);
 
 test("extends the existing Compact outflow authority rather than creating a competing public ledger", () => {
   assert.match(document, /does not create a second public ledger/i);
@@ -51,11 +57,15 @@ test("extends the existing Compact outflow authority rather than creating a comp
   );
 });
 
-test("records immutable provenance and explicit supersession", () => {
+test("records immutable provenance, exact replay, and explicit supersession", () => {
   assert.match(migration, /source_sequence bigint not null/i);
   assert.match(migration, /supersedes_observation_id uuid unique/i);
   assert.match(migration, /canonical_event_hash text not null unique/i);
   assert.match(recordEvent, /status', 'replayed'/i);
+  assert.match(
+    recordEvent,
+    /immutable source-event hash replay differs from its recorded payload/i,
+  );
   assert.match(
     recordEvent,
     /must explicitly supersede the current canonical event/i,
@@ -63,6 +73,10 @@ test("records immutable provenance and explicit supersession", () => {
   assert.match(
     migration,
     /Compact outflow authority history is append-only/i,
+  );
+  assert.match(
+    migration,
+    /compact_outflow_coverage_status_events[\s\S]*'superseded'/i,
   );
 });
 
@@ -80,7 +94,9 @@ test("coverage authority distinguishes complete and fail-closed states", () => {
   assert.match(freezeCoverage, /unresolved_count <> 0/i);
   assert.match(freezeCoverage, /batch_meta\.currency <> 'USD'/i);
   assert.match(freezeCoverage, /authority_capability <> 'complete'/i);
+  assert.match(freezeCoverage, /length\(btrim\(request\.source_watermark\)\) = 0/i);
   assert.match(freezeCoverage, /production' and event_meta\.is_synthetic/i);
+  assert.doesNotMatch(freezeCoverage, /event_meta\.created_at <= p_source_cutoff_at/i);
   assert.match(document, /absence of rows alone is never treated as proof of zero/i);
 });
 
@@ -88,6 +104,7 @@ test("net eligible outflow excludes non-money and non-authoritative cases", () =
   assert.match(freezeFinancial, /direction = 'outgoing'/i);
   assert.match(freezeFinancial, /payment_kind = 'moral_trade_payment'/i);
   assert.match(freezeFinancial, /settlement_status = 'settled'/i);
+  assert.match(freezeFinancial, /event_meta\.settled_at is not null/i);
   assert.match(
     freezeFinancial,
     /gross_settled_cents[\s\S]*refunded_cents[\s\S]*reversed_cents[\s\S]*chargeback_cents/i,
@@ -124,8 +141,9 @@ test("private tables and operator functions are not browser capabilities", () =>
     migration,
     /revoke all on schema moral_trade_private from public, anon, authenticated/i,
   );
+  assert.match(requireOperator, /assurance_level = 'aal2'/i);
   assert.match(
-    migration,
+    requireOperator,
     /AAL2 administrator or workflow service authority is required/i,
   );
   assert.match(
