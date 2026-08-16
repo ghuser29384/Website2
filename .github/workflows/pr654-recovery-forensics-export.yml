@@ -1,0 +1,292 @@
+name: PR654 recovery forensics export
+
+on:
+  push:
+    branches:
+      - qa/pr654-recovery-forensics-export-20260816
+    paths:
+      - .github/workflows/pr654-recovery-forensics-export.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr654-recovery-forensics-export
+  cancel-in-progress: false
+
+jobs:
+  forensics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      PRODUCT_BRANCH: qa/pooled-settlement-payer-fix-candidate-20260813
+      SUPABASE_CLI_VERSION: 2.110.0
+      EVIDENCE_DIR: ${{ runner.temp }}/pr654-recovery-forensics
+    steps:
+      - name: Check out QA harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact product head with full history
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          path: product
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+
+      - name: Capture repository lineage and local Supabase semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"/{logs,history,schema-history,manifests,synthetic}
+          TRANSCRIPT="$EVIDENCE_DIR/command-transcript.txt"
+          exec > >(tee -a "$TRANSCRIPT") 2>&1
+
+          sanitize() {
+            sed -E \
+              -e '/(anon key|service_role key|S3 Access Key|S3 Secret Key|JWT secret|DB URL)/I s#(:|=).*#\1 [REDACTED]#' \
+              -e 's#postgres(ql)?://[^[:space:]]+#[REDACTED_LOCAL_DB_URL]#g' \
+              -e 's#eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}#[REDACTED_LOCAL_JWT]#g' \
+              -e 's#sb_(secret|publishable)_[A-Za-z0-9_-]+#[REDACTED_LOCAL_KEY]#g'
+          }
+
+          cleanup_all() {
+            set +e
+            for d in "$RUNNER_TEMP"/pr654-synth-*; do
+              [[ -d "$d" ]] || continue
+              (cd "$d" && npx --yes "supabase@${SUPABASE_CLI_VERSION}" stop --no-backup >/dev/null 2>&1 || true)
+            done
+            docker ps -a --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}' > "$EVIDENCE_DIR/manifests/docker-after-cleanup.tsv"
+            docker volume ls --format '{{.Name}}' | grep -E 'supabase|pr654-synth' > "$EVIDENCE_DIR/manifests/volumes-after-cleanup.txt" || true
+            ss -ltnp 2>/dev/null | grep -E ':(5432[0-9]|8000|8443|3000|4000|5000|6543|55432)\b' > "$EVIDENCE_DIR/manifests/listeners-after-cleanup.txt" || true
+            rm -rf "$RUNNER_TEMP"/pr654-synth-*
+          }
+          trap cleanup_all EXIT
+
+          echo '===== exact-head preflight ====='
+          cd "$GITHUB_WORKSPACE/product"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          test -z "$(git symbolic-ref -q --short HEAD || true)"
+          test -z "$(git status --porcelain)"
+          git ls-remote origin "refs/heads/${PRODUCT_BRANCH}" refs/heads/main | tee "$EVIDENCE_DIR/manifests/remote-refs.txt"
+          test "$(awk -v r="refs/heads/${PRODUCT_BRANCH}" '$2==r{print $1}' "$EVIDENCE_DIR/manifests/remote-refs.txt")" = "$EXPECTED_PRODUCT_HEAD"
+
+          echo '===== environment safety ====='
+          env | cut -d= -f1 | grep -E '^(SUPABASE|POSTGRES|PG|STRIPE|EVERY|DATABASE|DIRECT)' | sort -u > "$EVIDENCE_DIR/manifests/relevant-env-names-before-unset.txt" || true
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_ID SUPABASE_PROJECT_REF SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY DATABASE_URL DIRECT_URL POSTGRES_URL STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET EVERY_ORG_WEBHOOK_SECRET; do
+            unset "$name"
+          done
+
+          echo '===== toolchain ====='
+          {
+            uname -a
+            cat /etc/os-release
+            docker version
+            node --version
+            npm --version
+            git --version
+            npx --yes "supabase@${SUPABASE_CLI_VERSION}" --version
+          } | tee "$EVIDENCE_DIR/toolchain.txt"
+
+          echo '===== export exact product tree ====='
+          tar --exclude=.git -czf "$EVIDENCE_DIR/product-tree.tar.gz" .
+          sha256sum "$EVIDENCE_DIR/product-tree.tar.gz" > "$EVIDENCE_DIR/product-tree.tar.gz.sha256"
+
+          echo '===== schema.sql lineage ====='
+          git log --all --follow --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase/schema.sql > "$EVIDENCE_DIR/history/schema-sql-log.tsv"
+          git log --all --reverse --follow --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase/schema.sql > "$EVIDENCE_DIR/history/schema-sql-log-reverse.tsv"
+          git log --all -p --follow -- supabase/schema.sql > "$EVIDENCE_DIR/history/schema-sql-patch-history.txt"
+          while IFS=$'\t' read -r commit _rest; do
+            [[ -n "$commit" ]] || continue
+            if git cat-file -e "$commit:supabase/schema.sql" 2>/dev/null; then
+              git show "$commit:supabase/schema.sql" > "$EVIDENCE_DIR/schema-history/${commit}.sql"
+            fi
+          done < "$EVIDENCE_DIR/history/schema-sql-log.tsv"
+
+          echo '===== migration-directory lineage ====='
+          git log --all --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase/migrations > "$EVIDENCE_DIR/history/migrations-log.tsv"
+          git log --all --reverse --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase/migrations > "$EVIDENCE_DIR/history/migrations-log-reverse.tsv"
+          git log --all --diff-filter=A --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase/migrations/20260422_background_networking_non_ai.sql > "$EVIDENCE_DIR/history/first-migration-introduction.tsv"
+          git blame --line-porcelain supabase/migrations/README.md > "$EVIDENCE_DIR/history/migrations-readme-blame.txt" || true
+
+          echo '===== repository documentation and bootstrap search ====='
+          git grep -n -I -E 'supabase/schema\.sql|schema\.sql|db reset|migration repair|migration baseline|Supabase SQL editor|full rebuilt schema|base schema|bootstrap' -- . > "$EVIDENCE_DIR/history/repository-baseline-references.txt" || true
+          git log --all -S'create table if not exists public.profiles' --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase > "$EVIDENCE_DIR/history/profiles-introduction-search.tsv" || true
+          git log --all -S'create table if not exists public.offers' --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase > "$EVIDENCE_DIR/history/offers-introduction-search.tsv" || true
+          git log --all -S'create table if not exists public.match_suggestions' --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase > "$EVIDENCE_DIR/history/match-suggestions-introduction-search.tsv" || true
+          git log --all -S'function public.set_updated_at' --date=iso-strict --format='%H%x09%P%x09%aI%x09%s' -- supabase > "$EVIDENCE_DIR/history/set-updated-at-introduction-search.tsv" || true
+
+          echo '===== current migration inventory ====='
+          python3 - <<'PY' > "$EVIDENCE_DIR/manifests/migration-inventory.json"
+          from pathlib import Path
+          from collections import defaultdict
+          import hashlib, json, re
+          root=Path('supabase/migrations')
+          rows=[]; by=defaultdict(list)
+          for p in sorted(x for x in root.iterdir() if x.is_file()):
+              m=re.match(r'^(\d+)_',p.name); version=m.group(1) if m else ''
+              if version: by[version].append(p.name)
+              data=p.read_bytes()
+              rows.append({'name':p.name,'version':version,'size':len(data),'sha256':hashlib.sha256(data).hexdigest(),'sql':p.suffix.lower()=='.sql','standard14':bool(re.fullmatch(r'\d{14}',version))})
+          print(json.dumps({'rows':rows,'duplicates':{k:v for k,v in by.items() if len(v)>1}},indent=2,sort_keys=True))
+          PY
+
+          echo '===== export prerequisite-bearing historical snapshots ====='
+          first_commit="$(cut -f1 "$EVIDENCE_DIR/history/first-migration-introduction.tsv" | head -1)"
+          first_parent="$(cut -f2 "$EVIDENCE_DIR/history/first-migration-introduction.tsv" | head -1 | awk '{print $1}')"
+          printf 'first_commit=%s\nfirst_parent=%s\n' "$first_commit" "$first_parent" | tee "$EVIDENCE_DIR/history/first-migration-identity.txt"
+          for c in "$first_parent" "$first_commit"; do
+            [[ -n "$c" ]] || continue
+            git ls-tree -r --name-only "$c" -- supabase > "$EVIDENCE_DIR/history/supabase-tree-${c}.txt" || true
+            if git cat-file -e "$c:supabase/schema.sql" 2>/dev/null; then
+              git show "$c:supabase/schema.sql" > "$EVIDENCE_DIR/schema-history/first-migration-context-${c}.sql"
+            fi
+          done
+
+          echo '===== synthetic Supabase migration semantics ====='
+          run_case() {
+            local case_name="$1"
+            local case_dir="$RUNNER_TEMP/pr654-synth-${case_name}"
+            local out="$EVIDENCE_DIR/synthetic/${case_name}"
+            mkdir -p "$case_dir" "$out"
+            cd "$case_dir"
+            npx --yes "supabase@${SUPABASE_CLI_VERSION}" init --force > "$out/init.log" 2>&1
+            mkdir -p supabase/migrations
+          }
+          finish_case() {
+            local case_name="$1"
+            local case_dir="$RUNNER_TEMP/pr654-synth-${case_name}"
+            local out="$EVIDENCE_DIR/synthetic/${case_name}"
+            cd "$case_dir"
+            set +e
+            npx --yes "supabase@${SUPABASE_CLI_VERSION}" stop --no-backup > "$out/stop.log" 2>&1
+            set -e
+          }
+          find_db_container() {
+            docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1
+          }
+          query_history() {
+            local out="$1"
+            local db
+            db="$(find_db_container)"
+            if [[ -n "$db" ]]; then
+              docker exec "$db" psql -X -U postgres -d postgres -AtF $'\t' -c "select column_name,data_type,is_nullable from information_schema.columns where table_schema='supabase_migrations' and table_name='schema_migrations' order by ordinal_position; select '---ROWS---'; select * from supabase_migrations.schema_migrations order by version;" > "$out" 2>&1 || true
+            fi
+          }
+
+          # Case 1: duplicate version prefixes.
+          run_case duplicate
+          cat > supabase/migrations/20260101000000_first.sql <<'SQL'
+          create table public.synthetic_first(id integer primary key);
+          SQL
+          cat > supabase/migrations/20260101000000_second.sql <<'SQL'
+          create table public.synthetic_second(id integer primary key);
+          SQL
+          set +e
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" start --debug > "$EVIDENCE_DIR/synthetic/duplicate/start.raw.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/duplicate/start.exit"
+          set -e
+          sanitize < "$EVIDENCE_DIR/synthetic/duplicate/start.raw.log" > "$EVIDENCE_DIR/synthetic/duplicate/start.log"
+          rm -f "$EVIDENCE_DIR/synthetic/duplicate/start.raw.log"
+          query_history "$EVIDENCE_DIR/synthetic/duplicate/history.tsv"
+          finish_case duplicate
+
+          # Case 2: non-14-digit version.
+          run_case nonstandard
+          cat > supabase/migrations/20260101_short.sql <<'SQL'
+          create table public.synthetic_short(id integer primary key);
+          SQL
+          set +e
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" start --debug > "$EVIDENCE_DIR/synthetic/nonstandard/start.raw.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/nonstandard/start.exit"
+          set -e
+          sanitize < "$EVIDENCE_DIR/synthetic/nonstandard/start.raw.log" > "$EVIDENCE_DIR/synthetic/nonstandard/start.log"
+          rm -f "$EVIDENCE_DIR/synthetic/nonstandard/start.raw.log"
+          query_history "$EVIDENCE_DIR/synthetic/nonstandard/history.tsv"
+          finish_case nonstandard
+
+          # Case 3: add an earlier migration after a later one is recorded.
+          run_case backdated
+          cat > supabase/migrations/20260102000000_later.sql <<'SQL'
+          create table public.synthetic_later(id integer primary key);
+          SQL
+          set +e
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" start > "$EVIDENCE_DIR/synthetic/backdated/start-later.raw.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/backdated/start-later.exit"
+          set -e
+          sanitize < "$EVIDENCE_DIR/synthetic/backdated/start-later.raw.log" > "$EVIDENCE_DIR/synthetic/backdated/start-later.log"
+          rm -f "$EVIDENCE_DIR/synthetic/backdated/start-later.raw.log"
+          query_history "$EVIDENCE_DIR/synthetic/backdated/history-before.tsv"
+          cat > supabase/migrations/20260101000000_earlier.sql <<'SQL'
+          create table public.synthetic_earlier(id integer primary key);
+          SQL
+          set +e
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" migration list --local > "$EVIDENCE_DIR/synthetic/backdated/list.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/backdated/list.exit"
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" migration up --local > "$EVIDENCE_DIR/synthetic/backdated/up.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/backdated/up.exit"
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" migration up --local --include-all > "$EVIDENCE_DIR/synthetic/backdated/up-include-all.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/backdated/up-include-all.exit"
+          set -e
+          query_history "$EVIDENCE_DIR/synthetic/backdated/history-after.tsv"
+          finish_case backdated
+
+          # Case 4: changed content under an already-recorded version.
+          run_case changed
+          cat > supabase/migrations/20260101000000_change.sql <<'SQL'
+          create table public.synthetic_change(id integer primary key);
+          SQL
+          set +e
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" start > "$EVIDENCE_DIR/synthetic/changed/start.raw.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/changed/start.exit"
+          set -e
+          sanitize < "$EVIDENCE_DIR/synthetic/changed/start.raw.log" > "$EVIDENCE_DIR/synthetic/changed/start.log"
+          rm -f "$EVIDENCE_DIR/synthetic/changed/start.raw.log"
+          query_history "$EVIDENCE_DIR/synthetic/changed/history-before.tsv"
+          cat > supabase/migrations/20260101000000_change.sql <<'SQL'
+          create table public.synthetic_change(id integer primary key, changed text not null default 'yes');
+          SQL
+          set +e
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" migration list --local > "$EVIDENCE_DIR/synthetic/changed/list.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/changed/list.exit"
+          npx --yes "supabase@${SUPABASE_CLI_VERSION}" migration up --local > "$EVIDENCE_DIR/synthetic/changed/up.log" 2>&1
+          echo "$?" > "$EVIDENCE_DIR/synthetic/changed/up.exit"
+          set -e
+          query_history "$EVIDENCE_DIR/synthetic/changed/history-after.tsv"
+          finish_case changed
+
+          cd "$GITHUB_WORKSPACE/product"
+          echo '===== credential scan ====='
+          if grep -RIlE '(^|[^A-Za-z0-9])(eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_[A-Za-z0-9]|sb_secret_|postgres(ql)?://[^[:space:]]+:[^@[:space:]]+@)' "$EVIDENCE_DIR" > "$EVIDENCE_DIR/manifests/credential-scan-hits.txt"; then
+            echo 'Credential-like content found in retained evidence.'
+            cat "$EVIDENCE_DIR/manifests/credential-scan-hits.txt"
+            exit 1
+          fi
+          : > "$EVIDENCE_DIR/manifests/credential-scan-hits.txt"
+
+          cleanup_all
+          trap - EXIT
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf "$GITHUB_WORKSPACE/pr654-recovery-forensics.tar.gz" "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-recovery-forensics.tar.gz" > "$GITHUB_WORKSPACE/pr654-recovery-forensics.tar.gz.sha256"
+
+      - name: Upload credential-free forensics
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-recovery-forensics-${{ github.run_id }}
+          path: |
+            pr654-recovery-forensics.tar.gz
+            pr654-recovery-forensics.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
