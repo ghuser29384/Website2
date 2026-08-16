@@ -1,0 +1,98 @@
+name: PR654 generate canonical Supabase baseline
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/scripts/pr654-generate-canonical-baseline.sh
+      - .github/workflows/pr654-generate-canonical-baseline.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr654-generate-canonical-baseline
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      TARGET_BRANCH: qa/pr654-migration-baseline-recovery-20260816
+      CANDIDATE_DIR: ${{ github.workspace }}/candidate
+      EVIDENCE_DIR: ${{ runner.temp }}/pr654-generate-canonical-baseline
+      BASELINE_VERSION: '20260816180000'
+      METADATA_VERSION: '20260816180100'
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+      QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      QA_POOLER_USER: postgres.hvmxfjjbdcgjjudmthdz
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out QA-only generator harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact recovery branch with push credentials
+        uses: actions/checkout@v4
+        with:
+          ref: qa/pr654-migration-baseline-recovery-20260816
+          path: candidate
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Install repository dependencies
+        working-directory: candidate
+        shell: bash
+        run: npm ci
+
+      - name: Generate and push canonical baseline candidate
+        id: generate
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$QA_SUPABASE_DB_URL"
+          bash "$GITHUB_WORKSPACE/harness/.github/scripts/pr654-generate-canonical-baseline.sh"
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-generate-canonical-baseline.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-generate-canonical-baseline.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-generate-canonical-baseline.tar.gz.sha256"
+
+      - name: Upload credential-free generation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-generate-canonical-baseline-${{ github.run_id }}
+          path: |
+            pr654-generate-canonical-baseline.tar.gz
+            pr654-generate-canonical-baseline.tar.gz.sha256
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce generation result
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.generate.outcome }}" = success
