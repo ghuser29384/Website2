@@ -1,0 +1,143 @@
+name: Exact-head Offers query document-navigation QA
+
+on:
+  push:
+    branches:
+      - qa/offers-query-document-navigation-19eb61e6-20260816
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-offers-query-document-navigation-19eb61e6-20260816
+  cancel-in-progress: false
+
+env:
+  EXPECTED_BASE: 4587e8c418621440835940d6924f32c02ba3f2d1
+  CANDIDATE_SHA: 19eb61e69f9661d25fb99d665a85c737bb7f9392
+  SOURCE_BRANCH: fix/offers-query-document-navigation-20260816
+
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out exact repair candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 19eb61e69f9661d25fb99d665a85c737bb7f9392
+          fetch-depth: 0
+
+      - name: Guard exact candidate and bounded two-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE"
+          test "$(git ls-remote origin "refs/heads/$SOURCE_BRANCH" | awk '{print $1}')" = "$CANDIDATE_SHA"
+          test "$(git merge-base "$EXPECTED_BASE" "$CANDIDATE_SHA")" = "$EXPECTED_BASE"
+          expected="$(printf '%s\n' \
+            'src/app/offers/page.tsx' \
+            'tests/offers-density.spec.ts' | sort)"
+          actual="$(git diff --name-only "$EXPECTED_BASE" "$CANDIDATE_SHA" | sort)"
+          test "$actual" = "$expected"
+          git diff --check "$EXPECTED_BASE" "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          mkdir -p qa-results
+          {
+            echo "base_sha=$EXPECTED_BASE"
+            echo "candidate_sha=$CANDIDATE_SHA"
+            echo "tree_sha=$(git rev-parse "$CANDIDATE_SHA^{tree}")"
+            echo 'changed_files:'
+            printf '%s\n' "$actual"
+          } | tee qa-results/candidate-identity.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused and complete source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/app/offers/page.tsx \
+            tests/offers-density.spec.ts \
+            2>&1 | tee qa-results/focused-eslint.log
+          npm test 2>&1 | tee qa-results/repository-tests.log
+          npm run lint -- --quiet 2>&1 | tee qa-results/repository-eslint.log
+          npx tsc --noEmit --pretty false 2>&1 | tee qa-results/typescript.log
+
+      - name: Build production application
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee qa-results/production-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Stress repaired document navigation thirty times
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            --config=playwright.release.config.ts \
+            tests/offers-density.spec.ts \
+            --grep='preserves search, clarification, filters, sorting, pagination, and action URLs' \
+            --repeat-each=30 \
+            --workers=1 \
+            --reporter=line \
+            2>&1 | tee qa-results/offers-query-document-navigation-repeat.log
+
+      - name: Run complete rendered release gate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line \
+            2>&1 | tee qa-results/release-browser-gate.log
+
+      - name: Reconfirm exact immutable source after QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE"
+          test "$(git ls-remote origin "refs/heads/$SOURCE_BRANCH" | awk '{print $1}')" = "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          {
+            echo "verified_candidate_sha=$CANDIDATE_SHA"
+            echo "verified_tree_sha=$(git rev-parse "$CANDIDATE_SHA^{tree}")"
+          } | tee qa-results/final-identity.txt
+
+      - name: Upload immutable exact-head QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offers-query-document-navigation-qa-${{ github.run_id }}
+          path: |
+            qa-results
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 30
