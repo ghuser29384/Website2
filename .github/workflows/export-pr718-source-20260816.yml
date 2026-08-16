@@ -1,0 +1,39 @@
+name: Export exact PR 718 source package 20260816
+
+on:
+  push:
+    branches:
+      - ops/export-pr718-source-20260816
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard expected inherited candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "e7359a046d67391a37c92505f4c50694d5b24e1e"
+
+      - name: Upload source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr718-source-${{ github.sha }}
+          retention-days: 3
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            .github/workflows/reciprocal-trade-operation-intent-shadow-gates.yml
+            docs/moral-trade/reciprocal-trade-operation-intent-v1
+            scripts/reciprocal-trade-shadow
+            package.json
+            package-lock.json
