@@ -1,0 +1,108 @@
+name: PR654 canonical baseline prototype validation
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/scripts/pr654-validate-canonical-baseline-prototype.sh
+      - .github/workflows/pr654-validate-canonical-baseline-prototype.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: pr654-canonical-baseline-prototype-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      SUPABASE_CLI_VERSION: 2.110.0
+
+    steps:
+      - name: Check out QA-only harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact product head detached
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          path: product
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+
+      - name: Download read-only production catalog export
+        uses: actions/download-artifact@v4
+        with:
+          name: pr654-canonical-baseline-export-31956760948
+          path: source-export
+          github-token: ${{ github.token }}
+          repository: ghuser29384/Website2
+          run-id: 31956760948
+
+      - name: Extract source export
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr654-source-export"
+          tar -xzf source-export/pr654-canonical-baseline-export.tar.gz \
+            -C "$RUNNER_TEMP/pr654-source-export"
+          test -s "$RUNNER_TEMP/pr654-source-export/pr654-canonical-baseline-export/prod/schema-with-privileges.sql"
+
+      - name: Run three-pass local canonical baseline prototype
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            SUPABASE_ACCESS_TOKEN \
+            SUPABASE_DB_PASSWORD \
+            SUPABASE_PROJECT_ID \
+            SUPABASE_PROJECT_REF \
+            SUPABASE_URL \
+            SUPABASE_SERVICE_ROLE_KEY \
+            NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+            DATABASE_URL \
+            DIRECT_URL \
+            POSTGRES_URL \
+            STRIPE_SECRET_KEY \
+            STRIPE_WEBHOOK_SECRET \
+            EVERY_ORG_WEBHOOK_SECRET
+          do
+            unset "$name"
+          done
+          export PRODUCT_DIR="$GITHUB_WORKSPACE/product"
+          export SOURCE_EXPORT_DIR="$RUNNER_TEMP/pr654-source-export"
+          export EVIDENCE_DIR="$RUNNER_TEMP/pr654-canonical-baseline-prototype-evidence"
+          bash harness/.github/scripts/pr654-validate-canonical-baseline-prototype.sh
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz.sha256"
+
+      - name: Upload credential-free prototype evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-canonical-baseline-prototype-${{ github.run_id }}
+          path: |
+            pr654-canonical-baseline-prototype-evidence.tar.gz
+            pr654-canonical-baseline-prototype-evidence.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
