@@ -40,7 +40,7 @@ begin
     pg_catalog.hashtextextended(p_participant_id::text || ':financial:' || p_cycle_key, 0)
   );
 
-  select coverage, metadata into coverage_record, coverage_meta
+  select coverage.* into coverage_record
   from public.mpgf_public_goods_outflow_coverage_snapshots coverage
   join moral_trade_private.compact_outflow_coverage_metadata metadata
     on metadata.coverage_snapshot_id = coverage.id
@@ -48,6 +48,12 @@ begin
     and coverage.cycle_key = p_cycle_key
     and metadata.authority_status <> 'provisional'
   order by metadata.created_at desc, coverage.id desc limit 1;
+
+  if coverage_record.id is not null then
+    select * into coverage_meta
+    from moral_trade_private.compact_outflow_coverage_metadata
+    where coverage_snapshot_id = coverage_record.id;
+  end if;
 
   if coverage_record.id is null then
     return pg_catalog.jsonb_build_object(
