@@ -1,0 +1,289 @@
+name: PR654 finalize canonical baseline recovery
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/workflows/pr654-finalize-canonical-baseline-recovery.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr654-finalize-canonical-baseline-recovery
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    env:
+      PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      RECOVERY_BRANCH: qa/pr654-migration-baseline-recovery-20260816
+      HARNESS_BRANCH: qa/pr654-canonical-baseline-export-20260816
+
+    steps:
+      - name: Check out QA harness with history
+        uses: actions/checkout@v4
+        with:
+          ref: qa/pr654-canonical-baseline-export-20260816
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact successful recovery head and collect evidence
+        id: verify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/$RECOVERY_BRANCH:refs/remotes/origin/$RECOVERY_BRANCH" \
+            "+refs/heads/qa/pooled-settlement-payer-fix-candidate-20260813:refs/remotes/origin/product"
+          recovery_head="$(git rev-parse "refs/remotes/origin/$RECOVERY_BRANCH")"
+          product_head="$(git rev-parse refs/remotes/origin/product)"
+          test "$product_head" = "$PRODUCT_HEAD"
+
+          run_json="$RUNNER_TEMP/run.json"
+          gh run list \
+            --workflow canonical-database-baseline-ci.yml \
+            --branch "$RECOVERY_BRANCH" \
+            --limit 1 \
+            --json databaseId,url,status,conclusion,headSha,createdAt \
+            > "$run_json"
+          run_id="$(jq -r '.[0].databaseId' "$run_json")"
+          run_url="$(jq -r '.[0].url' "$run_json")"
+          run_status="$(jq -r '.[0].status' "$run_json")"
+          run_conclusion="$(jq -r '.[0].conclusion' "$run_json")"
+          run_head="$(jq -r '.[0].headSha' "$run_json")"
+          test "$run_status" = completed
+          test "$run_conclusion" = success
+          test "$run_head" = "$recovery_head"
+
+          pr_number="$(gh pr list --head "$RECOVERY_BRANCH" --state open --json number --jq '.[0].number')"
+          test -n "$pr_number"
+          test "$(gh pr view "$pr_number" --json isDraft --jq .isDraft)" = true
+          test "$(gh pr view "$pr_number" --json state --jq .state)" = OPEN
+          test "$(gh pr view "$pr_number" --json mergedAt --jq .mergedAt)" = null
+
+          gh run download "$run_id" \
+            --name "canonical-baseline-evidence-$run_id" \
+            --dir "$RUNNER_TEMP/evidence"
+          evidence_sha="$(cut -d' ' -f1 "$RUNNER_TEMP/evidence/canonical-baseline-evidence-v2.tar.gz.sha256")"
+
+          changed_files="$(git diff --name-only "$PRODUCT_HEAD...$recovery_head" | wc -l | tr -d ' ')"
+          insertions="$(git diff --numstat "$PRODUCT_HEAD...$recovery_head" | awk '{a+=$1} END{print a+0}')"
+          deletions="$(git diff --numstat "$PRODUCT_HEAD...$recovery_head" | awk '{d+=$2} END{print d+0}')"
+          marker_count="$(git ls-tree -r --name-only "$recovery_head" -- supabase/migrations | grep -c '_legacy_history_marker.sql$')"
+          baseline_sha="$(git show "$recovery_head:supabase/migrations/20260816180000_canonical_schema_baseline.sql" | sha256sum | cut -d' ' -f1)"
+
+          {
+            echo "recovery_head=$recovery_head"
+            echo "run_id=$run_id"
+            echo "run_url=$run_url"
+            echo "pr_number=$pr_number"
+            echo "evidence_sha=$evidence_sha"
+            echo "changed_files=$changed_files"
+            echo "insertions=$insertions"
+            echo "deletions=$deletions"
+            echo "marker_count=$marker_count"
+            echo "baseline_sha=$baseline_sha"
+          } >> "$GITHUB_OUTPUT"
+
+          git diff --stat "$PRODUCT_HEAD...$recovery_head" > "$RUNNER_TEMP/diff-stat.txt"
+          git diff --name-status "$PRODUCT_HEAD...$recovery_head" > "$RUNNER_TEMP/diff-files.txt"
+
+      - name: Update stacked recovery PR and primary PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_HEAD: ${{ steps.verify.outputs.recovery_head }}
+          RUN_ID: ${{ steps.verify.outputs.run_id }}
+          RUN_URL: ${{ steps.verify.outputs.run_url }}
+          STACKED_PR: ${{ steps.verify.outputs.pr_number }}
+          EVIDENCE_SHA: ${{ steps.verify.outputs.evidence_sha }}
+          CHANGED_FILES: ${{ steps.verify.outputs.changed_files }}
+          INSERTIONS: ${{ steps.verify.outputs.insertions }}
+          DELETIONS: ${{ steps.verify.outputs.deletions }}
+          MARKER_COUNT: ${{ steps.verify.outputs.marker_count }}
+          BASELINE_SHA: ${{ steps.verify.outputs.baseline_sha }}
+        run: |
+          set -euo pipefail
+          stacked_body="$RUNNER_TEMP/stacked-body.md"
+          cat > "$stacked_body" <<EOF
+          ## Summary
+
+          This draft stacked PR restores a repository-owned, repeatable Supabase/PostgreSQL reconstruction path for PR #654.
+
+          Exact base product head: \`$PRODUCT_HEAD\`
+
+          Exact recovery head: \`$RECOVERY_HEAD\`
+
+          Final diff: \`$CHANGED_FILES\` files, \`$INSERTIONS\` insertions, \`$DELETIONS\` deletions.
+
+          The branch remains draft, unmerged, undeployed, and fail-closed. It does not authorize a remote migration, migration-history repair, provider request, payment, feature activation, or production change.
+
+          ## Decisions
+
+          - The deployed production catalog is the canonical runtime schema source. Permanent QA is materially divergent and is not used as the squash source.
+          - Named-human offer-bank publication, profiles, offers, funded pools, payments, provider events, and operator-owned records are excluded from empty reconstruction.
+          - The 248 legacy SQL files are preserved under \`supabase/legacy_migrations/\` as immutable evidence, but no longer form the executable CLI chain.
+          - The active chain contains \`$MARKER_COUNT\` schema-neutral history markers for versions observed in production or permanent QA, one guarded canonical baseline, and one forward-safe metadata migration.
+          - Existing non-empty databases are rejected by the baseline. Adoption requires a separately approved read-only catalog comparison and explicit migration-history transition.
+
+          ## Implementation
+
+          - \`supabase/migrations/20260816180000_canonical_schema_baseline.sql\`
+            - generated from a read-only production schema-only dump;
+            - guarded to abort on a non-empty application database;
+            - creates the production \`public\` and \`moral_trade_private\` catalog;
+            - preserves RLS, policies, triggers, functions, grants, indexes, and constraints;
+            - inserts only blocked/pending pooled-settlement gate defaults;
+            - contains no named-human or transactional seed data.
+          - \`supabase/migrations/20260816180100_canonical_schema_baseline_metadata.sql\`
+            records canonical baseline identity and retains service-role-only access.
+          - \`supabase/seed.sql\` contains only non-personal registered-charity reference rows.
+          - \`supabase/config.toml\` pins the local reconstruction contract to PostgreSQL 17.
+          - Source-contract, pgTAP, read-only adoption-verifier, fingerprint, documentation, and durable baseline CI were added.
+
+          Baseline SHA-256: \`$BASELINE_SHA\`
+
+          ## Verification
+
+          Final exact-head Actions run: $RUN_URL
+
+          The successful run completed:
+
+          - focused baseline and pooled-settlement source/security tests;
+          - scoped ESLint and \`git diff --check\`;
+          - Pass A: independent no-volume Supabase/PostgreSQL reconstruction;
+          - Pass B: \`db reset --local --no-seed\` reconstruction;
+          - Pass C: independent \`stop --no-backup\` and fresh reconstruction;
+          - migration-history equality across all three passes;
+          - relation/function catalog equality across independent passes;
+          - pooled-settlement table, RLS, browser-DML denial, trigger-helper, freeze-function, fail-closed gate, migration-identity, and no-fixture assertions;
+          - pgTAP and database lint;
+          - complete repository tests, TypeScript, repository lint, and production build;
+          - container, volume, listener, and credential-evidence cleanup.
+
+          Credential-free evidence archive SHA-256: \`$EVIDENCE_SHA\`
+
+          ## Release classification
+
+          - [x] **Runtime-affecting**
+          - [ ] **Repository-only**
+          - [ ] **Mixed or uncertain**
+
+          The migration architecture changes how new databases are reconstructed and how existing environments must adopt the canonical baseline.
+
+          ## Release disposition
+
+          - [ ] **Explicit production release and post-release smoke test required**
+          - [ ] **Merge after repository gates; no manual production promotion required**
+          - [ ] **Ordinary automatic main deployment may occur**
+          - [x] **Do not merge or deploy yet; blockers remain**
+
+          ### Remaining blockers
+
+          1. separately approved production migration-history adoption after read-only catalog verification;
+          2. a decision on permanent-QA reconciliation or replacement;
+          3. synchronization with then-current main;
+          4. signed Stripe and Every.org route-level QA;
+          5. rendered participant/operator UI QA;
+          6. participant terms, reserve/shortfall ownership, named operators, monitoring, reconciliation, incident response, and controlled-launch approval;
+          7. dependency-advisory triage.
+
+          ## Production evidence
+
+          None. No merge, deployment, remote database write, history repair, provider request, payment, or production action occurred.
+          EOF
+          sed -i 's/^          //' "$stacked_body"
+          gh pr edit "$STACKED_PR" --body-file "$stacked_body"
+
+          gh pr comment "$STACKED_PR" --body "Canonical baseline recovery completed locally on exact head \`$RECOVERY_HEAD\`. Final three-pass database and repository gate: **success**. Run: $RUN_URL. Evidence SHA-256: \`$EVIDENCE_SHA\`. The PR remains draft and blocked from merge/deployment."
+
+          primary_body="$RUNNER_TEMP/primary-body.md"
+          cat > "$primary_body" <<EOF
+          ## Summary
+
+          PR #654 contains the cross-user pooled-settlement implementation and payer-context authorization repair. It remains fail-closed:
+
+          \`\`\`text
+          TRADE_DONATION_POOL_ENABLED=false
+          TRADE_DONATION_POOL_MODE=disabled
+          \`\`\`
+
+          Exact product head: \`$PRODUCT_HEAD\`.
+
+          A separate draft stacked recovery PR #$STACKED_PR now restores a canonical empty-database reconstruction path at \`$RECOVERY_HEAD\`. Its final three-pass local database and complete repository gate succeeded: $RUN_URL
+
+          PR #654 remains draft, unmerged, undeployed, and not production-ready.
+
+          ## Completed evidence
+
+          - payer identity uses the already-derived \`context.payerUserId\` and fails closed;
+          - canonical trigger-helper privilege hardening is represented under migration \`20260814024354\`;
+          - focused and complete repository gates passed;
+          - rollback-controlled transactional matrix: 23/23 assertions passed;
+          - genuine two-session advisory-lock concurrency proof passed for one-threshold and two-threshold scenarios;
+          - draft recovery PR #$STACKED_PR archives the broken legacy chain, adds a guarded production-derived canonical baseline, retains history markers, excludes named-human/transactional seeds, and passes three independent local reconstruction paths;
+          - recovery evidence SHA-256: \`$EVIDENCE_SHA\`.
+
+          ## Release classification
+
+          - [x] **Runtime-affecting**
+          - [ ] **Repository-only**
+          - [ ] **Mixed or uncertain**
+
+          ## Release disposition
+
+          - [ ] **Explicit production release and post-release smoke test required**
+          - [ ] **Merge after repository gates; no manual production promotion required**
+          - [ ] **Ordinary automatic main deployment may occur**
+          - [x] **Do not merge or deploy yet; blockers remain**
+
+          ## Remaining blockers
+
+          1. review draft recovery PR #$STACKED_PR;
+          2. separately approve and execute production migration-history adoption only after catalog verification;
+          3. decide whether permanent QA is reconciled or replaced;
+          4. synchronize the product/recovery stack with then-current main and rerun exact-head gates;
+          5. signed Stripe and Every.org route-level QA;
+          6. rendered participant/operator UI QA;
+          7. operational terms, reserve ownership, monitoring, reconciliation, incident response, controlled-launch approval, and dependency-advisory triage.
+
+          ## Production evidence
+
+          None. No merge, deployment, remote database write, migration-history repair, provider request, payment, refund, checkout, feature activation, or production action occurred.
+          EOF
+          sed -i 's/^          //' "$primary_body"
+          gh pr edit 654 --body-file "$primary_body"
+          gh pr comment 654 --body "Canonical migration-baseline implementation completed in draft stacked PR #$STACKED_PR at \`$RECOVERY_HEAD\`. Three-pass local reconstruction and complete repository validation succeeded: $RUN_URL. Evidence SHA-256: \`$EVIDENCE_SHA\`. No remote database or production action occurred; both PRs remain draft and blocked."
+
+      - name: Remove all temporary inventory/generator harness files through a forward commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            .github/scripts/pr654-export-canonical-baseline.sh \
+            .github/scripts/pr654-generate-canonical-baseline.sh \
+            .github/workflows/pr654-export-canonical-baseline.yml \
+            .github/workflows/pr654-export-canonical-baseline-pr.yml \
+            .github/workflows/pr654-export-canonical-baseline-commented.yml \
+            .github/workflows/pr654-export-canonical-baseline-summary.yml \
+            .github/workflows/pr654-generate-canonical-baseline.yml \
+            .github/workflows/pr654-consolidate-baseline-ci.yml \
+            .github/workflows/pr654-finalize-canonical-baseline-recovery.yml \
+            docs/qa/pr654-canonical-baseline-inventory-summary.md
+          rmdir docs/qa 2>/dev/null || true
+          rmdir docs 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'QA: remove temporary PR654 baseline harness'
+          test -z "$(git diff --name-only "$PRODUCT_HEAD" HEAD)"
+          git push origin HEAD:$HARNESS_BRANCH
