@@ -102,6 +102,7 @@ jobs:
             scripts/evidence-payment-qa-namespace.test.mjs \
             scripts/evidence-payment-qa-run-ownership.test.mjs
 
+          git add -A
           expected="$(printf '%s\n' \
             .github/workflows/evidence-payment-release-qa.yml \
             scripts/evidence-payment-qa-namespace.mjs \
@@ -112,14 +113,14 @@ jobs:
             supabase/tests/evidence_weighted_payment_browser_preflight.sql \
             tests/evidence-weighted-payment-authenticated.spec.ts \
             | sort)"
-          actual="$(git diff --name-only origin/main | sort)"
+          actual="$(git diff --cached --name-only origin/main | sort)"
           if [[ "$actual" != "$expected" ]]; then
             printf 'Expected final paths:\n%s\nActual final paths:\n%s\n' "$expected" "$actual" >&2
             exit 1
           fi
           test ! -e .ci-upload
           test ! -e .github/workflows/evidence-payment-run-owned-bootstrap.yml
-          git diff --check origin/main
+          git diff --cached --check origin/main
 
       - name: Commit and push the exact materialized implementation
         shell: bash
