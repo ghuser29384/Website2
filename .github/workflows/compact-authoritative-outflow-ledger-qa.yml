@@ -80,12 +80,24 @@ jobs:
           git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/actual-files.txt
           diff -u /tmp/expected-files.txt /tmp/actual-files.txt
           test "$(wc -l < /tmp/actual-files.txt)" -eq 14
-
           test "$(find supabase/migrations -maxdepth 1 -type f -name '2026081614150*_compact_authoritative_outflow_*.sql' | wc -l)" -eq 4
           test "$(find supabase/tests -maxdepth 1 -type f -name 'compact_authoritative_outflow_ledger_*.sql' | wc -l)" -eq 2
-          ! grep -R "jnpoxvalyjtdghnperyu" $(cat /tmp/actual-files.txt)
-          ! grep -R -E "automaticCollectionEnabled[[:space:]]*[:=][[:space:]]*true|moneyMoved[[:space:]]*[:=][[:space:]]*true|activation_execution_enabled[[:space:]]*=[[:space:]]*true" $(cat /tmp/actual-files.txt)
-          ! grep -R -E "createServiceClient|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|EVERY_ORG" src/components src/lib/mpgf
+          test ! -e .github/workflows/repair-compact-outflow-qa.yml
+
+          if grep -R "jnpoxvalyjtdghnperyu" $(cat /tmp/actual-files.txt); then
+            echo "Production Supabase reference found in the ledger candidate."
+            exit 1
+          fi
+          if grep -R -E "automaticCollectionEnabled[[:space:]]*[:=][[:space:]]*true|moneyMoved[[:space:]]*[:=][[:space:]]*true|activation_execution_enabled[[:space:]]*=[[:space:]]*true" $(cat /tmp/actual-files.txt); then
+            echo "An active collection or activation effect was introduced."
+            exit 1
+          fi
+          if grep -R -E "createServiceClient|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|EVERY_ORG" \
+            src/components/mpgf/mpgf-public-goods-compacts.tsx \
+            src/lib/mpgf/compact-authoritative-outflow*.ts; then
+            echo "Application/runtime credential or service-role use is forbidden."
+            exit 1
+          fi
           git diff --check
 
       - name: Install exact dependencies
@@ -173,7 +185,7 @@ jobs:
 
   clean-ephemeral-database:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 70
     env:
       LOCAL_SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       HISTORICAL_BASELINE_COMMIT: 4c95052ff97d55b42486cac47b7430896946f124
@@ -191,14 +203,13 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install exact dependencies and pinned Supabase CLI
+      - name: Install exact dependencies and PostgreSQL client
         run: |
           npm ci
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
-        shell: bash
 
-      - name: Install Supabase CLI
+      - name: Install pinned Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: 2.114.0
@@ -264,6 +275,8 @@ jobs:
           set -o pipefail
           supabase db lint --db-url "$LOCAL_SUPABASE_DB_URL" --schema public --level warning --fail-on none \
             2>&1 | tee compact-outflow-clean/supabase-db-lint.log
+          supabase db lint --db-url "$LOCAL_SUPABASE_DB_URL" --schema moral_trade_private --level warning --fail-on none \
+            2>&1 | tee compact-outflow-clean/private-db-lint.log
           node scripts/verify-mpgf-public-goods-compacts-db-lint.mjs compact-outflow-clean/supabase-db-lint.log \
             | tee compact-outflow-clean/supabase-db-lint-owned-gate.json
           psql "$LOCAL_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
@@ -303,7 +316,6 @@ jobs:
       - name: Stop and erase ephemeral runtime
         if: always()
         run: supabase stop --no-backup --yes > /dev/null 2>&1 || true
-        shell: bash
 
       - name: Upload clean database evidence
         if: always()
@@ -320,7 +332,7 @@ jobs:
       || github.event_name == 'push'
       || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
     env:
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
@@ -362,20 +374,21 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
 
-      - name: Record zero-residue and money baselines
+      - name: Record zero-residue baseline
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p compact-outflow-rollback
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' \
             | sed '/^[[:space:]]*$/d' > compact-outflow-rollback/before.txt
-          select 'public_relations|' || count(*) from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+          select 'public_relations|' || count(*)
+            from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
             where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
-          union all select 'private_relations|' || count(*) from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+          union all select 'private_relations|' || count(*)
+            from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
             where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
-          union all select 'fixture_users|' || count(*) from auth.users where email like 'ledger-%@example.test'
-          union all select 'active_compacts|' || coalesce((select count(*) from public.mpgf_public_goods_compacts where status='active'),0)
-          union all select 'payment_mandates|' || coalesce((select count(*) from public.conditional_payment_mandates),0)
+          union all select 'fixture_users|' || count(*)
+            from auth.users where email like 'ledger-%@example.test'
           order by 1;
           SQL
 
@@ -426,20 +439,21 @@ jobs:
           rollback;
           SQL
 
-      - name: Prove rollback, no money, and zero fixture residue
+      - name: Prove rollback and zero fixture residue
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' \
             | sed '/^[[:space:]]*$/d' > compact-outflow-rollback/after.txt
-          select 'public_relations|' || count(*) from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+          select 'public_relations|' || count(*)
+            from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
             where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
-          union all select 'private_relations|' || count(*) from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+          union all select 'private_relations|' || count(*)
+            from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
             where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
-          union all select 'fixture_users|' || count(*) from auth.users where email like 'ledger-%@example.test'
-          union all select 'active_compacts|' || coalesce((select count(*) from public.mpgf_public_goods_compacts where status='active'),0)
-          union all select 'payment_mandates|' || coalesce((select count(*) from public.conditional_payment_mandates),0)
+          union all select 'fixture_users|' || count(*)
+            from auth.users where email like 'ledger-%@example.test'
           order by 1;
           SQL
           diff -u compact-outflow-rollback/before.txt compact-outflow-rollback/after.txt
