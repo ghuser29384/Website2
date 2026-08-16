@@ -1,0 +1,64 @@
+name: PR654 patched schema snapshot diagnostic
+
+on:
+  push:
+    branches:
+      - qa/pr654-recovery-forensics-export-20260816
+    paths:
+      - .github/scripts/pr654-patched-schema-diagnostic.sh
+      - .github/workflows/pr654-patched-schema-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out QA-only harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact product head
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          path: product
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+
+      - name: Run local-only patched schema diagnostic
+        working-directory: product
+        shell: bash
+        env:
+          EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          SUPABASE_CLI_VERSION: 2.110.0
+        run: |
+          export EVIDENCE_DIR="$RUNNER_TEMP/evidence-pr654-patched-schema"
+          bash ../harness/.github/scripts/pr654-patched-schema-diagnostic.sh
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-patched-schema.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-patched-schema.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-patched-schema.tar.gz.sha256"
+
+      - name: Upload credential-free evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-patched-schema-${{ github.run_id }}
+          path: |
+            pr654-patched-schema.tar.gz
+            pr654-patched-schema.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
