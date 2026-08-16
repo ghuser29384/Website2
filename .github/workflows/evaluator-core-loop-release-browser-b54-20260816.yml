@@ -1,0 +1,81 @@
+name: Exact-head evaluator integration release-browser validation
+
+on:
+  push:
+    branches:
+      - qa/evaluator-core-loop-release-browser-b54-20260816
+    paths:
+      - .github/workflows/evaluator-core-loop-release-browser-b54-20260816.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evaluator-core-loop-release-browser-b54-20260816
+  cancel-in-progress: false
+
+jobs:
+  release-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_TARGET_SHA: b54fe1b547fcc0efe273b233a26c514ee2a3fea6
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Check out immutable integration candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: b54fe1b547fcc0efe273b233a26c514ee2a3fea6
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Guard exact target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+          {
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } | tee release-browser-exact-head.txt
+          git diff --check
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete repository quality gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test | tee release-browser-unit.log
+          npm run lint -- --quiet | tee release-browser-lint.log
+          npx tsc --noEmit --pretty false | tee release-browser-types.log
+          npm run build | tee release-browser-build.log
+
+      - name: Run complete rendered browser gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e:release -- --reporter=line \
+            | tee release-browser-playwright.log
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluator-integration-release-browser-b54-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            release-browser-*.txt
+            release-browser-*.log
+            playwright-report
+            test-results
