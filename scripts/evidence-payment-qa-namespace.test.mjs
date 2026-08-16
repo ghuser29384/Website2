@@ -19,16 +19,18 @@ const BASE_INPUT = {
   qaRef: EVIDENCE_PAYMENT_QA_REF,
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 test("derivation is deterministic, complete, valid, and collision-free", () => {
   const first = buildEvidencePaymentQaNamespace(BASE_INPUT);
   const second = buildEvidencePaymentQaNamespace(BASE_INPUT);
   assert.deepEqual(second, first);
+  assert.equal(first.schemaVersion, 2);
   assert.match(first.namespace.handle, /^epqa-[0-9a-f]{24}$/);
   assert.match(first.namespace.sha256, /^[0-9a-f]{64}$/);
   assert.equal(Object.keys(first.roles).length, 6);
-  assert.ok(Object.keys(first.objects).length >= 30);
+  assert.ok(Object.keys(first.objects).length >= 34);
 
   const ids = [
     ...Object.values(first.roles).map((role) => role.id),
@@ -40,7 +42,8 @@ test("derivation is deterministic, complete, valid, and collision-free", () => {
   const emails = Object.values(first.roles).map((role) => role.email);
   assert.equal(new Set(emails).size, emails.length);
   for (const email of emails) {
-    assert.match(email, /^[a-z0-9-]+@qa\.invalid$/);
+    assert.match(email, /^epqa-[0-9a-f]{20}-[a-z-]+@qa\.invalid$/);
+    assert.doesNotMatch(email, /^evidence-payment-/);
     assert.ok(email.length <= 254);
   }
 });
@@ -100,7 +103,8 @@ test("CLI persists a reproducible non-secret manifest and GitHub environment", (
 
   const envText = readFileSync(githubEnvPath, "utf8");
   assert.match(envText, /EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE=epqa-/);
-  assert.match(envText, /EVIDENCE_PAYMENT_QA_PAYER_EMAIL=/);
+  assert.match(envText, /EVIDENCE_PAYMENT_QA_PAYER_EMAIL=epqa-/);
+  assert.match(envText, /EVIDENCE_PAYMENT_QA_ADMIN_FALLBACK_PAYOUT_ID=/);
   assert.doesNotMatch(envText, /password|token|cookie|secret/i);
 
   const second = runCli(

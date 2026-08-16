@@ -10,8 +10,10 @@ export const EVIDENCE_PAYMENT_QA_REF = "hvmxfjjbdcgjjudmthdz";
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const WORKFLOW_REF_PATTERN = /^[A-Za-z0-9_.@/+\-]+$/;
 const POSITIVE_INTEGER_PATTERN = /^[1-9][0-9]{0,19}$/;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const EMAIL_PATTERN = /^[a-z0-9-]+@qa\.invalid$/;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const EMAIL_PATTERN = /^epqa-[0-9a-f]{20}-[a-z-]+@qa\.invalid$/;
+const UUID_V5_URL_NAMESPACE = "6ba7b811-9dad-11d1-80b4-00c04fd430c8";
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
 const ROLE_DEFINITIONS = [
@@ -45,7 +47,10 @@ const OBJECT_DEFINITIONS = [
   ["payment-intent", "PAYMENT_INTENT_ID"],
   ["payment-receipt-initial", "PAYMENT_RECEIPT_INITIAL_ID"],
   ["payment-receipt-correction", "PAYMENT_RECEIPT_CORRECTION_ID"],
+  ["payment-receipt-cycle-2", "PAYMENT_RECEIPT_CYCLE_2_ID"],
+  ["admin-fallback-payment-receipt", "ADMIN_FALLBACK_PAYMENT_RECEIPT_ID"],
   ["payment-review-case", "PAYMENT_REVIEW_CASE_ID"],
+  ["admin-fallback-payment-review-case", "ADMIN_FALLBACK_PAYMENT_REVIEW_CASE_ID"],
   ["payment-review-decision", "PAYMENT_REVIEW_DECISION_ID"],
   ["payment-appeal", "PAYMENT_APPEAL_ID"],
   ["payment-appeal-decision", "PAYMENT_APPEAL_DECISION_ID"],
@@ -74,8 +79,17 @@ function requireString(value, name, pattern, maximumLength) {
   return value;
 }
 
+function uuidBytes(uuid) {
+  const compact = uuid.replaceAll("-", "");
+  if (!/^[0-9a-f]{32}$/.test(compact)) {
+    fail("internal UUID namespace is malformed.");
+  }
+  return Buffer.from(compact, "hex");
+}
+
 function deterministicUuid(canonical, label) {
-  const bytes = createHash("sha256")
+  const bytes = createHash("sha1")
+    .update(uuidBytes(UUID_V5_URL_NAMESPACE))
     .update(canonical, "utf8")
     .update("\u001f", "utf8")
     .update(label, "utf8")
@@ -127,18 +141,21 @@ export function buildEvidencePaymentQaNamespace(input) {
   }
 
   const canonical = [
-    "moral-trade-evidence-payment-qa-v1",
+    "moral-trade-evidence-payment-qa-v2",
     repository,
     workflowRef,
     runId,
     runAttempt,
     qaRef,
   ].join("\u001f");
-  const namespaceHash = createHash("sha256").update(canonical, "utf8").digest("hex");
+  const namespaceHash = createHash("sha256")
+    .update(canonical, "utf8")
+    .digest("hex");
   const handle = `epqa-${namespaceHash.slice(0, 24)}`;
 
   const roles = {};
   const environment = {
+    EVIDENCE_PAYMENT_QA_MANIFEST_SCHEMA_VERSION: "2",
     EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE: handle,
     EVIDENCE_PAYMENT_QA_NAMESPACE_HASH: namespaceHash,
     EVIDENCE_PAYMENT_QA_REPOSITORY: repository,
@@ -150,7 +167,7 @@ export function buildEvidencePaymentQaNamespace(input) {
 
   for (const [role, envRole] of ROLE_DEFINITIONS) {
     const id = deterministicUuid(canonical, `auth-user:${role}`);
-    const email = `evidence-payment-${role}-${namespaceHash.slice(0, 20)}@qa.invalid`;
+    const email = `epqa-${namespaceHash.slice(0, 20)}-${role}@qa.invalid`;
     if (!UUID_PATTERN.test(id)) fail(`derived ${role} UUID is invalid.`);
     if (!EMAIL_PATTERN.test(email) || email.length > 254) {
       fail(`derived ${role} email is invalid.`);
@@ -183,7 +200,7 @@ export function buildEvidencePaymentQaNamespace(input) {
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     namespace: {
       handle,
       sha256: namespaceHash,
@@ -235,7 +252,11 @@ function writeManifest(path, manifest) {
     }
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
-    writeFileSync(outputPath, serialized, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    writeFileSync(outputPath, serialized, {
+      encoding: "utf8",
+      mode: 0o600,
+      flag: "wx",
+    });
   }
 }
 

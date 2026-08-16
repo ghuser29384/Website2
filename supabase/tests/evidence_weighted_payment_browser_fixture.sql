@@ -1,101 +1,13 @@
 \set ON_ERROR_STOP on
+\ir evidence_weighted_payment_browser_preflight.sql
 \getenv qa_password EVIDENCE_PAYMENT_QA_PASSWORD
 
 -- Durable isolated-QA fixture for the authenticated Playwright release gate.
--- Set EVIDENCE_PAYMENT_QA_PASSWORD to an ephemeral random value before invoking
--- this script. The password is never checked in, and cleanup invalidates it.
+-- Every persistent identifier and email is derived from immutable workflow-run
+-- metadata. This script never reuses, discovers, or cleans a different run's
+-- fixtures. The password is ephemeral and never written to an artifact.
 
 begin;
-
-create temporary table qa_browser_cleanup_payouts
-on commit drop
-as
-select payout.id
-from public.trade_milestone_payouts payout
-join public.trade_agreement_milestones milestone
-  on milestone.id = payout.milestone_id
-where milestone.agreement_id in (
-  '72000000-0000-4000-8000-000000000001',
-  '72000000-0000-4000-8000-000000000002'
-);
-
-create temporary table qa_browser_cleanup_payment_cases
-on commit drop
-as
-select review_case.id
-from public.trade_payment_review_cases review_case
-where review_case.payout_id in (
-  select payout.id from qa_browser_cleanup_payouts payout
-);
-
-delete from public.trade_payment_appeals
-where case_id in (
-  select review_case.id from qa_browser_cleanup_payment_cases review_case
-);
-
-delete from public.trade_payment_review_decisions
-where decision_kind = 'appeal'
-  and case_id in (
-    select review_case.id from qa_browser_cleanup_payment_cases review_case
-  );
-
-delete from public.trade_payment_review_decisions
-where case_id in (
-  select review_case.id from qa_browser_cleanup_payment_cases review_case
-);
-
-delete from public.trade_payment_review_cases
-where id in (
-  select review_case.id from qa_browser_cleanup_payment_cases review_case
-);
-
-delete from public.trade_external_payment_receipts
-where attempt_number = 2
-  and payout_id in (
-    select payout.id from qa_browser_cleanup_payouts payout
-  );
-
-delete from public.trade_external_payment_receipts
-where attempt_number = 1
-  and payout_id in (
-    select payout.id from qa_browser_cleanup_payouts payout
-  );
-
-delete from public.agreements
-where id in (
-  '72000000-0000-4000-8000-000000000001',
-  '72000000-0000-4000-8000-000000000002'
-);
-
-delete from public.trade_notifications
-where user_id in (
-  '71000000-0000-4000-8000-000000000001',
-  '71000000-0000-4000-8000-000000000002',
-  '71000000-0000-4000-8000-000000000003',
-  '71000000-0000-4000-8000-000000000004',
-  '71000000-0000-4000-8000-000000000005',
-  '71000000-0000-4000-8000-000000000006'
-);
-
-delete from public.trade_review_role_grants
-where profile_id in (
-  '71000000-0000-4000-8000-000000000001',
-  '71000000-0000-4000-8000-000000000002',
-  '71000000-0000-4000-8000-000000000003',
-  '71000000-0000-4000-8000-000000000004',
-  '71000000-0000-4000-8000-000000000005',
-  '71000000-0000-4000-8000-000000000006'
-);
-
-delete from auth.mfa_factors
-where user_id in (
-  '71000000-0000-4000-8000-000000000001',
-  '71000000-0000-4000-8000-000000000002',
-  '71000000-0000-4000-8000-000000000003',
-  '71000000-0000-4000-8000-000000000004',
-  '71000000-0000-4000-8000-000000000005',
-  '71000000-0000-4000-8000-000000000006'
-);
 
 insert into auth.users (
   id,
@@ -128,10 +40,10 @@ select
   now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   jsonb_build_object(
-    'display_name',
-    actor.display_name,
-    'qa_fixture',
-    'evidence_payment_browser'
+    'display_name', actor.display_name,
+    'qa_fixture', 'evidence_payment_browser',
+    'qa_namespace', :'qa_namespace_handle',
+    'qa_namespace_sha256', :'qa_namespace_hash'
   ),
   '',
   '',
@@ -146,51 +58,36 @@ select
 from (
   values
     (
-      '71000000-0000-4000-8000-000000000001'::uuid,
-      'evidence-payment-payer@qa.invalid',
+      :'qa_payer_id'::uuid,
+      :'qa_payer_email',
       'QA Payment Payer'
     ),
     (
-      '71000000-0000-4000-8000-000000000002'::uuid,
-      'evidence-payment-payee@qa.invalid',
+      :'qa_payee_id'::uuid,
+      :'qa_payee_email',
       'QA Payment Payee'
     ),
     (
-      '71000000-0000-4000-8000-000000000003'::uuid,
-      'evidence-payment-reviewer@qa.invalid',
+      :'qa_reviewer_id'::uuid,
+      :'qa_reviewer_email',
       'QA Payment Reviewer'
     ),
     (
-      '71000000-0000-4000-8000-000000000004'::uuid,
-      'evidence-payment-appeal-reviewer@qa.invalid',
+      :'qa_appeal_reviewer_id'::uuid,
+      :'qa_appeal_reviewer_email',
       'QA Payment Appeal Reviewer'
     ),
     (
-      '71000000-0000-4000-8000-000000000005'::uuid,
-      'evidence-payment-outsider@qa.invalid',
+      :'qa_outsider_id'::uuid,
+      :'qa_outsider_email',
       'QA Payment Outsider'
     ),
     (
-      '71000000-0000-4000-8000-000000000006'::uuid,
-      'evidence-payment-admin@qa.invalid',
+      :'qa_admin_id'::uuid,
+      :'qa_admin_email',
       'QA Payment Administrator'
     )
-) as actor(id, email, display_name)
-on conflict (id) do update
-set email = excluded.email,
-    encrypted_password = excluded.encrypted_password,
-    email_confirmed_at = now(),
-    raw_app_meta_data = excluded.raw_app_meta_data,
-    raw_user_meta_data = excluded.raw_user_meta_data,
-    confirmation_token = excluded.confirmation_token,
-    recovery_token = excluded.recovery_token,
-    email_change = excluded.email_change,
-    email_change_token_new = excluded.email_change_token_new,
-    email_change_token_current = excluded.email_change_token_current,
-    reauthentication_token = excluded.reauthentication_token,
-    deleted_at = null,
-    banned_until = null,
-    updated_at = now();
+) as actor(id, email, display_name);
 
 insert into auth.identities (
   provider_id,
@@ -205,12 +102,9 @@ select
   actor.id::text,
   actor.id,
   jsonb_build_object(
-    'sub',
-    actor.id::text,
-    'email',
-    actor.email,
-    'email_verified',
-    true
+    'sub', actor.id::text,
+    'email', actor.email,
+    'email_verified', true
   ),
   'email',
   now(),
@@ -218,88 +112,61 @@ select
   now()
 from (
   values
-    (
-      '71000000-0000-4000-8000-000000000001'::uuid,
-      'evidence-payment-payer@qa.invalid'
-    ),
-    (
-      '71000000-0000-4000-8000-000000000002'::uuid,
-      'evidence-payment-payee@qa.invalid'
-    ),
-    (
-      '71000000-0000-4000-8000-000000000003'::uuid,
-      'evidence-payment-reviewer@qa.invalid'
-    ),
-    (
-      '71000000-0000-4000-8000-000000000004'::uuid,
-      'evidence-payment-appeal-reviewer@qa.invalid'
-    ),
-    (
-      '71000000-0000-4000-8000-000000000005'::uuid,
-      'evidence-payment-outsider@qa.invalid'
-    ),
-    (
-      '71000000-0000-4000-8000-000000000006'::uuid,
-      'evidence-payment-admin@qa.invalid'
-    )
-) as actor(id, email)
-on conflict (provider_id, provider) do update
-set user_id = excluded.user_id,
-    identity_data = excluded.identity_data,
-    updated_at = now();
+    (:'qa_payer_id'::uuid, :'qa_payer_email'),
+    (:'qa_payee_id'::uuid, :'qa_payee_email'),
+    (:'qa_reviewer_id'::uuid, :'qa_reviewer_email'),
+    (:'qa_appeal_reviewer_id'::uuid, :'qa_appeal_reviewer_email'),
+    (:'qa_outsider_id'::uuid, :'qa_outsider_email'),
+    (:'qa_admin_id'::uuid, :'qa_admin_email')
+) as actor(id, email);
 
 insert into public.profiles (id, email, display_name, bio, affiliation)
 select *
 from (
   values
     (
-      '71000000-0000-4000-8000-000000000001'::uuid,
-      'evidence-payment-payer@qa.invalid',
+      :'qa_payer_id'::uuid,
+      :'qa_payer_email',
       'QA Payment Payer',
       '',
       'Isolated QA'
     ),
     (
-      '71000000-0000-4000-8000-000000000002'::uuid,
-      'evidence-payment-payee@qa.invalid',
+      :'qa_payee_id'::uuid,
+      :'qa_payee_email',
       'QA Payment Payee',
       '',
       'Isolated QA'
     ),
     (
-      '71000000-0000-4000-8000-000000000003'::uuid,
-      'evidence-payment-reviewer@qa.invalid',
+      :'qa_reviewer_id'::uuid,
+      :'qa_reviewer_email',
       'QA Payment Reviewer',
       '',
       'Isolated QA'
     ),
     (
-      '71000000-0000-4000-8000-000000000004'::uuid,
-      'evidence-payment-appeal-reviewer@qa.invalid',
+      :'qa_appeal_reviewer_id'::uuid,
+      :'qa_appeal_reviewer_email',
       'QA Payment Appeal Reviewer',
       '',
       'Isolated QA'
     ),
     (
-      '71000000-0000-4000-8000-000000000005'::uuid,
-      'evidence-payment-outsider@qa.invalid',
+      :'qa_outsider_id'::uuid,
+      :'qa_outsider_email',
       'QA Payment Outsider',
       '',
       'Isolated QA'
     ),
     (
-      '71000000-0000-4000-8000-000000000006'::uuid,
-      'evidence-payment-admin@qa.invalid',
+      :'qa_admin_id'::uuid,
+      :'qa_admin_email',
       'QA Payment Administrator',
       '',
       'Isolated QA'
     )
-) as actor(id, email, display_name, bio, affiliation)
-on conflict (id) do update
-set email = excluded.email,
-    display_name = excluded.display_name,
-    bio = excluded.bio,
-    affiliation = excluded.affiliation;
+) as actor(id, email, display_name, bio, affiliation);
 
 insert into public.trade_review_role_grants (
   profile_id,
@@ -311,7 +178,7 @@ insert into public.trade_review_role_grants (
 )
 values
   (
-    '71000000-0000-4000-8000-000000000003',
+    :'qa_reviewer_id'::uuid,
     'reviewer',
     true,
     null,
@@ -319,7 +186,7 @@ values
     null
   ),
   (
-    '71000000-0000-4000-8000-000000000004',
+    :'qa_appeal_reviewer_id'::uuid,
     'reviewer',
     true,
     null,
@@ -327,18 +194,13 @@ values
     null
   ),
   (
-    '71000000-0000-4000-8000-000000000006',
+    :'qa_admin_id'::uuid,
     'administrator',
     true,
     null,
     now(),
     null
-  )
-on conflict (profile_id, role) do update
-set active = true,
-    granted_by = null,
-    granted_at = now(),
-    revoked_at = null;
+  );
 
 insert into public.agreements (
   id,
@@ -351,18 +213,18 @@ insert into public.agreements (
 )
 values
   (
-    '72000000-0000-4000-8000-000000000001',
-    '71000000-0000-4000-8000-000000000001',
-    '71000000-0000-4000-8000-000000000002',
+    :'qa_agreement_id'::uuid,
+    :'qa_payer_id'::uuid,
+    :'qa_payee_id'::uuid,
     'active',
     'active',
     'manual',
     'under_review'
   ),
   (
-    '72000000-0000-4000-8000-000000000002',
-    '71000000-0000-4000-8000-000000000001',
-    '71000000-0000-4000-8000-000000000002',
+    :'qa_admin_fallback_agreement_id'::uuid,
+    :'qa_payer_id'::uuid,
+    :'qa_payee_id'::uuid,
     'active',
     'active',
     'manual',
@@ -389,10 +251,10 @@ insert into public.trade_agreement_versions (
 )
 values
   (
-    '73000000-0000-4000-8000-000000000001',
-    '72000000-0000-4000-8000-000000000001',
+    :'qa_agreement_version_id'::uuid,
+    :'qa_agreement_id'::uuid,
     1,
-    '71000000-0000-4000-8000-000000000001',
+    :'qa_payer_id'::uuid,
     'Pay the externally settled QA amount',
     'Complete the evidence-weighted QA milestone',
     'QA browser lifecycle',
@@ -407,10 +269,10 @@ values
     null
   ),
   (
-    '73000000-0000-4000-8000-000000000002',
-    '72000000-0000-4000-8000-000000000002',
+    :'qa_admin_fallback_agreement_version_id'::uuid,
+    :'qa_admin_fallback_agreement_id'::uuid,
     1,
-    '71000000-0000-4000-8000-000000000001',
+    :'qa_payer_id'::uuid,
     'Pay the externally settled QA fallback amount',
     'Complete the fallback QA milestone',
     'QA administrator fallback',
@@ -428,14 +290,14 @@ values
 update public.agreements
 set current_version_id =
   case id
-    when '72000000-0000-4000-8000-000000000001'::uuid
-      then '73000000-0000-4000-8000-000000000001'::uuid
-    when '72000000-0000-4000-8000-000000000002'::uuid
-      then '73000000-0000-4000-8000-000000000002'::uuid
+    when :'qa_agreement_id'::uuid
+      then :'qa_agreement_version_id'::uuid
+    when :'qa_admin_fallback_agreement_id'::uuid
+      then :'qa_admin_fallback_agreement_version_id'::uuid
   end
 where id in (
-  '72000000-0000-4000-8000-000000000001',
-  '72000000-0000-4000-8000-000000000002'
+  :'qa_agreement_id'::uuid,
+  :'qa_admin_fallback_agreement_id'::uuid
 );
 
 insert into public.trade_agreement_milestones (
@@ -457,12 +319,12 @@ insert into public.trade_agreement_milestones (
 )
 values
   (
-    '74000000-0000-4000-8000-000000000001',
-    '72000000-0000-4000-8000-000000000001',
-    '73000000-0000-4000-8000-000000000001',
+    :'qa_milestone_id'::uuid,
+    :'qa_agreement_id'::uuid,
+    :'qa_agreement_version_id'::uuid,
     1,
-    '71000000-0000-4000-8000-000000000002',
-    '71000000-0000-4000-8000-000000000001',
+    :'qa_payee_id'::uuid,
+    :'qa_payer_id'::uuid,
     'service',
     'Complete the isolated-QA evidence-weighted payment lifecycle',
     'milestone',
@@ -474,12 +336,12 @@ values
     'graded'
   ),
   (
-    '74000000-0000-4000-8000-000000000002',
-    '72000000-0000-4000-8000-000000000002',
-    '73000000-0000-4000-8000-000000000002',
+    :'qa_admin_fallback_milestone_id'::uuid,
+    :'qa_admin_fallback_agreement_id'::uuid,
+    :'qa_admin_fallback_agreement_version_id'::uuid,
     1,
-    '71000000-0000-4000-8000-000000000002',
-    '71000000-0000-4000-8000-000000000001',
+    :'qa_payee_id'::uuid,
+    :'qa_payer_id'::uuid,
     'service',
     'Exercise the expired administrator payment-review fallback',
     'milestone',
@@ -498,8 +360,8 @@ with version_hashes as (
     public.trade_milestone_manifest_hash_v1(version_row.id) as manifest_hash
   from public.trade_agreement_versions version_row
   where version_row.id in (
-    '73000000-0000-4000-8000-000000000001',
-    '73000000-0000-4000-8000-000000000002'
+    :'qa_agreement_version_id'::uuid,
+    :'qa_admin_fallback_agreement_version_id'::uuid
   )
 )
 update public.trade_agreement_versions version_row
@@ -530,9 +392,9 @@ insert into public.trade_evidence_bundles (
 )
 values
   (
-    '75000000-0000-4000-8000-000000000001',
-    '74000000-0000-4000-8000-000000000001',
-    '71000000-0000-4000-8000-000000000002',
+    :'qa_evidence_bundle_id'::uuid,
+    :'qa_milestone_id'::uuid,
+    :'qa_payee_id'::uuid,
     'initial',
     1,
     'accepted',
@@ -540,9 +402,9 @@ values
     now()
   ),
   (
-    '75000000-0000-4000-8000-000000000002',
-    '74000000-0000-4000-8000-000000000002',
-    '71000000-0000-4000-8000-000000000002',
+    :'qa_admin_fallback_evidence_bundle_id'::uuid,
+    :'qa_admin_fallback_milestone_id'::uuid,
+    :'qa_payee_id'::uuid,
     'initial',
     1,
     'accepted',
@@ -568,10 +430,10 @@ insert into public.trade_milestone_reviews (
 )
 values
   (
-    '76000000-0000-4000-8000-000000000001',
-    '74000000-0000-4000-8000-000000000001',
-    '75000000-0000-4000-8000-000000000001',
-    '71000000-0000-4000-8000-000000000003',
+    :'qa_milestone_review_id'::uuid,
+    :'qa_milestone_id'::uuid,
+    :'qa_evidence_bundle_id'::uuid,
+    :'qa_reviewer_id'::uuid,
     'initial',
     'graded',
     1,
@@ -584,10 +446,10 @@ values
     now()
   ),
   (
-    '76000000-0000-4000-8000-000000000002',
-    '74000000-0000-4000-8000-000000000002',
-    '75000000-0000-4000-8000-000000000002',
-    '71000000-0000-4000-8000-000000000003',
+    :'qa_admin_fallback_milestone_review_id'::uuid,
+    :'qa_admin_fallback_milestone_id'::uuid,
+    :'qa_admin_fallback_evidence_bundle_id'::uuid,
+    :'qa_reviewer_id'::uuid,
     'initial',
     'graded',
     1,
@@ -603,21 +465,21 @@ values
 update public.trade_agreement_milestones
 set current_bundle_id =
       case id
-        when '74000000-0000-4000-8000-000000000001'::uuid
-          then '75000000-0000-4000-8000-000000000001'::uuid
-        when '74000000-0000-4000-8000-000000000002'::uuid
-          then '75000000-0000-4000-8000-000000000002'::uuid
+        when :'qa_milestone_id'::uuid
+          then :'qa_evidence_bundle_id'::uuid
+        when :'qa_admin_fallback_milestone_id'::uuid
+          then :'qa_admin_fallback_evidence_bundle_id'::uuid
       end,
     final_review_id =
       case id
-        when '74000000-0000-4000-8000-000000000001'::uuid
-          then '76000000-0000-4000-8000-000000000001'::uuid
-        when '74000000-0000-4000-8000-000000000002'::uuid
-          then '76000000-0000-4000-8000-000000000002'::uuid
+        when :'qa_milestone_id'::uuid
+          then :'qa_milestone_review_id'::uuid
+        when :'qa_admin_fallback_milestone_id'::uuid
+          then :'qa_admin_fallback_milestone_review_id'::uuid
       end
 where id in (
-  '74000000-0000-4000-8000-000000000001',
-  '74000000-0000-4000-8000-000000000002'
+  :'qa_milestone_id'::uuid,
+  :'qa_admin_fallback_milestone_id'::uuid
 );
 
 insert into public.trade_milestone_payouts (
@@ -639,11 +501,11 @@ insert into public.trade_milestone_payouts (
 )
 values
   (
-    '77000000-0000-4000-8000-000000000001',
-    '74000000-0000-4000-8000-000000000001',
-    '76000000-0000-4000-8000-000000000001',
-    '71000000-0000-4000-8000-000000000001',
-    '71000000-0000-4000-8000-000000000002',
+    :'qa_payout_id'::uuid,
+    :'qa_milestone_id'::uuid,
+    :'qa_milestone_review_id'::uuid,
+    :'qa_payer_id'::uuid,
+    :'qa_payee_id'::uuid,
     500,
     1,
     1,
@@ -656,11 +518,11 @@ values
     now()
   ),
   (
-    '77000000-0000-4000-8000-000000000002',
-    '74000000-0000-4000-8000-000000000002',
-    '76000000-0000-4000-8000-000000000002',
-    '71000000-0000-4000-8000-000000000001',
-    '71000000-0000-4000-8000-000000000002',
+    :'qa_admin_fallback_payout_id'::uuid,
+    :'qa_admin_fallback_milestone_id'::uuid,
+    :'qa_admin_fallback_milestone_review_id'::uuid,
+    :'qa_payer_id'::uuid,
+    :'qa_payee_id'::uuid,
     500,
     1,
     1,
@@ -675,18 +537,22 @@ values
 
 select set_config(
   'request.jwt.claim.sub',
-  '71000000-0000-4000-8000-000000000001',
+  :'qa_payer_id',
   true
 );
 select set_config(
   'request.jwt.claims',
-  '{"sub":"71000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
+  json_build_object(
+    'sub', :'qa_payer_id',
+    'role', 'authenticated',
+    'aal', 'aal1'
+  )::text,
   true
 );
 select public.report_trade_external_payment_v1(
-  '77000000-0000-4000-8000-000000000002',
+  :'qa_admin_fallback_payout_id'::uuid,
   'QA bank',
-  'QA-admin-fallback-initial',
+  'qa-admin-fallback-' || :'qa_namespace_handle',
   250,
   'USD',
   current_date,
@@ -695,21 +561,24 @@ select public.report_trade_external_payment_v1(
 
 select set_config(
   'request.jwt.claim.sub',
-  '71000000-0000-4000-8000-000000000002',
+  :'qa_payee_id',
   true
 );
 select set_config(
   'request.jwt.claims',
-  '{"sub":"71000000-0000-4000-8000-000000000002","role":"authenticated","aal":"aal1"}',
+  json_build_object(
+    'sub', :'qa_payee_id',
+    'role', 'authenticated',
+    'aal', 'aal1'
+  )::text,
   true
 );
 select public.respond_trade_external_payment_v1(
   (
     select id
     from public.trade_external_payment_receipts
-    where payout_id = '77000000-0000-4000-8000-000000000002'
-    order by payment_cycle desc, attempt_number desc
-    limit 1
+    where payout_id = :'qa_admin_fallback_payout_id'::uuid
+      and provider_reference = 'qa-admin-fallback-' || :'qa_namespace_handle'
   ),
   'dispute',
   'Exercise the expired isolated-QA administrator fallback.'
@@ -717,6 +586,40 @@ select public.respond_trade_external_payment_v1(
 
 update public.trade_payment_review_cases
 set reviewer_selection_deadline_at = now() - interval '1 second'
-where payout_id = '77000000-0000-4000-8000-000000000002';
+where payout_id = :'qa_admin_fallback_payout_id'::uuid;
 
 commit;
+
+select json_build_object(
+  'status', 'created',
+  'namespaceHandle', :'qa_namespace_handle',
+  'authUsers', (
+    select count(*) from auth.users
+    where id in (
+      :'qa_payer_id'::uuid,
+      :'qa_payee_id'::uuid,
+      :'qa_reviewer_id'::uuid,
+      :'qa_appeal_reviewer_id'::uuid,
+      :'qa_outsider_id'::uuid,
+      :'qa_admin_id'::uuid
+    )
+  ),
+  'agreements', (
+    select count(*) from public.agreements
+    where id in (
+      :'qa_agreement_id'::uuid,
+      :'qa_admin_fallback_agreement_id'::uuid
+    )
+  ),
+  'payouts', (
+    select count(*) from public.trade_milestone_payouts
+    where id in (
+      :'qa_payout_id'::uuid,
+      :'qa_admin_fallback_payout_id'::uuid
+    )
+  ),
+  'fallbackPaymentCases', (
+    select count(*) from public.trade_payment_review_cases
+    where payout_id = :'qa_admin_fallback_payout_id'::uuid
+  )
+) as fixture;
