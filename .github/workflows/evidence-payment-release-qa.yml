@@ -98,7 +98,7 @@ jobs:
           node scripts/evidence-payment-qa-namespace.mjs \
             --manifest evidence-payment-namespace.json \
             --github-env "$GITHUB_ENV" \
-            | tee evidence-payment-namespace.log
+            2>&1 | tee evidence-payment-namespace.log
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           from pathlib import Path
@@ -134,6 +134,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          ruby -e "require 'yaml'; abort('invalid workflow YAML') unless YAML.parse_file('.github/workflows/evidence-payment-release-qa.yml')"
           node --check scripts/evidence-payment-qa-namespace.mjs
           node --check scripts/evidence-payment-qa-namespace.test.mjs
           node --check scripts/evidence-payment-qa-run-ownership.test.mjs
@@ -141,11 +142,11 @@ jobs:
           node --test \
             scripts/evidence-payment-qa-namespace.test.mjs \
             scripts/evidence-payment-qa-run-ownership.test.mjs \
-            | tee evidence-payment-run-ownership.log
-          npm test | tee evidence-payment-unit.log
-          npm run lint -- --quiet | tee evidence-payment-lint.log
-          npx tsc --noEmit --pretty false | tee evidence-payment-typescript.log
-          npm run verify:crawlability | tee evidence-payment-crawlability.log
+            2>&1 | tee evidence-payment-run-ownership.log
+          npm test 2>&1 | tee evidence-payment-unit.log
+          npm run lint -- --quiet 2>&1 | tee evidence-payment-lint.log
+          npx tsc --noEmit --pretty false 2>&1 | tee evidence-payment-typescript.log
+          npm run verify:crawlability 2>&1 | tee evidence-payment-crawlability.log
           git diff --check "$(git merge-base HEAD origin/main)" HEAD
 
       - name: Verify additive and payment migrations are recorded
@@ -199,14 +200,14 @@ jobs:
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
             --file supabase/tests/evidence_weighted_payment_lifecycle.sql \
-            | tee evidence-payment-lifecycle.log
+            2>&1 | tee evidence-payment-lifecycle.log
 
       - name: Run deterministic two-writer Auth and database isolation proof
         shell: bash
         run: |
           set -euo pipefail
           node scripts/evidence-payment-qa-two-writer.mjs \
-            | tee evidence-payment-two-writer.log
+            2>&1 | tee evidence-payment-two-writer.log
 
       - name: Preflight and create run-owned authenticated fixtures
         shell: bash
@@ -220,13 +221,13 @@ jobs:
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
             --file supabase/tests/evidence_weighted_payment_browser_fixture.sql \
-            | tee evidence-payment-fixture.log
+            2>&1 | tee evidence-payment-fixture.log
 
       - name: Verify the run-owned synthetic Auth contract
         shell: bash
         run: |
           set -euo pipefail
-          node --input-type=module <<'NODE' | tee evidence-payment-auth-contract.log
+          node --input-type=module <<'NODE' 2>&1 | tee evidence-payment-auth-contract.log
           import { createClient } from "@supabase/supabase-js";
 
           const roles = [
@@ -293,7 +294,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm run build | tee evidence-payment-build.log
+          npm run build 2>&1 | tee evidence-payment-build.log
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -320,7 +321,7 @@ jobs:
           npx playwright test \
             tests/evidence-weighted-payment-authenticated.spec.ts \
             --reporter=line \
-            | tee evidence-payment-browser.log
+            2>&1 | tee evidence-payment-browser.log
 
       - name: Remove only this run's fixtures and prove zero residue
         if: always()
@@ -335,7 +336,7 @@ jobs:
           node scripts/evidence-payment-qa-namespace.mjs \
             --manifest evidence-payment-namespace.json \
             --github-env "$cleanup_env" \
-            | tee -a evidence-payment-namespace.log
+            2>&1 | tee -a evidence-payment-namespace.log
           set -a
           # The generator permits only shell-safe values and rejects control
           # characters before writing this temporary environment file.
@@ -345,7 +346,7 @@ jobs:
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
             --file supabase/tests/evidence_weighted_payment_browser_cleanup.sql \
-            | tee evidence-payment-cleanup.log
+            2>&1 | tee evidence-payment-cleanup.log
 
       - name: Upload release-gate evidence
         if: always()
@@ -358,5 +359,6 @@ jobs:
             evidence-payment-*.log
             evidence-payment-exact-head.txt
             evidence-payment-namespace.json
+            evidence-payment-two-writer.json
             playwright-report
             test-results

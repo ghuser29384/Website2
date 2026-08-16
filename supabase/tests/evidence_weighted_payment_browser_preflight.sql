@@ -183,6 +183,20 @@ begin
       select count(*) from auth.mfa_factors
       where user_id = any(manifest.user_ids)
     ),
+    'authMfaChallenges', (
+      select count(*) from auth.mfa_challenges challenge
+      where challenge.factor_id in (
+        select factor.id from auth.mfa_factors factor
+        where factor.user_id = any(manifest.user_ids)
+      )
+    ),
+    'authMfaAmrClaims', (
+      select count(*) from auth.mfa_amr_claims claim
+      where claim.session_id in (
+        select session.id from auth.sessions session
+        where session.user_id = any(manifest.user_ids)
+      )
+    ),
     'profiles', (
       select count(*) from public.profiles
       where id = any(manifest.user_ids) or email = any(manifest.emails)
@@ -195,6 +209,68 @@ begin
       select count(*) from public.trade_review_role_grants
       where profile_id = any(manifest.user_ids)
     ),
+    'invitations', (
+      select count(*) from public.trade_invitations invitation
+      where invitation.sender_id = any(manifest.user_ids)
+         or invitation.recipient_user_id = any(manifest.user_ids)
+    ),
+    'threads', (
+      select count(*) from public.trade_threads thread
+      where thread.participant_a = any(manifest.user_ids)
+         or thread.participant_b = any(manifest.user_ids)
+         or thread.agreement_id = any(manifest.agreement_ids)
+    ),
+    'messages', (
+      select count(*) from public.trade_messages message
+      where message.sender_id = any(manifest.user_ids)
+         or message.thread_id in (
+           select thread.id from public.trade_threads thread
+           where thread.participant_a = any(manifest.user_ids)
+              or thread.participant_b = any(manifest.user_ids)
+              or thread.agreement_id = any(manifest.agreement_ids)
+         )
+    ),
+    'threadReads', (
+      select count(*) from public.trade_thread_reads thread_read
+      where thread_read.user_id = any(manifest.user_ids)
+         or thread_read.thread_id in (
+           select thread.id from public.trade_threads thread
+           where thread.participant_a = any(manifest.user_ids)
+              or thread.participant_b = any(manifest.user_ids)
+              or thread.agreement_id = any(manifest.agreement_ids)
+         )
+    ),
+    'blocks', (
+      select count(*) from public.trade_blocks block_row
+      where block_row.blocker_id = any(manifest.user_ids)
+         or block_row.blocked_id = any(manifest.user_ids)
+         or block_row.thread_id in (
+           select thread.id from public.trade_threads thread
+           where thread.participant_a = any(manifest.user_ids)
+              or thread.participant_b = any(manifest.user_ids)
+              or thread.agreement_id = any(manifest.agreement_ids)
+         )
+    ),
+    'reports', (
+      select count(*) from public.trade_reports report
+      where report.reporter_id = any(manifest.user_ids)
+         or report.thread_id in (
+           select thread.id from public.trade_threads thread
+           where thread.participant_a = any(manifest.user_ids)
+              or thread.participant_b = any(manifest.user_ids)
+              or thread.agreement_id = any(manifest.agreement_ids)
+         )
+    ),
+    'counterproposals', (
+      select count(*) from public.trade_counterproposals proposal
+      where proposal.proposer_id = any(manifest.user_ids)
+         or proposal.thread_id in (
+           select thread.id from public.trade_threads thread
+           where thread.participant_a = any(manifest.user_ids)
+              or thread.participant_b = any(manifest.user_ids)
+              or thread.agreement_id = any(manifest.agreement_ids)
+         )
+    ),
     'agreements', (
       select count(*) from public.agreements
       where id = any(manifest.agreement_ids)
@@ -203,17 +279,52 @@ begin
       select count(*) from public.trade_agreement_versions
       where id = any(manifest.version_ids)
     ),
+    'agreementConfirmations', (
+      select count(*) from public.trade_agreement_confirmations
+      where agreement_version_id = any(manifest.version_ids)
+    ),
+    'legacyEvidenceItems', (
+      select count(*) from public.trade_evidence_items
+      where agreement_id = any(manifest.agreement_ids)
+    ),
+    'completionConfirmations', (
+      select count(*) from public.trade_completion_confirmations
+      where agreement_id = any(manifest.agreement_ids)
+    ),
+    'exitRequests', (
+      select count(*) from public.trade_exit_requests
+      where agreement_id = any(manifest.agreement_ids)
+    ),
     'milestones', (
       select count(*) from public.trade_agreement_milestones
       where id = any(manifest.milestone_ids)
+    ),
+    'milestoneReviewerNominations', (
+      select count(*) from public.trade_milestone_reviewer_nominations
+      where milestone_id = any(manifest.milestone_ids)
     ),
     'bundles', (
       select count(*) from public.trade_evidence_bundles
       where id = any(manifest.bundle_ids)
     ),
+    'bundleItems', (
+      select count(*) from public.trade_evidence_bundle_items
+      where bundle_id = any(manifest.bundle_ids)
+    ),
     'reviews', (
       select count(*) from public.trade_milestone_reviews
       where id = any(manifest.review_ids)
+    ),
+    'milestoneAppeals', (
+      select count(*) from public.trade_milestone_appeals
+      where milestone_id = any(manifest.milestone_ids)
+    ),
+    'milestoneAppealReviewerNominations', (
+      select count(*) from public.trade_appeal_reviewer_nominations nomination
+      where nomination.appeal_id in (
+        select appeal.id from public.trade_milestone_appeals appeal
+        where appeal.milestone_id = any(manifest.milestone_ids)
+      )
     ),
     'payouts', (
       select count(*) from public.trade_milestone_payouts
@@ -223,6 +334,37 @@ begin
       select count(*) from public.trade_payment_review_cases
       where payout_id = any(manifest.payout_ids)
     ),
+    'paymentReviewerNominations', (
+      select count(*) from public.trade_payment_reviewer_nominations nomination
+      where nomination.case_id in (
+        select review_case.id from public.trade_payment_review_cases review_case
+        where review_case.payout_id = any(manifest.payout_ids)
+      )
+    ),
+    'paymentReviewDecisions', (
+      select count(*) from public.trade_payment_review_decisions decision
+      where decision.case_id in (
+        select review_case.id from public.trade_payment_review_cases review_case
+        where review_case.payout_id = any(manifest.payout_ids)
+      )
+    ),
+    'paymentAppeals', (
+      select count(*) from public.trade_payment_appeals appeal
+      where appeal.case_id in (
+        select review_case.id from public.trade_payment_review_cases review_case
+        where review_case.payout_id = any(manifest.payout_ids)
+      )
+    ),
+    'paymentAppealReviewerNominations', (
+      select count(*) from public.trade_payment_appeal_reviewer_nominations nomination
+      where nomination.appeal_id in (
+        select appeal.id
+        from public.trade_payment_appeals appeal
+        join public.trade_payment_review_cases review_case
+          on review_case.id = appeal.case_id
+        where review_case.payout_id = any(manifest.payout_ids)
+      )
+    ),
     'paymentReceipts', (
       select count(*) from public.trade_external_payment_receipts
       where payout_id = any(manifest.payout_ids)
@@ -230,6 +372,10 @@ begin
     'notifications', (
       select count(*) from public.trade_notifications
       where user_id = any(manifest.user_ids)
+    ),
+    'events', (
+      select count(*) from public.core_loop_events
+      where profile_id = any(manifest.user_ids)
     ),
     'emailOutbox', (
       select count(*) from public.email_outbox
@@ -263,18 +409,40 @@ select json_build_object(
     'authSessions', 0,
     'authRefreshTokens', 0,
     'authMfaFactors', 0,
+    'authMfaChallenges', 0,
+    'authMfaAmrClaims', 0,
     'profiles', 0,
     'privateAccounts', 0,
     'reviewRoles', 0,
+    'invitations', 0,
+    'threads', 0,
+    'messages', 0,
+    'threadReads', 0,
+    'blocks', 0,
+    'reports', 0,
+    'counterproposals', 0,
     'agreements', 0,
     'versions', 0,
+    'agreementConfirmations', 0,
+    'legacyEvidenceItems', 0,
+    'completionConfirmations', 0,
+    'exitRequests', 0,
     'milestones', 0,
+    'milestoneReviewerNominations', 0,
     'bundles', 0,
+    'bundleItems', 0,
     'reviews', 0,
+    'milestoneAppeals', 0,
+    'milestoneAppealReviewerNominations', 0,
     'payouts', 0,
     'paymentCases', 0,
+    'paymentReviewerNominations', 0,
+    'paymentReviewDecisions', 0,
+    'paymentAppeals', 0,
+    'paymentAppealReviewerNominations', 0,
     'paymentReceipts', 0,
     'notifications', 0,
+    'events', 0,
     'emailOutbox', 0
   )
 )

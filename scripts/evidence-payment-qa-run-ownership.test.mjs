@@ -138,6 +138,16 @@ test("fixture creation fails closed instead of discovering, replacing, or cleani
   assert.match(preflight, /Refusing a non-QA Evidence-payment target/);
   assert.match(preflight, /namespace collision or residue/);
   assert.match(preflight, /where id = any\(manifest\.user_ids\) or email = any\(manifest\.emails\)/);
+  assert.match(preflight, /'authMfaChallenges'/);
+  assert.match(preflight, /'authMfaAmrClaims'/);
+  assert.match(preflight, /'bundleItems'/);
+  assert.match(preflight, /'paymentReviewerNominations'/);
+  assert.match(preflight, /'paymentReviewDecisions'/);
+  assert.match(preflight, /'paymentAppeals'/);
+  assert.match(preflight, /'paymentAppealReviewerNominations'/);
+  assert.match(preflight, /'events'/);
+  assert.match(preflight, /'threads'/);
+  assert.match(preflight, /'messages'/);
   assert.doesNotMatch(fixture, /\bon conflict\b/i);
   assert.doesNotMatch(fixture, /\bdelete\s+from\b/i);
   assert.doesNotMatch(fixture, /order\s+by\s+(?:id|created_at|email|display_name)/i);
@@ -155,17 +165,61 @@ test("cleanup is exact-ID scoped, ownership-checked, idempotent, and machine-rea
   assert.match(cleanup, /Cleanup ownership check failed for an Auth user/);
   assert.match(cleanup, /raw_user_meta_data->>'qa_namespace'/);
   assert.match(cleanup, /raw_user_meta_data->>'qa_namespace_sha256'/);
+  assert.match(cleanup, /qa_evidence_payment_actor_manifest[\s\S]*on commit preserve rows/);
+  assert.match(cleanup, /qa_browser_cleanup_payment_cases[\s\S]*on commit preserve rows/);
+  assert.match(cleanup, /qa_browser_cleanup_payment_appeals[\s\S]*on commit preserve rows/);
+  assert.match(cleanup, /qa_browser_cleanup_mfa_factors[\s\S]*on commit preserve rows/);
+  assert.match(cleanup, /qa_browser_cleanup_auth_sessions[\s\S]*on commit preserve rows/);
   assert.match(cleanup, /delete from auth\.users[\s\S]*qa_evidence_payment_actor_manifest/);
   assert.match(cleanup, /delete from auth\.identities[\s\S]*qa_evidence_payment_actor_manifest/);
   assert.match(cleanup, /delete from auth\.sessions[\s\S]*qa_evidence_payment_actor_manifest/);
   assert.match(cleanup, /delete from auth\.refresh_tokens[\s\S]*qa_evidence_payment_actor_manifest/);
   assert.match(cleanup, /delete from auth\.mfa_factors[\s\S]*qa_evidence_payment_actor_manifest/);
+  assert.match(cleanup, /delete from auth\.mfa_challenges[\s\S]*qa_browser_cleanup_mfa_factors/);
+  assert.match(cleanup, /delete from auth\.mfa_amr_claims[\s\S]*qa_browser_cleanup_auth_sessions/);
+  assert.match(cleanup, /delete from public\.trade_payment_reviewer_nominations/);
+  assert.match(cleanup, /delete from public\.trade_payment_review_decisions/);
+  assert.match(cleanup, /delete from public\.trade_payment_appeal_reviewer_nominations/);
+  assert.match(cleanup, /delete from public\.trade_evidence_bundle_items/);
+  assert.match(cleanup, /delete from public\.trade_messages/);
+  assert.match(cleanup, /delete from public\.trade_threads/);
   assert.doesNotMatch(cleanup, /banned_until\s*=/i);
   assert.doesNotMatch(cleanup, /like\s+'(?:evidence-payment|epqa)-%'/i);
   assert.doesNotMatch(cleanup, /role\s*=\s*'(?:payer|payee|reviewer|administrator)'/i);
+  assert.match(cleanup, /'paymentReviewerNominations'/);
+  assert.match(cleanup, /'paymentReviewDecisions'/);
+  assert.match(cleanup, /'paymentAppeals'/);
+  assert.match(cleanup, /'paymentAppealReviewerNominations'/);
+  assert.match(cleanup, /'authMfaChallenges'/);
+  assert.match(cleanup, /'authMfaAmrClaims'/);
+  assert.match(cleanup, /'messages'/);
+  assert.match(cleanup, /'threads'/);
   assert.match(cleanup, /'allZero', all_zero/);
   assert.match(cleanup, /where value::integer <> 0/);
   assert.match(cleanup, /\\quit 1/);
+});
+
+test("release artifacts retain stderr and the structured two-writer report", () => {
+  const workflow = sources.workflow;
+
+  assert.match(workflow, /ruby -e "require 'yaml'/);
+  assert.match(
+    workflow,
+    /evidence_weighted_payment_lifecycle\.sql[\s\S]*2>&1 \| tee evidence-payment-lifecycle\.log/,
+  );
+  assert.match(
+    workflow,
+    /evidence-payment-qa-two-writer\.mjs[\s\S]*2>&1 \| tee evidence-payment-two-writer\.log/,
+  );
+  assert.match(
+    workflow,
+    /evidence_weighted_payment_browser_fixture\.sql[\s\S]*2>&1 \| tee evidence-payment-fixture\.log/,
+  );
+  assert.match(
+    workflow,
+    /evidence_weighted_payment_browser_cleanup\.sql[\s\S]*2>&1 \| tee evidence-payment-cleanup\.log/,
+  );
+  assert.match(workflow, /evidence-payment-two-writer\.json/);
 });
 
 test("two run namespaces and the actual stale fixed-identity cleanup sets are disjoint", () => {
@@ -192,7 +246,6 @@ test("two run namespaces and the actual stale fixed-identity cleanup sets are di
   for (const value of ownedA) assert.equal(simulatedStore.has(value), false);
   for (const value of ownedB) assert.equal(simulatedStore.has(value), true);
 });
-
 
 test("the live two-writer proof interleaves Auth, database, stale-style, and cleanup boundaries", () => {
   const proof = sources.twoWriter;

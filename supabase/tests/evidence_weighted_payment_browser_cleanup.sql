@@ -38,7 +38,7 @@ create temporary table qa_evidence_payment_actor_manifest (
   id uuid primary key,
   email text not null unique,
   role_name text not null
-) on commit drop;
+) on commit preserve rows;
 
 insert into qa_evidence_payment_actor_manifest values
   (:'qa_payer_id'::uuid, :'qa_payer_email', 'payer'),
@@ -52,7 +52,7 @@ create temporary table qa_evidence_payment_object_manifest (
   object_kind text not null,
   id uuid primary key,
   parent_id uuid
-) on commit drop;
+) on commit preserve rows;
 
 insert into qa_evidence_payment_object_manifest values
   ('agreement', :'qa_agreement_id'::uuid, null),
@@ -214,7 +214,7 @@ begin
 end $$;
 
 create temporary table qa_browser_cleanup_payouts
-on commit drop
+on commit preserve rows
 as
 select payout.id
 from public.trade_milestone_payouts payout
@@ -224,7 +224,7 @@ where payout.id in (
 );
 
 create temporary table qa_browser_cleanup_payment_cases
-on commit drop
+on commit preserve rows
 as
 select review_case.id
 from public.trade_payment_review_cases review_case
@@ -232,9 +232,67 @@ where review_case.payout_id in (
   select payout.id from qa_browser_cleanup_payouts payout
 );
 
-delete from public.trade_payment_appeals
-where case_id in (
+create temporary table qa_browser_cleanup_payment_appeals
+on commit preserve rows
+as
+select appeal.id
+from public.trade_payment_appeals appeal
+where appeal.case_id in (
   select review_case.id from qa_browser_cleanup_payment_cases review_case
+);
+
+create temporary table qa_browser_cleanup_milestone_appeals
+on commit preserve rows
+as
+select appeal.id
+from public.trade_milestone_appeals appeal
+where appeal.milestone_id in (
+  :'qa_milestone_id'::uuid,
+  :'qa_admin_fallback_milestone_id'::uuid
+);
+
+create temporary table qa_browser_cleanup_threads
+on commit preserve rows
+as
+select thread.id
+from public.trade_threads thread
+where thread.participant_a in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or thread.participant_b in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or thread.agreement_id in (
+    :'qa_agreement_id'::uuid,
+    :'qa_admin_fallback_agreement_id'::uuid
+  );
+
+create temporary table qa_browser_cleanup_mfa_factors
+on commit preserve rows
+as
+select factor.id
+from auth.mfa_factors factor
+where factor.user_id in (
+  select id from qa_evidence_payment_actor_manifest
+);
+
+create temporary table qa_browser_cleanup_auth_sessions
+on commit preserve rows
+as
+select session.id
+from auth.sessions session
+where session.user_id in (
+  select id from qa_evidence_payment_actor_manifest
+);
+
+delete from public.trade_payment_appeal_reviewer_nominations
+where appeal_id in (
+  select appeal.id from qa_browser_cleanup_payment_appeals appeal
+);
+
+delete from public.trade_payment_appeals
+where id in (
+  select appeal.id from qa_browser_cleanup_payment_appeals appeal
 );
 
 delete from public.trade_payment_review_decisions
@@ -244,6 +302,11 @@ where decision_kind = 'appeal'
   );
 
 delete from public.trade_payment_review_decisions
+where case_id in (
+  select review_case.id from qa_browser_cleanup_payment_cases review_case
+);
+
+delete from public.trade_payment_reviewer_nominations
 where case_id in (
   select review_case.id from qa_browser_cleanup_payment_cases review_case
 );
@@ -263,6 +326,108 @@ delete from public.trade_external_payment_receipts
 where attempt_number = 1
   and payout_id in (
     select payout.id from qa_browser_cleanup_payouts payout
+  );
+
+delete from public.trade_appeal_reviewer_nominations
+where appeal_id in (
+  select appeal.id from qa_browser_cleanup_milestone_appeals appeal
+);
+
+delete from public.trade_milestone_appeals
+where id in (
+  select appeal.id from qa_browser_cleanup_milestone_appeals appeal
+);
+
+delete from public.trade_milestone_reviewer_nominations
+where milestone_id in (
+  :'qa_milestone_id'::uuid,
+  :'qa_admin_fallback_milestone_id'::uuid
+);
+
+delete from public.trade_evidence_bundle_items
+where bundle_id in (
+  :'qa_evidence_bundle_id'::uuid,
+  :'qa_admin_fallback_evidence_bundle_id'::uuid
+);
+
+delete from public.trade_agreement_confirmations
+where agreement_version_id in (
+  :'qa_agreement_version_id'::uuid,
+  :'qa_admin_fallback_agreement_version_id'::uuid
+);
+
+delete from public.trade_evidence_items
+where agreement_id in (
+  :'qa_agreement_id'::uuid,
+  :'qa_admin_fallback_agreement_id'::uuid
+);
+
+delete from public.trade_completion_confirmations
+where agreement_id in (
+  :'qa_agreement_id'::uuid,
+  :'qa_admin_fallback_agreement_id'::uuid
+);
+
+delete from public.trade_exit_requests
+where agreement_id in (
+  :'qa_agreement_id'::uuid,
+  :'qa_admin_fallback_agreement_id'::uuid
+);
+
+delete from public.trade_reports
+where reporter_id in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or thread_id in (
+    select thread.id from qa_browser_cleanup_threads thread
+  );
+
+delete from public.trade_messages
+where sender_id in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or thread_id in (
+    select thread.id from qa_browser_cleanup_threads thread
+  );
+
+delete from public.trade_thread_reads
+where user_id in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or thread_id in (
+    select thread.id from qa_browser_cleanup_threads thread
+  );
+
+delete from public.trade_blocks
+where blocker_id in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or blocked_id in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or thread_id in (
+    select thread.id from qa_browser_cleanup_threads thread
+  );
+
+delete from public.trade_counterproposals
+where proposer_id in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or thread_id in (
+    select thread.id from qa_browser_cleanup_threads thread
+  );
+
+delete from public.trade_threads
+where id in (
+  select thread.id from qa_browser_cleanup_threads thread
+);
+
+delete from public.trade_invitations
+where sender_id in (
+    select id from qa_evidence_payment_actor_manifest
+  )
+   or recipient_user_id in (
+    select id from qa_evidence_payment_actor_manifest
   );
 
 delete from public.email_outbox
@@ -302,6 +467,16 @@ where profile_id in (
 delete from public.profiles
 where id in (
   select id from qa_evidence_payment_actor_manifest
+);
+
+delete from auth.mfa_challenges
+where factor_id in (
+  select factor.id from qa_browser_cleanup_mfa_factors factor
+);
+
+delete from auth.mfa_amr_claims
+where session_id in (
+  select session.id from qa_browser_cleanup_auth_sessions session
 );
 
 delete from auth.mfa_factors
@@ -347,9 +522,44 @@ with residue as (
         :'qa_admin_fallback_agreement_version_id'::uuid
       )
     ),
+    'agreementConfirmations', (
+      select count(*) from public.trade_agreement_confirmations
+      where agreement_version_id in (
+        :'qa_agreement_version_id'::uuid,
+        :'qa_admin_fallback_agreement_version_id'::uuid
+      )
+    ),
+    'legacyEvidenceItems', (
+      select count(*) from public.trade_evidence_items
+      where agreement_id in (
+        :'qa_agreement_id'::uuid,
+        :'qa_admin_fallback_agreement_id'::uuid
+      )
+    ),
+    'completionConfirmations', (
+      select count(*) from public.trade_completion_confirmations
+      where agreement_id in (
+        :'qa_agreement_id'::uuid,
+        :'qa_admin_fallback_agreement_id'::uuid
+      )
+    ),
+    'exitRequests', (
+      select count(*) from public.trade_exit_requests
+      where agreement_id in (
+        :'qa_agreement_id'::uuid,
+        :'qa_admin_fallback_agreement_id'::uuid
+      )
+    ),
     'milestones', (
       select count(*) from public.trade_agreement_milestones
       where id in (
+        :'qa_milestone_id'::uuid,
+        :'qa_admin_fallback_milestone_id'::uuid
+      )
+    ),
+    'milestoneReviewerNominations', (
+      select count(*) from public.trade_milestone_reviewer_nominations
+      where milestone_id in (
         :'qa_milestone_id'::uuid,
         :'qa_admin_fallback_milestone_id'::uuid
       )
@@ -361,11 +571,34 @@ with residue as (
         :'qa_admin_fallback_evidence_bundle_id'::uuid
       )
     ),
+    'bundleItems', (
+      select count(*) from public.trade_evidence_bundle_items
+      where bundle_id in (
+        :'qa_evidence_bundle_id'::uuid,
+        :'qa_admin_fallback_evidence_bundle_id'::uuid
+      )
+    ),
     'reviews', (
       select count(*) from public.trade_milestone_reviews
       where id in (
         :'qa_milestone_review_id'::uuid,
         :'qa_admin_fallback_milestone_review_id'::uuid
+      )
+    ),
+    'milestoneAppeals', (
+      select count(*) from public.trade_milestone_appeals
+      where id in (
+        select appeal.id from qa_browser_cleanup_milestone_appeals appeal
+      )
+         or milestone_id in (
+           :'qa_milestone_id'::uuid,
+           :'qa_admin_fallback_milestone_id'::uuid
+         )
+    ),
+    'milestoneAppealReviewerNominations', (
+      select count(*) from public.trade_appeal_reviewer_nominations
+      where appeal_id in (
+        select appeal.id from qa_browser_cleanup_milestone_appeals appeal
       )
     ),
     'payouts', (
@@ -377,9 +610,39 @@ with residue as (
     ),
     'paymentCases', (
       select count(*) from public.trade_payment_review_cases
-      where payout_id in (
-        :'qa_payout_id'::uuid,
-        :'qa_admin_fallback_payout_id'::uuid
+      where id in (
+        select review_case.id from qa_browser_cleanup_payment_cases review_case
+      )
+         or payout_id in (
+           :'qa_payout_id'::uuid,
+           :'qa_admin_fallback_payout_id'::uuid
+         )
+    ),
+    'paymentReviewerNominations', (
+      select count(*) from public.trade_payment_reviewer_nominations
+      where case_id in (
+        select review_case.id from qa_browser_cleanup_payment_cases review_case
+      )
+    ),
+    'paymentReviewDecisions', (
+      select count(*) from public.trade_payment_review_decisions
+      where case_id in (
+        select review_case.id from qa_browser_cleanup_payment_cases review_case
+      )
+    ),
+    'paymentAppeals', (
+      select count(*) from public.trade_payment_appeals
+      where id in (
+        select appeal.id from qa_browser_cleanup_payment_appeals appeal
+      )
+         or case_id in (
+           select review_case.id from qa_browser_cleanup_payment_cases review_case
+         )
+    ),
+    'paymentAppealReviewerNominations', (
+      select count(*) from public.trade_payment_appeal_reviewer_nominations
+      where appeal_id in (
+        select appeal.id from qa_browser_cleanup_payment_appeals appeal
       )
     ),
     'paymentReceipts', (
@@ -389,149 +652,170 @@ with residue as (
         :'qa_admin_fallback_payout_id'::uuid
       )
     ),
+    'invitations', (
+      select count(*) from public.trade_invitations
+      where sender_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or recipient_user_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+    ),
+    'threads', (
+      select count(*) from public.trade_threads
+      where id in (
+          select thread.id from qa_browser_cleanup_threads thread
+        )
+         or participant_a in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or participant_b in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or agreement_id in (
+          :'qa_agreement_id'::uuid,
+          :'qa_admin_fallback_agreement_id'::uuid
+        )
+    ),
+    'messages', (
+      select count(*) from public.trade_messages
+      where sender_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or thread_id in (
+          select thread.id from qa_browser_cleanup_threads thread
+        )
+    ),
+    'threadReads', (
+      select count(*) from public.trade_thread_reads
+      where user_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or thread_id in (
+          select thread.id from qa_browser_cleanup_threads thread
+        )
+    ),
+    'blocks', (
+      select count(*) from public.trade_blocks
+      where blocker_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or blocked_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or thread_id in (
+          select thread.id from qa_browser_cleanup_threads thread
+        )
+    ),
+    'reports', (
+      select count(*) from public.trade_reports
+      where reporter_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or thread_id in (
+          select thread.id from qa_browser_cleanup_threads thread
+        )
+    ),
+    'counterproposals', (
+      select count(*) from public.trade_counterproposals
+      where proposer_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+         or thread_id in (
+          select thread.id from qa_browser_cleanup_threads thread
+        )
+    ),
     'notifications', (
       select count(*) from public.trade_notifications
       where user_id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+        select id from qa_evidence_payment_actor_manifest
       )
     ),
     'events', (
       select count(*) from public.core_loop_events
       where profile_id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+        select id from qa_evidence_payment_actor_manifest
       )
     ),
     'reviewRoles', (
       select count(*) from public.trade_review_role_grants
       where profile_id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+        select id from qa_evidence_payment_actor_manifest
       )
     ),
     'profiles', (
       select count(*) from public.profiles
       where id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+        select id from qa_evidence_payment_actor_manifest
       )
       or email in (
-        :'qa_payer_email',
-        :'qa_payee_email',
-        :'qa_reviewer_email',
-        :'qa_appeal_reviewer_email',
-        :'qa_outsider_email',
-        :'qa_admin_email'
+        select email from qa_evidence_payment_actor_manifest
       )
     ),
     'privateAccounts', (
       select count(*) from moral_trade_private.person_accounts
       where profile_id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+        select id from qa_evidence_payment_actor_manifest
       )
     ),
     'authUsers', (
       select count(*) from auth.users
       where id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+        select id from qa_evidence_payment_actor_manifest
       )
       or email in (
-        :'qa_payer_email',
-        :'qa_payee_email',
-        :'qa_reviewer_email',
-        :'qa_appeal_reviewer_email',
-        :'qa_outsider_email',
-        :'qa_admin_email'
+        select email from qa_evidence_payment_actor_manifest
       )
     ),
     'authIdentities', (
       select count(*) from auth.identities
       where user_id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+        select id from qa_evidence_payment_actor_manifest
       )
     ),
     'authSessions', (
       select count(*) from auth.sessions
-      where user_id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
-      )
+      where id in (
+          select session.id from qa_browser_cleanup_auth_sessions session
+        )
+         or user_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
     ),
     'authRefreshTokens', (
       select count(*) from auth.refresh_tokens
       where user_id in (
-        :'qa_payer_id',
-        :'qa_payee_id',
-        :'qa_reviewer_id',
-        :'qa_appeal_reviewer_id',
-        :'qa_outsider_id',
-        :'qa_admin_id'
+        select id::text from qa_evidence_payment_actor_manifest
       )
     ),
     'authMfaFactors', (
       select count(*) from auth.mfa_factors
-      where user_id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+      where id in (
+          select factor.id from qa_browser_cleanup_mfa_factors factor
+        )
+         or user_id in (
+          select id from qa_evidence_payment_actor_manifest
+        )
+    ),
+    'authMfaChallenges', (
+      select count(*) from auth.mfa_challenges
+      where factor_id in (
+        select factor.id from qa_browser_cleanup_mfa_factors factor
+      )
+    ),
+    'authMfaAmrClaims', (
+      select count(*) from auth.mfa_amr_claims
+      where session_id in (
+        select session.id from qa_browser_cleanup_auth_sessions session
       )
     ),
     'emailOutbox', (
       select count(*) from public.email_outbox
       where profile_id in (
-        :'qa_payer_id'::uuid,
-        :'qa_payee_id'::uuid,
-        :'qa_reviewer_id'::uuid,
-        :'qa_appeal_reviewer_id'::uuid,
-        :'qa_outsider_id'::uuid,
-        :'qa_admin_id'::uuid
+        select id from qa_evidence_payment_actor_manifest
       )
       or recipient_email in (
-        :'qa_payer_email',
-        :'qa_payee_email',
-        :'qa_reviewer_email',
-        :'qa_appeal_reviewer_email',
-        :'qa_outsider_email',
-        :'qa_admin_email'
+        select email from qa_evidence_payment_actor_manifest
       )
     )
   ) as body
