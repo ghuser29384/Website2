@@ -90,19 +90,47 @@ jobs:
           export PRODUCT_DIR="$GITHUB_WORKSPACE/product"
           export SOURCE_EXPORT_DIR="$RUNNER_TEMP/pr654-source-export"
           export EVIDENCE_DIR="$RUNNER_TEMP/pr654-canonical-baseline-prototype-evidence"
-          bash harness/.github/scripts/pr654-validate-canonical-baseline-prototype.sh
-          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
-            "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz" \
-            "$(basename "$EVIDENCE_DIR")"
-          sha256sum "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz" \
-            > "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz.sha256"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('harness/.github/scripts/pr654-validate-canonical-baseline-prototype.sh')
+          dst=Path('/home/runner/work/_temp/pr654-validate-canonical-baseline-prototype.sh')
+          text=src.read_text(encoding='utf-8')
+          text=text.replace(
+              'test "$status" -eq 0\n',
+              '''if [[ "$status" -ne 0 ]]; then
+            printf 'Supabase start failed with exit %s. Redacted tail follows.\\n' "$status" >&2
+            tail -500 "$EVIDENCE_DIR/logs/pass-a-start.log" >&2 || true
+            exit "$status"
+          fi
+          ''',
+              1,
+          )
+          dst.write_text(text,encoding='utf-8')
+          PY
+          chmod 700 "$RUNNER_TEMP/pr654-validate-canonical-baseline-prototype.sh"
+
+          set +e
+          bash "$RUNNER_TEMP/pr654-validate-canonical-baseline-prototype.sh"
+          gate_status=$?
+          set -e
+
+          if [[ -d "$EVIDENCE_DIR" ]]; then
+            tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+              "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz" \
+              "$(basename "$EVIDENCE_DIR")"
+            sha256sum "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz" \
+              > "$GITHUB_WORKSPACE/pr654-canonical-baseline-prototype-evidence.tar.gz.sha256"
+          fi
+          exit "$gate_status"
 
       - name: Upload credential-free prototype evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pr654-canonical-baseline-prototype-${{ github.run_id }}
           path: |
             pr654-canonical-baseline-prototype-evidence.tar.gz
             pr654-canonical-baseline-prototype-evidence.tar.gz.sha256
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
