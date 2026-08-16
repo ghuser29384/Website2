@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   materialize:
-    if: github.repository == 'ghuser29384/Website2'
+    if: github.repository == 'ghuser29384/Website2' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -88,12 +88,11 @@ jobs:
                       target.chmod(0o644)
           PY
 
-      - name: Remove bootstrap transport and verify the repository-only scope
+      - name: Remove bootstrap archive and verify the repository-only scope
         shell: bash
         run: |
           set -euo pipefail
           rm -rf .ci-upload
-          rm -f .github/workflows/evidence-payment-run-owned-bootstrap.yml
 
           node --check scripts/evidence-payment-qa-namespace.mjs
           node --check scripts/evidence-payment-qa-namespace.test.mjs
@@ -105,6 +104,7 @@ jobs:
           git add -A
           expected="$(printf '%s\n' \
             .github/workflows/evidence-payment-release-qa.yml \
+            .github/workflows/evidence-payment-run-owned-bootstrap.yml \
             scripts/evidence-payment-qa-namespace.mjs \
             scripts/evidence-payment-qa-namespace.test.mjs \
             scripts/evidence-payment-qa-run-ownership.test.mjs \
@@ -115,14 +115,14 @@ jobs:
             | sort)"
           actual="$(git diff --cached --name-only origin/main | sort)"
           if [[ "$actual" != "$expected" ]]; then
-            printf 'Expected final paths:\n%s\nActual final paths:\n%s\n' "$expected" "$actual" >&2
+            printf 'Expected staged paths:\n%s\nActual staged paths:\n%s\n' "$expected" "$actual" >&2
             exit 1
           fi
           test ! -e .ci-upload
-          test ! -e .github/workflows/evidence-payment-run-owned-bootstrap.yml
+          test -f .github/workflows/evidence-payment-run-owned-bootstrap.yml
           git diff --cached --check origin/main
 
-      - name: Commit and push the exact materialized implementation
+      - name: Commit and push the materialized non-workflow implementation
         shell: bash
         run: |
           set -euo pipefail
@@ -133,6 +133,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --check
+          if git diff --cached --name-only | grep -q '^\.github/workflows/'; then
+            echo "Refusing to let the Actions token modify a workflow file." >&2
+            exit 1
+          fi
           git commit -m "Wire Evidence-payment QA fixtures to run ownership" \
             -m "Replace fixed cross-run identities and cleanup with a deterministic run/attempt namespace, exact fixture parameters, ownership-aware cleanup, guarded preflight, and source-level overlap contracts. This remains repository-only and does not touch product runtime or production state."
           git push origin "HEAD:$GITHUB_REF_NAME"
