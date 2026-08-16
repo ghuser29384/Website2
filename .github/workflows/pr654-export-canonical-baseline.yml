@@ -1,0 +1,91 @@
+name: PR654 canonical baseline catalog export
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/scripts/pr654-export-canonical-baseline.sh
+      - .github/workflows/pr654-export-canonical-baseline.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr654-canonical-baseline-catalog-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+      QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      QA_POOLER_USER: postgres.hvmxfjjbdcgjjudmthdz
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out QA-only harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact product head detached
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          path: product
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client-17
+          pg_dump --version
+
+      - name: Run read-only production and QA export
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$QA_SUPABASE_DB_URL"
+          export PRODUCT_DIR="$GITHUB_WORKSPACE/product"
+          export EVIDENCE_DIR="$RUNNER_TEMP/pr654-canonical-baseline-export"
+          sed '/::add-mask/d' harness/.github/scripts/pr654-export-canonical-baseline.sh \
+            > "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
+          chmod 700 "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
+          bash "$RUNNER_TEMP/pr654-export-canonical-baseline.sh"
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-canonical-baseline-export.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-canonical-baseline-export.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-canonical-baseline-export.tar.gz.sha256"
+
+      - name: Upload credential-free evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-canonical-baseline-export-${{ github.run_id }}
+          path: |
+            pr654-canonical-baseline-export.tar.gz
+            pr654-canonical-baseline-export.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
