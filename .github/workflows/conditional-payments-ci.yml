@@ -25,6 +25,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,7 +38,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run conditional-payment tests
+      - name: Run conditional-payment and pooled-settlement tests
         id: tests
         continue-on-error: true
         shell: bash
@@ -44,6 +47,9 @@ jobs:
           node --import tsx --test \
             src/lib/payments/conditional-state.test.ts \
             src/lib/payments/checkout-payment-methods.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts \
             2>&1 | tee conditional-payments-test-output.txt
 
       - name: Upload test output
@@ -55,18 +61,29 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Lint conditional-payment integration
+      - name: Run complete repository test suite
+        run: npm test
+
+      - name: Lint conditional-payment and pooled-settlement integration
         run: >-
           npx eslint
           src/lib/payments/conditional-mandates.ts
           src/lib/payments/checkout-payment-methods.test.ts
           src/app/donation-offsets/payments/page.tsx
+          src/lib/trade-donation-pool-source-contract.test.ts
+          src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit
+
+      - name: Check exact diff formatting
+        run: git diff --check HEAD^
 
       - name: Build application
         env:
           CONDITIONAL_PAYMENTS_MODE: disabled
         run: npm run build
 
-      - name: Enforce conditional-payment test result
+      - name: Enforce focused test result
         if: steps.tests.outcome != 'success'
         run: exit 1
