@@ -1,0 +1,89 @@
+name: PR654 read-only long-lived database inventory PR
+
+on:
+  pull_request:
+    paths:
+      - .github/scripts/pr654-export-canonical-baseline.sh
+      - .github/workflows/pr654-export-canonical-baseline-pr.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr654-read-only-long-lived-inventory-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      PRODUCT_DIR: ${{ github.workspace }}/product
+      EVIDENCE_DIR: ${{ runner.temp }}/pr654-canonical-baseline-inventory
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+      QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      QA_POOLER_USER: postgres.hvmxfjjbdcgjjudmthdz
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out QA-only harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact product head detached
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          path: product
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install --yes --quiet postgresql-client > /dev/null
+
+      - name: Run exact-target read-only inventory
+        id: inventory
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$QA_SUPABASE_DB_URL"
+          bash "$GITHUB_WORKSPACE/harness/.github/scripts/pr654-export-canonical-baseline.sh"
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-canonical-baseline-inventory.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-canonical-baseline-inventory.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-canonical-baseline-inventory.tar.gz.sha256"
+
+      - name: Upload credential-free inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-canonical-baseline-inventory-pr-${{ github.run_id }}
+          path: |
+            pr654-canonical-baseline-inventory.tar.gz
+            pr654-canonical-baseline-inventory.tar.gz.sha256
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce inventory result
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.inventory.outcome }}" = success
