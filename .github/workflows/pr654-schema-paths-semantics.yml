@@ -1,0 +1,115 @@
+name: PR654 schema paths reset semantics
+
+on:
+  push:
+    branches:
+      - qa/pr654-recovery-forensics-export-20260816
+    paths:
+      - .github/workflows/pr654-schema-paths-semantics.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semantics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out QA-only harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+
+      - name: Run local-only schema paths probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_ID SUPABASE_PROJECT_REF SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY DATABASE_URL DIRECT_URL POSTGRES_URL; do unset "$name"; done
+          evidence="$RUNNER_TEMP/evidence-pr654-schema-paths"
+          project="$RUNNER_TEMP/pr654-schema-paths-project"
+          mkdir -p "$evidence"/{logs,manifests} "$project"
+          cleanup() {
+            set +e
+            (cd "$project" && npx --yes supabase@2.110.0 stop --no-backup > "$evidence/logs/stop.log" 2>&1 || true)
+            docker ps -a --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}' > "$evidence/manifests/docker-after-cleanup.tsv"
+            docker volume ls --format '{{.Name}}' | grep -E 'supabase|pr654-schema-paths' > "$evidence/manifests/volumes-after-cleanup.txt" || true
+            ss -ltnp 2>/dev/null | grep -E ':(5432[0-9]|8000|8443|3000|4000|5000|6543|55432)\b' > "$evidence/manifests/listeners-after-cleanup.txt" || true
+            rm -rf "$project"
+          }
+          trap cleanup EXIT
+          cd "$project"
+          npx --yes supabase@2.110.0 init --force > "$evidence/logs/init.log" 2>&1
+          mkdir -p supabase/schemas supabase/migrations
+          cat > supabase/schemas/00-base.sql <<'SQL'
+          create table public.synthetic_schema_path_base (
+            id integer primary key,
+            marker text not null default 'base'
+          );
+          SQL
+          cat > supabase/migrations/20260101000000_depends_on_schema_path.sql <<'SQL'
+          create table public.synthetic_schema_path_child (
+            id integer primary key,
+            base_id integer not null references public.synthetic_schema_path_base(id)
+          );
+          SQL
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('supabase/config.toml')
+          text=p.read_text()
+          needle='schema_paths = []'
+          if needle not in text:
+              raise SystemExit('schema_paths anchor missing')
+          p.write_text(text.replace(needle,'schema_paths = ["./schemas/00-base.sql"]',1))
+          PY
+          cp supabase/config.toml "$evidence/manifests/config.toml"
+          start_status=1
+          for attempt in 1 2 3; do
+            set +e
+            npx --yes supabase@2.110.0 start --debug > "$evidence/logs/start-attempt-${attempt}.raw.log" 2>&1
+            start_status=$?
+            set -e
+            sed -E \
+              -e '/(anon key|service_role key|S3 Access Key|S3 Secret Key|JWT secret|DB URL)/I s#(:|=).*#\1 [REDACTED]#' \
+              -e 's#postgres(ql)?://[^[:space:]]+#[REDACTED_LOCAL_DB_URL]#g' \
+              -e 's#eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}#[REDACTED_LOCAL_JWT]#g' \
+              < "$evidence/logs/start-attempt-${attempt}.raw.log" > "$evidence/logs/start-attempt-${attempt}.log"
+            rm -f "$evidence/logs/start-attempt-${attempt}.raw.log"
+            printf '%s\n' "$start_status" > "$evidence/logs/start-attempt-${attempt}.exit"
+            [[ "$start_status" -eq 0 ]] && break
+            sleep $((attempt * 10))
+          done
+          printf 'start_status=%s\n' "$start_status" > "$evidence/result.txt"
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1 || true)"
+          if [[ -n "$db" ]]; then
+            docker exec "$db" psql -X -U postgres -d postgres -AtF $'\t' -c "select to_regclass('public.synthetic_schema_path_base'),to_regclass('public.synthetic_schema_path_child'); select row_to_json(m)::text from supabase_migrations.schema_migrations m order by version;" > "$evidence/manifests/database-state.tsv" 2>&1 || true
+            set +e
+            npx --yes supabase@2.110.0 db reset --local --no-seed > "$evidence/logs/db-reset.log" 2>&1
+            reset_status=$?
+            set -e
+            printf 'reset_status=%s\n' "$reset_status" >> "$evidence/result.txt"
+            docker exec "$db" psql -X -U postgres -d postgres -AtF $'\t' -c "select to_regclass('public.synthetic_schema_path_base'),to_regclass('public.synthetic_schema_path_child'); select row_to_json(m)::text from supabase_migrations.schema_migrations m order by version;" > "$evidence/manifests/database-state-after-reset.tsv" 2>&1 || true
+          fi
+          if grep -RIlE '(^|[^A-Za-z0-9])(eyJ[A-Za-z0-9_-]{20,}|sb_secret_|postgres(ql)?://[^[:space:]]+:[^@[:space:]]+@)' "$evidence" > "$evidence/manifests/credential-scan-hits.txt"; then exit 1; fi
+          : > "$evidence/manifests/credential-scan-hits.txt"
+          cleanup
+          trap - EXIT
+          tar -C "$(dirname "$evidence")" -czf "$GITHUB_WORKSPACE/pr654-schema-paths-semantics.tar.gz" "$(basename "$evidence")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-schema-paths-semantics.tar.gz" > "$GITHUB_WORKSPACE/pr654-schema-paths-semantics.tar.gz.sha256"
+
+      - name: Upload credential-free evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-schema-paths-semantics-${{ github.run_id }}
+          path: |
+            pr654-schema-paths-semantics.tar.gz
+            pr654-schema-paths-semantics.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
