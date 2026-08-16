@@ -332,16 +332,16 @@ async function proveAuthorization(actorsA, actorsB) {
     [bAgreement],
   );
 
-  // Participants intentionally cannot query raw private evidence bundles
-  // directly. The product exposes their authorized evidence through the
-  // agreement workflow rather than table-wide PostgREST reads.
+  // Participants can read the submitted private evidence for their own
+  // agreement under the existing product RLS, but cannot discover the other
+  // run-owned namespace's bundle.
   assert.deepEqual(
     await exactIds(
       actorsA.payee.client,
       "trade_evidence_bundles",
       [aBundle, bBundle],
     ),
-    [],
+    [aBundle],
   );
   assert.deepEqual(
     await exactIds(
@@ -349,7 +349,7 @@ async function proveAuthorization(actorsA, actorsB) {
       "trade_evidence_bundles",
       [aBundle, bBundle],
     ),
-    [],
+    [bBundle],
   );
 
   assert.deepEqual(
@@ -631,7 +631,7 @@ try {
     status: "ok",
     participantAndAssignedReviewerCrossNamespacePrivateRows: 0,
     outsiderPrivateRows: 0,
-    directParticipantEvidenceRows: 0,
+    directParticipantEvidenceRows: 2,
     administratorBoundary: "existing global AAL2 privilege preserved",
   });
 
