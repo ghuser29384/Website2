@@ -116,35 +116,36 @@ jobs:
               '  local label="$1"\n  local out="$EVIDENCE_DIR/$label"\n  local db\n',
               1,
           )
-          old='''  diff -u "$SOURCE_ROOT/prod/catalog-manifest.tsv" "$out/catalog-manifest.tsv" > "$out/catalog-diff.txt" || {
-    sed -n '1,240p' "$out/catalog-diff.txt"
-    return 1
-  }
-'''
-          new='''  docker exec "$db" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -AtF $'\\t' -c "select n.nspname||'.'||c.relname||'.'||p.polname,case when p.polpermissive then 'PERMISSIVE' else 'RESTRICTIVE' end,array_to_string(array(select r.rolname from unnest(p.polroles) role_oid join pg_roles r on r.oid=role_oid order by r.rolname),','),p.polcmd,encode(extensions.digest(coalesce(pg_get_expr(p.polqual,p.polrelid,true),''),'sha256'),'hex'),encode(extensions.digest(coalesce(pg_get_expr(p.polwithcheck,p.polrelid,true),''),'sha256'),'hex') from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','moral_trade_private') order by 1;" > "$out/policy-semantic-manifest.tsv"
-  grep -v $'^POLICY\\t' "$SOURCE_ROOT/prod/catalog-manifest.tsv" > "$out/source-nonpolicy-manifest.tsv"
-  grep -v $'^POLICY\\t' "$out/catalog-manifest.tsv" > "$out/local-nonpolicy-manifest.tsv"
-  diff -u "$out/source-nonpolicy-manifest.tsv" "$out/local-nonpolicy-manifest.tsv" > "$out/nonpolicy-catalog-diff.txt" || {
-    sed -n '1,240p' "$out/nonpolicy-catalog-diff.txt"
-    return 1
-  }
-  diff -u "$SOURCE_ROOT/prod/policy-semantic-manifest.tsv" "$out/policy-semantic-manifest.tsv" > "$out/policy-semantic-diff.txt" || {
-    sed -n '1,240p' "$out/policy-semantic-diff.txt"
-    return 1
-  }
-  : > "$out/catalog-diff.txt"
-'''
+          old=(
+              '  diff -u "$SOURCE_ROOT/prod/catalog-manifest.tsv" "$out/catalog-manifest.tsv" > "$out/catalog-diff.txt" || {\n'
+              '    sed -n \'1,240p\' "$out/catalog-diff.txt"\n'
+              '    return 1\n'
+              '  }\n'
+          )
+          new=(
+              '  docker exec "$db" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -AtF $\'\\t\' -c "select n.nspname||\'.\'||c.relname||\'.\'||p.polname,case when p.polpermissive then \'PERMISSIVE\' else \'RESTRICTIVE\' end,array_to_string(array(select r.rolname from unnest(p.polroles) role_oid join pg_roles r on r.oid=role_oid order by r.rolname),\',\'),p.polcmd,encode(extensions.digest(coalesce(pg_get_expr(p.polqual,p.polrelid,true),\'\'),\'sha256\'),\'hex\'),encode(extensions.digest(coalesce(pg_get_expr(p.polwithcheck,p.polrelid,true),\'\'),\'sha256\'),\'hex\') from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in (\'public\',\'moral_trade_private\') order by 1;" > "$out/policy-semantic-manifest.tsv"\n'
+              '  grep -v $\'^POLICY\\t\' "$SOURCE_ROOT/prod/catalog-manifest.tsv" > "$out/source-nonpolicy-manifest.tsv"\n'
+              '  grep -v $\'^POLICY\\t\' "$out/catalog-manifest.tsv" > "$out/local-nonpolicy-manifest.tsv"\n'
+              '  diff -u "$out/source-nonpolicy-manifest.tsv" "$out/local-nonpolicy-manifest.tsv" > "$out/nonpolicy-catalog-diff.txt" || {\n'
+              '    sed -n \'1,240p\' "$out/nonpolicy-catalog-diff.txt"\n'
+              '    return 1\n'
+              '  }\n'
+              '  diff -u "$SOURCE_ROOT/prod/policy-semantic-manifest.tsv" "$out/policy-semantic-manifest.tsv" > "$out/policy-semantic-diff.txt" || {\n'
+              '    sed -n \'1,240p\' "$out/policy-semantic-diff.txt"\n'
+              '    return 1\n'
+              '  }\n'
+              '  : > "$out/catalog-diff.txt"\n'
+          )
           if old not in text:
               raise SystemExit('catalog comparison block not found')
           text=text.replace(old,new,1)
           text=text.replace(
               'test "$status" -eq 0\n',
-              '''if [[ "$status" -ne 0 ]]; then
-            printf 'Supabase start failed with exit %s. Redacted tail follows.\\n' "$status" >&2
-            tail -500 "$EVIDENCE_DIR/logs/pass-a-start.log" >&2 || true
-            exit "$status"
-          fi
-          ''',
+              'if [[ "$status" -ne 0 ]]; then\n'
+              '  printf \'Supabase start failed with exit %s. Redacted tail follows.\\n\' "$status" >&2\n'
+              '  tail -500 "$EVIDENCE_DIR/logs/pass-a-start.log" >&2 || true\n'
+              '  exit "$status"\n'
+              'fi\n',
               1,
           )
           dst.write_text(text,encoding='utf-8')
