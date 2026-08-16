@@ -1,6 +1,11 @@
 name: Patch evaluator for current Offers directory
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/patch-evaluator-current-offers-20260816.yml
   push:
     branches:
       - integration/evaluator-core-loop-current-main-20260815
@@ -16,6 +21,12 @@ concurrency:
 
 jobs:
   patch:
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'integration/evaluator-core-loop-current-main-20260815') ||
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/integration/evaluator-core-loop-current-main-20260815')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,24 +41,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/integration/evaluator-core-loop-current-main-20260815)"
-          test "$(git rev-parse HEAD^)" = "4d4e8e76904a0843425a21cfdc5259c33f3bb0a2"
+          test "$(git rev-parse HEAD^)" = "21a3cde28e2e128f8efb278e3e3a75a27e3e805a"
           python3 - <<'PY'
           from pathlib import Path
 
           path = Path("tests/evaluator-core-loop-authenticated.spec.ts")
           text = path.read_text()
-          old = '''      await expect(
-                evaluatorOfferCard.getByRole("heading", { level: 4 }),
-              ).toHaveText(
-                /Evaluator core-loop verification\\s*↔\\s*Private QA response verification/,
-              );'''
-          if old not in text:
-              old = '''      await expect(
-                evaluatorOfferCard.getByRole("heading", { level: 4 }),
-              ).toHaveText(
-                /Evaluator core-loop verification\\s*↔\\s*Private QA response verification/,
-              );'''
-          # Match the repository's exact six-space indentation independently of YAML indentation.
           old = '''      await expect(
         evaluatorOfferCard.getByRole("heading", { level: 4 }),
       ).toHaveText(
