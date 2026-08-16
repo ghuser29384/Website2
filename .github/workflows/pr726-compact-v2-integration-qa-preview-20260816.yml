@@ -21,7 +21,7 @@ env:
   CANDIDATE_TREE_SHA: 80772fa5e02c357eb59fc83286f3a668447de25d
   CANDIDATE_FIRST_PARENT: 206dca2ab96f61a6870da2bfd09987687a7b56e9
   CANDIDATE_SECOND_PARENT: 26d5a2f15fe49392d9af4b17c372dc630d690b12
-  CANDIDATE_AHEAD_COUNT: "84"
+  CANDIDATE_AHEAD_COUNT: "83"
   CANDIDATE_CHANGED_FILES: "43"
   COMPACT_SOURCE_SHA: 7dd480bebfe44fd967b353794c14e45d2f2db922
   COMPACT_SOURCE_TREE: b4248c749c702c808260c774920aaa80055f1cc0
@@ -163,7 +163,7 @@ jobs:
             --arg createRun "$CREATE_ADAPTER_RUN_ID" \
             --arg dashboardScopeRun "$DASHBOARD_SCOPE_RUN_ID" \
             '{
-              pr726:{open:true,draft:true,merged:false,mergeable:true,head:$head,tree:$tree,base:$base,firstParent:$firstParent,secondParent:$secondParent,ahead:84,changedFiles:43},
+              pr726:{open:true,draft:true,merged:false,mergeable:true,head:$head,tree:$tree,base:$base,firstParent:$firstParent,secondParent:$secondParent,ahead:83,changedFiles:43},
               pr663:{open:true,draft:true,merged:false,mergeable:true,head:$compactSource,tree:$compactTree,modifiedByController:false},
               releaseClassification:{runtimeAffecting:true,disposition:"do_not_merge_or_deploy",gate:"controller_exact_state"},
               exactHeadRuns:{compactQa:$compactRun,canonicalVisual:$canonicalRun,evidencePaymentQa:$paymentRun,smartQuery:$smartRun,createAdapter:$createRun,allApplicableSuccessful:true},
