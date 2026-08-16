@@ -1,0 +1,317 @@
+name: One-shot Offers query navigation repair
+
+on:
+  push:
+    branches:
+      - ops/repair-offers-query-navigation-20260816
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-offers-query-navigation-20260816
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_BASE: 4587e8c418621440835940d6924f32c02ba3f2d1
+      TARGET_BRANCH: ops/repair-offers-query-navigation-20260816
+      BOOTSTRAP_WORKFLOW: .github/workflows/repair-offers-query-navigation-20260816.yml
+
+    steps:
+      - name: Check out the exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/repair-offers-query-navigation-20260816
+          fetch-depth: 0
+
+      - name: Guard the immutable repair base and bootstrap-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_BASE"
+          test "$(git diff --name-only "$EXPECTED_BASE" HEAD)" = "$BOOTSTRAP_WORKFLOW"
+          git diff --check "$EXPECTED_BASE" HEAD
+
+      - name: Apply the bounded navigation and evidence repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              source = target.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement target, found {count}")
+              target.write_text(source.replace(old, new, 1), encoding="utf-8")
+
+          replace_exact(
+              "src/app/offers/page.tsx",
+              '{hasFilters ? <Link href={buildLiveHref({})}>Clear all</Link> : null}',
+              '{hasFilters ? <Link href={buildLiveHref({})} prefetch={false}>Clear all</Link> : null}',
+          )
+          replace_exact(
+              "src/app/offers/page.tsx",
+              '''                  <Link href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}>
+                    Previous
+                  </Link>''',
+              '''                  <Link
+                    href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}
+                    prefetch={false}
+                  >
+                    Previous
+                  </Link>''',
+          )
+          replace_exact(
+              "src/app/offers/page.tsx",
+              '''                  <Link href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}>
+                    Next
+                  </Link>''',
+              '''                  <Link
+                    href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}
+                    prefetch={false}
+                  >
+                    Next
+                  </Link>''',
+          )
+
+          replace_exact(
+              "tests/offers-density.spec.ts",
+              r'''    await publicPage.getByRole("button", { name: "Apply filters" }).click();
+              await expect(publicPage).toHaveURL(/sort=lowest_cost/);
+              expect(new URL(publicPage.url()).searchParams.get("mode")).toBe("pledge");
+
+              await publicPage.getByRole("link", { name: "Clear all" }).click();
+              await expect(publicPage).toHaveURL(/\/offers\?view=live$/);
+
+              await gotoDirectory(publicPage, "/offers?mode=pledge&sort=lowest_cost&view=live");
+              const next = publicPage.getByRole("link", { name: "Next" });
+              await expect(next).toBeVisible();
+              await next.click();
+              await expect(publicPage).toHaveURL(/(?:\?|&)page=2(?:&|$)/);
+              let url = new URL(publicPage.url());
+              expect(url.searchParams.get("page")).toBe("2");
+              expect(url.searchParams.get("mode")).toBe("pledge");
+              expect(url.searchParams.get("sort")).toBe("lowest_cost");
+              await publicPage.getByRole("link", { name: "Previous" }).click();
+              await expect(publicPage).not.toHaveURL(/(?:\?|&)page=2(?:&|$)/);
+              url = new URL(publicPage.url());
+              expect(url.searchParams.get("page")).toBeNull();
+              expect(url.searchParams.get("mode")).toBe("pledge");
+              expect(url.searchParams.get("sort")).toBe("lowest_cost");
+          ''',
+              r'''    await publicPage.getByRole("button", { name: "Apply filters" }).click();
+              await expect(publicPage).toHaveURL(/sort=lowest_cost/);
+              expect(new URL(publicPage.url()).searchParams.get("mode")).toBe("pledge");
+              await expect(filterDisclosure).toContainText(
+                "Pledge or reciprocal action · Lowest stated cost",
+              );
+
+              const clearAll = publicPage.getByRole("link", { name: "Clear all" });
+              await expect(clearAll).toHaveAttribute("href", "/offers?view=live");
+              await clearAll.click();
+              await expect(publicPage).toHaveURL(/\/offers\?view=live$/);
+              await expect(publicPage.getByText("All proposal types", { exact: true })).toBeVisible();
+
+              await gotoDirectory(publicPage, "/offers?mode=pledge&sort=lowest_cost&view=live");
+              const pageOnePagination = publicPage.getByRole("navigation", {
+                name: "Live proposal pages",
+              });
+              await expect(pageOnePagination).toContainText("Page 1 of 2");
+              const next = pageOnePagination.getByRole("link", { name: "Next" });
+              await expect(next).toHaveAttribute(
+                "href",
+                "/offers?view=live&mode=pledge&sort=lowest_cost&page=2",
+              );
+              await next.click();
+              await expect(publicPage).toHaveURL(
+                /\/offers\?view=live&mode=pledge&sort=lowest_cost&page=2$/,
+              );
+              const pageTwoPagination = publicPage.getByRole("navigation", {
+                name: "Live proposal pages",
+              });
+              await expect(pageTwoPagination).toContainText("Page 2 of 2");
+              let url = new URL(publicPage.url());
+              expect(url.searchParams.get("page")).toBe("2");
+              expect(url.searchParams.get("mode")).toBe("pledge");
+              expect(url.searchParams.get("sort")).toBe("lowest_cost");
+              const previous = pageTwoPagination.getByRole("link", { name: "Previous" });
+              await expect(previous).toHaveAttribute(
+                "href",
+                "/offers?view=live&mode=pledge&sort=lowest_cost",
+              );
+              await previous.click();
+              await expect(publicPage).toHaveURL(
+                /\/offers\?view=live&mode=pledge&sort=lowest_cost$/,
+              );
+              await expect(
+                publicPage.getByRole("navigation", { name: "Live proposal pages" }),
+              ).toContainText("Page 1 of 2");
+              url = new URL(publicPage.url());
+              expect(url.searchParams.get("page")).toBeNull();
+              expect(url.searchParams.get("mode")).toBe("pledge");
+              expect(url.searchParams.get("sort")).toBe("lowest_cost");
+          ''',
+          )
+
+          release_expression = "$" + "{{ env.RELEASE_EVIDENCE_DIR }}"
+          replace_exact(
+              ".github/workflows/vercel-release.yml",
+              "          path: " + release_expression + "\n",
+              "          path: |\n"
+              "            " + release_expression + "\n"
+              "            test-results\n"
+              "            playwright-report\n",
+          )
+
+          replace_exact(
+              "scripts/vercel-release-workflow.test.mjs",
+              r'''  assert.match(source, /path: \$\{\{ env\.RELEASE_EVIDENCE_DIR \}\}/);
+          ''',
+              r'''  const evidenceStart = source.indexOf("- name: Upload immutable release evidence");
+              const evidenceEnd = source.indexOf("- name: Record immutable release evidence", evidenceStart);
+              assert.notEqual(evidenceStart, -1);
+              assert.notEqual(evidenceEnd, -1);
+              const evidenceStep = source.slice(evidenceStart, evidenceEnd);
+              assert.match(evidenceStep, /if: always\(\)/);
+              assert.match(evidenceStep, /path: \|\n\s+\$\{\{ env\.RELEASE_EVIDENCE_DIR \}\}/);
+              assert.match(evidenceStep, /^\s+test-results\s*$/m);
+              assert.match(evidenceStep, /^\s+playwright-report\s*$/m);
+          ''',
+          )
+
+          Path(".github/workflows/repair-offers-query-navigation-20260816.yml").unlink()
+          PY
+
+          expected="$(printf '%s\n' \
+            '.github/workflows/vercel-release.yml' \
+            'scripts/vercel-release-workflow.test.mjs' \
+            'src/app/offers/page.tsx' \
+            'tests/offers-density.spec.ts' | sort)"
+          actual="$(git diff --name-only "$EXPECTED_BASE" | sort)"
+          test "$actual" = "$expected"
+          git diff --check "$EXPECTED_BASE"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run source and release-control gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qa-results
+          node --test scripts/vercel-release-workflow.test.mjs \
+            2>&1 | tee qa-results/release-control-tests.log
+          npx eslint \
+            src/app/offers/page.tsx \
+            tests/offers-density.spec.ts \
+            scripts/vercel-release-workflow.test.mjs \
+            2>&1 | tee qa-results/focused-eslint.log
+          npm test 2>&1 | tee qa-results/repository-tests.log
+          npm run lint -- --quiet 2>&1 | tee qa-results/repository-eslint.log
+          npx tsc --noEmit --pretty false 2>&1 | tee qa-results/typescript.log
+
+      - name: Build the production application
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee qa-results/production-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Reproduce the repaired query-navigation path repeatedly
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            --config=playwright.release.config.ts \
+            tests/offers-density.spec.ts \
+            --grep='preserves search, clarification, filters, sorting, pagination, and action URLs' \
+            --repeat-each=20 \
+            --workers=1 \
+            --reporter=line \
+            2>&1 | tee qa-results/offers-query-navigation-repeat.log
+
+      - name: Run the complete rendered release browser gate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line \
+            2>&1 | tee qa-results/release-browser.log
+
+      - name: Commit and push only the reviewed repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(printf '%s\n' \
+            '.github/workflows/vercel-release.yml' \
+            'scripts/vercel-release-workflow.test.mjs' \
+            'src/app/offers/page.tsx' \
+            'tests/offers-density.spec.ts' | sort)"
+          actual="$(git diff --name-only "$EXPECTED_BASE" | sort)"
+          test "$actual" = "$expected"
+          git diff --check "$EXPECTED_BASE"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            .github/workflows/vercel-release.yml \
+            scripts/vercel-release-workflow.test.mjs \
+            src/app/offers/page.tsx \
+            tests/offers-density.spec.ts
+          git add -A -- "$BOOTSTRAP_WORKFLOW"
+          git commit -m 'Stabilize Offers query navigation release QA'
+
+          actual_committed="$(git diff --name-only "$EXPECTED_BASE" HEAD | sort)"
+          test "$actual_committed" = "$expected"
+          git diff --check "$EXPECTED_BASE" HEAD
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+          {
+            echo "base=$EXPECTED_BASE"
+            echo "head=$(git rev-parse HEAD)"
+            echo "tree=$(git rev-parse HEAD^{tree})"
+            echo 'classification=product-navigation-race-with-semantic-qa-repair'
+            echo 'production_mutation=false'
+          } | tee qa-results/repair-summary.txt
+
+      - name: Upload immutable repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offers-query-navigation-repair-${{ github.run_id }}
+          path: |
+            qa-results
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 30
