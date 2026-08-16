@@ -20,6 +20,7 @@ const paths = {
   browserCleanup: "supabase/tests/mpgf_dac_product_browser_cleanup.sql",
   browserSpec: "tests/mpgf-dac-product-lifecycle.spec.ts",
   workflow: ".github/workflows/mpgf-dac-product-lifecycle-gates.yml",
+  styles: "src/app/globals.css",
 } as const;
 
 async function read(path: string) {
@@ -29,6 +30,15 @@ async function read(path: string) {
 function countOccurrences(source: string, fragment: string) {
   return source.split(fragment).length - 1;
 }
+
+test("compact-mobile DAC hero titles wrap instead of clipping operative text", async () => {
+  const styles = await read(paths.styles);
+
+  assert.match(
+    styles,
+    /@media \(max-width: 560px\) \{[\s\S]*?\.mpgf-hero-copy h1 \{[\s\S]*?font-size: clamp\(2\.45rem, 13\.5vw, 3rem\);[\s\S]*?overflow-wrap: anywhere;/,
+  );
+});
 
 test("live public DAC surfaces resolve exact published terms, terminal outcome, and owner-only receipts", async () => {
   const [loader, model, campaignPage, poolPage, publicApi, campaignView] = await Promise.all([

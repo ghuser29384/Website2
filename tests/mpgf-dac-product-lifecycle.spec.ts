@@ -216,6 +216,7 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
 
   const desktop = { width: 1440, height: 1000 };
   const mobile = { width: 390, height: 844 };
+  const compactMobile = { width: 320, height: 568 };
   let context: BrowserContext | null = null;
 
   qaCheckpoint("Proving the signed-out exact-term campaign and public API privacy boundary.");
@@ -403,6 +404,24 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   await gotoReady(page, ROUTES.lapse);
   await expect(page.getByRole("heading", { name: "Campaign lapsed" })).toBeVisible();
   await screenshot(page, "10-lapse-mobile");
+  await closeContext(context);
+  context = null;
+
+  context = await browserContext(browser, { viewport: compactMobile });
+  page = await context.newPage();
+  await gotoReady(page, ROUTES.open);
+  const compactHeading = page.getByRole("heading", {
+    name: "QA DAC open for conditional pledges",
+  });
+  await expect(compactHeading).toBeVisible();
+  const compactHeadingMetrics = await compactHeading.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(compactHeadingMetrics.scrollWidth).toBeLessThanOrEqual(
+    compactHeadingMetrics.clientWidth,
+  );
+  await screenshot(page, "11-open-anonymous-compact-mobile");
   await closeContext(context);
 
   qaCheckpoint("Complete rendered DAC lifecycle proof passed without payment execution.");

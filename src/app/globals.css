@@ -1296,6 +1296,12 @@ form.mpgf-dac-review-actions {
 }
 
 @media (max-width: 560px) {
+  .mpgf-hero-copy h1 {
+    max-width: 100%;
+    font-size: clamp(2.45rem, 13.5vw, 3rem);
+    overflow-wrap: anywhere;
+  }
+
   .mpgf-kpi-grid,
   .mpgf-console-toolbar,
   .mpgf-admin-grid,
