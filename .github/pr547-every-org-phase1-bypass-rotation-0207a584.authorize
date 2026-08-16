@@ -1,0 +1,6 @@
+schema=moral-trade-pr547-every-org-staging-authorization-v2
+phase=phase1_bypass_rotation
+candidate=0207a58410480b6edd1bb5a1496bc8ce7c66d6f6
+base=b2c45dc0110d8841f7cbd7576347936044310c1c
+controller_branch=ops/pr547-every-org-provider-staging-708-bypass-rotation-0207a584-20260816
+authorization=AUTHORIZE_PR547_EVERY_ORG_PHASE1_BYPASS_ROTATION_0207A584
