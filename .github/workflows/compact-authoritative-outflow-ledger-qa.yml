@@ -1,0 +1,329 @@
+name: Compact authoritative outflow ledger QA
+
+on:
+  pull_request:
+    branches: [agent/mpgf-public-goods-compacts]
+    paths:
+      - .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+      - docs/mpgf/compact-authoritative-outflow-ledger-v1.md
+      - scripts/test-compact-authoritative-outflow-concurrency.sh
+      - src/components/mpgf/mpgf-public-goods-compacts.tsx
+      - src/lib/mpgf/compact-authoritative-outflow*.ts
+      - supabase/migrations/2026081614150*_compact_authoritative_outflow_*.sql
+      - supabase/tests/compact_authoritative_outflow_ledger_*.sql
+      - tests/mpgf-public-goods-compacts.spec.ts
+  push:
+    branches: [feature/compact-authoritative-outflow-ledger-v1-20260816]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compact-authoritative-outflow-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+
+jobs:
+  source-and-rendered:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Guard exact scope and fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
+          cat > /tmp/expected.txt <<'EOF'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          docs/mpgf/compact-authoritative-outflow-ledger-v1.md
+          scripts/test-compact-authoritative-outflow-concurrency.sh
+          src/components/mpgf/mpgf-public-goods-compacts.tsx
+          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.ts
+          supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          tests/mpgf-public-goods-compacts.spec.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected.txt
+          sort -o /tmp/expected.txt /tmp/expected.txt
+          git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/actual.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          test "$(wc -l < /tmp/actual.txt)" -eq 14
+          test "$(find supabase/migrations -maxdepth 1 -name '2026081614150*_compact_authoritative_outflow_*.sql' | wc -l)" -eq 4
+          for controller in .github/workflows/repair-compact-outflow-*.yml; do
+            test ! -e "$controller"
+          done
+          if grep -R 'jnpoxvalyjtdghnperyu' $(cat /tmp/actual.txt); then exit 1; fi
+          if grep -E 'automaticCollectionEnabled[[:space:]]*[:=][[:space:]]*true|moneyMoved[[:space:]]*[:=][[:space:]]*true|activation_execution_enabled[[:space:]]*=[[:space:]]*true' \
+            docs/mpgf/compact-authoritative-outflow-ledger-v1.md \
+            src/components/mpgf/mpgf-public-goods-compacts.tsx \
+            src/lib/mpgf/compact-authoritative-outflow.ts \
+            supabase/migrations/2026081614150*_compact_authoritative_outflow_*.sql; then exit 1; fi
+          if grep -E 'createServiceClient|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|EVERY_ORG' \
+            src/components/mpgf/mpgf-public-goods-compacts.tsx \
+            src/lib/mpgf/compact-authoritative-outflow.ts; then exit 1; fi
+          git diff --check
+      - run: npm ci
+      - name: Focused contracts
+        run: |
+          node --import tsx --test \
+            src/lib/mpgf/compact-authoritative-outflow.test.ts \
+            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \
+            src/lib/mpgf/public-goods-compacts.test.ts \
+            src/lib/mpgf/public-goods-compacts-state.test.ts \
+            src/lib/mpgf/public-goods-compacts-contract.test.ts \
+            src/lib/mpgf/public-goods-compacts-hardening-contract.test.ts \
+            2>&1 | tee focused.log
+      - name: Complete repository tests
+        run: npm test 2>&1 | tee repository-tests.log
+      - name: ESLint
+        run: npm run lint -- --quiet 2>&1 | tee eslint.log
+      - name: Strict TypeScript
+        run: npx tsc --noEmit 2>&1 | tee typescript.log
+      - name: Production build
+        run: npm run build 2>&1 | tee build.log
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Four-viewpoint browser contract
+        run: npx playwright test tests/mpgf-public-goods-compacts.spec.ts --workers=1 --reporter=line 2>&1 | tee playwright.log
+      - name: Preserve exact source evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -z "$(git status --short --untracked-files=no)"
+          mkdir -p source-evidence
+          git rev-parse HEAD > source-evidence/head-sha.txt
+          git rev-parse "$STACK_BASE_SHA" > source-evidence/base-sha.txt
+          cp /tmp/actual.txt source-evidence/changed-files.txt
+          xargs -d '\n' sha256sum < /tmp/actual.txt > source-evidence/file-sha256.txt
+      - name: Upload source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-authoritative-outflow-source-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            source-evidence
+            focused.log
+            repository-tests.log
+            eslint.log
+            typescript.log
+            build.log
+            playwright.log
+            test-results/mpgf-public-goods-compacts-*.png
+
+  clean-ephemeral-database:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      BASELINE_COMMIT: 4c95052ff97d55b42486cac47b7430896946f124
+      BASELINE_SHA256: 5fa7f1f21f7a8fc5720ca695d9e6d90eef7eefc1dd97632a2b5ff665c321464a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: |
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.114.0
+      - name: Prepare migration chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p db-evidence/migrations
+          git show "$BASELINE_COMMIT:supabase/schema.sql" > db-evidence/baseline.sql
+          test "$(sha256sum db-evidence/baseline.sql | cut -d ' ' -f 1)" = "$BASELINE_SHA256"
+          git diff --name-only --diff-filter=AM "$BASELINE_COMMIT"..HEAD -- 'supabase/migrations/*.sql' | sort > db-evidence/migrations.txt
+          while read -r path; do cp "$path" db-evidence/migrations/; done < db-evidence/migrations.txt
+          git rev-parse HEAD > db-evidence/head-sha.txt
+      - name: Start clean PostgreSQL 17 Supabase runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv supabase/migrations "$RUNNER_TEMP/repo-migrations"
+          mkdir supabase/migrations
+          supabase init --force
+          sed -i 's/major_version = 15/major_version = 17/' supabase/config.toml
+          supabase start --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor --log-level error --yes > /dev/null
+          rmdir supabase/migrations
+          mv "$RUNNER_TEMP/repo-migrations" supabase/migrations
+      - name: Apply baseline and production-compatible migrations
+        shell: bash
+        run: |
+          set -o pipefail
+          SUPABASE_MIGRATION_TEST_DB_URL="$DB_URL" \
+          SUPABASE_MIGRATION_BASELINE_SQL=db-evidence/baseline.sql \
+          SUPABASE_MIGRATION_SKIP_BASENAMES=20260811152545_commitments_impact_study_instrumentation_qa_only.sql,20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql,20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql,20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql,20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql,20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql,20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql,20260811171544_commitments_impact_study_blocked_probe_service_role.sql \
+            bash scripts/apply-supabase-migrations-in-order.sh db-evidence/migrations 2>&1 | tee db-evidence/migration.log
+          for version in 20260816141500 20260816141501 20260816141502 20260816141503; do grep -q "applying_migration=${version}_" db-evidence/migration.log; done
+      - name: Generate and compare public runtime types
+        run: |
+          supabase gen types typescript --db-url "$DB_URL" --schema public > db-evidence/generated.types.ts
+          node scripts/verify-mpgf-public-goods-compacts-generated-types.mjs db-evidence/generated.types.ts src/lib/supabase/database.types.ts | tee db-evidence/type-comparison.json
+      - name: Lint and execute lifecycle
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db lint --db-url "$DB_URL" --schema public --level warning --fail-on none 2>&1 | tee db-evidence/public-lint.log
+          supabase db lint --db-url "$DB_URL" --schema moral_trade_private --level warning --fail-on none 2>&1 | tee db-evidence/private-lint.log
+          node scripts/verify-mpgf-public-goods-compacts-db-lint.mjs db-evidence/public-lint.log | tee db-evidence/owned-lint.json
+          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/lifecycle.log
+          begin;
+          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          \i supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          \i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          rollback;
+          SQL
+      - name: Concurrent canonical freeze
+        run: |
+          chmod +x scripts/test-compact-authoritative-outflow-concurrency.sh
+          COMPACT_OUTFLOW_TEST_DB_URL="$DB_URL" bash scripts/test-compact-authoritative-outflow-concurrency.sh 2>&1 | tee db-evidence/concurrency.log
+      - name: No-money readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' | tee db-evidence/no-money.txt
+          select 'activation|' || count(*) from public.mpgf_public_goods_compacts where status='active'
+          union all select 'electorate|' || count(*) from public.mpgf_public_goods_voting_snapshots
+          union all select 'payment_refs|' || count(*) from public.mpgf_public_goods_dormant_authorization_snapshots where provider_reference is not null
+          order by 1;
+          SQL
+          grep -qx 'activation|0' db-evidence/no-money.txt
+          grep -qx 'electorate|0' db-evidence/no-money.txt
+          grep -qx 'payment_refs|0' db-evidence/no-money.txt
+      - name: Stop ephemeral runtime
+        if: always()
+        run: supabase stop --no-backup --yes > /dev/null 2>&1 || true
+      - name: Upload database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-authoritative-outflow-clean-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          retention-days: 30
+          if-no-files-found: error
+          path: db-evidence
+
+  isolated-qa-rollback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      QA_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      EXPECTED_HOST: aws-0-us-west-1.pooler.supabase.com
+      PGSSLMODE: require
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+      - name: Verify exact isolated QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$QA_DB_URL"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          u=urlparse(os.environ['QA_DB_URL'])
+          assert u.hostname==os.environ['EXPECTED_HOST'] and u.port==5432 and u.path=='/postgres'
+          assert os.environ['EXPECTED_QA_REF'] in (u.username or '') and bool(u.password)
+          PY
+      - name: Record baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rollback-evidence/migrations
+          psql "$QA_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' > rollback-evidence/before.txt
+          select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
+          union all select 'private_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
+          union all select 'fixture_users|' || count(*) from auth.users where email like 'ledger-%@example.test'
+          order by 1;
+          SQL
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in [
+            '20260813163052_mpgf_public_goods_compacts.sql',
+            '20260814031500_mpgf_public_goods_compacts_state_hardening.sql',
+            '20260816141500_compact_authoritative_outflow_ledger_v1.sql',
+            '20260816141501_compact_authoritative_outflow_freeze_v1.sql',
+            '20260816141502_compact_authoritative_outflow_hardening_v1.sql',
+            '20260816141503_compact_authoritative_outflow_replay_fix_v1.sql']:
+            src=Path('supabase/migrations')/name
+            lines=[x for x in src.read_text().splitlines() if x.strip().lower() not in {'begin;','commit;'}]
+            (Path('rollback-evidence/migrations')/name).write_text('\n'.join(lines)+'\n')
+          PY
+      - name: Execute rollback-only lifecycle
+        shell: bash
+        run: |
+          set -o pipefail
+          psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee rollback-evidence/lifecycle.log
+          begin;
+          \i supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
+          \i supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
+          \i rollback-evidence/migrations/20260813163052_mpgf_public_goods_compacts.sql
+          \i rollback-evidence/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
+          \i rollback-evidence/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          \i rollback-evidence/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          \i rollback-evidence/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          \i rollback-evidence/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          \i supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          \i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          rollback;
+          SQL
+      - name: Prove rollback and zero residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' > rollback-evidence/after.txt
+          select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
+          union all select 'private_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
+          union all select 'fixture_users|' || count(*) from auth.users where email like 'ledger-%@example.test'
+          order by 1;
+          SQL
+          diff -u rollback-evidence/before.txt rollback-evidence/after.txt
+          git rev-parse HEAD > rollback-evidence/head-sha.txt
+      - name: Upload rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-authoritative-outflow-rollback-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          retention-days: 30
+          if-no-files-found: error
+          path: rollback-evidence
