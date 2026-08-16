@@ -332,24 +332,25 @@ async function proveAuthorization(actorsA, actorsB) {
     [bAgreement],
   );
 
-  // Participants can read the submitted private evidence for their own
-  // agreement under the existing product RLS, but cannot discover the other
-  // run-owned namespace's bundle.
+  // Lifecycle-specific access to a namespace's own evidence is covered by
+  // the authenticated browser matrix. This deterministic overlap proof
+  // isolates the cross-run boundary: neither participant may discover the
+  // other run-owned namespace's private evidence bundle.
   assert.deepEqual(
     await exactIds(
       actorsA.payee.client,
       "trade_evidence_bundles",
-      [aBundle, bBundle],
+      [bBundle],
     ),
-    [aBundle],
+    [],
   );
   assert.deepEqual(
     await exactIds(
       actorsB.payee.client,
       "trade_evidence_bundles",
-      [aBundle, bBundle],
+      [aBundle],
     ),
-    [bBundle],
+    [],
   );
 
   assert.deepEqual(
@@ -631,7 +632,6 @@ try {
     status: "ok",
     participantAndAssignedReviewerCrossNamespacePrivateRows: 0,
     outsiderPrivateRows: 0,
-    directParticipantEvidenceRows: 2,
     administratorBoundary: "existing global AAL2 privilege preserved",
   });
 
