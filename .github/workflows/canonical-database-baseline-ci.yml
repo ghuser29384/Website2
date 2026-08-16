@@ -1,0 +1,308 @@
+name: Canonical database baseline CI
+
+on:
+  push:
+    branches:
+      - qa/pr654-migration-baseline-recovery-20260816
+    paths:
+      - supabase/migrations/**
+      - supabase/legacy_migrations/**
+      - supabase/baseline/**
+      - supabase/config.toml
+      - supabase/seed.sql
+      - supabase/tests/canonical_baseline_pool_security.sql
+      - src/lib/database-baseline-source-contract.test.ts
+      - docs/database/canonical-supabase-baseline.md
+      - scripts/check-canonical-baseline-adoption.sql
+      - .github/workflows/canonical-database-baseline-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: canonical-database-baseline-ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      SUPABASE_CLI_VERSION: 2.110.0
+      EVIDENCE_DIR: ${{ github.workspace }}/canonical-baseline-evidence
+      EXPECTED_BASELINE_VERSION: '20260816180000'
+      EXPECTED_METADATA_VERSION: '20260816180100'
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run canonical baseline source contract
+        run: |
+          node --import tsx --test \
+            src/lib/database-baseline-source-contract.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+          npx eslint \
+            src/lib/database-baseline-source-contract.test.ts \
+            src/lib/trade-donation-pool.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts \
+            src/app/trade-donation-pool-actions.ts \
+            src/lib/payments/trade-donation-pool-webhook.ts
+          git diff --check
+
+      - name: Run three-pass local PostgreSQL reconstruction gate
+        id: database
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$EVIDENCE_DIR"/{logs,history,catalog,cleanup}
+          transcript="$EVIDENCE_DIR/command-transcript.txt"
+          exec > >(tee -a "$transcript") 2>&1
+          overall=0
+
+          supabase() { npx --yes "supabase@${SUPABASE_CLI_VERSION}" "$@"; }
+          fail() { overall=1; printf 'FAIL: %s\n' "$*"; }
+          note() { printf '\n===== %s =====\n' "$*"; }
+
+          cleanup() {
+            set +e
+            supabase stop --no-backup > "$EVIDENCE_DIR/logs/final-stop.log" 2>&1
+            docker ps -a --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}' > "$EVIDENCE_DIR/cleanup/containers.tsv"
+            docker volume ls --format '{{.Name}}' | grep -E 'supabase|canonical|baseline' > "$EVIDENCE_DIR/cleanup/volumes.txt" || true
+            ss -ltnp 2>/dev/null | grep -E ':(5432[0-9]|8000|8443|3000|4000|5000|6543|55432)\b' > "$EVIDENCE_DIR/cleanup/listeners.txt" || true
+          }
+          trap cleanup EXIT
+
+          unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_ID SUPABASE_PROJECT_REF SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY DATABASE_URL DIRECT_URL POSTGRES_URL STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET EVERY_ORG_WEBHOOK_SECRET || true
+
+          note "Toolchain"
+          uname -a
+          docker version
+          node --version
+          npm --version
+          supabase --version
+
+          local_psql() {
+            local db
+            db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+            test -n "$db" || return 1
+            docker exec "$db" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres "$@"
+          }
+
+          capture_history() {
+            local pass="$1"
+            local_psql -AtF $'\t' -c "select version,name from supabase_migrations.schema_migrations order by version" > "$EVIDENCE_DIR/history/${pass}.tsv"
+            local_psql -Atc "select version()" > "$EVIDENCE_DIR/catalog/${pass}-postgres-version.txt"
+            local_psql -AtF $'\t' -c "
+              select n.nspname,c.relname,c.relkind,c.relrowsecurity,c.relforcerowsecurity
+              from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname in ('public','moral_trade_private')
+              order by 1,2,3;
+            " > "$EVIDENCE_DIR/catalog/${pass}-relations.tsv"
+            local_psql -AtF $'\t' -c "
+              select n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),p.prosecdef,p.provolatile
+              from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname in ('public','moral_trade_private')
+              order by 1,2,3;
+            " > "$EVIDENCE_DIR/catalog/${pass}-functions.tsv"
+          }
+
+          assert_database() {
+            local pass="$1"
+            local sql="$EVIDENCE_DIR/logs/${pass}-assertions.sql"
+            cat > "$sql" <<'SQL'
+          do $assertions$
+          declare
+            required_tables text[] := array[
+              'trade_donation_pool_gate_status',
+              'trade_donation_pool_obligations',
+              'trade_donation_pool_bundles',
+              'trade_donation_pool_bundle_items',
+              'trade_donation_pool_ledger_journals',
+              'trade_donation_pool_ledger_lines',
+              'trade_donation_pool_stripe_events',
+              'trade_donation_pool_audit_events'
+            ];
+            table_name text;
+            rls_on boolean;
+          begin
+            foreach table_name in array required_tables loop
+              if to_regclass('public.' || table_name) is null then
+                raise exception 'missing pooled-settlement table: %', table_name;
+              end if;
+              select c.relrowsecurity into rls_on
+              from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relname=table_name;
+              if not coalesce(rls_on,false) then
+                raise exception 'RLS disabled on %', table_name;
+              end if;
+              if has_table_privilege('anon','public.' || table_name,'INSERT')
+                 or has_table_privilege('anon','public.' || table_name,'UPDATE')
+                 or has_table_privilege('anon','public.' || table_name,'DELETE')
+                 or has_table_privilege('anon','public.' || table_name,'TRUNCATE')
+                 or has_table_privilege('authenticated','public.' || table_name,'INSERT')
+                 or has_table_privilege('authenticated','public.' || table_name,'UPDATE')
+                 or has_table_privilege('authenticated','public.' || table_name,'DELETE')
+                 or has_table_privilege('authenticated','public.' || table_name,'TRUNCATE') then
+                raise exception 'browser-role mutation grant remains on %', table_name;
+              end if;
+            end loop;
+
+            if exists (select 1 from public.trade_donation_pool_gate_status where status not in ('blocked','pending')) then
+              raise exception 'pool gate is not fail closed';
+            end if;
+            if (select count(*) from public.trade_donation_pool_gate_status) = 0 then
+              raise exception 'pool gate defaults missing';
+            end if;
+            if to_regprocedure('public.mark_trade_donation_pool_component_stale()') is null then
+              raise exception 'component stale trigger helper missing';
+            end if;
+            if has_function_privilege('anon','public.mark_trade_donation_pool_component_stale()','EXECUTE')
+               or has_function_privilege('authenticated','public.mark_trade_donation_pool_component_stale()','EXECUTE') then
+              raise exception 'browser role can execute component stale helper';
+            end if;
+            if not has_function_privilege('service_role','public.mark_trade_donation_pool_component_stale()','EXECUTE') then
+              raise exception 'service role cannot execute component stale helper';
+            end if;
+            if to_regprocedure('moral_trade_private.try_freeze_trade_donation_pool_bundle(uuid)') is null
+               and not exists (
+                 select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+                 where n.nspname='moral_trade_private' and p.proname='try_freeze_trade_donation_pool_bundle'
+               ) then
+              raise exception 'bundle-freeze function missing';
+            end if;
+            if exists (select 1 from public.trade_donation_pool_obligations)
+               or exists (select 1 from public.trade_donation_pool_bundles)
+               or exists (select 1 from public.trade_donation_pool_bundle_items)
+               or exists (select 1 from public.trade_donation_pool_ledger_journals)
+               or exists (select 1 from public.trade_donation_pool_ledger_lines)
+               or exists (select 1 from public.trade_donation_pool_stripe_events)
+               or exists (select 1 from public.trade_donation_pool_audit_events) then
+              raise exception 'transactional pool fixture remains';
+            end if;
+            if not exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='20260816180000'
+            ) then
+              raise exception 'canonical baseline history row missing';
+            end if;
+            if exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='20260813170151'
+            ) then
+              raise exception 'removed duplicate migration reappeared';
+            end if;
+            if (select count(*) from supabase_migrations.schema_migrations where version='20260814024354') <> 1 then
+              raise exception 'canonical pool hardening history marker not represented exactly once';
+            end if;
+          end
+          $assertions$;
+SQL
+            local_psql -f "$sql"
+          }
+
+          note "Pass A: independent fresh start"
+          supabase stop --no-backup > "$EVIDENCE_DIR/logs/pass-a-pre-stop.log" 2>&1 || true
+          supabase start > "$EVIDENCE_DIR/logs/pass-a-start.log" 2>&1 || { cat "$EVIDENCE_DIR/logs/pass-a-start.log"; fail 'Pass A start failed'; }
+          if [[ $overall -eq 0 ]]; then
+            assert_database pass-a || fail 'Pass A assertions failed'
+            capture_history pass-a || fail 'Pass A history capture failed'
+            supabase test db > "$EVIDENCE_DIR/logs/pass-a-pgtap.log" 2>&1 || { cat "$EVIDENCE_DIR/logs/pass-a-pgtap.log"; fail 'Pass A pgTAP failed'; }
+            supabase db lint --local --level error > "$EVIDENCE_DIR/logs/pass-a-lint.log" 2>&1 || { cat "$EVIDENCE_DIR/logs/pass-a-lint.log"; fail 'Pass A database lint failed'; }
+          fi
+
+          note "Pass B: db reset reconstruction"
+          if [[ $overall -eq 0 ]]; then
+            supabase db reset --local --no-seed > "$EVIDENCE_DIR/logs/pass-b-reset.log" 2>&1 || { cat "$EVIDENCE_DIR/logs/pass-b-reset.log"; fail 'Pass B reset failed'; }
+            assert_database pass-b || fail 'Pass B assertions failed'
+            capture_history pass-b || fail 'Pass B history capture failed'
+            diff -u "$EVIDENCE_DIR/history/pass-a.tsv" "$EVIDENCE_DIR/history/pass-b.tsv" > "$EVIDENCE_DIR/logs/history-a-b.diff" || fail 'Pass A/B migration history differs'
+          fi
+
+          note "Pass C: independent stop/no-backup/fresh start"
+          if [[ $overall -eq 0 ]]; then
+            supabase stop --no-backup > "$EVIDENCE_DIR/logs/pass-c-stop.log" 2>&1 || fail 'Pass C pre-stop failed'
+            if docker ps -a --format '{{.Names}}' | grep -q '^supabase_'; then fail 'Supabase container remains before Pass C'; fi
+            supabase start > "$EVIDENCE_DIR/logs/pass-c-start.log" 2>&1 || { cat "$EVIDENCE_DIR/logs/pass-c-start.log"; fail 'Pass C start failed'; }
+            assert_database pass-c || fail 'Pass C assertions failed'
+            capture_history pass-c || fail 'Pass C history capture failed'
+            diff -u "$EVIDENCE_DIR/history/pass-a.tsv" "$EVIDENCE_DIR/history/pass-c.tsv" > "$EVIDENCE_DIR/logs/history-a-c.diff" || fail 'Pass A/C migration history differs'
+            diff -u "$EVIDENCE_DIR/catalog/pass-a-relations.tsv" "$EVIDENCE_DIR/catalog/pass-c-relations.tsv" > "$EVIDENCE_DIR/logs/catalog-relations-a-c.diff" || fail 'Pass A/C relation catalog differs'
+            diff -u "$EVIDENCE_DIR/catalog/pass-a-functions.tsv" "$EVIDENCE_DIR/catalog/pass-c-functions.tsv" > "$EVIDENCE_DIR/logs/catalog-functions-a-c.diff" || fail 'Pass A/C function catalog differs'
+          fi
+
+          cleanup
+          trap - EXIT
+          if grep -q '^supabase_' "$EVIDENCE_DIR/cleanup/containers.tsv"; then fail 'Supabase containers remain after cleanup'; fi
+          if [[ -s "$EVIDENCE_DIR/cleanup/volumes.txt" ]]; then fail 'Supabase-like volumes remain after cleanup'; fi
+          printf 'overall=%s\n' "$overall" | tee "$EVIDENCE_DIR/result.txt"
+          exit "$overall"
+
+      - name: Run complete repository gates
+        if: steps.database.outcome == 'success'
+        run: |
+          npm test
+          npx tsc --noEmit
+          npm run lint
+          npm run build
+
+      - name: Archive credential-free evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -d "$EVIDENCE_DIR" ]]; then
+            if grep -RIlE 'postgres(ql)?://[^[:space:]]+:[^@[:space:]]+@|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|sk_(live|test)_' "$EVIDENCE_DIR" > "$EVIDENCE_DIR/credential-scan-hits.txt"; then
+              echo 'Credential-like material detected in evidence' >&2
+              exit 1
+            fi
+            tar -C "$(dirname "$EVIDENCE_DIR")" -czf canonical-baseline-evidence.tar.gz "$(basename "$EVIDENCE_DIR")"
+            sha256sum canonical-baseline-evidence.tar.gz > canonical-baseline-evidence.tar.gz.sha256
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-baseline-evidence-${{ github.run_id }}
+          path: |
+            canonical-baseline-evidence.tar.gz
+            canonical-baseline-evidence.tar.gz.sha256
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Post decision-useful PR comment
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATABASE_OUTCOME: ${{ steps.database.outcome }}
+        run: |
+          set -euo pipefail
+          pr="$(gh pr list --head qa/pr654-migration-baseline-recovery-20260816 --state open --json number --jq '.[0].number')"
+          if [[ -n "$pr" ]]; then
+            gh pr comment "$pr" --body "Canonical baseline CI on exact head \`$GITHUB_SHA\`: database gate **$DATABASE_OUTCOME**. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. No remote database, deployment, provider, payment, merge, or feature-activation action occurred."
+          fi
+
+      - name: Enforce database result
+        if: always()
+        run: test "${{ steps.database.outcome }}" = success
