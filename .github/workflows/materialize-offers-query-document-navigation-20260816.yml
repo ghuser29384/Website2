@@ -1,4 +1,4 @@
-name: Materialize Offers query document-navigation repair
+name: Materialize non-workflow Offers query repair files
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: materialize-offers-query-document-navigation-20260816
+  group: materialize-offers-query-document-navigation-source-20260816
   cancel-in-progress: false
 
 env:
@@ -28,21 +28,19 @@ jobs:
           ref: fix/offers-query-document-navigation-20260816
           fetch-depth: 0
 
-      - name: Guard exact base and bootstrap-only scope
+      - name: Materialize exact non-workflow source files
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "$(git branch --show-current)" = "$TARGET_BRANCH"
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE"
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE"
-          test "$(git diff --name-only "$EXPECTED_BASE" HEAD)" = "$BOOTSTRAP_WORKFLOW"
-          git diff --check "$EXPECTED_BASE" HEAD
 
-      - name: Apply exact four-file repair
-        shell: bash
-        run: |
-          set -euo pipefail
+          if grep -Fq '<a href={buildLiveHref({})}>Clear all</a>' src/app/offers/page.tsx; then
+            echo 'Exact non-workflow repair is already materialized.'
+            exit 0
+          fi
+
           python - <<'PY'
           from pathlib import Path
 
@@ -183,15 +181,6 @@ jobs:
           '''
           test_path.write_text(test_source[:start] + replacement + test_source[end:], encoding="utf-8")
 
-          release_expression = "$" + "{{ env.RELEASE_EVIDENCE_DIR }}"
-          replace_one(
-              ".github/workflows/vercel-release.yml",
-              "          path: " + release_expression + "\n",
-              "          path: |\n"
-              "            " + release_expression + "\n"
-              "            test-results\n"
-              "            playwright-report\n",
-          )
           replace_one(
               "scripts/vercel-release-workflow.test.mjs",
               '  assert.match(source, /path: \\$\\{\\{ env\\.RELEASE_EVIDENCE_DIR \\}\\}/);\n',
@@ -205,36 +194,18 @@ jobs:
               '  assert.match(evidenceStep, /^\\s+test-results\\s*$/m);\n'
               '  assert.match(evidenceStep, /^\\s+playwright-report\\s*$/m);\n',
           )
-
-          Path(".github/workflows/materialize-offers-query-document-navigation-20260816.yml").unlink()
           PY
 
-          expected="$(printf '%s\n' \
-            '.github/workflows/vercel-release.yml' \
-            'scripts/vercel-release-workflow.test.mjs' \
-            'src/app/offers/page.tsx' \
-            'tests/offers-density.spec.ts' | sort)"
-          actual="$(git diff --name-only "$EXPECTED_BASE" | sort)"
-          test "$actual" = "$expected"
-          git diff --check "$EXPECTED_BASE"
-
-      - name: Commit exact repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE"
+          git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add -- src/app/offers/page.tsx tests/offers-density.spec.ts scripts/vercel-release-workflow.test.mjs
           expected="$(printf '%s\n' \
-            '.github/workflows/vercel-release.yml' \
             'scripts/vercel-release-workflow.test.mjs' \
             'src/app/offers/page.tsx' \
             'tests/offers-density.spec.ts' | sort)"
-          staged="$(git diff --cached --name-only "$EXPECTED_BASE" | sort)"
+          staged="$(git diff --cached --name-only | sort)"
           test "$staged" = "$expected"
-          git diff --cached --check "$EXPECTED_BASE"
-          git commit -m 'Use document navigation for Offers query state'
+          git diff --cached --check
+          git commit -m 'Materialize Offers document-navigation source repair'
           git push origin "HEAD:$TARGET_BRANCH"
-          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
-          test "$remote_head" = "$(git rev-parse HEAD)"
