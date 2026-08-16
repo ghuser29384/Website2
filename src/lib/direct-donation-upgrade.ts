@@ -37,7 +37,8 @@ export type DirectDonationUpgradeEnvironment = Exclude<
 >;
 export type DirectDonationUpgradeBranch = "fallback" | "matched";
 export type DirectDonationUpgradeParticipantRole = "creator" | "matcher";
-export type DirectDonationUpgradePrivacyMode = "public" | "private_until_completed";
+export type DirectDonationUpgradePrivacyMode =
+  "public" | "private_until_completed";
 export type DirectDonationUpgradeRuntimeEnvironment = Readonly<
   Record<string, string | undefined>
 >;
@@ -49,8 +50,7 @@ export interface DirectDonationUpgradeConfig {
   publicApiKey: string;
   donateLinkWebhookToken: string;
   partnerWebhookAuthorizationTokenConfigured: boolean;
-  partnerWebhookAuthorizationContract:
-    typeof EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS;
+  partnerWebhookAuthorizationContract: typeof EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS;
   webhookPathSecret: string;
   metadataSecret: string;
   qaFixturesEnabled: boolean;
@@ -231,7 +231,16 @@ export interface EvaluatedDirectDonationUpgradeWebhook {
   paymentMethod: string;
 }
 
-const EVERY_ORG_API_BASE = "https://partners.every.org/v0.2";
+const EVERY_ORG_LIVE_API_BASE = "https://partners.every.org/v0.2";
+const EVERY_ORG_STAGING_API_BASE = "https://partners-staging.every.org/v0.2";
+
+export function getEveryOrgApiBase(mode: DirectDonationUpgradeMode) {
+  if (mode === "staging") return EVERY_ORG_STAGING_API_BASE;
+  if (mode === "live") return EVERY_ORG_LIVE_API_BASE;
+  throw new Error(
+    "Every.org API is unavailable while Direct Donation Upgrades are disabled.",
+  );
+}
 const FETCH_TIMEOUT_MS = 10_000;
 
 function envText(
@@ -295,8 +304,10 @@ export function getDirectDonationUpgradeConfig(
   runtimeEnvironment: DirectDonationUpgradeRuntimeEnvironment = process.env,
 ): DirectDonationUpgradeConfig {
   const requestedEnabled =
-    envText(runtimeEnvironment, "DIRECT_DONATION_UPGRADES_ENABLED").toLowerCase() ===
-    "true";
+    envText(
+      runtimeEnvironment,
+      "DIRECT_DONATION_UPGRADES_ENABLED",
+    ).toLowerCase() === "true";
   const configuredMode = envText(
     runtimeEnvironment,
     "DIRECT_DONATION_UPGRADE_MODE",
@@ -307,9 +318,8 @@ export function getDirectDonationUpgradeConfig(
       : "disabled";
   const environment = mode === "disabled" ? null : mode;
   const publicApiKey = envText(runtimeEnvironment, "EVERY_ORG_PUBLIC_API_KEY");
-  const credentialConfiguration = getEveryOrgCredentialConfiguration(
-    runtimeEnvironment,
-  );
+  const credentialConfiguration =
+    getEveryOrgCredentialConfiguration(runtimeEnvironment);
   const webhookPathSecret = envText(
     runtimeEnvironment,
     "EVERY_ORG_WEBHOOK_PATH_SECRET",
@@ -319,8 +329,10 @@ export function getDirectDonationUpgradeConfig(
     "EVERY_ORG_PARTNER_METADATA_SECRET",
   );
   const qaFixturesEnabled =
-    envText(runtimeEnvironment, "DIRECT_DONATION_UPGRADE_QA_FIXTURES").toLowerCase() ===
-    "true";
+    envText(
+      runtimeEnvironment,
+      "DIRECT_DONATION_UPGRADE_QA_FIXTURES",
+    ).toLowerCase() === "true";
   const renderedQaInspectionEnabled =
     envText(
       runtimeEnvironment,
@@ -335,10 +347,14 @@ export function getDirectDonationUpgradeConfig(
   const vercelProduction = hasVercelProductionSignal(runtimeEnvironment);
   const blockers: string[] = [];
 
-  if (!requestedEnabled) blockers.push("Direct Donation Upgrades are disabled.");
-  if (mode === "disabled") blockers.push("DIRECT_DONATION_UPGRADE_MODE is disabled.");
+  if (!requestedEnabled)
+    blockers.push("Direct Donation Upgrades are disabled.");
+  if (mode === "disabled")
+    blockers.push("DIRECT_DONATION_UPGRADE_MODE is disabled.");
   if (mode === "staging" && vercelProduction) {
-    blockers.push("Every.org staging is blocked on Vercel production deployments.");
+    blockers.push(
+      "Every.org staging is blocked on Vercel production deployments.",
+    );
   }
   if (
     mode === "live" &&
@@ -364,10 +380,14 @@ export function getDirectDonationUpgradeConfig(
   }
   blockers.push(...credentialConfiguration.blockers);
   if (webhookPathSecret.length < 32) {
-    blockers.push("EVERY_ORG_WEBHOOK_PATH_SECRET must be at least 32 characters.");
+    blockers.push(
+      "EVERY_ORG_WEBHOOK_PATH_SECRET must be at least 32 characters.",
+    );
   }
   if (metadataSecret.length < 32) {
-    blockers.push("EVERY_ORG_PARTNER_METADATA_SECRET must be at least 32 characters.");
+    blockers.push(
+      "EVERY_ORG_PARTNER_METADATA_SECRET must be at least 32 characters.",
+    );
   }
 
   const environmentBoundaryReady =
@@ -382,7 +402,8 @@ export function getDirectDonationUpgradeConfig(
   const providerIndependentConnectorReady =
     readyForSearch &&
     credentialConfiguration.donateLinkWebhookTokenConfigured &&
-    credentialConfiguration.unsupportedCredentialEnvironmentNames.length === 0 &&
+    credentialConfiguration.unsupportedCredentialEnvironmentNames.length ===
+      0 &&
     !credentialConfiguration.publicAndPrivateTokensEqual &&
     webhookPathSecret.length >= 32 &&
     metadataSecret.length >= 32;
@@ -399,8 +420,7 @@ export function getDirectDonationUpgradeConfig(
     mode,
     environment,
     publicApiKey,
-    donateLinkWebhookToken:
-      credentialConfiguration.donateLinkWebhookToken,
+    donateLinkWebhookToken: credentialConfiguration.donateLinkWebhookToken,
     partnerWebhookAuthorizationTokenConfigured:
       credentialConfiguration.partnerWebhookAuthorizationTokenConfigured,
     partnerWebhookAuthorizationContract:
@@ -425,11 +445,15 @@ function normalizeText(value: unknown, maximum = 500) {
 }
 
 export function normalizeEveryOrgSlug(value: unknown) {
-  return normalizeText(value, 160).toLowerCase().replace(/^\/+|\/+$/g, "");
+  return normalizeText(value, 160)
+    .toLowerCase()
+    .replace(/^\/+|\/+$/g, "");
 }
 
 export function normalizeEveryOrgEin(value: unknown) {
-  return String(value ?? "").replace(/\D/g, "").slice(0, 16);
+  return String(value ?? "")
+    .replace(/\D/g, "")
+    .slice(0, 16);
 }
 
 function normalizedJson(value: unknown): unknown {
@@ -495,15 +519,22 @@ function identityWithoutHash(input: {
     normalizeEveryOrgSlug(input.primarySlug) ||
     nonprofitSlugFromProfileUrl(input.profileUrl);
   const profileUrl = normalizeText(input.profileUrl, 500);
-  const providerNonprofitId = normalizeText(input.providerNonprofitId, 160).toLowerCase();
+  const providerNonprofitId = normalizeText(
+    input.providerNonprofitId,
+    160,
+  ).toLowerCase();
   const name = normalizeText(input.name, 220);
   const ein = normalizeEveryOrgEin(input.ein);
   const isDisbursable = input.isDisbursable === true;
 
-  if (!providerNonprofitId) throw new Error("Every.org nonprofit ID is missing.");
+  if (!providerNonprofitId)
+    throw new Error("Every.org nonprofit ID is missing.");
   if (!name) throw new Error("Every.org nonprofit name is missing.");
   if (!primarySlug) throw new Error("Every.org nonprofit slug is missing.");
-  if (!profileUrl.startsWith("https://www.every.org/") && !profileUrl.startsWith("https://every.org/")) {
+  if (
+    !profileUrl.startsWith("https://www.every.org/") &&
+    !profileUrl.startsWith("https://every.org/")
+  ) {
     throw new Error("Every.org nonprofit profile URL is invalid.");
   }
   if (!isDisbursable) {
@@ -654,7 +685,7 @@ export async function fetchEveryOrgNonprofitIdentity(
   }
 
   const url = new URL(
-    `${EVERY_ORG_API_BASE}/nonprofit/${encodeURIComponent(normalizedIdentifier)}`,
+    `${getEveryOrgApiBase(config.mode)}/nonprofit/${encodeURIComponent(normalizedIdentifier)}`,
   );
   url.searchParams.set("apiKey", config.publicApiKey);
   const payload = objectValue(await fetchJson(url.toString()));
@@ -707,12 +738,14 @@ export async function searchEveryOrgNonprofits(
   if (!config.publicApiKey) return [];
 
   const url = new URL(
-    `${EVERY_ORG_API_BASE}/search/${encodeURIComponent(normalizedQuery)}`,
+    `${getEveryOrgApiBase(config.mode)}/search/${encodeURIComponent(normalizedQuery)}`,
   );
   url.searchParams.set("apiKey", config.publicApiKey);
   url.searchParams.set("take", String(take));
   const payload = objectValue(await fetchJson(url.toString()));
-  const nonprofits = Array.isArray(payload.nonprofits) ? payload.nonprofits : [];
+  const nonprofits = Array.isArray(payload.nonprofits)
+    ? payload.nonprofits
+    : [];
 
   const seen = new Set<string>();
   const results: EveryOrgNonprofitSearchResult[] = [];
@@ -752,7 +785,10 @@ export function formatDirectDonationUpgradeUsd(cents: number) {
 function constantTimeTextEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
-  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    timingSafeEqual(leftBuffer, rightBuffer)
+  );
 }
 
 function metadataSigningInput(
@@ -803,10 +839,15 @@ export function decodeDirectDonationUpgradePartnerMetadata(value: unknown) {
     return value as Record<string, unknown>;
   }
   if (typeof value !== "string" || !value.trim()) return {};
-  const candidates = [value.trim(), value.trim().replace(/-/g, "+").replace(/_/g, "/")];
+  const candidates = [
+    value.trim(),
+    value.trim().replace(/-/g, "+").replace(/_/g, "/"),
+  ];
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(Buffer.from(candidate, "base64").toString("utf8"));
+      const parsed = JSON.parse(
+        Buffer.from(candidate, "base64").toString("utf8"),
+      );
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return parsed as Record<string, unknown>;
       }
@@ -899,12 +940,22 @@ export function evaluateDirectDonationUpgradeWebhook(input: {
   const paymentMethod = normalizeText(payload.paymentMethod, 120);
   const failures: Array<[string, string]> = [];
 
-  if (!chargeId) failures.push(["missing_charge_id", "Every.org did not provide a charge ID."]);
+  if (!chargeId)
+    failures.push([
+      "missing_charge_id",
+      "Every.org did not provide a charge ID.",
+    ]);
   if (obligation.environment !== input.expectedEnvironment) {
-    failures.push(["environment_mismatch", "The webhook environment does not match the obligation."]);
+    failures.push([
+      "environment_mismatch",
+      "The webhook environment does not match the obligation.",
+    ]);
   }
   if (partnerDonationId !== obligation.partner_donation_id) {
-    failures.push(["partner_id_mismatch", "The partner donation ID does not match the obligation."]);
+    failures.push([
+      "partner_id_mismatch",
+      "The partner donation ID does not match the obligation.",
+    ]);
   }
   if (
     !verifyDirectDonationUpgradePartnerMetadata(
@@ -913,35 +964,65 @@ export function evaluateDirectDonationUpgradeWebhook(input: {
       input.metadataSecret,
     )
   ) {
-    failures.push(["metadata_signature_invalid", "Partner metadata is missing, altered, or unsigned."]);
+    failures.push([
+      "metadata_signature_invalid",
+      "Partner metadata is missing, altered, or unsigned.",
+    ]);
   }
   if (grossAmountCents !== obligation.expected_amount_cents) {
-    failures.push(["amount_mismatch", "The gross donation amount does not match the frozen obligation."]);
+    failures.push([
+      "amount_mismatch",
+      "The gross donation amount does not match the frozen obligation.",
+    ]);
   }
   if (
     netAmountCents === null ||
     netAmountCents < 0 ||
     (grossAmountCents !== null && netAmountCents > grossAmountCents)
   ) {
-    failures.push(["net_amount_invalid", "The provider net amount is missing or invalid."]);
+    failures.push([
+      "net_amount_invalid",
+      "The provider net amount is missing or invalid.",
+    ]);
   }
   if (currency !== obligation.expected_currency) {
-    failures.push(["currency_mismatch", "The donation currency does not match the frozen obligation."]);
+    failures.push([
+      "currency_mismatch",
+      "The donation currency does not match the frozen obligation.",
+    ]);
   }
   if (frequency !== "one-time") {
-    failures.push(["frequency_mismatch", "Only one-time donations fulfill Donation Upgrades."]);
+    failures.push([
+      "frequency_mismatch",
+      "Only one-time donations fulfill Donation Upgrades.",
+    ]);
   }
   const expectedRecipient = obligation.expected_recipient;
   if (nonprofitSlug !== expectedRecipient.primarySlug) {
-    failures.push(["recipient_mismatch", "The donation went to a different Every.org recipient."]);
+    failures.push([
+      "recipient_mismatch",
+      "The donation went to a different Every.org recipient.",
+    ]);
   }
   if (expectedRecipient.ein && nonprofitEin !== expectedRecipient.ein) {
-    failures.push(["ein_mismatch", "The recipient EIN does not match the frozen obligation."]);
+    failures.push([
+      "ein_mismatch",
+      "The recipient EIN does not match the frozen obligation.",
+    ]);
   }
   if (!donationDate) {
-    failures.push(["donation_date_invalid", "The provider donation date is missing or invalid."]);
-  } else if (Date.parse(donationDate) > Date.parse(obligation.due_at) + 5 * 60 * 1000) {
-    failures.push(["donation_late", "The donation was initiated after the fulfillment deadline."]);
+    failures.push([
+      "donation_date_invalid",
+      "The provider donation date is missing or invalid.",
+    ]);
+  } else if (
+    Date.parse(donationDate) >
+    Date.parse(obligation.due_at) + 5 * 60 * 1000
+  ) {
+    failures.push([
+      "donation_late",
+      "The donation was initiated after the fulfillment deadline.",
+    ]);
   }
 
   const firstFailure = failures[0];
@@ -967,7 +1048,9 @@ export function secureDirectDonationUpgradeWebhookPathMatches(
   candidate: string,
   configured: string,
 ) {
-  return configured.length >= 32 && constantTimeTextEqual(candidate, configured);
+  return (
+    configured.length >= 32 && constantTimeTextEqual(candidate, configured)
+  );
 }
 
 export function buildDirectDonationUpgradeCheckoutUrl(input: {
@@ -976,7 +1059,10 @@ export function buildDirectDonationUpgradeCheckoutUrl(input: {
   siteUrl?: string;
 }) {
   if (!input.config.readyForCheckout || !input.config.environment) {
-    throw new Error(input.config.blockers[0] ?? "Direct Donation Upgrade checkout is unavailable.");
+    throw new Error(
+      input.config.blockers[0] ??
+        "Direct Donation Upgrade checkout is unavailable.",
+    );
   }
   if (input.obligation.environment !== input.config.environment) {
     throw new Error("The obligation belongs to another Every.org environment.");
@@ -1028,15 +1114,15 @@ export function buildDirectDonationUpgradeCheckoutUrl(input: {
       siteUrl,
     ).toString(),
   );
-  url.searchParams.set("partner_donation_id", input.obligation.partner_donation_id);
+  url.searchParams.set(
+    "partner_donation_id",
+    input.obligation.partner_donation_id,
+  );
   url.searchParams.set(
     "partner_metadata",
     Buffer.from(JSON.stringify(metadata), "utf8").toString("base64"),
   );
-  url.searchParams.set(
-    "webhook_token",
-    input.config.donateLinkWebhookToken,
-  );
+  url.searchParams.set("webhook_token", input.config.donateLinkWebhookToken);
   url.searchParams.set("share_info", "false");
   url.searchParams.set("method", "card,bank,paypal,venmo,pay");
   url.hash = "donate";
@@ -1066,8 +1152,11 @@ export function buildDirectDonationUpgradeTermsHash(input: {
     privacyMode: input.privacyMode,
     environment: input.environment,
     baselineVersion: DIRECT_DONATION_UPGRADE_BASELINE_VERSION,
-    baselineAttestationHash: hashDirectDonationUpgradeText(input.baselineAttestation.trim()),
-    matcherCommitmentVersion: DIRECT_DONATION_UPGRADE_MATCHER_COMMITMENT_VERSION,
+    baselineAttestationHash: hashDirectDonationUpgradeText(
+      input.baselineAttestation.trim(),
+    ),
+    matcherCommitmentVersion:
+      DIRECT_DONATION_UPGRADE_MATCHER_COMMITMENT_VERSION,
     fulfillmentDays: DIRECT_DONATION_UPGRADE_FULFILLMENT_DAYS,
     webhookGraceHours: DIRECT_DONATION_UPGRADE_WEBHOOK_GRACE_HOURS,
   });
