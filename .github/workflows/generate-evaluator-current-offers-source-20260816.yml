@@ -1,4 +1,4 @@
-name: Generate corrected evaluator source for current Offers
+name: Publish corrected evaluator source for current Offers
 
 on:
   pull_request:
@@ -8,29 +8,31 @@ on:
       - .github/workflows/generate-evaluator-current-offers-source-20260816.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: generate-evaluator-current-offers-source-20260816
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  generate:
+  publish:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref == 'integration/evaluator-core-loop-current-main-20260815'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Check out exact PR head
+      - name: Check out exact integration branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: integration/evaluator-core-loop-current-main-20260815
+          fetch-depth: 0
 
       - name: Generate exact corrected full source
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           python3 - <<'PY'
           from pathlib import Path
 
@@ -112,14 +114,27 @@ jobs:
             echo 'Stale heading assertion remains.' >&2
             exit 1
           fi
-          sha256sum evaluator-core-loop-authenticated.corrected.ts | tee corrected-source.sha256
+          sha256sum evaluator-core-loop-authenticated.corrected.ts | tee /tmp/corrected-source.sha256
 
-      - name: Upload corrected source
-        uses: actions/upload-artifact@v4
-        with:
-          name: evaluator-core-loop-current-offers-corrected-source-${{ github.event.pull_request.head.sha }}
-          retention-days: 7
-          if-no-files-found: error
-          path: |
-            evaluator-core-loop-authenticated.corrected.ts
-            corrected-source.sha256
+      - name: Commit durable full source and remove staging files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv evaluator-core-loop-authenticated.corrected.ts \
+            tests/evaluator-core-loop-authenticated.spec.ts
+          git rm \
+            tests/evaluator-core-loop-authenticated.source.ts \
+            .github/workflows/generate-evaluator-current-offers-source-20260816.yml
+          git add tests/evaluator-core-loop-authenticated.spec.ts
+          git diff --check --cached
+          git diff --cached --name-only | sort | tee /tmp/changed.txt
+          printf '%s\n' \
+            .github/workflows/generate-evaluator-current-offers-source-20260816.yml \
+            tests/evaluator-core-loop-authenticated.source.ts \
+            tests/evaluator-core-loop-authenticated.spec.ts \
+            | sort > /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/changed.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Align evaluator discovery with current Offers disclosure"
+          git push origin HEAD:integration/evaluator-core-loop-current-main-20260815
