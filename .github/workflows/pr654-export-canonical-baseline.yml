@@ -108,25 +108,23 @@ jobs:
           export PGCONNECT_TIMEOUT=15
           export PGSSLMODE=require
           export PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=120000 -c lock_timeout=5000'
-          export PROD_URL="$PROD_SUPABASE_DB_URL"
-          export QA_URL="$QA_SUPABASE_DB_URL"
           for label in prod qa; do
-            if [[ "$label" == prod ]]; then url="$PROD_URL"; else url="$QA_URL"; fi
+            if [[ "$label" == prod ]]; then url="$PROD_SUPABASE_DB_URL"; else url="$QA_SUPABASE_DB_URL"; fi
             psql "$url" -X -v ON_ERROR_STOP=1 -AtF $'\t' > "$EVIDENCE_DIR/$label/policy-semantic-manifest.tsv" <<'SQL'
-begin transaction isolation level repeatable read read only;
-select n.nspname||'.'||c.relname||'.'||p.polname as key,
-       case when p.polpermissive then 'PERMISSIVE' else 'RESTRICTIVE' end as permissive,
-       array_to_string(array(select r.rolname from unnest(p.polroles) role_oid join pg_roles r on r.oid=role_oid order by r.rolname), ',') as roles,
-       p.polcmd,
-       encode(digest(coalesce(pg_get_expr(p.polqual,p.polrelid,true),''),'sha256'),'hex') as using_sha256,
-       encode(digest(coalesce(pg_get_expr(p.polwithcheck,p.polrelid,true),''),'sha256'),'hex') as check_sha256
-from pg_policy p
-join pg_class c on c.oid=p.polrelid
-join pg_namespace n on n.oid=c.relnamespace
-where n.nspname in ('public','moral_trade_private')
-order by key;
-commit;
-SQL
+          begin transaction isolation level repeatable read read only;
+          select n.nspname||'.'||c.relname||'.'||p.polname as key,
+                 case when p.polpermissive then 'PERMISSIVE' else 'RESTRICTIVE' end as permissive,
+                 array_to_string(array(select r.rolname from unnest(p.polroles) role_oid join pg_roles r on r.oid=role_oid order by r.rolname), ',') as roles,
+                 p.polcmd,
+                 encode(digest(coalesce(pg_get_expr(p.polqual,p.polrelid,true),''),'sha256'),'hex') as using_sha256,
+                 encode(digest(coalesce(pg_get_expr(p.polwithcheck,p.polrelid,true),''),'sha256'),'hex') as check_sha256
+          from pg_policy p
+          join pg_class c on c.oid=p.polrelid
+          join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname in ('public','moral_trade_private')
+          order by key;
+          commit;
+          SQL
           done
 
           tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
