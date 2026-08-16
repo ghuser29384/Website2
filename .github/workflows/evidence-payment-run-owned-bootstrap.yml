@@ -36,7 +36,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$GITHUB_REF_NAME" = "fix/evidence-payment-run-owned-qa-20260816-v2"
 
-          for part in $(seq -w 0 7); do
+          for part in 00 01 02 03 04 05 06 07; do
             test -f ".ci-upload/evidence-sequence.part${part}"
           done
           cat .ci-upload/evidence-sequence.part{00..07} > "$RUNNER_TEMP/evidence-sequence.tar.gz.b64"
