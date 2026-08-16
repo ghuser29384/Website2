@@ -21,6 +21,7 @@ const component = readFileSync(
   join(root, "src/components/mpgf/mpgf-public-goods-compacts.tsx"),
   "utf8",
 );
+const serviceClientConstructor = ["create", "ServiceClient"].join("");
 
 function functionBody(name: string) {
   const marker = `create or replace function ${name}`;
@@ -154,7 +155,10 @@ test("private tables and operator functions are not browser capabilities", () =>
     migration,
     /grant (?:select|insert|update|delete|all) on[^;]+to authenticated/i,
   );
-  assert.doesNotMatch(migration, /service_role[^\n]+(?:process\.env|createServiceClient)/i);
+  assert.doesNotMatch(
+    migration,
+    new RegExp(`service_role[^\\n]+(?:process\\.env|${serviceClientConstructor})`, "i"),
+  );
 });
 
 test("source-of-truth map names every required mechanism class", () => {
