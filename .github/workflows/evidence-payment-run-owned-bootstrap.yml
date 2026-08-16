@@ -131,10 +131,16 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The authenticated connector already wrote the permanent workflow. Restore
+          # that exact HEAD version so this lower-privilege Actions token commits only
+          # fixture, cleanup, Playwright, contract, and transport-removal paths.
+          git restore --source=HEAD --staged --worktree \
+            .github/workflows/evidence-payment-release-qa.yml
           git add -A
           git diff --cached --check
           if git diff --cached --name-only | grep -q '^\.github/workflows/'; then
             echo "Refusing to let the Actions token modify a workflow file." >&2
+            git diff --cached --name-only >&2
             exit 1
           fi
           git commit -m "Wire Evidence-payment QA fixtures to run ownership" \
