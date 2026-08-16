@@ -1,0 +1,6 @@
+schema=moral-trade-pr547-every-org-staging-preflight-trigger-v1
+candidate=0207a58410480b6edd1bb5a1496bc8ce7c66d6f6
+controller_branch=ops/pr547-every-org-provider-staging-708-bypass-rotation-v2-0207a584-20260816
+purpose=recheck_rotated_phase1_prerequisites_without_deployment
+deployment_authorized=false
+provider_transaction_authorized=false
