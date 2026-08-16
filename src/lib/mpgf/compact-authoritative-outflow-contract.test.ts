@@ -4,13 +4,12 @@ import { join } from "node:path";
 import test from "node:test";
 
 const root = process.cwd();
-const migration = readFileSync(
-  join(
-    root,
-    "supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql",
-  ),
-  "utf8",
-);
+const migration = [
+  "supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql",
+  "supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql",
+]
+  .map((path) => readFileSync(join(root, path), "utf8"))
+  .join("\n");
 const document = readFileSync(
   join(root, "docs/mpgf/compact-authoritative-outflow-ledger-v1.md"),
   "utf8",
