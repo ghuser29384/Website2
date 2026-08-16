@@ -31,7 +31,9 @@ const REQUIRED = {
   WORKFLOW_REF,
 };
 for (const [key, value] of Object.entries(REQUIRED)) {
-  if (!value) throw new Error(`Missing required two-writer environment value ${key}.`);
+  if (!value) {
+    throw new Error(`Missing required two-writer environment value ${key}.`);
+  }
 }
 if (EXPECTED_QA_REF !== EVIDENCE_PAYMENT_QA_REF) {
   throw new Error("Refusing two-writer QA outside the exact isolated-QA project.");
@@ -62,9 +64,13 @@ const ROLE_KEYS = [
   "outsider",
   "administrator",
 ];
+
+// Actual fixed identities selected by the stale cleanup at
+// e0ed0d206687dae17882260313152846b2d2bd22.
 const STALE_USER_IDS = Array.from(
   { length: 6 },
-  (_, index) => `71000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+  (_, index) =>
+    `71000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
 );
 const STALE_AGREEMENT_IDS = [
   "72000000-0000-4000-8000-000000000001",
@@ -78,14 +84,6 @@ const STALE_EMAILS = [
   "evidence-payment-outsider@qa.invalid",
   "evidence-payment-admin@qa.invalid",
 ];
-
-function safeError(value) {
-  const text = value instanceof Error ? value.message : String(value);
-  return text
-    .replaceAll(DATABASE_URL, "[REDACTED_DATABASE_URL]")
-    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[REDACTED_JWT]")
-    .slice(0, 4000);
-}
 
 function manifestFor(lane) {
   return buildEvidencePaymentQaNamespace({
@@ -102,6 +100,19 @@ const namespaceB = manifestFor("b");
 const passwordA = randomBytes(48).toString("base64url");
 const passwordB = randomBytes(48).toString("base64url");
 const summaries = [];
+
+function safeError(value) {
+  let text = value instanceof Error ? value.message : String(value);
+  for (const secret of [DATABASE_URL, passwordA, passwordB]) {
+    if (secret) text = text.replaceAll(secret, "[REDACTED]");
+  }
+  return text
+    .replace(
+      /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+      "[REDACTED_JWT]",
+    )
+    .slice(0, 4000);
+}
 
 function emit(stage, payload) {
   const record = { stage, ...payload };
@@ -134,7 +145,14 @@ function parseJsonLines(output) {
 function runPsqlFile(stage, file, manifest, password = "") {
   const result = spawnSync(
     "psql",
-    [DATABASE_URL, "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--file", file],
+    [
+      DATABASE_URL,
+      "--no-psqlrc",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "--file",
+      file,
+    ],
     {
       cwd: ROOT,
       encoding: "utf8",
@@ -147,15 +165,24 @@ function runPsqlFile(stage, file, manifest, password = "") {
       `${stage} failed: ${safeError(`${result.stdout ?? ""}\n${result.stderr ?? ""}`)}`,
     );
   }
-  const json = parseJsonLines(result.stdout ?? "");
-  if (json.length === 0) throw new Error(`${stage} emitted no machine-readable result.`);
-  return json.at(-1);
+  const records = parseJsonLines(result.stdout ?? "");
+  if (records.length === 0) {
+    throw new Error(`${stage} emitted no machine-readable result.`);
+  }
+  return records.at(-1);
 }
 
 function runInlineSql(stage, sql) {
   const result = spawnSync(
     "psql",
-    [DATABASE_URL, "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--tuples-only", "--no-align"],
+    [
+      DATABASE_URL,
+      "--no-psqlrc",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "--tuples-only",
+      "--no-align",
+    ],
     {
       cwd: ROOT,
       encoding: "utf8",
@@ -169,11 +196,13 @@ function runInlineSql(stage, sql) {
       `${stage} failed: ${safeError(`${result.stdout ?? ""}\n${result.stderr ?? ""}`)}`,
     );
   }
-  const json = parseJsonLines(result.stdout ?? "");
-  if (json.length !== 1) {
-    throw new Error(`${stage} expected one machine-readable row and received ${json.length}.`);
+  const records = parseJsonLines(result.stdout ?? "");
+  if (records.length !== 1) {
+    throw new Error(
+      `${stage} expected one machine-readable row and received ${records.length}.`,
+    );
   }
-  return json[0];
+  return records[0];
 }
 
 function authClient() {
@@ -196,10 +225,15 @@ async function authenticateNamespace(manifest, password) {
       password,
     });
     if (error || !data.session || !data.user) {
-      throw new Error(`Synthetic two-writer Auth sign-in failed for ${role}: ${error?.message ?? "no session"}`);
+      throw new Error(
+        `Synthetic two-writer Auth sign-in failed for ${role}: ${error?.message ?? "no session"}`,
+      );
     }
     assert.equal(data.user.id, expected.id);
-    assert.equal(data.user.user_metadata?.qa_namespace, manifest.namespace.handle);
+    assert.equal(
+      data.user.user_metadata?.qa_namespace,
+      manifest.namespace.handle,
+    );
     actors[role] = { client, session: data.session };
   }
   return actors;
@@ -238,13 +272,17 @@ function totpCode(secret, offset = 0) {
 }
 
 async function elevate(client, label) {
-  const { data: enrollment, error: enrollmentError } = await client.auth.mfa.enroll({
-    factorType: "totp",
-    friendlyName: `two-writer-${label}`,
-  });
+  const { data: enrollment, error: enrollmentError } =
+    await client.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: `two-writer-${label}`,
+    });
   if (enrollmentError || !enrollment?.totp?.secret) {
-    throw new Error(`Two-writer TOTP enrollment failed for ${label}: ${enrollmentError?.message ?? "missing secret"}`);
+    throw new Error(
+      `Two-writer TOTP enrollment failed for ${label}: ${enrollmentError?.message ?? "missing secret"}`,
+    );
   }
+
   let lastError = "";
   for (const offset of [0, -1, 1]) {
     const { data, error } = await client.auth.mfa.challengeAndVerify({
@@ -252,12 +290,15 @@ async function elevate(client, label) {
       code: totpCode(enrollment.totp.secret, offset),
     });
     if (data && !error) {
-      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      const { data: sessionData, error: sessionError } =
+        await client.auth.getSession();
       if (!sessionError && sessionData.session) return sessionData.session;
     }
     lastError = error?.message ?? "missing AAL2 session";
   }
-  throw new Error(`Two-writer TOTP verification failed for ${label}: ${lastError}`);
+  throw new Error(
+    `Two-writer TOTP verification failed for ${label}: ${lastError}`,
+  );
 }
 
 async function exactIds(client, table, ids) {
@@ -266,7 +307,7 @@ async function exactIds(client, table, ids) {
   return (data ?? []).map((row) => row.id).sort();
 }
 
-async function proveAuthorization(a, b) {
+async function proveAuthorization(actorsA, actorsB) {
   const aAgreement = namespaceA.objects.agreement;
   const bAgreement = namespaceB.objects.agreement;
   const aBundle = namespaceA.objects["evidence-bundle"];
@@ -275,47 +316,93 @@ async function proveAuthorization(a, b) {
   const bPayout = namespaceB.objects.payout;
 
   assert.deepEqual(
-    await exactIds(a.payer.client, "agreements", [aAgreement, bAgreement]),
+    await exactIds(
+      actorsA.payer.client,
+      "agreements",
+      [aAgreement, bAgreement],
+    ),
     [aAgreement],
   );
   assert.deepEqual(
-    await exactIds(b.payer.client, "agreements", [aAgreement, bAgreement]),
+    await exactIds(
+      actorsB.payer.client,
+      "agreements",
+      [aAgreement, bAgreement],
+    ),
     [bAgreement],
   );
+
+  // Participants intentionally cannot query raw private evidence bundles
+  // directly. The product exposes their authorized evidence through the
+  // agreement workflow rather than table-wide PostgREST reads.
   assert.deepEqual(
-    await exactIds(a.payee.client, "trade_evidence_bundles", [aBundle, bBundle]),
-    [aBundle],
-  );
-  assert.deepEqual(
-    await exactIds(b.payee.client, "trade_evidence_bundles", [aBundle, bBundle]),
-    [bBundle],
-  );
-  assert.deepEqual(
-    await exactIds(a.payer.client, "trade_milestone_payouts", [aPayout, bPayout]),
-    [aPayout],
-   );
-  assert.deepEqual(
-    await exactIds(b.payer.client, "trade_milestone_payouts", [aPayout, bPayout]),
-    [bPayout],
-  );
-  assert.deepEqual(
-    await exactIds(a.outsider.client, "trade_evidence_bundles", [aBundle, bBundle]),
+    await exactIds(
+      actorsA.payee.client,
+      "trade_evidence_bundles",
+      [aBundle, bBundle],
+    ),
     [],
   );
   assert.deepEqual(
-    await exactIds(b.outsider.client, "trade_milestone_payouts", [aPayout, bPayout]),
+    await exactIds(
+      actorsB.payee.client,
+      "trade_evidence_bundles",
+      [aBundle, bBundle],
+    ),
     [],
   );
 
-  // The global administrator is intentionally privileged by the product's existing
-  // RLS contract. Cross-namespace denial is therefore asserted for participants,
-  // assigned reviewers, appeal reviewers, and outsiders—Not for AAL2 administrators.
   assert.deepEqual(
-    await exactIds(a.reviewer.client, "trade_evidence_bundles", [aBundle, bBundle]),
+    await exactIds(
+      actorsA.payer.client,
+      "trade_milestone_payouts",
+      [aPayout, bPayout],
+    ),
+    [aPayout],
+  );
+  assert.deepEqual(
+    await exactIds(
+      actorsB.payer.client,
+      "trade_milestone_payouts",
+      [aPayout, bPayout],
+    ),
+    [bPayout],
+  );
+  assert.deepEqual(
+    await exactIds(
+      actorsA.outsider.client,
+      "trade_evidence_bundles",
+      [aBundle, bBundle],
+    ),
+    [],
+  );
+  assert.deepEqual(
+    await exactIds(
+      actorsB.outsider.client,
+      "trade_milestone_payouts",
+      [aPayout, bPayout],
+    ),
+    [],
+  );
+
+  // Existing product RLS deliberately gives the AAL2 administrator global
+  // access. The cross-namespace boundary is therefore proved with exact
+  // participants, assigned reviewers, and outsiders—not by weakening that
+  // administrator contract.
+  assert.deepEqual(
+    await exactIds(
+      actorsA.reviewer.client,
+      "trade_evidence_bundles",
+      [aBundle, bBundle],
+    ),
     [aBundle],
   );
   assert.deepEqual(
-    await exactIds(b.reviewer.client, "trade_evidence_bundles", [aBundle, bBundle]),
+    await exactIds(
+      actorsB.reviewer.client,
+      "trade_evidence_bundles",
+      [aBundle, bBundle],
+    ),
     [bBundle],
   );
 }
@@ -325,7 +412,9 @@ function sqlUuidArray(values) {
 }
 
 function sqlTextArray(values) {
-  return `array[${values.map((value) => `'${value.replaceAll("'", "''")}'`).join(",")}]`;
+  return `array[${values
+    .map((value) => `'${value.replaceAll("'", "''")}'`)
+    .join(",")}]`;
 }
 
 function staleStyleProofSql() {
@@ -341,15 +430,24 @@ function staleStyleProofSql() {
     namespaceB.objects.agreement,
     namespaceB.objects["admin-fallback-agreement"],
   ];
+
   return `
 \\set ON_ERROR_STOP on
 begin;
-create temporary table stale_auth_fixture(id uuid primary key, email text not null, owner text not null) on commit drop;
-create temporary table stale_agreement_fixture(id uuid primary key, owner text not null) on commit drop;
+create temporary table stale_auth_fixture(
+  id uuid primary key,
+  email text not null,
+  owner text not null
+) on commit drop;
+create temporary table stale_agreement_fixture(
+  id uuid primary key,
+  owner text not null
+) on commit drop;
 insert into stale_auth_fixture
-select id, email, owner from unnest(
-  ${sqlUuidArray([...STALE_USER_IDS , ...aUsers, ...bUsers])},
-  ${sqlTextArray([...STALE_EMAILS , ...aEmails, ...bEmails])},
+select id, email, owner
+from unnest(
+  ${sqlUuidArray([...STALE_USER_IDS, ...aUsers, ...bUsers])},
+  ${sqlTextArray([...STALE_EMAILS, ...aEmails, ...bEmails])},
   ${sqlTextArray([
     ...STALE_USER_IDS.map(() => "stale-fixed"),
     ...aUsers.map(() => "A"),
@@ -357,8 +455,9 @@ select id, email, owner from unnest(
   ])}
 ) as fixture(id, email, owner);
 insert into stale_agreement_fixture
-select id, owner from unnest(
-  ${sqlUuidArray([...STALE_AGREEMENT_IDS , ...aAgreements, ...bAgreements])},
+select id, owner
+from unnest(
+  ${sqlUuidArray([...STALE_AGREEMENT_IDS, ...aAgreements, ...bAgreements])},
   ${sqlTextArray([
     ...STALE_AGREEMENT_IDS.map(() => "stale-fixed"),
     ...aAgreements.map(() => "A"),
@@ -366,23 +465,47 @@ select id, owner from unnest(
   ])}
 ) as fixture(id, owner);
 
--- These predicates are copied from the actual fixed-identity cleanup at
+-- Exact predicates copied from the actual fixed-identity cleanup at
 -- e0ed0d206687dae17882260313152846b2d2bd22.
-delete from stale_agreement_fixture where id in (${STALE_AGREEMENT_IDS.map((id) => `'${id}'`).join(",")});
-delete from stale_auth_fixture where id in (${STALE_USER_IDS.map((id) => `'${id}'`).join(",")});
+delete from stale_agreement_fixture
+where id in (${STALE_AGREEMENT_IDS.map((id) => `'${id}'`).join(",")});
+delete from stale_auth_fixture
+where id in (${STALE_USER_IDS.map((id) => `'${id}'`).join(",")});
 
 select json_build_object(
   'status', 'ok',
-  'staleAuthRemaining', (select count(*) from stale_auth_fixture where owner = 'stale-fixed'),
-  'staleAgreementsRemaining', (select count(*) from stale_agreement_fixture where owner = 'stale-fixed'),
-  'aAuthRemaining', (select count(*) from stale_auth_fixture where owner = 'A'),
-  'bAuthRemaining', (select count(*) from stale_auth_fixture where owner = 'B'),
-  'aAgreementsRemaining', (select count(*) from stale_agreement_fixture where owner = 'A'),
- 'bAgreementsRemaining', (select count(*) from stale_agreement_fixture where owner = 'B'),
-  'liveAUsers', (select count(*) from auth.users where id = any(${sqlUuidArray(aUsers)})),
-  'liveBUsers', (select count(*) from auth.users where id = any(${sqlUuidArray(bUsers)})),
-  'liveAAgreements', (select count(*) from public.agreements where id = any(${sqlUuidArray(aAgreements)})),
-  'liveBAgreements', (select count(*) from public.agreements where id = any(${sqlUuidArray(bAgreements)})),
+  'staleAuthRemaining', (
+    select count(*) from stale_auth_fixture where owner = 'stale-fixed'
+  ),
+  'staleAgreementsRemaining', (
+    select count(*) from stale_agreement_fixture where owner = 'stale-fixed'
+  ),
+  'aAuthRemaining', (
+    select count(*) from stale_auth_fixture where owner = 'A'
+  ),
+  'bAuthRemaining', (
+    select count(*) from stale_auth_fixture where owner = 'B'
+  ),
+  'aAgreementsRemaining', (
+    select count(*) from stale_agreement_fixture where owner = 'A'
+  ),
+  'bAgreementsRemaining', (
+    select count(*) from stale_agreement_fixture where owner = 'B'
+  ),
+  'liveAUsers', (
+    select count(*) from auth.users where id = any(${sqlUuidArray(aUsers)})
+  ),
+  'liveBUsers', (
+    select count(*) from auth.users where id = any(${sqlUuidArray(bUsers)})
+  ),
+  'liveAAgreements', (
+    select count(*) from public.agreements
+    where id = any(${sqlUuidArray(aAgreements)})
+  ),
+  'liveBAgreements', (
+    select count(*) from public.agreements
+    where id = any(${sqlUuidArray(bAgreements)})
+  ),
   'liveRunOwnedUsersMatchingStaleIds', (
     select count(*) from auth.users
     where id = any(${sqlUuidArray([...aUsers, ...bUsers])})
@@ -411,17 +534,21 @@ async function requireDeletedActors(actors, label) {
   for (const role of ROLE_KEYS) {
     const { data, error } = await actors[role].client.auth.getUser();
     if (!error && data.user) {
-      throw new Error(`${label} ${role} remained remotely authenticated after exact cleanup.`);
+      throw new Error(
+        `${label} ${role} remained remotely authenticated after exact cleanup.`,
+      );
     }
   }
 }
 
 async function verifyMfaState(actor, label) {
-  const { data: factors, error: factorError } = await actor.client.auth.mfa.listFactors();
+  const { data: factors, error: factorError } =
+    await actor.client.auth.mfa.listFactors();
   if (factorError || (factors?.totp?.length ?? 0) < 1) {
     throw new Error(`${label} lost its run-owned MFA factor.`);
   }
-  const { data: aal, error: aalError } = await actor.client.auth.mfa.getAuthenticatorAssuranceLevel();
+  const { data: aal, error: aalError } =
+    await actor.client.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aalError || aal?.currentLevel !== "aal2") {
     throw new Error(`${label} lost its AAL2 session.`);
   }
@@ -431,9 +558,18 @@ let actorsA;
 let actorsB;
 let cleanupACompleted = false;
 let cleanupBCompleted = false;
+
 try {
-  const preflightA = runPsqlFile("namespace A preflight", PREFLIGHT_SQL, namespaceA);
-  const preflightB = runPsqlFile("namespace B preflight", PREFLIGHT_SQL, namespaceB);
+  const preflightA = runPsqlFile(
+    "namespace A preflight",
+    PREFLIGHT_SQL,
+    namespaceA,
+  );
+  const preflightB = runPsqlFile(
+    "namespace B preflight",
+    PREFLIGHT_SQL,
+    namespaceB,
+  );
   emit("preflight", {
     namespaceA: namespaceA.namespace.handle,
     namespaceB: namespaceB.namespace.handle,
@@ -441,13 +577,26 @@ try {
     preflightB,
   });
 
-  const createdA = runPsqlFile("namespace A fixture", FIXTURE_SQL, namespaceA, passwordA);
-  const createdB = runPsqlFile("namespace B fixture", FIXTURE_SQL, namespaceB, passwordB);
+  const createdA = runPsqlFile(
+    "namespace A fixture",
+    FIXTURE_SQL,
+    namespaceA,
+    passwordA,
+  );
+  const createdB = runPsqlFile(
+    "namespace B fixture",
+    FIXTURE_SQL,
+    namespaceB,
+    passwordB,
+  );
   emit("created", { createdA, createdB });
 
   actorsA = await authenticateNamespace(namespaceA, passwordA);
   actorsB = await authenticateNamespace(namespaceB, passwordB);
-  actorsA.reviewer.session = await elevate(actorsA.reviewer.client, "a-reviewer");
+  actorsA.reviewer.session = await elevate(
+    actorsA.reviewer.client,
+    "a-reviewer",
+  );
   actorsA["appeal-reviewer"].session = await elevate(
     actorsA["appeal-reviewer"].client,
     "a-appeal-reviewer",
@@ -456,7 +605,10 @@ try {
     actorsA.administrator.client,
     "a-administrator",
   );
-  actorsB.reviewer.session = await elevate(actorsB.reviewer.client, "b-reviewer");
+  actorsB.reviewer.session = await elevate(
+    actorsB.reviewer.client,
+    "b-reviewer",
+  );
   actorsB["appeal-reviewer"].session = await elevate(
     actorsB["appeal-reviewer"].client,
     "b-appeal-reviewer",
@@ -479,10 +631,14 @@ try {
     status: "ok",
     participantAndAssignedReviewerCrossNamespacePrivateRows: 0,
     outsiderPrivateRows: 0,
+    directParticipantEvidenceRows: 0,
     administratorBoundary: "existing global AAL2 privilege preserved",
   });
 
-  const staleStyle = runInlineSql("stale-style fixed cleanup proof", staleStyleProofSql());
+  const staleStyle = runInlineSql(
+    "stale-style fixed cleanup proof",
+    staleStyleProofSql(),
+  );
   assert.deepEqual(staleStyle, {
     status: "ok",
     staleAuthRemaining: 0,
@@ -500,20 +656,46 @@ try {
   });
   emit("stale-style", staleStyle);
 
-  const cleanupA = runPsqlFile("namespace A cleanup", CLEANUP_SQL, namespaceA);
+  const cleanupA = runPsqlFile(
+    "namespace A cleanup",
+    CLEANUP_SQL,
+    namespaceA,
+  );
   cleanupACompleted = true;
   assert.equal(cleanupA.allZero, true);
   await requireDeletedActors(actorsA, "A");
   await requireLiveActors(actorsB, namespaceB, "B after A cleanup");
-  await verifyMfaState(actorsB.reviewer, "B reviewer after A cleanup");
-  await verifyMfaState(actorsB.administrator, "B administrator after A cleanup");
+  await verifyMfaState(
+    actorsB.reviewer,
+    "B reviewer after A cleanup",
+  );
+  await verifyMfaState(
+    actorsB.administrator,
+    "B administrator after A cleanup",
+  );
   assert.deepEqual(
-    await exactIds(actorsB.payer.client, "agreements", [namespaceB.objects.agreement]),
+    await exactIds(
+      actorsB.payer.client,
+      "agreements",
+      [namespaceB.objects.agreement],
+    ),
     [namespaceB.objects.agreement],
   );
   assert.deepEqual(
-    await exactIds(actorsB.reviewer.client, "trade_evidence_bundles", [namespaceB.objects["evidence-bundle"]]),
+    await exactIds(
+      actorsB.reviewer.client,
+      "trade_evidence_bundles",
+      [namespaceB.objects["evidence-bundle"]],
+    ),
     [namespaceB.objects["evidence-bundle"]],
+  );
+  assert.deepEqual(
+    await exactIds(
+      actorsB.payer.client,
+      "trade_milestone_payouts",
+      [namespaceB.objects.payout],
+    ),
+    [namespaceB.objects.payout],
   );
   emit("after-cleanup-a", {
     cleanupA,
@@ -522,25 +704,46 @@ try {
     bAdministratorMfaIntact: true,
     bAgreementRows: 1,
     bEvidenceRows: 1,
+    bPayoutRows: 1,
   });
 
-  const cleanupASecond = runPsqlFile("namespace A idempotent cleanup", CLEANUP_SQL, namespaceA);
+  const cleanupASecond = runPsqlFile(
+    "namespace A idempotent cleanup",
+    CLEANUP_SQL,
+    namespaceA,
+  );
   assert.equal(cleanupASecond.allZero, true);
   emit("failure-path-cleanup-a", { cleanupASecond });
 
   const freshB = await authenticateNamespace(namespaceB, passwordB);
-  await requireLiveActors(freshB, namespaceB, "B fresh sign-in after A cleanup");
+  await requireLiveActors(
+    freshB,
+    namespaceB,
+    "B fresh sign-in after A cleanup",
+  );
   emit("continued-b", { status: "ok", freshPasswordSignIns: 6 });
 
-  const cleanupB = runPsqlFile("namespace B cleanup", CLEANUP_SQL, namespaceB);
+  const cleanupB = runPsqlFile(
+    "namespace B cleanup",
+    CLEANUP_SQL,
+    namespaceB,
+  );
   cleanupBCompleted = true;
   assert.equal(cleanupB.allZero, true);
   await requireDeletedActors(actorsB, "B");
   await requireDeletedActors(freshB, "B fresh");
   emit("after-cleanup-b", { cleanupB });
 
-  const finalA = runPsqlFile("namespace A final preflight", PREFLIGHT_SQL, namespaceA);
-  const finalB = runPsqlFile("namespace B final preflight", PREFLIGHT_SQL, namespaceB);
+  const finalA = runPsqlFile(
+    "namespace A final preflight",
+    PREFLIGHT_SQL,
+    namespaceA,
+  );
+  const finalB = runPsqlFile(
+    "namespace B final preflight",
+    PREFLIGHT_SQL,
+    namespaceB,
+  );
   emit("final-zero-residue", { finalA, finalB });
 
   const report = {
@@ -577,7 +780,11 @@ try {
   ]) {
     if (completed) continue;
     try {
-      const cleanup = runPsqlFile(`emergency cleanup ${label}`, CLEANUP_SQL, manifest);
+      const cleanup = runPsqlFile(
+        `emergency cleanup ${label}`,
+        CLEANUP_SQL,
+        manifest,
+      );
       emit("emergency-cleanup", { namespace: label, cleanup });
     } catch (cleanupError) {
       emit("emergency-cleanup-failed", {
