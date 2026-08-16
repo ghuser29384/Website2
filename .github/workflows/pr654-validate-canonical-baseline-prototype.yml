@@ -50,11 +50,11 @@ jobs:
       - name: Download read-only production catalog export
         uses: actions/download-artifact@v4
         with:
-          name: pr654-canonical-baseline-export-31956760948
+          name: pr654-canonical-baseline-export-31959000570
           path: source-export
           github-token: ${{ github.token }}
           repository: ghuser29384/Website2
-          run-id: 31956760948
+          run-id: 31959000570
 
       - name: Extract source export
         shell: bash
@@ -64,6 +64,7 @@ jobs:
           tar -xzf source-export/pr654-canonical-baseline-export.tar.gz \
             -C "$RUNNER_TEMP/pr654-source-export"
           test -s "$RUNNER_TEMP/pr654-source-export/pr654-canonical-baseline-export/prod/schema-with-privileges.sql"
+          test -s "$RUNNER_TEMP/pr654-source-export/pr654-canonical-baseline-export/prod/policy-semantic-manifest.tsv"
 
       - name: Run three-pass local canonical baseline prototype
         shell: bash
@@ -115,11 +116,27 @@ jobs:
               '  local label="$1"\n  local out="$EVIDENCE_DIR/$label"\n  local db\n',
               1,
           )
-          text=text.replace(
-              '''  diff -u "$SOURCE_ROOT/prod/catalog-manifest.tsv" "$out/catalog-manifest.tsv" > "$out/catalog-diff.txt" || {\n''',
-              '''  docker exec "$db" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -AtF $'\\t' -c "select tablename,policyname,permissive,array_to_string(roles,','),cmd,coalesce(qual,''),coalesce(with_check,'') from pg_policies where schemaname='public' and (tablename,policyname) in (('trade_evidence_bundle_items','trade_evidence_bundle_items_authorized_select'),('trade_evidence_bundles','trade_evidence_bundles_authorized_select'),('trade_milestone_reviews','trade_milestone_reviews_authorized_select')) order by tablename,policyname;" > "$out/policy-definitions.tsv"\n  diff -u "$SOURCE_ROOT/prod/catalog-manifest.tsv" "$out/catalog-manifest.tsv" > "$out/catalog-diff.txt" || {\n''',
-              1,
-          )
+          old='''  diff -u "$SOURCE_ROOT/prod/catalog-manifest.tsv" "$out/catalog-manifest.tsv" > "$out/catalog-diff.txt" || {
+    sed -n '1,240p' "$out/catalog-diff.txt"
+    return 1
+  }
+'''
+          new='''  docker exec "$db" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -AtF $'\\t' -c "select n.nspname||'.'||c.relname||'.'||p.polname,case when p.polpermissive then 'PERMISSIVE' else 'RESTRICTIVE' end,array_to_string(array(select r.rolname from unnest(p.polroles) role_oid join pg_roles r on r.oid=role_oid order by r.rolname),','),p.polcmd,encode(extensions.digest(coalesce(pg_get_expr(p.polqual,p.polrelid,true),''),'sha256'),'hex'),encode(extensions.digest(coalesce(pg_get_expr(p.polwithcheck,p.polrelid,true),''),'sha256'),'hex') from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','moral_trade_private') order by 1;" > "$out/policy-semantic-manifest.tsv"
+  grep -v $'^POLICY\\t' "$SOURCE_ROOT/prod/catalog-manifest.tsv" > "$out/source-nonpolicy-manifest.tsv"
+  grep -v $'^POLICY\\t' "$out/catalog-manifest.tsv" > "$out/local-nonpolicy-manifest.tsv"
+  diff -u "$out/source-nonpolicy-manifest.tsv" "$out/local-nonpolicy-manifest.tsv" > "$out/nonpolicy-catalog-diff.txt" || {
+    sed -n '1,240p' "$out/nonpolicy-catalog-diff.txt"
+    return 1
+  }
+  diff -u "$SOURCE_ROOT/prod/policy-semantic-manifest.tsv" "$out/policy-semantic-manifest.tsv" > "$out/policy-semantic-diff.txt" || {
+    sed -n '1,240p' "$out/policy-semantic-diff.txt"
+    return 1
+  }
+  : > "$out/catalog-diff.txt"
+'''
+          if old not in text:
+              raise SystemExit('catalog comparison block not found')
+          text=text.replace(old,new,1)
           text=text.replace(
               'test "$status" -eq 0\n',
               '''if [[ "$status" -ne 0 ]]; then
