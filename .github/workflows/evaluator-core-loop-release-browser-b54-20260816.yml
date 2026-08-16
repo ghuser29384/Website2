@@ -2,9 +2,9 @@
 name: Exact-head evaluator integration release-browser validation
 
 on:
-  push:
+  pull_request:
     branches:
-      - qa/evaluator-core-loop-release-browser-b54-20260816
+      - integration/evaluator-core-loop-current-main-20260815
     paths:
       - .github/workflows/evaluator-core-loop-release-browser-b54-20260816.yml
 
@@ -17,6 +17,9 @@ concurrency:
 
 jobs:
   release-browser:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'qa/evaluator-core-loop-release-browser-b54-20260816'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
