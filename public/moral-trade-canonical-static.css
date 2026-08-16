@@ -168,7 +168,7 @@ summary:focus-visible {
 .btn.primary,
 button.primary,
 .other-cause-submit,
-.request-primary {
+.request-continue:not(:disabled) {
   border-color: #2450ff !important;
   background: #2450ff !important;
   color: #ffffff !important;
@@ -176,8 +176,8 @@ button.primary,
 
 .btn.primary:hover,
 button.primary:hover,
-.other-cause-submit:hover,
-.request-primary:hover {
+.other-cause-submit:hover:not(:disabled),
+.request-continue:hover:not(:disabled) {
   background: #153ee9 !important;
 }
 

@@ -385,14 +385,32 @@ test("live offers stay separated from examples while the wish registry uses broa
   );
 
   const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const participantOfferGroup = readRepoFile(
+    "src/components/marketplace/participant-offer-group.tsx",
+  );
   assert.match(offersPage, /LIVE_METADATA/);
   assert.match(offersPage, /without mixing examples or explanatory records into marketplace inventory/);
+  assert.match(offersPage, /WORKED_EXAMPLE_VIEWS/);
+  assert.match(offersPage, /redirect\("\/worked-examples"\)/);
   assert.match(offersPage, /if \(view === "templates" \|\| legacyTab === "templates"\) return <TradeTemplateLibrary \/>/);
   assert.match(offersPage, /Live participant records only/);
   assert.match(offersPage, /Search never substitutes examples for live demand/);
+  assert.match(offersPage, /data-authoritative-directory="true"/);
+  assert.match(offersPage, /livePage\.error \? \(/);
+  assert.match(offersPage, /Results unavailable/);
+  assert.match(offersPage, /data-directory-state="unavailable"/);
+  assert.match(offersPage, /data-directory-state="empty"/);
   assert.match(offersPage, /No live proposals are open/);
   assert.equal(offersPage.includes("CANONICAL_WORKED_CASE_OFFERS"), false);
   assert.equal(offersPage.includes("No public offers have been published yet"), false);
+  assert.match(participantOfferGroup, /data-participant-offer-group/);
+  assert.match(participantOfferGroup, /data-participant-offer/);
+  assert.match(participantOfferGroup, /aria-labelledby=\{offerHeadingId\}/);
+  assert.match(participantOfferGroup, /aria-describedby=\{`\$\{offerDescriptionId\} \$\{truthNoteId\}`\}/);
+  assert.match(participantOfferGroup, /data-proposal-disclosure/);
+  assert.match(participantOfferGroup, /\{isOwner \? "Manage" : "Respond"\}/);
+  assert.match(participantOfferGroup, /<dt>Get<\/dt>[\s\S]*<dt>Do<\/dt>/);
+  assert.match(participantOfferGroup, /Counteroffer[\s\S]*Ask[\s\S]*Remove saved[\s\S]*Open full terms/);
 
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
   const wishRegistrySource = readRepoFile("src/lib/wish-registry.ts");
