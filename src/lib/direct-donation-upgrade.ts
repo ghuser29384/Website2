@@ -231,7 +231,17 @@ export interface EvaluatedDirectDonationUpgradeWebhook {
   paymentMethod: string;
 }
 
-const EVERY_ORG_API_BASE = "https://partners.every.org/v0.2";
+const EVERY_ORG_LIVE_API_BASE = "https://partners.every.org/v0.2";
+const EVERY_ORG_STAGING_API_BASE =
+  "https://partners-staging.every.org/v0.2";
+
+export function getEveryOrgApiBase(mode: DirectDonationUpgradeMode) {
+  if (mode === "staging") return EVERY_ORG_STAGING_API_BASE;
+  if (mode === "live") return EVERY_ORG_LIVE_API_BASE;
+  throw new Error(
+    "Every.org API is unavailable while Direct Donation Upgrades are disabled.",
+  );
+}
 const FETCH_TIMEOUT_MS = 10_000;
 
 function envText(
@@ -654,7 +664,7 @@ export async function fetchEveryOrgNonprofitIdentity(
   }
 
   const url = new URL(
-    `${EVERY_ORG_API_BASE}/nonprofit/${encodeURIComponent(normalizedIdentifier)}`,
+    `${getEveryOrgApiBase(config.mode)}/nonprofit/${encodeURIComponent(normalizedIdentifier)}`,
   );
   url.searchParams.set("apiKey", config.publicApiKey);
   const payload = objectValue(await fetchJson(url.toString()));
@@ -707,7 +717,7 @@ export async function searchEveryOrgNonprofits(
   if (!config.publicApiKey) return [];
 
   const url = new URL(
-    `${EVERY_ORG_API_BASE}/search/${encodeURIComponent(normalizedQuery)}`,
+    `${getEveryOrgApiBase(config.mode)}/search/${encodeURIComponent(normalizedQuery)}`,
   );
   url.searchParams.set("apiKey", config.publicApiKey);
   url.searchParams.set("take", String(take));
