@@ -1,0 +1,126 @@
+name: Canonical database baseline CI v2
+
+on:
+  push:
+    branches:
+      - qa/pr654-migration-baseline-recovery-20260816
+    paths:
+      - supabase/migrations/**
+      - supabase/legacy_migrations/**
+      - supabase/baseline/**
+      - supabase/config.toml
+      - supabase/seed.sql
+      - supabase/tests/canonical_baseline_pool_security.sql
+      - src/lib/database-baseline-source-contract.test.ts
+      - docs/database/canonical-supabase-baseline.md
+      - scripts/check-canonical-baseline-adoption.sql
+      - .github/scripts/run-canonical-database-baseline-ci.sh
+      - .github/workflows/canonical-database-baseline-ci-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: canonical-database-baseline-ci-v2-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      SUPABASE_CLI_VERSION: 2.110.0
+      EVIDENCE_DIR: ${{ github.workspace }}/canonical-baseline-evidence-v2
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused source and security contracts
+        run: |
+          node --import tsx --test \
+            src/lib/database-baseline-source-contract.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+          npx eslint \
+            src/lib/database-baseline-source-contract.test.ts \
+            src/lib/trade-donation-pool.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts \
+            src/app/trade-donation-pool-actions.ts \
+            src/lib/payments/trade-donation-pool-webhook.ts
+          git diff --check
+
+      - name: Run three-pass local database gate
+        id: database
+        continue-on-error: true
+        shell: bash
+        run: bash .github/scripts/run-canonical-database-baseline-ci.sh
+
+      - name: Run complete repository gates
+        id: repository
+        if: steps.database.outcome == 'success'
+        continue-on-error: true
+        run: |
+          npm test
+          npx tsc --noEmit
+          npm run lint
+          npm run build
+
+      - name: Archive credential-free evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -d "$EVIDENCE_DIR" ]]; then
+            tar -C "$(dirname "$EVIDENCE_DIR")" -czf canonical-baseline-evidence-v2.tar.gz "$(basename "$EVIDENCE_DIR")"
+            sha256sum canonical-baseline-evidence-v2.tar.gz > canonical-baseline-evidence-v2.tar.gz.sha256
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-baseline-evidence-v2-${{ github.run_id }}
+          path: |
+            canonical-baseline-evidence-v2.tar.gz
+            canonical-baseline-evidence-v2.tar.gz.sha256
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Post PR result
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATABASE_OUTCOME: ${{ steps.database.outcome }}
+          REPOSITORY_OUTCOME: ${{ steps.repository.outcome }}
+        run: |
+          set -euo pipefail
+          pr="$(gh pr list --head qa/pr654-migration-baseline-recovery-20260816 --state open --json number --jq '.[0].number')"
+          if [[ -n "$pr" ]]; then
+            gh pr comment "$pr" --body "Canonical baseline v2 on \`$GITHUB_SHA\`: database gate **$DATABASE_OUTCOME**; repository gate **$REPOSITORY_OUTCOME**. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. No remote database, deployment, provider, payment, merge, or feature-activation action occurred."
+          fi
+
+      - name: Enforce all gates
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.database.outcome }}" = success
+          test "${{ steps.repository.outcome }}" = success
