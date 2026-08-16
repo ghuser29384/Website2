@@ -1,0 +1,45 @@
+name: PR 726 controller bookkeeping repair 20260816
+
+on:
+  push:
+    branches:
+      - ops/pr726-compact-v2-integration-qa-preview-20260816
+    paths:
+      - ".github/workflows/pr726-controller-bookkeeping-repair-20260816.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr726-controller-bookkeeping-repair-20260816
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact controller branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Correct candidate commit-count bookkeeping and push once
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "ops/pr726-compact-v2-integration-qa-preview-20260816"
+          test "$(git rev-parse HEAD)" = "c08bd0a9b536d31068ccdd242c6c659e255cdad3" || test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          workflow=.github/workflows/pr726-compact-v2-integration-qa-preview-20260816.yml
+          test "$(grep -c 'CANDIDATE_AHEAD_COUNT: "83"' "$workflow")" = "1"
+          test "$(grep -c 'ahead:83' "$workflow")" = "1"
+          sed -i 's/CANDIDATE_AHEAD_COUNT: "83"/CANDIDATE_AHEAD_COUNT: "84"/' "$workflow"
+          sed -i 's/ahead:83/ahead:84/' "$workflow"
+          test "$(grep -c 'CANDIDATE_AHEAD_COUNT: "84"' "$workflow")" = "1"
+          test "$(grep -c 'ahead:84' "$workflow")" = "1"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$workflow"
+          git commit -m "Correct PR 726 integration commit-count bookkeeping"
+          git push origin HEAD:"$GITHUB_REF_NAME"
