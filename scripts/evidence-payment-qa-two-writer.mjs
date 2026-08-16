@@ -386,25 +386,26 @@ async function proveAuthorization(actorsA, actorsB) {
     [],
   );
 
-  // Existing product RLS deliberately gives the AAL2 administrator global
-  // access. The cross-namespace boundary is therefore proved with exact
-  // participants, assigned reviewers, and outsiders—not by weakening that
-  // administrator contract.
+  // Lifecycle-specific reviewer access to a namespace's own evidence is
+  // covered by the authenticated browser matrix. The overlap proof queries
+  // only the opposite namespace, so fixture lifecycle state cannot be
+  // mistaken for a cross-run authorization oracle. Existing administrator
+  // privilege is unchanged and is not used to prove isolation.
   assert.deepEqual(
     await exactIds(
       actorsA.reviewer.client,
       "trade_evidence_bundles",
-      [aBundle, bBundle],
+      [bBundle],
     ),
-    [aBundle],
+    [],
   );
   assert.deepEqual(
     await exactIds(
       actorsB.reviewer.client,
       "trade_evidence_bundles",
-      [aBundle, bBundle],
+      [aBundle],
     ),
-    [bBundle],
+    [],
   );
 }
 
@@ -416,6 +417,123 @@ function sqlTextArray(values) {
   return `array[${values
     .map((value) => `'${value.replaceAll("'", "''")}'`)
     .join(",")}]`;
+}
+
+function namespaceDatabaseStateSql(manifest) {
+  const actorIds = Object.values(manifest.roles).map((role) => role.id);
+  const actorEmails = Object.values(manifest.roles).map((role) => role.email);
+  const agreementIds = [
+    manifest.objects.agreement,
+    manifest.objects["admin-fallback-agreement"],
+  ];
+  const versionIds = [
+    manifest.objects["agreement-version"],
+    manifest.objects["admin-fallback-agreement-version"],
+  ];
+  const milestoneIds = [
+    manifest.objects.milestone,
+    manifest.objects["admin-fallback-milestone"],
+  ];
+  const bundleIds = [
+    manifest.objects["evidence-bundle"],
+    manifest.objects["admin-fallback-evidence-bundle"],
+  ];
+  const reviewIds = [
+    manifest.objects["milestone-review"],
+    manifest.objects["admin-fallback-milestone-review"],
+  ];
+  const payoutIds = [
+    manifest.objects.payout,
+    manifest.objects["admin-fallback-payout"],
+  ];
+
+  return `
+select json_build_object(
+  'status', 'ok',
+  'authUsers', (
+    select count(*) from auth.users
+    where id = any(${sqlUuidArray(actorIds)})
+  ),
+  'bannedUsers', (
+    select count(*) from auth.users
+    where id = any(${sqlUuidArray(actorIds)})
+      and banned_until > now()
+  ),
+  'authIdentities', (
+    select count(*) from auth.identities
+    where user_id = any(${sqlUuidArray(actorIds)})
+  ),
+  'authSessions', (
+    select count(*) from auth.sessions
+    where user_id = any(${sqlUuidArray(actorIds)})
+  ),
+  'authRefreshTokens', (
+    select count(*) from auth.refresh_tokens
+    where user_id = any(${sqlTextArray(actorIds)})
+  ),
+  'authMfaFactors', (
+    select count(*) from auth.mfa_factors
+    where user_id = any(${sqlUuidArray(actorIds)})
+  ),
+  'profiles', (
+    select count(*) from public.profiles
+    where id = any(${sqlUuidArray(actorIds)})
+  ),
+  'privateAccounts', (
+    select count(*) from moral_trade_private.person_accounts
+    where profile_id = any(${sqlUuidArray(actorIds)})
+  ),
+  'reviewRoles', (
+    select count(*) from public.trade_review_role_grants
+    where profile_id = any(${sqlUuidArray(actorIds)})
+  ),
+  'agreements', (
+    select count(*) from public.agreements
+    where id = any(${sqlUuidArray(agreementIds)})
+  ),
+  'versions', (
+    select count(*) from public.trade_agreement_versions
+    where id = any(${sqlUuidArray(versionIds)})
+  ),
+  'milestones', (
+    select count(*) from public.trade_agreement_milestones
+    where id = any(${sqlUuidArray(milestoneIds)})
+  ),
+  'evidenceBundles', (
+    select count(*) from public.trade_evidence_bundles
+    where id = any(${sqlUuidArray(bundleIds)})
+  ),
+  'milestoneReviews', (
+    select count(*) from public.trade_milestone_reviews
+    where id = any(${sqlUuidArray(reviewIds)})
+  ),
+  'payouts', (
+    select count(*) from public.trade_milestone_payouts
+    where id = any(${sqlUuidArray(payoutIds)})
+  ),
+  'paymentReviewCases', (
+    select count(*) from public.trade_payment_review_cases
+    where payout_id = any(${sqlUuidArray(payoutIds)})
+  ),
+  'paymentReceipts', (
+    select count(*) from public.trade_external_payment_receipts
+    where payout_id = any(${sqlUuidArray(payoutIds)})
+  ),
+  'notifications', (
+    select count(*) from public.trade_notifications
+    where user_id = any(${sqlUuidArray(actorIds)})
+  ),
+  'events', (
+    select count(*) from public.core_loop_events
+    where profile_id = any(${sqlUuidArray(actorIds)})
+  ),
+  'emailOutbox', (
+    select count(*) from public.email_outbox
+    where profile_id = any(${sqlUuidArray(actorIds)})
+       or recipient_email = any(${sqlTextArray(actorEmails)})
+  )
+);
+`;
 }
 
 function staleStyleProofSql() {
@@ -656,6 +774,28 @@ try {
   });
   emit("stale-style", staleStyle);
 
+  const bDatabaseBeforeCleanupA = runInlineSql(
+    "namespace B exact database state before A cleanup",
+    namespaceDatabaseStateSql(namespaceB),
+  );
+  assert.equal(bDatabaseBeforeCleanupA.status, "ok");
+  assert.equal(bDatabaseBeforeCleanupA.authUsers, 6);
+  assert.equal(bDatabaseBeforeCleanupA.bannedUsers, 0);
+  assert.equal(bDatabaseBeforeCleanupA.authIdentities, 6);
+  assert.equal(bDatabaseBeforeCleanupA.profiles, 6);
+  assert.equal(bDatabaseBeforeCleanupA.reviewRoles, 3);
+  assert.equal(bDatabaseBeforeCleanupA.agreements, 2);
+  assert.equal(bDatabaseBeforeCleanupA.versions, 2);
+  assert.equal(bDatabaseBeforeCleanupA.milestones, 2);
+  assert.equal(bDatabaseBeforeCleanupA.evidenceBundles, 2);
+  assert.equal(bDatabaseBeforeCleanupA.milestoneReviews, 2);
+  assert.equal(bDatabaseBeforeCleanupA.payouts, 2);
+  assert.equal(bDatabaseBeforeCleanupA.paymentReviewCases, 1);
+  assert.equal(bDatabaseBeforeCleanupA.paymentReceipts, 1);
+  emit("before-cleanup-a", {
+    bDatabaseState: bDatabaseBeforeCleanupA,
+  });
+
   const cleanupA = runPsqlFile(
     "namespace A cleanup",
     CLEANUP_SQL,
@@ -683,28 +823,25 @@ try {
   );
   assert.deepEqual(
     await exactIds(
-      actorsB.reviewer.client,
-      "trade_evidence_bundles",
-      [namespaceB.objects["evidence-bundle"]],
-    ),
-    [namespaceB.objects["evidence-bundle"]],
-  );
-  assert.deepEqual(
-    await exactIds(
       actorsB.payer.client,
       "trade_milestone_payouts",
       [namespaceB.objects.payout],
     ),
     [namespaceB.objects.payout],
   );
+  const bDatabaseAfterCleanupA = runInlineSql(
+    "namespace B exact database state after A cleanup",
+    namespaceDatabaseStateSql(namespaceB),
+  );
+  assert.deepEqual(bDatabaseAfterCleanupA, bDatabaseBeforeCleanupA);
   emit("after-cleanup-a", {
     cleanupA,
     bRolesStillAuthenticated: 6,
     bReviewerMfaIntact: true,
     bAdministratorMfaIntact: true,
-    bAgreementRows: 1,
-    bEvidenceRows: 1,
-    bPayoutRows: 1,
+    bAgreementRowsAuthorized: 1,
+    bPayoutRowsAuthorized: 1,
+    bDatabaseState: bDatabaseAfterCleanupA,
   });
 
   const cleanupASecond = runPsqlFile(
