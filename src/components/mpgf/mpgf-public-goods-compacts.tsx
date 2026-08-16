@@ -173,10 +173,10 @@ export function MpgfPublicGoodsCompacts({ state: initialState, viewerPresent }: 
         <div className={styles.statusGrid}>
           <div><span>Coverage</span><strong>{statusLabel(state.obligation.coverage)}</strong></div>
           <div><span>Eligible net-settled outflow</span><strong>{formatUsd(state.obligation.eligibleNetSettledOutflowCents)}</strong></div>
-          <div><span>Aggregate 10% obligation</span><strong>{formatUsd(state.obligation.obligationCents)}</strong></div>
+          <div><span>Shadow calculated 10% amount</span><strong>{formatUsd(state.obligation.obligationCents)}</strong></div>
           <div><span>Allocation state</span><strong>{state.allocation.schedulingReady ? "Complete and cent-exact" : state.allocation.instructionValid ? "Percentages saved; cents blocked" : "Incomplete; fail closed"}</strong></div>
         </div>
-        <p className={styles.statusMessage}>{state.obligation.coverageReason} No amount is inferred from self-reporting or partial payment tables.</p>
+        <p className={styles.statusMessage}>{state.obligation.coverageReason} No amount is inferred from self-reporting or partial payment tables. When complete, this is a shadow calculation only—not a charge, collection, legal debt, mandate, or settlement.</p>
       </section>
 
       {!state.available ? <p className={styles.unavailable} role="status" data-testid="compact-unavailable"><strong>Live Compact v2 state unavailable.</strong> Published constitution examples are shown without fabricated activity. {state.unavailableReason}</p> : null}
