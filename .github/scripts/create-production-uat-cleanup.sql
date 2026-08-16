@@ -110,4 +110,6 @@ select jsonb_build_object(
   ),
   'cleanupPassed', true
 )
-from create_uat_cleanup_context context_row;
+from (
+  values (:'qa_user_id'::uuid)
+) as context_row(user_id);
