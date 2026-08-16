@@ -11,29 +11,36 @@ permissions:
 jobs:
   export:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Check out exact source
+      - name: Check out controller
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Guard expected inherited candidate
+      - name: Check out exact synchronized PR 718 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: e7359a046d67391a37c92505f4c50694d5b24e1e
+          fetch-depth: 0
+          path: candidate
+
+      - name: Guard exact source identity
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "e7359a046d67391a37c92505f4c50694d5b24e1e"
+          test "$(git -C candidate rev-parse HEAD)" = "e7359a046d67391a37c92505f4c50694d5b24e1e"
+          test "$(git -C candidate rev-parse HEAD^2)" = "4587e8c418621440835940d6924f32c02ba3f2d1"
 
-      - name: Upload source package
+      - name: Remove Git metadata from export
+        shell: bash
+        run: rm -rf candidate/.git
+
+      - name: Upload complete source package
         uses: actions/upload-artifact@v4
         with:
-          name: pr718-source-${{ github.sha }}
+          name: pr718-complete-source-${{ github.sha }}
           retention-days: 3
           if-no-files-found: error
           include-hidden-files: true
-          path: |
-            .github/workflows/reciprocal-trade-operation-intent-shadow-gates.yml
-            docs/moral-trade/reciprocal-trade-operation-intent-v1
-            scripts/reciprocal-trade-shadow
-            package.json
-            package-lock.json
+          path: candidate
