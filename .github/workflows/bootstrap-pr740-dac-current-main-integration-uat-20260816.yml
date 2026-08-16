@@ -36,17 +36,20 @@ jobs:
           sed -i "/'target=null',/d; /'alias=\[\]',/d" ops/pr740-bootstrap-controller.py
           python3 ops/pr740-bootstrap-controller.py
 
-      - name: Commit and push the one-use integration controller
+      - name: Publish generated workflow as an ordinary blob for trusted promotion
         shell: bash
         run: |
           set -euo pipefail
-          test -f .github/workflows/pr740-dac-current-main-integration-uat-20260816.yml
-          grep -Fq 'CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328' .github/workflows/pr740-dac-current-main-integration-uat-20260816.yml
-          grep -Fq 'group: mpgf-dac-product-lifecycle-shared-qa' .github/workflows/pr740-dac-current-main-integration-uat-20260816.yml
+          source_path=.github/workflows/pr740-dac-current-main-integration-uat-20260816.yml
+          staged_path=ops/pr740-generated-workflow.yml.txt
+          test -f "$source_path"
+          grep -Fq 'CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328' "$source_path"
+          grep -Fq 'group: mpgf-dac-product-lifecycle-shared-qa' "$source_path"
           grep -Fq '{ name: "1024x768", width: 1024, height: 768 }' ops/pr689-uat702/owner-uat.spec.ts
+          mv "$source_path" "$staged_path"
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/pr740-dac-current-main-integration-uat-20260816.yml ops/pr689-uat702/owner-uat.spec.ts
-          git commit -m "ops: arm PR 740 current-main DAC integration UAT"
+          git add "$staged_path" ops/pr689-uat702/owner-uat.spec.ts
+          git commit -m "ops: stage PR 740 integration controller blob"
           git push origin HEAD:ops/pr740-dac-current-main-integration-uat-20260816
