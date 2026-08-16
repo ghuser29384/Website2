@@ -836,21 +836,89 @@ test.describe("Offers compact hybrid", () => {
     await publicPage.getByRole("button", { name: "Apply filters" }).click();
     await expect(publicPage).toHaveURL(/sort=lowest_cost/);
     expect(new URL(publicPage.url()).searchParams.get("mode")).toBe("pledge");
+    await expect(filterDisclosure).toContainText(
+      "Pledge or reciprocal action · Lowest stated cost",
+    );
 
-    await publicPage.getByRole("link", { name: "Clear all" }).click();
-    await expect(publicPage).toHaveURL(/\/offers\?view=live$/);
+    const clearAll = publicPage.getByRole("link", { name: "Clear all" });
+    await expect(clearAll).toHaveAttribute("href", "/offers?view=live");
+    const [clearRequest] = await Promise.all([
+      publicPage.waitForRequest((request) => {
+        if (!request.isNavigationRequest()) return false;
+        const requestURL = new URL(request.url());
+        return requestURL.pathname === "/offers" && requestURL.search === "?view=live";
+      }),
+      publicPage.waitForURL((url) => url.pathname === "/offers" && url.search === "?view=live"),
+      clearAll.click(),
+    ]);
+    expect(clearRequest.resourceType()).toBe("document");
+    expect(new URL(clearRequest.url()).searchParams.has("_rsc")).toBe(false);
+    await expect(publicPage.getByRole("link", { name: "Clear all" })).toHaveCount(0);
 
     await gotoDirectory(publicPage, "/offers?mode=pledge&sort=lowest_cost&view=live");
-    const next = publicPage.getByRole("link", { name: "Next" });
-    await expect(next).toBeVisible();
-    await next.click();
-    await expect(publicPage).toHaveURL(/(?:\?|&)page=2(?:&|$)/);
+    const pageOnePagination = publicPage.getByRole("navigation", {
+      name: "Live proposal pages",
+    });
+    await expect(pageOnePagination).toContainText("Page 1 of 2");
+    const next = pageOnePagination.getByRole("link", { name: "Next" });
+    await expect(next).toHaveAttribute(
+      "href",
+      "/offers?view=live&mode=pledge&sort=lowest_cost&page=2",
+    );
+    const [nextRequest] = await Promise.all([
+      publicPage.waitForRequest((request) => {
+        if (!request.isNavigationRequest()) return false;
+        const requestURL = new URL(request.url());
+        return (
+          requestURL.pathname === "/offers" &&
+          requestURL.search === "?view=live&mode=pledge&sort=lowest_cost&page=2"
+        );
+      }),
+      publicPage.waitForURL(
+        (url) =>
+          url.pathname === "/offers" &&
+          url.search === "?view=live&mode=pledge&sort=lowest_cost&page=2",
+      ),
+      next.click(),
+    ]);
+    expect(nextRequest.resourceType()).toBe("document");
+    expect(new URL(nextRequest.url()).searchParams.has("_rsc")).toBe(false);
+
+    const pageTwoPagination = publicPage.getByRole("navigation", {
+      name: "Live proposal pages",
+    });
+    await expect(pageTwoPagination).toContainText("Page 2 of 2");
     let url = new URL(publicPage.url());
     expect(url.searchParams.get("page")).toBe("2");
     expect(url.searchParams.get("mode")).toBe("pledge");
     expect(url.searchParams.get("sort")).toBe("lowest_cost");
-    await publicPage.getByRole("link", { name: "Previous" }).click();
-    await expect(publicPage).not.toHaveURL(/(?:\?|&)page=2(?:&|$)/);
+
+    const previous = pageTwoPagination.getByRole("link", { name: "Previous" });
+    await expect(previous).toHaveAttribute(
+      "href",
+      "/offers?view=live&mode=pledge&sort=lowest_cost",
+    );
+    const [previousRequest] = await Promise.all([
+      publicPage.waitForRequest((request) => {
+        if (!request.isNavigationRequest()) return false;
+        const requestURL = new URL(request.url());
+        return (
+          requestURL.pathname === "/offers" &&
+          requestURL.search === "?view=live&mode=pledge&sort=lowest_cost"
+        );
+      }),
+      publicPage.waitForURL(
+        (nextURL) =>
+          nextURL.pathname === "/offers" &&
+          nextURL.search === "?view=live&mode=pledge&sort=lowest_cost",
+      ),
+      previous.click(),
+    ]);
+    expect(previousRequest.resourceType()).toBe("document");
+    expect(new URL(previousRequest.url()).searchParams.has("_rsc")).toBe(false);
+    await expect(
+      publicPage.getByRole("navigation", { name: "Live proposal pages" }),
+    ).toContainText("Page 1 of 2");
     url = new URL(publicPage.url());
     expect(url.searchParams.get("page")).toBeNull();
     expect(url.searchParams.get("mode")).toBe("pledge");
