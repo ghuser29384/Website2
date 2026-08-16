@@ -1,0 +1,808 @@
+name: PR654 full empty-database migration baseline
+
+on:
+  push:
+    branches:
+      - qa/pr654-migration-history-cleanup-gates-20260815
+    paths:
+      - .github/workflows/pr654-full-migration-baseline.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr654-full-migration-baseline
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      EXPECTED_MAIN: 75fd512e6cf82e2c51df53e211b854c0263109c3
+      PRODUCT_BRANCH: qa/pooled-settlement-payer-fix-candidate-20260813
+      SUPABASE_CLI_VERSION: 2.110.0
+      EVIDENCE_DIR: ${{ github.workspace }}/pr654-migration-baseline-evidence
+    steps:
+      - name: Check out exact product head
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+          cache: npm
+
+      - name: Run full local migration-baseline gate
+        id: gate
+        shell: bash
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p "$EVIDENCE_DIR/logs" "$EVIDENCE_DIR/manifests"
+          TRANSCRIPT="$EVIDENCE_DIR/command-transcript.txt"
+          SUMMARY="$EVIDENCE_DIR/summary.txt"
+          : > "$TRANSCRIPT"
+          : > "$SUMMARY"
+          exec > >(tee -a "$TRANSCRIPT") 2>&1
+
+          overall=0
+          db_gate=0
+          repo_gate=0
+          preflight_gate=0
+          cleanup_gate=0
+          db_started=0
+          db_container=""
+
+          note() {
+            printf '\n===== %s =====\n' "$*"
+          }
+
+          mark_fail() {
+            overall=1
+            printf 'FAIL: %s\n' "$*" | tee -a "$SUMMARY"
+          }
+
+          run_logged() {
+            local label="$1"
+            shift
+            note "$label"
+            printf '+ ' 
+            printf '%q ' "$@"
+            printf '\n'
+            "$@"
+            local status=$?
+            printf 'exit_status=%s\n' "$status"
+            return "$status"
+          }
+
+          sanitize_status() {
+            # Supabase status output includes local credentials. Preserve only non-secret
+            # service and port information, never raw keys, JWTs, passwords, or URLs.
+            grep -E '^(Stopped services:|[A-Z0-9_]+_PORT=|[A-Za-z ].*status|[A-Za-z_-]+[[:space:]]+(running|healthy|stopped))' || true
+          }
+
+          sanitize_supabase_log() {
+            # Supabase start can print local JWTs, service keys, object-storage keys,
+            # and a password-bearing DB URL. Raw output stays only in RUNNER_TEMP and
+            # is deleted immediately after this redacted copy is produced.
+            sed -E \
+              -e '/(anon key|service_role key|S3 Access Key|S3 Secret Key|JWT secret|DB URL)/I s#(:|=).*#\1 [REDACTED]#' \
+              -e 's#postgres(ql)?://[^[:space:]]+#[REDACTED_LOCAL_DB_URL]#g' \
+              -e 's#eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}#[REDACTED_LOCAL_JWT]#g' \
+              -e 's#sb_(secret|publishable)_[A-Za-z0-9_-]+#[REDACTED_LOCAL_KEY]#g'
+          }
+
+          cleanup() {
+            set +e
+            note "Final cleanup"
+            npx --yes "supabase@${SUPABASE_CLI_VERSION}" stop --no-backup >> "$EVIDENCE_DIR/logs/supabase-stop.log" 2>&1
+            stop_status=$?
+            printf 'supabase_stop_exit=%s\n' "$stop_status" | tee -a "$SUMMARY"
+
+            docker ps -a --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}' \
+              | tee "$EVIDENCE_DIR/manifests/docker-containers-after-cleanup.tsv"
+            docker volume ls --format '{{.Name}}' \
+              | grep -E 'supabase|pr654|baseline' \
+              | tee "$EVIDENCE_DIR/manifests/docker-volumes-after-cleanup.txt" || true
+            ss -ltnp 2>/dev/null \
+              | grep -E ':(5432[0-9]|8000|8443|3000|4000|5000|6543|55432)\b' \
+              | tee "$EVIDENCE_DIR/manifests/listeners-after-cleanup.txt" || true
+
+            if [[ -s "$EVIDENCE_DIR/manifests/docker-volumes-after-cleanup.txt" ]]; then
+              cleanup_gate=1
+              mark_fail "temporary Supabase-like Docker volumes remain after cleanup"
+            fi
+            if grep -q 'supabase_' "$EVIDENCE_DIR/manifests/docker-containers-after-cleanup.tsv"; then
+              cleanup_gate=1
+              mark_fail "temporary Supabase containers remain after cleanup"
+            fi
+          }
+          trap cleanup EXIT
+
+          note "Preflight: exact refs and detached clean checkout"
+          git status --short --branch | tee "$EVIDENCE_DIR/manifests/git-status-before.txt"
+          actual_head="$(git rev-parse HEAD)"
+          symbolic_head="$(git symbolic-ref -q --short HEAD || true)"
+          printf 'actual_head=%s\nsymbolic_head=%s\n' "$actual_head" "${symbolic_head:-DETACHED}" \
+            | tee "$EVIDENCE_DIR/manifests/git-head.txt"
+
+          remote_refs="$(git ls-remote origin \
+            "refs/heads/${PRODUCT_BRANCH}" \
+            refs/heads/main 2>&1)"
+          remote_status=$?
+          printf '%s\n' "$remote_refs" | tee "$EVIDENCE_DIR/manifests/remote-refs.txt"
+          if [[ $remote_status -ne 0 ]]; then
+            preflight_gate=1
+            mark_fail "could not resolve remote refs"
+          fi
+          product_remote="$(printf '%s\n' "$remote_refs" | awk -v r="refs/heads/${PRODUCT_BRANCH}" '$2==r{print $1}')"
+          main_remote="$(printf '%s\n' "$remote_refs" | awk '$2=="refs/heads/main"{print $1}')"
+          printf 'product_remote=%s\nmain_remote=%s\n' "$product_remote" "$main_remote" \
+            | tee -a "$EVIDENCE_DIR/manifests/git-head.txt"
+
+          if [[ "$actual_head" != "$EXPECTED_PRODUCT_HEAD" || "$product_remote" != "$EXPECTED_PRODUCT_HEAD" ]]; then
+            preflight_gate=1
+            mark_fail "PR #654 product head moved; database gate will not run"
+          fi
+          if [[ "$main_remote" != "$EXPECTED_MAIN" ]]; then
+            preflight_gate=1
+            mark_fail "remote main moved from the expected base; database gate will not run"
+          fi
+          if [[ -n "$symbolic_head" ]]; then
+            preflight_gate=1
+            mark_fail "checkout is not detached"
+          fi
+          if [[ -n "$(git status --porcelain)" ]]; then
+            preflight_gate=1
+            mark_fail "checkout is not clean"
+          fi
+
+          note "Environment safety: record names only, then unset"
+          env | cut -d= -f1 \
+            | grep -E '^(SUPABASE|POSTGRES|PG|STRIPE|EVERY)' \
+            | sort -u \
+            | tee "$EVIDENCE_DIR/manifests/relevant-environment-variable-names.txt" || true
+          for name in \
+            SUPABASE_ACCESS_TOKEN \
+            SUPABASE_DB_PASSWORD \
+            SUPABASE_PROJECT_ID \
+            SUPABASE_PROJECT_REF \
+            SUPABASE_URL \
+            SUPABASE_SERVICE_ROLE_KEY \
+            NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+            STRIPE_SECRET_KEY \
+            STRIPE_WEBHOOK_SECRET \
+            EVERY_ORG_WEBHOOK_SECRET
+          do
+            unset "$name"
+          done
+          if env | cut -d= -f1 | grep -Eq '^(SUPABASE_ACCESS_TOKEN|SUPABASE_DB_PASSWORD|SUPABASE_PROJECT_ID|SUPABASE_PROJECT_REF)$'; then
+            preflight_gate=1
+            mark_fail "remote-capable Supabase environment variable remained set"
+          fi
+
+          note "Toolchain inventory"
+          {
+            echo "runner_os=${RUNNER_OS:-unknown}"
+            echo "runner_arch=${RUNNER_ARCH:-unknown}"
+            uname -a
+            cat /etc/os-release
+            docker version
+            node --version
+            npm --version
+            git --version
+            npx --yes "supabase@${SUPABASE_CLI_VERSION}" --version
+          } | tee "$EVIDENCE_DIR/toolchain.txt"
+          if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+            preflight_gate=1
+            mark_fail "toolchain inventory failed"
+          fi
+
+          note "Static migration inventory"
+          python3 - <<'PY' | tee "$EVIDENCE_DIR/migration-inventory.txt"
+          from __future__ import annotations
+          from collections import defaultdict
+          from pathlib import Path
+          import hashlib
+          import json
+          import os
+          import re
+
+          root = Path("supabase/migrations")
+          entries = sorted(root.iterdir(), key=lambda p: p.name)
+          files = [p for p in entries if p.is_file()]
+          by_version: dict[str, list[str]] = defaultdict(list)
+          rows = []
+          for p in files:
+              name = p.name
+              match = re.match(r"^(\d+)_", name)
+              version = match.group(1) if match else ""
+              if version:
+                  by_version[version].append(name)
+              data = p.read_bytes()
+              rows.append({
+                  "name": name,
+                  "version": version,
+                  "standard_14_digit_version": bool(re.fullmatch(r"\d{14}", version)),
+                  "sql_extension": p.suffix.lower() == ".sql",
+                  "size": len(data),
+                  "readable": os.access(p, os.R_OK),
+                  "sha256": hashlib.sha256(data).hexdigest(),
+              })
+
+          duplicates = {k: v for k, v in by_version.items() if len(v) > 1}
+          nonstandard = [r["name"] for r in rows if not r["standard_14_digit_version"]]
+          empty = [r["name"] for r in rows if r["size"] == 0]
+          non_sql = [r["name"] for r in rows if not r["sql_extension"]]
+          unreadable = [r["name"] for r in rows if not r["readable"]]
+          canonical = root / "20260814024354_harden_trade_donation_pool_component_trigger_rpc.sql"
+          removed = root / "20260813170151_harden_trade_donation_pool_component_trigger_rpc.sql"
+
+          print(f"total_entries={len(entries)}")
+          print(f"total_regular_files={len(files)}")
+          print("duplicate_versions=" + json.dumps(duplicates, sort_keys=True))
+          print("nonstandard_versions=" + json.dumps(nonstandard))
+          print("empty_files=" + json.dumps(empty))
+          print("non_sql_files=" + json.dumps(non_sql))
+          print("unreadable_files=" + json.dumps(unreadable))
+          print(f"canonical_20260814024354_exists={canonical.is_file()}")
+          print(f"removed_20260813170151_absent={not removed.exists()}")
+          print("\nLEXICAL INVENTORY")
+          for row in rows:
+              print(
+                  f"{row['name']}\tversion={row['version'] or 'NONE'}\t"
+                  f"size={row['size']}\tsha256={row['sha256']}"
+              )
+
+          Path(os.environ["EVIDENCE_DIR"], "manifests", "migration-inventory.json").write_text(
+              json.dumps({
+                  "files": rows,
+                  "duplicates": duplicates,
+                  "nonstandard": nonstandard,
+                  "empty": empty,
+                  "non_sql": non_sql,
+                  "unreadable": unreadable,
+                  "canonical_exists": canonical.is_file(),
+                  "removed_absent": not removed.exists(),
+              }, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          audit_status=${PIPESTATUS[0]}
+          if [[ $audit_status -ne 0 ]]; then
+            preflight_gate=1
+            mark_fail "static migration audit failed"
+          fi
+
+          note "Duplicate-version source inspection"
+          for file in \
+            supabase/migrations/20260727043000_moral_trade_create_service_rpc_hardening.sql \
+            supabase/migrations/20260727043000_mpgf_equal_credit_advisory_ballots.sql
+          do
+            if [[ -f "$file" ]]; then
+              {
+                echo "### $file"
+                sha256sum "$file"
+                sed -n '1,80p' "$file"
+                echo
+                grep -Ein 'create (or replace )?(function|table|index)|alter table|grant |revoke ' "$file" || true
+                echo
+              } >> "$EVIDENCE_DIR/duplicate-version-source-inspection.txt"
+            else
+              preflight_gate=1
+              mark_fail "expected duplicate-version file missing: $file"
+            fi
+          done
+
+          note "schema.sql authority evidence"
+          {
+            echo "### Header"
+            sed -n '1,100p' supabase/schema.sql
+            echo "### Repository references"
+            git grep -n -I -E 'supabase/schema\.sql|schema\.sql' -- ':!supabase/schema.sql' || true
+            echo "### README/docs references to migration baseline"
+            git grep -n -I -E 'generated schema|schema snapshot|db reset|migration baseline|supabase migrations' -- README.md docs src supabase/tests 2>/dev/null || true
+          } | tee "$EVIDENCE_DIR/schema-sql-role-evidence.txt"
+
+          if [[ $preflight_gate -ne 0 ]]; then
+            overall=1
+            db_gate=1
+            printf 'database_gate=SKIPPED_PRECHECK\n' | tee -a "$SUMMARY"
+          else
+            note "Initialize disposable local Supabase project"
+            rm -rf .supabase
+            if [[ -f supabase/config.toml ]]; then
+              mark_fail "config.toml unexpectedly exists in exact product head"
+              db_gate=1
+            else
+              npx --yes "supabase@${SUPABASE_CLI_VERSION}" init --force \
+                > "$EVIDENCE_DIR/logs/supabase-init.log" 2>&1
+              init_status=$?
+              cat "$EVIDENCE_DIR/logs/supabase-init.log"
+              if [[ $init_status -ne 0 ]]; then
+                mark_fail "supabase init failed"
+                db_gate=1
+              fi
+            fi
+
+            if [[ $db_gate -eq 0 ]]; then
+              note "Pass A: fresh start from no local Supabase state"
+              npx --yes "supabase@${SUPABASE_CLI_VERSION}" stop --no-backup \
+                > "$EVIDENCE_DIR/logs/pre-start-stop.log" 2>&1 || true
+              docker ps -a --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}' \
+                | tee "$EVIDENCE_DIR/manifests/docker-containers-before-pass-a.tsv"
+              docker volume ls --format '{{.Name}}' \
+                | grep -E 'supabase|pr654|baseline' \
+                | tee "$EVIDENCE_DIR/manifests/docker-volumes-before-pass-a.txt" || true
+
+              pass_a_raw="$RUNNER_TEMP/pass-a-start.raw.log"
+              npx --yes "supabase@${SUPABASE_CLI_VERSION}" start \
+                > "$pass_a_raw" 2>&1
+              pass_a_start=$?
+              sanitize_supabase_log < "$pass_a_raw" > "$EVIDENCE_DIR/logs/pass-a-start.log"
+              rm -f "$pass_a_raw"
+              cat "$EVIDENCE_DIR/logs/pass-a-start.log"
+              printf 'pass_a_start_exit=%s\n' "$pass_a_start" | tee -a "$SUMMARY"
+              if [[ $pass_a_start -ne 0 ]]; then
+                db_gate=1
+                mark_fail "Pass A empty-database start failed"
+                grep -E 'Applying migration|duplicate|ERROR|Error|SQLSTATE|failed|Failed' \
+                  "$EVIDENCE_DIR/logs/pass-a-start.log" \
+                  | tail -200 \
+                  | tee "$EVIDENCE_DIR/logs/pass-a-first-failure-extract.log" || true
+              else
+                db_started=1
+              fi
+            fi
+
+            if [[ $db_started -eq 1 ]]; then
+              note "Pass A: status, images, and actual PostgreSQL version"
+              npx --yes "supabase@${SUPABASE_CLI_VERSION}" status -o env 2>/dev/null \
+                | sanitize_status \
+                | tee "$EVIDENCE_DIR/manifests/supabase-status-sanitized-pass-a.txt"
+              docker ps --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}' \
+                | tee "$EVIDENCE_DIR/manifests/docker-containers-pass-a.tsv"
+              : > "$EVIDENCE_DIR/manifests/docker-images-pass-a.txt"
+              while IFS=$'\t' read -r id name image status; do
+                [[ -z "$id" ]] && continue
+                docker inspect --format '{{.Name}}\t{{.Config.Image}}\t{{.Image}}' "$id" \
+                  >> "$EVIDENCE_DIR/manifests/docker-images-pass-a.txt"
+                docker image inspect --format '{{json .RepoDigests}}' "$image" \
+                  >> "$EVIDENCE_DIR/manifests/docker-images-pass-a.txt" 2>/dev/null || true
+              done < "$EVIDENCE_DIR/manifests/docker-containers-pass-a.tsv"
+              cat "$EVIDENCE_DIR/manifests/docker-images-pass-a.txt"
+
+              db_container="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+              if [[ -z "$db_container" ]]; then
+                db_gate=1
+                mark_fail "could not identify local Supabase database container"
+              else
+                docker exec "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+                  -Atc 'select version();' \
+                  | tee "$EVIDENCE_DIR/postgresql-version.txt"
+              fi
+            fi
+
+            if [[ $db_started -eq 1 && -n "$db_container" ]]; then
+              cat > "$RUNNER_TEMP/pr654-catalog-assertions.sql" <<'SQL'
+              \set ON_ERROR_STOP on
+              do $$
+              declare
+                t text;
+                expected_tables text[] := array[
+                  'trade_donation_pool_gate_status',
+                  'trade_donation_pool_obligations',
+                  'trade_donation_pool_bundles',
+                  'trade_donation_pool_bundle_items',
+                  'trade_donation_pool_ledger_journals',
+                  'trade_donation_pool_ledger_lines',
+                  'trade_donation_pool_stripe_events',
+                  'trade_donation_pool_audit_events'
+                ];
+                public_exec boolean;
+                helper_oid oid;
+                freeze_count integer;
+              begin
+                foreach t in array expected_tables loop
+                  if to_regclass(format('public.%I', t)) is null then
+                    raise exception 'missing pooled-settlement table: %', t;
+                  end if;
+                  if not exists (
+                    select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+                    where n.nspname='public' and c.relname=t and c.relrowsecurity
+                  ) then
+                    raise exception 'RLS not enabled: %', t;
+                  end if;
+                  if has_table_privilege('anon', format('public.%I', t), 'INSERT')
+                     or has_table_privilege('anon', format('public.%I', t), 'UPDATE')
+                     or has_table_privilege('anon', format('public.%I', t), 'DELETE')
+                     or has_table_privilege('anon', format('public.%I', t), 'TRUNCATE')
+                     or has_table_privilege('authenticated', format('public.%I', t), 'INSERT')
+                     or has_table_privilege('authenticated', format('public.%I', t), 'UPDATE')
+                     or has_table_privilege('authenticated', format('public.%I', t), 'DELETE')
+                     or has_table_privilege('authenticated', format('public.%I', t), 'TRUNCATE') then
+                    raise exception 'browser DML privilege exists on %', t;
+                  end if;
+                end loop;
+
+                select p.oid into helper_oid
+                from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+                where n.nspname='public'
+                  and p.proname='mark_trade_donation_pool_component_stale'
+                  and pg_get_function_identity_arguments(p.oid)='';
+                if helper_oid is null then
+                  raise exception 'missing mark_trade_donation_pool_component_stale()';
+                end if;
+                if not (select prosecdef from pg_proc where oid=helper_oid) then
+                  raise exception 'component stale helper is not SECURITY DEFINER';
+                end if;
+                if not exists (
+                  select 1 from unnest(coalesce((select proconfig from pg_proc where oid=helper_oid), array[]::text[])) cfg
+                  where cfg='search_path=pg_catalog'
+                ) then
+                  raise exception 'component stale helper lacks fixed pg_catalog search_path';
+                end if;
+                select exists (
+                  select 1
+                  from pg_proc p,
+                       lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+                  where p.oid=helper_oid and acl.grantee=0 and acl.privilege_type='EXECUTE'
+                ) into public_exec;
+                if public_exec
+                   or has_function_privilege('anon', helper_oid, 'EXECUTE')
+                   or has_function_privilege('authenticated', helper_oid, 'EXECUTE')
+                   or not has_function_privilege('service_role', helper_oid, 'EXECUTE') then
+                  raise exception 'component stale helper execution ACL is not service-role-only';
+                end if;
+                if not exists (
+                  select 1
+                  from pg_trigger tg
+                  join pg_class c on c.oid=tg.tgrelid
+                  join pg_namespace n on n.oid=c.relnamespace
+                  where n.nspname='public'
+                    and c.relname='agreements'
+                    and tg.tgname='mark_trade_donation_pool_component_stale_trigger'
+                    and tg.tgfoid=helper_oid
+                    and not tg.tgisinternal
+                ) then
+                  raise exception 'component stale trigger is not attached to public.agreements';
+                end if;
+
+                select count(*) into freeze_count
+                from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+                where n.nspname='moral_trade_private'
+                  and p.proname='try_freeze_trade_donation_pool_bundle'
+                  and pg_get_functiondef(p.oid) like '%pg_advisory_xact_lock(hashtextextended(bundle_key_value, 0))%';
+                if freeze_count <> 1 then
+                  raise exception 'expected exactly one advisory-locked try_freeze function, found %', freeze_count;
+                end if;
+              end $$;
+
+              select 'assertions_passed' as result;
+              SQL
+
+              cat > "$RUNNER_TEMP/pr654-manifest.sql" <<'SQL'
+              \set ON_ERROR_STOP on
+              select 'TABLE' as kind, n.nspname, c.relname,
+                     format('rls=%s owner=%s', c.relrowsecurity, pg_get_userbyid(c.relowner)) as detail
+              from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relname like 'trade_donation_pool_%'
+              order by c.relname;
+
+              select 'FUNCTION' as kind, n.nspname, p.proname,
+                     format('args=%s security_definer=%s config=%s acl=%s',
+                       pg_get_function_identity_arguments(p.oid), p.prosecdef,
+                       coalesce(array_to_string(p.proconfig, ','), ''), coalesce(p.proacl::text, 'DEFAULT')) as detail
+              from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where (n.nspname='public' and p.proname like '%trade_donation_pool%')
+                 or (n.nspname='moral_trade_private' and p.proname like '%trade_donation_pool%')
+              order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid);
+
+              select 'TRIGGER' as kind, n.nspname, c.relname,
+                     format('%s -> %s', tg.tgname, tg.tgfoid::regprocedure) as detail
+              from pg_trigger tg
+              join pg_class c on c.oid=tg.tgrelid
+              join pg_namespace n on n.oid=c.relnamespace
+              where not tg.tgisinternal
+                and (c.relname like 'trade_donation_pool_%' or tg.tgname like '%trade_donation_pool%')
+              order by n.nspname, c.relname, tg.tgname;
+
+              select 'CONSTRAINT' as kind, n.nspname, c.relname,
+                     format('%s %s', con.conname, pg_get_constraintdef(con.oid, true)) as detail
+              from pg_constraint con
+              join pg_class c on c.oid=con.conrelid
+              join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relname like 'trade_donation_pool_%'
+              order by c.relname, con.conname;
+
+              select 'INDEX' as kind, schemaname, tablename,
+                     format('%s %s', indexname, indexdef) as detail
+              from pg_indexes
+              where schemaname='public' and tablename like 'trade_donation_pool_%'
+              order by tablename, indexname;
+              SQL
+
+              run_db_checks() {
+                local pass="$1"
+                note "$pass: migration history, assertions, manifest, pgTAP, and lint"
+                docker exec "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+                  -AtF $'\t' \
+                  -c "select version, coalesce(name,''), coalesce(array_length(statements,1),0) from supabase_migrations.schema_migrations order by version, name" \
+                  | tee "$EVIDENCE_DIR/manifests/migration-history-${pass}.tsv"
+                local hist_status=${PIPESTATUS[0]}
+
+                docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+                  < "$RUNNER_TEMP/pr654-catalog-assertions.sql" \
+                  | tee "$EVIDENCE_DIR/logs/catalog-assertions-${pass}.log"
+                local assert_status=${PIPESTATUS[0]}
+
+                docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+                  -AtF $'\t' \
+                  < "$RUNNER_TEMP/pr654-manifest.sql" \
+                  | tee "$EVIDENCE_DIR/manifests/pooled-settlement-schema-${pass}.tsv"
+                local manifest_status=${PIPESTATUS[0]}
+
+                docker exec "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+                  -AtF $'\t' \
+                  -c "select '20260727043000', count(*), string_agg(coalesce(name,''), ',' order by name) from supabase_migrations.schema_migrations where version='20260727043000'; select '20260814024354', count(*) from supabase_migrations.schema_migrations where version='20260814024354'; select '20260813170151', count(*) from supabase_migrations.schema_migrations where version='20260813170151';" \
+                  | tee "$EVIDENCE_DIR/manifests/special-migration-history-${pass}.tsv"
+                local special_status=${PIPESTATUS[0]}
+
+                docker exec "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+                  -AtF $'\t' \
+                  -c "select relname, n_live_tup from pg_stat_user_tables where schemaname='public' and relname like 'trade_donation_pool_%' order by relname;" \
+                  | tee "$EVIDENCE_DIR/manifests/pool-row-counts-${pass}.tsv"
+                local row_status=${PIPESTATUS[0]}
+
+                npx --yes "supabase@${SUPABASE_CLI_VERSION}" test db \
+                  > "$EVIDENCE_DIR/logs/pgtap-${pass}.log" 2>&1
+                local pgtap_status=$?
+                cat "$EVIDENCE_DIR/logs/pgtap-${pass}.log"
+
+                npx --yes "supabase@${SUPABASE_CLI_VERSION}" db lint --local --level error \
+                  > "$EVIDENCE_DIR/logs/db-lint-${pass}.log" 2>&1
+                local lint_status=$?
+                cat "$EVIDENCE_DIR/logs/db-lint-${pass}.log"
+
+                printf '%s_history=%s\n%s_assertions=%s\n%s_manifest=%s\n%s_special_history=%s\n%s_row_counts=%s\n%s_pgtap=%s\n%s_db_lint=%s\n' \
+                  "$pass" "$hist_status" "$pass" "$assert_status" "$pass" "$manifest_status" \
+                  "$pass" "$special_status" "$pass" "$row_status" "$pass" "$pgtap_status" \
+                  "$pass" "$lint_status" | tee -a "$SUMMARY"
+
+                if (( hist_status || assert_status || manifest_status || special_status || row_status || pgtap_status || lint_status )); then
+                  return 1
+                fi
+                return 0
+              }
+
+              if ! run_db_checks pass-a; then
+                db_gate=1
+                mark_fail "Pass A database assertions or tools failed"
+              fi
+
+              if [[ $db_gate -eq 0 ]]; then
+                note "Pass B: destructive local reset and replay"
+                npx --yes "supabase@${SUPABASE_CLI_VERSION}" db reset --local --no-seed \
+                  > "$EVIDENCE_DIR/logs/pass-b-reset.log" 2>&1
+                pass_b_reset=$?
+                cat "$EVIDENCE_DIR/logs/pass-b-reset.log"
+                printf 'pass_b_reset_exit=%s\n' "$pass_b_reset" | tee -a "$SUMMARY"
+                if [[ $pass_b_reset -ne 0 ]]; then
+                  db_gate=1
+                  mark_fail "Pass B db reset failed"
+                  grep -E 'Applying migration|duplicate|ERROR|Error|SQLSTATE|failed|Failed' \
+                    "$EVIDENCE_DIR/logs/pass-b-reset.log" | tail -200 \
+                    | tee "$EVIDENCE_DIR/logs/pass-b-first-failure-extract.log" || true
+                elif ! run_db_checks pass-b; then
+                  db_gate=1
+                  mark_fail "Pass B database assertions or tools failed"
+                fi
+              fi
+
+              if [[ -f "$EVIDENCE_DIR/manifests/migration-history-pass-a.tsv" && -f "$EVIDENCE_DIR/manifests/migration-history-pass-b.tsv" ]]; then
+                diff -u \
+                  "$EVIDENCE_DIR/manifests/migration-history-pass-a.tsv" \
+                  "$EVIDENCE_DIR/manifests/migration-history-pass-b.tsv" \
+                  | tee "$EVIDENCE_DIR/manifests/migration-history-pass-a-vs-b.diff"
+                history_diff=${PIPESTATUS[0]}
+                printf 'migration_history_a_b_diff_exit=%s\n' "$history_diff" | tee -a "$SUMMARY"
+                if [[ $history_diff -ne 0 ]]; then
+                  db_gate=1
+                  mark_fail "Pass A and Pass B migration histories differ"
+                fi
+              fi
+
+              if [[ $db_gate -eq 0 ]]; then
+                note "Pass C: full stop without backup, then fresh start"
+                npx --yes "supabase@${SUPABASE_CLI_VERSION}" stop --no-backup \
+                  > "$EVIDENCE_DIR/logs/pass-c-stop.log" 2>&1
+                pass_c_stop=$?
+                cat "$EVIDENCE_DIR/logs/pass-c-stop.log"
+                if [[ $pass_c_stop -ne 0 ]]; then
+                  db_gate=1
+                  mark_fail "Pass C pre-start stop failed"
+                else
+                  pass_c_raw="$RUNNER_TEMP/pass-c-start.raw.log"
+                  npx --yes "supabase@${SUPABASE_CLI_VERSION}" start \
+                    > "$pass_c_raw" 2>&1
+                  pass_c_start=$?
+                  sanitize_supabase_log < "$pass_c_raw" > "$EVIDENCE_DIR/logs/pass-c-start.log"
+                  rm -f "$pass_c_raw"
+                  cat "$EVIDENCE_DIR/logs/pass-c-start.log"
+                  printf 'pass_c_start_exit=%s\n' "$pass_c_start" | tee -a "$SUMMARY"
+                  if [[ $pass_c_start -ne 0 ]]; then
+                    db_gate=1
+                    mark_fail "Pass C fresh start failed"
+                  else
+                    db_container="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+                    if ! run_db_checks pass-c; then
+                      db_gate=1
+                      mark_fail "Pass C database assertions or tools failed"
+                    fi
+                  fi
+                fi
+              fi
+            fi
+
+            if [[ $db_gate -ne 0 ]]; then
+              overall=1
+              printf 'database_gate=FAIL\n' | tee -a "$SUMMARY"
+            else
+              printf 'database_gate=PASS\n' | tee -a "$SUMMARY"
+            fi
+          fi
+
+          note "Repository gates on exact product head"
+          required_paths=(
+            src/lib/trade-donation-pool.test.ts
+            src/lib/trade-donation-pool-source-contract.test.ts
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+            src/lib/trade-donation-pool.ts
+            src/app/trade-donation-pool-actions.ts
+            src/lib/payments/trade-donation-pool-webhook.ts
+          )
+          for path in "${required_paths[@]}"; do
+            if [[ ! -f "$path" ]]; then
+              repo_gate=1
+              mark_fail "required repository gate path missing: $path"
+            fi
+          done
+
+          if [[ $repo_gate -eq 0 ]]; then
+            npm ci > "$EVIDENCE_DIR/logs/npm-ci.log" 2>&1
+            npm_ci_status=$?
+            cat "$EVIDENCE_DIR/logs/npm-ci.log"
+            printf 'npm_ci=%s\n' "$npm_ci_status" | tee -a "$SUMMARY"
+            (( npm_ci_status )) && repo_gate=1
+          fi
+
+          if [[ $repo_gate -eq 0 ]]; then
+            node --import tsx --test \
+              src/lib/trade-donation-pool.test.ts \
+              src/lib/trade-donation-pool-source-contract.test.ts \
+              src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts \
+              > "$EVIDENCE_DIR/logs/focused-tests.log" 2>&1
+            focused_status=$?
+            cat "$EVIDENCE_DIR/logs/focused-tests.log"
+            printf 'focused_tests=%s\n' "$focused_status" | tee -a "$SUMMARY"
+            (( focused_status )) && repo_gate=1
+          fi
+
+          if [[ $repo_gate -eq 0 ]]; then
+            npm test > "$EVIDENCE_DIR/logs/npm-test.log" 2>&1
+            npm_test_status=$?
+            cat "$EVIDENCE_DIR/logs/npm-test.log"
+            printf 'npm_test=%s\n' "$npm_test_status" | tee -a "$SUMMARY"
+            (( npm_test_status )) && repo_gate=1
+          fi
+
+          if [[ $repo_gate -eq 0 ]]; then
+            npx tsc --noEmit > "$EVIDENCE_DIR/logs/tsc.log" 2>&1
+            tsc_status=$?
+            cat "$EVIDENCE_DIR/logs/tsc.log"
+            printf 'tsc=%s\n' "$tsc_status" | tee -a "$SUMMARY"
+            (( tsc_status )) && repo_gate=1
+          fi
+
+          if [[ $repo_gate -eq 0 ]]; then
+            npx eslint \
+              src/lib/trade-donation-pool.ts \
+              src/lib/trade-donation-pool.test.ts \
+              src/lib/trade-donation-pool-source-contract.test.ts \
+              src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts \
+              src/app/trade-donation-pool-actions.ts \
+              src/lib/payments/trade-donation-pool-webhook.ts \
+              > "$EVIDENCE_DIR/logs/eslint.log" 2>&1
+            eslint_status=$?
+            cat "$EVIDENCE_DIR/logs/eslint.log"
+            printf 'eslint=%s\n' "$eslint_status" | tee -a "$SUMMARY"
+            (( eslint_status )) && repo_gate=1
+          fi
+
+          git diff --check > "$EVIDENCE_DIR/logs/git-diff-check.log" 2>&1
+          diff_status=$?
+          cat "$EVIDENCE_DIR/logs/git-diff-check.log"
+          printf 'git_diff_check=%s\n' "$diff_status" | tee -a "$SUMMARY"
+          (( diff_status )) && repo_gate=1
+
+          if [[ $repo_gate -eq 0 ]]; then
+            npm run build > "$EVIDENCE_DIR/logs/npm-build.log" 2>&1
+            build_status=$?
+            cat "$EVIDENCE_DIR/logs/npm-build.log"
+            printf 'npm_build=%s\n' "$build_status" | tee -a "$SUMMARY"
+            (( build_status )) && repo_gate=1
+          fi
+
+          if [[ $repo_gate -ne 0 ]]; then
+            overall=1
+            printf 'repository_gate=FAIL\n' | tee -a "$SUMMARY"
+          else
+            printf 'repository_gate=PASS\n' | tee -a "$SUMMARY"
+          fi
+
+          note "Final source-tree state before cleanup"
+          git status --short --branch | tee "$EVIDENCE_DIR/manifests/git-status-after.txt"
+          git diff --stat "$EXPECTED_MAIN...$EXPECTED_PRODUCT_HEAD" \
+            | tee "$EVIDENCE_DIR/manifests/product-diff-stat.txt"
+          git diff --name-status "$EXPECTED_MAIN...$EXPECTED_PRODUCT_HEAD" \
+            | tee "$EVIDENCE_DIR/manifests/product-diff-files.txt"
+
+          printf 'preflight_gate=%s\ndb_gate=%s\nrepo_gate=%s\noverall_before_cleanup=%s\n' \
+            "$preflight_gate" "$db_gate" "$repo_gate" "$overall" | tee -a "$SUMMARY"
+
+          # Run cleanup now; the EXIT trap will run it again harmlessly if needed.
+          cleanup
+          trap - EXIT
+          if [[ $cleanup_gate -ne 0 ]]; then
+            overall=1
+          fi
+
+          note "Build credential-free evidence archive"
+          # Reject common credential-bearing strings before packaging. Local URLs are
+          # allowed only in sanitized manifests; raw status output was never saved.
+          if grep -RIlE '(^|[^A-Za-z0-9])(eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_[A-Za-z0-9]|sb_secret_|postgres(ql)?://[^[:space:]]+:[^@[:space:]]+@)' \
+               "$EVIDENCE_DIR" > "$EVIDENCE_DIR/manifests/credential-scan-hits.txt"; then
+            overall=1
+            mark_fail "credential-like material detected in evidence directory"
+          else
+            : > "$EVIDENCE_DIR/manifests/credential-scan-hits.txt"
+          fi
+
+          printf 'final_overall=%s\n' "$overall" | tee -a "$SUMMARY"
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-migration-baseline-evidence.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-migration-baseline-evidence.tar.gz" \
+            | tee "$GITHUB_WORKSPACE/pr654-migration-baseline-evidence.tar.gz.sha256"
+
+          echo "exit_code=$overall" >> "$GITHUB_OUTPUT"
+          exit "$overall"
+
+      - name: Upload credential-free migration-baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-full-migration-baseline-${{ github.run_id }}
+          path: |
+            pr654-migration-baseline-evidence.tar.gz
+            pr654-migration-baseline-evidence.tar.gz.sha256
+            pr654-migration-baseline-evidence/summary.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce gate result
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.gate.outcome }}" != "success" ]]; then
+            echo "Migration-baseline gate failed; inspect the uploaded evidence artifact."
+            exit 1
+          fi
