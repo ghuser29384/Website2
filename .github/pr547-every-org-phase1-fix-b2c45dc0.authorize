@@ -1,0 +1,6 @@
+schema=moral-trade-pr547-every-org-staging-authorization-v1
+phase=phase1_bootstrap
+candidate=b2c45dc0110d8841f7cbd7576347936044310c1c
+base=106f9781cf13f75af31594ed79deef89318a87b7
+controller_branch=ops/pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815
+authorization=AUTHORIZE_PR547_EVERY_ORG_PHASE1_FIX_B2C45DC0
