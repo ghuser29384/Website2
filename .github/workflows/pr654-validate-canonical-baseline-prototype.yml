@@ -116,6 +116,11 @@ jobs:
               1,
           )
           text=text.replace(
+              '''  diff -u "$SOURCE_ROOT/prod/catalog-manifest.tsv" "$out/catalog-manifest.tsv" > "$out/catalog-diff.txt" || {\n''',
+              '''  docker exec "$db" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -AtF $'\\t' -c "select tablename,policyname,permissive,array_to_string(roles,','),cmd,coalesce(qual,''),coalesce(with_check,'') from pg_policies where schemaname='public' and (tablename,policyname) in (('trade_evidence_bundle_items','trade_evidence_bundle_items_authorized_select'),('trade_evidence_bundles','trade_evidence_bundles_authorized_select'),('trade_milestone_reviews','trade_milestone_reviews_authorized_select')) order by tablename,policyname;" > "$out/policy-definitions.tsv"\n  diff -u "$SOURCE_ROOT/prod/catalog-manifest.tsv" "$out/catalog-manifest.tsv" > "$out/catalog-diff.txt" || {\n''',
+              1,
+          )
+          text=text.replace(
               'test "$status" -eq 0\n',
               '''if [[ "$status" -ne 0 ]]; then
             printf 'Supabase start failed with exit %s. Redacted tail follows.\\n' "$status" >&2
