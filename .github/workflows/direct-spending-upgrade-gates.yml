@@ -1,0 +1,277 @@
+name: Spending Upgrade stacked candidate gates
+
+on:
+  pull_request:
+    branches:
+      - integration/direct-donation-upgrade-current-main-20260807
+      - main
+    paths:
+      - ".env.example"
+      - ".github/workflows/direct-spending-upgrade-*.yml"
+      - "docs/direct-verified-donation-upgrade.md"
+      - "docs/legal-review/payments-charitable-funds-flow-review-packet.md"
+      - "playwright.direct-spending-upgrade.config.ts"
+      - "src/app/admin/donation-upgrades/**"
+      - "src/app/api/connectors/every-org/**"
+      - "src/app/api/jobs/donation-upgrades/**"
+      - "src/app/direct-spending-upgrade-actions.ts"
+      - "src/app/donation-upgrades/**"
+      - "src/app/trades/new/direct-donation-upgrade-create.tsx"
+      - "src/app/trades/new/direct-spending-upgrade-create.tsx"
+      - "src/components/donation-upgrades/**"
+      - "src/lib/direct-donation-upgrade.ts"
+      - "src/lib/direct-spending-upgrade*.ts"
+      - "src/lib/supabase/database.types.ts"
+      - "supabase/migrations/20260814150806_direct_spending_upgrade_subtype.sql"
+      - "supabase/tests/direct_spending_upgrade*.sql"
+      - "tests/direct-spending-upgrade-authenticated.spec.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-spending-upgrade-gates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Full source, PostgreSQL, and build gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: spending_upgrade_ephemeral
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d spending_upgrade_ephemeral"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      EPHEMERAL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/spending_upgrade_ephemeral
+      EXPECTED_STACK_BASE_SHA: 106f9781cf13f75af31594ed79deef89318a87b7
+      STACK_BASE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+      MIGRATION: supabase/migrations/20260814150806_direct_spending_upgrade_subtype.sql
+      REGRESSION: supabase/tests/direct_spending_upgrade.sql
+      BOOTSTRAP: supabase/tests/direct_spending_upgrade_ephemeral_bootstrap.sql
+      CONCURRENCY_SETUP: supabase/tests/direct_spending_upgrade_concurrency_setup.sql
+      CONCURRENCY_ASSERT: supabase/tests/direct_spending_upgrade_concurrency_assert.sql
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and PostgreSQL client
+        run: |
+          set -euo pipefail
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Verify exact stacked base and immutable predecessor migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$STACK_BASE_BRANCH"
+          fetched_base="$(git rev-parse "origin/$STACK_BASE_BRANCH")"
+          head="$(git rev-parse HEAD)"
+          expected_head="${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$head" = "$expected_head"
+          test "$fetched_base" = "$EXPECTED_STACK_BASE_SHA"
+          test "$(git merge-base "$fetched_base" "$head")" = "$fetched_base"
+          test "$(git rev-parse "$fetched_base")" = "$EXPECTED_STACK_BASE_SHA"
+          git diff --exit-code "$fetched_base"...HEAD -- \
+            supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql \
+            supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql \
+            supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql \
+            supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql
+          git diff --check "$fetched_base"...HEAD
+          git diff --name-only "$fetched_base"...HEAD | sort | tee spending-upgrade-changed-files.txt
+          {
+            printf 'stack_base_branch=%s\n' "$STACK_BASE_BRANCH"
+            printf 'stack_base_sha=%s\n' "$fetched_base"
+            printf 'head=%s\n' "$head"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } | tee spending-upgrade-exact-source.txt
+          sha256sum "$MIGRATION" "$REGRESSION" "$BOOTSTRAP" \
+            "$CONCURRENCY_SETUP" "$CONCURRENCY_ASSERT" \
+            | tee spending-upgrade-sql-sha256.txt
+
+      - name: Compile migration twice and run rollback-only state matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$BOOTSTRAP" | tee spending-upgrade-bootstrap.log
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$MIGRATION" | tee spending-upgrade-migration-first.log
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$MIGRATION" | tee spending-upgrade-migration-second.log
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$REGRESSION" 2>&1 | tee spending-upgrade-regression.log
+          grep -Fq 'direct_spending_upgrade rollback-only QA passed' \
+            spending-upgrade-regression.log
+
+      - name: Prove concurrent match and proposal transitions serialize
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$CONCURRENCY_SETUP" | tee spending-upgrade-concurrency-setup.log
+
+          set +e
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --command "select public.join_direct_spending_upgrade_offer('f0200000-0000-4000-8000-000000000002', 'f1200000-0000-4000-8000-000000000012', 'direct-spending-upgrade-matcher-v1-2026-08-14', 'staging');" \
+            > spending-upgrade-join-a.log 2>&1 &
+          join_a_pid=$!
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --command "select public.join_direct_spending_upgrade_offer('f0300000-0000-4000-8000-000000000003', 'f1200000-0000-4000-8000-000000000012', 'direct-spending-upgrade-matcher-v1-2026-08-14', 'staging');" \
+            > spending-upgrade-join-b.log 2>&1 &
+          join_b_pid=$!
+          wait "$join_a_pid"; join_a_status=$?
+          wait "$join_b_pid"; join_b_status=$?
+          set -e
+          if [[ "$join_a_status" -eq 0 && "$join_b_status" -eq 0 ]] || \
+             [[ "$join_a_status" -ne 0 && "$join_b_status" -ne 0 ]]; then
+            echo "Expected exactly one concurrent join to succeed: $join_a_status $join_b_status" >&2
+            exit 1
+          fi
+
+          set +e
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --command "select public.direct_spending_upgrade_accept_fixture_proposal('f2300000-0000-4000-8000-000000000023');" \
+            > spending-upgrade-proposal-a.log 2>&1 &
+          proposal_a_pid=$!
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --command "select public.direct_spending_upgrade_accept_fixture_proposal('f2400000-0000-4000-8000-000000000024');" \
+            > spending-upgrade-proposal-b.log 2>&1 &
+          proposal_b_pid=$!
+          wait "$proposal_a_pid"; proposal_a_status=$?
+          wait "$proposal_b_pid"; proposal_b_status=$?
+          set -e
+          if [[ "$proposal_a_status" -eq 0 && "$proposal_b_status" -eq 0 ]] || \
+             [[ "$proposal_a_status" -ne 0 && "$proposal_b_status" -ne 0 ]]; then
+            echo "Expected exactly one concurrent proposal acceptance to succeed: $proposal_a_status $proposal_b_status" >&2
+            exit 1
+          fi
+
+          psql "$EPHEMERAL_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$CONCURRENCY_ASSERT" 2>&1 | tee spending-upgrade-concurrency-assert.log
+          grep -Fq 'direct_spending_upgrade concurrent transitions passed' \
+            spending-upgrade-concurrency-assert.log
+
+      - name: Focused Spending Upgrade contracts
+        run: >-
+          node --import tsx --test
+          src/lib/direct-spending-upgrade.test.ts
+          src/lib/direct-spending-upgrade-source-contract.test.ts
+          src/lib/direct-donation-upgrade.test.ts
+          src/lib/direct-donation-upgrade-split.test.ts
+          src/lib/direct-donation-upgrade-environment-contract.test.ts
+          src/lib/direct-donation-upgrade-source-contract.test.ts
+
+      - name: Complete repository tests
+        id: tests
+        continue-on-error: true
+        run: npm test > spending-upgrade-repository-tests.log 2>&1
+
+      - name: Absolute TypeScript gate
+        id: typecheck
+        continue-on-error: true
+        run: npx tsc --noEmit > spending-upgrade-typecheck.log 2>&1
+
+      - name: Absolute ESLint gate
+        id: lint
+        continue-on-error: true
+        run: npm run lint > spending-upgrade-lint.log 2>&1
+
+      - name: Production build with Spending Upgrade disabled
+        id: disabled-build
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          DIRECT_SPENDING_UPGRADES_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > spending-upgrade-disabled-build.log 2>&1
+
+      - name: Preview build with deterministic no-service fixtures
+        id: enabled-build
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3212
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"
+          DIRECT_DONATION_UPGRADES_ENABLED: "true"
+          DIRECT_DONATION_UPGRADE_MODE: staging
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
+          DIRECT_SPENDING_UPGRADES_ENABLED: "true"
+          DIRECT_SPENDING_UPGRADE_FINGERPRINT_SECRET: spending-upgrade-preview-fingerprint-secret
+          EVERY_ORG_WEBHOOK_TOKEN: spending-upgrade-preview-token
+          EVERY_ORG_WEBHOOK_PATH_SECRET: spending-upgrade-preview-path-secret-20260814
+          EVERY_ORG_PARTNER_METADATA_SECRET: spending-upgrade-preview-metadata-secret-20260814
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          rm -rf .next
+          npm run build > spending-upgrade-enabled-build.log 2>&1
+
+      - name: Upload exact candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-spending-upgrade-gates-${{ github.run_id }}
+          path: |
+            spending-upgrade-*.txt
+            spending-upgrade-*.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Require every engineering gate
+        if: always()
+        shell: bash
+        env:
+          TESTS: ${{ steps.tests.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          DISABLED_BUILD: ${{ steps.disabled-build.outcome }}
+          ENABLED_BUILD: ${{ steps.enabled-build.outcome }}
+        run: |
+          set -euo pipefail
+          failed=0
+          report() {
+            local label="$1" outcome="$2" log="$3"
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+              echo "::error title=${label} failed::Last 200 lines follow"
+              test -f "$log" && tail -n 200 "$log" || true
+            fi
+          }
+          report "Complete repository tests" "$TESTS" spending-upgrade-repository-tests.log
+          report "Absolute TypeScript" "$TYPECHECK" spending-upgrade-typecheck.log
+          report "Absolute ESLint" "$LINT" spending-upgrade-lint.log
+          report "Disabled production build" "$DISABLED_BUILD" spending-upgrade-disabled-build.log
+          report "Enabled Preview build" "$ENABLED_BUILD" spending-upgrade-enabled-build.log
+          exit "$failed"

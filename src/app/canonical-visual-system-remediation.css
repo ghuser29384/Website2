@@ -56,6 +56,23 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([
   box-shadow: none !important;
 }
 
+/*
+ * The desktop masthead has a fixed 72px navigation row. Keep every primary
+ * destination in that row instead of allowing the last item to wrap beneath
+ * the black header; narrower layouts already expose the row through horizontal
+ * scrolling or the dedicated two-row breakpoint.
+ */
+.mt-site-topbar .topbar-links {
+  flex-wrap: nowrap !important;
+}
+
+@media (min-width: 1181px) and (max-width: 1500px) {
+  .mt-site-topbar .topbar-links > a,
+  .mt-site-topbar .topbar-menu-trigger {
+    padding-inline: 11px !important;
+  }
+}
+
 /* Marketplace route shells must read as ruled editorial workspaces, not SaaS cards. */
 .mt-v75-route-board,
 .mt-v75-side-nav,

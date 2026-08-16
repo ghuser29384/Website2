@@ -7,6 +7,10 @@ import {
   startDirectDonationUpgradeCheckoutAction,
   withdrawDirectDonationUpgradeBackupAction,
 } from "@/app/direct-donation-upgrade-actions";
+import {
+  DirectDonationUpgradeBaselineChoice,
+  DirectSpendingUpgradeCreate,
+} from "@/app/trades/new/direct-spending-upgrade-create";
 import { DirectUpgradeAmountFields } from "@/components/donation-upgrades/direct-upgrade-amount-fields";
 import {
   DirectUpgradeDeadlineField,
@@ -45,6 +49,7 @@ import {
   loadDirectDonationUpgradeViewerData,
 } from "@/lib/direct-donation-upgrade-data";
 import { getFormMessage } from "@/lib/form-state";
+import { getDirectSpendingUpgradeConfig } from "@/lib/direct-spending-upgrade";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 function statusLabel(value: unknown) {
@@ -72,6 +77,10 @@ async function loadRenderClockMs() {
   return Date.now();
 }
 
+function queryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
 export async function DirectDonationUpgradeCreate({
   params,
 }: {
@@ -80,6 +89,25 @@ export async function DirectDonationUpgradeCreate({
   const returnTo = "/trades/new?structure=conditional-donation&rail=direct";
   const viewer = await requireViewer(returnTo);
   const config = getDirectDonationUpgradeConfig();
+  const spendingConfig = getDirectSpendingUpgradeConfig();
+  const baselineSource = queryValue(params.baseline);
+  if (spendingConfig.requestedEnabled) {
+    if (baselineSource === "nonessential-spending") {
+      return (
+        <DirectSpendingUpgradeCreate
+          params={params}
+          viewerId={viewer.authUser.id}
+        />
+      );
+    }
+    if (baselineSource !== "planned-donation") {
+      return (
+        <DirectDonationUpgradeBaselineChoice
+          viewerName={viewer.displayName}
+        />
+      );
+    }
+  }
   const renderedQaNoServiceData =
     directDonationUpgradeRenderedQaNoServiceDataEnabled({
       viewerId: viewer.authUser.id,

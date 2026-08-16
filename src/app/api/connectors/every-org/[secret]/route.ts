@@ -4,6 +4,8 @@ import {
   type EveryOrgPartnerWebhookPayload as DirectEveryOrgPartnerWebhookPayload,
 } from "@/lib/direct-donation-upgrade";
 import { handleDirectDonationUpgradeEveryOrgWebhook } from "@/lib/direct-donation-upgrade-webhook";
+import { getDirectSpendingUpgradeConfig } from "@/lib/direct-spending-upgrade";
+import { handleDirectSpendingUpgradeEveryOrgWebhook } from "@/lib/direct-spending-upgrade-webhook";
 import {
   evaluateEveryOrgTradeDonationWebhook,
   getTradeDonationProviderConfig,
@@ -93,10 +95,11 @@ export async function POST(
   context: { params: Promise<{ secret: string }> },
 ) {
   const directConfig = getDirectDonationUpgradeConfig();
+  const spendingConfig = getDirectSpendingUpgradeConfig();
   const pledgeConfig = getTradeDonationProviderConfig();
   const { secret } = await context.params;
   const directPathAccepted =
-    directConfig.readyForCheckout &&
+    (directConfig.readyForCheckout || spendingConfig.readyForCheckout) &&
     secureDirectDonationUpgradeWebhookPathMatches(secret, directConfig.webhookPathSecret);
   const pledgePathAccepted =
     pledgeConfig.ready && secureWebhookPathMatches(secret, pledgeConfig.webhookPathSecret);
@@ -128,6 +131,19 @@ export async function POST(
     });
     if (directResult.handled) {
       return Response.json(directResult.body, { status: directResult.status });
+    }
+    if (spendingConfig.readyForCheckout) {
+      const spendingResult =
+        await handleDirectSpendingUpgradeEveryOrgWebhook({
+          payload,
+          rawBody,
+          config: spendingConfig,
+        });
+      if (spendingResult.handled) {
+        return Response.json(spendingResult.body, {
+          status: spendingResult.status,
+        });
+      }
     }
   }
 

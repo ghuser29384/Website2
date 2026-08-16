@@ -1,0 +1,192 @@
+name: Spending Upgrade three-viewport rendered QA
+
+on:
+  pull_request:
+    branches:
+      - integration/direct-donation-upgrade-current-main-20260807
+      - main
+    paths:
+      - ".github/workflows/direct-spending-upgrade-rendered-qa.yml"
+      - "playwright.direct-spending-upgrade.config.ts"
+      - "tests/direct-spending-upgrade-authenticated.spec.ts"
+      - "src/app/direct-spending-upgrade-actions.ts"
+      - "src/app/donation-upgrades/**"
+      - "src/app/trades/new/direct-donation-upgrade-create.tsx"
+      - "src/app/trades/new/direct-spending-upgrade-create.tsx"
+      - "src/components/donation-upgrades/**"
+      - "src/lib/direct-spending-upgrade*.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-spending-upgrade-rendered-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rendered-read-only:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      DIRECT_SPENDING_UPGRADE_RENDERED_BASE_URL: http://127.0.0.1:3212
+      EXPECTED_STACK_BASE_SHA: 106f9781cf13f75af31594ed79deef89318a87b7
+      STACK_BASE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3212
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      DIRECT_UPGRADE_RENDERED_QA_PASSWORD: ${{ secrets.DIRECT_UPGRADE_RENDERED_QA_PASSWORD }}
+      DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"
+      DIRECT_DONATION_UPGRADES_ENABLED: "true"
+      DIRECT_DONATION_UPGRADE_MODE: staging
+      DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
+      DIRECT_SPENDING_UPGRADES_ENABLED: "true"
+      DIRECT_SPENDING_UPGRADE_FINGERPRINT_SECRET: spending-upgrade-rendered-fingerprint-secret-20260814
+      EVERY_ORG_WEBHOOK_TOKEN: spending-upgrade-rendered-no-charge-token
+      EVERY_ORG_WEBHOOK_PATH_SECRET: spending-upgrade-rendered-path-secret-20260814
+      EVERY_ORG_PARTNER_METADATA_SECRET: spending-upgrade-rendered-metadata-secret-20260814
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      VERCEL: "1"
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact stacked source and no migration authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${QA_SUPABASE_DB_URL:-}"
+          test -n "${DIRECT_UPGRADE_RENDERED_QA_PASSWORD:-}"
+          git fetch --no-tags origin "$STACK_BASE_BRANCH"
+          fetched_base="$(git rev-parse "origin/$STACK_BASE_BRANCH")"
+          test "$fetched_base" = "$EXPECTED_STACK_BASE_SHA"
+          test "$(git merge-base "$fetched_base" HEAD)" = "$fetched_base"
+          git diff --check "$fetched_base"...HEAD
+          {
+            printf 'stack_base_sha=%s\n' "$fetched_base"
+            printf 'head=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'database_url_present=false\n'
+            printf 'service_role_present=false\n'
+          } | tee spending-upgrade-rendered-exact-source.txt
+
+      - name: Install exact dependencies and Chromium
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Bind successful QA Auth session to no-service fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from "node:fs";
+          import { createClient } from "@supabase/supabase-js";
+
+          const email = "direct-upgrade-rendered-creator@qa.invalid";
+          const password = process.env.DIRECT_UPGRADE_RENDERED_QA_PASSWORD;
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+          const githubEnv = process.env.GITHUB_ENV;
+          if (!password || !supabaseUrl || !publishableKey || !githubEnv) {
+            throw new Error("Isolated-QA Auth binding inputs are incomplete.");
+          }
+          const client = createClient(supabaseUrl, publishableKey, {
+            auth: {
+              autoRefreshToken: false,
+              detectSessionInUrl: false,
+              persistSession: false,
+            },
+          });
+          const { data, error } = await client.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) {
+            throw new Error(`Isolated-QA sign-in failed: ${error.message}`);
+          }
+          const viewerId = data.user?.id?.trim().toLowerCase();
+          if (
+            !data.session ||
+            !viewerId ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+              viewerId,
+            )
+          ) {
+            throw new Error(
+              "Successful isolated-QA sign-in did not return a valid user session UUID.",
+            );
+          }
+          console.log(`::add-mask::${viewerId}`);
+          appendFileSync(
+            githubEnv,
+            `DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID=${viewerId}\n` +
+              `DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID=${viewerId}\n`,
+          );
+          const { error: signOutError } = await client.auth.signOut({ scope: "local" });
+          if (signOutError) {
+            throw new Error(`Isolated-QA binding session cleanup failed: ${signOutError.message}`);
+          }
+          console.log("Bound the authenticated QA user to this run's no-service fixtures.");
+          NODE
+
+      - name: Build no-service deterministic Preview fixture
+        run: npm run build 2>&1 | tee spending-upgrade-rendered-build.log
+
+      - name: Start exact production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3212 > spending-upgrade-rendered-server.log 2>&1 &
+          echo "$!" > spending-upgrade-rendered-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3212/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 spending-upgrade-rendered-server.log
+          exit 1
+
+      - name: Run authenticated desktop, tablet, and mobile read-only QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            --config playwright.direct-spending-upgrade.config.ts \
+            --workers=1 \
+            --reporter=line \
+            2>&1 | tee spending-upgrade-rendered-browser.log
+          test -f output/playwright/spending-upgrade/desktop-create-form.png
+          test -f output/playwright/spending-upgrade/tablet-create-form.png
+          test -f output/playwright/spending-upgrade/mobile-create-form.png
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-spending-upgrade-rendered-${{ github.run_id }}
+          path: |
+            spending-upgrade-rendered-*.txt
+            spending-upgrade-rendered-*.log
+            output/playwright/spending-upgrade/**/*.png
+            output/playwright/spending-upgrade/test-results/**
+          if-no-files-found: warn
+          retention-days: 30
