@@ -1,0 +1,38 @@
+name: PR654 consolidate canonical baseline CI
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/workflows/pr654-consolidate-baseline-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out recovery candidate
+        uses: actions/checkout@v4
+        with:
+          ref: qa/pr654-migration-baseline-recovery-20260816
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Consolidate durable CI workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/canonical-database-baseline-ci.yml
+          test -f .github/workflows/canonical-database-baseline-ci-v2.yml
+          rm .github/workflows/canonical-database-baseline-ci.yml
+          mv .github/workflows/canonical-database-baseline-ci-v2.yml .github/workflows/canonical-database-baseline-ci.yml
+          sed -i 's#canonical-database-baseline-ci-v2.yml#canonical-database-baseline-ci.yml#g' .github/workflows/canonical-database-baseline-ci.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Consolidate canonical database baseline CI'
+          git push origin HEAD:qa/pr654-migration-baseline-recovery-20260816
