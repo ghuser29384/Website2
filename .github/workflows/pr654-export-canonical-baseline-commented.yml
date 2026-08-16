@@ -1,0 +1,132 @@
+name: PR654 read-only long-lived inventory with audit comment
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/scripts/pr654-export-canonical-baseline.sh
+      - .github/workflows/pr654-export-canonical-baseline-commented.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr654-read-only-long-lived-inventory-commented
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_PRODUCT_HEAD: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+      PRODUCT_DIR: ${{ github.workspace }}/product
+      EVIDENCE_DIR: ${{ runner.temp }}/pr654-canonical-baseline-inventory
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+      QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      QA_POOLER_USER: postgres.hvmxfjjbdcgjjudmthdz
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out QA-only harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact product head detached
+        uses: actions/checkout@v4
+        with:
+          ref: f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          path: product
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install --yes --quiet postgresql-client > /dev/null
+
+      - name: Run exact-target read-only inventory
+        id: inventory
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$QA_SUPABASE_DB_URL"
+          bash "$GITHUB_WORKSPACE/harness/.github/scripts/pr654-export-canonical-baseline.sh"
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-canonical-baseline-inventory.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-canonical-baseline-inventory.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-canonical-baseline-inventory.tar.gz.sha256"
+
+      - name: Upload credential-free inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr654-canonical-baseline-inventory-${{ github.run_id }}
+          path: |
+            pr654-canonical-baseline-inventory.tar.gz
+            pr654-canonical-baseline-inventory.tar.gz.sha256
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Post sanitized audit result to PR 654
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INVENTORY_OUTCOME: ${{ steps.inventory.outcome }}
+        run: |
+          set -euo pipefail
+          comment="$RUNNER_TEMP/pr654-inventory-comment.md"
+          {
+            echo '## Read-only long-lived database inventory'
+            echo
+            echo "- Exact product head: \`$EXPECTED_PRODUCT_HEAD\`"
+            echo "- QA harness head: \`$GITHUB_SHA\`"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- Inventory outcome: **$INVENTORY_OUTCOME**"
+            echo "- Artifact: \`pr654-canonical-baseline-inventory-$GITHUB_RUN_ID\`"
+            if [[ -f "$GITHUB_WORKSPACE/pr654-canonical-baseline-inventory.tar.gz.sha256" ]]; then
+              echo "- Archive SHA-256: \`$(cut -d' ' -f1 "$GITHUB_WORKSPACE/pr654-canonical-baseline-inventory.tar.gz.sha256")\`"
+            fi
+            echo
+            for label in prod qa; do
+              if [[ -f "$EVIDENCE_DIR/$label/summary.txt" ]]; then
+                echo "### $label summary"
+                echo '```text'
+                sed -n '1,120p' "$EVIDENCE_DIR/$label/summary.txt"
+                echo '```'
+              fi
+            done
+            if [[ -f "$EVIDENCE_DIR/comparison/summary.txt" ]]; then
+              echo '### comparison summary'
+              echo '```text'
+              sed -n '1,180p' "$EVIDENCE_DIR/comparison/summary.txt"
+              echo '```'
+            fi
+            echo
+            echo 'The run is read-only. It does not authorize a migration, history repair, deployment, provider request, payment, merge, or feature activation.'
+          } > "$comment"
+          gh api "repos/$GITHUB_REPOSITORY/issues/654/comments" --method POST --raw-field body="$(cat "$comment")" >/dev/null
+
+      - name: Enforce inventory result
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.inventory.outcome }}" = success
