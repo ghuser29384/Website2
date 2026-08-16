@@ -48,6 +48,16 @@ test("primary acquisition routes lead with real actions instead of pilot languag
   assert.match(legacyPilot, /permanentRedirect\("\/start"\)/);
 });
 
+test("the start route streams its critical action shell before optional live state", () => {
+  assert.match(start, /export default function StartPage\(\)/);
+  assert.doesNotMatch(start, /export default async function StartPage/);
+  assert.match(start, /createUnavailableMarketplaceOverview\(\)/);
+  assert.ok(
+    start.indexOf("<h1>Choose a real first action.</h1>") <
+      start.indexOf("<StartServiceSnapshot />"),
+  );
+});
+
 test("the financial action has a real external payment handoff and explicit boundaries", () => {
   assert.match(donate, /EveryOrgDonateButton/);
   assert.match(donate, /complete payment on Every\.org/);
