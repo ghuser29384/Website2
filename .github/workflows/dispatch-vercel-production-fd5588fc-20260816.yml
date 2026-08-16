@@ -1,0 +1,66 @@
+name: Dispatch exact production release fd5588fc
+
+on:
+  push:
+    branches:
+      - ops/dispatch-vercel-production-fd5588fc-20260816
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: dispatch-vercel-production-fd5588fc-20260816
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: fd5588fc4ae7f2fed44d6b0d1ca68f24ce1b86ab
+  CONTROLLER_BRANCH: ops/dispatch-vercel-production-fd5588fc-20260816
+  CONTROLLER_WORKFLOW: .github/workflows/dispatch-vercel-production-fd5588fc-20260816.yml
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact dispatch controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/dispatch-vercel-production-fd5588fc-20260816
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Guard immutable main and controller-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_WORKFLOW"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+          test -f .github/workflows/vercel-release.yml
+
+      - name: Dispatch checked-in exact-SHA production workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg expected_sha "$EXPECTED_MAIN_SHA" \
+            '{
+              ref: "main",
+              inputs: {
+                target: "production",
+                ref: "main",
+                expected_sha: $expected_sha,
+                synthetic_auth_fixture_url: ""
+              }
+            }' \
+            | gh api \
+                --method POST \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+                --input -
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
