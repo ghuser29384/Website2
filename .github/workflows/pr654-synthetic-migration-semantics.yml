@@ -12,17 +12,10 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: pr654-synthetic-migration-semantics
-  cancel-in-progress: false
-
 jobs:
   semantics:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    env:
-      SUPABASE_CLI_VERSION: 2.110.0
-      EVIDENCE_DIR: ${{ runner.temp }}/pr654-synthetic-migration-semantics
     steps:
       - name: Check out QA-only probe
         uses: actions/checkout@v4
@@ -36,8 +29,10 @@ jobs:
         with:
           node-version: 20.19.4
 
-      - name: Unset remote-capable environment
+      - name: Run local-only semantics probe
         shell: bash
+        env:
+          SUPABASE_CLI_VERSION: 2.110.0
         run: |
           for name in \
             SUPABASE_ACCESS_TOKEN \
@@ -57,33 +52,20 @@ jobs:
           do
             unset "$name"
           done
-          env | cut -d= -f1 \
-            | grep -E '^(SUPABASE_ACCESS_TOKEN|SUPABASE_DB_PASSWORD|SUPABASE_PROJECT_ID|SUPABASE_PROJECT_REF|DATABASE_URL|DIRECT_URL|POSTGRES_URL)$' \
-            && exit 1 || true
-
-      - name: Run local-only semantics probe
-        shell: bash
-        run: bash .github/scripts/pr654-synthetic-migration-semantics.sh
-
-      - name: Package credential-free evidence
-        if: always()
-        shell: bash
-        run: |
-          if [[ -d "$EVIDENCE_DIR" ]]; then
-            tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
-              "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz" \
-              "$(basename "$EVIDENCE_DIR")"
-            sha256sum "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz" \
-              > "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz.sha256"
-          fi
+          export EVIDENCE_DIR="$RUNNER_TEMP/pr654-synthetic-migration-semantics"
+          bash .github/scripts/pr654-synthetic-migration-semantics.sh
+          tar -C "$(dirname "$EVIDENCE_DIR")" -czf \
+            "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz" \
+            "$(basename "$EVIDENCE_DIR")"
+          sha256sum "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz" \
+            > "$GITHUB_WORKSPACE/pr654-synthetic-migration-semantics.tar.gz.sha256"
 
       - name: Upload credential-free evidence
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pr654-synthetic-migration-semantics-${{ github.run_id }}
           path: |
             pr654-synthetic-migration-semantics.tar.gz
             pr654-synthetic-migration-semantics.tar.gz.sha256
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
