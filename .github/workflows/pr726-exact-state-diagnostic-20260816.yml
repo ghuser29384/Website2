@@ -1,0 +1,93 @@
+name: PR 726 exact-state diagnostic 20260816
+
+on:
+  push:
+    branches:
+      - ops/pr726-compact-v2-integration-qa-preview-20260816
+    paths:
+      - ".github/workflows/pr726-exact-state-diagnostic-20260816.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CANDIDATE_BASE_SHA: 26d5a2f15fe49392d9af4b17c372dc630d690b12
+      CANDIDATE_HEAD_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+      CANDIDATE_TREE_SHA: 80772fa5e02c357eb59fc83286f3a668447de25d
+      CANDIDATE_FIRST_PARENT: 206dca2ab96f61a6870da2bfd09987687a7b56e9
+      CANDIDATE_SECOND_PARENT: 26d5a2f15fe49392d9af4b17c372dc630d690b12
+      COMPACT_SOURCE_SHA: 7dd480bebfe44fd967b353794c14e45d2f2db922
+      COMPACT_SOURCE_TREE: b4248c749c702c808260c774920aaa80055f1cc0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          path: app
+          fetch-depth: 0
+          ref: ${{ env.CANDIDATE_HEAD_SHA }}
+      - name: Collect every exact-state assertion independently
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic
+          gh api repos/ghuser29384/Website2/pulls/726 > diagnostic/pr726.json
+          gh api repos/ghuser29384/Website2/pulls/663 > diagnostic/pr663.json
+          gh api repos/ghuser29384/Website2/issues/725 > diagnostic/issue725.json
+          for id in 31924922538 31924922561 31924922560 31924922550 31924922549 31924922553; do
+            gh api "repos/ghuser29384/Website2/actions/runs/$id" > "diagnostic/run-$id.json"
+          done
+          gh api "repos/ghuser29384/Website2/deployments?sha=$CANDIDATE_HEAD_SHA&per_page=100" > diagnostic/deployments.json
+          set +e
+          git -C app merge-base --is-ancestor "$COMPACT_SOURCE_SHA" "$CANDIDATE_HEAD_SHA"
+          ancestor_status=$?
+          git -C app diff --check "$CANDIDATE_BASE_SHA" "$CANDIDATE_HEAD_SHA" > diagnostic/diff-check.txt 2>&1
+          diff_status=$?
+          set -e
+          jq -n \
+            --arg ref "$GITHUB_REF_NAME" \
+            --arg appHead "$(git -C app rev-parse HEAD)" \
+            --arg appTree "$(git -C app rev-parse HEAD^{tree})" \
+            --arg firstParent "$(git -C app rev-parse HEAD^1)" \
+            --arg secondParent "$(git -C app rev-parse HEAD^2)" \
+            --arg mergeBase "$(git -C app merge-base origin/main HEAD)" \
+            --arg aheadCount "$(git -C app rev-list --count "$CANDIDATE_BASE_SHA..HEAD")" \
+            --arg changedCount "$(git -C app diff --name-only "$CANDIDATE_BASE_SHA...HEAD" | wc -l | tr -d ' ')" \
+            --arg status "$(git -C app status --porcelain)" \
+            --arg sourceTree "$(git -C app rev-parse "$COMPACT_SOURCE_SHA^{tree}")" \
+            --arg originMain "$(git -C app rev-parse origin/main)" \
+            --argjson ancestorStatus "$ancestor_status" \
+            --argjson diffStatus "$diff_status" \
+            --slurpfile pr726 diagnostic/pr726.json \
+            --slurpfile pr663 diagnostic/pr663.json \
+            --slurpfile issue diagnostic/issue725.json \
+            --slurpfile compactRun diagnostic/run-31924922538.json \
+            --slurpfile canonicalRun diagnostic/run-31924922561.json \
+            --slurpfile paymentRun diagnostic/run-31924922560.json \
+            --slurpfile smartRun diagnostic/run-31924922550.json \
+            --slurpfile createRun diagnostic/run-31924922549.json \
+            --slurpfile dashboardRun diagnostic/run-31924922553.json \
+            --slurpfile deployments diagnostic/deployments.json \
+            '{
+              git:{ref:$ref,head:$appHead,tree:$appTree,firstParent:$firstParent,secondParent:$secondParent,mergeBase:$mergeBase,aheadCount:$aheadCount,changedCount:$changedCount,status:$status,sourceTree:$sourceTree,originMain:$originMain,ancestorStatus:$ancestorStatus,diffStatus:$diffStatus},
+              pr726:{state:$pr726[0].state,draft:$pr726[0].draft,merged:$pr726[0].merged,mergeable:$pr726[0].mergeable,head:$pr726[0].head.sha,base:$pr726[0].base.sha,hasRuntime:($pr726[0].body|contains("Runtime-affecting")),hasBlocked:($pr726[0].body|contains("Do not merge or deploy yet; blockers remain")),hasProductionAuthorization:($pr726[0].body|contains("[x] **Explicit production release"))},
+              pr663:{state:$pr663[0].state,draft:$pr663[0].draft,merged:$pr663[0].merged,mergeable:$pr663[0].mergeable,head:$pr663[0].head.sha},
+              issue725:{state:$issue[0].state},
+              runs:{compact:{name:$compactRun[0].name,head:$compactRun[0].head_sha,status:$compactRun[0].status,conclusion:$compactRun[0].conclusion},canonical:{name:$canonicalRun[0].name,head:$canonicalRun[0].head_sha,status:$canonicalRun[0].status,conclusion:$canonicalRun[0].conclusion},payment:{name:$paymentRun[0].name,head:$paymentRun[0].head_sha,status:$paymentRun[0].status,conclusion:$paymentRun[0].conclusion},smart:{name:$smartRun[0].name,head:$smartRun[0].head_sha,status:$smartRun[0].status,conclusion:$smartRun[0].conclusion},create:{name:$createRun[0].name,head:$createRun[0].head_sha,status:$createRun[0].status,conclusion:$createRun[0].conclusion},dashboard:{name:$dashboardRun[0].name,head:$dashboardRun[0].head_sha,status:$dashboardRun[0].status,conclusion:$dashboardRun[0].conclusion}},
+              deploymentCount:($deployments[0]|length)
+            }' | tee diagnostic/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr726-exact-state-diagnostic-${{ github.run_id }}
+          path: diagnostic
+          if-no-files-found: error
+          retention-days: 7
