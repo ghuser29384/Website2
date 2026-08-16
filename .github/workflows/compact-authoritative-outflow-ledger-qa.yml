@@ -71,7 +71,8 @@ jobs:
           for controller in .github/workflows/repair-compact-outflow-*.yml; do
             test ! -e "$controller"
           done
-          if grep -R 'jnpoxvalyjtdghnperyu' $(cat /tmp/actual.txt); then exit 1; fi
+          production_ref="$(printf '%s%s' 'jnpoxvalyjtd' 'ghnperyu')"
+          if grep -R -- "$production_ref" $(cat /tmp/actual.txt); then exit 1; fi
           if grep -E 'automaticCollectionEnabled[[:space:]]*[:=][[:space:]]*true|moneyMoved[[:space:]]*[:=][[:space:]]*true|activation_execution_enabled[[:space:]]*=[[:space:]]*true' \
             docs/mpgf/compact-authoritative-outflow-ledger-v1.md \
             src/components/mpgf/mpgf-public-goods-compacts.tsx \
