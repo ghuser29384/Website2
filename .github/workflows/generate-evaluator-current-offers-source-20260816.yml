@@ -1,0 +1,93 @@
+name: Generate corrected evaluator source for current Offers
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/generate-evaluator-current-offers-source-20260816.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generate-evaluator-current-offers-source-20260816
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'integration/evaluator-core-loop-current-main-20260815'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Generate exact corrected full source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source_path = Path('tests/evaluator-core-loop-authenticated.source.ts')
+          output_path = Path('evaluator-core-loop-authenticated.corrected.ts')
+          text = source_path.read_text()
+
+          old_heading = '''      await expect(
+            evaluatorOfferCard.getByRole("heading", { level: 4 }),
+          ).toHaveText(
+            /Evaluator core-loop verification\\s*↔\\s*Private QA response verification/,
+          );'''
+          current_heading = '''      const evaluatorHeading = evaluatorOfferCard.getByRole("heading", {
+            level: 4,
+            name: /Evaluator core-loop verification\\s+Private QA response verification/i,
+          });
+          await expect(evaluatorHeading).toHaveText(
+            /Evaluator core-loop verification\\s*\\/\\s*Private QA response verification/,
+          );'''
+          if text.count(old_heading) != 1:
+              raise SystemExit(f'Expected one stale heading assertion, found {text.count(old_heading)}')
+          text = text.replace(old_heading, current_heading, 1)
+
+          old_link = '''      await evaluatorOfferCard
+            .getByRole("link", { exact: true, name: "Open full terms ↗" })
+            .click();'''
+          current_link = '''      await evaluatorOfferCard
+            .getByText("Exact terms & more actions", { exact: true })
+            .click();
+          await evaluatorOfferCard
+            .getByRole("link", { exact: true, name: "Open full terms" })
+            .click();'''
+          if text.count(old_link) != 1:
+              raise SystemExit(f'Expected one stale full-terms assertion, found {text.count(old_link)}')
+          text = text.replace(old_link, current_link, 1)
+
+          output_path.write_text(text)
+          PY
+          test -s evaluator-core-loop-authenticated.corrected.ts
+          grep -F 'Exact terms & more actions' evaluator-core-loop-authenticated.corrected.ts
+          grep -F 'Open full terms"' evaluator-core-loop-authenticated.corrected.ts
+          if grep -Fq 'Open full terms ↗' evaluator-core-loop-authenticated.corrected.ts; then
+            echo 'Stale full-terms assertion remains.' >&2
+            exit 1
+          fi
+          if grep -Fq 'verification\\s*↔' evaluator-core-loop-authenticated.corrected.ts; then
+            echo 'Stale heading assertion remains.' >&2
+            exit 1
+          fi
+          sha256sum evaluator-core-loop-authenticated.corrected.ts | tee corrected-source.sha256
+
+      - name: Upload corrected source
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluator-core-loop-current-offers-corrected-source-${{ github.event.pull_request.head.sha }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            evaluator-core-loop-authenticated.corrected.ts
+            corrected-source.sha256
