@@ -97,6 +97,12 @@ jobs:
           dst=Path('/home/runner/work/_temp/pr654-validate-canonical-baseline-prototype.sh')
           text=src.read_text(encoding='utf-8')
           text=text.replace(
+              "schema=schema.replace('CREATE SCHEMA public;', 'CREATE SCHEMA IF NOT EXISTS public;')\n",
+              "schema=schema.replace('CREATE SCHEMA public;', 'CREATE SCHEMA IF NOT EXISTS public;')\n"
+              "schema=re.sub(r'(?m)^ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin .*?;\\n?', '', schema)\n",
+              1,
+          )
+          text=text.replace(
               'test "$status" -eq 0\n',
               '''if [[ "$status" -ne 0 ]]; then
             printf 'Supabase start failed with exit %s. Redacted tail follows.\\n' "$status" >&2
@@ -109,6 +115,7 @@ jobs:
           dst.write_text(text,encoding='utf-8')
           PY
           chmod 700 "$RUNNER_TEMP/pr654-validate-canonical-baseline-prototype.sh"
+          bash -n "$RUNNER_TEMP/pr654-validate-canonical-baseline-prototype.sh"
 
           set +e
           bash "$RUNNER_TEMP/pr654-validate-canonical-baseline-prototype.sh"
