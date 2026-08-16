@@ -1,0 +1,32 @@
+name: PR654 delete temporary canonical-baseline harness branch
+
+on:
+  push:
+    branches:
+      - qa/pr654-canonical-baseline-export-20260816
+    paths:
+      - .github/workflows/pr654-delete-temporary-harness-branch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out temporary harness branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa/pr654-canonical-baseline-export-20260816
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify no durable diff and delete temporary ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_head=f0ea581e8956f7987e58dd2240a7e0249bf7cb06
+          mapfile -t changed < <(git diff --name-only "$product_head" HEAD)
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = '.github/workflows/pr654-delete-temporary-harness-branch.yml'
+          git push origin --delete qa/pr654-canonical-baseline-export-20260816
