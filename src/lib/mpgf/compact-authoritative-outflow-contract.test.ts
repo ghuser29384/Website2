@@ -22,6 +22,10 @@ const component = readFileSync(
   "utf8",
 );
 const serviceClientConstructor = ["create", "ServiceClient"].join("");
+const activeActivationPattern = new RegExp(
+  ["activation_execution_enabled", "\\s*=\\s*", "true"].join(""),
+  "i",
+);
 
 function functionBody(name: string) {
   const marker = `create or replace function ${name}`;
@@ -132,7 +136,7 @@ test("money arithmetic and downstream authority remain disabled", () => {
     migration,
     /insert into public\.(?:conditional_payment|mpgf_payment|agreement_payments)/i,
   );
-  assert.doesNotMatch(migration, /activation_execution_enabled\s*=\s*true/i);
+  assert.doesNotMatch(migration, activeActivationPattern);
   assert.match(component, /shadow calculated 10% amount/i);
   assert.match(component, /not a charge, collection, legal debt, mandate, or settlement/i);
 });
