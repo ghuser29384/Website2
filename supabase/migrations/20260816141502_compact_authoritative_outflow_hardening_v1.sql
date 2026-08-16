@@ -132,14 +132,16 @@ begin
       message = 'The source event must belong to the exact prior UTC month represented by its ingest batch.';
   end if;
 
-  select observation.*, event_meta.*
-  into existing_observation, existing_meta
+  select observation.* into existing_observation
   from public.mpgf_public_goods_outflow_observations observation
   join moral_trade_private.compact_outflow_event_metadata event_meta
     on event_meta.observation_id = observation.id
   where event_meta.canonical_event_hash = p_source_event_hash;
 
   if existing_observation.id is not null then
+    select * into existing_meta
+    from moral_trade_private.compact_outflow_event_metadata
+    where observation_id = existing_observation.id;
     if existing_observation.participant_id is distinct from batch.participant_id
        or existing_observation.source_system is distinct from p_adapter_key
        or existing_observation.source_record_key is distinct from btrim(p_source_record_key)
