@@ -1,3 +1,4 @@
+# One-use controller: validates immutable candidate b54fe1b547fcc0efe273b233a26c514ee2a3fea6 only.
 name: Exact-head evaluator integration release-browser validation
 
 on:
