@@ -1,0 +1,66 @@
+name: PR 547 Every.org leaked artifact cleanup 31950231377
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-provider-staging-708-artifact-cleanup-31950231377-20260816
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: pr547-every-org-artifact-cleanup-31950231377-20260816
+  cancel-in-progress: false
+
+jobs:
+  delete_leaked_artifact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify exact cleanup scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_REF_NAME" = "ops/pr547-every-org-provider-staging-708-artifact-cleanup-31950231377-20260816"
+          test "$GITHUB_ACTOR" = "ghuser29384"
+
+      - name: Delete exact leaked workflow artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_id=9264499143
+          repo=ghuser29384/Website2
+
+          before_code="$(curl --silent --show-error \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$repo/actions/artifacts/$artifact_id")"
+          test "$before_code" = 200
+
+          delete_code="$(curl --silent --show-error \
+            --request DELETE \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$repo/actions/artifacts/$artifact_id")"
+          test "$delete_code" = 204
+
+          after_code="$(curl --silent --show-error \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$repo/actions/artifacts/$artifact_id")"
+          test "$after_code" = 404
+
+          printf 'artifact_id=%s deleted=true\n' "$artifact_id"
