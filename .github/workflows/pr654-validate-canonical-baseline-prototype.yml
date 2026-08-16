@@ -103,6 +103,14 @@ jobs:
               1,
           )
           text=text.replace(
+              "prelude+='revoke all on schema public from public;\\n\\n'\n",
+              "prelude+='revoke all on schema public from public;\\n'\n"
+              "prelude+='alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated, service_role;\\n'\n"
+              "prelude+='alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated, service_role;\\n'\n"
+              "prelude+='alter default privileges for role postgres in schema public revoke all on functions from anon, authenticated, service_role;\\n\\n'\n",
+              1,
+          )
+          text=text.replace(
               '  local label="$1" out="$EVIDENCE_DIR/$label" db\n',
               '  local label="$1"\n  local out="$EVIDENCE_DIR/$label"\n  local db\n',
               1,
