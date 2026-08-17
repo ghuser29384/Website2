@@ -1,0 +1,78 @@
+name: One-use PR 743 root prefetch repair v2
+
+on:
+  push:
+    branches:
+      - ops/pr743-protected-preview-20260817
+    paths:
+      - .github/workflows/pr743-root-prefetch-repair-v2-20260817.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr743-root-prefetch-repair-v2
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      TARGET_BRANCH: integration/pr665-current-main-20260817
+      EXPECTED_MAIN_SHA: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
+      EXPECTED_HEAD_SHA: 8fb215b27c07c1bbc25f5bec84e323e8eb1c2a37
+
+    steps:
+      - name: Check out exact current candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Guard source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
+          test "$(git merge-base "$EXPECTED_MAIN_SHA" HEAD)" = "$EXPECTED_MAIN_SHA"
+
+      - name: Apply exact root-prefetch repair and source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgp3b3JrYmVuY2hfcGF0aCA9IFBhdGgoJ3NyYy9jb21wb25lbnRzL2NvcmUtdHJhZGUvdHJhZGUtZHJhZnQtd29ya2JlbmNoLnRzeCcpCndvcmtiZW5jaCA9IHdvcmtiZW5jaF9wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQpvbGQgPSAnPExpbmsgYXJpYS1sYWJlbD0iTW9yYWwgVHJhZGUsIGhvbWUiIGNsYXNzTmFtZT17c3R5bGVzLmJyYW5kTGlua30gaHJlZj0iLyI+JwpuZXcgPSAnPExpbmsgYXJpYS1sYWJlbD0iTW9yYWwgVHJhZGUsIGhvbWUiIGNsYXNzTmFtZT17c3R5bGVzLmJyYW5kTGlua30gaHJlZj0iLyIgcHJlZmV0Y2g9e2ZhbHNlfT4nCmlmIHdvcmtiZW5jaC5jb3VudChvbGQpICE9IDI6CiAgICByYWlzZSBTeXN0ZW1FeGl0KGYnZXhwZWN0ZWQgZXhhY3RseSB0d28gdW5zdXBwcmVzc2VkIHJvb3QgYnJhbmQgbGlua3MsIGZvdW5kIHt3b3JrYmVuY2guY291bnQob2xkKX0nKQp3b3JrYmVuY2ggPSB3b3JrYmVuY2gucmVwbGFjZShvbGQsIG5ldykKaWYgd29ya2JlbmNoLmNvdW50KG5ldykgIT0gMjoKICAgIHJhaXNlIFN5c3RlbUV4aXQoJ2ZhaWxlZCB0byBzdXBwcmVzcyBib3RoIHJvb3QgYnJhbmQgcHJlZmV0Y2hlcycpCndvcmtiZW5jaF9wYXRoLndyaXRlX3RleHQod29ya2JlbmNoLCBlbmNvZGluZz0ndXRmLTgnKQoKdGVzdF9wYXRoID0gUGF0aCgnc3JjL2F1dGgtcmVzb2x1dGlvbi13aXJpbmcudGVzdC50cycpCnNvdXJjZSA9IHRlc3RfcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9J3V0Zi04JykKYW5jaG9yID0gJ3Rlc3QoInNpZ25lZC1vdXQgdHJhZGUgZXhpdCBjYW5ub3QgcHJlZmV0Y2ggdGhlIGRvY3VtZW50LWJhY2tlZCBEaXNjb3ZlciByb3V0ZSIsICgpID0+IHtcbicKYWRkaXRpb24gPSAnJyd0ZXN0KCJ0cmFkZSBjb21wb3NlciBhbmQgc2lnbi1pbiBnYXRlIGNhbm5vdCBwcmVmZXRjaCB0aGUgcmV3cml0dGVuIHJvb3Qgcm91dGUiLCAoKSA9PiB7CiAgY29uc3Qgcm9vdEJyYW5kTGlua3MgPSB0cmFkZURyYWZ0V29ya2JlbmNoU291cmNlLm1hdGNoKAogICAgLzxMaW5rIGFyaWEtbGFiZWw9Ik1vcmFsIFRyYWRlLCBob21lIiBjbGFzc05hbWU9XFx7c3R5bGVzXFwuYnJhbmRMaW5rXFx9IGhyZWY9IlxcLyIgcHJlZmV0Y2g9XFx7ZmFsc2VcXH0+L2d1LAogICk7CiAgYXNzZXJ0LmVxdWFsKHJvb3RCcmFuZExpbmtzPy5sZW5ndGgsIDIpOwogIGFzc2VydC5kb2VzTm90TWF0Y2goCiAgICB0cmFkZURyYWZ0V29ya2JlbmNoU291cmNlLAogICAgLzxMaW5rIGFyaWEtbGFiZWw9Ik1vcmFsIFRyYWRlLCBob21lIiBjbGFzc05hbWU9XFx7c3R5bGVzXFwuYnJhbmRMaW5rXFx9IGhyZWY9IlxcLyI+L3UsCiAgKTsKfSk7CgonJycKaWYgc291cmNlLmNvdW50KGFuY2hvcikgIT0gMToKICAgIHJhaXNlIFN5c3RlbUV4aXQoJ2F1dGgtcmVzb2x1dGlvbiB3aXJpbmcgaW5zZXJ0aW9uIGFuY2hvciBjaGFuZ2VkJykKaWYgJ3RyYWRlIGNvbXBvc2VyIGFuZCBzaWduLWluIGdhdGUgY2Fubm90IHByZWZldGNoIHRoZSByZXdyaXR0ZW4gcm9vdCByb3V0ZScgaW4gc291cmNlOgogICAgcmFpc2UgU3lzdGVtRXhpdCgncm9vdCBwcmVmZXRjaCBjb250cmFjdCBhbHJlYWR5IGV4aXN0cycpCnRlc3RfcGF0aC53cml0ZV90ZXh0KHNvdXJjZS5yZXBsYWNlKGFuY2hvcixhZGRpdGlvbiArIGFuY2hvciwgMSksIGVuY29kaW5nPSd1dGYtOCcpCg==' | base64 --decode > /tmp/pr743-root-prefetch-repair.py
+          python3 /tmp/pr743-root-prefetch-repair.py
+
+      - name: Run focused executable verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test src/auth-resolution-wiring.test.ts src/proxy.test.ts
+          npx eslint src/auth-resolution-wiring.test.ts src/components/core-trade/trade-draft-workbench.tsx
+          git diff --check
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' src/auth-resolution-wiring.test.ts src/components/core-trade/trade-draft-workbench.tsx | sort)"
+
+      - name: Commit and push without rewriting history
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/auth-resolution-wiring.test.ts src/components/core-trade/trade-draft-workbench.tsx
+          git commit -m "Prevent trade surfaces from prefetching rewritten root"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'new_head=%s\nnew_tree=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee pr743-root-prefetch-repair-v2.txt
+
+      - name: Upload repair identity
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr743-root-prefetch-repair-v2-${{ github.run_id }}
+          path: pr743-root-prefetch-repair-v2.txt
+          retention-days: 30
