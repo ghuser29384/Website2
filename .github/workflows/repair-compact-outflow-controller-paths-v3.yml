@@ -10,27 +10,66 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: repair-compact-outflow-controller-paths-v3-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   repair:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
-      - name: Check out exact branch
+      - name: Check out exact controller commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
 
       - name: Repair v2 controller paths and remove this controller
         shell: bash
         run: |
           set -euo pipefail
-          git merge-base --is-ancestor de3b6e5480a43cf536c655cc3ad1c69786352382 HEAD
-          sed -i 's/compact-authoritative_outflow/compact_authoritative_outflow/g' \
-            .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
-          test "$(grep -c 'compact-authoritative_outflow_ledger_' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml)" -ge 2
-          test "$(grep -c 'compact-authoritative_outflow_ledger_' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml)" -eq "$(grep -c 'supabase/tests/compact' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml)"
+          test "$(git rev-parse HEAD^)" = "a2fdbb6488f54f6c32f7c3d43d8dfa52a5597391"
+          test "$(git diff --name-only a2fdbb6488f54f6c32f7c3d43d8dfa52a5597391...HEAD)" = ".github/workflows/repair-compact-outflow-controller-paths-v3.yml"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/repair-compact-outflow-profile-fixtures-v2.yml')
+          source = path.read_text(encoding='utf-8')
+
+          replacements = [
+              ('compact-authoritative_outflow', 'compact_authoritative_outflow'),
+              (
+                  '.github/workflows/repair-compact-outflow-phase-lineage-v3.yml',
+                  '.github/workflows/repair-compact-outflow-lineage.yml',
+              ),
+              (
+                  '.github/workflows/repair-compact-outflow-phase-ordering-v2.yml',
+                  '.github/workflows/repair-compact-outflow-phase-ordering-v1.yml',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in source:
+                  raise SystemExit(f'missing expected controller text: {old}')
+              source = source.replace(old, new)
+
+          if 'compact-authoritative_outflow' in source:
+              raise SystemExit('hyphenated test path remains')
+          for required in [
+              'supabase/tests/compact_authoritative_outflow_ledger_core.sql',
+              'supabase/tests/compact_authoritative_outflow_ledger_authorization.sql',
+              '.github/workflows/repair-compact-outflow-lineage.yml',
+              '.github/workflows/repair-compact-outflow-phase-ordering-v1.yml',
+          ]:
+              if required not in source:
+                  raise SystemExit(f'missing repaired controller text: {required}')
+
+          path.write_text(source, encoding='utf-8')
+          PY
           git diff --check
+          test "$(grep -c 'supabase/tests/compact_authoritative_outflow_ledger_' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml)" -ge 6
+          grep -q '.github/workflows/repair-compact-outflow-lineage.yml' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
+          grep -q '.github/workflows/repair-compact-outflow-phase-ordering-v1.yml' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
