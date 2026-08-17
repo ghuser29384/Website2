@@ -1,0 +1,483 @@
+name: PR 727 production Create UAT via protected DB fixture
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr727-production-create-uat-db-final
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr727-production-create-uat-final-20260817
+  RELEASE_SHA: fd5588fc4ae7f2fed44d6b0d1ca68f24ce1b86ab
+  CONTROLLER_BASE_SHA: af26c915db008ff157bacabb5209ec9dc22c59e9
+  PREVIOUS_CONTROLLER_SHA: 9f8b0930ff205ddfbedda4a7eee24a6d39369aeb
+  DEPLOYMENT_ID: dpl_5uNGHmgrNDjraHVRukXyNPeGRgEk
+  DEPLOYMENT_URL: https://moraltrade-site-6vbxdlg7e-ellen-s.vercel.app
+  DEPLOYMENT_HOST: moraltrade-site-6vbxdlg7e-ellen-s.vercel.app
+  CANONICAL_ORIGINS: https://www.moraltrade.org,https://moraltrade.org
+  APEX_DOMAIN: moraltrade.org
+  WWW_DOMAIN: www.moraltrade.org
+  SUPABASE_REF: jnpoxvalyjtdghnperyu
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  OUTPUT_DIR: create-production-uat-db-final
+
+jobs:
+  production-uat:
+    environment:
+      name: MoralTrade QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out exact controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact release ancestry and five-file controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$PREVIOUS_CONTROLLER_SHA"
+          git cat-file -e "${RELEASE_SHA}^{commit}"
+          git cat-file -e "${CONTROLLER_BASE_SHA}^{commit}"
+          git merge-base --is-ancestor "$RELEASE_SHA" "$CONTROLLER_BASE_SHA"
+          git merge-base --is-ancestor "$CONTROLLER_BASE_SHA" "$GITHUB_SHA"
+          git diff --check "$RELEASE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$RELEASE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > expected-controller-files.txt <<'FILES'
+          .github/scripts/create-production-uat-cleanup.sql
+          .github/scripts/create-production-uat-fixture.sql
+          .github/scripts/create-production-uat.mjs
+          .github/workflows/pr727-production-create-uat-db.yml
+          .github/workflows/pr727-production-create-uat-final.yml
+          FILES
+          diff -u expected-controller-files.txt controller-files.txt
+          test -z "$(git status --porcelain --untracked-files=no)"
+          mkdir -p "$OUTPUT_DIR"
+          {
+            printf 'release_sha=%s\n' "$RELEASE_SHA"
+            printf 'controller_base_sha=%s\n' "$CONTROLLER_BASE_SHA"
+            printf 'controller_sha=%s\n' "$GITHUB_SHA"
+            printf 'controller_tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } > "$OUTPUT_DIR/controller.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies, Chromium, PostgreSQL client, jq, and curl
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client jq curl > /dev/null
+          node --check .github/scripts/create-production-uat.mjs
+          ruby -e "require 'yaml'; abort('invalid workflow YAML') unless YAML.parse_file('.github/workflows/pr727-production-create-uat-db.yml')"
+
+      - name: Validate protected production database and bind checked-in public configuration
+        id: credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${VERCEL_TOKEN:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ['PROD_SUPABASE_DB_URL'])
+          expected = os.environ['SUPABASE_REF']
+          query = parse_qs(parsed.query)
+          valid = (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and bool(parsed.password)
+              and parsed.path == '/postgres'
+              and (
+                  expected in (parsed.username or '')
+                  or expected in (parsed.hostname or '')
+                  or query.get('project', [''])[0] == expected
+              )
+          )
+          if not valid:
+              raise SystemExit('Refusing a database URL outside exact Moral Trade production.')
+          PY
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -Atv ON_ERROR_STOP=1 \
+              -c "select to_regclass('auth.users') is not null
+                    and to_regclass('auth.identities') is not null
+                    and to_regclass('public.profiles') is not null;" \
+            | grep -Fxq 't'
+
+          supabase_url="$(sed -nE 's/^const DEFAULT_PUBLIC_SUPABASE_URL = "([^"]+)";$/\1/p' src/lib/supabase/config.ts)"
+          publishable_key="$(awk '
+            /^const DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY =/ {
+              getline
+              value=$0
+              sub(/^[[:space:]]*"/, "", value)
+              sub(/";[[:space:]]*$/, "", value)
+              print value
+              exit
+            }
+          ' src/lib/supabase/config.ts)"
+          test -n "$supabase_url"
+          test -n "$publishable_key"
+          observed_ref="$(SUPABASE_URL="$supabase_url" python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          print((urlparse(os.environ['SUPABASE_URL']).hostname or '').split('.')[0])
+          PY
+          )"
+          test "$observed_ref" = "$SUPABASE_REF"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$publishable_key"
+          umask 077
+          {
+            printf 'export NEXT_PUBLIC_SUPABASE_URL=%q\n' "$supabase_url"
+            printf 'export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%q\n' "$publishable_key"
+            printf 'export PROD_SUPABASE_DB_URL=%q\n' "$PROD_SUPABASE_DB_URL"
+          } > "$RUNNER_TEMP/create-uat-secrets.env"
+          unset publishable_key supabase_url
+          jq -n \
+            --arg supabaseRef "$observed_ref" \
+            --arg sourceEnvironment 'MoralTrade QA' \
+            --arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{target:"Moral Trade production Supabase",supabaseRef:$supabaseRef,credentialSource:"protected GitHub environment database URL",sourceEnvironment:$sourceEnvironment,publicConfigurationSource:"checked-in production defaults",secretValuesRetained:false,observedAt:$observedAt}' \
+            > "$OUTPUT_DIR/environment.json"
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Verify exact deployment and both aliases before UAT
+        id: alias_before
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="$RUNNER_TEMP/deployment-before.json"
+          curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" > "$raw"
+          jq -e --arg id "$DEPLOYMENT_ID" --arg host "$DEPLOYMENT_HOST" --arg project "$VERCEL_PROJECT_ID" --arg sha "$RELEASE_SHA" '
+            ((.id // .uid) == $id)
+            and (.url == $host)
+            and ((.projectId // .project.id // "") == $project)
+            and ((.readyState // .state // "") == "READY")
+            and (.target == "production")
+            and ((.aliasError // null) == null)
+            and (.meta.githubCommitSha == $sha)
+          ' "$raw" >/dev/null
+          jq '{id:(.id // .uid),url,projectId:(.projectId // .project.id),readyState:(.readyState // .state),target,githubCommitSha:.meta.githubCommitSha}' "$raw" > "$OUTPUT_DIR/deployment-before.json"
+          mkdir -p "$OUTPUT_DIR/aliases-before"
+          for alias_name in "$APEX_DOMAIN" "$WWW_DOMAIN"; do
+            key="${alias_name//./-}"
+            alias_raw="$RUNNER_TEMP/alias-before-${key}.json"
+            curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" > "$alias_raw"
+            jq -e --arg alias "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$DEPLOYMENT_ID" '
+              (.alias == $alias)
+              and (.projectId == $project)
+              and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+            ' "$alias_raw" >/dev/null
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' "$alias_raw" > "$OUTPUT_DIR/aliases-before/${key}.json"
+          done
+          : > "$OUTPUT_DIR/http-before.txt"
+          for origin in https://moraltrade.org https://www.moraltrade.org; do
+            printf 'requested=%s/create\n' "$origin" >> "$OUTPUT_DIR/http-before.txt"
+            curl -sS -L --max-redirs 5 --max-time 60 -o /dev/null \
+              -w 'status=%{http_code}\neffective=%{url_effective}\nredirects=%{num_redirects}\n\n' \
+              "$origin/create" >> "$OUTPUT_DIR/http-before.txt"
+          done
+          test "$(grep -c '^status=200$' "$OUTPUT_DIR/http-before.txt")" = '2'
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Create one run-owned production Auth fixture transactionally
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          qa_user_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+          qa_suffix="$(openssl rand -hex 6)"
+          qa_email="create-uat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${qa_suffix}@qa.moraltrade.invalid"
+          qa_password="$(openssl rand -base64 36 | tr -d '\n')"
+          qa_run_id="${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          echo "::add-mask::$qa_password"
+          umask 077
+          printf '%s' "$qa_user_id" > "$RUNNER_TEMP/qa-user-id"
+          printf '%s' "$qa_email" > "$RUNNER_TEMP/qa-email"
+          printf '%s' "$qa_password" > "$RUNNER_TEMP/qa-password"
+          printf '%s' "$qa_run_id" > "$RUNNER_TEMP/qa-run-id"
+          export CREATE_UAT_USER_ID="$qa_user_id"
+          export CREATE_UAT_EMAIL="$qa_email"
+          export CREATE_UAT_PASSWORD="$qa_password"
+          export CREATE_UAT_RUN_ID="$qa_run_id"
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -X -Atv ON_ERROR_STOP=1 \
+              --file .github/scripts/create-production-uat-fixture.sql \
+              > "$OUTPUT_DIR/fixture-sql.log"
+          grep -Fq '"fixturePassed": true' "$OUTPUT_DIR/fixture-sql.log"
+          jq -n --arg userId "$qa_user_id" --arg email "$qa_email" --arg runId "$qa_run_id" --arg createdAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{userId:$userId,email:$email,scope:"create_production_uat",runId:$runId,profileCreated:true,transactionalFixture:true,createdAt:$createdAt}' \
+            > "$OUTPUT_DIR/fixture.json"
+          unset qa_password CREATE_UAT_PASSWORD
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Run authenticated canonical desktop and mobile Create UAT
+        id: browser
+        shell: bash
+        run: |
+          set -uo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          export CREATE_UAT_EXPECTED_MAIN_SHA="$RELEASE_SHA"
+          export CREATE_UAT_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export CREATE_UAT_ORIGINS="$CANONICAL_ORIGINS"
+          export CREATE_UAT_OUTPUT_DIR="$OUTPUT_DIR"
+          export CREATE_UAT_USER_ID="$(cat "$RUNNER_TEMP/qa-user-id")"
+          export CREATE_UAT_EMAIL="$(cat "$RUNNER_TEMP/qa-email")"
+          export CREATE_UAT_PASSWORD="$(cat "$RUNNER_TEMP/qa-password")"
+          echo "::add-mask::$CREATE_UAT_PASSWORD"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$OUTPUT_DIR/uat-started-at.txt"
+          set +e
+          node .github/scripts/create-production-uat.mjs \
+            > >(tee "$OUTPUT_DIR/browser.log") \
+            2> >(tee "$OUTPUT_DIR/browser.stderr.log" >&2)
+          code=$?
+          set -e
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$OUTPUT_DIR/uat-completed-at.txt"
+          printf '%s\n' "$code" > "$OUTPUT_DIR/browser-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Reverify deployment and both aliases after UAT
+        id: alias_after
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          code=0
+          raw="$RUNNER_TEMP/deployment-after.json"
+          set +e
+          curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" > "$raw"
+          curl_code=$?
+          set -e
+          if [[ "$curl_code" -ne 0 ]] || ! jq -e --arg id "$DEPLOYMENT_ID" --arg host "$DEPLOYMENT_HOST" --arg project "$VERCEL_PROJECT_ID" --arg sha "$RELEASE_SHA" '
+            ((.id // .uid) == $id)
+            and (.url == $host)
+            and ((.projectId // .project.id // "") == $project)
+            and ((.readyState // .state // "") == "READY")
+            and (.target == "production")
+            and (.meta.githubCommitSha == $sha)
+          ' "$raw" >/dev/null; then
+            code=70
+          else
+            jq '{id:(.id // .uid),url,projectId:(.projectId // .project.id),readyState:(.readyState // .state),target,githubCommitSha:.meta.githubCommitSha}' "$raw" > "$OUTPUT_DIR/deployment-after.json"
+          fi
+          mkdir -p "$OUTPUT_DIR/aliases-after"
+          if [[ "$code" -eq 0 ]]; then
+            for alias_name in "$APEX_DOMAIN" "$WWW_DOMAIN"; do
+              key="${alias_name//./-}"
+              alias_raw="$RUNNER_TEMP/alias-after-${key}.json"
+              set +e
+              curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" > "$alias_raw"
+              alias_curl=$?
+              set -e
+              if [[ "$alias_curl" -ne 0 ]] || ! jq -e --arg alias "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$DEPLOYMENT_ID" '
+                (.alias == $alias)
+                and (.projectId == $project)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+              ' "$alias_raw" >/dev/null; then
+                code=71
+                break
+              fi
+              jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' "$alias_raw" > "$OUTPUT_DIR/aliases-after/${key}.json"
+            done
+          fi
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Remove and prove absence of exact run-owned fixture transactionally
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          code=0
+          deleted=false
+          auth_absent=false
+          identity_absent=false
+          profile_absent=false
+          session_absent=false
+          refresh_absent=false
+          user_id=''
+          email=''
+          run_id=''
+          [[ -s "$RUNNER_TEMP/qa-user-id" ]] && user_id="$(cat "$RUNNER_TEMP/qa-user-id")"
+          [[ -s "$RUNNER_TEMP/qa-email" ]] && email="$(cat "$RUNNER_TEMP/qa-email")"
+          [[ -s "$RUNNER_TEMP/qa-run-id" ]] && run_id="$(cat "$RUNNER_TEMP/qa-run-id")"
+          if [[ -s "$RUNNER_TEMP/create-uat-secrets.env" && -n "$user_id" ]]; then
+            source "$RUNNER_TEMP/create-uat-secrets.env"
+            export CREATE_UAT_USER_ID="$user_id"
+            export CREATE_UAT_EMAIL="$email"
+            export CREATE_UAT_RUN_ID="$run_id"
+            set +e
+            PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -X -Atv ON_ERROR_STOP=1 \
+                --file .github/scripts/create-production-uat-cleanup.sql \
+                > "$OUTPUT_DIR/cleanup-sql.log" 2> "$OUTPUT_DIR/cleanup-sql.stderr.log"
+            cleanup_code=$?
+            set -e
+            if [[ "$cleanup_code" -ne 0 ]]; then
+              code=80
+            elif grep -Fq '"cleanupPassed": true' "$OUTPUT_DIR/cleanup-sql.log"; then
+              deleted=true
+              auth_absent=true
+              identity_absent=true
+              profile_absent=true
+              session_absent=true
+              refresh_absent=true
+            else
+              code=81
+            fi
+          elif [[ -n "$user_id" ]]; then
+            code=82
+          else
+            auth_absent=true
+            identity_absent=true
+            profile_absent=true
+            session_absent=true
+            refresh_absent=true
+          fi
+          jq -n \
+            --arg userId "$user_id" \
+            --arg email "$email" \
+            --argjson deleted "$deleted" \
+            --argjson authAbsent "$auth_absent" \
+            --argjson identityAbsent "$identity_absent" \
+            --argjson profileAbsent "$profile_absent" \
+            --argjson sessionAbsent "$session_absent" \
+            --argjson refreshAbsent "$refresh_absent" \
+            --argjson exitCode "$code" \
+            --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{userId:(if $userId=="" then null else $userId end),email:(if $email=="" then null else $email end),deleted:$deleted,authUserAbsent:$authAbsent,identityAbsent:$identityAbsent,profileAbsent:$profileAbsent,sessionAbsent:$sessionAbsent,refreshTokenAbsent:$refreshAbsent,exitCode:$exitCode,completedAt:$completedAt}' \
+            > "$OUTPUT_DIR/cleanup.json"
+          rm -f "$RUNNER_TEMP"/qa-* "$RUNNER_TEMP/create-uat-secrets.env"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Validate and summarize machine-readable evidence
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = process.env.OUTPUT_DIR;
+          const fail = (message) => { throw new Error(message); };
+          const readJson = (name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+          const exitCode = Number(fs.readFileSync(path.join(dir, 'browser-exit-code.txt'), 'utf8').trim());
+          if (exitCode !== 0) fail(`Browser exit code ${exitCode}.`);
+          const evidence = readJson('evidence.json');
+          const cleanup = readJson('cleanup.json');
+          if (evidence.expectedMainSha !== process.env.RELEASE_SHA) fail('Release SHA mismatch.');
+          if (evidence.expectedDeploymentId !== process.env.DEPLOYMENT_ID) fail('Deployment ID mismatch.');
+          if (evidence.noOfferPaymentTradeOrSyntheticProductRecordCreated !== true) fail('Product-record boundary was not preserved.');
+          if (!evidence.desktop || !evidence.mobile || !evidence.secondCanonical) fail('Incomplete viewport/domain evidence.');
+          const allDiagnostics = [evidence.desktop.diagnostics,evidence.mobile.diagnostics,evidence.secondCanonical.diagnostics];
+          for (const diagnostics of allDiagnostics) {
+            for (const key of ['consoleErrors','hydrationErrors','pageErrors','failedRelevantRequests','httpErrors','mutationRequests']) {
+              if (!Array.isArray(diagnostics[key]) || diagnostics[key].length !== 0) fail(`Nonempty diagnostics ${key}.`);
+            }
+          }
+          if (cleanup.exitCode !== 0 || cleanup.deleted !== true || cleanup.authUserAbsent !== true || cleanup.identityAbsent !== true || cleanup.profileAbsent !== true || cleanup.sessionAbsent !== true || cleanup.refreshTokenAbsent !== true) {
+            fail('Fixture cleanup proof failed.');
+          }
+          const screenshots = ['create-production-desktop-1644x900.png','create-production-desktop-frame-1644x900.png','create-production-mobile-390x844.png','create-production-mobile-frame-390x844.png'];
+          for (const name of screenshots) {
+            const file = path.join(dir, name);
+            if (!fs.existsSync(file) || fs.statSync(file).size < 1000) fail(`Missing screenshot ${name}.`);
+          }
+          const summary = {
+            schemaVersion: 1,
+            releaseSha: evidence.expectedMainSha,
+            deploymentId: evidence.expectedDeploymentId,
+            deploymentUrl: process.env.DEPLOYMENT_URL,
+            aliases: ['moraltrade.org','www.moraltrade.org'],
+            uatStartedAt: evidence.startedAt,
+            uatFinishedAt: evidence.finishedAt,
+            desktopViewport: { width: 1644, height: 900 },
+            mobileViewport: { width: 390, height: 844 },
+            authenticatedCanonicalDomains: true,
+            uiContractPassed: true,
+            browserDiagnosticsClean: true,
+            browserMutationRequests: 0,
+            fixtureDeleted: true,
+            authUserAbsent: true,
+            identityAbsent: true,
+            profileAbsent: true,
+            sessionAbsent: true,
+            refreshTokenAbsent: true,
+            noOfferPaymentTradeOrSyntheticProductRecordCreated: true,
+          };
+          fs.writeFileSync(path.join(dir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
+          NODE
+          code=$?
+          sensitive="$(grep -RIlE --include='*.json' --include='*.log' --include='*.txt' '
+            "password"[[:space:]]*:|"access_token"[[:space:]]*:|"refresh_token"[[:space:]]*:|sb_secret_|SUPABASE_SERVICE_ROLE_KEY|PROD_SUPABASE_DB_URL|VERCEL_TOKEN|CREATE_UAT_PASSWORD|postgres(ql)?://
+          ' "$OUTPUT_DIR" controller-files.txt expected-controller-files.txt 2>/dev/null || true)"
+          if [[ -n "$sensitive" ]]; then
+            printf 'Credential-like artifact content: %s\n' "$sensitive" >&2
+            code=90
+          fi
+          test -z "$(git status --porcelain --untracked-files=no)" || code=91
+          printf '%s\n' "$code" > "$OUTPUT_DIR/evidence-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload immutable production UAT evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr727-production-create-uat-db-final-${{ github.run_id }}
+          path: |
+            controller-files.txt
+            expected-controller-files.txt
+            create-production-uat-db-final/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve fail-closed conclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.credentials.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.alias_before.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.fixture.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.browser.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.alias_after.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.cleanup.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.evidence.outputs.exit_code || '255' }}" = '0'
+
+      - name: Delete one-use controller branch after success
+        if: success()
+        shell: bash
+        run: git push origin --delete "$CONTROLLER_BRANCH"
