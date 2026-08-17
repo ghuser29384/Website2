@@ -1,0 +1,64 @@
+name: Issue 714 hosted QA capability probe
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-merge-diagnostic-20260817
+    paths:
+      - .github/workflows/issue714-hosted-capability-probe.yml
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HELPER_HEAD: __SET_BY_COMMIT__
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/issue714-pr698-merge-diagnostic-20260817
+          fetch-depth: 1
+      - name: Report capability presence without revealing credentials
+        shell: bash
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          SUPABASE_ACCESS_TOKEN_VALUE: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID_VALUE: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF_VALUE: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD_VALUE: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY_VALUE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL_VALUE: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_VALUE: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY_VALUE: ${{ secrets.SUPABASE_ANON_KEY }}
+          TEST_INBOX_API_KEY_VALUE: ${{ secrets.TEST_INBOX_API_KEY }}
+          MAILSLURP_API_KEY_VALUE: ${{ secrets.MAILSLURP_API_KEY }}
+          MAILOSAUR_API_KEY_VALUE: ${{ secrets.MAILOSAUR_API_KEY }}
+          RESEND_API_KEY_VALUE: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          set -euo pipefail
+          report_bool() {
+            local name="$1"
+            local value="$2"
+            if [[ -n "$value" ]]; then
+              printf '%s=present\n' "$name"
+            else
+              printf '%s=absent\n' "$name"
+            fi
+          }
+          report_bool VERCEL_TOKEN "$VERCEL_TOKEN_VALUE"
+          report_bool SUPABASE_ACCESS_TOKEN "$SUPABASE_ACCESS_TOKEN_VALUE"
+          report_bool SUPABASE_PROJECT_ID "$SUPABASE_PROJECT_ID_VALUE"
+          report_bool SUPABASE_PROJECT_REF "$SUPABASE_PROJECT_REF_VALUE"
+          report_bool SUPABASE_DB_PASSWORD "$SUPABASE_DB_PASSWORD_VALUE"
+          report_bool SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY_VALUE"
+          report_bool NEXT_PUBLIC_SUPABASE_URL "$NEXT_PUBLIC_SUPABASE_URL_VALUE"
+          report_bool NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_VALUE"
+          report_bool SUPABASE_ANON_KEY "$SUPABASE_ANON_KEY_VALUE"
+          report_bool TEST_INBOX_API_KEY "$TEST_INBOX_API_KEY_VALUE"
+          report_bool MAILSLURP_API_KEY "$MAILSLURP_API_KEY_VALUE"
+          report_bool MAILOSAUR_API_KEY "$MAILOSAUR_API_KEY_VALUE"
+          report_bool RESEND_API_KEY "$RESEND_API_KEY_VALUE"
