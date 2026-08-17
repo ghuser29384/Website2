@@ -1,0 +1,95 @@
+name: Patch PR 727 production UAT harness once
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+    paths:
+      - .github/workflows/patch-pr727-uat-harness-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-pr727-production-uat-harness
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard one-shot parent and patch only the non-workflow harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/pr727-production-create-uat-final-20260817'
+          test "$(git rev-parse HEAD^)" = '48588bbd42fcdf4ecd9a5271cf979b730e263865'
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/patch-pr727-uat-harness-once.yml'
+          git diff --check HEAD^ HEAD
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/create-production-uat.mjs')
+          source = path.read_text(encoding='utf-8')
+          start = source.index('async function openCanonicalCreate(page, origin) {')
+          end = source.index('const CAUSES = [', start)
+          entry = '''async function openCanonicalCreate(page, origin) {
+            const response = await page.goto(`${origin}/create`, { waitUntil: "domcontentloaded" });
+            if (!response || response.status() !== 200) throw new Error(`${origin}/create returned ${response?.status() ?? "no response"}.`);
+            await expect(page.getByRole("heading", { level: 1, name: "Create a Moral Trade" })).toBeVisible({ timeout: 30_000 });
+            await expect(page.locator('iframe[title="Moral Trade Create"]')).toBeVisible({ timeout: 30_000 });
+            const finalUrl = new URL(page.url());
+            if (!allowedHosts.has(finalUrl.host) || finalUrl.pathname !== "/create") throw new Error(`${origin}/create resolved unexpectedly to ${page.url()}.`);
+            const chain = redirectChain(response);
+            if (chain.length > 2) throw new Error(`${origin}/create used an unexpected redirect chain: ${chain.join(" -> ")}`);
+            return { origin, finalUrl: page.url(), redirectChain: chain };
+          }
+
+          async function enterCanonicalDraft(page) {
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await expect(create.getByRole("heading", { level: 1, name: "What do you want to improve?" })).toBeVisible({ timeout: 30_000 });
+            return create;
+          }
+
+          '''
+          source = source[:start] + entry + source[end:]
+          replacements = {
+            '{ name: "Factory farming", pattern: /factory farming|animal|meat|vegetarian/i },': '{ name: "Factory farming", pattern: /factory farming|animal(?:-| )welfare|animal|plant-based|meat|vegetarian|vegan/i },',
+            '{ name: "Existential risk", pattern: /existential(?:-| )risk/i },': '{ name: "Existential risk", pattern: /existential(?:-| )risk|x-risk|ai safety|future flourishing|future generations|longterm|catastrophic risk/i },',
+            '{ name: "Priorities research", pattern: /priorities(?:-| )research|cause priorities|resources should be allocated/i },': '{ name: "Priorities research", pattern: /priorities(?:-| )research|global priorities|cause priorit|resource allocation|resources should be allocated/i },',
+            '  await input.press("Tab");\n  await input.press("Shift+Tab");\n  await expect(input).toBeFocused();': '  await input.press("Tab");\n  const focusedAfterTab = create.locator(":focus");\n  await expect(focusedAfterTab).toHaveCount(1);\n  await focusedAfterTab.press("Shift+Tab");\n  await expect(input).toBeFocused();\n  await input.press("ArrowDown");\n  await expect(activeSuggestion).toHaveCount(1);',
+          }
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f'Expected harness contract exactly once: {old}')
+              source = source.replace(old, new, 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+          node --check .github/scripts/create-production-uat.mjs
+          ! grep -Fq 'Draft a trade' .github/scripts/create-production-uat.mjs
+          grep -Fq 'focusedAfterTab.press("Shift+Tab")' .github/scripts/create-production-uat.mjs
+          grep -Fq 'await input.press("ArrowDown");' .github/scripts/create-production-uat.mjs
+          git diff --check
+          test "$(git diff --name-only)" = '.github/scripts/create-production-uat.mjs'
+
+      - name: Commit and push only the corrected harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/scripts/create-production-uat.mjs
+          test "$(git diff --cached --name-only)" = '.github/scripts/create-production-uat.mjs'
+          git diff --cached --check
+          git commit -m 'Correct production Create UAT harness semantics'
+          git push origin HEAD:ops/pr727-production-create-uat-final-20260817
