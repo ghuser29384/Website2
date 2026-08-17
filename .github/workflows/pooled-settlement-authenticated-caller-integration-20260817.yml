@@ -1,0 +1,250 @@
+name: Pooled settlement authenticated-caller integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa/723-authenticated-confirmation-integration-20260817
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pooled-settlement-authenticated-caller-integration
+  cancel-in-progress: false
+
+env:
+  PR700_HEAD: 813573f64eaa17d2ca240c50f76ead9a3b535f97
+  PRODUCT_REPAIR_HEAD: ec59737e66aa6135b822446e4cb4a82372e0b39b
+  AUTH_MIGRATION_PATH: supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  source:
+    name: Exact stacked source and fail-closed preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    outputs:
+      ready: ${{ steps.preflight.outputs.ready }}
+      unsafe: ${{ steps.preflight.outputs.unsafe }}
+    steps:
+      - name: Check out exact stacked candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Verify exact PR 700 parent and seven-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$PR700_HEAD"
+          actual="$(git diff --name-only "$PR700_HEAD" HEAD | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs' \
+            '.github/scripts/pooled-settlement-authenticated-caller-integration.mjs' \
+            '.github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs' \
+            '.github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml' \
+            'src/app/trade-donation-actions-base.ts' \
+            'src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts' \
+            'supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql' \
+            | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          test "$(git rev-parse HEAD:src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts)" = "807070193708689e8b48281de3f67ed6bf913a68"
+          test "$(git rev-parse HEAD:supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql)" = "86cbb3ce7b7774c1f7a86e2f19cc5e6fdc0e4b68"
+          grep -F 'import { createClient, createServiceClient } from "@/lib/supabase/server";' src/app/trade-donation-actions-base.ts
+          grep -F 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts
+          test "$(grep -c 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts)" = "1"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Test original and stacked QA harness contracts
+        run: |
+          node --test \
+            .github/scripts/pooled-settlement-qa-e2e.test.mjs \
+            .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs
+
+      - name: Run authorization and pooled-settlement contracts
+        run: |
+          node --import tsx --test \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/trade-donation-pool-environment-source-contract.test.ts \
+            src/lib/trade-donation-pool-stripe-environment-source-contract.test.ts \
+            src/lib/trade-donation-pool-provider-resume-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- --quiet
+
+      - name: Build with pooled settlement disabled
+        env:
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Classify isolated-QA configuration without fallbacks
+        id: preflight
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+          QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+          QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+          QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+          QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+          QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+          QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+          QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+          POOLED_SETTLEMENT_QA_OUTPUT_DIR: pooled-settlement-authenticated-caller-preflight
+        run: node .github/scripts/pooled-settlement-qa-e2e.mjs --preflight-only
+
+      - name: Upload sanitized preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-authenticated-caller-preflight-${{ github.run_id }}
+          path: pooled-settlement-authenticated-caller-preflight/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  authenticated-e2e:
+    name: Authenticated 19-case matrix with caller repair
+    needs: source
+    if: needs.source.outputs.ready == 'true' && needs.source.outputs.unsafe != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3215
+      POOLED_SETTLEMENT_QA_BASE_URL: http://127.0.0.1:3215
+      POOLED_SETTLEMENT_QA_OUTPUT_DIR: pooled-settlement-authenticated-caller-evidence
+      TRADE_DONATION_POOL_ENABLED: "true"
+      TRADE_DONATION_POOL_MODE: test
+      EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "true"
+      EVERY_ORG_ENVIRONMENT: staging
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact stacked candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Verify exact PR 700 parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$PR700_HEAD"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium and PostgreSQL client
+        shell: bash
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Verify QA target and apply authenticated-only privilege migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import {
+            QA_PROJECT_REF,
+            databaseUrlTargetsProject,
+          } from "./.github/scripts/pooled-settlement-qa-contract.mjs";
+          if (QA_PROJECT_REF !== "hvmxfjjbdcgjjudmthdz") {
+            throw new Error("Unexpected QA project reference.");
+          }
+          if (!databaseUrlTargetsProject(process.env.QA_SUPABASE_DB_URL, QA_PROJECT_REF)) {
+            throw new Error("QA_SUPABASE_DB_URL does not target the canonical isolated QA project.");
+          }
+          NODE
+          psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$AUTH_MIGRATION_PATH"
+          actual="$(psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align --field-separator '|' \
+            --command "select p.prosecdef, coalesce(array_to_string(p.proconfig, ','), ''), has_function_privilege('anon', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'), has_function_privilege('service_role', p.oid, 'EXECUTE') from pg_proc p where p.oid = to_regprocedure('public.confirm_trade_donation_version_v2(uuid,uuid,uuid)');")"
+          test "$actual" = "t|search_path=pg_catalog|f|t|f"
+
+      - name: Bind the synthetic operator allowlist
+        shell: bash
+        run: echo "ADMIN_EMAILS=pooled-qa-${GITHUB_RUN_ID}-operator@example.test" >> "$GITHUB_ENV"
+
+      - name: Build exact QA runtime
+        run: npm run build
+
+      - name: Start exact QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -p 3215 > /tmp/pooled-settlement-next.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3215/ > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          tail -100 /tmp/pooled-settlement-next.log
+          exit 1
+
+      - name: Execute all 19 authenticated QA scenarios
+        run: node .github/scripts/pooled-settlement-authenticated-caller-integration.mjs
+
+      - name: Upload sanitized authenticated evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-authenticated-caller-qa-${{ github.run_id }}
+          path: pooled-settlement-authenticated-caller-evidence/
+          if-no-files-found: error
+          retention-days: 14
