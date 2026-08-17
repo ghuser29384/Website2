@@ -1,0 +1,33 @@
+name: PR 749 controller artifact generator
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr749-uat-controller-generator-pr.yml"
+      - "ops/pr749-generate-controller.py"
+      - ".github/workflows/pr740-dac-current-main-integration-uat-20260816.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Generate and verify the exact PR 749 controller
+        run: python3 ops/pr749-generate-controller.py
+
+      - name: Upload generated controller
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr749-generated-uat-controller-${{ github.run_id }}
+          path: generated/pr749-dac-current-main-integration-uat-20260817.yml
+          if-no-files-found: error
+          retention-days: 7
