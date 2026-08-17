@@ -219,36 +219,26 @@ async function verifyAuthenticatedOrigin(context, origin) {
 
 async function openCanonicalCreate(page, origin) {
   const response = await page.goto(`${origin}/create`, { waitUntil: "domcontentloaded" });
-  if (!response || response.status() !== 200) {
-    throw new Error(`${origin}/create returned ${response?.status() ?? "no response"}.`);
-  }
-  await expect(page.getByRole("heading", { level: 1, name: "Create." })).toBeVisible();
+  if (!response || response.status() !== 200) throw new Error(`${origin}/create returned ${response?.status() ?? "no response"}.`);
+  await expect(page.getByRole("heading", { level: 1, name: "Create a Moral Trade" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('iframe[title="Moral Trade Create"]')).toBeVisible({ timeout: 30_000 });
   const finalUrl = new URL(page.url());
-  if (!allowedHosts.has(finalUrl.host) || finalUrl.pathname !== "/create") {
-    throw new Error(`${origin}/create resolved unexpectedly to ${page.url()}.`);
-  }
+  if (!allowedHosts.has(finalUrl.host) || finalUrl.pathname !== "/create") throw new Error(`${origin}/create resolved unexpectedly to ${page.url()}.`);
   const chain = redirectChain(response);
   if (chain.length > 2) throw new Error(`${origin}/create used an unexpected redirect chain: ${chain.join(" -> ")}`);
-  const draftLink = page.getByRole("link", { name: "Draft a trade" });
-  await expect(draftLink).toHaveAttribute("href", "/offers/new?entry=draft&mode=pledge");
   return { origin, finalUrl: page.url(), redirectChain: chain };
 }
 
 async function enterCanonicalDraft(page) {
-  const draftLink = page.getByRole("link", { name: "Draft a trade" });
-  await Promise.all([
-    page.waitForURL((url) => url.pathname === "/trades/new", { timeout: 60_000 }),
-    draftLink.click(),
-  ]);
   const create = page.frameLocator('iframe[title="Moral Trade Create"]');
-  await expect(create.getByRole("heading", { level: 1, name: "What do you want to improve?" })).toBeVisible();
+  await expect(create.getByRole("heading", { level: 1, name: "What do you want to improve?" })).toBeVisible({ timeout: 30_000 });
   return create;
 }
 
 const CAUSES = [
-  { name: "Factory farming", pattern: /factory farming|animal|meat|vegetarian/i },
-  { name: "Existential risk", pattern: /existential(?:-| )risk/i },
-  { name: "Priorities research", pattern: /priorities(?:-| )research|cause priorities|resources should be allocated/i },
+  { name: "Factory farming", pattern: /factory farming|animal(?:-| )welfare|animal|plant-based|meat|vegetarian|vegan/i },
+  { name: "Existential risk", pattern: /existential(?:-| )risk|x-risk|ai safety|future flourishing|future generations|longterm|catastrophic risk/i },
+  { name: "Priorities research", pattern: /priorities(?:-| )research|global priorities|cause priorit|resource allocation|resources should be allocated/i },
 ];
 
 async function returnToCause(create) {
@@ -294,8 +284,12 @@ async function chooseCauseAndInspect(create, cause, detailed) {
   await expect(activeSuggestion).toHaveCount(1);
 
   await input.press("Tab");
-  await input.press("Shift+Tab");
+  const focusedAfterTab = create.locator(":focus");
+  await expect(focusedAfterTab).toHaveCount(1);
+  await focusedAfterTab.press("Shift+Tab");
   await expect(input).toBeFocused();
+  await input.press("ArrowDown");
+  await expect(activeSuggestion).toHaveCount(1);
 
   const state = await create.locator("body").evaluate(() => {
     const requiredElement = (selector) => {
