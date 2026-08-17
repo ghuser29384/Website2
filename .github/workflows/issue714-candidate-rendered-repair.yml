@@ -54,8 +54,8 @@ jobs:
           desktop_900 = '{ width: 1440, height: 900 }'
           desktop_1000 = '{ width: 1440, height: 1000 }'
           count = offers.count(desktop_900)
-          if count != 2:
-              raise SystemExit(f"expected two 1440x900 entries, found {count}")
+          if count != 3:
+              raise SystemExit(f"expected three 1440x900 entries, found {count}")
           offers = offers.replace(desktop_900, desktop_1000)
           offers_path.write_text(offers)
 
