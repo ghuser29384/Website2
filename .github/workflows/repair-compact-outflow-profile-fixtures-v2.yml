@@ -1,0 +1,175 @@
+name: Repair Compact outflow profile fixtures v2
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-compact-outflow-profile-fixtures-v2-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Verify authorized lineage and controller-only drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor de3b6e5480a43cf536c655cc3ad1c69786352382 HEAD
+          cat > /tmp/expected-controller-files.txt <<'EOF'
+          .github/workflows/repair-compact-outflow-profile-fixtures-v1.yml
+          .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
+          EOF
+          sed -i 's/^          //' /tmp/expected-controller-files.txt
+          git diff --name-only de3b6e5480a43cf536c655cc3ad1c69786352382...HEAD | sort > /tmp/actual-controller-files.txt
+          diff -u /tmp/expected-controller-files.txt /tmp/actual-controller-files.txt
+
+      - name: Repair deterministic fixtures and durable validation contract
+        shell: bash
+        env:
+          PHASE_CONTRACT_B64: aW1wb3J0IGFzc2VydCBmcm9tICJub2RlOmFzc2VydC9zdHJpY3QiOwppbXBvcnQgeyByZWFkRmlsZVN5bmMgfSBmcm9tICJub2RlOmZzIjsKaW1wb3J0IHsgam9pbiB9IGZyb20gIm5vZGU6cGF0aCI7CmltcG9ydCB0ZXN0IGZyb20gIm5vZGU6dGVzdCI7Cgpjb25zdCByb290ID0gcHJvY2Vzcy5jd2QoKTsKY29uc3Qgd29ya2Zsb3cgPSByZWFkRmlsZVN5bmMoCiAgam9pbihyb290LCAiLmdpdGh1Yi93b3JrZmxvd3MvY29tcGFjdC1hdXRob3JpdGF0aXZlLW91dGZsb3ctbGVkZ2VyLXFhLnltbCIpLAogICJ1dGY4IiwKKTsKCmZ1bmN0aW9uIHBvc2l0aW9uKG1hcmtlcjogc3RyaW5nKTogbnVtYmVyIHsKICBjb25zdCBpbmRleCA9IHdvcmtmbG93LmluZGV4T2YobWFya2VyKTsKICBhc3NlcnQubm90RXF1YWwoaW5kZXgsIC0xLCBgTWlzc2luZyB3b3JrZmxvdyBwaGFzZTogJHttYXJrZXJ9YCk7CiAgcmV0dXJuIGluZGV4Owp9Cgp0ZXN0KCJjbGVhbiByZWNvbnN0cnVjdGlvbiBwcm92ZXMgdGhlIGxlZ2FjeSBDb21wYWN0IGNvbnRyYWN0IGJlZm9yZSBsZWRnZXIgaGFyZGVuaW5nIiwgKCkgPT4gewogIGNvbnN0IHByZUxlZGdlckFwcGx5ID0gcG9zaXRpb24oCiAgICAiLSBuYW1lOiBBcHBseSBwcmUtbGVkZ2VyIHByb2R1Y3Rpb24tY29tcGF0aWJsZSBtaWdyYXRpb25zIiwKICApOwogIGNvbnN0IGxlZ2FjeVJlZ3Jlc3Npb24gPSBwb3NpdGlvbigKICAgICItIG5hbWU6IFZhbGlkYXRlIG9yaWdpbmFsIENvbXBhY3QgbGlmZWN5Y2xlIGJlZm9yZSBsZWRnZXIgaGFyZGVuaW5nIiwKICApOwogIGNvbnN0IGxlZGdlckFwcGx5ID0gcG9zaXRpb24oIi0gbmFtZTogQXBwbHkgYXV0aG9yaXRhdGl2ZSBsZWRnZXIgbWlncmF0aW9ucyIpOwogIGNvbnN0IGZpbmFsTGVkZ2VyU3VpdGVzID0gcG9zaXRpb24oCiAgICAiLSBuYW1lOiBMaW50IGZpbmFsIHNjaGVtYSBhbmQgZXhlY3V0ZSBhdXRob3JpdGF0aXZlIGxlZGdlciBsaWZlY3ljbGUiLAogICApOwoKICBhc3NlcnQub2socHJlTGVkZ2VyQXBwbHkgPCBsZWdhY3lSZWdyZXNzaW9uKTsKICBhc3NlcnQub2sobGVnYWN5UmVncmVzc2lvbiA8IGxlZGdlckFwcGx5KTsKICBhc3NlcnQub2sobGVkZ2VyQXBwbHkgPCBmaW5hbExlZGdlclN1aXRlcyk7CiAgYXNzZXJ0Lm1hdGNoKAogICAgd29ya2Zsb3csCiAgICAvbGVkZ2VyX3NraXBzPTIwMjYwODE2MTQxNTAwX2NvbXBhY3RfYXV0aG9yaXRhdGl2ZV9vdXRmbG93X2xlZGdlcl92MVwuc3FsLDIwMjYwODE2MTQxNTAxX2NvbXBhY3RfYXV0aG9yaXRhdGl2ZV9vdXRmbG93X2ZyZWV6ZV92MVwuc3FsLDIwMjYwODE2MTQxNTAyX2NvbXBhY3RfYXV0aG9yaXRhdGl2ZV9vdXRmbG93X2hhcmRlbmluZ192MVwuc3FsLDIwMjYwODE2MTQxNTAzX2NvbXBhY3RfYXV0aG9yaXRhdGl2ZV9vdXRmbG93X3JlcGxheV9maXhfdjFcLnNxbC8sCiAgKTsKfSk7Cgp0ZXN0KCJpc29sYXRlZCBRQSB rZWVwcyBib3RoIHNjaGVtYSBwaGFzZXMgaW5zaWRlIG9uZSBvdXRlciByb2xsYmFjayIsICgpID0+IHsKICBjb25zdCBvcmRlcmVkTGlmZWN5Y2xlID0gcG9zaXRpb24oCiAgICAiLSBuYW1lOiBFeGVjdXRlIHJvbGxiYWNrLW9ubHkgc3RhZ2VkIGxpZmVjeWNsZSIsCiAgKTsKICBjb25zdCByb2xsYmFja1Byb29mID0gcG9zaXRpb24oIi0gbmFtZTogUHJvdmUgcm9sbGJhY2sgYW5kIHplcm8gcmVzaWR1ZSIpOwogIGNvbnN0IG9yZGVyZWRCb2R5ID0gd29ya2Zsb3cuc2xpY2Uob3JkZXJlZExpZmVjeWNsZSwgcm9sbGJhY2tQcm9vZik7CgogIGFzc2VydC5tYXRjaChvcmRlcmVkQm9keSwgL2JlZ2luOy8pOwogIGFzc2VydC5tYXRjaChvcmRlcmVkQm9keSwgL3NhdmVwb2ludCBjb21wYWN0X3ByZV9sZWRnZXJfY29udHJhY3Q7Lyk7CiAgYXNzZXJ0Lm1hdGNoKG9yZGVyZWRCb2R5LCAvcm9sbGJhY2sgdG8gc2F2ZXBvaW50IGNvbXBhY3RfcHJlX2xlZGdlcl9jb250cmFjdDsvKTsKICBhc3NlcnQubWF0Y2goCiAgICBvcmRlcmVkQm9keSwKICAgIC9tcGdmX3B1YmxpY19nb29kc19jb21wYWN0c19oaXN0b3JpY2FsX2ZyZWV6ZVwuc3FsLywKICApOwogIGFzc2VydC5tYXRjaCgKICAgIG9yZGVyZWRCb2R5LAogICAgLzIwMjYwODE2MTQxNTAwX2NvbXBhY3RfYXV0aG9yaXRhdGl2ZV9vdXRmbG93X2xlZGdlcl92MVwuc3FsLywKICApOwogIGFzc2VydC5tYXRjaCgKICAgIG9yZGVyZWRCb2R5LAogICAgL2NvbXBhY3RfYXV0aG9yaXRhdGl2ZV9vdXRmbG93X2xlZGdlcl9jb3JlXC5zcWwvLAogICk7CiAgYXNzZXJ0Lm1hdGNoKAogICAgb3JkZXJlZEJvZHksCiAgICAvY29tcGFjdF9hdXRob3JpdGF0aXZlX291dGZsb3dfbGVkZ2VyX2F1dGhvcml6YXRpb25cLnNxbC8sCiAgKTsKICBhc3NlcnQubWF0Y2gob3JkZXJlZEJvZHksIC9cbiAgICAgICAgICByb2xsYmFjaztcbiAgICAgICAgICBTUUwvKTsKCiAgY29uc3QgbGVnYWN5VGVzdCA9IG9yZGVyZWRCb2R5LmluZGV4T2YoCiAgICAibXBnZl9wdWJsaWNfZ29vZHNfY29tcGFjdHNfbGlmZWN5Y2xlLnNxbCIsCiAgKTsKICBjb25zdCBmaXJzdExlZGdlck1pZ3JhdGlvbiA9IG9yZGVyZWRCb2R5LmluZGV4T2YoCiAgICAiMjAyNjA4MTYxNDE1MDBfY29tcGFjdF9hdXRob3JpdGF0aXZlX291dGZsb3dfbGVkZ2VyX3YxLnNxbCIsCiAgKTsKICBjb25zdCBsZWRnZXJUZXN0ID0gb3JkZXJlZEJvZHkuaW5kZXhPZigKICAgICJjb21wYWN0X2F1dGhvcml0YXRpdmVfb3V0Zmxvd19sZWRnZXJfY29yZS5zcWwiLAogICk7CiAgYXNzZXJ0Lm9rKGxlZ2FjeVRlc3QgPj0gMCAmJiBsZWdhY3lUZXN0IDwgZmlyc3RMZWRnZXJNaWdyYXRpb24pOwogIGFzc2VydC5vayhmaXJzdExlZGdlck1pZ3JhdGlvbiA8IGxlZGdlclRlc3QpOwp9KTsKCnRlc3QoInByb2ZpbGUgZml4dHVyZXMgdG9sZXJhdGUgdGhlIHN5bmNocm9ub3VzIGF1dGgtdG8tcHJvZmlsZSB0cmlnZ2VyIiwgKCkgPT4gewogIGZvciAoY29uc3QgZmlsZSBvZiBbCiAgICAic3VwYWJhc2UvdGVzdHMvY29tcGFjdF9hdXRob3JpdGF0aXZlX291dGZsb3dfbGVkZ2VyX2NvcmUuc3FsIiwKICAgICJzdXBhYmFzZS90ZXN0cy9jb21wYWN0X2F1dGhvcml0YXRpdmVfb3V0Zmxvd19sZWRnZXJfYXV0aG9yaXphdGlvbi5zcWwiLAogIF0pIHsKICAgIGNvbnN0IHNvdXJjZSA9IHJlYWRGaWxlU3luYyhqb2luKHJvb3QsIGZpbGUpLCAidXRmOCIpOwogICAgYXNzZXJ0Lm1hdGNoKAogICAgICBzb3VyY2UsCiAgICAgIC9pbnNlcnQgaW50byBwdWJsaWNcLnByb2ZpbGVzW1xzXFNdKm9uIGNvbmZsaWN0IFwoaWRcKSBkbyB1cGRhdGUgc2V0LywKICAgICk7CiAgfQp9KTsKCnRlc3QoInRoZSBleGFjdC1oZWFkIHdvcmtmbG93IHBlcm1hbmVudGx5IGNvdmVycyBpdHMgcGhhc2Utb3JkZXIgY29udHJhY3QgYW5kIHN0ZGVyciIsICgpID0+IHsKICBhc3NlcnQubWF0Y2goCiAgICB3b3JrZmxvdywKICAgIC9zcmNcL2xpYlwvbXBnZlwvY29tcGFjdC1hdXRob3JpdGF0aXZlLW91dGZsb3ctcGhhc2Utb3JkZXItY29udHJhY3RcLnRlc3RcLnRzLywKICApOwogIGFzc2VydC5tYXRjaCh3b3JrZmxvdywgL3djIC1sIDwgXC90bXBcL2FjdHVhbFwu dHh0XCIgLWVxIDE1Lyk7CiAgYXNzZXJ0Lm1hdGNoKAogICAgd29ya2Zsb3csCiAgICAvcHNxbCAiXCREQl9VUkwiIC0tbm8tcHNxbHJjIC0tc2V0IE9OX0VSUk9SX1NUT1A9MSAyPiYxIDw8J1NRTCcvLAogICk7CiAgYXNzZXJ0Lm1hdGNoKAogICAgd29ya2Zsb3csCiAgICAvcHNxbCAiXCRRQV9EQl9VUkwiIC0tbm8tcHNxbHJjIC0tc2V0IE9OX0VSUk9SX1NUT1A9MSAyPiYxIDw8J1NRTCcvLAogICk7Cn0pOwo=
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          assignments = "\n".join([
+              "on conflict (id) do update set",
+              "  email = excluded.email,",
+              "  display_name = excluded.display_name,",
+              "  bio = excluded.bio,",
+              "  affiliation = excluded.affiliation,",
+              "  username = excluded.username,",
+              "  account_kind = excluded.account_kind,",
+              "  accepts_group_invitations = excluded.accepts_group_invitations,",
+              "  public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled",
+          ])
+
+          def make_profile_fixture_idempotent(path: str, end_marker: str) -> None:
+              target = Path(path)
+              source = target.read_text(encoding="utf-8")
+              start = source.index("insert into public.profiles (")
+              end = source.index(end_marker, start)
+              block = source[start:end]
+              if assignments not in block:
+                  stripped = block.rstrip()
+                  if not stripped.endswith(";"):
+                      raise SystemExit(f"{path}: profile fixture does not end in a semicolon")
+                  block = stripped[:-1] + "\n" + assignments + ";"
+                  target.write_text(source[:start] + block + source[end:], encoding="utf-8")
+
+          make_profile_fixture_idempotent(
+              "supabase/tests/compact_authoritative_outflow_ledger_core.sql",
+              "\n\\echo ledger-core:profiles-inserted",
+          )
+          make_profile_fixture_idempotent(
+              "supabase/tests/compact_authoritative_outflow_ledger_authorization.sql",
+              "\n\ninsert into public.trade_review_role_grants",
+          )
+
+          workflow_path = Path(".github/workflows/compact-authoritative-outflow-ledger-qa.yml")
+          workflow = workflow_path.read_text(encoding="utf-8")
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global workflow
+              count = workflow.count(old)
+              if count == 1:
+                  workflow = workflow.replace(old, new)
+              elif new not in workflow:
+                  raise SystemExit(f"Expected one {label}; found {count}")
+
+          replace_once(
+              "          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts\n"
+              "          src/lib/mpgf/compact-authoritative-outflow.test.ts",
+              "          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts\n"
+              "          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts\n"
+              "          src/lib/mpgf/compact-authoritative-outflow.test.ts",
+              "expected manifest",
+          )
+          replace_once(
+              "            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \\\n"
+              "            src/lib/mpgf/public-goods-compacts.test.ts",
+              "            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \\\n"
+              "            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts \\\n"
+              "            src/lib/mpgf/public-goods-compacts.test.ts",
+              "focused contract list",
+          )
+          replace_once(
+              'test "$(wc -l < /tmp/actual.txt)" -eq 14',
+              'test "$(wc -l < /tmp/actual.txt)" -eq 15',
+              "scope count",
+          )
+          replace_once(
+              '          for controller in .github/workflows/repair-compact-outflow-*.yml; do\n'
+              '            test ! -e "$controller"\n'
+              '          done',
+              '          test ! -e .github/workflows/add-compact-outflow-phase-order-contract-v1.yml\n'
+              '          for controller in .github/workflows/repair-compact-outflow-*.yml; do\n'
+              '            test ! -e "$controller"\n'
+              '          done',
+              "controller guard",
+          )
+          replace_once(
+              'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee db-evidence/pre-ledger-lifecycle.log',
+              'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee db-evidence/pre-ledger-lifecycle.log',
+              "pre-ledger stderr capture",
+          )
+          replace_once(
+              'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee db-evidence/ledger-lifecycle.log',
+              'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee db-evidence/ledger-lifecycle.log',
+              "ledger stderr capture",
+          )
+          replace_once(
+              'psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee rollback-evidence/lifecycle.log',
+              'psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee rollback-evidence/lifecycle.log',
+              "rollback stderr capture",
+          )
+          workflow_path.write_text(workflow, encoding="utf-8")
+
+          Path("src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts").write_bytes(
+              base64.b64decode(os.environ["PHASE_CONTRACT_B64"]),
+          )
+          PY
+
+          git diff --check
+          grep -q 'on conflict (id) do update set' supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          grep -q 'on conflict (id) do update set' supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          grep -q 'compact-authoritative-outflow-phase-order-contract.test.ts' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -q 'eq 15' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -q '2>&1' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+
+      - name: Commit durable repair and remove one-use controllers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/compact-authoritative-outflow-ledger-qa.yml \
+            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts \
+            supabase/tests/compact-authoritative_outflow_ledger_core.sql \
+            supabase/tests/compact-authoritative_outflow_ledger_authorization.sql
+          git rm --ignore-unmatch \
+            .github/workflows/add-compact-outflow-phase-order-contract-v1.yml \
+            .github/workflows/repair-compact-outflow-phase-lineage-v3.yml \
+            .github/workflows/repair-compact-outflow-phase-ordering-v2.yml \
+            .github/workflows/repair-compact-outflow-profile-fixtures-v1.yml \
+            .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
+          git commit -m "test: repair Compact outflow profile fixtures"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
