@@ -12,7 +12,6 @@ import { PARETO_HEURISTIC_MODEL_KEY } from "./lib/pareto-recommendation-model";
 const ROOT = process.cwd();
 const READINESS_MODULE = "src/lib/feed/learned-ranking-readiness.ts";
 const ALLOWED_READINESS_REFERENCES = new Set([
-  READINESS_MODULE,
   "src/lib/feed/learned-ranking-readiness.test.ts",
   "src/feed-learned-ranking-release-gate.test.ts",
 ]);
