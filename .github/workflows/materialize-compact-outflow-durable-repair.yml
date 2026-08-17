@@ -1,0 +1,183 @@
+name: Materialize Compact outflow durable repair
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/materialize-compact-outflow-durable-repair.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-compact-outflow-durable-repair-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check out exact materializer commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Verify exact authorized controller commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "0d9e5dee42c5cb5eddb5894b245b588cf03b4084"
+          test "$(git diff --name-only 0d9e5dee42c5cb5eddb5894b245b588cf03b4084...HEAD)" = ".github/workflows/materialize-compact-outflow-durable-repair.yml"
+
+      - name: Materialize durable source repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          assignments = "\n".join([
+              "on conflict (id) do update set",
+              "  email = excluded.email,",
+              "  display_name = excluded.display_name,",
+              "  bio = excluded.bio,",
+              "  affiliation = excluded.affiliation,",
+              "  username = excluded.username,",
+              "  account_kind = excluded.account_kind,",
+              "  accepts_group_invitations = excluded.accepts_group_invitations,",
+              "  public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled",
+          ])
+
+          def make_profile_fixture_idempotent(path: str, end_marker: str) -> None:
+              target = Path(path)
+              source = target.read_text(encoding="utf-8")
+              start = source.index("insert into public.profiles (")
+              end = source.index(end_marker, start)
+              block = source[start:end]
+              if assignments not in block:
+                  stripped = block.rstrip()
+                  if not stripped.endswith(";"):
+                      raise SystemExit(f"{path}: profile fixture does not end in a semicolon")
+                  block = stripped[:-1] + "\n" + assignments + ";"
+                  target.write_text(source[:start] + block + source[end:], encoding="utf-8")
+
+          make_profile_fixture_idempotent(
+              "supabase/tests/compact_authoritative_outflow_ledger_core.sql",
+              "\n\\echo ledger-core:profiles-inserted",
+          )
+          make_profile_fixture_idempotent(
+              "supabase/tests/compact_authoritative_outflow_ledger_authorization.sql",
+              "\n\ninsert into public.trade_review_role_grants",
+          )
+
+          workflow_path = Path(".github/workflows/compact-authoritative-outflow-ledger-qa.yml")
+          workflow = workflow_path.read_text(encoding="utf-8")
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global workflow
+              count = workflow.count(old)
+              if count == 1:
+                  workflow = workflow.replace(old, new)
+              elif new not in workflow:
+                  raise SystemExit(f"Expected one {label}; found {count}")
+
+          replace_once(
+              "          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts\n"
+              "          src/lib/mpgf/compact-authoritative-outflow.test.ts",
+              "          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts\n"
+              "          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts\n"
+              "          src/lib/mpgf/compact-authoritative-outflow.test.ts",
+              "expected manifest",
+          )
+          replace_once(
+              "            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \\\n"
+              "            src/lib/mpgf/public-goods-compacts.test.ts",
+              "            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \\\n"
+              "            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts \\\n"
+              "            src/lib/mpgf/public-goods-compacts.test.ts",
+              "focused contract list",
+          )
+          replace_once(
+              'test "$(wc -l < /tmp/actual.txt)" -eq 14',
+              'test "$(wc -l < /tmp/actual.txt)" -eq 15',
+              "scope count",
+          )
+          replace_once(
+              '          for controller in .github/workflows/repair-compact-outflow-*.yml; do\n'
+              '            test ! -e "$controller"\n'
+              '          done',
+              '          test ! -e .github/workflows/add-compact-outflow-phase-order-contract-v1.yml\n'
+              '          test ! -e .github/workflows/materialize-compact-outflow-durable-repair.yml\n'
+              '          for controller in .github/workflows/repair-compact-outflow-*.yml; do\n'
+              '            test ! -e "$controller"\n'
+              '          done',
+              "controller guard",
+          )
+          replace_once(
+              'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee db-evidence/pre-ledger-lifecycle.log',
+              'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee db-evidence/pre-ledger-lifecycle.log',
+              "pre-ledger stderr capture",
+          )
+          replace_once(
+              'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee db-evidence/ledger-lifecycle.log',
+              'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee db-evidence/ledger-lifecycle.log',
+              "ledger stderr capture",
+          )
+          replace_once(
+              'psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee rollback-evidence/lifecycle.log',
+              'psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee rollback-evidence/lifecycle.log',
+              "rollback stderr capture",
+          )
+          workflow_path.write_text(workflow, encoding="utf-8")
+          PY
+
+          git diff --check
+          grep -Fq 'on conflict (id) do update set' supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          grep -Fq 'on conflict (id) do update set' supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          grep -Fq 'compact-authoritative-outflow-phase-order-contract.test.ts' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'eq 15' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          test "$(grep -Fc '2>&1' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -ge 3
+          test -f src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+
+      - name: Publish Git blobs without moving a branch ref
+        id: blobs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p materialized-repair
+          : > materialized-repair/blob-shas.tsv
+          for path in \
+            .github/workflows/compact-authoritative-outflow-ledger-qa.yml \
+            supabase/tests/compact_authoritative_outflow_ledger_core.sql \
+            supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          do
+            encoded="$(base64 -w0 "$path")"
+            sha="$(jq -n --arg content "$encoded" '{content:$content,encoding:"base64"}' \
+              | gh api --method POST "repos/$GITHUB_REPOSITORY/git/blobs" --input - \
+              | jq -r .sha)"
+            test -n "$sha"
+            printf '%s\t%s\n' "$path" "$sha" | tee -a materialized-repair/blob-shas.tsv
+            cp --parents "$path" materialized-repair/
+          done
+          git rev-parse HEAD > materialized-repair/materializer-head.txt
+          git rev-parse HEAD^{tree} > materialized-repair/materializer-tree.txt
+          git rev-parse HEAD^ > materialized-repair/materializer-parent.txt
+          sha256sum \
+            .github/workflows/compact-authoritative-outflow-ledger-qa.yml \
+            supabase/tests/compact_authoritative_outflow_ledger_core.sql \
+            supabase/tests/compact_authoritative_outflow_ledger_authorization.sql \
+            > materialized-repair/file-sha256.txt
+          test -z "$(git status --short --untracked-files=no)" || true
+
+      - name: Upload materialized repair evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-outflow-materialized-repair-${{ github.run_id }}-${{ github.sha }}
+          retention-days: 30
+          if-no-files-found: error
+          path: materialized-repair
