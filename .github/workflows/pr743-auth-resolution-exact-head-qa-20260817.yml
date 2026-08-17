@@ -23,13 +23,7 @@ jobs:
       EXPECTED_BASE_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
       EXPECTED_HEAD_SHA: 350370ed1470e08a154e11094e304097fc940523
       EXPECTED_HEAD_TREE: 327be245d37f0c702068983d536d7bce124a418c
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: auth-resolution-public-fixture
-      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:3231
       SITE_URL: https://www.moraltrade.org
-      SUPABASE_SERVICE_ROLE_KEY: auth-resolution-service-fixture
-      VERCEL: "1"
-      VERCEL_ENV: preview
 
     steps:
       - name: Check out the immutable runtime candidate
@@ -98,10 +92,12 @@ jobs:
             tests/auth-resolution-delayed.auth.ts \
             | tee auth-resolution-focused-lint.log
 
-      - name: Run complete repository gates
+      - name: Run complete repository gates without a live Supabase target
         shell: bash
         run: |
           set -euo pipefail
+          test -z "${NEXT_PUBLIC_SUPABASE_URL:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
           npm test | tee auth-resolution-repository-tests.log
           npm run lint -- --quiet | tee auth-resolution-repository-lint.log
           npx tsc --noEmit --pretty false | tee auth-resolution-typescript.log
@@ -109,8 +105,15 @@ jobs:
           git diff --check
           git diff --check "$EXPECTED_BASE_SHA"...HEAD
 
-      - name: Build the exact candidate
+      - name: Build the exact candidate against the local synthetic Auth target
         shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: auth-resolution-public-fixture
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:3231
+          SUPABASE_SERVICE_ROLE_KEY: auth-resolution-service-fixture
+          VERCEL: "1"
+          VERCEL_ENV: preview
         run: |
           set -euo pipefail
           npm run build | tee auth-resolution-build.log
