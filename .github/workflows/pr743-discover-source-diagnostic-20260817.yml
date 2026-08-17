@@ -30,13 +30,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
           {
             echo '### exact path and literal queries'
-            git grep -n -I -E '/discover\?domain=offers|domain["'"'=: ]+offers|view["'"'=: ]+list' -- . ':!package-lock.json' || true
+            git grep -n -I -F '/discover?domain=offers&view=list' -- . ':!package-lock.json' || true
+            git grep -n -I -F 'domain=offers' -- . ':!package-lock.json' || true
+            git grep -n -I -F 'view=list' -- . ':!package-lock.json' || true
             echo
-            echo '### every /discover occurrence in browser and application sources'
-            git grep -n -I '/discover' -- public src tests playwright*.ts ':!package-lock.json' || true
+            echo '### every /discover occurrence in the exact candidate'
+            git grep -n -I -F '/discover' -- . ':!package-lock.json' || true
             echo
-            echo '### every offers compatibility/navigation target'
-            git grep -n -I -E 'offers\?view|href.*offers|discover.*offers|offers.*discover|domain.*offers|view.*list' -- public src tests playwright*.ts ':!package-lock.json' || true
+            echo '### nearby offers/discover/navigation constructions'
+            git grep -n -I -E 'offers\?view|href.{0,100}offers|discover.{0,100}offers|offers.{0,100}discover|domain.{0,50}offers|view.{0,50}list' -- . ':!package-lock.json' || true
           } | tee pr743-discover-source-trace.txt
 
       - name: Upload trace
