@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  EXPECTED_HEAD: 4bac0139ff31caabeb6e46ea3dcf76eb696b7bcb
-  EXPECTED_TREE: 2e9126e8b9c0c3b0913e9da6dc29231fa0f0a18f
+  EXPECTED_HEAD: 0e83687f5d0388bdc860bca6035faed5339705e1
+  EXPECTED_TREE: 6736f5b3c91409b9f66caf3b52a67371eb61d5d2
   EXPECTED_MAIN: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
   TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
   HELPER_BRANCH: ops/issue714-pr698-merge-diagnostic-20260817
@@ -103,6 +103,7 @@ jobs:
             src/lib/public-route-smoke.test.ts \
             src/lib/create-interface/unified-entry-routes.test.ts \
             src/lib/release-browser-gate-contract.test.ts \
+            src/offers-density-viewport-contract.test.ts \
             2>&1 | tee logs/focused-source-tests.log
 
       - name: Run complete repository tests
