@@ -1,0 +1,182 @@
+name: Temporary PR 743 auth-resolution exact-head QA
+
+on:
+  pull_request:
+    branches:
+      - "integration/pr665-current-main-20260817"
+    paths:
+      - ".github/workflows/pr743-auth-resolution-exact-head-qa-20260817.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pr743-auth-resolution-exact-head
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-auth-resolution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      EXPECTED_BASE_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
+      EXPECTED_HEAD_SHA: 350370ed1470e08a154e11094e304097fc940523
+      EXPECTED_HEAD_TREE: 327be245d37f0c702068983d536d7bce124a418c
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: auth-resolution-public-fixture
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:3231
+      SITE_URL: https://www.moraltrade.org
+      SUPABASE_SERVICE_ROLE_KEY: auth-resolution-service-fixture
+      VERCEL: "1"
+      VERCEL_ENV: preview
+
+    steps:
+      - name: Check out the immutable runtime candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Prove exact source identity and ten-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_HEAD_TREE"
+          test "$(git merge-base "$EXPECTED_BASE_SHA" HEAD)" = "$EXPECTED_BASE_SHA"
+          expected="$(printf '%s\n' \
+            playwright.auth-resolution.config.ts \
+            scripts/auth-resolution-supabase.mjs \
+            src/auth-resolution-wiring.test.ts \
+            src/components/core-trade/trade-draft-workbench.tsx \
+            src/components/marketplace/marketplace-components.tsx \
+            src/lib/app-data.ts \
+            src/lib/auth-resolution.test.ts \
+            src/lib/auth-resolution.ts \
+            src/lib/supabase/server.ts \
+            tests/auth-resolution-delayed.auth.ts \
+            | sort)"
+          actual="$(git diff --name-only "$EXPECTED_BASE_SHA"...HEAD | sort)"
+          test "$actual" = "$expected"
+          {
+            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
+            printf 'head=%s\n' "$EXPECTED_HEAD_SHA"
+            printf 'tree=%s\n' "$EXPECTED_HEAD_TREE"
+            printf 'files=%s\n' "$(printf '%s\n' "$actual" | wc -l | tr -d ' ')"
+          } | tee auth-resolution-exact-head.txt
+          git diff --check "$EXPECTED_BASE_SHA"...HEAD
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run syntax and focused auth-resolution contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/auth-resolution-supabase.mjs
+          node --import tsx --test \
+            src/lib/auth-resolution.test.ts \
+            src/auth-resolution-wiring.test.ts \
+            | tee auth-resolution-focused.log
+          npx eslint \
+            playwright.auth-resolution.config.ts \
+            scripts/auth-resolution-supabase.mjs \
+            src/auth-resolution-wiring.test.ts \
+            src/components/core-trade/trade-draft-workbench.tsx \
+            src/components/marketplace/marketplace-components.tsx \
+            src/lib/app-data.ts \
+            src/lib/auth-resolution.test.ts \
+            src/lib/auth-resolution.ts \
+            src/lib/supabase/server.ts \
+            tests/auth-resolution-delayed.auth.ts \
+            | tee auth-resolution-focused-lint.log
+
+      - name: Run complete repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test | tee auth-resolution-repository-tests.log
+          npm run lint -- --quiet | tee auth-resolution-repository-lint.log
+          npx tsc --noEmit --pretty false | tee auth-resolution-typescript.log
+          npm run verify:crawlability | tee auth-resolution-crawlability.log
+          git diff --check
+          git diff --check "$EXPECTED_BASE_SHA"...HEAD
+
+      - name: Build the exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build | tee auth-resolution-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run deterministic desktop and exact-mobile Auth browser QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p auth-resolution-evidence
+          PLAYWRIGHT_JSON_OUTPUT_NAME=auth-resolution-evidence/playwright.json \
+            npx playwright test \
+              --config=playwright.auth-resolution.config.ts \
+              --reporter=line,json \
+              | tee auth-resolution-playwright.log
+
+      - name: Scan retained evidence for credential material
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee auth-resolution-privacy-scan.log
+          from pathlib import Path
+          import re
+
+          roots = [
+              Path("auth-resolution-evidence"),
+              Path("test-results/auth-resolution"),
+          ]
+          files = [
+              path
+              for root in roots
+              if root.exists()
+              for path in root.rglob("*")
+              if path.is_file() and path.stat().st_size <= 20_000_000
+          ]
+          patterns = {
+              "jwt": re.compile(rb"eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}"),
+              "bearer": re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{20,}", re.I),
+              "refresh_token": re.compile(rb"refresh[_-]?token[\"'=:\s]+[A-Za-z0-9._~+/-]{16,}", re.I),
+              "supabase_cookie": re.compile(rb"sb-[a-z0-9-]+-auth-token", re.I),
+              "service_role": re.compile(rb"sb_(?:secret|service_role)_[A-Za-z0-9_-]{12,}", re.I),
+              "private_key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+          }
+          findings = []
+          for path in files:
+              data = path.read_bytes()
+              for label, pattern in patterns.items():
+                  if pattern.search(data):
+                      findings.append((label, str(path)))
+          print({"filesScanned": len(files), "findings": findings})
+          if findings:
+              raise SystemExit("Credential-like material found in retained Auth QA evidence.")
+          PY
+
+      - name: Upload immutable auth-resolution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr743-auth-resolution-${{ env.EXPECTED_HEAD_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            auth-resolution-*.log
+            auth-resolution-exact-head.txt
+            auth-resolution-evidence
+            test-results/auth-resolution
