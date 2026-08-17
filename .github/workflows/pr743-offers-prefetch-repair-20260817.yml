@@ -1,4 +1,4 @@
-name: Temporary PR 743 repaired exact-head QA
+name: One-use PR 743 latest-main integration
 
 on:
   push:
@@ -8,46 +8,50 @@ on:
       - .github/workflows/pr743-offers-prefetch-repair-20260817.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: pr743-repaired-exact-head-qa
+  group: pr743-latest-main-integration
   cancel-in-progress: false
 
-jobs:
-  exact-head-qa:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
-    env:
-      EXPECTED_BASE_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
-      EXPECTED_HEAD_SHA: 4e56686e37a872ebe4dbf9752ef2201c81beb168
-      EXPECTED_HEAD_TREE: 32ec69548241e8c147d2a374edc81245588184a0
-      SITE_URL: https://www.moraltrade.org
+env:
+  TARGET_BRANCH: integration/pr665-current-main-20260817
+  EXPECTED_OLD_HEAD: 4e56686e37a872ebe4dbf9752ef2201c81beb168
+  EXPECTED_MAIN_SHA: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
 
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - name: Check out immutable repaired candidate
+      - name: Check out exact candidate branch
         uses: actions/checkout@v4
         with:
-          ref: 4e56686e37a872ebe4dbf9752ef2201c81beb168
+          ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
 
-      - name: Use Node 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Prove exact identity and eleven-file scope
+      - name: Guard source identities and disjoint main movement
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
-          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_HEAD_TREE"
-          test "$(git merge-base "$EXPECTED_BASE_SHA" HEAD)" = "$EXPECTED_BASE_SHA"
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE_SHA"
-          test "$(git ls-remote origin refs/heads/integration/pr665-current-main-20260817 | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
-          expected="$(printf '%s\n' \
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_OLD_HEAD"
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_OLD_HEAD"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git merge-base "$EXPECTED_MAIN_SHA" HEAD)" = "c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3"
+
+          expected_main_delta="$(printf '%s\n' \
+            .github/workflows/feed-learning-readiness.yml \
+            docs/feed/learned-ranking-readiness.md \
+            src/feed-learned-ranking-release-gate.test.ts \
+            src/lib/feed/learned-ranking-readiness.test.ts \
+            src/lib/feed/learned-ranking-readiness.ts \
+            | sort)"
+          actual_main_delta="$(git diff --name-only c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3..."$EXPECTED_MAIN_SHA" | sort)"
+          test "$actual_main_delta" = "$expected_main_delta"
+
+          expected_candidate_delta="$(printf '%s\n' \
             playwright.auth-resolution.config.ts \
             scripts/auth-resolution-supabase.mjs \
             src/app/profile/page.tsx \
@@ -60,30 +64,24 @@ jobs:
             src/lib/supabase/server.ts \
             tests/auth-resolution-delayed.auth.ts \
             | sort)"
-          actual="$(git diff --name-only "$EXPECTED_BASE_SHA"...HEAD | sort)"
-          test "$actual" = "$expected"
-          {
-            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
-            printf 'head=%s\n' "$EXPECTED_HEAD_SHA"
-            printf 'tree=%s\n' "$EXPECTED_HEAD_TREE"
-            printf 'files=%s\n' "$(printf '%s\n' "$actual" | wc -l | tr -d ' ')"
-          } | tee pr743-repaired-exact-head.txt
-          git diff --check "$EXPECTED_BASE_SHA"...HEAD
+          actual_candidate_delta="$(git diff --name-only c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3...HEAD | sort)"
+          test "$actual_candidate_delta" = "$expected_candidate_delta"
+          test -z "$(comm -12 <(printf '%s\n' "$expected_main_delta") <(printf '%s\n' "$expected_candidate_delta"))"
 
-      - name: Install exact dependencies
-        run: npm ci
-
-      - name: Run syntax and focused contracts
+      - name: Merge exact latest main conventionally
         shell: bash
         run: |
           set -euo pipefail
-          node --check scripts/auth-resolution-supabase.mjs
-          node --import tsx --test \
-            src/lib/auth-resolution.test.ts \
-            src/auth-resolution-wiring.test.ts \
-            src/proxy.test.ts \
-            | tee pr743-focused-tests.log
-          npx eslint \
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-ff "$EXPECTED_MAIN_SHA" \
+            -m "Merge latest main into PR #743 auth-resolution candidate"
+
+          test "$(git rev-parse HEAD^1)" = "$EXPECTED_OLD_HEAD"
+          test "$(git rev-parse HEAD^2)" = "$EXPECTED_MAIN_SHA"
+          test "$(git merge-base "$EXPECTED_MAIN_SHA" HEAD)" = "$EXPECTED_MAIN_SHA"
+
+          expected_candidate_delta="$(printf '%s\n' \
             playwright.auth-resolution.config.ts \
             scripts/auth-resolution-supabase.mjs \
             src/app/profile/page.tsx \
@@ -95,94 +93,42 @@ jobs:
             src/lib/auth-resolution.ts \
             src/lib/supabase/server.ts \
             tests/auth-resolution-delayed.auth.ts \
-            | tee pr743-focused-lint.log
+            | sort)"
+          actual_candidate_delta="$(git diff --name-only "$EXPECTED_MAIN_SHA"...HEAD | sort)"
+          test "$actual_candidate_delta" = "$expected_candidate_delta"
 
-      - name: Run complete repository gates without a live Supabase target
+          while IFS= read -r path; do
+            test "$(git rev-parse "HEAD:$path")" = "$(git rev-parse "$EXPECTED_OLD_HEAD:$path")"
+          done <<< "$expected_candidate_delta"
+
+          while IFS= read -r path; do
+            test "$(git rev-parse "HEAD:$path")" = "$(git rev-parse "$EXPECTED_MAIN_SHA:$path")"
+          done <<'PATHS'
+          .github/workflows/feed-learning-readiness.yml
+          docs/feed/learned-ranking-readiness.md
+          src/feed-learned-ranking-release-gate.test.ts
+          src/lib/feed/learned-ranking-readiness.test.ts
+          src/lib/feed/learned-ranking-readiness.ts
+          PATHS
+
+          git diff --check "$EXPECTED_MAIN_SHA"...HEAD
+          {
+            printf 'old_head=%s\n' "$EXPECTED_OLD_HEAD"
+            printf 'main=%s\n' "$EXPECTED_MAIN_SHA"
+            printf 'integrated_head=%s\n' "$(git rev-parse HEAD)"
+            printf 'integrated_tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } | tee pr743-latest-main-integration.txt
+
+      - name: Push only if branch remains unchanged
         shell: bash
         run: |
           set -euo pipefail
-          test -z "${NEXT_PUBLIC_SUPABASE_URL:-}"
-          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
-          npm test | tee pr743-repository-tests.log
-          npm run lint -- --quiet | tee pr743-repository-lint.log
-          npx tsc --noEmit --pretty false | tee pr743-typescript.log
-          npm run verify:crawlability | tee pr743-crawlability.log
-          git diff --check
-          git diff --check "$EXPECTED_BASE_SHA"...HEAD
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_OLD_HEAD"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
 
-      - name: Build exact candidate against local synthetic Auth target
-        shell: bash
-        env:
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: auth-resolution-public-fixture
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:3231
-          SUPABASE_SERVICE_ROLE_KEY: auth-resolution-service-fixture
-          VERCEL: "1"
-          VERCEL_ENV: preview
-        run: |
-          set -euo pipefail
-          npm run build | tee pr743-build.log
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run deterministic Auth desktop and exact-mobile browser QA
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p pr743-repaired-evidence
-          PLAYWRIGHT_JSON_OUTPUT_NAME=pr743-repaired-evidence/playwright.json \
-            npx playwright test \
-              --config=playwright.auth-resolution.config.ts \
-              --reporter=line,json \
-              | tee pr743-playwright.log
-
-      - name: Scan retained evidence for credential material
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' | tee pr743-privacy-scan.log
-          from pathlib import Path
-          import re
-
-          roots = [Path("pr743-repaired-evidence"), Path("test-results/auth-resolution")]
-          files = [
-              path
-              for root in roots
-              if root.exists()
-              for path in root.rglob("*")
-              if path.is_file() and path.stat().st_size <= 25_000_000
-          ]
-          patterns = {
-              "jwt": re.compile(rb"eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}"),
-              "bearer": re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{20,}", re.I),
-              "refresh_token": re.compile(rb"refresh[_-]?token[\"'=:\s]+[A-Za-z0-9._~+/-]{16,}", re.I),
-              "supabase_cookie": re.compile(rb"sb-[a-z0-9-]+-auth-token", re.I),
-              "service_role": re.compile(rb"sb_(?:secret|service_role)_[A-Za-z0-9_-]{12,}", re.I),
-              "private_key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-              "database_url": re.compile(rb"postgres(?:ql)?://[^\s\"']+", re.I),
-          }
-          findings = []
-          for path in files:
-              data = path.read_bytes()
-              for label, pattern in patterns.items():
-                  if pattern.search(data):
-                      findings.append((label, str(path)))
-          print({"filesScanned": len(files), "findings": findings})
-          if findings:
-              raise SystemExit("Credential-like material found in retained repaired-head evidence.")
-          PY
-
-      - name: Upload immutable repaired-head evidence
-        if: always()
+      - name: Upload integration identity
         uses: actions/upload-artifact@v4
         with:
-          name: pr743-repaired-exact-head-${{ env.EXPECTED_HEAD_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
-          if-no-files-found: warn
+          name: pr743-latest-main-integration-${{ github.run_id }}
+          path: pr743-latest-main-integration.txt
           retention-days: 30
-          path: |
-            pr743-*.log
-            pr743-repaired-exact-head.txt
-            pr743-repaired-evidence
-            test-results/auth-resolution
