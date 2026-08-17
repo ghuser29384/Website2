@@ -32,6 +32,43 @@ for old, new in required_replacements:
 text = text.replace('PR 740', 'PR 749')
 text = text.replace('pr740-', 'pr749-')
 
+push_header = "on:\n  push:\n"
+pull_request_header = """on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr749-dac-current-main-integration-uat-20260817.yml"
+      - "ops/pr689-uat702/**"
+  push:
+"""
+if push_header not in text:
+    raise SystemExit('Generated controller is missing the expected push trigger header.')
+text = text.replace(push_header, pull_request_header, 1)
+
+old_checkout = """      - name: Check out the one-use controller only
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+"""
+new_checkout = """      - name: Check out the one-use controller only
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+"""
+if old_checkout not in text:
+    raise SystemExit('Generated controller is missing the expected controller checkout block.')
+text = text.replace(old_checkout, new_checkout, 1)
+
+old_branch_assertion = 'test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"'
+new_branch_assertion = 'test "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" = "$CONTROLLER_BRANCH"'
+if old_branch_assertion not in text:
+    raise SystemExit('Generated controller is missing the expected branch assertion.')
+text = text.replace(old_branch_assertion, new_branch_assertion, 1)
+
 required = [
     'CANDIDATE_BASE_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3',
     'SOURCE_PR689_HEAD_SHA: 1456027e1ebaf9e99ea2d03f5e223de4ef510e23',
@@ -44,6 +81,8 @@ required = [
     'CONDITIONAL_PAYMENTS_MODE: disabled',
     'MPGF_REAL_MONEY_ENABLED: "false"',
     'EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"',
+    'github.event.pull_request.head.sha || github.sha',
+    '${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}',
 ]
 for token in required:
     if token not in text:
