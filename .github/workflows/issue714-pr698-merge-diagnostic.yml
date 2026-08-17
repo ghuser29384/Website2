@@ -1,4 +1,4 @@
-name: Issue 714 PR 698 private handoff repair
+name: Issue 714 PR 698 private log and cookie hardening
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: write
 
 jobs:
-  repair:
+  harden:
     runs-on: ubuntu-24.04
     steps:
-      - name: Check out exact synchronized PR branch
+      - name: Check out exact PR candidate
         uses: actions/checkout@v4
         with:
           ref: agent/issue-675-activation-routing-canonical-walkthrough
@@ -24,11 +24,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Guard exact synchronized inputs
+      - name: Guard exact inputs
         shell: bash
         run: |
           set -euo pipefail
-          EXPECTED_HEAD='f36539cfff205ac2507b4109469700b6ad3e4ace'
+          EXPECTED_HEAD='b490707ca1eecc46f2f747f2cc32864fbd1a2831'
           EXPECTED_MAIN='c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3'
           TARGET_BRANCH='agent/issue-675-activation-routing-canonical-walkthrough'
           git fetch --no-tags origin main "$TARGET_BRANCH"
@@ -37,7 +37,7 @@ jobs:
           test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
           test "$(git rev-list --count HEAD..origin/main)" = '0'
 
-      - name: Implement private Walkthrough handoff and privacy regressions
+      - name: Scope the handoff cookie and sanitize Complete Profile logs
         shell: bash
         run: |
           set -euo pipefail
@@ -52,367 +52,99 @@ jobs:
                   raise SystemExit(f"{path}: expected one exact match, found {count}")
               file.write_text(source.replace(old, new, 1))
 
-          profile_path = "src/lib/walkthrough-profile.ts"
           replace_once(
-              profile_path,
-              '''function readSearchParam(searchParams: SearchParams | undefined, key: string) {
-            const value = searchParams?.[key];
-            return Array.isArray(value) ? clean(value[0]) : clean(value);
-          }
-          ''',
-              '''export const WALKTHROUGH_PRIVATE_QUERY_KEYS = [
-            "source",
-            "cause_area",
-            "walkthrough_cause",
-            "offer_type",
-            "match_name",
-            "match_get",
-            "match_give",
-            "participant_kind",
-            "primary_goal",
-            "first_action",
-          ] as const;
-
-          export function hasWalkthroughPrivateQuery(searchParams: SearchParams | undefined) {
-            if (!searchParams) return false;
-
-            return WALKTHROUGH_PRIVATE_QUERY_KEYS.some((key) => {
-              const value = searchParams[key];
-              return Array.isArray(value)
-                ? value.some((item) => clean(item).length > 0)
-                : clean(value).length > 0;
-            });
-          }
-          ''',
+              "src/lib/walkthrough-profile.ts",
+              'export const WALKTHROUGH_PROFILE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;\n',
+              'export const WALKTHROUGH_PROFILE_MAX_AGE_SECONDS = 60 * 60 * 4;\n',
           )
           replace_once(
-              profile_path,
-              '''export function getWalkthroughProfileDraft({
-            cookieValue,
-            searchParams,
-          }: {
-            cookieValue?: string | null;
-            searchParams?: SearchParams;
-          }) {
-            const source = readSearchParam(searchParams, "source");
-            const hasQueryDraft =
-              source === "walkthrough" ||
-              Boolean(readSearchParam(searchParams, "offer_type")) ||
-              Boolean(readSearchParam(searchParams, "match_name"));
+              "src/app/walkthrough/actions.ts",
+              '''    path: "/",
+              sameSite: "lax",
+          ''',
+              '''    path: "/complete-profile",
+              sameSite: "lax",
+          ''',
+          )
 
-            if (hasQueryDraft) {
-              const queryDraft = createWalkthroughProfileDraft({
-                originalCause: readSearchParam(searchParams, "walkthrough_cause"),
-                causeArea: readSearchParam(searchParams, "cause_area"),
-                offerType: readSearchParam(searchParams, "offer_type"),
-                matchName: readSearchParam(searchParams, "match_name"),
-                matchGet: readSearchParam(searchParams, "match_get"),
-                matchGive: readSearchParam(searchParams, "match_give"),
-              });
+          actions = "src/app/complete-profile/actions.ts"
+          replace_once(
+              actions,
+              '''function read(formData: FormData, key: string) {
+            const value = formData.get(key);
+            return typeof value === "string" ? value : "";
+          }
 
-              if (queryDraft) return queryDraft;
+          ''',
+              '''function read(formData: FormData, key: string) {
+            const value = formData.get(key);
+            return typeof value === "string" ? value : "";
+          }
+
+          function getSafeErrorCode(error: unknown) {
+            if (!error || typeof error !== "object" || !("code" in error)) {
+              return "unknown";
             }
 
-            return parseWalkthroughProfileDraft(cookieValue);
+            const code = (error as { code?: unknown }).code;
+            return typeof code === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(code)
+              ? code
+              : "unknown";
           }
-          ''',
-              '''export function getWalkthroughProfileDraft({
-            cookieValue,
-          }: {
-            cookieValue?: string | null;
-            searchParams?: SearchParams;
-          }) {
-            return parseWalkthroughProfileDraft(cookieValue);
-          }
+
           ''',
           )
+          replacements = {
+              'console.error("Failed to encrypt complete-profile preferences", error);':
+                  'console.error("Failed to encrypt complete-profile preferences", { code: getSafeErrorCode(error) });',
+              'console.error("Failed to update complete profile identity", profileError);':
+                  'console.error("Failed to update complete profile identity", { code: getSafeErrorCode(profileError) });',
+              'console.error("Failed to save complete profile onboarding", onboardingError);':
+                  'console.error("Failed to save complete profile onboarding", { code: getSafeErrorCode(onboardingError) });',
+              'console.error("Failed to save complete profile matching preferences", wishProfileError);':
+                  'console.error("Failed to save complete profile matching preferences", { code: getSafeErrorCode(wishProfileError) });',
+              'console.error("Failed to attach ranked priorities to profile synthesis", synthesisError);':
+                  'console.error("Failed to attach ranked priorities to profile synthesis", { code: getSafeErrorCode(synthesisError) });',
+          }
+          for old, new in replacements.items():
+              replace_once(actions, old, new)
           replace_once(
-              profile_path,
-              '''export function buildWalkthroughOnboardingPath(draft: WalkthroughProfileDraft) {
-            const query = new URLSearchParams({
-              source: "walkthrough",
-              cause_area: draft.causeArea,
-              walkthrough_cause: draft.originalCause,
-              offer_type: draft.offerType,
-              match_name: draft.matchName,
-              match_get: draft.matchGet,
-              match_give: draft.matchGive,
-            });
-
-            return `/onboarding?${query.toString()}`;
-          }
-
-          export function buildWalkthroughCompleteProfilePath(draft: WalkthroughProfileDraft) {
-            const query = new URLSearchParams({
-              source: "walkthrough",
-              cause_area: draft.causeArea,
-              walkthrough_cause: draft.originalCause,
-              offer_type: draft.offerType,
-              match_name: draft.matchName,
-              match_get: draft.matchGet,
-              match_give: draft.matchGive,
-            });
-
-            return `/complete-profile?${query.toString()}`;
-          }
-          ''',
-              '''export function buildWalkthroughOnboardingPath(draft: WalkthroughProfileDraft) {
-            void draft;
-            return "/onboarding";
-          }
-
-          export function buildWalkthroughCompleteProfilePath(draft: WalkthroughProfileDraft) {
-            void draft;
-            return "/complete-profile";
-          }
-          ''',
-          )
-
-          actions_path = "src/app/walkthrough/actions.ts"
-          replace_once(
-              actions_path,
-              '''    console.error("Failed to persist walkthrough activation", {
+              actions,
+              '''    console.error("Failed to persist completed profile activation", {
                 message: transitionError?.message ?? "Unexpected activation stage",
                 profileId: viewer.authUser.id,
                 transitionedStage,
               });
           ''',
-              '''    console.error("Failed to persist walkthrough activation", {
+              '''    console.error("Failed to persist completed profile activation", {
                 reason: transitionError ? "transition_error" : "unexpected_stage",
               });
           ''',
           )
-
-          page_path = "src/app/complete-profile/page.tsx"
           replace_once(
-              page_path,
-              '''  getCompleteProfileDraft,
-            type WalkthroughProfileDraft,
-            WALKTHROUGH_PROFILE_COOKIE_NAME,
-          ''',
-              '''  getCompleteProfileDraft,
-            hasWalkthroughPrivateQuery,
-            WALKTHROUGH_PROFILE_COOKIE_NAME,
-          ''',
-          )
-          replace_once(
-              page_path,
-              '''function buildCompleteProfilePath(draft: WalkthroughProfileDraft) {
-            if (draft.source === "direct") return "/complete-profile";
-
-            const query = new URLSearchParams({
-              source: "walkthrough",
-              cause_area: draft.causeArea,
-              walkthrough_cause: draft.originalCause,
-              offer_type: draft.offerType,
-              match_name: draft.matchName,
-              match_get: draft.matchGet,
-              match_give: draft.matchGive,
-            });
-
-            return `/complete-profile?${query.toString()}`;
+              actions,
+              '''  if (profileSource === "walkthrough") {
+            const cookieStore = await cookies();
+            cookieStore.delete(WALKTHROUGH_PROFILE_COOKIE_NAME);
           }
-
           ''',
-              '''''',
-          )
-          replace_once(
-              page_path,
-              '''export default async function CompleteProfilePage({ searchParams }: CompleteProfilePageProps) {
-            const resolvedSearchParams = await searchParams;
+              '''  if (profileSource === "walkthrough") {
             const cookieStore = await cookies();
-          ''',
-              '''export default async function CompleteProfilePage({ searchParams }: CompleteProfilePageProps) {
-            const resolvedSearchParams = await searchParams;
-
-            if (hasWalkthroughPrivateQuery(resolvedSearchParams)) {
-              const safeParams = new URLSearchParams();
-              if (readSearchParam(resolvedSearchParams.username_required) === "1") {
-                safeParams.set("username_required", "1");
-              }
-              if (readSearchParam(resolvedSearchParams.sources) === "x") {
-                safeParams.set("sources", "x");
-              }
-              if (readSearchParam(resolvedSearchParams.panel) === "connections") {
-                safeParams.set("panel", "connections");
-              }
-              if (readSearchParam(resolvedSearchParams.next) === "/feed") {
-                safeParams.set("next", "/feed");
-              }
-              const cleanQuery = safeParams.toString();
-              redirect(`/complete-profile${cleanQuery ? `?${cleanQuery}` : ""}`);
-            }
-
-            const cookieStore = await cookies();
-          ''',
-          )
-          replace_once(
-              page_path,
-              '''  const profileDraft = getCompleteProfileDraft({
-              allowDirect: activationState.kind === "available",
-              cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
-              searchParams: resolvedSearchParams,
+            cookieStore.delete(WALKTHROUGH_PROFILE_COOKIE_NAME);
+            cookieStore.set(WALKTHROUGH_PROFILE_COOKIE_NAME, "", {
+              expires: new Date(0),
+              httpOnly: true,
+              path: "/complete-profile",
+              sameSite: "lax",
+              secure: process.env.NODE_ENV === "production",
             });
-          ''',
-              '''  const profileDraft = getCompleteProfileDraft({
-              allowDirect: activationState.kind === "available",
-              cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
-            });
-          ''',
-          )
-          replace_once(
-              page_path,
-              '''  const baseReturnTo = buildCompleteProfilePath(profileDraft);
-          ''',
-              '''  const baseReturnTo = "/complete-profile";
+          }
           ''',
           )
 
-          browser_path = "tests/complete-profile-review.spec.ts"
-          browser = Path(browser_path).read_text()
-          old_prefix = '''import { expect, test } from "@playwright/test";
-
-          const completeProfilePath =
-            "/complete-profile?source=walkthrough&cause_area=Animal%20welfare&walkthrough_cause=Factory%20farming&offer_type=Money&match_name=Mina%20Park&match_get=Fund%20a%20verified%20animal-welfare%20review&match_give=Replace%20eight%20car%20trips%20with%20transit";
-
-          test("a local Walkthrough draft cannot unlock Complete Profile without persisted activation", async ({ page }) => {
-            await page.goto(completeProfilePath);
-
-            await expect(page).toHaveURL(/\\/walkthrough$/);
-            await expect(page.getByLabel("Profile setup: priorities")).toHaveCount(0);
-          });
-          '''
-          new_prefix = '''import { expect, test } from "@playwright/test";
-
-          const privateQueryKeys = [
-            "source",
-            "cause_area",
-            "walkthrough_cause",
-            "offer_type",
-            "match_name",
-            "match_get",
-            "match_give",
-          ];
-          const legacyCompleteProfilePath =
-            "/complete-profile?source=walkthrough&cause_area=private-sentinel-a&walkthrough_cause=private-sentinel-b&offer_type=Money&match_name=private-sentinel-c&match_get=private-sentinel-d&match_give=private-sentinel-e";
-
-          test("a legacy query-bearing Walkthrough draft is normalized and cannot unlock Complete Profile", async ({ page }) => {
-            const navigations: string[] = [];
-            page.on("request", (request) => {
-              if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
-                navigations.push(request.url());
-              }
-            });
-
-            await page.goto(legacyCompleteProfilePath);
-
-            await expect(page).toHaveURL(/\\/walkthrough$/);
-            await expect(page.getByLabel("Profile setup: priorities")).toHaveCount(0);
-            expect(navigations[0]).toContain("/complete-profile?");
-            expect(navigations.length).toBeGreaterThanOrEqual(2);
-
-            for (const navigation of navigations.slice(1)) {
-              for (const key of privateQueryKeys) {
-                expect(navigation).not.toContain(`${key}=`);
-              }
-              expect(navigation).not.toContain("private-sentinel");
-            }
-
-            const referrer = await page.evaluate(() => document.referrer);
-            for (const key of privateQueryKeys) {
-              expect(referrer).not.toContain(`${key}=`);
-            }
-            expect(referrer).not.toContain("private-sentinel");
-
-            const hrefs = await page.locator("a[href]").evaluateAll((links) =>
-              links.map((link) => (link as HTMLAnchorElement).href),
-            );
-            for (const href of hrefs) {
-              for (const key of privateQueryKeys) {
-                expect(href).not.toContain(`${key}=`);
-              }
-              expect(href).not.toContain("private-sentinel");
-            }
-          });
-          '''
-          if browser.count(old_prefix) != 1:
-              raise SystemExit(f"{browser_path}: could not replace exact browser privacy prefix")
-          Path(browser_path).write_text(browser.replace(old_prefix, new_prefix, 1))
-
-          Path("src/walkthrough-private-handoff.test.ts").write_text('''import assert from "node:assert/strict";
-          import { readFileSync } from "node:fs";
-          import test from "node:test";
-
-          import {
-            buildWalkthroughCompleteProfilePath,
-            buildWalkthroughOnboardingPath,
-            createWalkthroughProfileDraft,
-            encodeWalkthroughProfileDraft,
-            getCompleteProfileDraft,
-            getWalkthroughProfileDraft,
-            hasWalkthroughPrivateQuery,
-            WALKTHROUGH_PRIVATE_QUERY_KEYS,
-          } from "@/lib/walkthrough-profile";
-
-          const privateDraft = createWalkthroughProfileDraft({
-            originalCause: "private-sentinel-cause",
-            causeArea: "Animal welfare",
-            offerType: "Money",
-            matchName: "private-sentinel-name",
-            matchGet: "private-sentinel-request",
-            matchGive: "private-sentinel-offer",
-            participantKind: "individual",
-            primaryGoal: "find_counterparty",
-            firstAction: "create_broad_preview",
-            createdAt: "2026-08-17T00:00:00.000Z",
-          });
-
-          if (!privateDraft) throw new Error("Synthetic private Walkthrough draft did not validate.");
-
-          test("Walkthrough handoff builders emit clean paths only", () => {
-            assert.equal(buildWalkthroughCompleteProfilePath(privateDraft), "/complete-profile");
-            assert.equal(buildWalkthroughOnboardingPath(privateDraft), "/onboarding");
-
-            for (const key of WALKTHROUGH_PRIVATE_QUERY_KEYS) {
-              assert.doesNotMatch(buildWalkthroughCompleteProfilePath(privateDraft), new RegExp(`${key}=`));
-              assert.doesNotMatch(buildWalkthroughOnboardingPath(privateDraft), new RegExp(`${key}=`));
-            }
-            assert.doesNotMatch(buildWalkthroughCompleteProfilePath(privateDraft), /private-sentinel/);
-            assert.doesNotMatch(buildWalkthroughOnboardingPath(privateDraft), /private-sentinel/);
-          });
-
-          test("query parameters cannot supply or override a private Walkthrough draft", () => {
-            const cookieValue = encodeWalkthroughProfileDraft(privateDraft);
-            const queryDraft = {
-              source: "walkthrough",
-              cause_area: "Existential risk",
-              walkthrough_cause: "private-query-cause",
-              offer_type: "Time",
-              match_name: "private-query-name",
-              match_get: "private-query-request",
-              match_give: "private-query-offer",
-            };
-
-            assert.equal(hasWalkthroughPrivateQuery(queryDraft), true);
-            assert.equal(hasWalkthroughPrivateQuery({ username_required: "1", next: "/feed" }), false);
-
-            const fromWalkthrough = getWalkthroughProfileDraft({
-              cookieValue,
-              searchParams: queryDraft,
-            });
-            const fromCompleteProfile = getCompleteProfileDraft({
-              cookieValue,
-              searchParams: queryDraft,
-            });
-
-            assert.equal(fromWalkthrough?.matchName, privateDraft.matchName);
-            assert.equal(fromCompleteProfile?.matchName, privateDraft.matchName);
-            assert.notEqual(fromWalkthrough?.matchName, queryDraft.match_name);
-            assert.notEqual(fromCompleteProfile?.matchName, queryDraft.match_name);
-          });
-
-          test("activation source wiring keeps identifiers and private draft values out of logs and return paths", () => {
-            const actionSource = readFileSync("src/app/walkthrough/actions.ts", "utf8");
+          test_path = Path("src/walkthrough-private-handoff.test.ts")
+          source = test_path.read_text()
+          old = '''  const actionSource = readFileSync("src/app/walkthrough/actions.ts", "utf8");
             const pageSource = readFileSync("src/app/complete-profile/page.tsx", "utf8");
 
             assert.doesNotMatch(actionSource, /profileId:/);
@@ -425,16 +157,39 @@ jobs:
             assert.doesNotMatch(pageSource, /match_get/);
             assert.doesNotMatch(pageSource, /match_give/);
           });
-          ''')
-          PY
+          '''
+          new = '''  const actionSource = readFileSync("src/app/walkthrough/actions.ts", "utf8");
+            const completeActionSource = readFileSync("src/app/complete-profile/actions.ts", "utf8");
+            const pageSource = readFileSync("src/app/complete-profile/page.tsx", "utf8");
 
+            assert.doesNotMatch(actionSource, /profileId:/);
+            assert.doesNotMatch(actionSource, /message:\\s*transitionError/);
+            assert.match(actionSource, /path:\\s*"\\/complete-profile"/);
+            assert.match(actionSource, /buildWalkthroughCompleteProfilePath\\(draft\\)/);
+            assert.doesNotMatch(completeActionSource, /profileId:/);
+            assert.doesNotMatch(completeActionSource, /message:\\s*transitionError/);
+            assert.doesNotMatch(completeActionSource, /console\\.error\\([^;]+,\\s*(?:error|profileError|onboardingError|wishProfileError|synthesisError)\\);/s);
+            assert.match(completeActionSource, /getSafeErrorCode/);
+            assert.match(completeActionSource, /path:\\s*"\\/complete-profile"/);
+            assert.match(pageSource, /hasWalkthroughPrivateQuery\\(resolvedSearchParams\\)/);
+            assert.match(pageSource, /const baseReturnTo = "\\/complete-profile"/);
+            assert.doesNotMatch(pageSource, /buildCompleteProfilePath/);
+            assert.doesNotMatch(pageSource, /walkthrough_cause/);
+            assert.doesNotMatch(pageSource, /match_get/);
+            assert.doesNotMatch(pageSource, /match_give/);
+          });
+          '''
+          if source.count(old) != 1:
+              raise SystemExit("private-handoff test: expected one exact source-wiring block")
+          test_path.write_text(source.replace(old, new, 1))
+          PY
           git diff --check
           git status --short
 
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Run focused private-handoff and activation tests
+      - name: Run focused privacy and activation gates
         shell: bash
         run: |
           set -euo pipefail
@@ -446,28 +201,26 @@ jobs:
           npx eslint \
             src/lib/walkthrough-profile.ts \
             src/app/walkthrough/actions.ts \
-            src/app/complete-profile/page.tsx \
-            src/walkthrough-private-handoff.test.ts \
-            tests/complete-profile-review.spec.ts
+            src/app/complete-profile/actions.ts \
+            src/walkthrough-private-handoff.test.ts
           npx tsc --noEmit --pretty false
 
-      - name: Commit and push the reviewed repair
+      - name: Commit and push the bounded hardening
         shell: bash
         run: |
           set -euo pipefail
           TARGET_BRANCH='agent/issue-675-activation-routing-canonical-walkthrough'
-          EXPECTED_PARENT='f36539cfff205ac2507b4109469700b6ad3e4ace'
+          EXPECTED_PARENT='b490707ca1eecc46f2f747f2cc32864fbd1a2831'
           test "$(git rev-parse HEAD)" = "$EXPECTED_PARENT"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
             src/lib/walkthrough-profile.ts \
             src/app/walkthrough/actions.ts \
-            src/app/complete-profile/page.tsx \
-            src/walkthrough-private-handoff.test.ts \
-            tests/complete-profile-review.spec.ts
+            src/app/complete-profile/actions.ts \
+            src/walkthrough-private-handoff.test.ts
           git diff --cached --check
-          git commit -m 'Keep Walkthrough drafts out of URLs and logs'
+          git commit -m 'Scope activation drafts and sanitize setup logs'
           NEW_HEAD="$(git rev-parse HEAD)"
           NEW_TREE="$(git rev-parse HEAD^{tree})"
           test -z "$(git status --porcelain)"
@@ -478,13 +231,13 @@ jobs:
               "$(git rev-parse origin/main)" \
               "$(git rev-list --count origin/main..HEAD)" \
               "$(git rev-list --count HEAD..origin/main)"
-            printf 'privacy_repair_pushed=true\n'
-          } | tee /tmp/issue714-private-handoff-report.txt
+            printf 'privacy_log_hardening_pushed=true\n'
+          } | tee /tmp/issue714-private-log-report.txt
 
-      - name: Upload privacy-repair evidence
+      - name: Upload hardening evidence
         uses: actions/upload-artifact@v4
         with:
-          name: issue714-private-handoff-repair
-          path: /tmp/issue714-private-handoff-report.txt
+          name: issue714-private-log-hardening
+          path: /tmp/issue714-private-log-report.txt
           if-no-files-found: error
           retention-days: 14
