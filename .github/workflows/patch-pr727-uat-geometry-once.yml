@@ -1,0 +1,75 @@
+name: Instrument PR 727 production UAT geometry once
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+    paths:
+      - .github/workflows/patch-pr727-uat-geometry-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: instrument-pr727-production-uat-geometry
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard one-shot parent and instrument only the UAT harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/pr727-production-create-uat-final-20260817'
+          test "$(git rev-parse HEAD^)" = '40580b02431b94388cded4f6b4d6b956a7c343c4'
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/patch-pr727-uat-geometry-once.yml'
+          git diff --check HEAD^ HEAD
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/create-production-uat.mjs')
+          source = path.read_text(encoding='utf-8')
+          marker = '  if (state.heading.top < state.header.bottom + 16)'
+          if source.count(marker) != 1:
+              raise SystemExit('Expected one geometry assertion boundary.')
+          evidence = '''  writeJson(`geometry-${cause.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, {
+            cause: cause.name,
+            detailed,
+            state,
+          });
+
+          '''
+          evidence = '\n'.join(line[10:] if line.startswith('          ') else line for line in evidence.splitlines())
+          updated = source.replace(marker, evidence + marker, 1)
+          if updated.count('writeJson(`geometry-${cause.name.toLowerCase()') != 1:
+              raise SystemExit('Geometry evidence hook missing or duplicated.')
+          path.write_text(updated, encoding='utf-8')
+          PY
+
+          node --check .github/scripts/create-production-uat.mjs
+          grep -Fq 'writeJson(`geometry-${cause.name.toLowerCase()' .github/scripts/create-production-uat.mjs
+          git diff --check
+          test "$(git diff --name-only)" = '.github/scripts/create-production-uat.mjs'
+
+      - name: Commit and push only the instrumented UAT harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/scripts/create-production-uat.mjs
+          test "$(git diff --cached --name-only)" = '.github/scripts/create-production-uat.mjs'
+          git diff --cached --check
+          git commit -m 'Record production Create UAT geometry before assertions'
+          git push origin HEAD:ops/pr727-production-create-uat-final-20260817
