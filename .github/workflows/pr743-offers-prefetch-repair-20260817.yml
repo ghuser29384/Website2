@@ -1,0 +1,177 @@
+name: One-use PR 743 Offers prefetch repair
+
+on:
+  push:
+    branches:
+      - ops/pr743-protected-preview-20260817
+    paths:
+      - .github/workflows/pr743-offers-prefetch-repair-20260817.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr743-offers-prefetch-repair
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: integration/pr665-current-main-20260817
+  EXPECTED_MAIN_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
+  EXPECTED_HEAD_SHA: 350370ed1470e08a154e11094e304097fc940523
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out the exact candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Guard immutable source and current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
+          test "$(git merge-base "$EXPECTED_MAIN_SHA" HEAD)" = "$EXPECTED_MAIN_SHA"
+
+      - name: Apply the causal no-prefetch repair and executable source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              source = target.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one replacement target, found {count}")
+              target.write_text(source.replace(old, new, 1), encoding="utf-8")
+
+          marketplace_path = Path("src/components/marketplace/marketplace-components.tsx")
+          marketplace = marketplace_path.read_text(encoding="utf-8")
+          side_start = marketplace.index("function MarketplaceSideNav({")
+          side_end = marketplace.index("\nexport function MarketplaceRouteShell({", side_start)
+          side = marketplace[side_start:side_end]
+
+          old_brand = '<Link className="mt-v75-side-brand" href="/offers">'
+          new_brand = '<Link className="mt-v75-side-brand" href="/offers" prefetch={false}>'
+          if side.count(old_brand) != 1:
+              raise SystemExit(f"MarketplaceSideNav: expected one queryless Offers brand link, found {side.count(old_brand)}")
+          side = side.replace(old_brand, new_brand, 1)
+
+          old_item = '''            href={item.href}
+            key={item.key}'''
+          new_item = '''            href={item.href}
+            prefetch={item.href === "/offers" ? false : undefined}
+            key={item.key}'''
+          if side.count(old_item) != 1:
+              raise SystemExit(f"MarketplaceSideNav: expected one item-link target, found {side.count(old_item)}")
+          side = side.replace(old_item, new_item, 1)
+          marketplace_path.write_text(
+              marketplace[:side_start] + side + marketplace[side_end:],
+              encoding="utf-8",
+          )
+
+          replace_once(
+              "src/app/profile/page.tsx",
+              '<Link className="button button-secondary button-mini" href="/offers">',
+              '<Link className="button button-secondary button-mini" href="/offers" prefetch={false}>',
+          )
+
+          wiring_path = Path("src/auth-resolution-wiring.test.ts")
+          wiring = wiring_path.read_text(encoding="utf-8")
+          read_anchor = '''const marketplaceComponentsSource = readFileSync(
+  "src/components/marketplace/marketplace-components.tsx",
+  "utf8",
+);
+'''
+          read_replacement = read_anchor + '''const profilePageSource = readFileSync("src/app/profile/page.tsx", "utf8");
+'''
+          if wiring.count(read_anchor) != 1:
+              raise SystemExit("auth-resolution wiring: profile source insertion anchor changed")
+          wiring = wiring.replace(read_anchor, read_replacement, 1)
+
+          test_anchor = '''test("Dashboard bottom navigation cannot prefetch the Offers compatibility redirect", () => {
+'''
+          insertion = '''test("authenticated profile navigation cannot prefetch the queryless Offers compatibility redirect", () => {
+  const sideNavStart = marketplaceComponentsSource.indexOf("function MarketplaceSideNav({");
+  const sideNavEnd = marketplaceComponentsSource.indexOf(
+    "\\nexport function MarketplaceRouteShell({",
+    sideNavStart,
+  );
+  assert.ok(sideNavStart >= 0 && sideNavEnd > sideNavStart);
+  const sideNavSource = marketplaceComponentsSource.slice(sideNavStart, sideNavEnd);
+
+  assert.match(
+    sideNavSource,
+    /<Link className="mt-v75-side-brand" href="\\/offers" prefetch=\\{false\\}>/u,
+  );
+  assert.match(
+    sideNavSource,
+    /href=\\{item\\.href\\}\\s+prefetch=\\{item\\.href === "\\/offers" \\? false : undefined\\}\\s+key=\\{item\\.key\\}/u,
+  );
+  assert.match(
+    profilePageSource,
+    /<Link className="button button-secondary button-mini" href="\\/offers" prefetch=\\{false\\}>/u,
+  );
+});
+
+'''
+          if wiring.count(test_anchor) != 1:
+              raise SystemExit("auth-resolution wiring: bottom-navigation test anchor changed")
+          wiring = wiring.replace(test_anchor, insertion + test_anchor, 1)
+          wiring_path.write_text(wiring, encoding="utf-8")
+          PY
+
+      - name: Run focused contracts, lint, and whitespace checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test \
+            src/auth-resolution-wiring.test.ts \
+            src/proxy.test.ts
+          npx eslint \
+            src/app/profile/page.tsx \
+            src/auth-resolution-wiring.test.ts \
+            src/components/marketplace/marketplace-components.tsx
+          git diff --check
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' \
+            src/app/profile/page.tsx \
+            src/auth-resolution-wiring.test.ts \
+            src/components/marketplace/marketplace-components.tsx \
+            | sort)"
+
+      - name: Commit and push without rewriting history
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/app/profile/page.tsx \
+            src/auth-resolution-wiring.test.ts \
+            src/components/marketplace/marketplace-components.tsx
+          git commit -m "Prevent queryless Offers prefetches on authenticated surfaces"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'new_head=%s\nnew_tree=%s\n' \
+            "$(git rev-parse HEAD)" \
+            "$(git rev-parse HEAD^{tree})" \
+            | tee pr743-offers-prefetch-repair.txt
+
+      - name: Upload repair identity
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr743-offers-prefetch-repair-${{ github.run_id }}
+          path: pr743-offers-prefetch-repair.txt
+          retention-days: 30
