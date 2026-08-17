@@ -1,0 +1,165 @@
+name: PR 727 production Create geometry diagnostic
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+    paths:
+      - .github/workflows/pr727-production-create-uat-geometry-diagnostic.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr727-production-create-geometry-diagnostic
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr727-production-create-uat-final-20260817
+  CONTROLLER_PARENT_SHA: 54a37870796aef9f5108af0ab77aaeb342da213a
+  RELEASE_SHA: fd5588fc4ae7f2fed44d6b0d1ca68f24ce1b86ab
+  DEPLOYMENT_ID: dpl_5uNGHmgrNDjraHVRukXyNPeGRgEk
+  SUPABASE_REF: jnpoxvalyjtdghnperyu
+  OUTPUT_DIR: pr727-production-create-geometry-diagnostic
+
+jobs:
+  diagnose:
+    environment:
+      name: MoralTrade QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact ancestry and instrumentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$CONTROLLER_PARENT_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" HEAD
+          git diff --check "$RELEASE_SHA" HEAD
+          node --check .github/scripts/create-production-uat.mjs
+          grep -Fq 'writeJson(`geometry-${cause.name.toLowerCase()' .github/scripts/create-production-uat.mjs
+          grep -Fq 'autocomplete escapes its containing request panel.' .github/scripts/create-production-uat.mjs
+          mkdir -p "$OUTPUT_DIR"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Validate production database and prepare public Auth configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          parsed = urlparse(os.environ['PROD_SUPABASE_DB_URL'])
+          expected = os.environ['SUPABASE_REF']
+          query = parse_qs(parsed.query)
+          if not (parsed.scheme in {'postgres','postgresql'} and parsed.password and parsed.path == '/postgres' and (expected in (parsed.username or '') or expected in (parsed.hostname or '') or query.get('project',[''])[0] == expected)):
+              raise SystemExit('Refusing non-production database URL.')
+          PY
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -Atv ON_ERROR_STOP=1 \
+            -c "select to_regclass('auth.users') is not null and to_regclass('auth.identities') is not null and to_regclass('public.profiles') is not null;" | grep -Fxq t
+          supabase_url="$(sed -nE 's/^const DEFAULT_PUBLIC_SUPABASE_URL = "([^"]+)";$/\1/p' src/lib/supabase/config.ts)"
+          publishable_key="$(awk '/^const DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY =/ {getline; gsub(/^[[:space:]]*"|";[[:space:]]*$/, ""); print; exit}' src/lib/supabase/config.ts)"
+          test -n "$supabase_url"; test -n "$publishable_key"
+          test "$(SUPABASE_URL="$supabase_url" python3 -c 'import os; from urllib.parse import urlparse; print(urlparse(os.environ["SUPABASE_URL"]).hostname.split(".")[0])')" = "$SUPABASE_REF"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"; echo "::add-mask::$publishable_key"
+          umask 077
+          printf 'export NEXT_PUBLIC_SUPABASE_URL=%q\nexport NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%q\nexport PROD_SUPABASE_DB_URL=%q\n' \
+            "$supabase_url" "$publishable_key" "$PROD_SUPABASE_DB_URL" > "$RUNNER_TEMP/create-uat-secrets.env"
+
+      - name: Create one run-owned Auth fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          qa_user_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+          qa_email="create-geometry-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(openssl rand -hex 6)@qa.moraltrade.invalid"
+          qa_password="$(openssl rand -base64 36 | tr -d '\n')"
+          qa_run_id="${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          echo "::add-mask::$qa_password"; umask 077
+          printf '%s' "$qa_user_id" > "$RUNNER_TEMP/qa-user-id"; printf '%s' "$qa_email" > "$RUNNER_TEMP/qa-email"; printf '%s' "$qa_password" > "$RUNNER_TEMP/qa-password"; printf '%s' "$qa_run_id" > "$RUNNER_TEMP/qa-run-id"
+          export CREATE_UAT_USER_ID="$qa_user_id" CREATE_UAT_EMAIL="$qa_email" CREATE_UAT_PASSWORD="$qa_password" CREATE_UAT_RUN_ID="$qa_run_id"
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -X -Atv ON_ERROR_STOP=1 \
+            --file .github/scripts/create-production-uat-fixture.sql > "$OUTPUT_DIR/fixture-sql.log"
+          grep -Fq '"fixturePassed": true' "$OUTPUT_DIR/fixture-sql.log"
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Run instrumented canonical production flow
+        id: browser
+        shell: bash
+        run: |
+          set -uo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          export CREATE_UAT_EXPECTED_MAIN_SHA="$RELEASE_SHA" CREATE_UAT_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID" CREATE_UAT_ORIGINS='https://www.moraltrade.org,https://moraltrade.org' CREATE_UAT_OUTPUT_DIR="$OUTPUT_DIR"
+          export CREATE_UAT_USER_ID="$(cat "$RUNNER_TEMP/qa-user-id")" CREATE_UAT_EMAIL="$(cat "$RUNNER_TEMP/qa-email")" CREATE_UAT_PASSWORD="$(cat "$RUNNER_TEMP/qa-password")"
+          echo "::add-mask::$CREATE_UAT_PASSWORD"
+          set +e
+          node .github/scripts/create-production-uat.mjs > "$OUTPUT_DIR/browser.log" 2> "$OUTPUT_DIR/browser.stderr.log"
+          code=$?
+          set -e
+          printf '%s\n' "$code" > "$OUTPUT_DIR/browser-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Remove and prove absence of exact fixture
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          code=0; deleted=false; user_id=''; email=''; run_id=''
+          [[ -s "$RUNNER_TEMP/qa-user-id" ]] && user_id="$(cat "$RUNNER_TEMP/qa-user-id")"; [[ -s "$RUNNER_TEMP/qa-email" ]] && email="$(cat "$RUNNER_TEMP/qa-email")"; [[ -s "$RUNNER_TEMP/qa-run-id" ]] && run_id="$(cat "$RUNNER_TEMP/qa-run-id")"
+          if [[ -s "$RUNNER_TEMP/create-uat-secrets.env" && -n "$user_id" ]]; then
+            source "$RUNNER_TEMP/create-uat-secrets.env"; export CREATE_UAT_USER_ID="$user_id" CREATE_UAT_EMAIL="$email" CREATE_UAT_RUN_ID="$run_id"
+            PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -X -Atv ON_ERROR_STOP=1 \
+              --file .github/scripts/create-production-uat-cleanup.sql > "$OUTPUT_DIR/cleanup-sql.log" 2> "$OUTPUT_DIR/cleanup-sql.stderr.log" || code=80
+            if [[ "$code" -eq 0 ]] && grep -Fq '"cleanupPassed": true' "$OUTPUT_DIR/cleanup-sql.log"; then deleted=true; elif [[ "$code" -eq 0 ]]; then code=81; fi
+          else code=82; fi
+          jq -n --arg userId "$user_id" --argjson deleted "$deleted" --argjson exitCode "$code" \
+            '{userId:$userId,deleted:$deleted,authUserAbsent:$deleted,identityAbsent:$deleted,profileAbsent:$deleted,sessionAbsent:$deleted,refreshTokenAbsent:$deleted,exitCode:$exitCode}' > "$OUTPUT_DIR/cleanup.json"
+          rm -f "$RUNNER_TEMP"/qa-* "$RUNNER_TEMP/create-uat-secrets.env"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"; exit 0
+
+      - name: Require diagnostic geometry and successful cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.fixture.outputs.exit_code || '255' }}" = 0
+          test "${{ steps.cleanup.outputs.exit_code || '255' }}" = 0
+          test -s "$OUTPUT_DIR/geometry-factory-farming.json"
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr727-production-create-geometry-diagnostic-${{ github.run_id }}
+          path: ${{ env.OUTPUT_DIR }}
+          if-no-files-found: error
+          retention-days: 14
