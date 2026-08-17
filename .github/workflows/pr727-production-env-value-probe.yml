@@ -1,0 +1,116 @@
+name: PR 727 production environment value probe
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-env-value-probe-20260817
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr727-production-env-value-probe
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr727-production-env-value-probe-20260817
+  CONTROLLER_BASE_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
+  EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  OUTPUT_DIR: pr727-production-env-value-probe
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard one-file controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$CONTROLLER_BASE_SHA" "$GITHUB_SHA"
+          git diff --check "$CONTROLLER_BASE_SHA" "$GITHUB_SHA"
+          test "$(git diff --name-only "$CONTROLLER_BASE_SHA" "$GITHUB_SHA")" = '.github/workflows/pr727-production-env-value-probe.yml'
+          mkdir -p "$OUTPUT_DIR"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Safely resolve production values
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull --yes --environment=production --token="$VERCEL_TOKEN" > "$RUNNER_TEMP/vercel-pull.log" 2>&1
+          test -s .vercel/.env.production.local
+
+          env_file="$PWD/.vercel/.env.production.local"
+          service_length="$(ENV_FILE="$env_file" bash -c '
+            set +u
+            source "$ENV_FILE"
+            printf "%s" "${#SUPABASE_SERVICE_ROLE_KEY}"
+          ')"
+          service_nonempty=false
+          [[ "$service_length" -gt 0 ]] && service_nonempty=true
+
+          public_summary="$(node --import tsx --input-type=module <<'NODE'
+          import { getSupabaseEnv } from './src/lib/supabase/config.ts';
+          const value = getSupabaseEnv('www.moraltrade.org');
+          const ref = new URL(value.url).hostname.split('.')[0];
+          process.stdout.write(JSON.stringify({
+            ref,
+            urlLength: value.url.length,
+            publishableKeyLength: value.publishableKey.length,
+            publishableKeyPrefix: value.publishableKey.slice(0, 15),
+          }));
+          NODE
+          )"
+          public_ref="$(jq -r '.ref' <<< "$public_summary")"
+          test "$public_ref" = "$EXPECTED_SUPABASE_REF"
+
+          jq -n \
+            --argjson serviceRoleLength "$service_length" \
+            --argjson serviceRoleNonempty "$service_nonempty" \
+            --argjson public "$public_summary" \
+            --arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {
+                schemaVersion:1,
+                productionServiceRoleLength:$serviceRoleLength,
+                productionServiceRoleNonempty:$serviceRoleNonempty,
+                publicConfig:$public,
+                observedAt:$observedAt,
+                secretValuePersisted:false
+              }' > "$OUTPUT_DIR/result.json"
+          rm -rf .vercel "$RUNNER_TEMP/vercel-pull.log"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr727-production-env-value-probe-${{ github.run_id }}
+          path: pr727-production-env-value-probe/result.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Delete one-use probe branch
+        shell: bash
+        run: git push origin --delete "$CONTROLLER_BRANCH"
