@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 90
     env:
       EXPECTED_BASE_SHA: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
-      EXPECTED_HEAD_SHA: cc837362a3c6cffb56baa8d8f826946838a7fbd5
+      EXPECTED_HEAD_SHA: 4f2c5d1c251b5a23c16c0a2f7d4760daf29977c0
       EXPECTED_HEAD_TREE: 9d27fd0506c465e738e2d2ed71cda9ab3072f39f
       SITE_URL: https://www.moraltrade.org
 
