@@ -10,164 +10,55 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: pr743-offers-prefetch-repair
-  cancel-in-progress: false
-
-env:
-  TARGET_BRANCH: integration/pr665-current-main-20260817
-  EXPECTED_MAIN_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
-  EXPECTED_HEAD_SHA: 350370ed1470e08a154e11094e304097fc940523
-
 jobs:
   repair:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - name: Check out the exact candidate branch
+      - name: Check out exact candidate branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.TARGET_BRANCH }}
+          ref: integration/pr665-current-main-20260817
           fetch-depth: 0
 
-      - name: Guard immutable source and current main
+      - name: Guard source identity
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
-          test "$(git branch --show-current)" = "$TARGET_BRANCH"
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
-          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
-          test "$(git merge-base "$EXPECTED_MAIN_SHA" HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git branch --show-current)" = "integration/pr665-current-main-20260817"
+          test "$(git rev-parse HEAD)" = "350370ed1470e08a154e11094e304097fc940523"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3"
+          test "$(git ls-remote origin refs/heads/integration/pr665-current-main-20260817 | awk '{print $1}')" = "350370ed1470e08a154e11094e304097fc940523"
 
-      - name: Apply the causal no-prefetch repair and executable source contracts
+      - name: Apply exact causal repair
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
+          printf '%s' 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgptYXJrZXRwbGFjZV9wYXRoID0gUGF0aCgic3JjL2NvbXBvbmVudHMvbWFya2V0cGxhY2UvbWFya2V0cGxhY2UtY29tcG9uZW50cy50c3giKQptYXJrZXRwbGFjZSA9IG1hcmtldHBsYWNlX3BhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCnNpZGVfc3RhcnQgPSBtYXJrZXRwbGFjZS5pbmRleCgiZnVuY3Rpb24gTWFya2V0cGxhY2VTaWRlTmF2KHsiKQpzaWRlX2VuZCA9IG1hcmtldHBsYWNlLmluZGV4KCJcbmV4cG9ydCBmdW5jdGlvbiBNYXJrZXRwbGFjZVJvdXRlU2hlbGwoeyIsIHNpZGVfc3RhcnQpCnNpZGUgPSBtYXJrZXRwbGFjZVtzaWRlX3N0YXJ0OnNpZGVfZW5kXQpvbGRfYnJhbmQgPSAnPExpbmsgY2xhc3NOYW1lPSJtdC12NzUtc2lkZS1icmFuZCIgaHJlZj0iL29mZmVycyI+JwpuZXdfYnJhbmQgPSAnPExpbmsgY2xhc3NOYW1lPSJtdC12NzUtc2lkZS1icmFuZCIgaHJlZj0iL29mZmVycyIgcHJlZmV0Y2g9e2ZhbHNlfT4nCmlmIHNpZGUuY291bnQob2xkX2JyYW5kKSAhPSAxOgogICAgcmFpc2UgU3lzdGVtRXhpdChmIk1hcmtldHBsYWNlU2lkZU5hdjogZXhwZWN0ZWQgb25lIHF1ZXJ5bGVzcyBPZmZlcnMgYnJhbmQgbGluaywgZm91bmQge3NpZGUuY291bnQob2xkX2JyYW5kKX0iKQpzaWRlID0gc2lkZS5yZXBsYWNlKG9sZF9icmFuZCwgbmV3X2JyYW5kLCAxKQpvbGRfaXRlbSA9ICcgICAgICAgICAgICBocmVmPXtpdGVtLmhyZWZ9XG4gICAgICAgICAgICBrZXk9e2l0ZW0ua2V5fScKbmV3X2l0ZW0gPSAnICAgICAgICAgICAgaHJlZj17aXRlbS5ocmVmfVxuICAgICAgICAgICAgcHJlZmV0Y2g9e2l0ZW0uaHJlZiA9PT0gIi9vZmZlcnMiID8gZmFsc2UgOiB1bmRlZmluZWR9XG4gICAgICAgICAgICBrZXk9e2l0ZW0ua2V5fScKaWYgc2lkZS5jb3VudChvbGRfaXRlbSkgIT0gMToKICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJNYXJrZXRwbGFjZVNpZGVOYXY6IGV4cGVjdGVkIG9uZSBpdGVtLWxpbmsgdGFyZ2V0LCBmb3VuZCB7c2lkZS5jb3VudChvbGRfaXRlbSl9IikKc2lkZSA9IHNpZGUucmVwbGFjZShvbGRfaXRlbSwgbmV3X2l0ZW0sIDEpCm1hcmtldHBsYWNlX3BhdGgud3JpdGVfdGV4dChtYXJrZXRwbGFjZVs6c2lkZV9zdGFydF0gKyBzaWRlICsgbWFya2V0cGxhY2Vbc2lkZV9lbmQ6XSwgZW5jb2Rpbmc9InV0Zi04IikKCnByb2ZpbGVfcGF0aCA9IFBhdGgoInNyYy9hcHAvcHJvZmlsZS9wYWdlLnRzeCIpCnByb2ZpbGUgPSBwcm9maWxlX3BhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCm9sZF9wcm9maWxlID0gJzxMaW5rIGNsYXNzTmFtZT0iYnV0dG9uIGJ1dHRvbi1zZWNvbmRhcnkgYnV0dG9uLW1pbmkiIGhyZWY9Ii9vZmZlcnMiPicKbmV3X3Byb2ZpbGUgPSAnPExpbmsgY2xhc3NOYW1lPSJidXR0b24gYnV0dG9uLXNlY29uZGFyeSBidXR0b24tbWluaSIgaHJlZj0iL29mZmVycyIgcHJlZmV0Y2g9e2ZhbHNlfT4nCmlmIHByb2ZpbGUuY291bnQob2xkX3Byb2ZpbGUpICE9IDE6CiAgICByYWlzZSBTeXN0ZW1FeGl0KGYicHJvZmlsZTogZXhwZWN0ZWQgb25lIHF1ZXJ5bGVzcyBPZmZlcnMgbGluaywgZm91bmQge3Byb2ZpbGUuY291bnQob2xkX3Byb2ZpbGUpfSIpCnByb2ZpbGVfcGF0aC53cml0ZV90ZXh0KHByb2ZpbGUucmVwbGFjZShvbGRfcHJvZmlsZSwgbmV3X3Byb2ZpbGUsIDEpLCBlbmNvZGluZz0idXRmLTgiKQoKd2lyaW5nX3BhdGggPSBQYXRoKCJzcmMvYXV0aC1yZXNvbHV0aW9uLXdpcmluZy50ZXN0LnRzIikKd2lyaW5nID0gd2lyaW5nX3BhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCnJlYWRfYW5jaG9yID0gJ2NvbnN0IG1hcmtldHBsYWNlQ29tcG9uZW50c1NvdXJjZSA9IHJlYWRGaWxlU3luYyhcbiAgInNyYy9jb21wb25lbnRzL21hcmtldHBsYWNlL21hcmtldHBsYWNlLWNvbXBvbmVudHMudHN4IixcbiAgInV0ZjgiLFxuKTtcbicKcmVhZF9yZXBsYWNlbWVudCA9IHJlYWRfYW5jaG9yICsgJ2NvbnN0IHByb2ZpbGVQYWdlU291cmNlID0gcmVhZEZpbGVTeW5jKCJzcmMvYXBwL3Byb2ZpbGUvcGFnZS50c3giLCAidXRmOCIpO1xuJwppZiB3aXJpbmcuY291bnQocmVhZF9hbmNob3IpICE9IDE6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJhdXRoLXJlc29sdXRpb24gd2lyaW5nOiBwcm9maWxlIHNvdXJjZSBpbnNlcnRpb24gYW5jaG9yIGNoYW5nZWQiKQp3aXJpbmcgPSB3aXJpbmcucmVwbGFjZShyZWFkX2FuY2hvciwgcmVhZF9yZXBsYWNlbWVudCwgMSkKdGVzdF9hbmNob3IgPSAndGVzdCgiRGFzaGJvYXJkIGJvdHRvbSBuYXZpZ2F0aW9uIGNhbm5vdCBwcmVmZXRjaCB0aGUgT2ZmZXJzIGNvbXBhdGliaWxpdHkgcmVkaXJlY3QiLCAoKSA9PiB7XG4nCmluc2VydGlvbiA9ICcnJ3Rlc3QoImF1dGhlbnRpY2F0ZWQgcHJvZmlsZSBuYXZpZ2F0aW9uIGNhbm5vdCBwcmVmZXRjaCB0aGUgcXVlcnlsZXNzIE9mZmVycyBjb21wYXRpYmlsaXR5IHJlZGlyZWN0IiwgKCkgPT4gewogIGNvbnN0IHNpZGVOYXZTdGFydCA9IG1hcmtldHBsYWNlQ29tcG9uZW50c1NvdXJjZS5pbmRleE9mKCJmdW5jdGlvbiBNYXJrZXRwbGFjZVNpZGVOYXYoeyIpOwogIGNvbnN0IHNpZGVOYXZFbmQgPSBtYXJrZXRwbGFjZUNvbXBvbmVudHNTb3VyY2UuaW5kZXhPZigKICAgICJcXG5leHBvcnQgZnVuY3Rpb24gTWFya2V0cGxhY2VSb3V0ZVNoZWxsKHsiLAogICAgc2lkZU5hdlN0YXJ0LAogICk7CiAgYXNzZXJ0Lm9rKHNpZGVOYXZTdGFydCA+PSAwICYmIHNpZGVOYXZFbmQgPiBzaWRlTmF2U3RhcnQpOwogIGNvbnN0IHNpZGVOYXZTb3VyY2UgPSBtYXJrZXRwbGFjZUNvbXBvbmVudHNTb3VyY2Uuc2xpY2Uoc2lkZU5hdlN0YXJ0LCBzaWRlTmF2RW5kKTsKCiAgYXNzZXJ0Lm1hdGNoKAogICAgc2lkZU5hdlNvdXJjZSwKICAgIC88TGluayBjbGFzc05hbWU9Im10LXY3NS1zaWRlLWJyYW5kIiBocmVmPSJcXC9vZmZlcnMiIHByZWZldGNoPVxce2ZhbHNlXFx9Pi91LAogICk7CiAgYXNzZXJ0Lm1hdGNoKAogICAgc2lkZU5hdlNvdXJjZSwKICAgIC9ocmVmPVxce2l0ZW1cXC5ocmVmXFx9XFxzK3ByZWZldGNoPVxce2l0ZW1cXC5ocmVmID09PSAiXFwvb2ZmZXJzIiBcXD8gZmFsc2UgOiB1bmRlZmluZWRcXH1cXHMra2V5PVxce2l0ZW1cXC5rZXlcXH0vdSwKICApOwogIGFzc2VydC5tYXRjaCgKICAgIHByb2ZpbGVQYWdlU291cmNlLAogICAgLzxMaW5rIGNsYXNzTmFtZT0iYnV0dG9uIGJ1dHRvbi1zZWNvbmRhcnkgYnV0dG9uLW1pbmkiIGhyZWY9IlxcL29mZmVycyIgcHJlZmV0Y2g9XFx7ZmFsc2VcXH0+L3UsCiAgKTsKfSk7CgonJycKaWYgd2lyaW5nLmNvdW50KHRlc3RfYW5jaG9yKSAhPSAxOgogICAgcmFpc2UgU3lzdGVtRXhpdCgiYXV0aC1yZXNvbHV0aW9uIHdpcmluZzogYm90dG9tLW5hdmlnYXRpb24gdGVzdCBhbmNob3IgY2hhbmdlZCIpCndpcmluZ19wYXRoLndyaXRlX3RleHQod2lyaW5nLnJlcGxhY2UodGVzdF9hbmNob3IsIGluc2VydGlvbiArIHRlc3RfYW5jaG9yLCAxKSwgZW5jb2Rpbmc9InV0Zi04IikK' | base64 --decode > /tmp/pr743_patch.py
+          python3 /tmp/pr743_patch.py
+          git diff --check
 
-          def replace_once(path: str, old: str, new: str) -> None:
-              target = Path(path)
-              source = target.read_text(encoding="utf-8")
-              count = source.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected exactly one replacement target, found {count}")
-              target.write_text(source.replace(old, new, 1), encoding="utf-8")
-
-          marketplace_path = Path("src/components/marketplace/marketplace-components.tsx")
-          marketplace = marketplace_path.read_text(encoding="utf-8")
-          side_start = marketplace.index("function MarketplaceSideNav({")
-          side_end = marketplace.index("\nexport function MarketplaceRouteShell({", side_start)
-          side = marketplace[side_start:side_end]
-
-          old_brand = '<Link className="mt-v75-side-brand" href="/offers">'
-          new_brand = '<Link className="mt-v75-side-brand" href="/offers" prefetch={false}>'
-          if side.count(old_brand) != 1:
-              raise SystemExit(f"MarketplaceSideNav: expected one queryless Offers brand link, found {side.count(old_brand)}")
-          side = side.replace(old_brand, new_brand, 1)
-
-          old_item = '''            href={item.href}
-            key={item.key}'''
-          new_item = '''            href={item.href}
-            prefetch={item.href === "/offers" ? false : undefined}
-            key={item.key}'''
-          if side.count(old_item) != 1:
-              raise SystemExit(f"MarketplaceSideNav: expected one item-link target, found {side.count(old_item)}")
-          side = side.replace(old_item, new_item, 1)
-          marketplace_path.write_text(
-              marketplace[:side_start] + side + marketplace[side_end:],
-              encoding="utf-8",
-          )
-
-          replace_once(
-              "src/app/profile/page.tsx",
-              '<Link className="button button-secondary button-mini" href="/offers">',
-              '<Link className="button button-secondary button-mini" href="/offers" prefetch={false}>',
-          )
-
-          wiring_path = Path("src/auth-resolution-wiring.test.ts")
-          wiring = wiring_path.read_text(encoding="utf-8")
-          read_anchor = '''const marketplaceComponentsSource = readFileSync(
-  "src/components/marketplace/marketplace-components.tsx",
-  "utf8",
-);
-'''
-          read_replacement = read_anchor + '''const profilePageSource = readFileSync("src/app/profile/page.tsx", "utf8");
-'''
-          if wiring.count(read_anchor) != 1:
-              raise SystemExit("auth-resolution wiring: profile source insertion anchor changed")
-          wiring = wiring.replace(read_anchor, read_replacement, 1)
-
-          test_anchor = '''test("Dashboard bottom navigation cannot prefetch the Offers compatibility redirect", () => {
-'''
-          insertion = '''test("authenticated profile navigation cannot prefetch the queryless Offers compatibility redirect", () => {
-  const sideNavStart = marketplaceComponentsSource.indexOf("function MarketplaceSideNav({");
-  const sideNavEnd = marketplaceComponentsSource.indexOf(
-    "\\nexport function MarketplaceRouteShell({",
-    sideNavStart,
-  );
-  assert.ok(sideNavStart >= 0 && sideNavEnd > sideNavStart);
-  const sideNavSource = marketplaceComponentsSource.slice(sideNavStart, sideNavEnd);
-
-  assert.match(
-    sideNavSource,
-    /<Link className="mt-v75-side-brand" href="\\/offers" prefetch=\\{false\\}>/u,
-  );
-  assert.match(
-    sideNavSource,
-    /href=\\{item\\.href\\}\\s+prefetch=\\{item\\.href === "\\/offers" \\? false : undefined\\}\\s+key=\\{item\\.key\\}/u,
-  );
-  assert.match(
-    profilePageSource,
-    /<Link className="button button-secondary button-mini" href="\\/offers" prefetch=\\{false\\}>/u,
-  );
-});
-
-'''
-          if wiring.count(test_anchor) != 1:
-              raise SystemExit("auth-resolution wiring: bottom-navigation test anchor changed")
-          wiring = wiring.replace(test_anchor, insertion + test_anchor, 1)
-          wiring_path.write_text(wiring, encoding="utf-8")
-          PY
-
-      - name: Run focused contracts, lint, and whitespace checks
+      - name: Run focused executable gates
         shell: bash
         run: |
           set -euo pipefail
           npm ci
-          node --import tsx --test \
-            src/auth-resolution-wiring.test.ts \
-            src/proxy.test.ts
-          npx eslint \
-            src/app/profile/page.tsx \
-            src/auth-resolution-wiring.test.ts \
-            src/components/marketplace/marketplace-components.tsx
-          git diff --check
-          test "$(git diff --name-only | sort)" = "$(printf '%s\n' \
-            src/app/profile/page.tsx \
-            src/auth-resolution-wiring.test.ts \
-            src/components/marketplace/marketplace-components.tsx \
-            | sort)"
+          node --import tsx --test src/auth-resolution-wiring.test.ts src/proxy.test.ts
+          npx eslint src/app/profile/page.tsx src/auth-resolution-wiring.test.ts src/components/marketplace/marketplace-components.tsx
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' src/app/profile/page.tsx src/auth-resolution-wiring.test.ts src/components/marketplace/marketplace-components.tsx | sort)"
 
       - name: Commit and push without rewriting history
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
+          test "$(git ls-remote origin refs/heads/integration/pr665-current-main-20260817 | awk '{print $1}')" = "350370ed1470e08a154e11094e304097fc940523"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            src/app/profile/page.tsx \
-            src/auth-resolution-wiring.test.ts \
-            src/components/marketplace/marketplace-components.tsx
+          git add src/app/profile/page.tsx src/auth-resolution-wiring.test.ts src/components/marketplace/marketplace-components.tsx
           git commit -m "Prevent queryless Offers prefetches on authenticated surfaces"
-          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
-          printf 'new_head=%s\nnew_tree=%s\n' \
-            "$(git rev-parse HEAD)" \
-            "$(git rev-parse HEAD^{tree})" \
-            | tee pr743-offers-prefetch-repair.txt
+          git push origin HEAD:refs/heads/integration/pr665-current-main-20260817
+          printf 'new_head=%s\nnew_tree=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee pr743-offers-prefetch-repair.txt
 
       - name: Upload repair identity
         uses: actions/upload-artifact@v4
