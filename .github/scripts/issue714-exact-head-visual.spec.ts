@@ -167,9 +167,12 @@ for (const viewport of [
       expect(cacheControl).toMatch(/private/i);
       expect(cacheControl).toMatch(/no-store/i);
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/i);
-      await expect(page.getByRole("link", { name: /retry/i })).toBeVisible();
-      await expect(page.getByRole("link", { name: /discover/i })).toBeVisible();
-      await expect(page.locator("a")).toHaveCount(2);
+      await expect(page.getByRole("link", { name: "Retry account check" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Browse Discover" })).toBeVisible();
+      const linkPaths = await page.locator("a[href]").evaluateAll((elements) =>
+        elements.map((element) => new URL((element as HTMLAnchorElement).href).pathname),
+      );
+      expect(new Set(linkPaths)).toEqual(new Set(["/", "/discover"]));
       await expectNoOverflow(page);
       await screenshot(page, testInfo, `${viewport.name}-account-state-unavailable`);
       await assertCleanRuntime();
