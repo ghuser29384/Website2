@@ -1,0 +1,323 @@
+name: One-use PR 743 protected Preview UAT
+
+on:
+  push:
+    branches:
+      - ops/pr743-protected-preview-20260817
+    paths:
+      - .github/workflows/pr743-protected-preview-uat-20260817.yml
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: pr743-protected-preview-uat
+  cancel-in-progress: false
+
+jobs:
+  preview-uat:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      EXPECTED_MAIN_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
+      EXPECTED_CANDIDATE_SHA: 350370ed1470e08a154e11094e304097fc940523
+      EXPECTED_CANDIDATE_TREE: 327be245d37f0c702068983d536d7bce124a418c
+      RELEASE_PREVIEW_BRANCH: release/vercel-preview
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      EVIDENCE_DIR: pr743-preview-evidence
+
+    steps:
+      - name: Check out the immutable runtime candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Guard repository, main, Preview ref, and candidate identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_CANDIDATE_TREE"
+          test "$(git merge-base "$EXPECTED_MAIN_SHA" HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/$RELEASE_PREVIEW_BRANCH | awk '{print $1}')" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(gh api repos/$GITHUB_REPOSITORY/pulls/743 --jq .head.sha)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(gh api repos/$GITHUB_REPOSITORY/pulls/743 --jq .draft)" = "true"
+          test "$(gh api repos/$GITHUB_REPOSITORY/pulls/743 --jq .state)" = "open"
+          mkdir -p "$EVIDENCE_DIR"
+          {
+            printf 'main=%s\n' "$EXPECTED_MAIN_SHA"
+            printf 'candidate=%s\n' "$EXPECTED_CANDIDATE_SHA"
+            printf 'tree=%s\n' "$EXPECTED_CANDIDATE_TREE"
+            printf 'release_preview_ref=%s\n' "$EXPECTED_CANDIDATE_SHA"
+          } | tee "$EVIDENCE_DIR/source-identity.txt"
+          git diff --check "$EXPECTED_MAIN_SHA"...HEAD
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install a digest-verified official cloudflared binary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_json="$RUNNER_TEMP/cloudflared-release.json"
+          curl -fsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/cloudflare/cloudflared/releases/latest \
+            -o "$release_json"
+          asset_json="$RUNNER_TEMP/cloudflared-asset.json"
+          jq -e '.assets[] | select(.name == "cloudflared-linux-amd64")' \
+            "$release_json" > "$asset_json"
+          asset_url="$(jq -r .browser_download_url "$asset_json")"
+          asset_digest="$(jq -r '.digest // empty' "$asset_json")"
+          release_tag="$(jq -r .tag_name "$release_json")"
+          [[ "$asset_url" == https://github.com/cloudflare/cloudflared/releases/download/*/cloudflared-linux-amd64 ]]
+          [[ "$asset_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          curl -fL --retry 3 --retry-all-errors "$asset_url" -o "$RUNNER_TEMP/cloudflared"
+          actual_digest="sha256:$(sha256sum "$RUNNER_TEMP/cloudflared" | awk '{print $1}')"
+          test "$actual_digest" = "$asset_digest"
+          chmod +x "$RUNNER_TEMP/cloudflared"
+          "$RUNNER_TEMP/cloudflared" --version | tee "$EVIDENCE_DIR/cloudflared-version.txt"
+          {
+            printf 'release_tag=%s\n' "$release_tag"
+            printf 'asset_digest=%s\n' "$asset_digest"
+          } | tee "$EVIDENCE_DIR/cloudflared-integrity.txt"
+
+      - name: Start the isolated Auth fixture and public tunnel
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          control_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$control_secret"
+          echo "AUTH_RESOLUTION_FIXTURE_CONTROL_SECRET=$control_secret" >> "$GITHUB_ENV"
+
+          "$RUNNER_TEMP/cloudflared" tunnel \
+            --url http://127.0.0.1:3231 \
+            --no-autoupdate \
+            > "$EVIDENCE_DIR/cloudflared.log" 2>&1 &
+          tunnel_pid=$!
+          echo "$tunnel_pid" > "$RUNNER_TEMP/cloudflared.pid"
+
+          tunnel_url=""
+          for attempt in $(seq 1 90); do
+            tunnel_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "$EVIDENCE_DIR/cloudflared.log" | tail -n 1 || true)"
+            if [[ -n "$tunnel_url" ]]; then break; fi
+            if ! kill -0 "$tunnel_pid" 2>/dev/null; then
+              cat "$EVIDENCE_DIR/cloudflared.log" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          [[ "$tunnel_url" =~ ^https://[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.trycloudflare\.com$ ]]
+          echo "AUTH_RESOLUTION_FIXTURE_URL=$tunnel_url" >> "$GITHUB_ENV"
+          echo "fixture_url=$tunnel_url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$tunnel_url" > "$EVIDENCE_DIR/fixture-url.txt"
+
+          AUTH_RESOLUTION_FIXTURE_CONTROL_SECRET="$control_secret" \
+          AUTH_RESOLUTION_PUBLIC_URL="$tunnel_url" \
+          AUTH_RESOLUTION_SUPABASE_PORT=3231 \
+            node scripts/auth-resolution-supabase.mjs \
+            > "$EVIDENCE_DIR/auth-fixture.log" 2>&1 &
+          fixture_pid=$!
+          echo "$fixture_pid" > "$RUNNER_TEMP/auth-fixture.pid"
+
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:3231/ >/dev/null \
+              && curl -fsS "$tunnel_url/" >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$fixture_pid" 2>/dev/null; then
+              cat "$EVIDENCE_DIR/auth-fixture.log" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "The isolated Auth fixture did not become reachable through the verified tunnel." >&2
+          exit 1
+
+      - name: Dispatch and require the permanent guarded Preview release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          active_count="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=20" \
+            | jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+          test "$active_count" = "0"
+          dispatch_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run .github/workflows/vercel-release.yml \
+            --ref main \
+            -f target=preview \
+            -f ref="$RELEASE_PREVIEW_BRANCH" \
+            -f expected_sha="$EXPECTED_CANDIDATE_SHA" \
+            -f synthetic_auth_fixture_url="$AUTH_RESOLUTION_FIXTURE_URL"
+
+          run_id=""
+          for attempt in $(seq 1 60); do
+            runs_json="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=20")"
+            run_id="$(printf '%s' "$runs_json" | jq -r \
+              --arg started "$dispatch_started" \
+              '[.workflow_runs[] | select(.created_at >= $started)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$run_id" ]]; then break; fi
+            sleep 2
+          done
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          echo "release_run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "VERCEL_RELEASE_RUN_ID=$run_id" >> "$GITHUB_ENV"
+          printf 'run_id=%s\ndispatched_at=%s\n' "$run_id" "$dispatch_started" \
+            | tee "$EVIDENCE_DIR/release-run.txt"
+          gh run watch "$run_id" --exit-status --interval 15
+
+      - name: Download and verify immutable Preview release evidence
+        id: deployment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/permanent-release"
+          gh run download "$VERCEL_RELEASE_RUN_ID" \
+            --dir "$EVIDENCE_DIR/permanent-release"
+          deployment_url_file="$(find "$EVIDENCE_DIR/permanent-release" -name deployment-url.txt -type f -print -quit)"
+          deployment_detail_file="$(find "$EVIDENCE_DIR/permanent-release" -name deployment-detail.json -type f -print -quit)"
+          test -f "$deployment_url_file"
+          test -f "$deployment_detail_file"
+          deployment_url="$(tr -d '\r\n' < "$deployment_url_file")"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app$ ]]
+          deployment_id="$(jq -r '.id // .uid // empty' "$deployment_detail_file")"
+          [[ "$deployment_id" =~ ^dpl_[A-Za-z0-9]+$ ]]
+          jq -e \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_CANDIDATE_SHA" '
+              ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+              and ((.aliasError // null) == null)
+            ' "$deployment_detail_file" >/dev/null
+          if jq -e '(.alias // .aliases // []) | any(. == "moraltrade.org" or . == "www.moraltrade.org")' \
+            "$deployment_detail_file" >/dev/null; then
+            echo "Preview unexpectedly acquired a canonical production alias." >&2
+            exit 1
+          fi
+          echo "AUTH_RESOLUTION_BASE_URL=$deployment_url" >> "$GITHUB_ENV"
+          echo "PREVIEW_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          {
+            printf 'deployment_id=%s\n' "$deployment_id"
+            printf 'deployment_url=%s\n' "$deployment_url"
+            printf 'candidate=%s\n' "$EXPECTED_CANDIDATE_SHA"
+            printf 'project=%s\n' "$VERCEL_PROJECT_ID"
+            printf 'target=preview\n'
+          } | tee "$EVIDENCE_DIR/preview-identity.txt"
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run hosted authenticated desktop and exact-mobile acceptance
+        shell: bash
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: pr743-preview-evidence/hosted-playwright.json
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+          npx playwright test \
+            --config=playwright.auth-resolution.config.ts \
+            --reporter=line,json \
+            | tee "$EVIDENCE_DIR/hosted-playwright.log"
+
+      - name: Record fixture behavior after hosted acceptance
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${AUTH_RESOLUTION_FIXTURE_URL:-}" && -n "${AUTH_RESOLUTION_FIXTURE_CONTROL_SECRET:-}" ]]; then
+            curl -fsS \
+              -H "x-auth-resolution-fixture-control: $AUTH_RESOLUTION_FIXTURE_CONTROL_SECRET" \
+              "$AUTH_RESOLUTION_FIXTURE_URL/__fixture/events" \
+              > "$EVIDENCE_DIR/fixture-events.json" || true
+          fi
+
+      - name: Scan retained evidence for credential material
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee "$EVIDENCE_DIR/privacy-scan.log"
+          from pathlib import Path
+          import re
+
+          roots = [Path("pr743-preview-evidence"), Path("test-results/auth-resolution")]
+          files = [
+              path
+              for root in roots
+              if root.exists()
+              for path in root.rglob("*")
+              if path.is_file() and path.stat().st_size <= 25_000_000
+          ]
+          patterns = {
+              "jwt": re.compile(rb"eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}"),
+              "bearer": re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{20,}", re.I),
+              "refresh_token": re.compile(rb"refresh[_-]?token[\"'=:\s]+[A-Za-z0-9._~+/-]{16,}", re.I),
+              "supabase_cookie": re.compile(rb"sb-[a-z0-9-]+-auth-token", re.I),
+              "service_role": re.compile(rb"sb_(?:secret|service_role)_[A-Za-z0-9_-]{12,}", re.I),
+              "private_key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+              "database_url": re.compile(rb"postgres(?:ql)?://[^\s\"']+", re.I),
+              "vercel_token": re.compile(rb"(?:VERCEL_TOKEN|x-vercel-protection-bypass)[\"'=:\s]+[A-Za-z0-9._~+/-]{12,}", re.I),
+          }
+          findings = []
+          for path in files:
+              data = path.read_bytes()
+              for label, pattern in patterns.items():
+                  if pattern.search(data):
+                      findings.append((label, str(path)))
+          print({"filesScanned": len(files), "findings": findings})
+          if findings:
+              raise SystemExit("Credential-like material found in retained Preview evidence.")
+          PY
+
+      - name: Upload immutable protected-Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr743-protected-preview-${{ env.EXPECTED_CANDIDATE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            pr743-preview-evidence
+            test-results/auth-resolution
+
+      - name: Stop the isolated fixture and tunnel
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -f "$RUNNER_TEMP/auth-fixture.pid" ]]; then
+            kill "$(cat "$RUNNER_TEMP/auth-fixture.pid")" 2>/dev/null || true
+          fi
+          if [[ -f "$RUNNER_TEMP/cloudflared.pid" ]]; then
+            kill "$(cat "$RUNNER_TEMP/cloudflared.pid")" 2>/dev/null || true
+          fi
