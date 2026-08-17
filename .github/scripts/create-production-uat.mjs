@@ -297,6 +297,9 @@ async function chooseCauseAndInspect(create, cause, detailed) {
   await expect(focusedAfterTab).toHaveCount(1);
   await focusedAfterTab.press("Shift+Tab");
   await expect(input).toBeFocused();
+  await input.fill("Revie");
+  await input.fill("Review");
+  await expect(create.locator("#actionSuggestions")).toBeVisible();
   await input.press("ArrowDown");
   await expect(activeSuggestion).toHaveCount(1);
 
