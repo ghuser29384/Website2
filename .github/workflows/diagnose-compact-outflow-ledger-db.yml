@@ -1,0 +1,51 @@
+name: Diagnose Compact outflow ledger DB
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/diagnose-compact-outflow-ledger-db.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - name: Preserve psql stderr and verbose diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/compact-authoritative-outflow-ledger-qa.yml')
+          source = path.read_text(encoding='utf-8')
+          old = '''          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/ledger-lifecycle.log
+          begin;
+'''
+          new = '''          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' 2>&1 | tee db-evidence/ledger-lifecycle.log
+          \\set VERBOSITY verbose
+          begin;
+'''
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected one ledger lifecycle command; found {source.count(old)}.')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit diagnostic capture and remove controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          git rm .github/workflows/diagnose-compact-outflow-ledger-db.yml
+          git commit -m "ci: retain verbose Compact outflow SQL failures"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
