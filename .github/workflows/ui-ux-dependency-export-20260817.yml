@@ -1,0 +1,56 @@
+name: UI UX dependency export 2026-08-17
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - design/moral-trade-ui-ux-system-20260817
+    paths:
+      - ".github/workflows/ui-ux-dependency-export-20260817.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-ux-dependency-export-20260817
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium runtime
+        run: npx playwright install chromium
+
+      - name: Package portable dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ui-ux-dependencies
+          tar -C "$GITHUB_WORKSPACE" -czf "/tmp/ui-ux-dependencies/node-modules-${GITHUB_SHA}.tar.gz" node_modules
+          tar -C "$HOME/.cache" -czf "/tmp/ui-ux-dependencies/ms-playwright-${GITHUB_SHA}.tar.gz" ms-playwright
+          node --version | tee /tmp/ui-ux-dependencies/node-version.txt
+          npm --version | tee /tmp/ui-ux-dependencies/npm-version.txt
+          sha256sum /tmp/ui-ux-dependencies/*.tar.gz | tee /tmp/ui-ux-dependencies/archive-sha256.txt
+
+      - name: Upload portable dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: website2-dependencies-${{ github.sha }}
+          path: /tmp/ui-ux-dependencies
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
