@@ -19,6 +19,8 @@ permissions:
 env:
   CANDIDATE_HEAD_SHA: 0d9c997cee8e251818d74fa96ea8321c6489cac8
   CONTROLLER_BRANCH: ops/pr749-dac-current-main-integration-uat-20260817
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+  FORBIDDEN_PROD_REF: jnpoxvalyjtdghnperyu
 
 jobs:
   owner-uat:
@@ -54,6 +56,53 @@ jobs:
           set -euo pipefail
           mkdir -p evidence app/test-results
           python3 -m pip install --user --disable-pip-version-check PyYAML==6.0.2
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Reconcile the reviewed terminal schema on exact isolated QA
+        shell: bash
+        env:
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$QA_SUPABASE_DB_URL"
+          case "$QA_SUPABASE_DB_URL" in
+            *"$EXPECTED_QA_REF"*) ;;
+            *) echo "QA database URL does not identify the exact isolated-QA project." >&2; exit 1 ;;
+          esac
+          case "$QA_SUPABASE_DB_URL" in
+            *"$FORBIDDEN_PROD_REF"*) echo "Production database reference detected." >&2; exit 1 ;;
+            *) ;;
+          esac
+
+          ssl_active="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
+            --command "select coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false');")"
+          test "$ssl_active" = "true"
+
+          cd app
+          echo "a19653e57a20dff8d01e1dd54b4b77304fe0712fe3356820953945e7b9999cd2  supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql" \
+            | sha256sum --check --strict
+          echo "d8dc2a55840425357c8859b87d26fba0415bb1a50c8e739518a88b9686142cbb  supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql" \
+            | sha256sum --check --strict
+
+          for migration in \
+            supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql \
+            supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql
+          do
+            test "$(sed -n '/^[[:space:]]*$/d; p; q' "$migration" | tr '[:upper:]' '[:lower:]')" = "begin;"
+            test "$(awk 'NF { line=$0 } END { print line }' "$migration" | tr '[:upper:]' '[:lower:]')" = "commit;"
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$migration"
+          done
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file ../controller/ops/pr689-uat702/verify-preexisting-dac-schema.sql \
+            > ../evidence/wrapper-terminal-schema-reconciliation-verification.txt
+          sha256sum \
+            supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql \
+            supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql \
+            > ../evidence/wrapper-terminal-schema-reconciliation.sha256
+          printf 'target_ref=%s\nproduction_ref_excluded=true\ntls=true\nreconciliation_migrations_applied=2\nresult=passed\n' \
+            "$EXPECTED_QA_REF" > ../evidence/wrapper-terminal-schema-reconciliation.txt
 
       - name: Execute the transformed trusted controller
         id: controller
