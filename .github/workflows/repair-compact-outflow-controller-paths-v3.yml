@@ -29,8 +29,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "a2fdbb6488f54f6c32f7c3d43d8dfa52a5597391"
-          test "$(git diff --name-only a2fdbb6488f54f6c32f7c3d43d8dfa52a5597391...HEAD)" = ".github/workflows/repair-compact-outflow-controller-paths-v3.yml"
+          test "$(git rev-parse HEAD^)" = "1c302d224f2c5e5720e580fa0d3928ae83f653e1"
+          test "$(git diff --name-only 1c302d224f2c5e5720e580fa0d3928ae83f653e1...HEAD)" = ".github/workflows/repair-compact-outflow-controller-paths-v3.yml"
           python3 - <<'PY'
           from pathlib import Path
 
@@ -49,27 +49,37 @@ jobs:
               ),
           ]
           for old, new in replacements:
-              if old not in source:
-                  raise SystemExit(f'missing expected controller text: {old}')
-              source = source.replace(old, new)
+              if old in source:
+                  source = source.replace(old, new)
+              elif new not in source:
+                  raise SystemExit(f'missing both old and repaired controller text: {old}')
 
-          if 'compact-authoritative_outflow' in source:
-              raise SystemExit('hyphenated test path remains')
-          for required in [
+          forbidden = [
+              'compact-authoritative_outflow',
+              '.github/workflows/repair-compact-outflow-phase-lineage-v3.yml',
+              '.github/workflows/repair-compact-outflow-phase-ordering-v2.yml',
+          ]
+          for value in forbidden:
+              if value in source:
+                  raise SystemExit(f'forbidden stale controller text remains: {value}')
+
+          required = [
               'supabase/tests/compact_authoritative_outflow_ledger_core.sql',
               'supabase/tests/compact_authoritative_outflow_ledger_authorization.sql',
               '.github/workflows/repair-compact-outflow-lineage.yml',
               '.github/workflows/repair-compact-outflow-phase-ordering-v1.yml',
-          ]:
-              if required not in source:
-                  raise SystemExit(f'missing repaired controller text: {required}')
+          ]
+          for value in required:
+              if value not in source:
+                  raise SystemExit(f'missing repaired controller text: {value}')
 
           path.write_text(source, encoding='utf-8')
           PY
           git diff --check
-          test "$(grep -c 'supabase/tests/compact_authoritative_outflow_ledger_' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml)" -ge 6
-          grep -q '.github/workflows/repair-compact-outflow-lineage.yml' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
-          grep -q '.github/workflows/repair-compact-outflow-phase-ordering-v1.yml' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
+          grep -Fq 'supabase/tests/compact_authoritative_outflow_ledger_core.sql' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
+          grep -Fq 'supabase/tests/compact_authoritative_outflow_ledger_authorization.sql' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
+          grep -Fq '.github/workflows/repair-compact-outflow-lineage.yml' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
+          grep -Fq '.github/workflows/repair-compact-outflow-phase-ordering-v1.yml' .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/repair-compact-outflow-profile-fixtures-v2.yml
