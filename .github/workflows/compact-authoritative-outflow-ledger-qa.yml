@@ -52,6 +52,7 @@ jobs:
           scripts/test-compact-authoritative-outflow-concurrency.sh
           src/components/mpgf/mpgf-public-goods-compacts.tsx
           src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
           src/lib/mpgf/compact-authoritative-outflow.test.ts
           src/lib/mpgf/compact-authoritative-outflow.ts
           supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
@@ -66,8 +67,10 @@ jobs:
           sort -o /tmp/expected.txt /tmp/expected.txt
           git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/actual.txt
           diff -u /tmp/expected.txt /tmp/actual.txt
-          test "$(wc -l < /tmp/actual.txt)" -eq 14
+          test "$(wc -l < /tmp/actual.txt)" -eq 15
           test "$(find supabase/migrations -maxdepth 1 -name '2026081614150*_compact_authoritative_outflow_*.sql' | wc -l)" -eq 4
+          test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v2.yml
+          test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v3.yml
           for controller in .github/workflows/repair-compact-outflow-*.yml; do
             test ! -e "$controller"
           done
@@ -88,6 +91,7 @@ jobs:
           node --import tsx --test \
             src/lib/mpgf/compact-authoritative-outflow.test.ts \
             src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \
+            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts \
             src/lib/mpgf/public-goods-compacts.test.ts \
             src/lib/mpgf/public-goods-compacts-state.test.ts \
             src/lib/mpgf/public-goods-compacts-contract.test.ts \
@@ -198,7 +202,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/pre-ledger-lifecycle.log
+          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee db-evidence/pre-ledger-lifecycle.log
           begin;
           \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
           \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
@@ -232,7 +236,7 @@ jobs:
           supabase db lint --db-url "$DB_URL" --schema public --level warning --fail-on none 2>&1 | tee db-evidence/public-lint.log
           supabase db lint --db-url "$DB_URL" --schema moral_trade_private --level warning --fail-on none 2>&1 | tee db-evidence/private-lint.log
           node scripts/verify-mpgf-public-goods-compacts-db-lint.mjs db-evidence/public-lint.log | tee db-evidence/owned-lint.json
-          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/ledger-lifecycle.log
+          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee db-evidence/ledger-lifecycle.log
           begin;
           \i supabase/tests/compact_authoritative_outflow_ledger_core.sql
           \i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
@@ -323,7 +327,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee rollback-evidence/lifecycle.log
+          psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee rollback-evidence/lifecycle.log
           begin;
           \i supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
           \i supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
