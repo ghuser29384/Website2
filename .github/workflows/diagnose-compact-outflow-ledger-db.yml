@@ -27,13 +27,8 @@ jobs:
           from pathlib import Path
           path = Path('.github/workflows/compact-authoritative-outflow-ledger-qa.yml')
           source = path.read_text(encoding='utf-8')
-          old = '''          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/ledger-lifecycle.log
-          begin;
-'''
-          new = '''          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' 2>&1 | tee db-evidence/ledger-lifecycle.log
-          \\set VERBOSITY verbose
-          begin;
-'''
+          old = "          psql \"$DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/ledger-lifecycle.log\n          begin;\n"
+          new = "          psql \"$DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' 2>&1 | tee db-evidence/ledger-lifecycle.log\n          \\set VERBOSITY verbose\n          begin;\n"
           if source.count(old) != 1:
               raise SystemExit(f'Expected one ledger lifecycle command; found {source.count(old)}.')
           path.write_text(source.replace(old, new), encoding='utf-8')
