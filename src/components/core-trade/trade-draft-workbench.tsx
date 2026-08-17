@@ -1088,7 +1088,11 @@ export function TradeDraftSignInGate({ returnTo = "/trades/new" }: { returnTo?: 
         <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/">
           <MoralTradeWordmark />
         </Link>
-        <Link className={`${styles.button} ${styles.buttonBack}`} href="/discover">
+        <Link
+          className={`${styles.button} ${styles.buttonBack}`}
+          href="/discover"
+          prefetch={false}
+        >
           Exit
         </Link>
       </header>
