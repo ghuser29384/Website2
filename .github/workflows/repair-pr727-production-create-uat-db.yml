@@ -1,0 +1,153 @@
+name: Repair PR 727 production Create UAT DB controller once
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+    paths:
+      - .github/workflows/repair-pr727-production-create-uat-db.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pr727-production-create-uat-db
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact repair controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard repair-only bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/pr727-production-create-uat-final-20260817'
+          test "$(git rev-parse HEAD^)" = '2e7f1fead5e21faf07f9b97fb4c41055832f416d'
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/repair-pr727-production-create-uat-db.yml'
+          git diff --check HEAD^ HEAD
+
+      - name: Align UAT with the released canonical entry and retain strict credential scanning
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          script_path = Path('.github/scripts/create-production-uat.mjs')
+          workflow_path = Path('.github/workflows/pr727-production-create-uat-db.yml')
+          script = script_path.read_text(encoding='utf-8')
+          workflow = workflow_path.read_text(encoding='utf-8')
+
+          old = '''async function openCanonicalCreate(page, origin) {
+            const response = await page.goto(`${origin}/create`, { waitUntil: "domcontentloaded" });
+            if (!response || response.status() !== 200) {
+              throw new Error(`${origin}/create returned ${response?.status() ?? "no response"}.`);
+            }
+            await expect(page.getByRole("heading", { level: 1, name: "Create." })).toBeVisible();
+            const finalUrl = new URL(page.url());
+            if (!allowedHosts.has(finalUrl.host) || finalUrl.pathname !== "/create") {
+              throw new Error(`${origin}/create resolved unexpectedly to ${page.url()}.`);
+            }
+            const chain = redirectChain(response);
+            if (chain.length > 2) throw new Error(`${origin}/create used an unexpected redirect chain: ${chain.join(" -> ")}`);
+            const draftLink = page.getByRole("link", { name: "Draft a trade" });
+            await expect(draftLink).toHaveAttribute("href", "/offers/new?entry=draft&mode=pledge");
+            return { origin, finalUrl: page.url(), redirectChain: chain };
+          }
+
+          async function enterCanonicalDraft(page) {
+            const draftLink = page.getByRole("link", { name: "Draft a trade" });
+            await Promise.all([
+              page.waitForURL((url) => url.pathname === "/trades/new", { timeout: 60_000 }),
+              draftLink.click(),
+            ]);
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await expect(create.getByRole("heading", { level: 1, name: "What do you want to improve?" })).toBeVisible();
+            return create;
+          }
+          '''
+          # Dedent exact source block to avoid making indentation assumptions in Python.
+          old = '\n'.join(line[10:] if line.startswith('          ') else line for line in old.splitlines()) + '\n'
+          new = '''async function openCanonicalCreate(page, origin) {
+            const response = await page.goto(`${origin}/create`, { waitUntil: "domcontentloaded" });
+            if (!response || response.status() !== 200) {
+              throw new Error(`${origin}/create returned ${response?.status() ?? "no response"}.`);
+            }
+            await expect(
+              page.getByRole("heading", { level: 1, name: "Create a Moral Trade" }),
+            ).toBeVisible({ timeout: 30_000 });
+            const createFrame = page.locator('iframe[title="Moral Trade Create"]');
+            await expect(createFrame).toBeVisible({ timeout: 30_000 });
+            const finalUrl = new URL(page.url());
+            if (!allowedHosts.has(finalUrl.host) || finalUrl.pathname !== "/create") {
+              throw new Error(`${origin}/create resolved unexpectedly to ${page.url()}.`);
+            }
+            const chain = redirectChain(response);
+            if (chain.length > 2) throw new Error(`${origin}/create used an unexpected redirect chain: ${chain.join(" -> ")}`);
+            return { origin, finalUrl: page.url(), redirectChain: chain };
+          }
+
+          async function enterCanonicalDraft(page) {
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await expect(
+              create.getByRole("heading", { level: 1, name: "What do you want to improve?" }),
+            ).toBeVisible({ timeout: 30_000 });
+            return create;
+          }
+          '''
+          new = '\n'.join(line[10:] if line.startswith('          ') else line for line in new.splitlines()) + '\n'
+          if script.count(old) != 1:
+              raise SystemExit('Expected the stale canonical Create entry block exactly once.')
+          script = script.replace(old, new, 1)
+          script_path.write_text(script, encoding='utf-8')
+
+          parent = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          workflow, count = re.subn(
+              r'^  PREVIOUS_CONTROLLER_SHA: [0-9a-f]{40}$',
+              f'  PREVIOUS_CONTROLLER_SHA: {parent}',
+              workflow,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          if count != 1:
+              raise SystemExit('Expected one previous-controller SHA field.')
+
+          scanner_pattern = re.compile(
+              r'''          sensitive="\$\(grep -RIlE --include='\*\.json' --include='\*\.log' --include='\*\.txt' '\n.*?          ' "\$OUTPUT_DIR" controller-files\.txt expected-controller-files\.txt 2>/dev/null \|\| true\)"''',
+              re.DOTALL,
+          )
+          replacement = '''          sensitive="$(grep -RIlE --include='*.json' --include='*.log' --include='*.txt' '\"password\"[[:space:]]*:|\"access_token\"[[:space:]]*:|\"refresh_token\"[[:space:]]*:|sb_secret_|SUPABASE_SERVICE_ROLE_KEY|PROD_SUPABASE_DB_URL|VERCEL_TOKEN|CREATE_UAT_PASSWORD|postgres(ql)?://' "$OUTPUT_DIR" controller-files.txt expected-controller-files.txt 2>/dev/null || true)"'''
+          workflow, count = scanner_pattern.subn(replacement, workflow, count=1)
+          if count != 1:
+              raise SystemExit('Expected one multiline credential scanner block.')
+          workflow_path.write_text(workflow, encoding='utf-8')
+          PY
+
+          node --check .github/scripts/create-production-uat.mjs
+          ruby -e "require 'yaml'; abort('invalid YAML') unless YAML.parse_file('.github/workflows/pr727-production-create-uat-db.yml')"
+          grep -Fq 'Create a Moral Trade' .github/scripts/create-production-uat.mjs
+          grep -Fq 'iframe[title="Moral Trade Create"]' .github/scripts/create-production-uat.mjs
+          ! grep -Fq 'Draft a trade' .github/scripts/create-production-uat.mjs
+
+      - name: Commit the repaired five-file controller and remove this one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/repair-pr727-production-create-uat-db.yml
+          git add .github/scripts/create-production-uat.mjs .github/workflows/pr727-production-create-uat-db.yml
+          git diff --cached --check
+          git commit -m 'Align production Create UAT with canonical live entry'
+          git push origin HEAD:ops/pr727-production-create-uat-final-20260817
