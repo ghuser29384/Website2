@@ -57,7 +57,7 @@ export type LearnedRankingObservation =
 
 export interface ReviewedLearnedRankingPolicy {
   approval: "approved" | "not_approved";
-  minimums: Record<LearnedRankingObservationKey, number>;
+  minimums: Partial<Record<LearnedRankingObservationKey, number>>;
   policyId: string;
   policyVersion: string;
   sourceHash: string;
@@ -65,9 +65,11 @@ export interface ReviewedLearnedRankingPolicy {
 
 export interface LearnedRankingReadinessInput {
   observationProvenance: LearnedRankingObservationProvenance;
-  observations: Record<LearnedRankingObservationKey, LearnedRankingObservation>;
+  observations: Partial<
+    Record<LearnedRankingObservationKey, LearnedRankingObservation>
+  >;
   policy: ReviewedLearnedRankingPolicy | null;
-  reviews: Record<LearnedRankingReviewKey, LearnedRankingReviewDecision>;
+  reviews: Partial<Record<LearnedRankingReviewKey, LearnedRankingReviewDecision>>;
 }
 
 export type LearnedRankingReadinessReasonCode =
@@ -100,6 +102,22 @@ function hasPolicyIdentity(policy: ReviewedLearnedRankingPolicy) {
   );
 }
 
+function normalizeObservations(
+  observations: LearnedRankingReadinessInput["observations"],
+) {
+  const normalized = {} as Record<
+    LearnedRankingObservationKey,
+    LearnedRankingObservation
+  >;
+  for (const key of REQUIRED_LEARNED_RANKING_OBSERVATIONS) {
+    normalized[key] = observations[key] ?? {
+      availability: "unavailable",
+      reason: "missing_observation",
+    };
+  }
+  return normalized;
+}
+
 /**
  * Determines whether durable observation evidence is complete enough to enter
  * an independent calibration review. This function never authorizes a learned
@@ -109,6 +127,7 @@ export function evaluateLearnedRankingReadiness(
   input: LearnedRankingReadinessInput,
 ): LearnedRankingReadinessDecision {
   const reasonCodes: LearnedRankingReadinessReasonCode[] = [];
+  const observations = normalizeObservations(input.observations);
   const { policy } = input;
 
   if (!policy) {
@@ -121,7 +140,7 @@ export function evaluateLearnedRankingReadiness(
       reasonCodes.push("reviewed_policy_identity_invalid");
     }
     for (const key of REQUIRED_LEARNED_RANKING_OBSERVATIONS) {
-      if (!isNonNegativeFiniteNumber(policy.minimums?.[key])) {
+      if (!isNonNegativeFiniteNumber(policy.minimums[key])) {
         reasonCodes.push(`reviewed_minimum_invalid:${key}`);
       }
     }
@@ -132,7 +151,7 @@ export function evaluateLearnedRankingReadiness(
   }
 
   for (const key of REQUIRED_LEARNED_RANKING_OBSERVATIONS) {
-    const observation = input.observations[key];
+    const observation = observations[key];
     if (observation.availability === "unavailable") {
       reasonCodes.push(`observation_unavailable:${key}`);
       continue;
@@ -141,7 +160,7 @@ export function evaluateLearnedRankingReadiness(
       reasonCodes.push(`observation_invalid:${key}`);
       continue;
     }
-    const minimum = policy?.minimums?.[key];
+    const minimum = policy?.minimums[key];
     if (
       isNonNegativeFiniteNumber(minimum) &&
       observation.value < minimum
@@ -160,7 +179,7 @@ export function evaluateLearnedRankingReadiness(
     authoritativeImplementationKey: PARETO_HEURISTIC_MODEL_KEY,
     authoritativeRanker: DETERMINISTIC_PARETO_SAFE_BOOTSTRAP,
     learnedRankingMayActivate: false,
-    observations: input.observations,
+    observations,
     reasonCodes,
     status: reasonCodes.length
       ? "not_ready"
