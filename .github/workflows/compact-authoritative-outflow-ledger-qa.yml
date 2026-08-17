@@ -178,30 +178,62 @@ jobs:
           supabase start --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor --log-level error --yes > /dev/null
           rmdir supabase/migrations
           mv "$RUNNER_TEMP/repo-migrations" supabase/migrations
-      - name: Apply baseline and production-compatible migrations
+      - name: Apply pre-ledger production-compatible migrations
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
+          qa_skips=20260811152545_commitments_impact_study_instrumentation_qa_only.sql,20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql,20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql,20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql,20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql,20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql,20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql,20260811171544_commitments_impact_study_blocked_probe_service_role.sql
+          ledger_skips=20260816141500_compact_authoritative_outflow_ledger_v1.sql,20260816141501_compact_authoritative_outflow_freeze_v1.sql,20260816141502_compact_authoritative_outflow_hardening_v1.sql,20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
           SUPABASE_MIGRATION_TEST_DB_URL="$DB_URL" \
           SUPABASE_MIGRATION_BASELINE_SQL=db-evidence/baseline.sql \
-          SUPABASE_MIGRATION_SKIP_BASENAMES=20260811152545_commitments_impact_study_instrumentation_qa_only.sql,20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql,20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql,20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql,20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql,20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql,20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql,20260811171544_commitments_impact_study_blocked_probe_service_role.sql \
-            bash scripts/apply-supabase-migrations-in-order.sh db-evidence/migrations 2>&1 | tee db-evidence/migration.log
-          for version in 20260816141500 20260816141501 20260816141502 20260816141503; do grep -q "applying_migration=${version}_" db-evidence/migration.log; done
+          SUPABASE_MIGRATION_SKIP_BASENAMES="${qa_skips},${ledger_skips}" \
+            bash scripts/apply-supabase-migrations-in-order.sh db-evidence/migrations 2>&1 | tee db-evidence/pre-ledger-migration.log
+          for version in 20260816141500 20260816141501 20260816141502 20260816141503; do
+            if grep -q "applying_migration=${version}_" db-evidence/pre-ledger-migration.log; then
+              echo "Ledger migration ${version} was applied before legacy Compact validation." >&2
+              exit 1
+            fi
+          done
+      - name: Validate original Compact lifecycle before ledger hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/pre-ledger-lifecycle.log
+          begin;
+          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          rollback;
+          SQL
+      - name: Apply authoritative ledger migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > db-evidence/ledger-migration.log
+          for migration in \
+            supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql \
+            supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql \
+            supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql \
+            supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          do
+            echo "applying_ledger_migration=$(basename "$migration")" | tee -a db-evidence/ledger-migration.log
+            psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$migration" 2>&1 | tee -a db-evidence/ledger-migration.log
+          done
+          for version in 20260816141500 20260816141501 20260816141502 20260816141503; do
+            grep -q "applying_ledger_migration=${version}_" db-evidence/ledger-migration.log
+          done
       - name: Generate and compare public runtime types
         run: |
           supabase gen types typescript --db-url "$DB_URL" --schema public > db-evidence/generated.types.ts
           node scripts/verify-mpgf-public-goods-compacts-generated-types.mjs db-evidence/generated.types.ts src/lib/supabase/database.types.ts | tee db-evidence/type-comparison.json
-      - name: Lint and execute lifecycle
+      - name: Lint final schema and execute authoritative ledger lifecycle
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           supabase db lint --db-url "$DB_URL" --schema public --level warning --fail-on none 2>&1 | tee db-evidence/public-lint.log
           supabase db lint --db-url "$DB_URL" --schema moral_trade_private --level warning --fail-on none 2>&1 | tee db-evidence/private-lint.log
           node scripts/verify-mpgf-public-goods-compacts-db-lint.mjs db-evidence/public-lint.log | tee db-evidence/owned-lint.json
-          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/lifecycle.log
+          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/ledger-lifecycle.log
           begin;
-          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
-          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
           \i supabase/tests/compact_authoritative_outflow_ledger_core.sql
           \i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
           rollback;
@@ -287,22 +319,27 @@ jobs:
             lines=[x for x in src.read_text().splitlines() if x.strip().lower() not in {'begin;','commit;'}]
             (Path('rollback-evidence/migrations')/name).write_text('\n'.join(lines)+'\n')
           PY
-      - name: Execute rollback-only lifecycle
+      - name: Execute rollback-only staged lifecycle
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee rollback-evidence/lifecycle.log
           begin;
           \i supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
           \i supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
           \i rollback-evidence/migrations/20260813163052_mpgf_public_goods_compacts.sql
           \i rollback-evidence/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
+
+          savepoint compact_pre_ledger_contract;
+          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          rollback to savepoint compact_pre_ledger_contract;
+          release savepoint compact_pre_ledger_contract;
+
           \i rollback-evidence/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
           \i rollback-evidence/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
           \i rollback-evidence/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
           \i rollback-evidence/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
-          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
-          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
           \i supabase/tests/compact_authoritative_outflow_ledger_core.sql
           \i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
           rollback;

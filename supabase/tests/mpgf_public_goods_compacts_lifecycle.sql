@@ -410,152 +410,34 @@ insert into public.mpgf_public_goods_dormant_authorization_snapshots (
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', now(), now() + interval '2 months',
   'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 );
-create temporary table mpgf_public_goods_outflow_fixture_ids (
-  key text primary key,
-  value uuid not null
-) on commit drop;
-
-set local role service_role;
-select pg_catalog.set_config('request.jwt.claims', '{"role":"service_role"}', true);
-
-insert into mpgf_public_goods_outflow_fixture_ids values (
-  'batch',
-  moral_trade_private.compact_outflow_ingest_batch_v1(
-    '6a000000-0000-4000-8000-000000000001',
-    pg_catalog.to_char(pg_catalog.timezone('UTC', pg_catalog.now()), 'YYYY-MM'),
-    'qa',
-    'USD',
-    'compact-authoritative-outflow-ledger/v1',
-    'qa.compact.lifecycle.batch.0001'
-  )
-);
-
-select moral_trade_private.record_compact_outflow_event_v1(
-  (select value from mpgf_public_goods_outflow_fixture_ids where key = 'batch'),
-  'qa_authoritative_synthetic',
-  'eligible',
-  'outgoing',
-  'moral_trade_payment',
-  'settled',
-  12345700,
-  10,
-  10,
-  10,
-  bounds.period_start + interval '1 day',
-  bounds.period_start + interval '1 day 1 minute',
-  'qa-compact-lifecycle-v1',
-  1,
-  'sha256:' || pg_catalog.repeat('51', 32),
-  null,
-  true
+insert into public.mpgf_public_goods_outflow_coverage_snapshots (
+  id, participant_id, cycle_key, period_start, period_end_exclusive,
+  coverage_status, coverage_reason, source_scope, source_coverage_attested, evidence_hash
 )
-from public.mpgf_public_goods_cycle_bounds_v2(
-  pg_catalog.to_char(pg_catalog.timezone('UTC', pg_catalog.now()), 'YYYY-MM')
-) as bounds;
+select '6c000000-0000-4000-8000-000000000001',
+  '6a000000-0000-4000-8000-000000000001', to_char(timezone('UTC', now()), 'YYYY-MM'),
+  bounds.period_start, bounds.period_end_exclusive, 'complete', 'QA synthetic complete coverage',
+  array['authoritative_moral_trade_settlements','refunds_reversals_chargebacks'], true,
+  'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+from public.mpgf_public_goods_cycle_bounds_v2(to_char(timezone('UTC', now()), 'YYYY-MM')) as bounds;
 
-select moral_trade_private.record_compact_outflow_event_v1(
-  (select value from mpgf_public_goods_outflow_fixture_ids where key = 'batch'),
-  'qa_authoritative_synthetic',
-  'compact-excluded',
-  'outgoing',
-  'compact_contribution',
-  'settled',
-  99999999,
-  0,
-  0,
-  0,
-  bounds.period_start + interval '1 day',
-  bounds.period_start + interval '1 day 1 minute',
-  'qa-compact-lifecycle-v1',
-  1,
-  'sha256:' || pg_catalog.repeat('52', 32),
-  null,
-  true
+insert into public.mpgf_public_goods_outflow_observations (
+  coverage_snapshot_id, participant_id, source_system, source_record_key,
+  direction, payment_kind, settlement_status, gross_settled_cents,
+  refunded_cents, reversed_cents, chargeback_cents, occurred_at, source_event_hash
 )
-from public.mpgf_public_goods_cycle_bounds_v2(
-  pg_catalog.to_char(pg_catalog.timezone('UTC', pg_catalog.now()), 'YYYY-MM')
-) as bounds;
-
-select moral_trade_private.record_compact_outflow_event_v1(
-  (select value from mpgf_public_goods_outflow_fixture_ids where key = 'batch'),
-  'qa_authoritative_synthetic',
-  'incoming-excluded',
-  'incoming',
-  'moral_trade_payment',
-  'settled',
-  99999999,
-  0,
-  0,
-  0,
-  bounds.period_start + interval '1 day',
-  bounds.period_start + interval '1 day 1 minute',
-  'qa-compact-lifecycle-v1',
-  1,
-  'sha256:' || pg_catalog.repeat('53', 32),
-  null,
-  true
-)
-from public.mpgf_public_goods_cycle_bounds_v2(
-  pg_catalog.to_char(pg_catalog.timezone('UTC', pg_catalog.now()), 'YYYY-MM')
-) as bounds;
-
-select moral_trade_private.record_compact_outflow_event_v1(
-  (select value from mpgf_public_goods_outflow_fixture_ids where key = 'batch'),
-  'qa_authoritative_synthetic',
-  'pending-excluded',
-  'outgoing',
-  'moral_trade_payment',
-  'pending',
-  99999999,
-  0,
-  0,
-  0,
-  bounds.period_start + interval '1 day',
-  null,
-  'qa-compact-lifecycle-v1',
-  0,
-  'sha256:' || pg_catalog.repeat('54', 32),
-  null,
-  true
-)
-from public.mpgf_public_goods_cycle_bounds_v2(
-  pg_catalog.to_char(pg_catalog.timezone('UTC', pg_catalog.now()), 'YYYY-MM')
-) as bounds;
-
-do $test$
-declare
-  frozen jsonb;
-begin
-  frozen := moral_trade_private.freeze_compact_outflow_coverage_v1(
-    (select value from mpgf_public_goods_outflow_fixture_ids where key = 'batch'),
-    'complete',
-    'Synthetic QA coverage complete through the exact prior UTC month.',
-    pg_catalog.now(),
-    pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'adapter_key', 'qa_authoritative_synthetic',
-        'disposition', 'complete',
-        'source_watermark', 'qa:lifecycle:' || pg_catalog.to_char(
-          pg_catalog.timezone('UTC', pg_catalog.now()),
-          'YYYY-MM'
-        ),
-        'evidence_hash', 'sha256:' || pg_catalog.repeat('55', 32)
-      )
-    ),
-    'qa.compact.lifecycle.coverage.0001'
-  );
-  if frozen->>'authorityStatus' is distinct from 'complete'
-    or (frozen->>'sourceObservationCount')::integer is distinct from 4
-    or pg_catalog.coalesce((frozen->>'moneyMoved')::boolean, true)
-    or pg_catalog.coalesce((frozen->>'paymentMandateCreated')::boolean, true)
-  then
-    raise exception 'Authoritative QA-only Compact coverage did not freeze exactly: %', frozen;
-  end if;
-end;
-$test$;
-
-reset role;
-select pg_catalog.set_config('request.jwt.claims', '{}', true);
+select '6c000000-0000-4000-8000-000000000001',
+  '6a000000-0000-4000-8000-000000000001', 'qa', item.source_key,
+  item.direction, item.payment_kind, item.settlement_status, item.gross_cents,
+  item.refunded_cents, item.reversed_cents, item.chargeback_cents,
+  bounds.period_start + interval '1 day', item.event_hash
+from public.mpgf_public_goods_cycle_bounds_v2(to_char(timezone('UTC', now()), 'YYYY-MM')) as bounds
+cross join (values
+  ('eligible','outgoing','moral_trade_payment','settled',12345700::bigint,10::bigint,10::bigint,10::bigint,'sha256:1111111111111111111111111111111111111111111111111111111111111111'),
+  ('compact-excluded','outgoing','compact_contribution','settled',99999999::bigint,0::bigint,0::bigint,0::bigint,'sha256:2222222222222222222222222222222222222222222222222222222222222222'),
+  ('incoming-excluded','incoming','moral_trade_payment','settled',99999999::bigint,0::bigint,0::bigint,0::bigint,'sha256:3333333333333333333333333333333333333333333333333333333333333333'),
+  ('pending-excluded','outgoing','moral_trade_payment','pending',99999999::bigint,0::bigint,0::bigint,0::bigint,'sha256:4444444444444444444444444444444444444444444444444444444444444444')
+) as item(source_key,direction,payment_kind,settlement_status,gross_cents,refunded_cents,reversed_cents,chargeback_cents,event_hash);
 
 do $test$
 declare response jsonb;
@@ -563,40 +445,15 @@ begin
   response := public.freeze_mpgf_public_goods_financial_cycle_v2(
     '6a000000-0000-4000-8000-000000000001', to_char(timezone('UTC', now()), 'YYYY-MM')
   );
-  if response->>'coverageStatus' is distinct from 'complete'
-    or response->>'authorityStatus' is distinct from 'complete'
-    or response->>'obligationState' is distinct from 'calculated'
-    or (response->>'eligibleNetSettledOutflowCents')::bigint is distinct from 12345670
-    or (response->>'obligationCents')::bigint is distinct from 1234567
-    or (response->>'scheduledTotalCents')::bigint is distinct from 1234567
+  if (response->>'eligibleNetSettledOutflowCents')::bigint <> 12345670
+    or (response->>'obligationCents')::bigint <> 1234567
+    or (response->>'scheduledTotalCents')::bigint <> 1234567
     or (response->>'obligationCents')::bigint <= 1000
-    or pg_catalog.coalesce((response->>'moneyMoved')::boolean, true)
-    or pg_catalog.coalesce((response->>'paymentMandateCreated')::boolean, true)
-  then
-    raise exception 'Net-settlement, no-cap, cent-exact, authority, or no-money freeze failed: %', response;
-  end if;
-  if (
-    select scheduled_contribution_cents
-    from public.mpgf_public_goods_scheduled_amount_snapshots
-    where compact_id = '10000000-0000-4000-8000-000000000001'
-  ) is distinct from 411481::bigint
-    or (
-      select scheduled_contribution_cents
-      from public.mpgf_public_goods_scheduled_amount_snapshots
-      where compact_id = '10000000-0000-4000-8000-000000000002'
-    ) is distinct from 823086::bigint
-  then
-    raise exception 'Largest-remainder allocation did not use deterministic Compact-key ordering.';
-  end if;
-  if (
-    select count(*)
-    from public.mpgf_public_goods_obligation_snapshots
-    where participant_id = '6a000000-0000-4000-8000-000000000001'
-      and cycle_key = pg_catalog.to_char(pg_catalog.timezone('UTC', pg_catalog.now()), 'YYYY-MM')
-      and state = 'calculated'
-  ) <> 1 then
-    raise exception 'The authoritative lifecycle fixture did not create exactly one calculated obligation snapshot.';
-  end if;
+    or (response->>'moneyMoved')::boolean
+  then raise exception 'Net-settlement, no-cap, or cent-exact freeze failed: %', response; end if;
+  if (select scheduled_contribution_cents from public.mpgf_public_goods_scheduled_amount_snapshots where compact_id = '10000000-0000-4000-8000-000000000001') <> 411481
+    or (select scheduled_contribution_cents from public.mpgf_public_goods_scheduled_amount_snapshots where compact_id = '10000000-0000-4000-8000-000000000002') <> 823086
+  then raise exception 'Largest-remainder allocation did not use deterministic Compact-key ordering.'; end if;
   begin
     update public.mpgf_public_goods_obligation_snapshots set obligation_cents = 1;
     raise exception 'An immutable obligation snapshot was updated.';
