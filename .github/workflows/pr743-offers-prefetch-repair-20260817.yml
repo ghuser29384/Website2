@@ -1,4 +1,4 @@
-name: Temporary PR 743 integrated exact-head QA
+name: One-use PR 743 root prefetch repair
 
 on:
   push:
@@ -8,186 +8,104 @@ on:
       - .github/workflows/pr743-offers-prefetch-repair-20260817.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: pr743-integrated-exact-head-qa
+  group: pr743-root-prefetch-repair
   cancel-in-progress: false
 
 jobs:
-  exact-head-qa:
+  repair:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 25
     env:
-      EXPECTED_BASE_SHA: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
+      TARGET_BRANCH: integration/pr665-current-main-20260817
+      EXPECTED_MAIN_SHA: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
       EXPECTED_HEAD_SHA: ebd45a898e83b803681871d95e71162082e68eb8
-      EXPECTED_HEAD_TREE: 3bff442637bfa6855ab5649cbf0566a01788d30e
-      SITE_URL: https://www.moraltrade.org
 
     steps:
-      - name: Check out immutable integrated candidate
+      - name: Check out exact integrated candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
 
-      - name: Use Node 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Prove exact identity and eleven-file scope
+      - name: Guard source identities
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
-          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_HEAD_TREE"
-          test "$(git merge-base "$EXPECTED_BASE_SHA" HEAD)" = "$EXPECTED_BASE_SHA"
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE_SHA"
-          test "$(git ls-remote origin refs/heads/integration/pr665-current-main-20260817 | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
-          expected="$(printf '%s\n' \
-            playwright.auth-resolution.config.ts \
-            scripts/auth-resolution-supabase.mjs \
-            src/app/profile/page.tsx \
-            src/auth-resolution-wiring.test.ts \
-            src/components/core-trade/trade-draft-workbench.tsx \
-            src/components/marketplace/marketplace-components.tsx \
-            src/lib/app-data.ts \
-            src/lib/auth-resolution.test.ts \
-            src/lib/auth-resolution.ts \
-            src/lib/supabase/server.ts \
-            tests/auth-resolution-delayed.auth.ts \
-            | sort)"
-          actual="$(git diff --name-only "$EXPECTED_BASE_SHA"...HEAD | sort)"
-          test "$actual" = "$expected"
-          {
-            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
-            printf 'head=%s\n' "$EXPECTED_HEAD_SHA"
-            printf 'tree=%s\n' "$EXPECTED_HEAD_TREE"
-            printf 'files=%s\n' "$(printf '%s\n' "$actual" | wc -l | tr -d ' ')"
-          } | tee pr743-integrated-exact-head.txt
-          git diff --check "$EXPECTED_BASE_SHA"...HEAD
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
+          test "$(git merge-base "$EXPECTED_MAIN_SHA" HEAD)" = "$EXPECTED_MAIN_SHA"
 
-      - name: Install exact dependencies
-        run: npm ci
-
-      - name: Run syntax and focused contracts
+      - name: Suppress both queryless root RSC prefetches and add a source contract
         shell: bash
         run: |
           set -euo pipefail
-          node --check scripts/auth-resolution-supabase.mjs
-          node --import tsx --test \
-            src/lib/auth-resolution.test.ts \
-            src/auth-resolution-wiring.test.ts \
-            src/proxy.test.ts \
-            src/feed-learned-ranking-release-gate.test.ts \
-            src/lib/feed/learned-ranking-readiness.test.ts \
-            | tee pr743-focused-tests.log
-          npx eslint \
-            playwright.auth-resolution.config.ts \
-            scripts/auth-resolution-supabase.mjs \
-            src/app/profile/page.tsx \
-            src/auth-resolution-wiring.test.ts \
-            src/components/core-trade/trade-draft-workbench.tsx \
-            src/components/marketplace/marketplace-components.tsx \
-            src/feed-learned-ranking-release-gate.test.ts \
-            src/lib/app-data.ts \
-            src/lib/auth-resolution.test.ts \
-            src/lib/auth-resolution.ts \
-            src/lib/feed/learned-ranking-readiness.test.ts \
-            src/lib/feed/learned-ranking-readiness.ts \
-            src/lib/supabase/server.ts \
-            tests/auth-resolution-delayed.auth.ts \
-            | tee pr743-focused-lint.log
-
-      - name: Run complete repository gates without a live Supabase target
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -z "${NEXT_PUBLIC_SUPABASE_URL:-}"
-          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
-          npm test | tee pr743-repository-tests.log
-          npm run lint -- --quiet | tee pr743-repository-lint.log
-          npx tsc --noEmit --pretty false | tee pr743-typescript.log
-          npm run verify:crawlability | tee pr743-crawlability.log
-          git diff --check
-          git diff --check "$EXPECTED_BASE_SHA"...HEAD
-
-      - name: Build exact candidate against local synthetic Auth target
-        shell: bash
-        env:
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: auth-resolution-public-fixture
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:3231
-          SUPABASE_SERVICE_ROLE_KEY: auth-resolution-service-fixture
-          VERCEL: "1"
-          VERCEL_ENV: preview
-        run: |
-          set -euo pipefail
-          npm run build | tee pr743-build.log
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run deterministic Auth desktop and exact-mobile browser QA
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p pr743-integrated-evidence
-          PLAYWRIGHT_JSON_OUTPUT_NAME=pr743-integrated-evidence/playwright.json \
-            npx playwright test \
-              --config=playwright.auth-resolution.config.ts \
-              --reporter=line,json \
-              | tee pr743-playwright.log
-
-      - name: Scan retained evidence for credential material
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' | tee pr743-privacy-scan.log
+          python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          roots = [Path("pr743-integrated-evidence"), Path("test-results/auth-resolution")]
-          files = [
-              path
-              for root in roots
-              if root.exists()
-              for path in root.rglob("*")
-              if path.is_file() and path.stat().st_size <= 25_000_000
-          ]
-          patterns = {
-              "jwt": re.compile(rb"eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}"),
-              "bearer": re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{20,}", re.I),
-              "refresh_token": re.compile(rb"refresh[_-]?token[\"'=:\s]+[A-Za-z0-9._~+/-]{16,}", re.I),
-              "supabase_cookie": re.compile(rb"sb-[a-z0-9-]+-auth-token", re.I),
-              "service_role": re.compile(rb"sb_(?:secret|service_role)_[A-Za-z0-9_-]{12,}", re.I),
-              "private_key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-              "database_url": re.compile(rb"postgres(?:ql)?://[^\s\"']+", re.I),
-          }
-          findings = []
-          for path in files:
-              data = path.read_bytes()
-              for label, pattern in patterns.items():
-                  if pattern.search(data):
-                      findings.append((label, str(path)))
-          print({"filesScanned": len(files), "findings": findings})
-          if findings:
-              raise SystemExit("Credential-like material found in retained integrated-head evidence.")
+          workbench_path = Path("src/components/core-trade/trade-draft-workbench.tsx")
+          workbench = workbench_path.read_text(encoding="utf-8")
+          old = '<Link aria-label="Moral Trade, home" className={styles.brandLink} href="/">'
+          new = '<Link aria-label="Moral Trade, home" className={styles.brandLink} href="/" prefetch={false}>'
+          if workbench.count(old) != 2:
+              raise SystemExit(f"expected exactly two unsuppressed root brand links, found {workbench.count(old)}")
+          workbench = workbench.replace(old, new)
+          if workbench.count(new) != 2:
+              raise SystemExit("failed to suppress both root brand prefetches")
+          workbench_path.write_text(workbench, encoding="utf-8")
+
+          test_path = Path("src/auth-resolution-wiring.test.ts")
+          source = test_path.read_text(encoding="utf-8")
+          anchor = 'test("signed-out trade exit cannot prefetch the document-backed Discover route", () => {\n'
+          addition = '''test("trade composer and sign-in gate cannot prefetch the rewritten root route", () => {
+  const rootBrandLinks = tradeDraftWorkbenchSource.match(
+    /<Link aria-label="Moral Trade, home" className=\{styles\.brandLink\} href="\\/" prefetch=\{false\}>/gu,
+  );
+  assert.equal(rootBrandLinks?.length, 2);
+  assert.doesNotMatch(
+    tradeDraftWorkbenchSource,
+    /<Link aria-label="Moral Trade, home" className=\{styles\.brandLink\} href="\\/">/u,
+  );
+});
+
+'''
+          if source.count(anchor) != 1:
+              raise SystemExit("auth-resolution wiring insertion anchor changed")
+          if 'trade composer and sign-in gate cannot prefetch the rewritten root route' in source:
+              raise SystemExit("root prefetch contract already exists")
+          test_path.write_text(source.replace(anchor, addition + anchor, 1), encoding="utf-8")
           PY
 
-      - name: Upload immutable integrated-head evidence
-        if: always()
+      - name: Run focused executable verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test src/auth-resolution-wiring.test.ts src/proxy.test.ts
+          npx eslint src/auth-resolution-wiring.test.ts src/components/core-trade/trade-draft-workbench.tsx
+          git diff --check
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' src/auth-resolution-wiring.test.ts src/components/core-trade/trade-draft-workbench.tsx | sort)"
+
+      - name: Commit and push without rewriting history
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/auth-resolution-wiring.test.ts src/components/core-trade/trade-draft-workbench.tsx
+          git commit -m "Prevent trade surfaces from prefetching rewritten root"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'new_head=%s\nnew_tree=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee pr743-root-prefetch-repair.txt
+
+      - name: Upload repair identity
         uses: actions/upload-artifact@v4
         with:
-          name: pr743-integrated-exact-head-${{ env.EXPECTED_HEAD_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
-          if-no-files-found: warn
+          name: pr743-root-prefetch-repair-${{ github.run_id }}
+          path: pr743-root-prefetch-repair.txt
           retention-days: 30
-          path: |
-            pr743-*.log
-            pr743-integrated-exact-head.txt
-            pr743-integrated-evidence
-            test-results/auth-resolution
