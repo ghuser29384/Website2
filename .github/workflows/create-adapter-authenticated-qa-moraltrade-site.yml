@@ -1,0 +1,148 @@
+name: Authenticated Create adapter isolated-QA release gate (moraltrade-site)
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/create-adapter-authenticated-qa-moraltrade-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: create-adapter-isolated-qa-authenticated-moraltrade-site-20260729
+  cancel-in-progress: true
+
+jobs:
+  authenticated-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EXACT_CANDIDATE_SHA: ee5ef38aa8141b56f7010d58b524a728ab22f73d
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PREVIEW_BASE_URL: https://moraltrade-site-75nh7jeyz-ellen-s.vercel.app
+      PREVIEW_SHARE_URL: https://moraltrade-site-75nh7jeyz-ellen-s.vercel.app
+      VERCEL_PROJECT_NAME: moraltrade-site
+      VERCEL_SCOPE: ellen-s
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
+    steps:
+      - name: Check out QA operator branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable one-run Vercel automation bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          bypass_secret="$(openssl rand -hex 16)"
+          printf '::add-mask::%s\n' "$bypass_secret"
+          payload="$(jq -nc \
+            --arg secret "$bypass_secret" \
+            --arg note "Create release QA moraltrade-site run ${GITHUB_RUN_ID}" \
+            '{generate:{secret:$secret,note:$note}}')"
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --url "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_NAME}/protection-bypass?slug=${VERCEL_SCOPE}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            >/tmp/vercel-automation-bypass-create.json
+          printf 'VERCEL_AUTOMATION_BYPASS_SECRET=%s\n' "$bypass_secret" >> "$GITHUB_ENV"
+
+      - name: Reuse the exact repaired QA reconstruction step
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/create-adapter-authenticated-qa.yml').read_text()
+          step_marker = '      - name: Reconstruct and repair QA runner and browser script\n'
+          next_marker = '\n      - name: Run authenticated QA and exact cleanup\n'
+          step_start = source.index(step_marker)
+          run_start = source.index('        run: |\n', step_start) + len('        run: |\n')
+          run_end = source.index(next_marker, run_start)
+          lines = source[run_start:run_end].splitlines()
+          body = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+          path = Path('/tmp/reconstruct-create-adapter-qa.sh')
+          path.write_text('#!/usr/bin/env bash\n' + body)
+          PY
+          chmod +x /tmp/reconstruct-create-adapter-qa.sh
+          bash -n /tmp/reconstruct-create-adapter-qa.sh
+          /tmp/reconstruct-create-adapter-qa.sh
+
+      - name: Run authenticated QA and exact cleanup
+        id: qa
+        continue-on-error: true
+        run: /tmp/run-create-adapter-qa.sh
+
+      - name: Revoke one-run Vercel automation bypass
+        id: bypass_cleanup
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_AUTOMATION_BYPASS_SECRET:-}"
+          payload="$(jq -nc \
+            --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" \
+            '{revoke:{secret:$secret,regenerate:false}}')"
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --url "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_NAME}/protection-bypass?slug=${VERCEL_SCOPE}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            >/tmp/vercel-automation-bypass-revoke.json
+
+      - name: Upload authenticated QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-adapter-isolated-qa-authenticated-moraltrade-site-${{ github.run_id }}
+          path: |
+            /tmp/create-adapter-candidate/qa-artifacts/create-adapter-authenticated
+            /tmp/create-adapter-e2e-result.json
+            /tmp/create-adapter-fixture-ids.txt
+            /tmp/create-adapter-database-evidence.log
+            /tmp/create-adapter-cleanup.log
+            /tmp/create-adapter-zero-residue.json
+            /tmp/create-adapter-final-status.txt
+            /tmp/vercel-automation-bypass-create.json
+            /tmp/vercel-automation-bypass-revoke.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report run ID and exact release-gate outcome
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QA_OUTCOME: ${{ steps.qa.outcome }}
+          BYPASS_CLEANUP_OUTCOME: ${{ steps.bypass_cleanup.outcome }}
+        run: |
+          gh pr comment 275 --body "Authenticated isolated-QA Create release gate run \`${GITHUB_RUN_ID}\` completed with browser/database outcome **${QA_OUTCOME}** and Vercel-bypass cleanup outcome **${BYPASS_CLEANUP_OUTCOME}** against exact candidate \`${EXACT_CANDIDATE_SHA}\` and moraltrade-site Preview \`${PREVIEW_BASE_URL}\`."
+
+      - name: Require all authenticated QA gates
+        if: always()
+        env:
+          QA_OUTCOME: ${{ steps.qa.outcome }}
+          BYPASS_CLEANUP_OUTCOME: ${{ steps.bypass_cleanup.outcome }}
+        run: |
+          test "$QA_OUTCOME" = success
+          test "$BYPASS_CLEANUP_OUTCOME" = success
+
+# Reuses the exact repaired website2 QA reconstruction block while changing only the
+# target project and exact isolated-QA Preview. Production remains untouched.

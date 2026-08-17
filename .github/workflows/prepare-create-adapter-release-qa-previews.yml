@@ -1,0 +1,195 @@
+name: Prepare integrated Create release QA previews
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/prepare-create-adapter-release-qa-previews.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: prepare-integrated-create-release-qa-previews-20260728
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXACT_CANDIDATE_SHA: ee5ef38aa8141b56f7010d58b524a728ab22f73d
+      RELEASE_BRANCH: release/moral-trade-create-adapter-20260728
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: ellen-s
+    steps:
+      - name: Check out the QA operator branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate exact targets and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$EXACT_CANDIDATE_SHA" = "ee5ef38aa8141b56f7010d58b524a728ab22f73d"
+          test "$RELEASE_BRANCH" = "release/moral-trade-create-adapter-20260728"
+          test "$QA_SUPABASE_URL" = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
+          for name in QA_SUPABASE_PUBLISHABLE_KEY QA_SUPABASE_SERVICE_ROLE_KEY VERCEL_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+          printf '::add-mask::%s\n' "$QA_SUPABASE_PUBLISHABLE_KEY" "$QA_SUPABASE_SERVICE_ROLE_KEY" "$VERCEL_TOKEN"
+
+      - name: Materialize the exact integrated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$EXACT_CANDIDATE_SHA"
+          rm -rf /tmp/create-adapter-integrated-candidate
+          git worktree add --detach /tmp/create-adapter-integrated-candidate "$EXACT_CANDIDATE_SHA"
+          test "$(git -C /tmp/create-adapter-integrated-candidate rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"
+          test "$(git rev-parse origin/$RELEASE_BRANCH)" = "$EXACT_CANDIDATE_SHA"
+
+      - name: Configure isolated-QA variables and deploy both projects
+        id: deploy
+        shell: bash
+        working-directory: /tmp/create-adapter-integrated-candidate
+        run: |
+          set -euo pipefail
+          : > /tmp/create-adapter-release-qa-deployments.tsv
+
+          set_variable() {
+            local project="$1"
+            local name="$2"
+            local value="$3"
+            local sensitivity="$4"
+
+            rm -rf .vercel
+            npx --yes vercel@latest link \
+              --yes \
+              --project "$project" \
+              --scope "$VERCEL_SCOPE" \
+              --token "$VERCEL_TOKEN" >/dev/null
+
+            if [[ "$sensitivity" == "sensitive" ]]; then
+              printf '%s' "$value" | npx --yes vercel@latest env add \
+                "$name" preview "$RELEASE_BRANCH" \
+                --force \
+                --sensitive \
+                --scope "$VERCEL_SCOPE" \
+                --token "$VERCEL_TOKEN" >/dev/null
+            else
+              printf '%s' "$value" | npx --yes vercel@latest env add \
+                "$name" preview "$RELEASE_BRANCH" \
+                --force \
+                --no-sensitive \
+                --scope "$VERCEL_SCOPE" \
+                --token "$VERCEL_TOKEN" >/dev/null
+            fi
+          }
+
+          deploy_project() {
+            local project="$1"
+            rm -rf .vercel .vercel/output
+            npx --yes vercel@latest link \
+              --yes \
+              --project "$project" \
+              --scope "$VERCEL_SCOPE" \
+              --token "$VERCEL_TOKEN" >/dev/null
+            npx --yes vercel@latest pull \
+              --yes \
+              --environment preview \
+              --git-branch "$RELEASE_BRANCH" \
+              --scope "$VERCEL_SCOPE" \
+              --token "$VERCEL_TOKEN" >/dev/null
+            npx --yes vercel@latest build \
+              --scope "$VERCEL_SCOPE" \
+              --token "$VERCEL_TOKEN" >/tmp/${project}-vercel-build.log 2>&1
+            npx --yes vercel@latest deploy \
+              --prebuilt \
+              --force \
+              --yes \
+              --env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL" \
+              --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY" \
+              --env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY" \
+              --meta githubCommitOrg=ghuser29384 \
+              --meta githubCommitRepo=Website2 \
+              --meta githubCommitRef="$RELEASE_BRANCH" \
+              --meta githubCommitSha="$EXACT_CANDIDATE_SHA" \
+              --scope "$VERCEL_SCOPE" \
+              --token "$VERCEL_TOKEN" \
+              >/tmp/${project}-vercel-deploy.log 2>&1
+            local url
+            url="$(grep -Eo 'https://[^[:space:]]+\.vercel\.app' /tmp/${project}-vercel-deploy.log | tail -n 1)"
+            if [[ -z "$url" ]]; then
+              cat /tmp/${project}-vercel-deploy.log >&2
+              echo "Could not determine the $project Preview URL." >&2
+              exit 1
+            fi
+            printf '%s\t%s\n' "$project" "$url" | tee -a /tmp/create-adapter-release-qa-deployments.tsv
+          }
+
+          for project in website2 moraltrade-site; do
+            set_variable "$project" NEXT_PUBLIC_SUPABASE_URL "$QA_SUPABASE_URL" public
+            set_variable "$project" NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY "$QA_SUPABASE_PUBLISHABLE_KEY" public
+            set_variable "$project" SUPABASE_SERVICE_ROLE_KEY "$QA_SUPABASE_SERVICE_ROLE_KEY" sensitive
+            deploy_project "$project"
+          done
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows = {}
+          for line in Path('/tmp/create-adapter-release-qa-deployments.tsv').read_text().splitlines():
+              project, url = line.split('\t', 1)
+              rows[project] = url
+          if set(rows) != {'website2', 'moraltrade-site'}:
+              raise SystemExit(f'Unexpected deployment inventory: {rows}')
+          payload = {
+              'exact_candidate_sha': 'ee5ef38aa8141b56f7010d58b524a728ab22f73d',
+              'release_branch': 'release/moral-trade-create-adapter-20260728',
+              'supabase_project': 'hvmxfjjbdcgjjudmthdz',
+              'runtime_credentials_injected_per_deployment': True,
+              'deployments': rows,
+          }
+          Path('/tmp/create-adapter-release-qa-deployments.json').write_text(json.dumps(payload, indent=2) + '\n')
+          PY
+
+      - name: Upload deployment evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-adapter-integrated-qa-previews-${{ github.run_id }}
+          path: |
+            /tmp/create-adapter-release-qa-deployments.json
+            /tmp/website2-vercel-build.log
+            /tmp/website2-vercel-deploy.log
+            /tmp/moraltrade-site-vercel-build.log
+            /tmp/moraltrade-site-vercel-deploy.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report exact QA preview URLs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          website2_url="$(awk -F '\t' '$1 == "website2" {print $2}' /tmp/create-adapter-release-qa-deployments.tsv)"
+          moraltrade_url="$(awk -F '\t' '$1 == "moraltrade-site" {print $2}' /tmp/create-adapter-release-qa-deployments.tsv)"
+          gh pr comment 275 --body "Prepared fresh isolated-QA Preview deployments from exact integrated candidate \`$EXACT_CANDIDATE_SHA\`: website2 \`$website2_url\`; moraltrade-site \`$moraltrade_url\`. Both deployments received the isolated-QA Supabase URL, publishable key, and service-role key at deployment creation; production configuration and data remain unchanged."

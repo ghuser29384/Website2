@@ -1,0 +1,45 @@
+name: Report latest authenticated Create QA gate
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/report-latest-create-authenticated-qa.yml"
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      EXPECTED_QA_HEAD: 7fdadf036e079d115736458916828a6fba7a6be7
+      WORKFLOW_NAME: Authenticated Create adapter isolated-QA release gate
+    steps:
+      - name: Report the exact latest authenticated release gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=ops%2Fcreate-adapter-authenticated-qa-20260728&event=push&per_page=100")"
+          run="$(jq -c --arg name "$WORKFLOW_NAME" --arg sha "$EXPECTED_QA_HEAD" '[.workflow_runs[] | select(.name == $name and .head_sha == $sha)] | sort_by(.created_at) | last // empty' <<<"$payload")"
+          if [[ -z "$run" ]]; then
+            gh pr comment 273 --body "No authenticated Create release-gate run was found for QA head \`$EXPECTED_QA_HEAD\`."
+            exit 1
+          fi
+          run_id="$(jq -r '.id' <<<"$run")"
+          status="$(jq -r '.status' <<<"$run")"
+          conclusion="$(jq -r '.conclusion // "pending"' <<<"$run")"
+          url="$(jq -r '.html_url' <<<"$run")"
+          jobs="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100")"
+          job_summary="$(jq -r '[.jobs[] | "- `\(.name)`: status `\(.status)`, conclusion `\(.conclusion // "pending")`, job id `\(.id)`"] | join("\n")' <<<"$jobs")"
+          artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+          artifact_summary="$(jq -r 'if (.artifacts | length) == 0 then "- none" else [.artifacts[] | "- `\(.name)` (artifact id `\(.id)`, expired `\(.expired)`)" ] | join("\n") end' <<<"$artifacts")"
+          gh pr comment 273 --body "Latest exact authenticated Create release gate for QA head \`$EXPECTED_QA_HEAD\`:\n\n- run: \`$run_id\`\n- status: **$status**\n- conclusion: **$conclusion**\n- URL: $url\n\nJobs:\n$job_summary\n\nArtifacts:\n$artifact_summary"
+
+# Triggered after the workflow file already existed on the branch.
