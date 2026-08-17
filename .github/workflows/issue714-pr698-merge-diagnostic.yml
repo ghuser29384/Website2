@@ -1,4 +1,4 @@
-name: Issue 714 PR 698 private log and cookie hardening
+name: Issue 714 PR 698 exact-head repository and rendered gates
 
 on:
   push:
@@ -6,13 +6,21 @@ on:
       - ops/issue714-pr698-merge-diagnostic-20260817
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  EXPECTED_HEAD: 7a1384cd7cbc580b00f0eb8b39bb690349693156
+  EXPECTED_TREE: 16f3023295d7bd9c5b281aec0d6d5645752742c2
+  EXPECTED_MAIN: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
+  TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
+  HELPER_BRANCH: ops/issue714-pr698-merge-diagnostic-20260817
 
 jobs:
-  harden:
+  exact-head-gates:
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
-      - name: Check out exact PR candidate
+      - name: Check out immutable PR candidate
         uses: actions/checkout@v4
         with:
           ref: agent/issue-675-activation-routing-canonical-walkthrough
@@ -24,87 +32,160 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Guard exact inputs
+      - name: Guard candidate identity, ancestry, and clean branch
         shell: bash
         run: |
           set -euo pipefail
-          EXPECTED_HEAD='b490707ca1eecc46f2f747f2cc32864fbd1a2831'
-          EXPECTED_MAIN='c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3'
-          TARGET_BRANCH='agent/issue-675-activation-routing-canonical-walkthrough'
-          git fetch --no-tags origin main "$TARGET_BRANCH"
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_HEAD"
-          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
-          test "$(git rev-list --count HEAD..origin/main)" = '0'
-
-      - name: Apply bounded privacy hardening
-        shell: bash
-        run: |
-          set -euo pipefail
-          HELPER_BRANCH='ops/issue714-pr698-merge-diagnostic-20260817'
-          git fetch --no-tags origin "$HELPER_BRANCH"
-          git show "origin/$HELPER_BRANCH:.github/scripts/issue714-private-log-harden.py" > /tmp/issue714-private-log-harden.py
-          python /tmp/issue714-private-log-harden.py
-
-      - name: Check patch hygiene
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --check
-          git status --short
+          mkdir -p artifacts/issue714 logs
+          git fetch --no-tags origin main "$TARGET_BRANCH" "$HELPER_BRANCH"
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          ACTUAL_TREE="$(git rev-parse HEAD^{tree})"
+          REMOTE_HEAD="$(git rev-parse "origin/$TARGET_BRANCH")"
+          ACTUAL_MAIN="$(git rev-parse origin/main)"
+          MERGE_BASE="$(git merge-base HEAD origin/main)"
+          AHEAD="$(git rev-list --count origin/main..HEAD)"
+          BEHIND="$(git rev-list --count HEAD..origin/main)"
+          test "$ACTUAL_HEAD" = "$EXPECTED_HEAD"
+          test "$ACTUAL_TREE" = "$EXPECTED_TREE"
+          test "$REMOTE_HEAD" = "$EXPECTED_HEAD"
+          test "$ACTUAL_MAIN" = "$EXPECTED_MAIN"
+          test "$BEHIND" = '0'
+          test -z "$(git status --porcelain)"
+          MIGRATION='supabase/migrations/20260814042516_account_activation_stage.sql'
+          MIGRATION_BLOB="$(git hash-object "$MIGRATION")"
+          MIGRATION_SHA256="$(sha256sum "$MIGRATION" | awk '{print $1}')"
+          CHANGED_COUNT="$(git diff --name-only origin/main...HEAD | wc -l | tr -d ' ')"
+          {
+            printf 'head=%s\n' "$ACTUAL_HEAD"
+            printf 'tree=%s\n' "$ACTUAL_TREE"
+            printf 'remote_head=%s\n' "$REMOTE_HEAD"
+            printf 'main=%s\n' "$ACTUAL_MAIN"
+            printf 'merge_base=%s\n' "$MERGE_BASE"
+            printf 'ahead=%s\nbehind=%s\n' "$AHEAD" "$BEHIND"
+            printf 'changed_files=%s\n' "$CHANGED_COUNT"
+            printf 'migration_blob=%s\n' "$MIGRATION_BLOB"
+            printf 'migration_sha256=%s\n' "$MIGRATION_SHA256"
+          } | tee artifacts/issue714/identity.txt
+          git diff --name-status origin/main...HEAD > artifacts/issue714/changed-files.txt
+          git log --format='%H %P %s' origin/main..HEAD > artifacts/issue714/commit-graph.txt
+          git diff --check origin/main...HEAD
 
       - name: Install exact dependencies
-        run: npm ci
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee logs/npm-ci.log
 
-      - name: Run focused privacy and activation gates
+      - name: Install the non-committed exact-viewport acceptance spec
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "origin/$HELPER_BRANCH:.github/scripts/issue714-exact-head-visual.spec.ts" \
+            > tests/issue714-exact-head-visual.spec.ts
+          npx playwright test --config=playwright.release.config.ts \
+            tests/issue714-exact-head-visual.spec.ts --list --reporter=line \
+            2>&1 | tee logs/exact-viewport-discovery.log
+
+      - name: Run focused activation, proxy, route, privacy, and release contracts
         shell: bash
         run: |
           set -euo pipefail
           node --import tsx --test \
-            src/walkthrough-private-handoff.test.ts \
-            src/walkthrough-next-canonical.test.ts \
+            src/account-activation-schema-contract.test.ts \
             src/lib/account-activation.test.ts \
-            src/lib/auth-routes.test.ts
-          npx eslint \
-            src/lib/walkthrough-profile.ts \
-            src/app/walkthrough/actions.ts \
-            src/app/complete-profile/actions.ts \
-            src/walkthrough-private-handoff.test.ts
-          npx tsc --noEmit --pretty false
+            src/lib/auth-routes.test.ts \
+            src/lib/supabase/proxy.test.ts \
+            src/proxy.test.ts \
+            src/walkthrough-next-canonical.test.ts \
+            src/walkthrough-private-handoff.test.ts \
+            src/live-now-truth-boundary.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/lib/create-interface/unified-entry-routes.test.ts \
+            src/lib/release-browser-gate-contract.test.ts \
+            2>&1 | tee logs/focused-source-tests.log
 
-      - name: Commit and push the bounded hardening
+      - name: Run complete repository tests
         shell: bash
         run: |
           set -euo pipefail
-          TARGET_BRANCH='agent/issue-675-activation-routing-canonical-walkthrough'
-          EXPECTED_PARENT='b490707ca1eecc46f2f747f2cc32864fbd1a2831'
-          test "$(git rev-parse HEAD)" = "$EXPECTED_PARENT"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            src/lib/walkthrough-profile.ts \
-            src/app/walkthrough/actions.ts \
-            src/app/complete-profile/actions.ts \
-            src/walkthrough-private-handoff.test.ts
-          git diff --cached --check
-          git commit -m 'Scope activation drafts and sanitize setup logs'
-          NEW_HEAD="$(git rev-parse HEAD)"
-          NEW_TREE="$(git rev-parse HEAD^{tree})"
-          test -z "$(git status --porcelain)"
-          git push origin "HEAD:$TARGET_BRANCH"
-          {
-            printf 'parent=%s\nhead=%s\ntree=%s\n' "$EXPECTED_PARENT" "$NEW_HEAD" "$NEW_TREE"
-            printf 'main=%s\nahead=%s\nbehind=%s\n' \
-              "$(git rev-parse origin/main)" \
-              "$(git rev-list --count origin/main..HEAD)" \
-              "$(git rev-list --count HEAD..origin/main)"
-            printf 'privacy_log_hardening_pushed=true\n'
-          } | tee /tmp/issue714-private-log-report.txt
+          npm test 2>&1 | tee logs/npm-test.log
 
-      - name: Upload hardening evidence
+      - name: Run complete ESLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee logs/eslint.log
+
+      - name: Run standalone TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --pretty false 2>&1 | tee logs/typescript.log
+
+      - name: Run optimized production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee logs/build.log
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium 2>&1 | tee logs/playwright-install.log
+
+      - name: Run complete credential-free release browser gate including exact viewports
+        shell: bash
+        env:
+          CI: "true"
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line --workers=1 \
+            2>&1 | tee logs/release-browser.log
+
+      - name: Build privacy-safe screenshot and result manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/issue714/screenshots
+          if [ -d test-results ]; then
+            find test-results -type f -name '*.png' -print0 | while IFS= read -r -d '' file; do
+              name="$(basename "$file")"
+              parent="$(basename "$(dirname "$file")")"
+              cp "$file" "artifacts/issue714/screenshots/${parent}--${name}"
+            done
+          fi
+          find artifacts/issue714/screenshots -type f -name '*.png' -print0 \
+            | sort -z \
+            | xargs -0 -r sha256sum \
+            > artifacts/issue714/screenshot-sha256.txt
+          if grep -RIl --exclude='*.png' --exclude='*.zip' \
+              'synthetic-private-sentinel\|match_get=\|match_give=\|walkthrough_cause=' \
+              artifacts/issue714 logs test-results 2>/dev/null \
+              > artifacts/issue714/privacy-scan-matches.txt; then
+            test ! -s artifacts/issue714/privacy-scan-matches.txt
+          fi
+          printf 'candidate_head=%s\ncandidate_tree=%s\n' "$EXPECTED_HEAD" "$EXPECTED_TREE" \
+            > artifacts/issue714/result.txt
+          printf 'screenshot_count=%s\n' "$(find artifacts/issue714/screenshots -type f -name '*.png' | wc -l | tr -d ' ')" \
+            >> artifacts/issue714/result.txt
+          printf 'privacy_scan=passed\n' >> artifacts/issue714/result.txt
+
+      - name: Upload exact-head evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: issue714-private-log-hardening
-          path: /tmp/issue714-private-log-report.txt
-          if-no-files-found: error
-          retention-days: 14
+          name: issue714-pr698-exact-head-gates
+          path: |
+            artifacts/issue714
+            logs
+            test-results
+          if-no-files-found: warn
+          retention-days: 21
