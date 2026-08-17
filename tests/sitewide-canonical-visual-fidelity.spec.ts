@@ -41,16 +41,50 @@ test("Start service snapshot renders as distinct non-overlapping rows", async ({
   expect(response?.status() ?? 200).toBeLessThan(400);
   await expect(page.getByRole("heading", { level: 1, name: "Choose a real first action." })).toBeVisible();
 
-  const card = page.locator(".growth-progress-card");
+  // The resolved Suspense segment can briefly coexist in hidden transport DOM with the visible
+  // fallback. Target the accessible card so hidden streaming internals do not create a false
+  // strict-mode failure, while two genuinely visible cards still fail this assertion.
+  const card = page.getByRole("complementary", { name: "Current service state" });
   const stats = card.locator(".growth-progress-stat");
   const followup = card.locator(".hero-followup");
+  await expect(card).toHaveCount(1);
   await expect(card).toBeVisible();
   await expect(stats).toHaveCount(3);
   await expect(followup).toBeVisible();
 
-  const cardRect = await rect(card);
-  const statRects = await Promise.all([0, 1, 2].map((index) => rect(stats.nth(index))));
-  const followupRect = await rect(followup);
+  // React can replace the visible fallback with the resolved segment between separate
+  // boundingBox calls. Capture the card and all descendant geometry synchronously in one browser
+  // task so the assertions describe one user-visible DOM state.
+  const layout = await card.evaluate((element) => {
+    const toRect = (target: Element) => {
+      const box = target.getBoundingClientRect();
+      return {
+        bottom: box.bottom,
+        height: box.height,
+        left: box.left,
+        right: box.right,
+        top: box.top,
+        width: box.width,
+      };
+    };
+    const renderedStats = Array.from(element.querySelectorAll(".growth-progress-stat"));
+    const renderedFollowup = element.querySelector(".hero-followup");
+
+    if (renderedStats.length !== 3 || !renderedFollowup) {
+      return null;
+    }
+
+    return {
+      card: toRect(element),
+      stats: renderedStats.map((stat) => toRect(stat)),
+      followup: toRect(renderedFollowup),
+    };
+  });
+  expect(layout).not.toBeNull();
+
+  const cardRect = layout!.card;
+  const statRects = layout!.stats;
+  const followupRect = layout!.followup;
 
   for (const item of statRects) {
     expect(item.left).toBeGreaterThanOrEqual(cardRect.left - 1);

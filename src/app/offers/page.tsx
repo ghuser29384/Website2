@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import filterStyles from "@/components/discovery/discovery-filters.module.css";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { ParticipantOfferGroup } from "@/components/marketplace/participant-offer-group";
@@ -47,6 +47,8 @@ import {
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
+
+import densityStyles from "./offers-density.module.css";
 
 const LIVE_METADATA: Metadata = {
   title: "Explore live proposals",
@@ -137,6 +139,7 @@ const SORT_OPTIONS: ReadonlyArray<{ value: OfferSort; label: string }> = [
 ];
 
 const SMART_OFFER_CANDIDATE_LIMIT = 2_000;
+const WORKED_EXAMPLE_VIEWS = new Set(["examples", "worked_examples", "worked-examples"]);
 
 function readParam(
   searchParams: Record<string, string | string[] | undefined>,
@@ -506,6 +509,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const view = readParam(resolvedSearchParams, "view");
   const legacyTab = readParam(resolvedSearchParams, "tab");
+  if (
+    WORKED_EXAMPLE_VIEWS.has(view.toLowerCase()) ||
+    WORKED_EXAMPLE_VIEWS.has(legacyTab.toLowerCase())
+  ) {
+    redirect("/worked-examples");
+  }
   if (view === "templates" || legacyTab === "templates") return <TradeTemplateLibrary />;
 
   const page = parsePage(resolvedSearchParams.page);
@@ -545,124 +554,186 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const hasFilters = Boolean(search || mode !== "all" || activeConstraintLabels.length || sort !== "newest");
   const pageCount = Math.max(1, Math.ceil(livePage.total / livePage.pageSize));
   const currentReturnTo = buildLiveHref({ facets, mode, page, search, sort });
+  const modeLabel = MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode;
+  const sortLabel = SORT_OPTIONS.find((option) => option.value === sort)?.label ?? sort;
+  const activeFilterLabels = [
+    search ? `Query: ${search}` : null,
+    mode !== "all" ? modeLabel : null,
+    ...activeConstraintLabels,
+  ].filter((label): label is string => Boolean(label));
+  const topbarActions = getTopbarActions(isAuthenticated);
+  const routeNavigation = getPrimaryNavLinks(isAuthenticated).flatMap((link) =>
+    link.href
+      ? [{ href: link.href, label: link.label, description: link.summary }]
+      : link.items ?? [],
+  );
 
   return (
-    <div className="page-shell marketplace-product-shell">
-      <div className="mt-beta-strip">
-        <span>Live marketplace</span>
-        <span>Hard constraints are applied before semantic and trust-aware ranking.</span>
-        <Link href="/donate">Financial route available</Link>
-      </div>
-
-      <header>
-        <SiteTopbar
-          brandHref="/"
-          links={getPrimaryNavLinks(isAuthenticated)}
-          {...getTopbarActions(isAuthenticated)}
-          showLogout={isAuthenticated}
-        />
+    <div className={densityStyles.shell}>
+      <header className={densityStyles.routeHeader}>
+        <div className={densityStyles.routeTopbar}>
+          <SiteTopbar
+            authLink={topbarActions.authLink}
+            brandHref="/"
+            links={[
+              {
+                items: routeNavigation,
+                label: "Navigate",
+                summary: "Global navigation for the Moral Trade marketplace.",
+              },
+            ]}
+            primaryAction={{ href: createHref, label: "Create a proposal" }}
+            showLogout={isAuthenticated}
+          />
+          <p className={densityStyles.routeContext}>Offers · Live directory</p>
+        </div>
       </header>
 
-      <main className="mt-product-main" id="main-content" tabIndex={-1}>
-        <section className="mt-explore-hero" aria-labelledby="explore-heading">
-          <div className="mt-explore-copy">
-            <p className="mt-product-kicker">Marketplace</p>
-            <h1 id="explore-heading">Find a live proposal you can evaluate quickly.</h1>
-            <p>
-              Describe the outcome, evidence standard, budget, or deadline in ordinary language.
-              Explicit constraints are enforced first; remaining results are ranked by semantic fit,
-              evidence quality, your saved cause priorities, urgency, and a modest transaction-credit signal.
-            </p>
-            <div className="mt-product-actions">
-              <Link className="button button-primary" href={createHref}>Create a proposal</Link>
-              <Link className="button button-secondary" href="/donate">Make a financial contribution</Link>
-            </div>
-          </div>
-          <aside className="mt-explore-side">
-            <p className="mt-product-kicker">Directory rule</p>
-            <strong>Live participant records only.</strong>
-            <p>
-              Search never substitutes examples for live demand. A result with an unknown amount,
-              deadline, or verification state does not pass a hard constraint on that field.
-            </p>
-          </aside>
-        </section>
-
-        {formMessage ? (
-          <div className={`status-banner ${formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"}`}>
-            {formMessage.text}
-          </div>
-        ) : null}
-        {livePage.error ? <div className="status-banner status-banner-error" role="alert">{livePage.error}</div> : null}
-        {livePage.candidateLimitReached ? (
-          <div className="status-banner" role="status">
-            This semantic result set was ranked from the newest {SMART_OFFER_CANDIDATE_LIMIT.toLocaleString()} live candidates.
-            Tighten the cause, budget, or deadline to narrow a larger registry.
-          </div>
-        ) : null}
-
-        <section className="mt-product-section is-white" aria-labelledby="directory-heading">
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker">Live directory</p>
-              <h2 id="directory-heading">Open participant proposals</h2>
-            </div>
-            <p>
-              {participantGroups.length.toLocaleString()} participant{participantGroups.length === 1 ? "" : "s"}
-               across {livePage.items.length.toLocaleString()} exact proposal{livePage.items.length === 1 ? "" : "s"}
-               on this page; {livePage.total.toLocaleString()} proposal{livePage.total === 1 ? "" : "s"} match the full result set.
-            </p>
-          </div>
-
-          <SmartQueryForm action="/offers" className={filterStyles.filterPanel} method="get" queryName="search" surface="offers">
-            <input name="view" type="hidden" value="live" />
-            <div className={filterStyles.filterGrid}>
-              <label className={filterStyles.field}>
-                <span>Search proposals</span>
-                <input
-                  className={filterStyles.control}
-                  defaultValue={search}
-                  name="search"
-                  placeholder="e.g. verified civic work under $50 before August 1"
-                  type="search"
-                />
-              </label>
-              <label className={filterStyles.field}>
-                <span>Proposal type</span>
-                <select className={filterStyles.control} defaultValue={mode} name="mode">
-                  {MODE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <label className={filterStyles.field}>
-                <span>Sort</span>
-                <select className={filterStyles.control} defaultValue={sort} name="sort">
-                  {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-            </div>
-            <div className={filterStyles.actions}>
-              <button className="button button-primary" type="submit">Apply smart search</button>
-              {hasFilters ? <Link className="button button-secondary" href={buildLiveHref({})}>Clear all</Link> : null}
-            </div>
-            <div className={filterStyles.filterMeta}>
-              <div className={filterStyles.activeFilters} aria-live="polite">
-                <strong>{livePage.total.toLocaleString()} matching offer(s)</strong>
-                {search ? <span className={filterStyles.activeChip}>Query: {search}</span> : null}
-                {mode !== "all" ? (
-                  <span className={filterStyles.activeChip}>{MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode}</span>
-                ) : null}
-                {activeConstraintLabels.map((label) => <span className={filterStyles.activeChip} key={label}>{label}</span>)}
+      <main className={densityStyles.main} id="main-content" tabIndex={-1}>
+        {formMessage || livePage.error || livePage.candidateLimitReached ? (
+          <div className={densityStyles.statusStack}>
+            {formMessage ? (
+              <div className={`status-banner ${formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"}`}>
+                {formMessage.text}
               </div>
-              <p className={filterStyles.rankingNote}>
-                Hard constraints → semantic relevance (46%) → evidence quality (20%) → personal cause fit (16%) →
-                deadline urgency (10%) → transaction credit (8%). Explicit sort choices may reorder the surviving set.
-              </p>
+            ) : null}
+            {livePage.error ? (
+              <div className="status-banner status-banner-error" role="alert">{livePage.error}</div>
+            ) : null}
+            {livePage.candidateLimitReached ? (
+              <div className="status-banner" role="status">
+                This semantic result set was ranked from the newest {SMART_OFFER_CANDIDATE_LIMIT.toLocaleString()} live candidates.
+                Tighten the cause, budget, or deadline to narrow a larger registry.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <section className={densityStyles.workspace} aria-labelledby="directory-heading">
+          <aside className={densityStyles.introRail}>
+            <p className={densityStyles.sectionLabel}>Live offers</p>
+            <h1 id="directory-heading">Find a live proposal you can evaluate quickly.</h1>
+            <p className={densityStyles.introCopy}>
+              Search by outcome, evidence, budget, or deadline, then open only the exact terms
+              worth considering.
+            </p>
+
+            <details className={densityStyles.infoDisclosure}>
+              <summary>Directory rule</summary>
+              <div>
+                <strong>Live participant records only.</strong>
+                <p>
+                  Search never substitutes examples for live demand. A result with an unknown
+                  amount, deadline, or verification state does not pass a hard constraint on that
+                  field.
+                </p>
+              </div>
+            </details>
+
+            <nav aria-label="Offers supporting routes" className={densityStyles.introLinks}>
+              <Link href="/donate">Make a financial contribution</Link>
+              <Link href="/offers?view=templates">Browse trade templates</Link>
+            </nav>
+          </aside>
+
+          <SmartQueryForm
+            action="/offers"
+            className={densityStyles.directoryForm}
+            method="get"
+            queryName="search"
+            surface="offers"
+          >
+            <input name="view" type="hidden" value="live" />
+
+            <div className={densityStyles.searchStage} data-testid="directory-controls">
+              <div className={densityStyles.resultsHeading}>
+                <div>
+                  <p className={densityStyles.sectionLabel}>Live directory</p>
+                  <h2>Open participant proposals</h2>
+                </div>
+                <p aria-live="polite" className={densityStyles.resultCount}>
+                  {livePage.error ? (
+                    <strong>Results unavailable</strong>
+                  ) : (
+                    <>
+                      <strong>{livePage.total.toLocaleString()}</strong> matching proposal{livePage.total === 1 ? "" : "s"}
+                      <span aria-hidden="true"> · </span>
+                      {livePage.items.length.toLocaleString()} on this page from {participantGroups.length.toLocaleString()} participant{participantGroups.length === 1 ? "" : "s"}
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div aria-label="Search live proposals" className={densityStyles.searchControl} role="search">
+                <label htmlFor="offers-search">Search proposals</label>
+                <div>
+                  <input
+                    defaultValue={search}
+                    id="offers-search"
+                    name="search"
+                    placeholder="e.g. verified civic work under $50 before August 1"
+                    type="search"
+                  />
+                  <button type="submit">Search</button>
+                </div>
+              </div>
+
+              <div className={densityStyles.activeState}>
+                <span>{activeFilterLabels.length ? activeFilterLabels.join(" · ") : "All proposal types"}</span>
+                {hasFilters ? <a href={buildLiveHref({})}>Clear all</a> : null}
+              </div>
             </div>
+
+            <details className={densityStyles.filterDisclosure}>
+              <summary>
+                <span>Filter &amp; sort</span>
+                <small>{modeLabel} · {sortLabel}</small>
+              </summary>
+              <div className={densityStyles.filterContent}>
+                <label>
+                  <span>Proposal type</span>
+                  <select defaultValue={mode} name="mode">
+                    {MODE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Sort</span>
+                  <select defaultValue={sort} name="sort">
+                    {SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <button className={densityStyles.filterSubmit} type="submit">Apply filters</button>
+
+                <details className={densityStyles.rankingDisclosure}>
+                  <summary>How ranking works</summary>
+                  <p>
+                    Hard constraints are applied before semantic and trust-aware ranking. Hard
+                    constraints → semantic relevance (46%) → evidence quality (20%) → personal
+                    cause fit (16%) → deadline urgency (10%) → transaction credit (8%). Explicit
+                    sort choices may reorder the surviving set.
+                  </p>
+                </details>
+              </div>
+            </details>
           </SmartQueryForm>
 
-          <div className="mt-directory-view">
-            {livePage.items.length ? (
-              <div className="mt-market-grid">
+          <div
+            className={`${densityStyles.resultsStage} mt-directory-view`}
+            data-authoritative-directory="true"
+            id="directory-results"
+          >
+            {livePage.error ? (
+              <div className={densityStyles.emptyState} data-directory-state="unavailable">
+                <h3>Live proposals are temporarily unavailable</h3>
+                <p>The directory could not be loaded. No result or open-state conclusion is shown until the live records are available.</p>
+                <div><Link className={densityStyles.emptyPrimary} href={currentReturnTo}>Try again</Link></div>
+              </div>
+            ) : livePage.items.length ? (
+              <div className={densityStyles.groupList}>
                 {participantGroups.map((group) => (
                   <ParticipantOfferGroup
                     currentReturnTo={currentReturnTo}
@@ -676,57 +747,60 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 ))}
               </div>
             ) : (
-              <div className="panel empty-state">
+              <div className={densityStyles.emptyState} data-directory-state="empty">
                 <h3>{hasFilters ? "No live proposals satisfy every hard constraint" : "No live proposals are open"}</h3>
                 <p>
-                  Unknown budget, deadline, or verification data is not treated as a match. Remove one hard constraint
-                  or create a proposal with structured terms.
+                  Unknown budget, deadline, or verification data is not treated as a match. Remove
+                  one hard constraint or create a proposal with structured terms.
                 </p>
-                <div className="hero-actions">
-                  {hasFilters ? <Link className="button button-primary" href={buildLiveHref({})}>Clear filters</Link> :
-                    <Link className="button button-primary" href={createHref}>Create the first proposal</Link>}
-                  <Link className="button button-secondary" href="/donate">Fund a public good</Link>
+                <div>
+                  {hasFilters ? (
+                    <Link className={densityStyles.emptyPrimary} href={buildLiveHref({})}>Clear filters</Link>
+                  ) : (
+                    <Link className={densityStyles.emptyPrimary} href={createHref}>Create the first proposal</Link>
+                  )}
+                  <Link href="/donate">Fund a public good</Link>
                 </div>
               </div>
             )}
 
-            {livePage.hasPreviousPage || livePage.hasNextPage ? (
-              <nav className="pagination" aria-label="Live proposal pages">
+            {!livePage.error && (livePage.hasPreviousPage || livePage.hasNextPage) ? (
+              <nav className={densityStyles.pagination} aria-label="Live proposal pages">
                 {livePage.hasPreviousPage ? (
-                  <Link className="button button-secondary button-mini" href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}>
+                  <a href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}>
                     Previous
-                  </Link>
-                ) : null}
+                  </a>
+                ) : <span />}
                 <span>Page {page} of {pageCount}</span>
                 {livePage.hasNextPage ? (
-                  <Link className="button button-secondary button-mini" href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}>
+                  <a href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}>
                     Next
-                  </Link>
-                ) : null}
+                  </a>
+                ) : <span />}
               </nav>
             ) : null}
           </div>
-        </section>
 
-        <section className="mt-product-section" aria-labelledby="other-routes-heading">
-          <div className="mt-product-section-head">
-            <div><p className="mt-product-kicker">Other live routes</p><h2 id="other-routes-heading">Coordinate without a bilateral listing</h2></div>
-            <p>Use an offset, conditional pool, or consent-gated introduction when a public proposal is not the right structure.</p>
-          </div>
-          <div className="mt-pool-link-grid">
-            <Link className="mt-pool-link-card" href="/offsets">
-              <div><p className="mt-market-eyebrow">Opposed donations</p><h3>Donation offsets</h3></div>
-              <p>Redirect matched planned donations toward a destination both participants prefer.</p><span>Open offsets ↗</span>
-            </Link>
-            <Link className="mt-pool-link-card" href="/pools">
-              <div><p className="mt-market-eyebrow">Conditional funding</p><h3>Funding pools</h3></div>
-              <p>Review maximum exposure, threshold, deadline, recipient, and failure behavior.</p><span>Open pools ↗</span>
-            </Link>
-            <Link className="mt-pool-link-card" href="/background-networking">
-              <div><p className="mt-market-eyebrow">Private matching</p><h3>Consent-gated introductions</h3></div>
-              <p>Share a broad preview without publishing exact wishes or contact details.</p><span>Request matching ↗</span>
-            </Link>
-          </div>
+          <section className={densityStyles.otherRoutes} aria-labelledby="other-routes-heading">
+            <div>
+              <p className={densityStyles.sectionLabel}>Other live routes</p>
+              <h2 id="other-routes-heading">Related coordination routes</h2>
+            </div>
+            <nav aria-label="Related live routes">
+              <Link href="/offsets">
+                <strong>Donation offsets</strong>
+                <span>Opposed donations</span>
+              </Link>
+              <Link href="/pools">
+                <strong>Funding pools</strong>
+                <span>Conditional funding</span>
+              </Link>
+              <Link href="/background-networking">
+                <strong>Consent-gated introductions</strong>
+                <span>Private matching</span>
+              </Link>
+            </nav>
+          </section>
         </section>
       </main>
 

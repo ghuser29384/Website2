@@ -6,37 +6,89 @@ import {
   type Session,
   type SupabaseClient,
 } from "@supabase/supabase-js";
-import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 
-const BASE_URL = process.env.EVIDENCE_PAYMENT_BASE_URL ?? "http://127.0.0.1:3210";
+const BASE_URL =
+  process.env.EVIDENCE_PAYMENT_BASE_URL ?? "http://127.0.0.1:3210";
 const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://hvmxfjjbdcgjjudmthdz.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??
+  "https://hvmxfjjbdcgjjudmthdz.supabase.co";
 const SUPABASE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   "sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8";
 const QA_PASSWORD = process.env.EVIDENCE_PAYMENT_QA_PASSWORD ?? "";
+const FIXTURE_ENABLED = QA_PASSWORD.length > 0;
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const EMAIL_PATTERN = /^epqa-[0-9a-f]{20}-[a-z-]+@qa\.invalid$/;
+const HANDLE_PATTERN = /^epqa-[0-9a-f]{24}$/;
+const HASH_PATTERN = /^[0-9a-f]{64}$/;
+
+function fixtureEnv(name: string, pattern: RegExp) {
+  const value = process.env[name] ?? "";
+  if (FIXTURE_ENABLED && !pattern.test(value)) {
+    throw new Error(`Missing or malformed run-owned Evidence-payment fixture value: ${name}`);
+  }
+  return value;
+}
+
+const QA_NAMESPACE_HANDLE = fixtureEnv(
+  "EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE",
+  HANDLE_PATTERN,
+);
+const QA_NAMESPACE_HASH = fixtureEnv(
+  "EVIDENCE_PAYMENT_QA_NAMESPACE_HASH",
+  HASH_PATTERN,
+);
 
 const IDS = {
-  admin: "71000000-0000-4000-8000-000000000006",
-  agreement: "72000000-0000-4000-8000-000000000001",
-  adminFallbackAgreement: "72000000-0000-4000-8000-000000000002",
-  appealReviewer: "71000000-0000-4000-8000-000000000004",
-  milestone: "74000000-0000-4000-8000-000000000001",
-  outsider: "71000000-0000-4000-8000-000000000005",
-  payee: "71000000-0000-4000-8000-000000000002",
-  payer: "71000000-0000-4000-8000-000000000001",
-  payout: "77000000-0000-4000-8000-000000000001",
-  reviewer: "71000000-0000-4000-8000-000000000003",
+  admin: fixtureEnv("EVIDENCE_PAYMENT_QA_ADMIN_ID", UUID_PATTERN),
+  agreement: fixtureEnv("EVIDENCE_PAYMENT_QA_AGREEMENT_ID", UUID_PATTERN),
+  adminFallbackAgreement: fixtureEnv(
+    "EVIDENCE_PAYMENT_QA_ADMIN_FALLBACK_AGREEMENT_ID",
+    UUID_PATTERN,
+  ),
+  appealReviewer: fixtureEnv(
+    "EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_ID",
+    UUID_PATTERN,
+  ),
+  milestone: fixtureEnv("EVIDENCE_PAYMENT_QA_MILESTONE_ID", UUID_PATTERN),
+  outsider: fixtureEnv("EVIDENCE_PAYMENT_QA_OUTSIDER_ID", UUID_PATTERN),
+  payee: fixtureEnv("EVIDENCE_PAYMENT_QA_PAYEE_ID", UUID_PATTERN),
+  payer: fixtureEnv("EVIDENCE_PAYMENT_QA_PAYER_ID", UUID_PATTERN),
+  payout: fixtureEnv("EVIDENCE_PAYMENT_QA_PAYOUT_ID", UUID_PATTERN),
+  reviewer: fixtureEnv("EVIDENCE_PAYMENT_QA_REVIEWER_ID", UUID_PATTERN),
 } as const;
 
 const EMAILS = {
-  admin: "evidence-payment-admin@qa.invalid",
-  appealReviewer: "evidence-payment-appeal-reviewer@qa.invalid",
-  outsider: "evidence-payment-outsider@qa.invalid",
-  payee: "evidence-payment-payee@qa.invalid",
-  payer: "evidence-payment-payer@qa.invalid",
-  reviewer: "evidence-payment-reviewer@qa.invalid",
+  admin: fixtureEnv("EVIDENCE_PAYMENT_QA_ADMIN_EMAIL", EMAIL_PATTERN),
+  appealReviewer: fixtureEnv(
+    "EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_EMAIL",
+    EMAIL_PATTERN,
+  ),
+  outsider: fixtureEnv("EVIDENCE_PAYMENT_QA_OUTSIDER_EMAIL", EMAIL_PATTERN),
+  payee: fixtureEnv("EVIDENCE_PAYMENT_QA_PAYEE_EMAIL", EMAIL_PATTERN),
+  payer: fixtureEnv("EVIDENCE_PAYMENT_QA_PAYER_EMAIL", EMAIL_PATTERN),
+  reviewer: fixtureEnv("EVIDENCE_PAYMENT_QA_REVIEWER_EMAIL", EMAIL_PATTERN),
 } as const;
+
+if (FIXTURE_ENABLED) {
+  if (SUPABASE_URL !== "https://hvmxfjjbdcgjjudmthdz.supabase.co") {
+    throw new Error("Refusing to run Evidence-payment authenticated QA outside isolated QA.");
+  }
+  const ids = Object.values(IDS);
+  const emails = Object.values(EMAILS);
+  if (new Set(ids).size !== ids.length || new Set(emails).size !== emails.length) {
+    throw new Error("Run-owned Evidence-payment fixture identifiers are not unique.");
+  }
+}
 
 function decodeBase32(value: string) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -60,7 +112,9 @@ function totpCode(secret: string, offset = 0) {
   const counter = BigInt(Math.floor(Date.now() / 30_000) + offset);
   const counterBytes = Buffer.alloc(8);
   counterBytes.writeBigUInt64BE(counter);
-  const digest = createHmac("sha1", decodeBase32(secret)).update(counterBytes).digest();
+  const digest = createHmac("sha1", decodeBase32(secret))
+    .update(counterBytes)
+    .digest();
   const position = digest[digest.length - 1] & 0x0f;
   const binary =
     ((digest[position] & 0x7f) << 24) |
@@ -87,18 +141,23 @@ async function signIn(email: string) {
     password: QA_PASSWORD,
   });
   if (error || !data.session) {
-    throw new Error(`Isolated-QA sign-in failed for ${email}: ${error?.message ?? "no session"}`);
+    throw new Error(
+      `Isolated-QA sign-in failed for ${email}: ${error?.message ?? "no session"}`,
+    );
   }
   return { client, session: data.session };
 }
 
 async function elevateWithTotp(client: SupabaseClient, aal1Session: Session) {
-  const { data: enrollment, error: enrollmentError } = await client.auth.mfa.enroll({
-    factorType: "totp",
-    friendlyName: `evidence-payment-${Date.now()}`,
-  });
+  const { data: enrollment, error: enrollmentError } =
+    await client.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: `evidence-payment-${QA_NAMESPACE_HANDLE}-${Date.now()}`,
+    });
   if (enrollmentError || !enrollment?.totp?.secret) {
-    throw new Error(`TOTP enrollment failed: ${enrollmentError?.message ?? "missing secret"}`);
+    throw new Error(
+      `TOTP enrollment failed: ${enrollmentError?.message ?? "missing secret"}`,
+    );
   }
 
   let lastError = "";
@@ -108,7 +167,8 @@ async function elevateWithTotp(client: SupabaseClient, aal1Session: Session) {
       code: totpCode(enrollment.totp.secret, offset),
     });
     if (data && !error) {
-      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      const { data: sessionData, error: sessionError } =
+        await client.auth.getSession();
       if (!sessionError && sessionData.session) {
         return { aal1Session, session: sessionData.session };
       }
@@ -167,7 +227,9 @@ async function authenticatedContext(
 }
 
 function qaCheckpoint(message: string) {
-  console.log(`[evidence-payment-qa] ${message}`);
+  console.log(
+    `[evidence-payment-qa:${QA_NAMESPACE_HANDLE}:${QA_NAMESPACE_HASH.slice(0, 12)}] ${message}`,
+  );
 }
 
 async function expectSuccess(page: Page, message: string) {
@@ -202,7 +264,10 @@ async function nominatePaymentReviewer(page: Page, reviewerId: string) {
   await expect(form).toHaveCount(1);
   await form.locator('select[name="reviewer_id"]').selectOption(reviewerId);
   await form
-    .getByRole("button", { name: "Record payment-reviewer nomination", exact: true })
+    .getByRole("button", {
+      name: "Record payment-reviewer nomination",
+      exact: true,
+    })
     .click();
   await expectSuccess(
     page,
@@ -210,7 +275,10 @@ async function nominatePaymentReviewer(page: Page, reviewerId: string) {
   );
 }
 
-async function nominatePaymentAppealReviewer(page: Page, reviewerId: string) {
+async function nominatePaymentAppealReviewer(
+  page: Page,
+  reviewerId: string,
+) {
   await waitForInteractivePage(page);
   const form = page.locator("form").filter({
     has: page.getByRole("heading", {
@@ -221,7 +289,10 @@ async function nominatePaymentAppealReviewer(page: Page, reviewerId: string) {
   await expect(form).toHaveCount(1);
   await form.locator('select[name="reviewer_id"]').selectOption(reviewerId);
   await form
-    .getByRole("button", { name: "Record payment-appeal nomination", exact: true })
+    .getByRole("button", {
+      name: "Record payment-appeal nomination",
+      exact: true,
+    })
     .click();
   await expectSuccess(
     page,
@@ -237,7 +308,9 @@ async function reportExternalPayment(page: Page, reference: string) {
   await form
     .locator('input[name="paid_at"]')
     .fill(new Date().toISOString().slice(0, 10));
-  await form.locator('input[name="external_reference"]').fill(reference);
+  await form
+    .locator('input[name="external_reference"]')
+    .fill(`${QA_NAMESPACE_HANDLE}-${reference}`);
   await form.locator('input[name="payment_attested"]').check();
   await form
     .getByRole("button", { name: "Report external payment", exact: true })
@@ -293,7 +366,9 @@ async function recordPaymentAppealDecision(
 }
 
 test.describe("authenticated evidence-weighted payment release gate", () => {
-  test("completes every role, viewport, and negative-authorization path", async ({ browser }) => {
+  test("completes every role, viewport, and negative-authorization path", async ({
+    browser,
+  }) => {
     test.setTimeout(5 * 60_000);
     test.skip(!QA_PASSWORD, "EVIDENCE_PAYMENT_QA_PASSWORD is required.");
 
@@ -347,13 +422,21 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
     const adminAuth = await signIn(EMAILS.admin);
     qaCheckpoint("signed in all six isolated-QA roles");
 
-    const reviewerAal2 = await elevateWithTotp(reviewerAuth.client, reviewerAuth.session);
+    const reviewerAal2 = await elevateWithTotp(
+      reviewerAuth.client,
+      reviewerAuth.session,
+    );
     const appealReviewerAal2 = await elevateWithTotp(
       appealReviewerAuth.client,
       appealReviewerAuth.session,
     );
-    const adminAal2 = await elevateWithTotp(adminAuth.client, adminAuth.session);
-    qaCheckpoint("verified reviewer, appeal-reviewer, and administrator AAL2 sessions");
+    const adminAal2 = await elevateWithTotp(
+      adminAuth.client,
+      adminAuth.session,
+    );
+    qaCheckpoint(
+      "verified reviewer, appeal-reviewer, and administrator AAL2 sessions",
+    );
 
     const contexts: BrowserContext[] = [];
     const context = async (
@@ -366,30 +449,55 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
     };
 
     try {
-      const payer = await context(payerAuth.session, { width: 1440, height: 1000 });
-      const payee = await context(payeeAuth.session, { width: 390, height: 844 });
+      const payer = await context(payerAuth.session, {
+        width: 1440,
+        height: 1000,
+      });
+      const payee = await context(payeeAuth.session, {
+        width: 390,
+        height: 844,
+      });
       const reviewerAal1 = await context(reviewerAal2.aal1Session, {
         width: 1280,
         height: 900,
       });
-      const reviewer = await context(reviewerAal2.session, { width: 1440, height: 1000 });
+      const reviewer = await context(reviewerAal2.session, {
+        width: 1440,
+        height: 1000,
+      });
       const appealReviewer = await context(appealReviewerAal2.session, {
         width: 412,
         height: 915,
       });
-      const outsider = await context(outsiderAuth.session, { width: 1280, height: 900 });
-      const adminAal1 = await context(adminAal2.aal1Session, { width: 1280, height: 900 });
-      const admin = await context(adminAal2.session, { width: 1440, height: 1000 });
+      const outsider = await context(outsiderAuth.session, {
+        width: 1280,
+        height: 900,
+      });
+      const adminAal1 = await context(adminAal2.aal1Session, {
+        width: 1280,
+        height: 900,
+      });
+      const admin = await context(adminAal2.session, {
+        width: 1440,
+        height: 1000,
+      });
 
       const outsiderPage = await outsider.newPage();
-      await gotoReady(outsiderPage, `/trade-agreements/${IDS.agreement}`);
+      await gotoReady(
+        outsiderPage,
+        `/trade-agreements/${IDS.agreement}`,
+      );
       await expect(
-        outsiderPage.getByRole("heading", { name: "Unavailable", exact: true }),
+        outsiderPage.getByRole("heading", {
+          name: "Unavailable",
+          exact: true,
+        }),
       ).toBeVisible();
-      const { data: outsiderCases, error: outsiderReadError } = await outsiderAuth.client
-        .from("trade_payment_review_cases")
-        .select("id")
-        .eq("payout_id", IDS.payout);
+      const { data: outsiderCases, error: outsiderReadError } =
+        await outsiderAuth.client
+          .from("trade_payment_review_cases")
+          .select("id")
+          .eq("payout_id", IDS.payout);
       expect(outsiderReadError).toBeNull();
       expect(outsiderCases).toEqual([]);
       const { error: outsiderReportError } = await outsiderAuth.client.rpc(
@@ -400,7 +508,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
           p_paid_on: new Date().toISOString().slice(0, 10),
           p_payout_id: IDS.payout,
           p_provider: "QA outsider",
-          p_provider_reference: `outsider-${Date.now()}`,
+          p_provider_reference: `${QA_NAMESPACE_HANDLE}-outsider-${Date.now()}`,
           p_receipt_storage_path: "",
         },
       );
@@ -408,35 +516,46 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("passed outsider read/RPC denial");
 
       const reviewerAal1Page = await reviewerAal1.newPage();
-      await gotoReady(reviewerAal1Page, `/trade-review/${IDS.milestone}`);
+      await gotoReady(
+        reviewerAal1Page,
+        `/trade-review/${IDS.milestone}`,
+      );
       await expect(
-        reviewerAal1Page.getByText("Authenticator verification required", { exact: true }),
+        reviewerAal1Page.getByText("Authenticator verification required", {
+          exact: true,
+        }),
       ).toBeVisible();
 
       const adminAal1Page = await adminAal1.newPage();
       await gotoReady(adminAal1Page, "/admin/trade-review");
-      await expect(adminAal1Page.getByText("Operator access blocked", { exact: true })).toBeVisible();
+      await expect(
+        adminAal1Page.getByText("Operator access blocked", { exact: true }),
+      ).toBeVisible();
       qaCheckpoint("passed reviewer and administrator AAL1 denials");
 
       const adminPage = await admin.newPage();
       await gotoReady(adminPage, "/admin/trade-review");
       await expect(
-        adminPage.getByText("Profile-bound administrator grant with active AAL2 MFA.", {
+        adminPage.getByText(
+          "Profile-bound administrator grant with active AAL2 MFA.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      const adminFallbackForm = adminPage.locator("form").filter({
+        has: adminPage.getByRole("heading", {
+          name: "Assign a neutral payment reviewer",
           exact: true,
         }),
-      ).toBeVisible();
-      const adminFallbackForm = adminPage
-        .locator("form")
-        .filter({
-          has: adminPage.getByRole("heading", {
-            name: "Assign a neutral payment reviewer",
-            exact: true,
-          }),
-        });
+      });
       await expect(adminFallbackForm).toHaveCount(1);
-      await adminFallbackForm.locator('select[name="reviewer_id"]').selectOption(IDS.reviewer);
       await adminFallbackForm
-        .getByRole("button", { name: "Assign payment reviewer", exact: true })
+        .locator('select[name="reviewer_id"]')
+        .selectOption(IDS.reviewer);
+      await adminFallbackForm
+        .getByRole("button", {
+          name: "Assign payment reviewer",
+          exact: true,
+        })
         .click();
       await expectSuccess(
         adminPage,
@@ -458,15 +577,23 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       const payeePage = await payee.newPage();
       await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
       expect(
-        await payeePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+        await payeePage.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+        ),
       ).toBe(true);
-      const initialResponseForm = formWithButton(payeePage, "Dispute payment report");
+      const initialResponseForm = formWithButton(
+        payeePage,
+        "Dispute payment report",
+      );
       await expect(initialResponseForm).toHaveCount(1);
       await initialResponseForm
         .locator('textarea[name="confirmation_note"]')
         .fill("The initial external-payment evidence is not sufficient.");
       await initialResponseForm
-        .getByRole("button", { name: "Dispute payment report", exact: true })
+        .getByRole("button", {
+          name: "Dispute payment report",
+          exact: true,
+        })
         .click();
       await expectSuccess(
         payeePage,
@@ -510,13 +637,19 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("submitted corrected receipt with a fresh response window");
 
       await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
-      const correctedResponseForm = formWithButton(payeePage, "Dispute payment report");
+      const correctedResponseForm = formWithButton(
+        payeePage,
+        "Dispute payment report",
+      );
       await expect(correctedResponseForm).toHaveCount(1);
       await correctedResponseForm
         .locator('textarea[name="confirmation_note"]')
         .fill("The corrected receipt still does not establish payment.");
       await correctedResponseForm
-        .getByRole("button", { name: "Dispute payment report", exact: true })
+        .getByRole("button", {
+          name: "Dispute payment report",
+          exact: true,
+        })
         .click();
       await expectSuccess(
         payeePage,
@@ -537,13 +670,21 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("recorded provisional still-due decision");
 
       await gotoReady(payerPage, `/trade-agreements/${IDS.agreement}`);
-      const appealRequestForm = formWithButton(payerPage, "Open the single payment appeal");
+      const appealRequestForm = formWithButton(
+        payerPage,
+        "Open the single payment appeal",
+      );
       await expect(appealRequestForm).toHaveCount(1);
       await appealRequestForm
         .locator('textarea[name="payment_appeal_reason"]')
-        .fill("A different reviewer should reconsider the corrected receipt facts.");
+        .fill(
+          "A different reviewer should reconsider the corrected receipt facts.",
+        );
       await appealRequestForm
-        .getByRole("button", { name: "Open the single payment appeal", exact: true })
+        .getByRole("button", {
+          name: "Open the single payment appeal",
+          exact: true,
+        })
         .click();
       await expectSuccess(
         payerPage,
@@ -562,31 +703,41 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         .select("id")
         .eq("case_id", paymentCase?.id)
         .single();
-      const { error: originalReviewerAppealError } = await reviewerAuth.client.rpc(
-        "resolve_trade_payment_appeal_v1",
-        {
+      const { error: originalReviewerAppealError } =
+        await reviewerAuth.client.rpc("resolve_trade_payment_appeal_v1", {
           p_appeal_id: paymentAppeal?.id,
           p_outcome: "still_due",
-          p_private_reason: "The original reviewer must not decide the appeal.",
-        },
-      );
+          p_private_reason:
+            "The original reviewer must not decide the appeal.",
+        });
       expect(originalReviewerAppealError).not.toBeNull();
       qaCheckpoint("blocked original reviewer from deciding the appeal");
 
-      await nominatePaymentAppealReviewer(payerPage, IDS.appealReviewer);
+      await nominatePaymentAppealReviewer(
+        payerPage,
+        IDS.appealReviewer,
+      );
       await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
-      await nominatePaymentAppealReviewer(payeePage, IDS.appealReviewer);
+      await nominatePaymentAppealReviewer(
+        payeePage,
+        IDS.appealReviewer,
+      );
       qaCheckpoint("completed different-reviewer appeal nomination");
 
       const appealReviewerPage = await appealReviewer.newPage();
-      await gotoReady(appealReviewerPage, `/trade-review/${IDS.milestone}`);
+      await gotoReady(
+        appealReviewerPage,
+        `/trade-review/${IDS.milestone}`,
+      );
       expect(
         await appealReviewerPage.evaluate(
           () => document.documentElement.scrollWidth <= window.innerWidth + 1,
         ),
       ).toBe(true);
       await expect(
-        appealReviewerPage.getByText("Independent payment appeal", { exact: true }),
+        appealReviewerPage.getByText("Independent payment appeal", {
+          exact: true,
+        }),
       ).toBeVisible();
       await recordPaymentAppealDecision(
         appealReviewerPage,
@@ -611,7 +762,10 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
 
       await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
       await payeePage
-        .getByRole("button", { name: "Confirm payment received", exact: true })
+        .getByRole("button", {
+          name: "Confirm payment received",
+          exact: true,
+        })
         .click();
       await expectSuccess(
         payeePage,
@@ -620,26 +774,35 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("confirmed external payment on mobile");
 
       await gotoReady(payerPage, `/trade-agreements/${IDS.agreement}`);
-      await expect(payerPage.getByText("Completed", { exact: true })).toBeVisible();
-      await expect(payerPage.getByText("2.50 USD", { exact: true })).toBeVisible();
+      await expect(
+        payerPage.getByText("Completed", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        payerPage.getByText("2.50 USD", { exact: true }),
+      ).toBeVisible();
 
-      const { data: finalAgreement, error: agreementError } = await payerAuth.client
-        .from("agreements")
-        .select("lifecycle_status,completion_state,completed_at")
-        .eq("id", IDS.agreement)
-        .single();
+      const { data: finalAgreement, error: agreementError } =
+        await payerAuth.client
+          .from("agreements")
+          .select("lifecycle_status,completion_state,completed_at")
+          .eq("id", IDS.agreement)
+          .single();
       expect(agreementError).toBeNull();
       expect(finalAgreement?.lifecycle_status).toBe("completed");
       expect(finalAgreement?.completion_state).toBe("reviewed_complete");
       expect(finalAgreement?.completed_at).not.toBeNull();
 
-      const { data: finalPayout, error: payoutError } = await payerAuth.client
-        .from("trade_milestone_payouts")
-        .select("status,amount_due_cents")
-        .eq("id", IDS.payout)
-        .single();
+      const { data: finalPayout, error: payoutError } =
+        await payerAuth.client
+          .from("trade_milestone_payouts")
+          .select("status,amount_due_cents")
+          .eq("id", IDS.payout)
+          .single();
       expect(payoutError).toBeNull();
-      expect(finalPayout).toMatchObject({ status: "confirmed", amount_due_cents: 250 });
+      expect(finalPayout).toMatchObject({
+        status: "confirmed",
+        amount_due_cents: 250,
+      });
 
       const { error: payeeDirectWriteError } = await payeeAuth.client
         .from("trade_milestone_payouts")
@@ -648,7 +811,9 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       expect(payeeDirectWriteError).not.toBeNull();
       qaCheckpoint("verified completion and blocked a direct payout write");
     } finally {
-      await Promise.all(contexts.map((openContext) => openContext.close()));
+      await Promise.all(
+        contexts.map((openContext) => openContext.close()),
+      );
     }
   });
 });

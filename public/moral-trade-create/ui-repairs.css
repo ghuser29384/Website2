@@ -1,0 +1,179 @@
+/* Create-route repairs for selection affordances, contrast, sticky-header anchoring, and bounded autocomplete geometry. */
+
+html {
+  scroll-padding-top: calc(var(--header-h) + 16px);
+}
+
+/* The request form is a content panel, not a primary action button. Keep its text and surfaces explicit. */
+.request-primary {
+  border-color: var(--line-strong) !important;
+  background: #fffdf8 !important;
+  color: #111111 !important;
+}
+
+.request-primary:hover {
+  background: #fffdf8 !important;
+}
+
+.request-entry-head label {
+  color: #111111 !important;
+}
+
+.request-entry-head span {
+  color: #4d4b46 !important;
+}
+
+.request-input-row,
+.suggestions {
+  background: #fffdf8 !important;
+  color: #111111 !important;
+}
+
+.suggestions {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.suggestion-option,
+.suggestion-option span:last-child {
+  background: #fffdf8 !important;
+  color: #111111 !important;
+}
+
+.suggestion-option:hover,
+.suggestion-option.active,
+.suggestion-option[aria-selected="true"] {
+  background: #e4eaff !important;
+  color: #111111 !important;
+}
+
+.suggestion-option:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+.suggestions[data-placement="above"] {
+  top: auto !important;
+  bottom: calc(14px + 63px);
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 0;
+}
+
+/* The chosen cause sits on a light strip inside the dark intro column. Do not inherit white text. */
+.chosen-strip {
+  background: #fffdf8 !important;
+  color: #111111 !important;
+}
+
+.chosen-strip strong {
+  color: #111111 !important;
+}
+
+/* Use a conventional radio/check affordance instead of an external-link arrow. */
+.cause-choice::after {
+  content: "";
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font: 700 12px/1 var(--mono);
+  opacity: .46;
+  transform: none;
+}
+
+.cause-choice:hover::after {
+  opacity: 1;
+  transform: none;
+}
+
+.cause-choice.selected::after {
+  content: "✓";
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--tone);
+  opacity: 1;
+}
+
+.other-cause-submit:disabled {
+  border-left-color: #b8b5ad !important;
+  background: #d8d5cc !important;
+  color: #706d67 !important;
+  cursor: not-allowed !important;
+}
+
+/* The desktop progress control names each step while preserving the compact bar grammar. */
+.topbar .progress {
+  align-items: stretch;
+  gap: 10px;
+  padding: 0;
+}
+
+.topbar .progress span {
+  position: relative;
+  width: 78px !important;
+  height: 28px !important;
+  padding-top: 12px;
+  background: transparent !important;
+  color: #87847d;
+  font: 700 8px/1 var(--mono);
+  letter-spacing: .08em;
+  opacity: 1 !important;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topbar .progress span::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: #5d5b57;
+}
+
+.topbar .progress span::after {
+  content: attr(data-step-label);
+}
+
+.topbar .progress span.done {
+  background: transparent !important;
+  color: #aeb8e4;
+}
+
+.topbar .progress span.done::before {
+  background: #2450ff;
+}
+
+.topbar .progress span.active {
+  background: transparent !important;
+  color: #ffffff;
+}
+
+.topbar .progress span.active::before {
+  background: #ffffff;
+}
+
+.topbar .progress span[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .topbar .progress span {
+    width: 48px !important;
+    font-size: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .suggestions,
+  .suggestions[data-placement="above"] {
+    position: static;
+    top: auto !important;
+    bottom: auto;
+    max-height: min(240px, 40dvh) !important;
+    border-top: 0;
+  }
+}
