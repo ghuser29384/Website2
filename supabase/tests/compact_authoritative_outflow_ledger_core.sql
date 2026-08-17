@@ -11,7 +11,7 @@ insert into auth.users (
   ('6b000000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','authenticated','authenticated','ledger-zero@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()),
   ('6b000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000','authenticated','authenticated','ledger-incomplete@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()),
   ('6b000000-0000-4000-8000-000000000004','00000000-0000-0000-0000-000000000000','authenticated','authenticated','ledger-eur@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()),
-  ('6b000000-0000-4000-8000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','ledger-prod@example.test','',now(),'{}','{}','','','','','',false,false,now(),now());
+  ('6b000000-0000-4000-8000-000000000005','00000000-0000-0000-8000-000000000000','authenticated','authenticated','ledger-prod@example.test','',now(),'{}','{}','','','','','',false,false,now(),now());
 
 insert into public.profiles (
   id, email, display_name, bio, affiliation, username, account_kind,
@@ -27,6 +27,10 @@ create temporary table compact_outflow_test_ids (
   key text primary key,
   value uuid not null
 ) on commit drop;
+
+grant select, insert, update, delete
+on table compact_outflow_test_ids
+to service_role;
 
 set local role service_role;
 select pg_catalog.set_config('request.jwt.claims', '{"role":"service_role"}', true);
