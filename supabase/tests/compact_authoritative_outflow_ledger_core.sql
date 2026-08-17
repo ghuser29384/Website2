@@ -1,5 +1,7 @@
 -- Executed inside a workflow-owned transaction and rolled back.
 \set ON_ERROR_STOP on
+\set VERBOSITY verbose
+\echo ledger-core:start
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -12,6 +14,7 @@ insert into auth.users (
   ('6b000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000','authenticated','authenticated','ledger-incomplete@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()),
   ('6b000000-0000-4000-8000-000000000004','00000000-0000-0000-0000-000000000000','authenticated','authenticated','ledger-eur@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()),
   ('6b000000-0000-4000-8000-000000000005','00000000-0000-0000-8000-000000000000','authenticated','authenticated','ledger-prod@example.test','',now(),'{}','{}','','','','','',false,false,now(),now());
+\echo ledger-core:auth-users-inserted
 
 insert into public.profiles (
   id, email, display_name, bio, affiliation, username, account_kind,
@@ -22,6 +25,7 @@ insert into public.profiles (
   ('6b000000-0000-4000-8000-000000000003','ledger-incomplete@example.test','Ledger Incomplete','','','ledger-incomplete','individual',true,true),
   ('6b000000-0000-4000-8000-000000000004','ledger-eur@example.test','Ledger EUR','','','ledger-eur','individual',true,true),
   ('6b000000-0000-4000-8000-000000000005','ledger-prod@example.test','Ledger Prod','','','ledger-prod','individual',true,true);
+\echo ledger-core:profiles-inserted
 
 create temporary table compact_outflow_test_ids (
   key text primary key,
