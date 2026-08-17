@@ -11,10 +11,16 @@ def sub_once(
     label: str,
     *,
     flags: int = 0,
+    expand: bool = False,
 ) -> None:
     file = Path(path)
     source = file.read_text()
-    updated, count = re.subn(pattern, replacement, source, count=1, flags=flags)
+    replacer = (
+        (lambda match: match.expand(replacement))
+        if expand
+        else (lambda _match: replacement)
+    )
+    updated, count = re.subn(pattern, replacer, source, count=1, flags=flags)
     if count != 1:
         raise SystemExit(f"{path}: {label}: expected one regex match, found {count}")
     file.write_text(updated)
@@ -32,6 +38,7 @@ sub_once(
     r'\1path: "/complete-profile",',
     "scope handoff cookie",
     flags=re.S,
+    expand=True,
 )
 
 actions = "src/app/complete-profile/actions.ts"
@@ -53,6 +60,7 @@ function getSafeErrorCode(error: unknown) {
 ''',
     "insert safe log-code helper",
     flags=re.S,
+    expand=True,
 )
 
 raw_logs = [
