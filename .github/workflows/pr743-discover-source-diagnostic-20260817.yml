@@ -23,24 +23,44 @@ jobs:
           ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
           fetch-depth: 0
 
-      - name: Prove identity and trace queryless root navigation sources
+      - name: Prove identity and scan text sources for root navigation
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
-          {
-            echo '### literal JSX/HTML root href forms'
-            git grep -n -I -E 'href[[:space:]]*=[[:space:]]*["'"']/["'"']|href[[:space:]]*=[[:space:]]*\{["'"']/["'"']\}' -- . ':!package-lock.json' || true
-            echo
-            echo '### root-like href data and navigation arrays'
-            git grep -n -I -E 'href:[[:space:]]*["'"']/["'"']|href[[:space:]]*=[[:space:]]*["'"']/[#?]|location\.(assign|replace)[[:space:]]*\([[:space:]]*["'"']/' -- . ':!package-lock.json' || true
-            echo
-            echo '### Next Link tags and nearby prefetch decisions'
-            git grep -n -I -E '<Link|prefetch=' -- src ':!package-lock.json' || true
-            echo
-            echo '### all exact queryless slash string occurrences in TS/TSX/JS/HTML'
-            git grep -n -I -E '["'"']/["'"']' -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.html' || true
-          } | tee pr743-root-prefetch-source-trace.txt
+          python3 - <<'PY' | tee pr743-root-prefetch-source-trace.txt
+          from pathlib import Path
+          import re
+
+          suffixes = {'.ts', '.tsx', '.js', '.jsx', '.mjs', '.html'}
+          patterns = {
+              'jsx_root_href': re.compile(r'href\s*=\s*(?:["\']/["\']|\{["\']/["\']\})'),
+              'root_href_data': re.compile(r'href\s*:\s*["\']/["\']'),
+              'root_string': re.compile(r'["\']/["\']'),
+              'link_tag': re.compile(r'<Link\b'),
+              'prefetch': re.compile(r'prefetch\s*='),
+          }
+          roots = [Path('src'), Path('public'), Path('tests')]
+          files = sorted(
+              p for root in roots for p in root.rglob('*')
+              if p.is_file() and p.suffix in suffixes and p.stat().st_size <= 5_000_000
+          )
+          print(f'exact_head={"ebd45a898e83b803681871d95e71162082e68eb8"}')
+          for label, pattern in patterns.items():
+              print(f'\n### {label}')
+              for path in files:
+                  try:
+                      lines = path.read_text(encoding='utf-8').splitlines()
+                  except UnicodeDecodeError:
+                      continue
+                  for index, line in enumerate(lines):
+                      if pattern.search(line):
+                          start = max(0, index - 2)
+                          end = min(len(lines), index + 3)
+                          print(f'--- {path}:{index + 1}')
+                          for cursor in range(start, end):
+                              print(f'{cursor + 1}:{lines[cursor]}')
+          PY
 
       - name: Decode and inspect packed live Feed document for root navigation
         shell: bash
@@ -53,22 +73,15 @@ jobs:
           const encoded = names.map((name) => fs.readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, 'utf8')).join('');
           const source = zlib.gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
           const lines = source.split(/\r?\n/u);
-          console.log('\n### decoded live source lines containing href/root/navigation');
+          console.log('\n### decoded live source lines containing root-like href/navigation');
           for (let index = 0; index < lines.length; index += 1) {
-            if (/href|location|history|navigate|prefetch/iu.test(lines[index])) {
-              const start = Math.max(0, index - 1);
-              const end = Math.min(lines.length, index + 2);
+            if (/href\s*=\s*["']\/(?:["'#?])|location|history|navigate|prefetch/iu.test(lines[index])) {
+              const start = Math.max(0, index - 2);
+              const end = Math.min(lines.length, index + 3);
               for (let cursor = start; cursor < end; cursor += 1) console.log(`${cursor + 1}:${lines[cursor]}`);
               console.log('---');
             }
           }
-          console.log('\n### decoded exact root targets');
-          for (const pattern of [
-            /href\s*=\s*["']\/["']/giu,
-            /href\s*=\s*["']\/(?:[#?][^"']*)?["']/giu,
-            /location(?:\.assign|\.replace)?\s*\(?\s*["']\/["']/giu,
-            /["']\/["']/giu,
-          ]) console.log(String(pattern), [...source.matchAll(pattern)].slice(0, 100).map((m) => m[0]));
           NODE
 
       - name: Upload trace
