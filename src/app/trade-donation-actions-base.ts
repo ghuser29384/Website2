@@ -21,7 +21,7 @@ import {
   type TradeDonationIntentRow,
   type TradeDonationPayerRole,
 } from "@/lib/trade-donation";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 function read(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -236,7 +236,7 @@ export async function confirmDonationAwareAgreementVersionAction(formData: FormD
 
   const returnTo = safeAgreementPath(agreementId);
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data, error } = await supabase.rpc(
     "confirm_trade_donation_version_v2",
     {
@@ -296,8 +296,8 @@ export async function confirmDonationAwareTradeCompletionAction(formData: FormDa
     redirectWithMessage(
       agreementId,
       "error",
-      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence before final completion.",
-    );
+      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence befor final completion.",
+     );
   }
 
   return confirmBaseTradeCompletionAction(formData);
