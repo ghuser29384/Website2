@@ -1,0 +1,63 @@
+from pathlib import Path
+
+source_path = Path('.github/workflows/pr740-dac-current-main-integration-uat-20260816.yml')
+output_path = Path('generated/pr749-dac-current-main-integration-uat-20260817.yml')
+text = source_path.read_text()
+
+replacements = [
+    ('PR 740 current-main DAC integration protected Preview owner UAT 20260816',
+     'PR 749 fresh-current-main DAC integration protected Preview owner UAT 20260817'),
+    ('ops/pr740-dac-current-main-integration-uat-20260816',
+     'ops/pr749-dac-current-main-integration-uat-20260817'),
+    ('pr740-dac-current-main-integration-uat-20260816.yml',
+     'pr749-dac-current-main-integration-uat-20260817.yml'),
+    ('CANDIDATE_BASE_SHA: 4587e8c418621440835940d6924f32c02ba3f2d1',
+     'CANDIDATE_BASE_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3'),
+    ('CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328',
+     'CANDIDATE_HEAD_SHA: 0d9c997cee8e251818d74fa96ea8321c6489cac8'),
+    ('CANDIDATE_TREE_SHA: 2d00b09d2077857fcbf6437f79b7b1abcadd9827',
+     'CANDIDATE_TREE_SHA: 6ccbd8c7f34392475b8738ec7ce581a460c55066'),
+    ('INTEGRATION_PR_NUMBER: "740"', 'INTEGRATION_PR_NUMBER: "749"'),
+    ('pulls/740', 'pulls/749'),
+    ('pr:740', 'pr:749'),
+    ('PR 740', 'PR 749'),
+    ('pr740-', 'pr749-'),
+]
+
+for old, new in replacements:
+    if old not in text:
+        raise SystemExit(f'Missing expected controller source token: {old}')
+    text = text.replace(old, new)
+
+required = [
+    'CANDIDATE_BASE_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3',
+    'SOURCE_PR689_HEAD_SHA: 1456027e1ebaf9e99ea2d03f5e223de4ef510e23',
+    'CANDIDATE_HEAD_SHA: 0d9c997cee8e251818d74fa96ea8321c6489cac8',
+    'CANDIDATE_TREE_SHA: 6ccbd8c7f34392475b8738ec7ce581a460c55066',
+    'CONTROLLER_BRANCH: ops/pr749-dac-current-main-integration-uat-20260817',
+    'INTEGRATION_PR_NUMBER: "749"',
+    'EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz',
+    'FORBIDDEN_PROD_REF: jnpoxvalyjtdghnperyu',
+    'CONDITIONAL_PAYMENTS_MODE: disabled',
+    'MPGF_REAL_MONEY_ENABLED: "false"',
+    'EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"',
+]
+for token in required:
+    if token not in text:
+        raise SystemExit(f'Generated controller is missing required token: {token}')
+
+forbidden = [
+    'CANDIDATE_BASE_SHA: 4587e8c418621440835940d6924f32c02ba3f2d1',
+    'CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328',
+    'CANDIDATE_TREE_SHA: 2d00b09d2077857fcbf6437f79b7b1abcadd9827',
+    'ops/pr740-dac-current-main-integration-uat-20260816',
+    'pulls/740',
+    'pr:740',
+]
+for token in forbidden:
+    if token in text:
+        raise SystemExit(f'Generated controller retained stale token: {token}')
+
+output_path.parent.mkdir(parents=True, exist_ok=True)
+output_path.write_text(text)
+print(f'generated_bytes={output_path.stat().st_size}')
