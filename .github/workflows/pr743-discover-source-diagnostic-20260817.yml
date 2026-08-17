@@ -41,6 +41,42 @@ jobs:
             git grep -n -I -E 'offers\?view|href.{0,100}offers|discover.{0,100}offers|offers.{0,100}discover|domain.{0,50}offers|view.{0,50}list' -- . ':!package-lock.json' || true
           } | tee pr743-discover-source-trace.txt
 
+      - name: Decode and inspect the packed live Feed document
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' | tee -a pr743-discover-source-trace.txt
+          const fs = require('node:fs');
+          const zlib = require('node:zlib');
+          const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
+          const encoded = names
+            .map((name) => fs.readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, 'utf8'))
+            .join('');
+          const source = zlib.gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
+          console.log('\n### decoded live source: lines containing offers/discover/prefetch/fetch');
+          const lines = source.split(/\r?\n/u);
+          for (let index = 0; index < lines.length; index += 1) {
+            if (/offers|discover|prefetch|fetch\s*\(/iu.test(lines[index])) {
+              const start = Math.max(0, index - 1);
+              const end = Math.min(lines.length, index + 2);
+              for (let cursor = start; cursor < end; cursor += 1) {
+                console.log(`${cursor + 1}:${lines[cursor]}`);
+              }
+              console.log('---');
+            }
+          }
+          console.log('\n### decoded live source exact bare Offers targets');
+          const patterns = [
+            /href\s*=\s*["']\/offers["']/giu,
+            /href\s*=\s*["']https:\/\/moraltrade\.org\/offers["']/giu,
+            /fetch\s*\(\s*["']\/offers["']/giu,
+            /location(?:\.assign|\.replace)?\s*\(?\s*["']\/offers["']/giu,
+          ];
+          for (const pattern of patterns) {
+            console.log(String(pattern), [...source.matchAll(pattern)].map((match) => match[0]));
+          }
+          NODE
+
       - name: Upload trace
         uses: actions/upload-artifact@v4
         with:
