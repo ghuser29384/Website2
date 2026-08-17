@@ -1,0 +1,92 @@
+name: Patch PR 727 UAT transition geometry once
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+    paths:
+      - .github/workflows/patch-pr727-uat-transition-geometry-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Guard and patch transition-time geometry semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/pr727-production-create-uat-final-20260817'
+          test "$(git rev-parse HEAD^)" = 'ced0fab9d6bc50aa6b9ac47bc724573ff0b4a393'
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/patch-pr727-uat-transition-geometry-once.yml'
+          git diff --check HEAD^ HEAD
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/scripts/create-production-uat.mjs')
+          source = path.read_text(encoding='utf-8')
+          marker = '  await expect(create.locator("#screenRequest")).toBeVisible();\n'
+          if source.count(marker) != 1:
+              raise SystemExit(f'Expected one request-screen marker, found {source.count(marker)}')
+          insertion = "\n".join([
+              '  const transitionState = await create.locator("body").evaluate(() => {',
+              '    const bounds = (selector) => {',
+              '      const element = document.querySelector(selector);',
+              '      if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);',
+              '      const value = element.getBoundingClientRect();',
+              '      return { top: value.top, bottom: value.bottom, left: value.left, right: value.right };',
+              '    };',
+              '    return {',
+              '      scrollY: window.scrollY,',
+              '      header: bounds(".topbar"),',
+              '      heading: bounds("#requestHeading"),',
+              '      selectedCause: bounds("#requestCause"),',
+              '      requestEntry: bounds(".request-entry"),',
+              '    };',
+              '  });',
+              '  writeJson(`transition-${cause.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, { cause: cause.name, transitionState });',
+              '  if (transitionState.heading.bottom <= 0 || transitionState.heading.top < transitionState.header.bottom + 16) {',
+              '    throw new Error(`${cause.name} automatic transition obscures the request heading.`);',
+              '  }',
+              '  if (transitionState.selectedCause.bottom > 0 && transitionState.selectedCause.top < transitionState.header.bottom + 16) {',
+              '    throw new Error(`${cause.name} automatic transition obscures the selected-cause summary.`);',
+              '  }',
+              '  if (transitionState.requestEntry.bottom > 0 && transitionState.requestEntry.top < transitionState.header.bottom + 16) {',
+              '    throw new Error(`${cause.name} automatic transition obscures the request-entry panel.`);',
+              '  }',
+              '',
+          ])
+          source = source.replace(marker, marker + insertion, 1)
+          old = '  if (state.heading.top < state.header.bottom + 16) throw new Error(`${cause.name} heading is obscured by the sticky header.`);\n  if (state.scrollY !== 0) throw new Error(`${cause.name} automatic transition left scrollY=${state.scrollY}.`);\n'
+          new = '  if (state.requestEntry.bottom > 0 && state.requestEntry.top < state.header.bottom + 16) throw new Error(`${cause.name} focused request-entry panel is obscured by the sticky header.`);\n'
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected one stale end-state header block, found {source.count(old)}')
+          source = source.replace(old, new, 1)
+          if source.count('automatic transition obscures the request heading') != 1:
+              raise SystemExit('Transition assertion missing or duplicated')
+          path.write_text(source, encoding='utf-8')
+          PY
+          node --check .github/scripts/create-production-uat.mjs
+          grep -Fq 'automatic transition obscures the request heading' .github/scripts/create-production-uat.mjs
+          grep -Fq 'focused request-entry panel is obscured by the sticky header' .github/scripts/create-production-uat.mjs
+          ! grep -Fq 'automatic transition left scrollY=' .github/scripts/create-production-uat.mjs
+          git diff --check
+          test "$(git diff --name-only)" = '.github/scripts/create-production-uat.mjs'
+      - name: Commit and push only the harness correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/scripts/create-production-uat.mjs
+          test "$(git diff --cached --name-only)" = '.github/scripts/create-production-uat.mjs'
+          git diff --cached --check
+          git commit -m 'Check Create sticky-header geometry at transition time'
+          git push origin HEAD:ops/pr727-production-create-uat-final-20260817
