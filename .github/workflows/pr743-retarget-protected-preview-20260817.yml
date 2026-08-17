@@ -1,0 +1,85 @@
+name: One-use PR 743 protected Preview retarget
+
+on:
+  push:
+    branches:
+      - ops/pr743-protected-preview-20260817
+    paths:
+      - .github/workflows/pr743-retarget-protected-preview-20260817.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr743-retarget-protected-preview
+  cancel-in-progress: false
+
+jobs:
+  retarget:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: ops/pr743-protected-preview-20260817
+      UAT_PATH: .github/workflows/pr743-protected-preview-uat-20260817.yml
+      EXPECTED_OLD_SHA: ebd45a898e83b803681871d95e71162082e68eb8
+      EXPECTED_OLD_TREE: 3bff442637bfa6855ab5649cbf0566a01788d30e
+      FINAL_SHA: 4f2c5d1c251b5a23c16c0a2f7d4760daf29977c0
+      FINAL_TREE: 9d27fd0506c465e738e2d2ed71cda9ab3072f39f
+
+    steps:
+      - name: Check out exact controller head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guard repository and immutable refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "7e993158363710e5fe2c3eaa1cbccdb5cd56c235"
+          test "$(git ls-remote origin refs/heads/integration/pr665-current-main-20260817 | awk '{print $1}')" = "$FINAL_SHA"
+          test "$(git ls-remote origin refs/heads/release/vercel-preview | awk '{print $1}')" = "$FINAL_SHA"
+
+      - name: Retarget only the protected Preview UAT identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["UAT_PATH"])
+          source = path.read_text(encoding="utf-8")
+          replacements = {
+              os.environ["EXPECTED_OLD_SHA"]: os.environ["FINAL_SHA"],
+              os.environ["EXPECTED_OLD_TREE"]: os.environ["FINAL_TREE"],
+          }
+          for old, new in replacements.items():
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected exactly one {old} occurrence, found {count}")
+              source = source.replace(old, new, 1)
+          path.write_text(source, encoding="utf-8")
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = "$UAT_PATH"
+          grep -F "EXPECTED_CANDIDATE_SHA: $FINAL_SHA" "$UAT_PATH"
+          grep -F "EXPECTED_CANDIDATE_TREE: $FINAL_TREE" "$UAT_PATH"
+          ! grep -F "$EXPECTED_OLD_SHA" "$UAT_PATH"
+          ! grep -F "$EXPECTED_OLD_TREE" "$UAT_PATH"
+
+      - name: Commit and push without rewriting history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse origin/$TARGET_BRANCH)" = "$GITHUB_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$UAT_PATH"
+          git commit -m "Run PR 743 protected Preview UAT on final exact head"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
