@@ -77,18 +77,16 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install exact dependencies, Chromium, jq, and curl
+      - name: Install exact dependencies and Chromium
         shell: bash
         run: |
           set -euo pipefail
           npm ci
           npx playwright install --with-deps chromium
-          sudo apt-get update -qq
-          sudo apt-get install --yes jq curl > /dev/null
           node --check .github/scripts/pr727-create-production-uat.mjs
           ruby -e "require 'yaml'; abort('invalid workflow YAML') unless YAML.parse_file('.github/workflows/pr727-create-production-uat.yml')"
 
-      - name: Pull exact production environment without exposing credentials
+      - name: Pull exact production service credentials and bind checked-in public defaults
         id: env_pull
         shell: bash
         run: |
@@ -101,21 +99,35 @@ jobs:
             --yes \
             --environment=production \
             --token="$VERCEL_TOKEN" \
-            > "$OUTPUT_DIR/vercel-pull.log" 2>&1
+            > "$RUNNER_TEMP/pr727-vercel-pull.log" 2>&1
           test -s .vercel/.env.production.local
 
           set +x
           set -a
           source .vercel/.env.production.local
           set +a
-          public_key="${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}}"
-          test -n "${NEXT_PUBLIC_SUPABASE_URL:-}"
+
+          defaults="$(node <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('src/lib/supabase/config.ts', 'utf8');
+          const url = source.match(/const DEFAULT_PUBLIC_SUPABASE_URL = "([^"]+)";/)?.[1];
+          const key = source.match(/const DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY =\s*"([^"]+)";/)?.[1];
+          if (!url || !key) process.exit(1);
+          process.stdout.write(`${url}\n${key}\n`);
+          NODE
+          )"
+          mapfile -t default_lines <<< "$defaults"
+          supabase_url="${NEXT_PUBLIC_SUPABASE_URL:-${default_lines[0]:-}}"
+          public_key="${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-${default_lines[1]:-}}}"
+          test -n "$supabase_url"
           test -n "$public_key"
           test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
-          observed_ref="$(python3 - <<'PY'
+
+          observed_ref="$(SUPABASE_URL="$supabase_url" python3 - <<'PY'
           import os
           from urllib.parse import urlparse
-          print(urlparse(os.environ['NEXT_PUBLIC_SUPABASE_URL']).hostname.split('.')[0])
+          hostname = urlparse(os.environ['SUPABASE_URL']).hostname or ''
+          print(hostname.split('.')[0])
           PY
           )"
           test "$observed_ref" = "$EXPECTED_SUPABASE_REF"
@@ -123,19 +135,30 @@ jobs:
           echo "::add-mask::$public_key"
           umask 077
           {
-            printf 'export NEXT_PUBLIC_SUPABASE_URL=%q\n' "$NEXT_PUBLIC_SUPABASE_URL"
+            printf 'export NEXT_PUBLIC_SUPABASE_URL=%q\n' "$supabase_url"
             printf 'export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%q\n' "$public_key"
             printf 'export SUPABASE_SERVICE_ROLE_KEY=%q\n' "$SUPABASE_SERVICE_ROLE_KEY"
           } > "$RUNNER_TEMP/pr727-production-secrets.env"
+
           rm -f .vercel/.env.production.local .vercel/.env.local
-          unset SUPABASE_SERVICE_ROLE_KEY public_key
+          unset SUPABASE_SERVICE_ROLE_KEY NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SUPABASE_ANON_KEY \
+            public_key supabase_url defaults default_lines
 
           jq -n \
             --arg projectId "$VERCEL_PROJECT_ID" \
             --arg supabaseRef "$observed_ref" \
             --arg pulledAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{projectId:$projectId,environment:"production",supabaseRef:$supabaseRef,pulledAt:$pulledAt,secretsPersistedToArtifact:false}' \
-            > "$OUTPUT_DIR/environment-summary.json"
+            '{
+              projectId:$projectId,
+              environment:"production",
+              supabaseRef:$supabaseRef,
+              publicConfigurationSource:"checked-in defaults with production-env override",
+              serviceCredentialSource:"Vercel production environment",
+              serviceCredentialPresent:true,
+              pulledAt:$pulledAt,
+              secretsPersistedToArtifact:false
+            }' > "$OUTPUT_DIR/environment-summary.json"
           echo 'exit_code=0' >> "$GITHUB_OUTPUT"
 
       - name: Verify exact deployment and both canonical aliases before UAT
@@ -143,11 +166,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          detail="$OUTPUT_DIR/deployment-before.json"
+          detail_raw="$RUNNER_TEMP/pr727-deployment-before.json"
           curl -fsS \
             -H "Authorization: Bearer ${VERCEL_TOKEN}" \
             "https://api.vercel.com/v13/deployments/${EXPECTED_DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
-            > "$detail"
+            > "$detail_raw"
           jq -e \
             --arg id "$EXPECTED_DEPLOYMENT_ID" \
             --arg host "$EXPECTED_DEPLOYMENT_HOST" \
@@ -162,16 +185,26 @@ jobs:
               and (.meta.githubCommitOrg == "ghuser29384")
               and (.meta.githubCommitRepo == "Website2")
               and (.meta.githubCommitSha == $sha)
-            ' "$detail" >/dev/null
+            ' "$detail_raw" >/dev/null
+          jq '{
+            id:(.id // .uid),
+            url,
+            projectId:(.projectId // .project.id),
+            readyState:(.readyState // .state),
+            target,
+            aliasError:(.aliasError // null),
+            githubCommitSha:.meta.githubCommitSha
+          }' "$detail_raw" > "$OUTPUT_DIR/deployment-before.json"
 
           mkdir -p "$OUTPUT_DIR/aliases-before"
           for alias_name in "$CANONICAL_APEX_DOMAIN" "$CANONICAL_WWW_DOMAIN"; do
             alias_key="${alias_name//./-}"
-            alias_path="$OUTPUT_DIR/aliases-before/${alias_key}.json"
+            alias_raw="$RUNNER_TEMP/pr727-alias-before-${alias_key}.json"
+            alias_out="$OUTPUT_DIR/aliases-before/${alias_key}.json"
             curl -fsS \
               -H "Authorization: Bearer ${VERCEL_TOKEN}" \
               "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" \
-              > "$alias_path"
+              > "$alias_raw"
             jq -e \
               --arg alias "$alias_name" \
               --arg project "$VERCEL_PROJECT_ID" \
@@ -179,19 +212,27 @@ jobs:
                 (.alias == $alias)
                 and (.projectId == $project)
                 and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
-              ' "$alias_path" >/dev/null
+              ' "$alias_raw" >/dev/null
+            jq '{
+              alias,
+              projectId,
+              deploymentId:(.deploymentId // .deployment.id // .deployment.uid)
+            }' "$alias_raw" > "$alias_out"
           done
 
+          : > "$OUTPUT_DIR/http-before.txt"
           for origin in "$APEX_ORIGIN" "$CANONICAL_ORIGIN"; do
-            result_path="$OUTPUT_DIR/http-$(printf '%s' "$origin" | sha256sum | cut -c1-12)-before.txt"
+            result="$RUNNER_TEMP/pr727-http-before.txt"
+            printf 'requested=%s\n' "${origin}/trades/new" > "$result"
             curl -sS -L --max-redirs 5 --max-time 60 \
               -o /dev/null \
               -w 'status=%{http_code}\neffective=%{url_effective}\nredirects=%{num_redirects}\n' \
-              "${origin}/trades/new" \
-              | tee "$result_path"
-            grep -Fxq 'status=200' "$result_path"
-            redirects="$(sed -n 's/^redirects=//p' "$result_path")"
+              "${origin}/trades/new" >> "$result"
+            grep -Fxq 'status=200' "$result"
+            redirects="$(sed -n 's/^redirects=//p' "$result")"
             test "$redirects" -le 5
+            cat "$result" >> "$OUTPUT_DIR/http-before.txt"
+            printf '\n' >> "$OUTPUT_DIR/http-before.txt"
           done
           echo 'exit_code=0' >> "$GITHUB_OUTPUT"
 
@@ -227,20 +268,20 @@ jobs:
                   qa_scope:"pr727_create_production_uat",
                   qa_run_id:$runId
                 }
-              }
-            ')"
+              }')"
+          auth_raw="$RUNNER_TEMP/pr727-auth-user-created.json"
           status="$(curl -sS \
             -X POST \
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H 'Content-Type: application/json' \
-            -o "$OUTPUT_DIR/auth-user-created.json" \
+            -o "$auth_raw" \
             -w '%{http_code}' \
             --data "$request_body" \
             "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users")"
           unset request_body qa_password
           test "$status" = '200' -o "$status" = '201'
-          qa_user_id="$(jq -r '.id // empty' "$OUTPUT_DIR/auth-user-created.json")"
+          qa_user_id="$(jq -r '.id // empty' "$auth_raw")"
           test -n "$qa_user_id"
           jq -e \
             --arg id "$qa_user_id" \
@@ -251,46 +292,49 @@ jobs:
               and (.email_confirmed_at != null)
               and (.user_metadata.qa_scope == "pr727_create_production_uat")
               and (.user_metadata.qa_run_id == $run)
-            ' "$OUTPUT_DIR/auth-user-created.json" >/dev/null
+            ' "$auth_raw" >/dev/null
           printf '%s' "$qa_user_id" > "$RUNNER_TEMP/pr727-qa-user-id"
 
-          profile_ready=false
-          for attempt in $(seq 1 30); do
+          profile_raw="$RUNNER_TEMP/pr727-profile-created.json"
+          profile_count=-1
+          for attempt in $(seq 1 20); do
             curl -fsS \
               -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
               "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?id=eq.${qa_user_id}&select=id,email,display_name" \
-              > "$RUNNER_TEMP/pr727-profile-created.json"
-            if jq -e \
-              --arg id "$qa_user_id" \
-              --arg email "$qa_email" '
-                length == 1
-                and .[0].id == $id
-                and ((.[0].email // "") | ascii_downcase == ($email | ascii_downcase))
-              ' "$RUNNER_TEMP/pr727-profile-created.json" >/dev/null; then
-              profile_ready=true
+              > "$profile_raw"
+            profile_count="$(jq 'length' "$profile_raw")"
+            if [[ "$profile_count" = '0' || "$profile_count" = '1' ]]; then
               break
             fi
             sleep 1
           done
-          test "$profile_ready" = 'true'
+          test "$profile_count" = '0' -o "$profile_count" = '1'
+          if [[ "$profile_count" = '1' ]]; then
+            jq -e --arg id "$qa_user_id" '.[0].id == $id' "$profile_raw" >/dev/null
+          fi
 
           echo "PR727_QA_USER_ID=$qa_user_id" >> "$GITHUB_ENV"
           echo "PR727_QA_EMAIL=$qa_email" >> "$GITHUB_ENV"
           echo "PR727_QA_RUN_ID=$qa_run_id" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" >> "$GITHUB_ENV"
-          public_key="$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$public_key" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" >> "$GITHUB_ENV"
           echo "PR727_OUTPUT_DIR=$OUTPUT_DIR" >> "$GITHUB_ENV"
 
           jq -n \
             --arg userId "$qa_user_id" \
             --arg email "$qa_email" \
             --arg runId "$qa_run_id" \
-            --arg createdAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{userId:$userId,email:$email,qaScope:"pr727_create_production_uat",qaRunId:$runId,profileCreated:true,createdAt:$createdAt}' \
-            > "$OUTPUT_DIR/fixture-summary.json"
-          rm -f "$RUNNER_TEMP/pr727-profile-created.json"
+            --argjson profileCreated "$([[ "$profile_count" = '1' ]] && echo true || echo false)" \
+            --arg createdAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {
+                userId:$userId,
+                email:$email,
+                qaScope:"pr727_create_production_uat",
+                qaRunId:$runId,
+                profileCreated:$profileCreated,
+                createdAt:$createdAt
+              }' > "$OUTPUT_DIR/fixture-summary.json"
           echo 'exit_code=0' >> "$GITHUB_OUTPUT"
 
       - name: Run authenticated desktop and mobile canonical Create UAT
@@ -326,11 +370,12 @@ jobs:
           set -uo pipefail
           code=0
           mkdir -p "$OUTPUT_DIR/aliases-after"
+          detail_raw="$RUNNER_TEMP/pr727-deployment-after.json"
           set +e
           curl -fsS \
             -H "Authorization: Bearer ${VERCEL_TOKEN}" \
             "https://api.vercel.com/v13/deployments/${EXPECTED_DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
-            > "$OUTPUT_DIR/deployment-after.json"
+            > "$detail_raw"
           curl_code=$?
           set -e
           if [[ "$curl_code" -ne 0 ]] || ! jq -e \
@@ -342,19 +387,30 @@ jobs:
               and ((.readyState // .state // "") == "READY")
               and (.target == "production")
               and (.meta.githubCommitSha == $sha)
-            ' "$OUTPUT_DIR/deployment-after.json" >/dev/null; then
+            ' "$detail_raw" >/dev/null; then
             code=80
+          else
+            jq '{
+              id:(.id // .uid),
+              url,
+              projectId:(.projectId // .project.id),
+              readyState:(.readyState // .state),
+              target,
+              aliasError:(.aliasError // null),
+              githubCommitSha:.meta.githubCommitSha
+            }' "$detail_raw" > "$OUTPUT_DIR/deployment-after.json"
           fi
 
           if [[ "$code" -eq 0 ]]; then
             for alias_name in "$CANONICAL_APEX_DOMAIN" "$CANONICAL_WWW_DOMAIN"; do
               alias_key="${alias_name//./-}"
-              alias_path="$OUTPUT_DIR/aliases-after/${alias_key}.json"
+              alias_raw="$RUNNER_TEMP/pr727-alias-after-${alias_key}.json"
+              alias_out="$OUTPUT_DIR/aliases-after/${alias_key}.json"
               set +e
               curl -fsS \
                 -H "Authorization: Bearer ${VERCEL_TOKEN}" \
                 "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" \
-                > "$alias_path"
+                > "$alias_raw"
               alias_curl=$?
               set -e
               if [[ "$alias_curl" -ne 0 ]] || ! jq -e \
@@ -364,10 +420,15 @@ jobs:
                   (.alias == $alias)
                   and (.projectId == $project)
                   and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
-                ' "$alias_path" >/dev/null; then
+                ' "$alias_raw" >/dev/null; then
                 code=81
                 break
               fi
+              jq '{
+                alias,
+                projectId,
+                deploymentId:(.deploymentId // .deployment.id // .deployment.uid)
+              }' "$alias_raw" > "$alias_out"
             done
           fi
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
@@ -392,11 +453,12 @@ jobs:
 
           if [[ -s "$RUNNER_TEMP/pr727-production-secrets.env" && -n "$user_id" ]]; then
             source "$RUNNER_TEMP/pr727-production-secrets.env"
+            inspect_raw="$RUNNER_TEMP/pr727-user-before-delete.json"
             set +e
             inspect_status="$(curl -sS \
               -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-              -o "$RUNNER_TEMP/pr727-user-before-delete.json" \
+              -o "$inspect_raw" \
               -w '%{http_code}' \
               "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${user_id}")"
             inspect_curl=$?
@@ -410,7 +472,7 @@ jobs:
                   and ((.email // "") | ascii_downcase == ($email | ascii_downcase))
                   and (.user_metadata.qa_scope == "pr727_create_production_uat")
                   and (.user_metadata.qa_run_id == $run)
-                ' "$RUNNER_TEMP/pr727-user-before-delete.json" >/dev/null; then
+                ' "$inspect_raw" >/dev/null; then
               code=82
             else
               set +e
@@ -479,11 +541,20 @@ jobs:
             --argjson authAbsent "$auth_absent" \
             --argjson profileAbsent "$profile_absent" \
             --argjson exitCode "$code" \
-            --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{userId:($userId|select(length>0)),email:($email|select(length>0)),deleted:$deleted,authUserAbsent:$authAbsent,profileAbsent:$profileAbsent,exitCode:$exitCode,completedAt:$completedAt}' \
-            > "$OUTPUT_DIR/cleanup-summary.json"
+            --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {
+                userId:(if $userId == "" then null else $userId end),
+                email:(if $email == "" then null else $email end),
+                deleted:$deleted,
+                authUserAbsent:$authAbsent,
+                profileAbsent:$profileAbsent,
+                exitCode:$exitCode,
+                completedAt:$completedAt
+              }' > "$OUTPUT_DIR/cleanup-summary.json"
           rm -f \
             "$RUNNER_TEMP/pr727-qa-password" \
+            "$RUNNER_TEMP/pr727-auth-user-created.json" \
+            "$RUNNER_TEMP/pr727-profile-created.json" \
             "$RUNNER_TEMP/pr727-user-before-delete.json" \
             "$RUNNER_TEMP/pr727-user-delete.json" \
             "$RUNNER_TEMP/pr727-user-after-delete.json" \
@@ -536,8 +607,12 @@ jobs:
           assert(result.mobile.autocomplete.position === 'static', 'Mobile autocomplete did not stay in flow.');
           assert(result.desktop.requestSurface.requestPanelStyle.tagName === 'DIV', 'Request panel was not a DIV.');
           assert(result.desktop.requestSurface.requestPanelStyle.backgroundColor === 'rgb(255, 253, 248)', 'Request panel background mismatch.');
-          for (const ratio of Object.values(result.desktop.requestSurface.contrasts)) assert(ratio >= 4.5, 'Desktop contrast below 4.5.');
-          for (const ratio of Object.values(result.mobile.requestSurface.contrasts)) assert(ratio >= 4.5, 'Mobile contrast below 4.5.');
+          for (const ratio of Object.values(result.desktop.requestSurface.contrasts)) {
+            assert(ratio >= 4.5, 'Desktop contrast below 4.5.');
+          }
+          for (const ratio of Object.values(result.mobile.requestSurface.contrasts)) {
+            assert(ratio >= 4.5, 'Mobile contrast below 4.5.');
+          }
           assert(result.desktop.keyboard.ratio >= 4.5 && result.mobile.keyboard.ratio >= 4.5, 'Selected-suggestion contrast below 4.5.');
           assert(cleanup.exitCode === 0 && cleanup.deleted === true, 'Run-owned Auth fixture was not deleted.');
           assert(cleanup.authUserAbsent === true && cleanup.profileAbsent === true, 'Run-owned Auth residue remained.');
@@ -587,7 +662,15 @@ jobs:
             evidence_code=87
           fi
 
-          rm -f "$RUNNER_TEMP/pr727-production-secrets.env" "$RUNNER_TEMP/pr727-qa-email" "$RUNNER_TEMP/pr727-qa-user-id" "$RUNNER_TEMP/pr727-qa-run-id"
+          rm -f \
+            "$RUNNER_TEMP/pr727-production-secrets.env" \
+            "$RUNNER_TEMP/pr727-qa-email" \
+            "$RUNNER_TEMP/pr727-qa-user-id" \
+            "$RUNNER_TEMP/pr727-qa-run-id" \
+            "$RUNNER_TEMP/pr727-vercel-pull.log" \
+            "$RUNNER_TEMP"/pr727-deployment-*.json \
+            "$RUNNER_TEMP"/pr727-alias-*.json \
+            "$RUNNER_TEMP"/pr727-http-before.txt
           rm -rf .vercel
           test -z "$(git status --porcelain --untracked-files=no)" || evidence_code=88
           printf '%s\n' "$evidence_code" > "$OUTPUT_DIR/evidence-exit-code.txt"
