@@ -1,4 +1,4 @@
-name: Issue 714 PR 698 merge diagnostic
+name: Issue 714 PR 698 authorized merge executor
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
       - ops/issue714-pr698-merge-diagnostic-20260817
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  merge:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out PR branch with complete history
@@ -18,18 +18,25 @@ jobs:
           ref: agent/issue-675-activation-routing-canonical-walkthrough
           fetch-depth: 0
 
-      - name: Verify exact inputs and simulate normal merge
+      - name: Merge exact current main and resolve the single audited conflict
         shell: bash
         run: |
           set -euo pipefail
           EXPECTED_MAIN='c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3'
           EXPECTED_HEAD='8f1ddb8b15204536155b669d8d3d1f76498e7e78'
+          TARGET_BRANCH='agent/issue-675-activation-routing-canonical-walkthrough'
+          REPORT='/tmp/issue714-pr698-merge-report.txt'
+
+          git fetch --no-tags origin main "$TARGET_BRANCH"
           ACTUAL_HEAD="$(git rev-parse HEAD)"
-          git fetch --no-tags origin main
           ACTUAL_MAIN="$(git rev-parse origin/main)"
-          printf 'expected_head=%s\nactual_head=%s\nexpected_main=%s\nactual_main=%s\n' \
-            "$EXPECTED_HEAD" "$ACTUAL_HEAD" "$EXPECTED_MAIN" "$ACTUAL_MAIN" | tee /tmp/issue714-merge-diagnostic.txt
+          REMOTE_HEAD="$(git rev-parse "origin/$TARGET_BRANCH")"
+          {
+            printf 'expected_head=%s\nactual_head=%s\nremote_head=%s\n' "$EXPECTED_HEAD" "$ACTUAL_HEAD" "$REMOTE_HEAD"
+            printf 'expected_main=%s\nactual_main=%s\n' "$EXPECTED_MAIN" "$ACTUAL_MAIN"
+          } | tee "$REPORT"
           test "$ACTUAL_HEAD" = "$EXPECTED_HEAD"
+          test "$REMOTE_HEAD" = "$EXPECTED_HEAD"
           test "$ACTUAL_MAIN" = "$EXPECTED_MAIN"
 
           git config user.name 'github-actions[bot]'
@@ -40,27 +47,55 @@ jobs:
           MERGE_STATUS=$?
           set -e
 
+          mapfile -t CONFLICTS < <(git diff --name-only --diff-filter=U)
           {
-            printf '\nmerge_status=%s\n\n' "$MERGE_STATUS"
+            printf '\nmerge_status=%s\n' "$MERGE_STATUS"
+            printf 'conflict_count=%s\n' "${#CONFLICTS[@]}"
+            printf 'conflicts=%s\n' "${CONFLICTS[*]:-none}"
             printf '%s\n' '--- merge stdout ---'
             cat /tmp/merge.stdout
             printf '%s\n' '--- merge stderr ---'
             cat /tmp/merge.stderr
-            printf '%s\n' '--- unmerged paths ---'
-            git diff --name-only --diff-filter=U || true
-            printf '%s\n' '--- index status ---'
+          } >> "$REPORT"
+
+          test "$MERGE_STATUS" -eq 1
+          test "${#CONFLICTS[@]}" -eq 1
+          test "${CONFLICTS[0]}" = 'tests/offers-density.spec.ts'
+
+          # Current main owns the comprehensive Offers hybrid browser contract.
+          # PR #698's activation work does not own this file's product semantics.
+          git checkout --theirs -- tests/offers-density.spec.ts
+          git add tests/offers-density.spec.ts
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --check
+
+          git commit -m 'Merge current main into activation routing candidate'
+          NEW_HEAD="$(git rev-parse HEAD)"
+          NEW_TREE="$(git rev-parse HEAD^{tree})"
+          FIRST_PARENT="$(git rev-parse HEAD^1)"
+          SECOND_PARENT="$(git rev-parse HEAD^2)"
+          BEHIND="$(git rev-list --count HEAD..origin/main)"
+          AHEAD="$(git rev-list --count origin/main..HEAD)"
+          {
+            printf '\nnew_head=%s\nnew_tree=%s\n' "$NEW_HEAD" "$NEW_TREE"
+            printf 'first_parent=%s\nsecond_parent=%s\n' "$FIRST_PARENT" "$SECOND_PARENT"
+            printf 'ahead=%s\nbehind=%s\n' "$AHEAD" "$BEHIND"
+            printf '%s\n' '--- committed status ---'
             git status --short
-            printf '%s\n' '--- conflict hunks ---'
-            git diff --cc || true
-          } >> /tmp/issue714-merge-diagnostic.txt
+          } | tee -a "$REPORT"
 
-          cat /tmp/issue714-merge-diagnostic.txt
-          git merge --abort || true
+          test "$FIRST_PARENT" = "$EXPECTED_HEAD"
+          test "$SECOND_PARENT" = "$EXPECTED_MAIN"
+          test "$BEHIND" = '0'
+          test -z "$(git status --porcelain)"
 
-      - name: Upload diagnostic
+          git push origin "HEAD:$TARGET_BRANCH"
+          printf 'pushed=true\n' | tee -a "$REPORT"
+
+      - name: Upload merge evidence
         uses: actions/upload-artifact@v4
         with:
-          name: issue714-pr698-merge-diagnostic
-          path: /tmp/issue714-merge-diagnostic.txt
+          name: issue714-pr698-authorized-merge
+          path: /tmp/issue714-pr698-merge-report.txt
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
