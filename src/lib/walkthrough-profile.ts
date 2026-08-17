@@ -61,9 +61,28 @@ function clean(value: unknown, maxLength = 160) {
     .slice(0, maxLength);
 }
 
-function readSearchParam(searchParams: SearchParams | undefined, key: string) {
-  const value = searchParams?.[key];
-  return Array.isArray(value) ? clean(value[0]) : clean(value);
+export const WALKTHROUGH_PRIVATE_QUERY_KEYS = [
+  "source",
+  "cause_area",
+  "walkthrough_cause",
+  "offer_type",
+  "match_name",
+  "match_get",
+  "match_give",
+  "participant_kind",
+  "primary_goal",
+  "first_action",
+] as const;
+
+export function hasWalkthroughPrivateQuery(searchParams: SearchParams | undefined) {
+  if (!searchParams) return false;
+
+  return WALKTHROUGH_PRIVATE_QUERY_KEYS.some((key) => {
+    const value = searchParams[key];
+    return Array.isArray(value)
+      ? value.some((item) => clean(item).length > 0)
+      : clean(value).length > 0;
+  });
 }
 
 export function mapWalkthroughCauseToCauseArea(cause: string): WalkthroughCauseArea {
@@ -151,30 +170,10 @@ export function parseWalkthroughProfileDraft(value: string | null | undefined) {
 
 export function getWalkthroughProfileDraft({
   cookieValue,
-  searchParams,
 }: {
   cookieValue?: string | null;
   searchParams?: SearchParams;
 }) {
-  const source = readSearchParam(searchParams, "source");
-  const hasQueryDraft =
-    source === "walkthrough" ||
-    Boolean(readSearchParam(searchParams, "offer_type")) ||
-    Boolean(readSearchParam(searchParams, "match_name"));
-
-  if (hasQueryDraft) {
-    const queryDraft = createWalkthroughProfileDraft({
-      originalCause: readSearchParam(searchParams, "walkthrough_cause"),
-      causeArea: readSearchParam(searchParams, "cause_area"),
-      offerType: readSearchParam(searchParams, "offer_type"),
-      matchName: readSearchParam(searchParams, "match_name"),
-      matchGet: readSearchParam(searchParams, "match_get"),
-      matchGive: readSearchParam(searchParams, "match_give"),
-    });
-
-    if (queryDraft) return queryDraft;
-  }
-
   return parseWalkthroughProfileDraft(cookieValue);
 }
 
@@ -213,29 +212,11 @@ export function getCompleteProfileDraft({
 }
 
 export function buildWalkthroughOnboardingPath(draft: WalkthroughProfileDraft) {
-  const query = new URLSearchParams({
-    source: "walkthrough",
-    cause_area: draft.causeArea,
-    walkthrough_cause: draft.originalCause,
-    offer_type: draft.offerType,
-    match_name: draft.matchName,
-    match_get: draft.matchGet,
-    match_give: draft.matchGive,
-  });
-
-  return `/onboarding?${query.toString()}`;
+  void draft;
+  return "/onboarding";
 }
 
 export function buildWalkthroughCompleteProfilePath(draft: WalkthroughProfileDraft) {
-  const query = new URLSearchParams({
-    source: "walkthrough",
-    cause_area: draft.causeArea,
-    walkthrough_cause: draft.originalCause,
-    offer_type: draft.offerType,
-    match_name: draft.matchName,
-    match_get: draft.matchGet,
-    match_give: draft.matchGive,
-  });
-
-  return `/complete-profile?${query.toString()}`;
+  void draft;
+  return "/complete-profile";
 }

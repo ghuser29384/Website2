@@ -21,7 +21,7 @@ import {
 } from "@/lib/x-profile-connector";
 import {
   getCompleteProfileDraft,
-  type WalkthroughProfileDraft,
+  hasWalkthroughPrivateQuery,
   WALKTHROUGH_PROFILE_COOKIE_NAME,
 } from "@/lib/walkthrough-profile";
 
@@ -41,28 +41,31 @@ interface CompleteProfilePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-function buildCompleteProfilePath(draft: WalkthroughProfileDraft) {
-  if (draft.source === "direct") return "/complete-profile";
-
-  const query = new URLSearchParams({
-    source: "walkthrough",
-    cause_area: draft.causeArea,
-    walkthrough_cause: draft.originalCause,
-    offer_type: draft.offerType,
-    match_name: draft.matchName,
-    match_get: draft.matchGet,
-    match_give: draft.matchGive,
-  });
-
-  return `/complete-profile?${query.toString()}`;
-}
-
 function readSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
 export default async function CompleteProfilePage({ searchParams }: CompleteProfilePageProps) {
   const resolvedSearchParams = await searchParams;
+
+  if (hasWalkthroughPrivateQuery(resolvedSearchParams)) {
+    const safeParams = new URLSearchParams();
+    if (readSearchParam(resolvedSearchParams.username_required) === "1") {
+      safeParams.set("username_required", "1");
+    }
+    if (readSearchParam(resolvedSearchParams.sources) === "x") {
+      safeParams.set("sources", "x");
+    }
+    if (readSearchParam(resolvedSearchParams.panel) === "connections") {
+      safeParams.set("panel", "connections");
+    }
+    if (readSearchParam(resolvedSearchParams.next) === "/feed") {
+      safeParams.set("next", "/feed");
+    }
+    const cleanQuery = safeParams.toString();
+    redirect(`/complete-profile${cleanQuery ? `?${cleanQuery}` : ""}`);
+  }
+
   const cookieStore = await cookies();
   const usernamePromptRequested =
     readSearchParam(resolvedSearchParams.username_required) === "1";
@@ -80,7 +83,6 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   const profileDraft = getCompleteProfileDraft({
     allowDirect: activationState.kind === "available",
     cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
-    searchParams: resolvedSearchParams,
   });
 
   if (!profileDraft) {
@@ -104,7 +106,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
     username: xConnectorStatus.username,
   };
   const requestedSuccessTo = "/feed";
-  const baseReturnTo = buildCompleteProfilePath(profileDraft);
+  const baseReturnTo = "/complete-profile";
   const returnTo = usernamePromptRequested
     ? `${baseReturnTo}${baseReturnTo.includes("?") ? "&" : "?"}${new URLSearchParams({
         username_required: "1",

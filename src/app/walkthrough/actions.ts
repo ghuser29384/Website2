@@ -105,9 +105,7 @@ export async function completeWalkthroughActivationAction(formData: FormData) {
 
   if (transitionError || transitionedStage !== "sparks_required") {
     console.error("Failed to persist walkthrough activation", {
-      message: transitionError?.message ?? "Unexpected activation stage",
-      profileId: viewer.authUser.id,
-      transitionedStage,
+      reason: transitionError ? "transition_error" : "unexpected_stage",
     });
     redirectWithError("Walkthrough completion was not saved. Review & refine to retry safely.");
   }

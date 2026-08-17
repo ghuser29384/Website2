@@ -1,13 +1,54 @@
 import { expect, test } from "@playwright/test";
 
-const completeProfilePath =
-  "/complete-profile?source=walkthrough&cause_area=Animal%20welfare&walkthrough_cause=Factory%20farming&offer_type=Money&match_name=Mina%20Park&match_get=Fund%20a%20verified%20animal-welfare%20review&match_give=Replace%20eight%20car%20trips%20with%20transit";
+const privateQueryKeys = [
+  "source",
+  "cause_area",
+  "walkthrough_cause",
+  "offer_type",
+  "match_name",
+  "match_get",
+  "match_give",
+];
+const legacyCompleteProfilePath =
+  "/complete-profile?source=walkthrough&cause_area=private-sentinel-a&walkthrough_cause=private-sentinel-b&offer_type=Money&match_name=private-sentinel-c&match_get=private-sentinel-d&match_give=private-sentinel-e";
 
-test("a local Walkthrough draft cannot unlock Complete Profile without persisted activation", async ({ page }) => {
-  await page.goto(completeProfilePath);
+test("a legacy query-bearing Walkthrough draft is normalized and cannot unlock Complete Profile", async ({ page }) => {
+  const navigations: string[] = [];
+  page.on("request", (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      navigations.push(request.url());
+    }
+  });
+
+  await page.goto(legacyCompleteProfilePath);
 
   await expect(page).toHaveURL(/\/walkthrough$/);
   await expect(page.getByLabel("Profile setup: priorities")).toHaveCount(0);
+  expect(navigations[0]).toContain("/complete-profile?");
+  expect(navigations.length).toBeGreaterThanOrEqual(2);
+
+  for (const navigation of navigations.slice(1)) {
+    for (const key of privateQueryKeys) {
+      expect(navigation).not.toContain(`${key}=`);
+    }
+    expect(navigation).not.toContain("private-sentinel");
+  }
+
+  const referrer = await page.evaluate(() => document.referrer);
+  for (const key of privateQueryKeys) {
+    expect(referrer).not.toContain(`${key}=`);
+  }
+  expect(referrer).not.toContain("private-sentinel");
+
+  const hrefs = await page.locator("a[href]").evaluateAll((links) =>
+    links.map((link) => (link as HTMLAnchorElement).href),
+  );
+  for (const href of hrefs) {
+    for (const key of privateQueryKeys) {
+      expect(href).not.toContain(`${key}=`);
+    }
+    expect(href).not.toContain("private-sentinel");
+  }
 });
 
 test("a first-time Complete Profile visit is still sent to the mandatory Walkthrough", async ({
