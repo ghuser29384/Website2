@@ -72,11 +72,21 @@ test("query parameters cannot supply or override a private Walkthrough draft", (
 
 test("activation source wiring keeps identifiers and private draft values out of logs and return paths", () => {
   const actionSource = readFileSync("src/app/walkthrough/actions.ts", "utf8");
+  const completeActionSource = readFileSync("src/app/complete-profile/actions.ts", "utf8");
   const pageSource = readFileSync("src/app/complete-profile/page.tsx", "utf8");
 
   assert.doesNotMatch(actionSource, /profileId:/);
   assert.doesNotMatch(actionSource, /message:\s*transitionError/);
+  assert.match(actionSource, /path:\s*"\/complete-profile"/);
   assert.match(actionSource, /buildWalkthroughCompleteProfilePath\(draft\)/);
+  assert.doesNotMatch(completeActionSource, /profileId:/);
+  assert.doesNotMatch(completeActionSource, /message:\s*transitionError/);
+  assert.doesNotMatch(
+    completeActionSource,
+    /console\.error\([\s\S]*?,\s*(?:error|profileError|onboardingError|wishProfileError|synthesisError)\);/,
+  );
+  assert.match(completeActionSource, /getSafeErrorCode/);
+  assert.match(completeActionSource, /path:\s*"\/complete-profile"/);
   assert.match(pageSource, /hasWalkthroughPrivateQuery\(resolvedSearchParams\)/);
   assert.match(pageSource, /const baseReturnTo = "\/complete-profile"/);
   assert.doesNotMatch(pageSource, /buildCompleteProfilePath/);

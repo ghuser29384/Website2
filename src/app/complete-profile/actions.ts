@@ -32,6 +32,17 @@ function read(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
+function getSafeErrorCode(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return "unknown";
+  }
+
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(code)
+    ? code
+    : "unknown";
+}
+
 function redirectWithMessage(path: string, key: "error" | "message", text: string): never {
   const url = new URL(path, "https://moraltrade.org");
   url.searchParams.set(key, text);
@@ -144,7 +155,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
       includeOfferType: profileSource === "walkthrough",
     });
   } catch (error) {
-    console.error("Failed to encrypt complete-profile preferences", error);
+    console.error("Failed to encrypt complete-profile preferences", { code: getSafeErrorCode(error) });
     redirectWithMessage(
       returnTo,
       "error",
@@ -173,7 +184,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     .eq("id", viewer.authUser.id);
 
   if (profileError) {
-    console.error("Failed to update complete profile identity", profileError);
+    console.error("Failed to update complete profile identity", { code: getSafeErrorCode(profileError) });
     const usernameConflict =
       profileError.code === "23505" ||
       /username.*(?:claimed|reserved|unique|already)/iu.test(profileError.message ?? "");
@@ -208,7 +219,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     );
 
   if (onboardingError) {
-    console.error("Failed to save complete profile onboarding", onboardingError);
+    console.error("Failed to save complete profile onboarding", { code: getSafeErrorCode(onboardingError) });
     redirectWithMessage(
       returnTo,
       "error",
@@ -292,7 +303,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
   }
 
   if (wishProfileError) {
-    console.error("Failed to save complete profile matching preferences", wishProfileError);
+    console.error("Failed to save complete profile matching preferences", { code: getSafeErrorCode(wishProfileError) });
     redirectWithMessage(returnTo, "error", "Your profile preferences could not be saved.");
   }
 
@@ -307,7 +318,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     );
 
   if (synthesisError) {
-    console.error("Failed to attach ranked priorities to profile synthesis", synthesisError);
+    console.error("Failed to attach ranked priorities to profile synthesis", { code: getSafeErrorCode(synthesisError) });
     redirectWithMessage(
       returnTo,
       "error",
@@ -337,9 +348,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
 
   if (transitionError || transitionedStage !== "setup_complete") {
     console.error("Failed to persist completed profile activation", {
-      message: transitionError?.message ?? "Unexpected activation stage",
-      profileId: viewer.authUser.id,
-      transitionedStage,
+      reason: transitionError ? "transition_error" : "unexpected_stage",
     });
     redirectWithMessage(
       returnTo,
@@ -350,7 +359,15 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
 
   if (profileSource === "walkthrough") {
     const cookieStore = await cookies();
+    // Clear both the historical root-scoped cookie and the current private handoff cookie.
     cookieStore.delete(WALKTHROUGH_PROFILE_COOKIE_NAME);
+    cookieStore.set(WALKTHROUGH_PROFILE_COOKIE_NAME, "", {
+      expires: new Date(0),
+      httpOnly: true,
+      path: "/complete-profile",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
   }
 
   revalidatePath("/complete-profile");

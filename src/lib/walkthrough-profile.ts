@@ -7,7 +7,7 @@ import {
 
 export const WALKTHROUGH_PROFILE_COOKIE_NAME = "mt_walkthrough_profile_draft";
 export const WALKTHROUGH_PROFILE_STORAGE_KEY = "mt_walkthrough_profile_draft";
-export const WALKTHROUGH_PROFILE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+export const WALKTHROUGH_PROFILE_MAX_AGE_SECONDS = 60 * 60 * 4;
 
 const WALKTHROUGH_OFFER_TYPES = ["Money", "Time", "A pledge"] as const;
 const causeAreaSet = new Set<string>(COHORT_CAUSES);

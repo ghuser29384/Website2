@@ -49,7 +49,7 @@ export async function completeWalkthroughActivationAction(formData: FormData) {
   cookieStore.set(WALKTHROUGH_PROFILE_COOKIE_NAME, encodeWalkthroughProfileDraft(draft), {
     httpOnly: true,
     maxAge: WALKTHROUGH_PROFILE_MAX_AGE_SECONDS,
-    path: "/",
+    path: "/complete-profile",
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
   });
