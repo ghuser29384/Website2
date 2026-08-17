@@ -1,0 +1,78 @@
+name: Patch PR 727 UAT suggestion visibility once
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+    paths:
+      - .github/workflows/patch-pr727-uat-reopen-v2-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-pr727-uat-reopen-v2
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard and patch the UAT harness only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/pr727-production-create-uat-final-20260817'
+          test "$(git rev-parse HEAD^)" = '99098ccdbc84f8aa300a5bc516b18b691436aeec'
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/patch-pr727-uat-reopen-v2-once.yml'
+          git diff --check HEAD^ HEAD
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/scripts/create-production-uat.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = '''  await focusedAfterTab.press("Shift+Tab");
+          await expect(input).toBeFocused();
+          await input.press("ArrowDown");
+          await expect(activeSuggestion).toHaveCount(1);
+          '''
+          old = '\n'.join(line[10:] if line.startswith('          ') else line for line in old.splitlines()) + '\n'
+          new = '''  await focusedAfterTab.press("Shift+Tab");
+          await expect(input).toBeFocused();
+          await input.fill("Revie");
+          await input.fill("Review");
+          await expect(create.locator("#actionSuggestions")).toBeVisible();
+          await input.press("ArrowDown");
+          await expect(activeSuggestion).toHaveCount(1);
+          '''
+          new = '\n'.join(line[10:] if line.startswith('          ') else line for line in new.splitlines()) + '\n'
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected one stale keyboard block, found {source.count(old)}')
+          updated = source.replace(old, new, 1)
+          if updated.count('await input.fill("Revie");') != 1:
+              raise SystemExit('Reopen contract missing or duplicated')
+          path.write_text(updated, encoding='utf-8')
+          PY
+          node --check .github/scripts/create-production-uat.mjs
+          grep -Fq 'await input.fill("Revie");' .github/scripts/create-production-uat.mjs
+          grep -Fq 'await expect(create.locator("#actionSuggestions")).toBeVisible();' .github/scripts/create-production-uat.mjs
+          git diff --check
+          test "$(git diff --name-only)" = '.github/scripts/create-production-uat.mjs'
+
+      - name: Commit and push the harness correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/scripts/create-production-uat.mjs
+          test "$(git diff --cached --name-only)" = '.github/scripts/create-production-uat.mjs'
+          git diff --cached --check
+          git commit -m 'Reopen Create suggestions before geometry checks'
+          git push origin HEAD:ops/pr727-production-create-uat-final-20260817
