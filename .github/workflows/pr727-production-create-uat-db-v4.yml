@@ -1,0 +1,252 @@
+name: PR 727 completed production Create UAT
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+    paths:
+      - .github/workflows/pr727-production-create-uat-db-v4.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr727-completed-production-create-uat
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr727-production-create-uat-final-20260817
+  CONTROLLER_PARENT_SHA: e328e3abc7d92198e2d0fc26db66eda615e3e6be
+  RELEASE_SHA: fd5588fc4ae7f2fed44d6b0d1ca68f24ce1b86ab
+  DEPLOYMENT_ID: dpl_5uNGHmgrNDjraHVRukXyNPeGRgEk
+  DEPLOYMENT_URL: https://moraltrade-site-6vbxdlg7e-ellen-s.vercel.app
+  DEPLOYMENT_HOST: moraltrade-site-6vbxdlg7e-ellen-s.vercel.app
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  SUPABASE_REF: jnpoxvalyjtdghnperyu
+  OUTPUT_DIR: pr727-completed-production-create-uat
+
+jobs:
+  production-uat:
+    environment:
+      name: MoralTrade QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out exact controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard release ancestry and controller-only state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$CONTROLLER_PARENT_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" HEAD
+          git diff --check "$RELEASE_SHA" HEAD
+          git diff --name-only "$RELEASE_SHA" HEAD | sort > controller-files.txt
+          test "$(grep -c '^\.github/' controller-files.txt)" = "$(wc -l < controller-files.txt | tr -d ' ')"
+          mkdir -p "$OUTPUT_DIR"
+          printf 'release_sha=%s\ncontroller_sha=%s\n' "$RELEASE_SHA" "$GITHUB_SHA" > "$OUTPUT_DIR/controller.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client jq curl > /dev/null
+
+      - name: Prepare corrected canonical-live UAT harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/create-production-uat.mjs .github/scripts/create-production-uat.runtime.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/create-production-uat.runtime.mjs')
+          source = path.read_text(encoding='utf-8')
+          start = source.index('async function openCanonicalCreate(page, origin) {')
+          end = source.index('const CAUSES = [', start)
+          entry = '''async function openCanonicalCreate(page, origin) {
+            const response = await page.goto(`${origin}/create`, { waitUntil: "domcontentloaded" });
+            if (!response || response.status() !== 200) throw new Error(`${origin}/create returned ${response?.status() ?? "no response"}.`);
+            await expect(page.getByRole("heading", { level: 1, name: "Create a Moral Trade" })).toBeVisible({ timeout: 30_000 });
+            await expect(page.locator('iframe[title="Moral Trade Create"]')).toBeVisible({ timeout: 30_000 });
+            const finalUrl = new URL(page.url());
+            if (!allowedHosts.has(finalUrl.host) || finalUrl.pathname !== "/create") throw new Error(`${origin}/create resolved unexpectedly to ${page.url()}.`);
+            const chain = redirectChain(response);
+            if (chain.length > 2) throw new Error(`${origin}/create used an unexpected redirect chain: ${chain.join(" -> ")}`);
+            return { origin, finalUrl: page.url(), redirectChain: chain };
+          }
+
+          async function enterCanonicalDraft(page) {
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await expect(create.getByRole("heading", { level: 1, name: "What do you want to improve?" })).toBeVisible({ timeout: 30_000 });
+            return create;
+          }
+
+          '''
+          source = source[:start] + entry + source[end:]
+          replacements = {
+            '{ name: "Factory farming", pattern: /factory farming|animal|meat|vegetarian/i },': '{ name: "Factory farming", pattern: /factory farming|animal(?:-| )welfare|animal|plant-based|meat|vegetarian|vegan/i },',
+            '{ name: "Existential risk", pattern: /existential(?:-| )risk/i },': '{ name: "Existential risk", pattern: /existential(?:-| )risk|x-risk|ai safety|future flourishing|future generations|longterm|catastrophic risk/i },',
+            '{ name: "Priorities research", pattern: /priorities(?:-| )research|cause priorities|resources should be allocated/i },': '{ name: "Priorities research", pattern: /priorities(?:-| )research|global priorities|cause priorit|resource allocation|resources should be allocated/i },',
+            '  await input.press("Tab");\n  await input.press("Shift+Tab");\n  await expect(input).toBeFocused();': '  await input.press("Tab");\n  const focusedAfterTab = create.locator(":focus");\n  await expect(focusedAfterTab).toHaveCount(1);\n  await focusedAfterTab.press("Shift+Tab");\n  await expect(input).toBeFocused();',
+          }
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f'Expected harness contract exactly once: {old}')
+              source = source.replace(old, new, 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+          node --check .github/scripts/create-production-uat.runtime.mjs
+          ! grep -Fq 'Draft a trade' .github/scripts/create-production-uat.runtime.mjs
+          grep -Fq 'focusedAfterTab.press("Shift+Tab")' .github/scripts/create-production-uat.runtime.mjs
+
+      - name: Validate protected production endpoints and prepare credentials
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"; test -n "${VERCEL_TOKEN:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          p=urlparse(os.environ['PROD_SUPABASE_DB_URL']); expected=os.environ['SUPABASE_REF']; q=parse_qs(p.query)
+          if not (p.scheme in {'postgres','postgresql'} and p.password and p.path=='/postgres' and (expected in (p.username or '') or expected in (p.hostname or '') or q.get('project',[''])[0]==expected)):
+              raise SystemExit('Refusing non-production database URL.')
+          PY
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -Atv ON_ERROR_STOP=1 -c "select to_regclass('auth.users') is not null and to_regclass('auth.identities') is not null and to_regclass('public.profiles') is not null;" | grep -Fxq t
+          supabase_url="$(sed -nE 's/^const DEFAULT_PUBLIC_SUPABASE_URL = "([^"]+)";$/\1/p' src/lib/supabase/config.ts)"
+          publishable_key="$(awk '/^const DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY =/ {getline; gsub(/^[[:space:]]*"|";[[:space:]]*$/, ""); print; exit}' src/lib/supabase/config.ts)"
+          test -n "$supabase_url"; test -n "$publishable_key"
+          test "$(SUPABASE_URL="$supabase_url" python3 -c 'import os; from urllib.parse import urlparse; print(urlparse(os.environ["SUPABASE_URL"]).hostname.split(".")[0])')" = "$SUPABASE_REF"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"; echo "::add-mask::$publishable_key"
+          umask 077
+          printf 'export NEXT_PUBLIC_SUPABASE_URL=%q\nexport NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%q\nexport PROD_SUPABASE_DB_URL=%q\n' "$supabase_url" "$publishable_key" "$PROD_SUPABASE_DB_URL" > "$RUNNER_TEMP/create-uat-secrets.env"
+
+          raw="$RUNNER_TEMP/deployment-before.json"
+          curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" > "$raw"
+          jq -e --arg id "$DEPLOYMENT_ID" --arg host "$DEPLOYMENT_HOST" --arg project "$VERCEL_PROJECT_ID" --arg sha "$RELEASE_SHA" '((.id//.uid)==$id) and (.url==$host) and ((.projectId//.project.id//"")==$project) and ((.readyState//.state//"")=="READY") and (.target=="production") and (.meta.githubCommitSha==$sha)' "$raw" >/dev/null
+          jq '{id:(.id//.uid),url,projectId:(.projectId//.project.id),readyState:(.readyState//.state),target,githubCommitSha:.meta.githubCommitSha}' "$raw" > "$OUTPUT_DIR/deployment-before.json"
+          mkdir -p "$OUTPUT_DIR/aliases-before"
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"; alias_raw="$RUNNER_TEMP/${key}.json"
+            curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" > "$alias_raw"
+            jq -e --arg alias "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$DEPLOYMENT_ID" '(.alias==$alias) and (.projectId==$project) and ((.deploymentId//.deployment.id//.deployment.uid//"")==$deployment)' "$alias_raw" >/dev/null
+            jq '{alias,projectId,deploymentId:(.deploymentId//.deployment.id//.deployment.uid)}' "$alias_raw" > "$OUTPUT_DIR/aliases-before/${key}.json"
+          done
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Create one run-owned production Auth fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          qa_user_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"; qa_email="create-uat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(openssl rand -hex 6)@qa.moraltrade.invalid"; qa_password="$(openssl rand -base64 36 | tr -d '\n')"; qa_run_id="${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          echo "::add-mask::$qa_password"; umask 077
+          printf '%s' "$qa_user_id" > "$RUNNER_TEMP/qa-user-id"; printf '%s' "$qa_email" > "$RUNNER_TEMP/qa-email"; printf '%s' "$qa_password" > "$RUNNER_TEMP/qa-password"; printf '%s' "$qa_run_id" > "$RUNNER_TEMP/qa-run-id"
+          export CREATE_UAT_USER_ID="$qa_user_id" CREATE_UAT_EMAIL="$qa_email" CREATE_UAT_PASSWORD="$qa_password" CREATE_UAT_RUN_ID="$qa_run_id"
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -X -Atv ON_ERROR_STOP=1 --file .github/scripts/create-production-uat-fixture.sql > "$OUTPUT_DIR/fixture-sql.log"
+          grep -Fq '"fixturePassed": true' "$OUTPUT_DIR/fixture-sql.log"
+          jq -n --arg userId "$qa_user_id" --arg runId "$qa_run_id" '{userId:$userId,scope:"create_production_uat",runId:$runId,transactionalFixture:true}' > "$OUTPUT_DIR/fixture.json"
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Run authenticated canonical desktop and mobile UAT
+        id: browser
+        shell: bash
+        run: |
+          set -uo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          export CREATE_UAT_EXPECTED_MAIN_SHA="$RELEASE_SHA" CREATE_UAT_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID" CREATE_UAT_ORIGINS='https://www.moraltrade.org,https://moraltrade.org' CREATE_UAT_OUTPUT_DIR="$OUTPUT_DIR"
+          export CREATE_UAT_USER_ID="$(cat "$RUNNER_TEMP/qa-user-id")" CREATE_UAT_EMAIL="$(cat "$RUNNER_TEMP/qa-email")" CREATE_UAT_PASSWORD="$(cat "$RUNNER_TEMP/qa-password")"
+          echo "::add-mask::$CREATE_UAT_PASSWORD"; date -u +%Y-%m-%dT%H:%M:%SZ > "$OUTPUT_DIR/uat-started-at.txt"
+          set +e
+          node .github/scripts/create-production-uat.runtime.mjs > >(tee "$OUTPUT_DIR/browser.log") 2> >(tee "$OUTPUT_DIR/browser.stderr.log" >&2)
+          code=$?
+          set -e
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$OUTPUT_DIR/uat-completed-at.txt"; printf '%s\n' "$code" > "$OUTPUT_DIR/browser-exit-code.txt"; echo "exit_code=$code" >> "$GITHUB_OUTPUT"; exit 0
+
+      - name: Reverify deployment and aliases
+        id: alias_after
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          code=0; raw="$RUNNER_TEMP/deployment-after.json"
+          curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" > "$raw" || code=70
+          if [[ "$code" -eq 0 ]] && jq -e --arg id "$DEPLOYMENT_ID" --arg project "$VERCEL_PROJECT_ID" --arg sha "$RELEASE_SHA" '((.id//.uid)==$id) and ((.projectId//.project.id//"")==$project) and ((.readyState//.state//"")=="READY") and (.target=="production") and (.meta.githubCommitSha==$sha)' "$raw" >/dev/null; then jq '{id:(.id//.uid),url,projectId:(.projectId//.project.id),readyState:(.readyState//.state),target,githubCommitSha:.meta.githubCommitSha}' "$raw" > "$OUTPUT_DIR/deployment-after.json"; else code=70; fi
+          mkdir -p "$OUTPUT_DIR/aliases-after"
+          if [[ "$code" -eq 0 ]]; then
+            for alias_name in moraltrade.org www.moraltrade.org; do key="${alias_name//./-}"; alias_raw="$RUNNER_TEMP/after-${key}.json"; curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" > "$alias_raw" || { code=71; break; }; jq -e --arg alias "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$DEPLOYMENT_ID" '(.alias==$alias) and (.projectId==$project) and ((.deploymentId//.deployment.id//.deployment.uid//"")==$deployment)' "$alias_raw" >/dev/null || { code=71; break; }; jq '{alias,projectId,deploymentId:(.deploymentId//.deployment.id//.deployment.uid)}' "$alias_raw" > "$OUTPUT_DIR/aliases-after/${key}.json"; done
+          fi
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"; exit 0
+
+      - name: Remove and prove absence of exact fixture
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          code=0; deleted=false; user_id=''; email=''; run_id=''
+          [[ -s "$RUNNER_TEMP/qa-user-id" ]] && user_id="$(cat "$RUNNER_TEMP/qa-user-id")"; [[ -s "$RUNNER_TEMP/qa-email" ]] && email="$(cat "$RUNNER_TEMP/qa-email")"; [[ -s "$RUNNER_TEMP/qa-run-id" ]] && run_id="$(cat "$RUNNER_TEMP/qa-run-id")"
+          if [[ -s "$RUNNER_TEMP/create-uat-secrets.env" && -n "$user_id" ]]; then source "$RUNNER_TEMP/create-uat-secrets.env"; export CREATE_UAT_USER_ID="$user_id" CREATE_UAT_EMAIL="$email" CREATE_UAT_RUN_ID="$run_id"; PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -X -Atv ON_ERROR_STOP=1 --file .github/scripts/create-production-uat-cleanup.sql > "$OUTPUT_DIR/cleanup-sql.log" 2> "$OUTPUT_DIR/cleanup-sql.stderr.log" || code=80; if [[ "$code" -eq 0 ]] && grep -Fq '"cleanupPassed": true' "$OUTPUT_DIR/cleanup-sql.log"; then deleted=true; elif [[ "$code" -eq 0 ]]; then code=81; fi; else code=82; fi
+          jq -n --arg userId "$user_id" --argjson deleted "$deleted" --argjson exitCode "$code" '{userId:$userId,deleted:$deleted,authUserAbsent:$deleted,identityAbsent:$deleted,profileAbsent:$deleted,sessionAbsent:$deleted,refreshTokenAbsent:$deleted,exitCode:$exitCode}' > "$OUTPUT_DIR/cleanup.json"
+          rm -f "$RUNNER_TEMP"/qa-* "$RUNNER_TEMP/create-uat-secrets.env" .github/scripts/create-production-uat.runtime.mjs
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"; exit 0
+
+      - name: Validate evidence and credential boundary
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          node <<'NODE'
+          const fs=require('node:fs'),path=require('node:path'),dir=process.env.OUTPUT_DIR,read=n=>JSON.parse(fs.readFileSync(path.join(dir,n),'utf8')),fail=m=>{throw new Error(m)};
+          if(Number(fs.readFileSync(path.join(dir,'browser-exit-code.txt'),'utf8').trim())!==0) fail('browser failed');
+          const e=read('evidence.json'),c=read('cleanup.json'); if(e.expectedMainSha!==process.env.RELEASE_SHA||e.expectedDeploymentId!==process.env.DEPLOYMENT_ID) fail('identity mismatch'); if(e.noOfferPaymentTradeOrSyntheticProductRecordCreated!==true) fail('mutation boundary'); if(!e.desktop||!e.mobile||!e.secondCanonical) fail('missing evidence'); for(const d of [e.desktop.diagnostics,e.mobile.diagnostics,e.secondCanonical.diagnostics]) for(const k of ['consoleErrors','hydrationErrors','pageErrors','failedRelevantRequests','httpErrors','mutationRequests']) if(!Array.isArray(d[k])||d[k].length) fail(`diagnostics ${k}`); if(c.exitCode!==0||c.deleted!==true||c.authUserAbsent!==true||c.identityAbsent!==true||c.profileAbsent!==true||c.sessionAbsent!==true||c.refreshTokenAbsent!==true) fail('cleanup'); for(const n of ['create-production-desktop-1644x900.png','create-production-desktop-frame-1644x900.png','create-production-mobile-390x844.png','create-production-mobile-frame-390x844.png']){const f=path.join(dir,n);if(!fs.existsSync(f)||fs.statSync(f).size<1000)fail(`missing ${n}`)} fs.writeFileSync(path.join(dir,'summary.json'),JSON.stringify({releaseSha:e.expectedMainSha,deploymentId:e.expectedDeploymentId,deploymentUrl:process.env.DEPLOYMENT_URL,aliases:['moraltrade.org','www.moraltrade.org'],uatStartedAt:e.startedAt,uatFinishedAt:e.finishedAt,desktopViewport:{width:1644,height:900},mobileViewport:{width:390,height:844},authenticatedCanonicalDomains:true,uiContractPassed:true,browserDiagnosticsClean:true,fixtureDeleted:true,noOfferPaymentTradeOrSyntheticProductRecordCreated:true},null,2)+'\n');
+          NODE
+          code=$?
+          sensitive="$(grep -RIlE --include='*.json' --include='*.log' --include='*.txt' '"password"[[:space:]]*:|"access_token"[[:space:]]*:|"refresh_token"[[:space:]]*:|sb_secret_|SUPABASE_SERVICE_ROLE_KEY|PROD_SUPABASE_DB_URL|VERCEL_TOKEN|CREATE_UAT_PASSWORD|postgres(ql)?://' "$OUTPUT_DIR" controller-files.txt 2>/dev/null || true)"; [[ -n "$sensitive" ]] && { echo "Credential-like artifact content: $sensitive" >&2; code=90; }
+          printf '%s\n' "$code" > "$OUTPUT_DIR/evidence-exit-code.txt"; echo "exit_code=$code" >> "$GITHUB_OUTPUT"; exit 0
+
+      - name: Upload immutable production UAT evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr727-completed-production-create-uat-${{ github.run_id }}
+          path: |
+            controller-files.txt
+            pr727-completed-production-create-uat/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve fail-closed conclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.preflight.outputs.exit_code || '255' }}" = 0
+          test "${{ steps.fixture.outputs.exit_code || '255' }}" = 0
+          test "${{ steps.browser.outputs.exit_code || '255' }}" = 0
+          test "${{ steps.alias_after.outputs.exit_code || '255' }}" = 0
+          test "${{ steps.cleanup.outputs.exit_code || '255' }}" = 0
+          test "${{ steps.evidence.outputs.exit_code || '255' }}" = 0
