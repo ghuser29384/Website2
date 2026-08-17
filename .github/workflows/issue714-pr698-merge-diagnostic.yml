@@ -38,7 +38,13 @@ jobs:
           test "$(git rev-list --count HEAD..origin/main)" = '0'
 
       - name: Apply bounded privacy hardening
-        run: python .github/scripts/issue714-private-log-harden.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          HELPER_BRANCH='ops/issue714-pr698-merge-diagnostic-20260817'
+          git fetch --no-tags origin "$HELPER_BRANCH"
+          git show "origin/$HELPER_BRANCH:.github/scripts/issue714-private-log-harden.py" > /tmp/issue714-private-log-harden.py
+          python /tmp/issue714-private-log-harden.py
 
       - name: Check patch hygiene
         shell: bash
