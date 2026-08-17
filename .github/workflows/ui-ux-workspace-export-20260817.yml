@@ -1,0 +1,50 @@
+name: UI UX workspace export 2026-08-17
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - design/moral-trade-ui-ux-system-20260817
+    paths:
+      - ".github/workflows/ui-ux-workspace-export-20260817.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-ux-workspace-export-20260817
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact candidate with history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record exact identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ui-ux-workspace
+          git rev-parse HEAD | tee /tmp/ui-ux-workspace/head-sha.txt
+          git rev-parse HEAD^{tree} | tee /tmp/ui-ux-workspace/tree-sha.txt
+          git status --short --branch | tee /tmp/ui-ux-workspace/git-status.txt
+
+      - name: Package complete Git workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "$GITHUB_WORKSPACE" -czf "/tmp/ui-ux-workspace/website2-${GITHUB_SHA}.tar.gz" .
+          sha256sum "/tmp/ui-ux-workspace/website2-${GITHUB_SHA}.tar.gz" | tee /tmp/ui-ux-workspace/archive-sha256.txt
+
+      - name: Upload exact-head workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: website2-workspace-${{ github.sha }}
+          path: /tmp/ui-ux-workspace
+          if-no-files-found: error
+          retention-days: 3
