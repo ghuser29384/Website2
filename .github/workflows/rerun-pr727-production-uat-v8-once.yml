@@ -1,0 +1,59 @@
+name: Rerun PR 727 production Create UAT v8 once
+
+on:
+  push:
+    branches:
+      - ops/pr727-production-create-uat-final-20260817
+    paths:
+      - .github/workflows/rerun-pr727-production-uat-v8-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rerun-pr727-production-uat-v8-once
+  cancel-in-progress: false
+
+jobs:
+  rerun:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Guard exact transition-repair parent and arm v8
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/pr727-production-create-uat-final-20260817'
+          test "$(git rev-parse HEAD^)" = '844b4a02191d76e32c95141c45c481ed592963b9'
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/rerun-pr727-production-uat-v8-once.yml'
+          git diff --check HEAD^ HEAD
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          path = Path('.github/workflows/pr727-production-create-uat-db-v8.yml')
+          source = path.read_text(encoding='utf-8')
+          old = '  CONTROLLER_PARENT_SHA: d7ffc3f5aaf0ce8acd296c631fa71df28b319527\n'
+          new = f"  CONTROLLER_PARENT_SHA: {os.environ['GITHUB_SHA']}\n"
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected one stale parent field, found {source.count(old)}')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+          ruby -e "require 'yaml'; abort('invalid workflow YAML') unless YAML.parse_file('.github/workflows/pr727-production-create-uat-db-v8.yml')"
+          git diff --check
+          test "$(git diff --name-only)" = '.github/workflows/pr727-production-create-uat-db-v8.yml'
+      - name: Commit armed workflow and retire one-shot controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/rerun-pr727-production-uat-v8-once.yml
+          git add .github/workflows/pr727-production-create-uat-db-v8.yml
+          git diff --cached --check
+          git commit -m 'Rerun production Create UAT after transition repair'
+          git push origin HEAD:ops/pr727-production-create-uat-final-20260817
