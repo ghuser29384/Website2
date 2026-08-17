@@ -1,0 +1,573 @@
+name: MPGF DAC product lifecycle gates
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
+      - "src/app/api/mpgf/dac/**"
+      - "src/app/mpgf/actions.ts"
+      - "src/app/mpgf/admin/**"
+      - "src/app/mpgf/campaigns/**"
+      - "src/app/mpgf/pools/**"
+      - "src/components/mpgf/**"
+      - "src/lib/mpgf/dac-*.ts"
+      - "src/lib/mpgf/participant-types.ts"
+      - "src/lib/mpgf/persistence.ts"
+      - "src/app/globals.css"
+      - "supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql"
+      - "supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql"
+      - "supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql"
+      - "supabase/tests/mpgf_dac_product_browser_*.sql"
+      - "supabase/tests/mpgf_dac_public_terms_api.sql"
+      - "tests/mpgf-dac-product-lifecycle.spec.ts"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
+      - "src/app/api/mpgf/dac/**"
+      - "src/app/mpgf/actions.ts"
+      - "src/app/mpgf/admin/**"
+      - "src/app/mpgf/campaigns/**"
+      - "src/app/mpgf/pools/**"
+      - "src/components/mpgf/**"
+      - "src/lib/mpgf/dac-*.ts"
+      - "src/lib/mpgf/participant-types.ts"
+      - "src/lib/mpgf/persistence.ts"
+      - "src/app/globals.css"
+      - "supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql"
+      - "supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql"
+      - "supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql"
+      - "supabase/tests/mpgf_dac_product_browser_*.sql"
+      - "supabase/tests/mpgf_dac_public_terms_api.sql"
+      - "tests/mpgf-dac-product-lifecycle.spec.ts"
+  workflow_dispatch:
+
+concurrency:
+  # Every isolated-QA execution mutates the same deterministic synthetic IDs.
+  # Serialize all branches and events so another run cannot drift the shared QA
+  # schema or delete fixtures while an exact-head proof is in progress.
+  group: mpgf-dac-product-lifecycle-shared-qa
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  source-gates:
+    name: Exact-version product source, tests, lint, types, and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || 'ff76d5944ece2bb9b1ba06de5c21fd3105536b42' }}
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
+          {
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            sha256sum \
+              supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql \
+              supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql \
+              supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql \
+              supabase/tests/mpgf_dac_public_terms_api.sql \
+              supabase/tests/mpgf_dac_product_browser_fixture.sql \
+              supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+              tests/mpgf-dac-product-lifecycle.spec.ts
+          } | tee mpgf-dac-product-exact-head.txt
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused product contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-lifecycle-model.test.ts \
+            src/lib/mpgf/dac-public-terms-migration.test.ts \
+            src/lib/mpgf/dac-terminal-event-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-terminal-schema-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts \
+            | tee mpgf-dac-product-focused.log
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test | tee mpgf-dac-product-repository-tests.log
+
+      - name: Run repository lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet | tee mpgf-dac-product-lint.log
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit | tee mpgf-dac-product-typecheck.log
+
+      - name: Build the production application
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build | tee mpgf-dac-product-build.log
+
+      - name: Verify exact diff hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check "$EXPECTED_BASE_SHA" "$EXPECTED_HEAD_SHA"
+          git diff --name-only "$EXPECTED_BASE_SHA" "$EXPECTED_HEAD_SHA" \
+            | sort | tee mpgf-dac-product-diff-files.txt
+
+      - name: Upload source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-product-source-${{ github.run_id }}
+          path: |
+            mpgf-dac-product-*.txt
+            mpgf-dac-product-*.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  isolated-qa:
+    name: Creator, reviewer, pledge, success, lapse, privacy, and zero-residue proof
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: source-gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      ADMIN_EMAILS: dac-product-reviewer@qa.invalid
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      MPGF_DAC_PRODUCT_BASE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact isolated-QA target and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only Moral Trade QA target.")
+          PY
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Verify all stacked DAC foundations
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align <<'SQL' | tee mpgf-dac-product-parent-foundation.txt
+          select 'review_freeze=' ||
+            (to_regprocedure('public.mpgf_approve_and_freeze_pool_proposal(uuid,uuid,text)') is not null);
+          select 'publication=' ||
+            (to_regprocedure('public.mpgf_publish_pool_proposal(uuid,text,text,uuid,text)') is not null);
+          select 'canonical_pledge=' ||
+            (to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') is not null);
+          select 'terminal=' ||
+            (to_regprocedure('public.mpgf_finalize_dac_campaign(text,uuid,text)') is not null);
+          SQL
+          grep -Fxq 'review_freeze=true' mpgf-dac-product-parent-foundation.txt
+          grep -Fxq 'publication=true' mpgf-dac-product-parent-foundation.txt
+          grep -Fxq 'canonical_pledge=true' mpgf-dac-product-parent-foundation.txt
+          grep -Fxq 'terminal=true' mpgf-dac-product-parent-foundation.txt
+
+      - name: Compile terminal-schema reconciliation migrations in rollback-only transactions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          from pathlib import Path
+
+          migrations = [
+              Path("supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql"),
+              Path("supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql"),
+          ]
+          for migration in migrations:
+              source = migration.read_text()
+              if not source.lstrip().startswith("begin;"):
+                  raise SystemExit(f"{migration} does not begin with begin;")
+              if not source.rstrip().endswith("commit;"):
+                  raise SystemExit(f"{migration} does not end with commit;")
+              target = Path(f"mpgf-dac-{migration.stem}-rollback.sql")
+              target.write_text(source.rstrip()[:-len("commit;")] + "rollback;\n")
+          PYCODE
+          for migration in             mpgf-dac-20260812073000_mpgf_dac_terminal_event_constraint_reconciliation-rollback.sql             mpgf-dac-20260812074500_mpgf_dac_terminal_schema_reconciliation-rollback.sql; do
+            psql "$QA_SUPABASE_DB_URL"               --no-psqlrc               --set ON_ERROR_STOP=1               --file "$migration"
+          done 2>&1 | tee mpgf-dac-terminal-reconciliation-compile.log
+
+      - name: Compile the additive public-terms migration in a rollback-only transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql")
+          source = path.read_text()
+          if not source.lstrip().startswith("begin;"):
+              raise SystemExit("Migration does not begin with begin;")
+          if not source.rstrip().endswith("commit;"):
+              raise SystemExit("Migration does not end with commit;")
+          Path("mpgf-dac-product-migration-rollback.sql").write_text(
+              source.rstrip()[:-len("commit;")] + "rollback;\n"
+          )
+          PY
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file mpgf-dac-product-migration-rollback.sql \
+            2>&1 | tee mpgf-dac-product-migration-compile.log
+
+      - name: Apply the public exact-terms API to isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql \
+            | tee mpgf-dac-product-migration.sha256
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql \
+            2>&1 | tee mpgf-dac-product-migration-apply.log
+
+      - name: Run rollback-only public exact-term privacy regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_public_terms_api.sql \
+            2>&1 | tee mpgf-dac-product-public-terms-regression.log
+
+      - name: Remove any interrupted prior synthetic lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+            2>&1 | tee mpgf-dac-product-pre-cleanup.log
+
+      - name: Reconcile exact terminal DAC schema immediately before fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum             supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql             supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql             | tee mpgf-dac-terminal-reconciliation.sha256
+          psql "$QA_SUPABASE_DB_URL"             --no-psqlrc             --set ON_ERROR_STOP=1             --file supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql             2>&1 | tee mpgf-dac-terminal-event-reconciliation-apply.log
+          psql "$QA_SUPABASE_DB_URL"             --no-psqlrc             --set ON_ERROR_STOP=1             --file supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql             2>&1 | tee mpgf-dac-terminal-schema-reconciliation-apply.log
+
+      - name: Verify exact terminal constraint vocabulary after cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL"             --no-psqlrc             --set ON_ERROR_STOP=1             --tuples-only             --no-align <<'SQL' | tee mpgf-dac-terminal-constraint-proof.txt
+          select 'proposal_status=' || coalesce((
+            select pg_get_constraintdef(oid, true) like '%succeeded%'
+              and pg_get_constraintdef(oid, true) like '%lapsed%'
+            from pg_constraint
+            where conrelid = 'public.mpgf_pool_proposals'::regclass
+              and conname = 'mpgf_pool_proposals_status_check'
+          ), false);
+          select 'proposal_lock=' || coalesce((
+            select pg_get_constraintdef(oid, true) like '%approved_as_candidate%'
+              and pg_get_constraintdef(oid, true) like '%succeeded%'
+              and pg_get_constraintdef(oid, true) like '%lapsed%'
+              and pg_get_constraintdef(oid, true) like '%operative_terms_sha256%'
+            from pg_constraint
+            where conrelid = 'public.mpgf_pool_proposals'::regclass
+              and conname = 'mpgf_pool_proposals_lock_complete'
+          ), false);
+          select 'lifecycle_events=' || coalesce((
+            select pg_get_constraintdef(oid, true) like '%pool_succeeded%'
+              and pg_get_constraintdef(oid, true) like '%pool_lapsed%'
+            from pg_constraint
+            where conrelid = 'public.mpgf_pool_lifecycle_events'::regclass
+              and conname = 'mpgf_pool_lifecycle_events_event_type_check'
+          ), false);
+          select 'pledge_events=' || coalesce((
+            select pg_get_constraintdef(oid, true) like '%pledge_created%'
+              and pg_get_constraintdef(oid, true) like '%eligibility_reviewed%'
+              and pg_get_constraintdef(oid, true) like '%pledge_expired%'
+            from pg_constraint
+            where conrelid = 'public.mpgf_dac_pledge_events'::regclass
+              and conname = 'mpgf_dac_pledge_events_type_valid'
+          ), false);
+          SQL
+          grep -Fxq 'proposal_status=true' mpgf-dac-terminal-constraint-proof.txt
+          grep -Fxq 'proposal_lock=true' mpgf-dac-terminal-constraint-proof.txt
+          grep -Fxq 'lifecycle_events=true' mpgf-dac-terminal-constraint-proof.txt
+          grep -Fxq 'pledge_events=true' mpgf-dac-terminal-constraint-proof.txt
+
+      - name: Create deterministic open, succeeded, and lapsed browser fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export MPGF_DAC_PRODUCT_QA_PASSWORD="$qa_password"
+          printf 'MPGF_DAC_PRODUCT_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_fixture.sql \
+            2>&1 | tee mpgf-dac-product-fixture.log
+
+      - name: Verify synthetic Auth and QA service-role contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee mpgf-dac-product-auth-contract.log
+          import { createClient } from "@supabase/supabase-js";
+
+          const emails = [
+            "dac-product-creator@qa.invalid",
+            "dac-product-reviewer@qa.invalid",
+            "dac-product-pledger@qa.invalid",
+            "dac-product-outsider@qa.invalid",
+          ];
+          for (const email of emails) {
+            const client = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL,
+              process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+              { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } },
+            );
+            const { error } = await client.auth.signInWithPassword({
+              email,
+              password: process.env.MPGF_DAC_PRODUCT_QA_PASSWORD,
+            });
+            if (error) throw new Error(`Synthetic Auth sign-in failed for ${email}: ${error.message}`);
+            await client.auth.signOut({ scope: "local" });
+          }
+
+          const service = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY,
+            { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } },
+          );
+          const { data, error } = await service
+            .from("mpgf_pool_reviewers")
+            .select("reviewer_id")
+            .eq("reviewer_id", "cb222222-2222-4222-8222-222222222222")
+            .single();
+          if (error || data?.reviewer_id !== "cb222222-2222-4222-8222-222222222222") {
+            throw new Error(`QA service-role contract failed: ${error?.message ?? "wrong reviewer"}`);
+          }
+          console.log(`Verified ${emails.length} isolated-QA identities and the exact QA service role.`);
+          NODE
+
+      - name: Build the exact candidate against isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build | tee mpgf-dac-product-qa-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the exact production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3210 > mpgf-dac-product-server.log 2>&1 &
+          echo "$!" > mpgf-dac-product-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3210/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 240 mpgf-dac-product-server.log
+          exit 1
+
+      - name: Run complete rendered desktop, mobile, privacy, and authorization proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            --reporter=line \
+            | tee mpgf-dac-product-browser.log
+
+      - name: Remove synthetic lifecycle and invalidate credentials
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+            2>&1 | tee mpgf-dac-product-cleanup.log
+
+      - name: Prove zero synthetic residue and zero payment references
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align <<'SQL' | tee mpgf-dac-product-zero-residue.txt
+          with ids as (
+            select array[
+              'ca111111-1111-4111-8111-111111111111'::uuid,
+              'cb222222-2222-4222-8222-222222222222'::uuid,
+              'cc333333-3333-4333-8333-333333333333'::uuid,
+              'cd444444-4444-4444-8444-444444444444'::uuid
+            ] as users,
+            array[
+              'ce555555-5555-4555-8555-555555555555'::uuid,
+              'cf666666-6666-4666-8666-666666666666'::uuid,
+              'c0777777-7777-4777-8777-777777777777'::uuid
+            ] as proposals,
+            array[
+              'campaign-ce555555555545558555555555555555',
+              'campaign-cf666666666646668666666666666666',
+              'campaign-c0777777777747778777777777777777'
+            ] as campaigns
+          )
+          select 'fixture_residue=' || (
+            (select count(*) from auth.users, ids where auth.users.id = any(ids.users))
+            + (select count(*) from auth.identities, ids where auth.identities.user_id = any(ids.users))
+            + (select count(*) from auth.sessions, ids where auth.sessions.user_id = any(ids.users))
+            + (select count(*) from auth.refresh_tokens, ids where auth.refresh_tokens.user_id = any(array(select user_id::text from unnest(ids.users) as user_id)))
+            + (select count(*) from auth.mfa_factors, ids where auth.mfa_factors.user_id = any(ids.users))
+            + (select count(*) from moral_trade_private.person_accounts, ids where profile_id = any(ids.users))
+            + (select count(*) from public.profiles, ids where public.profiles.id = any(ids.users))
+            + (select count(*) from public.mpgf_pool_reviewers, ids where reviewer_id = any(ids.users))
+            + (select count(*) from public.mpgf_pool_proposals, ids where id = any(ids.proposals))
+            + (select count(*) from public.mpgf_pool_proposal_versions, ids where proposal_id = any(ids.proposals))
+            + (select count(*) from public.mpgf_pool_lifecycle_events, ids where proposal_id = any(ids.proposals))
+            + (select count(*) from public.moral_trade_create_pool_terms, ids where pool_proposal_id = any(ids.proposals))
+            + (select count(*) from public.mpgf_failure_bonus_premium_quotes, ids where pool_proposal_id = any(ids.proposals))
+            + (select count(*) from public.mpgf_public_goods_campaigns, ids where id = any(ids.campaigns))
+            + (select count(*) from public.mpgf_public_goods_pledges, ids where campaign_id = any(ids.campaigns))
+            + (select count(*) from public.mpgf_dac_pledge_intents, ids where campaign_id = any(ids.campaigns))
+            + (select count(*) from public.mpgf_dac_pledge_events, ids where campaign_id = any(ids.campaigns))
+            + (select count(*) from public.mpgf_dac_campaign_outcomes, ids where campaign_id = any(ids.campaigns))
+            + (select count(*) from public.moral_trade_create_submissions where id in (
+              'd1111111-1111-4111-8111-111111111111',
+              'd2222222-2222-4222-8222-222222222222',
+              'd3333333-3333-4333-8333-333333333333'
+            ))
+            + (select count(*) from public.mpgf_public_goods_rounds where id = 'qa-dac-product-round-20260807')
+            + (select count(*) from public.mpgf_public_goods_match_pools where id = 'qa-dac-product-match-20260807')
+          ) from ids;
+
+          with campaign_ids as (
+            select array[
+              'campaign-ce555555555545558555555555555555',
+              'campaign-cf666666666646668666666666666666',
+              'campaign-c0777777777747778777777777777777'
+            ] as campaigns
+          )
+          select 'payment_refs=' || count(*)
+          from public.mpgf_public_goods_pledges, campaign_ids
+          where campaign_id = any(campaign_ids.campaigns)
+            and (payment_intent_ref is not null or status = 'captured');
+          SQL
+          grep -Fxq 'fixture_residue=0' mpgf-dac-product-zero-residue.txt
+          grep -Fxq 'payment_refs=0' mpgf-dac-product-zero-residue.txt
+
+      - name: Upload permanent rendered and database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-product-lifecycle-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            mpgf-dac-product-*.log
+            mpgf-dac-product-*.txt
+            mpgf-dac-product-*.sha256
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 30
