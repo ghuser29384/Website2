@@ -40,18 +40,18 @@ test("ordinary non-donation confirmation retains the established base action", (
   const action = donationConfirmationAction();
   assert.match(
     action,
-    /if\s*\(!context\?\.term\)\s*\{\s*return confirmBaseAgreementVersionAction\(formData\);\s*\}/s,
+    /if\s*\(!context\?\.term\)\s*\{[\s\S]*?return confirmBaseAgreementVersionAction\(formData\);[\s\S]*?\}/,
   );
 });
 
 test("the forward-only migration exposes confirmation only to authenticated callers", () => {
   assert.match(
     privilegeMigration,
-    /revoke all on function public\.confirm_trade_donation_version_v2\(\s*uuid,\s*uuid,\s*uuid\s*\) from public,\s*anon,\s*authenticated,\s*service_role;/is,
+    /revoke all on function public\.confirm_trade_donation_version_v2\(\s*uuid,\s*uuid,\s*uuid\s*\) from public,\s*anon,\s*authenticated,\s*service_role;/i,
   );
   assert.match(
     privilegeMigration,
-    /grant execute on function public\.confirm_trade_donation_version_v2\(\s*uuid,\s*uuid,\s*uuid\s*\) to authenticated;/is,
+    /grant execute on function public\.confirm_trade_donation_version_v2\(\s*uuid,\s*uuid,\s*uuid\s*\) to authenticated;/i,
   );
   assert.doesNotMatch(
     privilegeMigration,
@@ -62,7 +62,7 @@ test("the forward-only migration exposes confirmation only to authenticated call
 test("the participant-binding trigger remains fail-closed on absent or mismatched auth identity", () => {
   assert.match(
     privacyCutover,
-    /if auth\.uid\(\) is null or new\.user_id is distinct from auth\.uid\(\) then\s*raise exception 'A confirmation must belong to the authenticated participant\.'/is,
+    /if auth\.uid\(\) is null or new\.user_id is distinct from auth\.uid\(\) then\s*raise exception 'A confirmation must belong to the authenticated participant\.'/i,
   );
   assert.doesNotMatch(privacyCutover, /set_config\([^)]*request\.jwt\.claims/i);
 });
