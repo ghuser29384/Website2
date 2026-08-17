@@ -262,6 +262,31 @@ async function chooseCauseAndInspect(create, cause, detailed) {
   const causeButton = create.locator(`.cause-choice[data-cause="${cause.name}"]`);
   await causeButton.click();
   await expect(create.locator("#screenRequest")).toBeVisible();
+  const transitionState = await create.locator("body").evaluate(() => {
+    const bounds = (selector) => {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+      const value = element.getBoundingClientRect();
+      return { top: value.top, bottom: value.bottom, left: value.left, right: value.right };
+    };
+    return {
+      scrollY: window.scrollY,
+      header: bounds(".topbar"),
+      heading: bounds("#requestHeading"),
+      selectedCause: bounds("#requestCause"),
+      requestEntry: bounds(".request-entry"),
+    };
+  });
+  writeJson(`transition-${cause.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, { cause: cause.name, transitionState });
+  if (transitionState.heading.bottom <= 0 || transitionState.heading.top < transitionState.header.bottom + 16) {
+    throw new Error(`${cause.name} automatic transition obscures the request heading.`);
+  }
+  if (transitionState.selectedCause.bottom > 0 && transitionState.selectedCause.top < transitionState.header.bottom + 16) {
+    throw new Error(`${cause.name} automatic transition obscures the selected-cause summary.`);
+  }
+  if (transitionState.requestEntry.bottom > 0 && transitionState.requestEntry.top < transitionState.header.bottom + 16) {
+    throw new Error(`${cause.name} automatic transition obscures the request-entry panel.`);
+  }
   await expect(causeButton).toHaveAttribute("aria-pressed", "true");
   await expect(create.locator(".cause-choice.selected")).toHaveCount(1);
   const pressedCount = await create.locator('.cause-choice[aria-pressed="true"]').count();
@@ -374,8 +399,7 @@ async function chooseCauseAndInspect(create, cause, detailed) {
   detailed,
   state,
 });
-  if (state.heading.top < state.header.bottom + 16) throw new Error(`${cause.name} heading is obscured by the sticky header.`);
-  if (state.scrollY !== 0) throw new Error(`${cause.name} automatic transition left scrollY=${state.scrollY}.`);
+  if (state.requestEntry.bottom > 0 && state.requestEntry.top < state.header.bottom + 16) throw new Error(`${cause.name} focused request-entry panel is obscured by the sticky header.`);
   if (state.horizontalOverflow > 1) throw new Error(`${cause.name} has ${state.horizontalOverflow}px inner horizontal overflow.`);
   if (state.panel.tagName === "BUTTON" || state.panel.background === "rgb(20, 94, 232)") {
     throw new Error(`${cause.name} request entry still presents as a blue primary button.`);
