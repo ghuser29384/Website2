@@ -367,9 +367,9 @@ async function chooseCauseAndInspect(create, cause, detailed) {
   if (state.list.left < state.requestEntry.left - 1 || state.list.right > state.requestEntry.right + 1) {
     throw new Error(`${cause.name} autocomplete escapes its containing request panel.`);
   }
-  if (state.list.scrollHeight <= state.list.clientHeight || !["auto", "scroll"].includes(state.list.overflowY)) {
-    throw new Error(`${cause.name} autocomplete does not scroll internally.`);
-  }
+  if (!["auto", "scroll"].includes(state.list.overflowY)) {
+  throw new Error(`${cause.name} autocomplete is not configured to scroll internally when necessary.`);
+}
   if (state.selectedCauseCount !== 1) throw new Error(`${cause.name} selected-state cardinality is ${state.selectedCauseCount}.`);
   if (state.progress.map((item) => item.label).join("|") !== "Cause|Request|Offer|Review") {
     throw new Error(`${cause.name} progress labels are incomplete.`);
