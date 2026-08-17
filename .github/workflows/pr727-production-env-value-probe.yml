@@ -73,9 +73,14 @@ jobs:
           ')"
           service_nonempty=false
           [[ "$service_length" -gt 0 ]] && service_nonempty=true
+          test "$service_nonempty" = 'true'
 
           public_summary="$(node --import tsx --input-type=module <<'NODE'
-          import { getSupabaseEnv } from './src/lib/supabase/config.ts';
+          const imported = await import('./src/lib/supabase/config.ts');
+          const getSupabaseEnv = imported.getSupabaseEnv ?? imported.default?.getSupabaseEnv;
+          if (typeof getSupabaseEnv !== 'function') {
+            throw new Error(`getSupabaseEnv unavailable; module keys: ${Object.keys(imported).join(',')}`);
+          }
           const value = getSupabaseEnv('www.moraltrade.org');
           const ref = new URL(value.url).hostname.split('.')[0];
           process.stdout.write(JSON.stringify({
