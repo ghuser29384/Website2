@@ -19,28 +19,31 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
-      - name: Preserve psql stderr and verbose diagnostics
+      - name: Add bounded SQL diagnostics
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('.github/workflows/compact-authoritative-outflow-ledger-qa.yml')
+          path = Path('supabase/tests/compact_authoritative_outflow_ledger_core.sql')
           source = path.read_text(encoding='utf-8')
-          old = "          psql \"$DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/ledger-lifecycle.log\n          begin;\n"
-          new = "          psql \"$DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' 2>&1 | tee db-evidence/ledger-lifecycle.log\n          \\set VERBOSITY verbose\n          begin;\n"
-          if source.count(old) != 1:
-              raise SystemExit(f'Expected one ledger lifecycle command; found {source.count(old)}.')
-          path.write_text(source.replace(old, new), encoding='utf-8')
+          if '\\set VERBOSITY verbose' not in source:
+              source = source.replace('\\set ON_ERROR_STOP on\n', '\\set ON_ERROR_STOP on\n\\set VERBOSITY verbose\n\\echo ledger-core:start\n', 1)
+          marker = "  ('6b000000-0000-4000-8000-000000000005','00000000-0000-0000-8000-000000000000','authenticated','authenticated','ledger-prod@example.test','',now(),'{}','{}','','','','','',false,false,now(),now());\n"
+          if '\\echo ledger-core:auth-users-inserted' not in source:
+              source = source.replace(marker, marker + '\\echo ledger-core:auth-users-inserted\n', 1)
+          profile_marker = "  ('6b000000-0000-4000-8000-000000000005','ledger-prod@example.test','Ledger Prod','','','ledger-prod','individual',true,true);\n"
+          if '\\echo ledger-core:profiles-inserted' not in source:
+              source = source.replace(profile_marker, profile_marker + '\\echo ledger-core:profiles-inserted\n', 1)
+          path.write_text(source, encoding='utf-8')
           PY
           git diff --check
-      - name: Commit diagnostic capture and remove controller
+      - name: Commit diagnostic fixture markers
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/compact-authoritative-outflow-ledger-qa.yml
-          git rm .github/workflows/diagnose-compact-outflow-ledger-db.yml
-          git commit -m "ci: retain verbose Compact outflow SQL failures"
+          git add supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          git commit -m "test: expose Compact outflow fixture failure location"
           git push origin "HEAD:${GITHUB_REF_NAME}"
