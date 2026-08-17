@@ -366,6 +366,11 @@ async function chooseCauseAndInspect(create, cause, detailed) {
     };
   });
 
+  writeJson(`geometry-${cause.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, {
+  cause: cause.name,
+  detailed,
+  state,
+});
   if (state.heading.top < state.header.bottom + 16) throw new Error(`${cause.name} heading is obscured by the sticky header.`);
   if (state.scrollY !== 0) throw new Error(`${cause.name} automatic transition left scrollY=${state.scrollY}.`);
   if (state.horizontalOverflow > 1) throw new Error(`${cause.name} has ${state.horizontalOverflow}px inner horizontal overflow.`);
