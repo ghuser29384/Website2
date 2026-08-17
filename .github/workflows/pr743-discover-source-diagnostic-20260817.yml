@@ -1,0 +1,47 @@
+name: Trace PR 743 hosted Discover request source
+
+on:
+  push:
+    branches:
+      - ops/pr743-protected-preview-20260817
+    paths:
+      - .github/workflows/pr743-discover-source-diagnostic-20260817.yml
+
+permissions:
+  contents: read
+
+jobs:
+  trace-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_CANDIDATE_SHA: 350370ed1470e08a154e11094e304097fc940523
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove identity and trace every relevant source occurrence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          {
+            echo '### exact path and literal queries'
+            git grep -n -I -E '/discover\?domain=offers|domain["'"'=: ]+offers|view["'"'=: ]+list' -- . ':!package-lock.json' || true
+            echo
+            echo '### every /discover occurrence in browser and application sources'
+            git grep -n -I '/discover' -- public src tests playwright*.ts ':!package-lock.json' || true
+            echo
+            echo '### every offers compatibility/navigation target'
+            git grep -n -I -E 'offers\?view|href.*offers|discover.*offers|offers.*discover|domain.*offers|view.*list' -- public src tests playwright*.ts ':!package-lock.json' || true
+          } | tee pr743-discover-source-trace.txt
+
+      - name: Upload trace
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr743-discover-source-trace-${{ env.EXPECTED_CANDIDATE_SHA }}-${{ github.run_id }}
+          path: pr743-discover-source-trace.txt
+          retention-days: 14
