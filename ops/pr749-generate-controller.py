@@ -4,7 +4,7 @@ source_path = Path('.github/workflows/pr740-dac-current-main-integration-uat-202
 output_path = Path('generated/pr749-dac-current-main-integration-uat-20260817.yml')
 text = source_path.read_text()
 
-replacements = [
+required_replacements = [
     ('PR 740 current-main DAC integration protected Preview owner UAT 20260816',
      'PR 749 fresh-current-main DAC integration protected Preview owner UAT 20260817'),
     ('ops/pr740-dac-current-main-integration-uat-20260816',
@@ -20,14 +20,17 @@ replacements = [
     ('INTEGRATION_PR_NUMBER: "740"', 'INTEGRATION_PR_NUMBER: "749"'),
     ('pulls/740', 'pulls/749'),
     ('pr:740', 'pr:749'),
-    ('PR 740', 'PR 749'),
-    ('pr740-', 'pr749-'),
 ]
 
-for old, new in replacements:
+for old, new in required_replacements:
     if old not in text:
         raise SystemExit(f'Missing expected controller source token: {old}')
     text = text.replace(old, new)
+
+# Cosmetic and artifact-name replacements may have been consumed by the exact
+# replacements above, so they are intentionally idempotent.
+text = text.replace('PR 740', 'PR 749')
+text = text.replace('pr740-', 'pr749-')
 
 required = [
     'CANDIDATE_BASE_SHA: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3',
