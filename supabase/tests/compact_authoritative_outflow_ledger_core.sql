@@ -24,7 +24,16 @@ insert into public.profiles (
   ('6b000000-0000-4000-8000-000000000002','ledger-zero@example.test','Ledger Zero','','','ledger-zero','individual',true,true),
   ('6b000000-0000-4000-8000-000000000003','ledger-incomplete@example.test','Ledger Incomplete','','','ledger-incomplete','individual',true,true),
   ('6b000000-0000-4000-8000-000000000004','ledger-eur@example.test','Ledger EUR','','','ledger-eur','individual',true,true),
-  ('6b000000-0000-4000-8000-000000000005','ledger-prod@example.test','Ledger Prod','','','ledger-prod','individual',true,true);
+  ('6b000000-0000-4000-8000-000000000005','ledger-prod@example.test','Ledger Prod','','','ledger-prod','individual',true,true)
+on conflict (id) do update set
+  email = excluded.email,
+  display_name = excluded.display_name,
+  bio = excluded.bio,
+  affiliation = excluded.affiliation,
+  username = excluded.username,
+  account_kind = excluded.account_kind,
+  accepts_group_invitations = excluded.accepts_group_invitations,
+  public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled;
 \echo ledger-core:profiles-inserted
 
 create temporary table compact_outflow_test_ids (

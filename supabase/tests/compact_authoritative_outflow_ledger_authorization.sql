@@ -15,7 +15,16 @@ insert into public.profiles (
   accepts_group_invitations, public_invitation_mentions_enabled
 ) values
   ('6c000000-0000-4000-8000-000000000001','ledger-admin@example.test','Ledger Admin','','','ledger-admin','individual',true,true),
-  ('6c000000-0000-4000-8000-000000000002','ledger-user@example.test','Ledger User','','','ledger-user','individual',true,true);
+  ('6c000000-0000-4000-8000-000000000002','ledger-user@example.test','Ledger User','','','ledger-user','individual',true,true)
+on conflict (id) do update set
+  email = excluded.email,
+  display_name = excluded.display_name,
+  bio = excluded.bio,
+  affiliation = excluded.affiliation,
+  username = excluded.username,
+  account_kind = excluded.account_kind,
+  accepts_group_invitations = excluded.accepts_group_invitations,
+  public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled;
 
 insert into public.trade_review_role_grants (
   profile_id, role, active, granted_by, granted_at
