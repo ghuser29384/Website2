@@ -25,11 +25,12 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
 
-      - name: Verify authorized parent
+      - name: Verify authorized lineage
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "de3b6e5480a43cf536c655cc3ad1c69786352382"
+          git merge-base --is-ancestor de3b6e5480a43cf536c655cc3ad1c69786352382 HEAD
+          test "$(git diff --name-only de3b6e5480a43cf536c655cc3ad1c69786352382...HEAD)" = ".github/workflows/repair-compact-outflow-profile-fixtures-v1.yml"
 
       - name: Repair deterministic fixtures and durable validation contract
         shell: bash
@@ -38,15 +39,17 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          assignments = """on conflict (id) do update set
-  email = excluded.email,
-  display_name = excluded.display_name,
-  bio = excluded.bio,
-  affiliation = excluded.affiliation,
-  username = excluded.username,
-  account_kind = excluded.account_kind,
-  accepts_group_invitations = excluded.accepts_group_invitations,
-  public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled"""
+          assignments = "\n".join([
+              "on conflict (id) do update set",
+              "  email = excluded.email,",
+              "  display_name = excluded.display_name,",
+              "  bio = excluded.bio,",
+              "  affiliation = excluded.affiliation,",
+              "  username = excluded.username,",
+              "  account_kind = excluded.account_kind,",
+              "  accepts_group_invitations = excluded.accepts_group_invitations,",
+              "  public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled",
+          ])
 
           def make_profile_fixture_idempotent(path: str, end_marker: str) -> None:
               target = Path(path)
@@ -73,33 +76,42 @@ jobs:
 
           workflow_path = Path(".github/workflows/compact-authoritative-outflow-ledger-qa.yml")
           workflow = workflow_path.read_text(encoding="utf-8")
-
-          expected_old = """          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
-          src/lib/mpgf/compact-authoritative-outflow.test.ts"""
-          expected_new = """          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
-          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
-          src/lib/mpgf/compact-authoritative-outflow.test.ts"""
-          focused_old = """            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \\
-            src/lib/mpgf/public-goods-compacts.test.ts"""
-          focused_new = """            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \\
-            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts \\
-            src/lib/mpgf/public-goods-compacts.test.ts"""
-          controller_old = """          for controller in .github/workflows/repair-compact-outflow-*.yml; do
-            test ! -e \"$controller\"
-          done"""
-          controller_new = """          test ! -e .github/workflows/add-compact-outflow-phase-order-contract-v1.yml
-          for controller in .github/workflows/repair-compact-outflow-*.yml; do
-            test ! -e \"$controller\"
-          done"""
-
           replacements = [
-              (expected_old, expected_new, "expected manifest"),
-              (focused_old, focused_new, "focused contract list"),
-              ('test "$(wc -l < /tmp/actual.txt)" -eq 14', 'test "$(wc -l < /tmp/actual.txt)" -eq 15', "scope count"),
-              (controller_old, controller_new, "controller guard"),
-              ('psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee db-evidence/pre-ledger-lifecycle.log', 'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee db-evidence/pre-ledger-lifecycle.log', "pre-ledger stderr capture"),
-              ('psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee db-evidence/ledger-lifecycle.log', 'psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee db-evidence/ledger-lifecycle.log', "ledger stderr capture"),
-              ('psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' | tee rollback-evidence/lifecycle.log', 'psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<\'SQL\' | tee rollback-evidence/lifecycle.log', "rollback stderr capture"),
+              (
+                  "          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts\n          src/lib/mpgf/compact-authoritative-outflow.test.ts",
+                  "          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts\n          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts\n          src/lib/mpgf/compact-authoritative-outflow.test.ts",
+                  "expected manifest",
+              ),
+              (
+                  "            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \\\n            src/lib/mpgf/public-goods-compacts.test.ts",
+                  "            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \\\n            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts \\\n            src/lib/mpgf/public-goods-compacts.test.ts",
+                  "focused contract list",
+              ),
+              (
+                  'test "$(wc -l < /tmp/actual.txt)" -eq 14',
+                  'test "$(wc -l < /tmp/actual.txt)" -eq 15',
+                  "scope count",
+              ),
+              (
+                  "          for controller in .github/workflows/repair-compact-outflow-*.yml; do\n            test ! -e \"$controller\"\n          done",
+                  "          test ! -e .github/workflows/add-compact-outflow-phase-order-contract-v1.yml\n          for controller in .github/workflows/repair-compact-outflow-*.yml; do\n            test ! -e \"$controller\"\n          done",
+                  "controller guard",
+              ),
+              (
+                  "psql \"$DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/pre-ledger-lifecycle.log",
+                  "psql \"$DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee db-evidence/pre-ledger-lifecycle.log",
+                  "pre-ledger stderr capture",
+              ),
+              (
+                  "psql \"$DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee db-evidence/ledger-lifecycle.log",
+                  "psql \"$DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee db-evidence/ledger-lifecycle.log",
+                  "ledger stderr capture",
+              ),
+              (
+                  "psql \"$QA_DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' | tee rollback-evidence/lifecycle.log",
+                  "psql \"$QA_DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee rollback-evidence/lifecycle.log",
+                  "rollback stderr capture",
+              ),
           ]
           for old, new, label in replacements:
               if workflow.count(old) != 1:
@@ -107,89 +119,79 @@ jobs:
               workflow = workflow.replace(old, new)
           workflow_path.write_text(workflow, encoding="utf-8")
 
-          phase_contract = '''import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import test from "node:test";
-
-const workflow = readFileSync(
-  join(process.cwd(), ".github/workflows/compact-authoritative-outflow-ledger-qa.yml"),
-  "utf8",
-);
-
-function position(marker: string): number {
-  const index = workflow.indexOf(marker);
-  assert.notEqual(index, -1, `Missing workflow phase: ${marker}`);
-  return index;
-}
-
-test("clean reconstruction proves legacy Compact behavior before ledger hardening", () => {
-  const preLedgerApply = position("- name: Apply pre-ledger production-compatible migrations");
-  const legacyRegression = position("- name: Validate original Compact lifecycle before ledger hardening");
-  const ledgerApply = position("- name: Apply authoritative ledger migrations");
-  const finalLedgerSuites = position("- name: Lint final schema and execute authoritative ledger lifecycle");
-
-  assert.ok(preLedgerApply < legacyRegression);
-  assert.ok(legacyRegression < ledgerApply);
-  assert.ok(ledgerApply < finalLedgerSuites);
-  assert.match(
-    workflow,
-    /ledger_skips=20260816141500_compact_authoritative_outflow_ledger_v1\.sql,20260816141501_compact_authoritative_outflow_freeze_v1\.sql,20260816141502_compact_authoritative_outflow_hardening_v1\.sql,20260816141503_compact_authoritative_outflow_replay_fix_v1\.sql/,
-  );
-  for (const migration of [
-    "20260816141500_compact_authoritative_outflow_ledger_v1.sql",
-    "20260816141501_compact_authoritative_outflow_freeze_v1.sql",
-    "20260816141502_compact_authoritative_outflow_hardening_v1.sql",
-    "20260816141503_compact_authoritative_outflow_replay_fix_v1.sql",
-  ]) {
-    assert.ok(workflow.indexOf(`supabase/migrations/${migration}`, ledgerApply) > ledgerApply);
-  }
-});
-
-test("isolated QA keeps the legacy and ledger phases inside one outer rollback", () => {
-  const orderedLifecycle = position("- name: Execute rollback-only staged lifecycle");
-  const rollbackProof = position("- name: Prove rollback and zero residue");
-  const orderedBody = workflow.slice(orderedLifecycle, rollbackProof);
-
-  assert.match(orderedBody, /begin;/);
-  assert.match(orderedBody, /savepoint compact_pre_ledger_contract;/);
-  assert.match(orderedBody, /rollback to savepoint compact_pre_ledger_contract;/);
-  assert.match(orderedBody, /mpgf_public_goods_compacts_historical_freeze\.sql/);
-  assert.match(orderedBody, /20260816141500_compact_authoritative_outflow_ledger_v1\.sql/);
-  assert.match(orderedBody, /compact_authoritative_outflow_ledger_core\.sql/);
-  assert.match(orderedBody, /compact_authoritative_outflow_ledger_authorization\.sql/);
-  assert.match(orderedBody, /\n          rollback;\n          SQL/);
-
-  const legacyTest = orderedBody.indexOf("mpgf_public_goods_compacts_lifecycle.sql");
-  const firstLedgerMigration = orderedBody.indexOf("20260816141500_compact_authoritative_outflow_ledger_v1.sql");
-  const ledgerTest = orderedBody.indexOf("compact_authoritative_outflow_ledger_core.sql");
-  assert.ok(legacyTest >= 0 && legacyTest < firstLedgerMigration);
-  assert.ok(firstLedgerMigration < ledgerTest);
-});
-
-test("profile fixtures tolerate the synchronous auth-to-profile trigger without weakening production constraints", () => {
-  const core = readFileSync(
-    join(process.cwd(), "supabase/tests/compact_authoritative_outflow_ledger_core.sql"),
-    "utf8",
-  );
-  const authorization = readFileSync(
-    join(process.cwd(), "supabase/tests/compact_authoritative_outflow_ledger_authorization.sql"),
-    "utf8",
-  );
-  for (const source of [core, authorization]) {
-    assert.match(source, /insert into public\.profiles[\s\S]*on conflict \(id\) do update set/);
-  }
-});
-'''
+          phase_lines = [
+              'import assert from "node:assert/strict";',
+              'import { readFileSync } from "node:fs";',
+              'import { join } from "node:path";',
+              'import test from "node:test";',
+              '',
+              'const workflow = readFileSync(',
+              '  join(process.cwd(), ".github/workflows/compact-authoritative-outflow-ledger-qa.yml"),',
+              '  "utf8",',
+              ');',
+              '',
+              'function position(marker: string): number {',
+              '  const index = workflow.indexOf(marker);',
+              '  assert.notEqual(index, -1, `Missing workflow phase: ${marker}`);',
+              '  return index;',
+              '}',
+              '',
+              'test("clean reconstruction proves legacy Compact behavior before ledger hardening", () => {',
+              '  const preLedgerApply = position("- name: Apply pre-ledger production-compatible migrations");',
+              '  const legacyRegression = position("- name: Validate original Compact lifecycle before ledger hardening");',
+              '  const ledgerApply = position("- name: Apply authoritative ledger migrations");',
+              '  const finalLedgerSuites = position("- name: Lint final schema and execute authoritative ledger lifecycle");',
+              '  assert.ok(preLedgerApply < legacyRegression);',
+              '  assert.ok(legacyRegression < ledgerApply);',
+              '  assert.ok(ledgerApply < finalLedgerSuites);',
+              '  assert.match(workflow, /ledger_skips=20260816141500_compact_authoritative_outflow_ledger_v1\\.sql,20260816141501_compact_authoritative_outflow_freeze_v1\\.sql,20260816141502_compact_authoritative_outflow_hardening_v1\\.sql,20260816141503_compact_authoritative_outflow_replay_fix_v1\\.sql/);',
+              '  for (const migration of [',
+              '    "20260816141500_compact_authoritative_outflow_ledger_v1.sql",',
+              '    "20260816141501_compact_authoritative_outflow_freeze_v1.sql",',
+              '    "20260816141502_compact_authoritative_outflow_hardening_v1.sql",',
+              '    "20260816141503_compact_authoritative_outflow_replay_fix_v1.sql",',
+              '  ]) {',
+              '    assert.ok(workflow.indexOf(`supabase/migrations/${migration}`, ledgerApply) > ledgerApply);',
+              '  }',
+              '});',
+              '',
+              'test("isolated QA keeps the legacy and ledger phases inside one outer rollback", () => {',
+              '  const orderedLifecycle = position("- name: Execute rollback-only staged lifecycle");',
+              '  const rollbackProof = position("- name: Prove rollback and zero residue");',
+              '  const orderedBody = workflow.slice(orderedLifecycle, rollbackProof);',
+              '  assert.match(orderedBody, /begin;/);',
+              '  assert.match(orderedBody, /savepoint compact_pre_ledger_contract;/);',
+              '  assert.match(orderedBody, /rollback to savepoint compact_pre_ledger_contract;/);',
+              '  assert.match(orderedBody, /mpgf_public_goods_compacts_historical_freeze\\.sql/);',
+              '  assert.match(orderedBody, /20260816141500_compact_authoritative_outflow_ledger_v1\\.sql/);',
+              '  assert.match(orderedBody, /compact_authoritative_outflow_ledger_core\\.sql/);',
+              '  assert.match(orderedBody, /compact_authoritative_outflow_ledger_authorization\\.sql/);',
+              '  assert.match(orderedBody, /\\n          rollback;\\n          SQL/);',
+              '  const legacyTest = orderedBody.indexOf("mpgf_public_goods_compacts_lifecycle.sql");',
+              '  const firstLedgerMigration = orderedBody.indexOf("20260816141500_compact_authoritative_outflow_ledger_v1.sql");',
+              '  const ledgerTest = orderedBody.indexOf("compact_authoritative_outflow_ledger_core.sql");',
+              '  assert.ok(legacyTest >= 0 && legacyTest < firstLedgerMigration);',
+              '  assert.ok(firstLedgerMigration < ledgerTest);',
+              '});',
+              '',
+              'test("profile fixtures tolerate the synchronous auth-to-profile trigger", () => {',
+              '  const core = readFileSync(join(process.cwd(), "supabase/tests/compact_authoritative_outflow_ledger_core.sql"), "utf8");',
+              '  const authorization = readFileSync(join(process.cwd(), "supabase/tests/compact_authoritative_outflow_ledger_authorization.sql"), "utf8");',
+              '  for (const source of [core, authorization]) {',
+              '    assert.match(source, /insert into public\\.profiles[\\s\\S]*on conflict \\(id\\) do update set/);',
+              '  }',
+              '});',
+              '',
+          ]
           Path("src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts").write_text(
-              phase_contract,
+              "\n".join(phase_lines),
               encoding="utf-8",
           )
           PY
 
           git diff --check
-          grep -q 'on conflict (id) do update set' supabase/tests/compact_authoritative_outflow_ledger_core.sql
-          grep -q 'on conflict (id) do update set' supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          grep -q 'on conflict (id) do update set' supabase/tests/compact_authoritative-outflow_ledger_core.sql
+          grep -q 'on conflict (id) do update set' supabase/tests/compact_authoritative-outflow_ledger_authorization.sql
           grep -q 'compact-authoritative-outflow-phase-order-contract.test.ts' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
           grep -q 'eq 15' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
 
