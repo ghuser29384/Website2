@@ -45,41 +45,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          workbench_path = Path("src/components/core-trade/trade-draft-workbench.tsx")
-          workbench = workbench_path.read_text(encoding="utf-8")
-          old = '<Link aria-label="Moral Trade, home" className={styles.brandLink} href="/">'
-          new = '<Link aria-label="Moral Trade, home" className={styles.brandLink} href="/" prefetch={false}>'
-          if workbench.count(old) != 2:
-              raise SystemExit(f"expected exactly two unsuppressed root brand links, found {workbench.count(old)}")
-          workbench = workbench.replace(old, new)
-          if workbench.count(new) != 2:
-              raise SystemExit("failed to suppress both root brand prefetches")
-          workbench_path.write_text(workbench, encoding="utf-8")
-
-          test_path = Path("src/auth-resolution-wiring.test.ts")
-          source = test_path.read_text(encoding="utf-8")
-          anchor = 'test("signed-out trade exit cannot prefetch the document-backed Discover route", () => {\n'
-          addition = '''test("trade composer and sign-in gate cannot prefetch the rewritten root route", () => {
-  const rootBrandLinks = tradeDraftWorkbenchSource.match(
-    /<Link aria-label="Moral Trade, home" className=\{styles\.brandLink\} href="\\/" prefetch=\{false\}>/gu,
-  );
-  assert.equal(rootBrandLinks?.length, 2);
-  assert.doesNotMatch(
-    tradeDraftWorkbenchSource,
-    /<Link aria-label="Moral Trade, home" className=\{styles\.brandLink\} href="\\/">/u,
-  );
-});
-
-'''
-          if source.count(anchor) != 1:
-              raise SystemExit("auth-resolution wiring insertion anchor changed")
-          if 'trade composer and sign-in gate cannot prefetch the rewritten root route' in source:
-              raise SystemExit("root prefetch contract already exists")
-          test_path.write_text(source.replace(anchor, addition + anchor, 1), encoding="utf-8")
-          PY
+          printf '%s' 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgp3b3JrYmVuY2hfcGF0aCA9IFBhdGgoJ3NyYy9jb21wb25lbnRzL2NvcmUtdHJhZGUvdHJhZGUtZHJhZnQtd29ya2JlbmNoLnRzeCcpCndvcmtiZW5jaCA9IHdvcmtiZW5jaF9wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQpvbGQgPSAnPExpbmsgYXJpYS1sYWJlbD0iTW9yYWwgVHJhZGUsIGhvbWUiIGNsYXNzTmFtZT17c3R5bGVzLmJyYW5kTGlua30gaHJlZj0iLyI+JwpuZXcgPSAnPExpbmsgYXJpYS1sYWJlbD0iTW9yYWwgVHJhZGUsIGhvbWUiIGNsYXNzTmFtZT17c3R5bGVzLmJyYW5kTGlua30gaHJlZj0iLyIgcHJlZmV0Y2g9e2ZhbHNlfT4nCmlmIHdvcmtiZW5jaC5jb3VudChvbGQpICE9IDI6CiAgICByYWlzZSBTeXN0ZW1FeGl0KGYnZXhwZWN0ZWQgZXhhY3RseSB0d28gdW5zdXBwcmVzc2VkIHJvb3QgYnJhbmQgbGlua3MsIGZvdW5kIHt3b3JrYmVuY2guY291bnQob2xkKX0nKQp3b3JrYmVuY2ggPSB3b3JrYmVuY2gucmVwbGFjZShvbGQsIG5ldykKaWYgd29ya2JlbmNoLmNvdW50KG5ldykgIT0gMjoKICAgIHJhaXNlIFN5c3RlbUV4aXQoJ2ZhaWxlZCB0byBzdXBwcmVzcyBib3RoIHJvb3QgYnJhbmQgcHJlZmV0Y2hlcycpCndvcmtiZW5jaF9wYXRoLndyaXRlX3RleHQod29ya2JlbmNoLCBlbmNvZGluZz0ndXRmLTgnKQoKdGVzdF9wYXRoID0gUGF0aCgnc3JjL2F1dGgtcmVzb2x1dGlvbi13aXJpbmcudGVzdC50cycpCnNvdXJjZSA9IHRlc3RfcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9J3V0Zi04JykKYW5jaG9yID0gJ3Rlc3QoInNpZ25lZC1vdXQgdHJhZGUgZXhpdCBjYW5ub3QgcHJlZmV0Y2ggdGhlIGRvY3VtZW50LWJhY2tlZCBEaXNjb3ZlciByb3V0ZSIsICgpID0+IHtcbicKYWRkaXRpb24gPSAnJyd0ZXN0KCJ0cmFkZSBjb21wb3NlciBhbmQgc2lnbi1pbiBnYXRlIGNhbm5vdCBwcmVmZXRjaCB0aGUgcmV3cml0dGVuIHJvb3Qgcm91dGUiLCAoKSA9PiB7CiAgY29uc3Qgcm9vdEJyYW5kTGlua3MgPSB0cmFkZURyYWZ0V29ya2JlbmNoU291cmNlLm1hdGNoKAogICAgLzxMaW5rIGFyaWEtbGFiZWw9Ik1vcmFsIFRyYWRlLCBob21lIiBjbGFzc05hbWU9XFx7c3R5bGVzXFwuYnJhbmRMaW5rXFx9IGhyZWY9IlxcLyIgcHJlZmV0Y2g9XFx7ZmFsc2VcXH0+L2d1LAogICk7CiAgYXNzZXJ0LmVxdWFsKHJvb3RCcmFuZExpbmtzPy5sZW5ndGgsIDIpOwogIGFzc2VydC5kb2VzTm90TWF0Y2goCiAgICB0cmFkZURyYWZ0V29ya2JlbmNoU291cmNlLAogICAgLzxMaW5rIGFyaWEtbGFiZWw9Ik1vcmFsIFRyYWRlLCBob21lIiBjbGFzc05hbWU9XFx7c3R5bGVzXFwuYnJhbmRMaW5rXFx9IGhyZWY9IlxcLyI+L3UsCiAgKTsKfSk7CgonJycKaWYgc291cmNlLmNvdW50KGFuY2hvcikgIT0gMToKICAgIHJhaXNlIFN5c3RlbUV4aXQoJ2F1dGgtcmVzb2x1dGlvbiB3aXJpbmcgaW5zZXJ0aW9uIGFuY2hvciBjaGFuZ2VkJykKaWYgJ3RyYWRlIGNvbXBvc2VyIGFuZCBzaWduLWluIGdhdGUgY2Fubm90IHByZWZldGNoIHRoZSByZXdyaXR0ZW4gcm9vdCByb3V0ZScgaW4gc291cmNlOgogICAgcmFpc2UgU3lzdGVtRXhpdCgncm9vdCBwcmVmZXRjaCBjb250cmFjdCBhbHJlYWR5IGV4aXN0cycpCnRlc3RfcGF0aC53cml0ZV90ZXh0KHNvdXJjZS5yZXBsYWNlKGFuY2hvcixhZGRpdGlvbiArIGFuY2hvciwgMSksIGVuY29kaW5nPSd1dGYtOCcpCg==' | base64 --decode > /tmp/pr743-root-prefetch-repair.py
+          python3 /tmp/pr743-root-prefetch-repair.py
 
       - name: Run focused executable verification
         shell: bash
