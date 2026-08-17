@@ -242,11 +242,20 @@ const CAUSES = [
 ];
 
 async function returnToCause(create) {
-  const back = create.locator(".back-link");
-  if (await back.isVisible()) {
-    await back.click();
-    await expect(create.getByRole("heading", { level: 1, name: "What do you want to improve?" })).toBeVisible();
+  const causeHeading = create.getByRole("heading", {
+    level: 1,
+    name: "What do you want to improve?",
+  });
+  if (await causeHeading.isVisible()) return;
+
+  const suggestions = create.locator("#actionSuggestions");
+  if (await suggestions.isVisible()) {
+    await create.locator("#requestActionInput").press("Escape");
+    await expect(suggestions).toBeHidden();
   }
+
+  await create.locator("body").press("Escape");
+  await expect(causeHeading).toBeVisible();
 }
 
 async function chooseCauseAndInspect(create, cause, detailed) {
