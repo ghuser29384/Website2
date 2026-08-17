@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 env:
-  EXPECTED_HEAD: 7a1384cd7cbc580b00f0eb8b39bb690349693156
-  EXPECTED_TREE: 16f3023295d7bd9c5b281aec0d6d5645752742c2
-  EXPECTED_MAIN: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
+  EXPECTED_HEAD: 4bac0139ff31caabeb6e46ea3dcf76eb696b7bcb
+  EXPECTED_TREE: 2e9126e8b9c0c3b0913e9da6dc29231fa0f0a18f
+  EXPECTED_MAIN: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
   TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
   HELPER_BRANCH: ops/issue714-pr698-merge-diagnostic-20260817
 
@@ -98,6 +98,7 @@ jobs:
             src/proxy.test.ts \
             src/walkthrough-next-canonical.test.ts \
             src/walkthrough-private-handoff.test.ts \
+            src/lib/walkthrough-profile.test.ts \
             src/live-now-truth-boundary.test.ts \
             src/lib/public-route-smoke.test.ts \
             src/lib/create-interface/unified-entry-routes.test.ts \
