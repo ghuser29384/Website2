@@ -1,0 +1,290 @@
+name: Repair Compact outflow phase ordering v1
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/repair-compact-outflow-phase-ordering-v1.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-compact-outflow-phase-ordering-v1
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Rewrite database validation into pre-ledger and final-ledger phases
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f .github/workflows/repair-compact-outflow-phase-ordering-v1.yml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/compact-authoritative-outflow-ledger-qa.yml')
+          lines = path.read_text(encoding='utf-8').splitlines()
+
+          def replace_step(name: str, blocks: list[str]) -> None:
+              global lines
+              marker = f'      - name: {name}'
+              if marker not in lines:
+                  raise SystemExit(f'Missing workflow step: {name}')
+              start = lines.index(marker)
+              end = len(lines)
+              for index in range(start + 1, len(lines)):
+                  line = lines[index]
+                  if line.startswith('      - name: '):
+                      end = index
+                      break
+                  if line and not line.startswith(' '):
+                      end = index
+                      break
+                  if line.startswith('  ') and not line.startswith('      ') and line.strip().endswith(':'):
+                      end = index
+                      break
+              replacement: list[str] = []
+              for block in blocks:
+                  replacement.extend(block.strip('\n').splitlines())
+                  replacement.append('')
+              if replacement and replacement[-1] == '':
+                  replacement.pop()
+              lines[start:end] = replacement
+
+          replace_step('Prepare exact migration chain', [r'''      - name: Prepare exact pre-ledger and ledger migration chains
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          mkdir -p \
+            compact-outflow-clean/pre-ledger-migrations \
+            compact-outflow-clean/ledger-migrations
+          git show "$HISTORICAL_BASELINE_COMMIT:supabase/schema.sql" > compact-outflow-clean/historical-baseline.sql
+          test "$(sha256sum compact-outflow-clean/historical-baseline.sql | cut -d ' ' -f 1)" = "$HISTORICAL_BASELINE_SHA256"
+
+          git diff --name-only --diff-filter=AM "$HISTORICAL_BASELINE_COMMIT"..HEAD -- 'supabase/migrations/*.sql' \
+            | LC_ALL=C sort > compact-outflow-clean/post-baseline-migrations.txt
+          grep -Ev '/2026081614150[0-3]_compact_authoritative_outflow_.*\.sql$' \
+            compact-outflow-clean/post-baseline-migrations.txt \
+            > compact-outflow-clean/pre-ledger-migrations.txt
+          grep -E '/2026081614150[0-3]_compact_authoritative_outflow_.*\.sql$' \
+            compact-outflow-clean/post-baseline-migrations.txt \
+            > compact-outflow-clean/ledger-migrations.txt
+
+          test "$(wc -l < compact-outflow-clean/ledger-migrations.txt)" -eq 4
+          for version in 20260816141500 20260816141501 20260816141502 20260816141503; do
+            test "$(grep -c "/${version}_" compact-outflow-clean/ledger-migrations.txt)" -eq 1
+          done
+
+          while IFS= read -r migration_path; do
+            test -f "$migration_path"
+            cp "$migration_path" compact-outflow-clean/pre-ledger-migrations/
+          done < compact-outflow-clean/pre-ledger-migrations.txt
+          while IFS= read -r migration_path; do
+            test -f "$migration_path"
+            cp "$migration_path" compact-outflow-clean/ledger-migrations/
+          done < compact-outflow-clean/ledger-migrations.txt
+
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -print \
+            | LC_ALL=C sort | xargs sha256sum > compact-outflow-clean/migration-source.sha256
+          git rev-parse HEAD > compact-outflow-clean/head-sha.txt'''])
+
+          replace_step('Apply baseline and every production-compatible migration', [r'''      - name: Apply baseline and every production-compatible pre-ledger migration
+        shell: bash
+        run: |
+          set -o pipefail
+          SUPABASE_MIGRATION_TEST_DB_URL="$LOCAL_SUPABASE_DB_URL" \
+          SUPABASE_MIGRATION_BASELINE_SQL=compact-outflow-clean/historical-baseline.sql \
+          SUPABASE_MIGRATION_SKIP_BASENAMES=20260811152545_commitments_impact_study_instrumentation_qa_only.sql,20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql,20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql,20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql,20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql,20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql,20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql,20260811171544_commitments_impact_study_blocked_probe_service_role.sql \
+            bash scripts/apply-supabase-migrations-in-order.sh compact-outflow-clean/pre-ledger-migrations \
+            2>&1 | tee compact-outflow-clean/pre-ledger-migration-chain.log
+          test "$(grep -c '^skipping_environment_bound_migration=' compact-outflow-clean/pre-ledger-migration-chain.log)" -eq 8
+          if grep -q '2026081614150[0-3]_compact_authoritative_outflow_' compact-outflow-clean/pre-ledger-migration-chain.log; then
+            echo "Ledger migrations were applied before legacy Compact regression tests."
+            exit 1
+          fi''', r'''      - name: Run legacy Compact regressions before ledger authority hardening
+        shell: bash
+        run: |
+          set -o pipefail
+          for suite in \
+            mpgf_public_goods_compacts_lifecycle \
+            mpgf_public_goods_compacts_historical_freeze; do
+            psql "$LOCAL_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "supabase/tests/${suite}.sql" \
+              2>&1 | tee "compact-outflow-clean/pre-ledger-${suite}.log"
+          done''', r'''      - name: Apply the four authoritative-ledger migrations in order
+        shell: bash
+        run: |
+          set -o pipefail
+          : > compact-outflow-clean/ledger-migration-chain.log
+          while IFS= read -r migration_path; do
+            echo "applying_ledger_migration=$(basename "$migration_path")" \
+              | tee -a compact-outflow-clean/ledger-migration-chain.log
+            psql "$LOCAL_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "$migration_path" \
+              2>&1 | tee -a compact-outflow-clean/ledger-migration-chain.log
+          done < compact-outflow-clean/ledger-migrations.txt
+          test "$(grep -c '^applying_ledger_migration=' compact-outflow-clean/ledger-migration-chain.log)" -eq 4'''])
+
+          replace_step('Run database lint and ledger lifecycle suites', [r'''      - name: Run database lint on the final authoritative-ledger schema
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db lint --db-url "$LOCAL_SUPABASE_DB_URL" --schema public --level warning --fail-on none \
+            2>&1 | tee compact-outflow-clean/supabase-db-lint.log
+          supabase db lint --db-url "$LOCAL_SUPABASE_DB_URL" --schema moral_trade_private --level warning --fail-on none \
+            2>&1 | tee compact-outflow-clean/private-db-lint.log
+          node scripts/verify-mpgf-public-goods-compacts-db-lint.mjs compact-outflow-clean/supabase-db-lint.log \
+            | tee compact-outflow-clean/supabase-db-lint-owned-gate.json''', r'''      - name: Run final authoritative-ledger lifecycle and authorization suites
+        shell: bash
+        run: |
+          set -o pipefail
+          for suite in \
+            compact_authoritative_outflow_ledger_core \
+            compact_authoritative_outflow_ledger_authorization; do
+            psql "$LOCAL_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "supabase/tests/${suite}.sql" \
+              2>&1 | tee "compact-outflow-clean/${suite}.log"
+          done'''])
+
+          replace_step('Prepare rollback-only migration files', [r'''      - name: Prepare rollback-only migrations and normalized test bodies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            compact-outflow-rollback/migrations \
+            compact-outflow-rollback/test-bodies
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration_sources = [
+              Path('supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql'),
+              Path('supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql'),
+              Path('supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql'),
+              Path('supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql'),
+              Path('supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql'),
+              Path('supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql'),
+          ]
+          migration_output = Path('compact-outflow-rollback/migrations')
+          for source in migration_sources:
+              lines = source.read_text(encoding='utf-8').splitlines()
+              body = [line for line in lines if line.strip().lower() not in {'begin;', 'commit;'}]
+              (migration_output / source.name).write_text('\n'.join(body) + '\n', encoding='utf-8')
+
+          test_sources = [
+              Path('supabase/tests/mpgf_public_goods_compacts_lifecycle.sql'),
+              Path('supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql'),
+              Path('supabase/tests/compact_authoritative_outflow_ledger_core.sql'),
+              Path('supabase/tests/compact_authoritative_outflow_ledger_authorization.sql'),
+          ]
+          test_output = Path('compact-outflow-rollback/test-bodies')
+          for source in test_sources:
+              lines = source.read_text(encoding='utf-8').splitlines()
+              significant = [i for i, line in enumerate(lines) if line.strip() and not line.lstrip().startswith('--')]
+              if not significant:
+                  raise SystemExit(f'{source}: empty test suite')
+              first, last = significant[0], significant[-1]
+              if lines[first].strip().lower() != 'begin;' or lines[last].strip().lower() != 'rollback;':
+                  raise SystemExit(f'{source}: expected one rollback-only transaction envelope')
+              if sum(line.strip().lower() == 'begin;' for line in lines) != 1:
+                  raise SystemExit(f'{source}: unexpected nested begin')
+              if sum(line.strip().lower() == 'rollback;' for line in lines) != 1:
+                  raise SystemExit(f'{source}: unexpected nested rollback')
+              body = lines[:first] + lines[first + 1:last] + lines[last + 1:]
+              (test_output / source.name).write_text('\n'.join(body) + '\n', encoding='utf-8')
+          PY
+          sha256sum \
+            supabase/migrations/2026081614150*_compact_authoritative_outflow_*.sql \
+            supabase/tests/compact_authoritative_outflow_ledger_*.sql \
+            > compact-outflow-rollback/source-sha256.txt'''])
+
+          replace_step('Execute complete rollback-only authority lifecycle', [r'''      - name: Execute ordered rollback-only legacy and authoritative-ledger lifecycles
+        shell: bash
+        run: |
+          set -o pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee compact-outflow-rollback/lifecycle.log
+          begin;
+          \i supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
+          \i supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
+          \i compact-outflow-rollback/migrations/20260813163052_mpgf_public_goods_compacts.sql
+          \i compact-outflow-rollback/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
+
+          savepoint legacy_compact_lifecycle;
+          \i compact-outflow-rollback/test-bodies/mpgf_public_goods_compacts_lifecycle.sql
+          rollback to savepoint legacy_compact_lifecycle;
+          release savepoint legacy_compact_lifecycle;
+
+          savepoint legacy_compact_historical_freeze;
+          \i compact-outflow-rollback/test-bodies/mpgf_public_goods_compacts_historical_freeze.sql
+          rollback to savepoint legacy_compact_historical_freeze;
+          release savepoint legacy_compact_historical_freeze;
+
+          \i compact-outflow-rollback/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          \i compact-outflow-rollback/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          \i compact-outflow-rollback/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          \i compact-outflow-rollback/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+
+          savepoint authoritative_ledger_core;
+          \i compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_core.sql
+          rollback to savepoint authoritative_ledger_core;
+          release savepoint authoritative_ledger_core;
+
+          savepoint authoritative_ledger_authorization;
+          \i compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_authorization.sql
+          rollback to savepoint authoritative_ledger_authorization;
+          release savepoint authoritative_ledger_authorization;
+
+          rollback;
+          SQL'''])
+
+          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Validate and commit the durable repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          path = Path('.github/workflows/compact-authoritative-outflow-ledger-qa.yml')
+          data = yaml.safe_load(path.read_text(encoding='utf-8'))
+          if not isinstance(data, dict):
+              raise SystemExit('Workflow YAML did not parse to a mapping.')
+          text = path.read_text(encoding='utf-8')
+          for marker in [
+              'Prepare exact pre-ledger and ledger migration chains',
+              'Run legacy Compact regressions before ledger authority hardening',
+              'Apply the four authoritative-ledger migrations in order',
+              'Run final authoritative-ledger lifecycle and authorization suites',
+              'Execute ordered rollback-only legacy and authoritative-ledger lifecycles',
+          ]:
+              if marker not in text:
+                  raise SystemExit(f'Missing durable phase marker: {marker}')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          git rm .github/workflows/repair-compact-outflow-phase-ordering-v1.yml
+          git commit -m "ci: separate pre-ledger and authoritative-ledger validation"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
