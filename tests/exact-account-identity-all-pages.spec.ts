@@ -19,7 +19,7 @@ const accountFixture = {
   },
 };
 
-for (const path of ["/moral-trade-live.html", "/discover", "/walkthrough"] as const) {
+for (const path of ["/moral-trade-live.html", "/discover"] as const) {
   test(`${path} uses the authenticated account instead of the legacy AJ identity`, async ({ page }) => {
     await page.route("**/api/live-account", (route) =>
       route.fulfill({
@@ -69,3 +69,12 @@ for (const path of ["/moral-trade-live.html", "/discover", "/walkthrough"] as co
     );
   });
 }
+
+
+test("/walkthrough remains identity-neutral for voluntary signed-out use", async ({ page }) => {
+  await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await expect(page.locator('[data-walkthrough-ready="true"]')).toBeVisible();
+  await expect(page.getByText("AJ", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Alex Johnson", { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-mt-account-avatar="true"]')).toHaveCount(0);
+});
