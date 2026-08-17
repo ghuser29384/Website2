@@ -1,0 +1,138 @@
+name: Repair Compact outflow lineage
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/repair-compact-outflow-lineage.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - name: Make supersession lineage explicit and deterministic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          old_query = '''  select obligation.id into supersedes_obligation_id
+          from public.mpgf_public_goods_obligation_snapshots obligation
+          where obligation.participant_id = p_participant_id
+            and obligation.cycle_key = p_cycle_key
+          order by obligation.frozen_at desc, obligation.id desc limit 1;
+          '''
+          new_query = '''  select obligation.id into supersedes_obligation_id
+          from public.mpgf_public_goods_obligation_snapshots obligation
+          where obligation.participant_id = p_participant_id
+            and obligation.cycle_key = p_cycle_key
+            and not exists (
+              select 1
+              from public.mpgf_public_goods_obligation_snapshots successor
+              where successor.supersedes_id = obligation.id
+            )
+          order by obligation.frozen_at desc, obligation.id desc limit 1;
+          '''
+          for name in [
+              'supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql',
+              'supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql',
+          ]:
+              path = Path(name)
+              source = path.read_text(encoding='utf-8')
+              if source.count(old_query) != 1:
+                  raise SystemExit(f'{name}: expected one supersession query, found {source.count(old_query)}')
+              path.write_text(source.replace(old_query, new_query), encoding='utf-8')
+
+          test_path = Path('supabase/tests/compact_authoritative_outflow_ledger_core.sql')
+          test_source = test_path.read_text(encoding='utf-8')
+          test_source = test_source.replace('\\set VERBOSITY verbose\n\\echo ledger-core:start\n', '')
+          test_source = test_source.replace('\\echo ledger-core:auth-users-inserted\n', '')
+          test_source = test_source.replace('\\echo ledger-core:profiles-inserted\n', '')
+          old_assertion = '''do $test$
+          declare result jsonb; latest public.mpgf_public_goods_obligation_snapshots%rowtype;
+          begin
+            result := public.freeze_mpgf_public_goods_financial_cycle_v2(
+              '6b000000-0000-4000-8000-000000000001','2026-08'
+            );
+            if (result->>'eligibleNetSettledOutflowCents')::bigint <> 8000
+               or (result->>'obligationCents')::bigint <> 800 then
+              raise exception 'Late adjustment was not reflected in the superseding amount: %', result;
+            end if;
+            select * into latest from public.mpgf_public_goods_obligation_snapshots
+            where participant_id='6b000000-0000-4000-8000-000000000001' and cycle_key='2026-08'
+            order by frozen_at desc, id desc limit 1;
+            if latest.supersedes_id is null then
+              raise exception 'Late adjustment did not preserve explicit obligation supersession.';
+            end if;
+          end;
+          $test$;
+          '''
+          new_assertion = '''do $test$
+          declare
+            result jsonb;
+            latest public.mpgf_public_goods_obligation_snapshots%rowtype;
+            leaf_count integer;
+          begin
+            result := public.freeze_mpgf_public_goods_financial_cycle_v2(
+              '6b000000-0000-4000-8000-000000000001','2026-08'
+            );
+            if (result->>'eligibleNetSettledOutflowCents')::bigint <> 8000
+               or (result->>'obligationCents')::bigint <> 800 then
+              raise exception 'Late adjustment was not reflected in the superseding amount: %', result;
+            end if;
+            select count(*)::integer into leaf_count
+            from public.mpgf_public_goods_obligation_snapshots obligation
+            where obligation.participant_id='6b000000-0000-4000-8000-000000000001'
+              and obligation.cycle_key='2026-08'
+              and not exists (
+                select 1
+                from public.mpgf_public_goods_obligation_snapshots successor
+                where successor.supersedes_id = obligation.id
+              );
+            if leaf_count <> 1 then
+              raise exception 'Obligation supersession produced % current leaves instead of one.', leaf_count;
+            end if;
+            select * into latest
+            from public.mpgf_public_goods_obligation_snapshots obligation
+            where obligation.participant_id='6b000000-0000-4000-8000-000000000001'
+              and obligation.cycle_key='2026-08'
+              and not exists (
+                select 1
+                from public.mpgf_public_goods_obligation_snapshots successor
+                where successor.supersedes_id = obligation.id
+              );
+            if latest.supersedes_id is null then
+              raise exception 'Late adjustment did not preserve explicit obligation supersession.';
+            end if;
+          end;
+          $test$;
+          '''
+          if test_source.count(old_assertion) != 1:
+              raise SystemExit(f'Expected one late-adjustment assertion, found {test_source.count(old_assertion)}')
+          test_path.write_text(test_source.replace(old_assertion, new_assertion), encoding='utf-8')
+          PY
+          git diff --check
+          ! grep -q 'ledger-core:' supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          grep -q 'successor.supersedes_id = obligation.id' supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+      - name: Commit repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql \
+            supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql \
+            supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          git commit -m "fix: preserve Compact outflow obligation lineage"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
