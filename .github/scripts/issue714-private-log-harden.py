@@ -123,7 +123,7 @@ sub_once(
   assert.doesNotMatch(completeActionSource, /message:\\s*transitionError/);
   assert.doesNotMatch(
     completeActionSource,
-    /console\\.error\\([^;]+,\\s*(?:error|profileError|onboardingError|wishProfileError|synthesisError)\\);/s,
+    /console\\.error\\([\\s\\S]*?,\\s*(?:error|profileError|onboardingError|wishProfileError|synthesisError)\\);/,
   );
   assert.match(completeActionSource, /getSafeErrorCode/);
   assert.match(completeActionSource, /path:\\s*"\\/complete-profile"/);
