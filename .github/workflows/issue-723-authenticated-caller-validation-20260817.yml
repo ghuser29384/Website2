@@ -1,0 +1,71 @@
+name: Issue 723 authenticated caller validation
+
+on:
+  push:
+    branches:
+      - qa/745-authenticated-caller-validation-20260817
+    paths:
+      - .github/workflows/issue-723-authenticated-caller-validation-20260817.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue-723-authenticated-caller-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_PRODUCT_HEAD: ec59737e66aa6135b822446e4cb4a82372e0b39b
+      WORKFLOW_PATH: .github/workflows/issue-723-authenticated-caller-validation-20260817.yml
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact validation revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Verify exact product parent and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PRODUCT_HEAD"
+          test "$(git diff --name-only "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$WORKFLOW_PATH"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused authenticated-caller contracts
+        run: node --import tsx --test src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- --quiet
+
+      - name: Build with payment features disabled
+        env:
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
