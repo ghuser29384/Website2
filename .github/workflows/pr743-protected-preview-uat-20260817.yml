@@ -41,6 +41,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
           test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
           test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_CANDIDATE_TREE"
@@ -50,7 +51,6 @@ jobs:
           test "$(gh api repos/$GITHUB_REPOSITORY/pulls/743 --jq .head.sha)" = "$EXPECTED_CANDIDATE_SHA"
           test "$(gh api repos/$GITHUB_REPOSITORY/pulls/743 --jq .draft)" = "true"
           test "$(gh api repos/$GITHUB_REPOSITORY/pulls/743 --jq .state)" = "open"
-          mkdir -p "$EVIDENCE_DIR"
           {
             printf 'main=%s\n' "$EXPECTED_MAIN_SHA"
             printf 'candidate=%s\n' "$EXPECTED_CANDIDATE_SHA"
@@ -266,6 +266,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
           python3 - <<'PY' | tee "$EVIDENCE_DIR/privacy-scan.log"
           from pathlib import Path
           import re
