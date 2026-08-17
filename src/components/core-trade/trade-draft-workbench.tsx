@@ -461,7 +461,7 @@ export function TradeDraftWorkbench({
         ) : null}
 
         <header className={styles.top}>
-          <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/">
+          <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/" prefetch={false}>
             <MoralTradeWordmark />
           </Link>
           <div aria-label="Draft progress" className={styles.progress}>
@@ -1085,7 +1085,7 @@ export function TradeDraftSignInGate({ returnTo = "/trades/new" }: { returnTo?: 
   return (
     <main className={`${styles.page} ${styles.gate}`} id="main-content" tabIndex={-1}>
       <header className={styles.gateHeader}>
-        <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/">
+        <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/" prefetch={false}>
           <MoralTradeWordmark />
         </Link>
         <Link

@@ -61,6 +61,17 @@ test("server auth retries bypass Next.js GET memoization", () => {
   assert.match(serverClientSource, /global: \{\s*fetch: createAuthAwareServerFetch\(\),/u);
 });
 
+test("trade composer and sign-in gate cannot prefetch the rewritten root route", () => {
+  const rootBrandLinks = tradeDraftWorkbenchSource.match(
+    /<Link aria-label="Moral Trade, home" className=\{styles\.brandLink\} href="\/" prefetch=\{false\}>/gu,
+  );
+  assert.equal(rootBrandLinks?.length, 2);
+  assert.doesNotMatch(
+    tradeDraftWorkbenchSource,
+    /<Link aria-label="Moral Trade, home" className=\{styles\.brandLink\} href="\/">/u,
+  );
+});
+
 test("signed-out trade exit cannot prefetch the document-backed Discover route", () => {
   assert.ok(
     tradeDraftWorkbenchSource.includes(
