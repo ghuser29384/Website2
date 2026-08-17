@@ -12,6 +12,7 @@ const marketplaceComponentsSource = readFileSync(
   "src/components/marketplace/marketplace-components.tsx",
   "utf8",
 );
+const profilePageSource = readFileSync("src/app/profile/page.tsx", "utf8");
 
 test("getViewer request-scopes one lazy bounded verifier", () => {
   assert.match(
@@ -73,6 +74,29 @@ test("signed-out trade exit cannot prefetch the document-backed Discover route",
         "        </Link>",
       ].join("\n"),
     ),
+  );
+});
+
+test("authenticated profile navigation cannot prefetch the queryless Offers compatibility redirect", () => {
+  const sideNavStart = marketplaceComponentsSource.indexOf("function MarketplaceSideNav({");
+  const sideNavEnd = marketplaceComponentsSource.indexOf(
+    "\nexport function MarketplaceRouteShell({",
+    sideNavStart,
+  );
+  assert.ok(sideNavStart >= 0 && sideNavEnd > sideNavStart);
+  const sideNavSource = marketplaceComponentsSource.slice(sideNavStart, sideNavEnd);
+
+  assert.match(
+    sideNavSource,
+    /<Link className="mt-v75-side-brand" href="\/offers" prefetch=\{false\}>/u,
+  );
+  assert.match(
+    sideNavSource,
+    /href=\{item\.href\}\s+prefetch=\{item\.href === "\/offers" \? false : undefined\}\s+key=\{item\.key\}/u,
+  );
+  assert.match(
+    profilePageSource,
+    /<Link className="button button-secondary button-mini" href="\/offers" prefetch=\{false\}>/u,
   );
 });
 
