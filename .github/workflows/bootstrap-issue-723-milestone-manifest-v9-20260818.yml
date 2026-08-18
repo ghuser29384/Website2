@@ -1,0 +1,86 @@
+name: Normalize finalized milestone hash binding
+
+on:
+  push:
+    branches:
+      - qa/723-authenticated-confirmation-integration-20260817
+    paths:
+      - .github/workflows/bootstrap-issue-723-milestone-manifest-v9-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-issue-723-inspected-signature-executor
+  cancel-in-progress: false
+
+jobs:
+  normalize-or-clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BRANCH: qa/723-authenticated-confirmation-integration-20260817
+      TARGET: .github/workflows/bootstrap-issue-723-milestone-manifest-v5-20260818.yml
+      SELF: .github/workflows/bootstrap-issue-723-milestone-manifest-v9-20260818.yml
+    steps:
+      - name: Check out current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 20
+
+      - name: Normalize the generator when it remains
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "$TARGET"; then
+            python - <<'PY'
+            from pathlib import Path
+            path = Path(".github/workflows/bootstrap-issue-723-milestone-manifest-v5-20260818.yml")
+            lines = path.read_text().splitlines()
+            out = []
+            has_hash_values = any('p_manifest_hash: manifestHash' in line for line in lines)
+            has_finalized = any('const finalizedVersion = await loadOne' in line for line in lines)
+            replaced_confirm = False
+            for line in lines:
+                if '"  const values = (actor, functionName) => ({",' in line:
+                    line = line.replace('(actor, functionName)', '(actor, functionName, manifestHash = null)')
+                out.append(line)
+                if (not has_hash_values) and 'p_idempotency_key: `pooled-qa:' in line:
+                    indent = line[: len(line) - len(line.lstrip())]
+                    out.extend([
+                        indent + '"    p_manifest_hash: manifestHash,",',
+                        indent + '"    p_expected_manifest_hash: manifestHash,",',
+                        indent + '"    p_milestone_manifest_hash: manifestHash,",',
+                        indent + '"    p_expected_milestone_manifest_hash: manifestHash,",',
+                        indent + '"    p_complete_terms_hash: version.complete_terms_hash,",',
+                        indent + '"    p_expected_complete_terms_hash: version.complete_terms_hash,",',
+                    ])
+                if (not has_finalized) and 'f"  const confirmNames = {json.dumps(confirm_args)};",' in line:
+                    indent = line[: len(line) - len(line.lstrip())]
+                    out[-1:] = [
+                        indent + '"  const finalizedVersion = await loadOne(\\"trade_agreement_versions\\", version.id);",',
+                        indent + '"  assert.match(String(finalizedVersion.milestone_manifest_hash || \\\"\\\"), /^[0-9a-f]{64}$/);",',
+                        line,
+                    ]
+                if 'const confirmValues = values(actor,' in line:
+                    indent = line[: len(line) - len(line.lstrip())]
+                    out[-1] = indent + '"    const confirmValues = values(actor, \\\"confirm_trade_agreement_milestone_manifest_v1\\\", finalizedVersion.milestone_manifest_hash);",'
+                    replaced_confirm = True
+            if not replaced_confirm:
+                raise SystemExit("Could not locate generated confirmation value mapping.")
+            path.write_text("\n".join(out) + "\n")
+            PY
+          fi
+          rm "$SELF"
+          git diff --check
+
+      - name: Publish normalization or self-cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Normalize finalized milestone hash binding"
+          git push origin "HEAD:$BRANCH"
