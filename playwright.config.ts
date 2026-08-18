@@ -5,6 +5,8 @@ import { defineConfig } from "@playwright/test";
 const useProductionServer =
   process.env.PLAYWRIGHT_USE_PRODUCTION_SERVER === "1" ||
   (process.env.CI === "true" && existsSync(".next/BUILD_ID"));
+const playwrightPort = process.env.PLAYWRIGHT_PORT ?? "3210";
+const playwrightBaseUrl = `http://127.0.0.1:${playwrightPort}`;
 
 export default defineConfig({
   testDir: "./tests",
@@ -15,14 +17,14 @@ export default defineConfig({
   },
   webServer: {
     command: useProductionServer
-      ? "npm run start -- -H 127.0.0.1 -p 3210"
-      : "npm run dev -- -H 127.0.0.1 -p 3210",
+      ? `npm run start -- -H 127.0.0.1 -p ${playwrightPort}`
+      : `npm run dev -- -H 127.0.0.1 -p ${playwrightPort}`,
     reuseExistingServer: true,
     timeout: 120_000,
-    url: "http://127.0.0.1:3210",
+    url: playwrightBaseUrl,
   },
   use: {
-    baseURL: "http://127.0.0.1:3210",
+    baseURL: playwrightBaseUrl,
     storageState: {
       cookies: [
         {

@@ -284,6 +284,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.76,
     },
     {
+      url: getAbsoluteUrl("/mpgf/compacts"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.72,
+    },
+    {
       url: getAbsoluteUrl("/mpgf/pools"),
       lastModified: now,
       changeFrequency: "weekly",

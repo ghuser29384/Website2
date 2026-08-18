@@ -7,20 +7,25 @@
 -- The retired evidence RPCs trust a caller-supplied profile identifier and
 -- belong to the legacy dossier workflow. The Phase 3 application no longer
 -- calls them, so no API role may execute them after the privacy cutover.
-revoke all on function public.initialize_public_trade_evidence()
-  from public, anon, authenticated, service_role;
-revoke all on function public.register_trade_evidence_v3(
-  uuid, uuid, text, text, text, text, text, uuid
-) from public, anon, authenticated, service_role;
-revoke all on function public.publish_trade_evidence_v3(
-  uuid, uuid, text, text, text, text, text, text, text
-) from public, anon, authenticated, service_role;
-revoke all on function public.review_trade_evidence_v3(
-  uuid, uuid, text, text
-) from public, anon, authenticated, service_role;
-revoke all on function public.withdraw_trade_evidence_v3(
-  uuid, uuid, text
-) from public, anon, authenticated, service_role;
+do $retired_evidence_rpc_grants$
+begin
+  if to_regprocedure('public.initialize_public_trade_evidence()') is not null then
+    execute 'revoke all on function public.initialize_public_trade_evidence() from public, anon, authenticated, service_role';
+  end if;
+  if to_regprocedure('public.register_trade_evidence_v3(uuid,uuid,text,text,text,text,text,uuid)') is not null then
+    execute 'revoke all on function public.register_trade_evidence_v3(uuid, uuid, text, text, text, text, text, uuid) from public, anon, authenticated, service_role';
+  end if;
+  if to_regprocedure('public.publish_trade_evidence_v3(uuid,uuid,text,text,text,text,text,text,text)') is not null then
+    execute 'revoke all on function public.publish_trade_evidence_v3(uuid, uuid, text, text, text, text, text, text, text) from public, anon, authenticated, service_role';
+  end if;
+  if to_regprocedure('public.review_trade_evidence_v3(uuid,uuid,text,text)') is not null then
+    execute 'revoke all on function public.review_trade_evidence_v3(uuid, uuid, text, text) from public, anon, authenticated, service_role';
+  end if;
+  if to_regprocedure('public.withdraw_trade_evidence_v3(uuid,uuid,text)') is not null then
+    execute 'revoke all on function public.withdraw_trade_evidence_v3(uuid, uuid, text) from public, anon, authenticated, service_role';
+  end if;
+end;
+$retired_evidence_rpc_grants$;
 
 -- Cover the remaining release-owned foreign keys reported after the
 -- restrictive migration was exercised in isolated QA.

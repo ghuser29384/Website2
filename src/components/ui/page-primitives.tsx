@@ -349,14 +349,15 @@ export function IconMark({ name }: { name: IconName }) {
 
 interface BreadcrumbsProps {
   items: readonly LinkLike[];
+  prefetch?: boolean;
 }
 
-export function Breadcrumbs({ items }: BreadcrumbsProps) {
+export function Breadcrumbs({ items, prefetch }: BreadcrumbsProps) {
   return (
     <nav aria-label="Breadcrumb" className="breadcrumbs">
       <ol>
         <li>
-          <Link href="/">Home</Link>
+          <Link prefetch={prefetch} href="/">Home</Link>
         </li>
         {items.map((item, index) => {
           const isCurrent = index === items.length - 1;
@@ -366,7 +367,7 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
               {isCurrent ? (
                 <span aria-current="page">{item.label}</span>
               ) : (
-                <Link href={item.href}>{item.label}</Link>
+                <Link prefetch={prefetch} href={item.href}>{item.label}</Link>
               )}
             </li>
           );

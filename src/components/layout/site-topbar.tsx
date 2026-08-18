@@ -269,6 +269,26 @@ export function SiteTopbar({
           ) : null,
         )}
       </div>
+      <details className="topbar-mobile-nav" suppressHydrationWarning>
+        <summary>
+          <span>Primary navigation</span>
+          <span aria-hidden="true">Menu</span>
+        </summary>
+        <div className="topbar-mobile-nav-panel">
+          {links.map((link) =>
+            link.items?.length ? (
+              <div className="topbar-mobile-nav-group" key={link.label}>
+                <strong>{link.label}</strong>
+                {link.items.map((item) => (
+                  <NavItem key={`${item.href}-${item.label}`} href={item.href} label={item.label} />
+                ))}
+              </div>
+            ) : link.href ? (
+              <NavItem key={`${link.href}-${link.label}`} href={link.href} label={link.label} />
+            ) : null,
+          )}
+        </div>
+      </details>
       {showSearch ? (
         <form className="topbar-search" role="search" onSubmit={handleSearchSubmit}>
           <label className="sr-only" htmlFor={searchInputId}>
