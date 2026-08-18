@@ -1,0 +1,141 @@
+name: Repair Compact outflow final scope v2
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/repair-compact-outflow-final-scope-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-compact-outflow-final-scope-v2-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PARENT_SHA: e623e8e9c7e94a56bc1fc236a5e550891ba443e7
+  STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Verify bounded controller lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
+          test "$(git diff --name-only HEAD^...HEAD)" = ".github/workflows/repair-compact-outflow-final-scope-v2.yml"
+          test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
+
+      - name: Materialize final durable scope and no-money assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/compact-authoritative-outflow-ledger-qa.yml')
+          source = path.read_text(encoding='utf-8')
+          start_marker = '      - name: No-money readback\n'
+          end_marker = '      - name: Stop ephemeral runtime\n'
+          if source.count(start_marker) != 1 or source.count(end_marker) != 1:
+              raise SystemExit('Could not identify the unique no-money workflow block.')
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          replacement = '''      - name: No-money readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee db-evidence/no-money-assertion.log
+          do $assert$
+          begin
+            if exists (
+              select 1 from public.mpgf_public_goods_compacts where status = 'active'
+            ) then
+              raise exception 'Authoritative outflow QA unexpectedly activated a Compact.';
+            end if;
+            if exists (
+              select 1 from public.mpgf_public_goods_voting_snapshots
+            ) then
+              raise exception 'Authoritative outflow QA unexpectedly opened an electorate.';
+            end if;
+            if exists (
+              select 1
+              from public.mpgf_public_goods_dormant_authorization_snapshots
+              where provider_reference is not null
+            ) then
+              raise exception 'Authoritative outflow QA unexpectedly created a payment provider reference.';
+            end if;
+          end;
+          $assert$;
+          SQL
+          psql "$DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' | tee db-evidence/no-money.txt
+          select 'activation|' || count(*) from public.mpgf_public_goods_compacts where status='active'
+          union all select 'electorate|' || count(*) from public.mpgf_public_goods_voting_snapshots
+          union all select 'payment_refs|' || count(*) from public.mpgf_public_goods_dormant_authorization_snapshots where provider_reference is not null
+          order by 1;
+          SQL
+'''
+          updated = source[:start] + replacement + source[end:]
+          if updated.count('no-money-assertion.log') != 1:
+              raise SystemExit('No-money SQL assertion was not installed exactly once.')
+          block = updated[start:updated.index(end_marker, start)]
+          if 'grep -qx' in block:
+              raise SystemExit('Brittle shell grep remained in the no-money block.')
+          path.write_text(updated, encoding='utf-8')
+          PY
+
+          for path in \
+            .github/workflows/complete-compact-outflow-nonhosted-v1.yml \
+            .github/workflows/complete-compact-outflow-nonhosted-v2.yml \
+            .github/workflows/continue-compact-outflow-validation-v1.yml \
+            .github/workflows/finalize-compact-outflow-validation-v3.yml \
+            .github/workflows/repair-compact-outflow-phase-order-v1.yml \
+            .github/workflows/repair-compact-outflow-phase-ordering-v1.yml \
+            .github/workflows/repair-compact-outflow-preledger-assertion-v1.yml \
+            .github/workflows/repair-compact-outflow-test-isolation-v2.yml \
+            .github/workflows/repair-compact-outflow-final-scope-v2.yml
+          do
+            test -f "$path"
+            git rm "$path"
+          done
+
+          cat > /tmp/expected.txt <<'EOF'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          docs/mpgf/compact-authoritative-outflow-ledger-v1.md
+          scripts/test-compact-authoritative-outflow-concurrency.sh
+          src/components/mpgf/mpgf-public-goods-compacts.tsx
+          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.ts
+          supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          tests/mpgf-public-goods-compacts.spec.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected.txt
+          sort -o /tmp/expected.txt /tmp/expected.txt
+          git diff --name-only "$STACK_BASE_SHA" | sort > /tmp/actual.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          test "$(wc -l < /tmp/actual.txt)" -eq 15
+          git diff --check
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          git commit -m "ci: finalize Compact outflow exact-head validation"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
