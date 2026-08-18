@@ -1,14 +1,9 @@
 name: PR 757 exact production release controller
 
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
+  push:
     branches:
-      - main
+      - ops/pr757-exact-release-controller-pr-20260818
     paths:
       - .github/workflows/complete-profile-production-canary.yml
 
@@ -28,36 +23,33 @@ env:
   EXPECTED_MAIN_SHA: f9ae5480ae7c20176f24c5f8b678088b5823fc39
   RELEASE_WORKFLOW: vercel-release.yml
   RELEASE_NOT_BEFORE: '2026-08-18T05:55:29Z'
+  EVIDENCE_PR: '757'
 
 jobs:
-  dispatch:
-    if: ${{ github.event.pull_request.head.ref == 'ops/pr757-exact-release-controller-pr-20260818' }}
+  dispatch-and-observe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 55
     steps:
       - name: Check out exact controller head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Guard the one-file controller and exact remote main
+      - name: Guard exact repository state and controller-only scope
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
-          test "${{ github.event.pull_request.base.ref }}" = 'main'
-          test "${{ github.event.pull_request.base.sha }}" = "$EXPECTED_MAIN_SHA"
-          test "${{ github.event.pull_request.head.ref }}" = "$CONTROLLER_BRANCH"
-          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
-          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
           test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_PATH"
           git diff --check "$EXPECTED_MAIN_SHA" HEAD
-          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          test "$remote_main" = "$EXPECTED_MAIN_SHA"
           test "$(git show "$EXPECTED_MAIN_SHA:.github/workflows/vercel-release.yml" | sed -n '1p')" = 'name: Gated Vercel release'
 
-      - name: Adopt or dispatch exactly one guarded production release
+      - name: Adopt an existing exact run or dispatch exactly once
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -65,9 +57,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          find_exact_run() {
+          find_exact_runs() {
             local listing candidate_id candidate
-            listing="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=50")"
+            listing="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=100")"
             while IFS= read -r candidate_id; do
               [[ -n "$candidate_id" ]] || continue
               candidate="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate_id")"
@@ -80,20 +72,24 @@ jobs:
                 && "$(jq -r '.inputs.expected_sha // empty' <<<"$candidate")" = "$EXPECTED_MAIN_SHA" \
                 && -z "$(jq -r '.inputs.synthetic_auth_fixture_url // empty' <<<"$candidate")" ]]; then
                 printf '%s\n' "$candidate_id"
-                return 0
               fi
             done < <(jq -r '.workflow_runs | sort_by(.created_at) | reverse[] | .id' <<<"$listing")
-            return 1
           }
 
+          mapfile -t exact_runs < <(find_exact_runs)
+          if (( ${#exact_runs[@]} > 1 )); then
+            printf 'Refusing duplicate exact production runs: %s\n' "${exact_runs[*]}" >&2
+            exit 1
+          fi
+
           disposition='adopted-existing'
-          run_id="$(find_exact_run || true)"
+          run_id="${exact_runs[0]:-}"
           if [[ -z "$run_id" ]]; then
             disposition='dispatched-new'
             jq -n \
-              --arg workflow_ref 'main' \
-              --arg release_ref 'main' \
-              --arg target 'production' \
+              --arg workflow_ref main \
+              --arg release_ref main \
+              --arg target production \
               --arg expected_sha "$EXPECTED_MAIN_SHA" \
               --arg fixture '' \
               '{ref:$workflow_ref,inputs:{target:$target,ref:$release_ref,expected_sha:$expected_sha,synthetic_auth_fixture_url:$fixture}}' \
@@ -104,58 +100,81 @@ jobs:
                   --input - >/dev/null
 
             for _ in $(seq 1 60); do
-              run_id="$(find_exact_run || true)"
-              [[ -n "$run_id" ]] && break
+              mapfile -t exact_runs < <(find_exact_runs)
+              if (( ${#exact_runs[@]} == 1 )); then
+                run_id="${exact_runs[0]}"
+                break
+              fi
+              if (( ${#exact_runs[@]} > 1 )); then
+                printf 'Duplicate exact production runs appeared after dispatch: %s\n' "${exact_runs[*]}" >&2
+                exit 1
+              fi
               sleep 2
             done
           fi
 
           test -n "$run_id"
           run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
-          test "$(jq -r '.head_sha' <<<"$run")" = "$EXPECTED_MAIN_SHA"
-          test "$(jq -r '.event' <<<"$run")" = 'workflow_dispatch'
-          test "$(jq -r '.head_branch' <<<"$run")" = 'main'
-          test "$(jq -r '.inputs.target' <<<"$run")" = 'production'
-          test "$(jq -r '.inputs.ref' <<<"$run")" = 'main'
-          test "$(jq -r '.inputs.expected_sha' <<<"$run")" = "$EXPECTED_MAIN_SHA"
-          test -z "$(jq -r '.inputs.synthetic_auth_fixture_url // empty' <<<"$run")"
-
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "run_url=$(jq -r '.html_url' <<<"$run")" >> "$GITHUB_OUTPUT"
-          echo "status=$(jq -r '.status' <<<"$run")" >> "$GITHUB_OUTPUT"
-          echo "conclusion=$(jq -r '.conclusion // "pending"' <<<"$run")" >> "$GITHUB_OUTPUT"
-          echo "disposition=$disposition" >> "$GITHUB_OUTPUT"
-
-      - name: Record exact release identity on PR 757
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ steps.release.outputs.run_id }}
-          RUN_URL: ${{ steps.release.outputs.run_url }}
-          RUN_STATUS: ${{ steps.release.outputs.status }}
-          RUN_CONCLUSION: ${{ steps.release.outputs.conclusion }}
-          DISPOSITION: ${{ steps.release.outputs.disposition }}
-        shell: bash
-        run: |
-          set -euo pipefail
+          run_url="$(jq -r '.html_url' <<<"$run")"
           body="$(cat <<EOF
 PR757_EXACT_RELEASE_RUN
 controller_run_id=$GITHUB_RUN_ID
-controller_head=${{ github.event.pull_request.head.sha }}
-disposition=$DISPOSITION
-run_id=$RUN_ID
-run_url=$RUN_URL
+controller_head=$GITHUB_SHA
+disposition=$disposition
+run_id=$run_id
+run_url=$run_url
 head_sha=$EXPECTED_MAIN_SHA
 head_branch=main
 event=workflow_dispatch
-status=$RUN_STATUS
-conclusion=$RUN_CONCLUSION
-dispatch_ref=main
+status=$(jq -r '.status' <<<"$run")
+conclusion=$(jq -r '.conclusion // "pending"' <<<"$run")
 input_target=production
 input_ref=main
 input_expected_sha=$EXPECTED_MAIN_SHA
 input_synthetic_auth_fixture_url=<empty>
 EOF
 )"
-          gh pr comment 757 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment "$EVIDENCE_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
-# Synchronization trigger v2; this draft controller is never merged.
+      - name: Await and record exact release conclusion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.release.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 300); do
+            run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+            test "$(jq -r '.head_sha' <<<"$run")" = "$EXPECTED_MAIN_SHA"
+            test "$(jq -r '.event' <<<"$run")" = 'workflow_dispatch'
+            test "$(jq -r '.head_branch' <<<"$run")" = 'main'
+            status="$(jq -r '.status' <<<"$run")"
+            [[ "$status" = completed ]] && break
+            test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+            sleep 10
+          done
+
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          status="$(jq -r '.status' <<<"$run")"
+          conclusion="$(jq -r '.conclusion // "pending"' <<<"$run")"
+          jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100")"
+          job_summary="$(jq -r '[.jobs[] | "job_id=" + (.id|tostring) + " name=" + .name + " status=" + .status + " conclusion=" + (.conclusion // "pending")] | join("\n")' <<<"$jobs")"
+          body="$(cat <<EOF
+PR757_EXACT_RELEASE_FINAL
+run_id=$RUN_ID
+run_url=$(jq -r '.html_url' <<<"$run")
+head_sha=$EXPECTED_MAIN_SHA
+status=$status
+conclusion=$conclusion
+created_at=$(jq -r '.created_at' <<<"$run")
+updated_at=$(jq -r '.updated_at' <<<"$run")
+$job_summary
+EOF
+)"
+          gh pr comment "$EVIDENCE_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$status" = completed
+          test "$conclusion" = success
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+
+# One-use controller. Never merge; close and delete after the exact release sequence.
