@@ -666,7 +666,7 @@ function MarketplaceSideNav({
 
   return (
     <aside className="mt-v75-side-nav" data-marketplace-left-nav aria-label="Marketplace sections">
-      <Link className="mt-v75-side-brand" href="/offers">
+      <Link className="mt-v75-side-brand" href="/offers" prefetch={false}>
         <span className="mt-v77-brand-wordmark">
           <MoralTradeWordmark />
           <small>Coordination network</small>
@@ -678,6 +678,7 @@ function MarketplaceSideNav({
             aria-current={active === item.key ? "page" : undefined}
             className={joinClassName(["mt-v75-side-link", active === item.key && "is-active"])}
             href={item.href}
+            prefetch={item.href === "/offers" ? false : undefined}
             key={item.key}
           >
             <MarketplaceNavIcon name={item.icon} />
@@ -2653,6 +2654,7 @@ export function MarketplaceBottomNav({
             normalizedActive === item.key && "is-active",
           ])}
           href={item.href}
+          prefetch={item.href === "/offers" ? false : undefined}
           key={item.key}
         >
           <IconMark name={item.icon} />
