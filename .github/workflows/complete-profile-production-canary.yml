@@ -50,9 +50,9 @@ jobs:
           test "${{ github.event.pull_request.base.sha }}" = "$EXPECTED_MAIN_SHA"
           test "${{ github.event.pull_request.head.ref }}" = "$CONTROLLER_BRANCH"
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
-          test "$(git diff --name-only HEAD^ HEAD)" = "$CONTROLLER_PATH"
-          git diff --check HEAD^ HEAD
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_PATH"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
           remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_main" = "$EXPECTED_MAIN_SHA"
           test "$(git show "$EXPECTED_MAIN_SHA:.github/workflows/vercel-release.yml" | sed -n '1p')" = 'name: Gated Vercel release'
@@ -157,3 +157,5 @@ input_synthetic_auth_fixture_url=<empty>
 EOF
 )"
           gh pr comment 757 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+# Synchronization trigger v2; this draft controller is never merged.
