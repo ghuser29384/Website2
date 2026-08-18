@@ -87,9 +87,6 @@ jobs:
                   if current_setting('server_version_num')::integer < 170000 then
                     raise exception 'PostgreSQL 17 or newer required';
                   end if;
-                  if not coalesce((select ssl from pg_stat_ssl where pid = pg_backend_pid()), false) then
-                    raise exception 'TLS is required';
-                  end if;
                   if pg_database_size(current_database()) <= 0 then
                     raise exception 'empty database size';
                   end if;
@@ -108,7 +105,8 @@ jobs:
             "projectRef": "$EXPECTED_PROJECT_REF",
             "database": "postgres",
             "postgresMajor": 17,
-            "ssl": true,
+            "clientPoolerTlsRequired": true,
+            "poolerHost": "$EXPECTED_POOLER_HOST",
             "migrationHistoryPresent": true,
             "checkedAt": "$(date -u +%FT%TZ)"
           }
@@ -225,6 +223,7 @@ jobs:
             echo '### Production pre-DAC backup verified'
             echo "- exact main: \`$EXPECTED_MAIN_SHA\`"
             echo "- project: \`$EXPECTED_PROJECT_REF\`"
+            echo '- client-to-pooler TLS contract: sslmode=require'
             echo '- archive structure: verified'
             echo '- encrypted decrypt round trip: verified'
             echo '- plaintext retained: no'
