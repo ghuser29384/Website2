@@ -1,0 +1,74 @@
+name: Repair clean issue 723 reconstruction controller
+
+on:
+  push:
+    branches:
+      - fix/723-donation-confirmation-authenticated-caller
+    paths:
+      - .github/workflows/repair-reconstruct-issue-723-clean-stacked-candidate-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-clean-issue-723-reconstruction
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BRANCH: fix/723-donation-confirmation-authenticated-caller
+      TARGET: .github/workflows/reconstruct-issue-723-clean-stacked-candidate-20260818.yml
+      SELF: .github/workflows/repair-reconstruct-issue-723-clean-stacked-candidate-20260818.yml
+    steps:
+      - name: Check out current product branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 50
+
+      - name: Correct working-tree scope and dynamic branch binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path(".github/workflows/reconstruct-issue-723-clean-stacked-candidate-20260818.yml")
+          text = path.read_text()
+          old_scope = 'actual="$(git diff --name-only "$BASE_MAIN" HEAD | LC_ALL=C sort | tr \'\\n\' \' \')"'
+          new_scope = 'actual="$(git diff --name-only "$BASE_MAIN" | LC_ALL=C sort | tr \'\\n\' \' \')"'
+          if text.count(old_scope) != 1:
+              raise SystemExit("Expected one committed-head product scope comparison.")
+          text = text.replace(old_scope, new_scope)
+          old_binding = '''          workflow = workflow.replace(
+              "      - qa/723-authenticated-confirmation-integration-20260817",
+              f"      - {clean_branch}",
+          )'''
+          new_binding = '''          workflow, branch_bindings = re.subn(
+              r"(?m)^      - qa/723-authenticated-confirmation[^\\n]+$",
+              f"      - {clean_branch}",
+              workflow,
+              count=1,
+          )
+          if branch_bindings != 1:
+              raise SystemExit("Could not bind the permanent workflow to the clean branch.")'''
+          if text.count(old_binding) != 1:
+              raise SystemExit("Expected one static branch-binding block.")
+          text = text.replace(old_binding, new_binding)
+          path.write_text(text)
+          PY
+          rm "$SELF"
+          git diff --check
+          test "$(git diff --name-only HEAD | LC_ALL=C sort | tr '\n' ' ')" = "$TARGET "
+
+      - name: Publish reconstruction-controller repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix clean issue 723 reconstruction scope"
+          git push origin "HEAD:$BRANCH"
