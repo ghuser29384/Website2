@@ -1,0 +1,112 @@
+name: One-use DAC foundation test-harness repair 20260818
+
+on:
+  push:
+    branches:
+      - fix/dac-public-goods-foundation-reconciliation-20260818
+    paths:
+      - ".github/workflows/one-use-dac-foundation-test-harness-repair-20260818.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-use-dac-foundation-test-harness-repair-20260818
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/dac-public-goods-foundation-reconciliation-20260818
+          fetch-depth: 0
+
+      - name: Apply the bounded Playwright readiness repair and update exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          test_path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
+          source = test_path.read_text()
+
+          old_helper = '''async function gotoReady(page: Page, path: string) {
+            const response = await page.goto(path);
+            await page.waitForLoadState("networkidle");
+            return response;
+          }'''.replace("          ", "")
+          new_helper = '''async function gotoReady(page: Page, path: string) {
+            return page.goto(path, { waitUntil: "domcontentloaded" });
+          }'''.replace("          ", "")
+          if source.count(old_helper) != 1:
+            raise SystemExit("Expected exactly one gotoReady networkidle helper.")
+          if source.count('await page.waitForLoadState("networkidle");') != 3:
+            raise SystemExit("Expected exactly three networkidle waits before repair.")
+          if source.count("await page.reload();") != 2:
+            raise SystemExit("Expected exactly two plain reloads before repair.")
+
+          source = source.replace(old_helper, new_helper)
+          source = source.replace(
+              'await page.reload();\n  await page.waitForLoadState("networkidle");',
+              'await page.reload({ waitUntil: "domcontentloaded" });',
+          )
+          if 'waitForLoadState("networkidle")' in source:
+            raise SystemExit("A networkidle wait remains after repair.")
+          if source.count('waitUntil: "domcontentloaded"') != 3:
+            raise SystemExit("Expected three deterministic DOM-content readiness waits.")
+          test_path.write_text(source)
+
+          workflow_path = Path(
+              ".github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml"
+          )
+          workflow = workflow_path.read_text()
+          trigger_anchor = (
+              '      - "supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql"\n'
+          )
+          if workflow.count(trigger_anchor) != 2:
+            raise SystemExit("Expected two exact workflow trigger anchors.")
+          workflow = workflow.replace(
+              trigger_anchor,
+              trigger_anchor + '      - "tests/mpgf-dac-product-lifecycle.spec.ts"\n',
+          )
+
+          expected_anchor = (
+              "          supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql\n"
+          )
+          if workflow.count(expected_anchor) != 1:
+            raise SystemExit("Expected one exact changed-file scope anchor.")
+          workflow = workflow.replace(
+              expected_anchor,
+              expected_anchor + "          tests/mpgf-dac-product-lifecycle.spec.ts\n",
+          )
+
+          hash_anchor = '            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH"\n'
+          if workflow.count(hash_anchor) != 1:
+            raise SystemExit("Expected one exact source hash anchor.")
+          workflow = workflow.replace(
+              hash_anchor,
+              '            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH" tests/mpgf-dac-product-lifecycle.spec.ts\n',
+          )
+          workflow_path.write_text(workflow)
+          PY
+
+          git diff --check
+          git diff -- tests/mpgf-dac-product-lifecycle.spec.ts \
+            .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
+
+      - name: Commit normally and remove this one-use controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-use-dac-foundation-test-harness-repair-20260818.yml
+          git add tests/mpgf-dac-product-lifecycle.spec.ts \
+            .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
+          git commit -m "test(mpgf): use deterministic page readiness for DAC lifecycle"
+          git push origin HEAD:fix/dac-public-goods-foundation-reconciliation-20260818
