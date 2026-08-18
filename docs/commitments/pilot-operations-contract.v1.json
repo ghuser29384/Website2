@@ -1,0 +1,138 @@
+{
+  "schema_version": "moral-trade-pilot-operations-v1",
+  "status": "complete_contract_not_authorized",
+  "oversight": {
+    "qualified_written_determination_required": true,
+    "self_classify_exempt": false,
+    "recruitment_before_determination": false,
+    "requested_topics": [
+      "authority_and_applicability",
+      "human_subjects_status",
+      "review_category",
+      "consent_and_documentation",
+      "remote_identity",
+      "recruitment",
+      "compensation",
+      "privacy_and_retention",
+      "incident_reporting",
+      "amendment_and_reconsent",
+      "cross_border_conditions",
+      "training"
+    ]
+  },
+  "roles": [
+    "pilot_director",
+    "safety_officer",
+    "privacy_data_steward",
+    "facilitator_lead",
+    "facilitator",
+    "reviewer_lead",
+    "initial_reviewer",
+    "appeal_reviewer",
+    "technical_operator",
+    "recruitment_coordinator",
+    "methods_reviewer",
+    "independent_ethics_reviewer"
+  ],
+  "separation": {
+    "initial_reviewer_distinct_from_appeal_reviewer": true,
+    "facilitator_not_sole_reviewer_of_own_dyad": true,
+    "founder_cannot_override_hard_stop": true,
+    "pilot_director_not_sole_safety_and_progression_authority": true,
+    "technical_operator_no_ordinary_raw_evidence_access": true
+  },
+  "support": {
+    "primary_facilitator_required": true,
+    "backup_facilitator_required": true,
+    "safety_contact_required": true,
+    "technical_pause_authority_required": true,
+    "deadline_may_expire_without_coverage": false,
+    "is_24_7_emergency_service": false
+  },
+  "screening": {
+    "adult_only": true,
+    "private_power_screen_each_party": true,
+    "government_id_default": false,
+    "public_popularity_matching": false,
+    "newcomer_reliability_penalty": false,
+    "decline_without_reason": true
+  },
+  "compensation": {
+    "status": "unresolved_pre_launch",
+    "trade_consideration_minor": 0,
+    "may_depend_on_matching": false,
+    "may_depend_on_completion": false,
+    "may_depend_on_evidence": false,
+    "may_depend_on_challenge_or_appeal": false,
+    "may_depend_on_remaining_enrolled": false,
+    "outside_moral_trade_ledger": true
+  },
+  "consent": {
+    "product_and_research_separate": true,
+    "combined_checkbox_allowed": false,
+    "version_hash_required": true,
+    "copy_required": true,
+    "comprehension_separate": true,
+    "silence_is_consent": false,
+    "material_change_requires_review": true,
+    "research_withdrawal_distinct_from_product_exit": true
+  },
+  "privacy": {
+    "raw_evidence_in_analytics": false,
+    "raw_evidence_public": false,
+    "counterparty_private_acceptability_survey_access": false,
+    "access_logging_required": true,
+    "small_cell_external_threshold": 5,
+    "retention_is_provisional": true,
+    "deletion_rehearsal_required": true
+  },
+  "incidents": {
+    "levels": ["P0", "P1", "P2", "P3"],
+    "cohort_pause_on_P0": true,
+    "enrollment_hold_on_P1": true,
+    "restart_requires_independent_review": true,
+    "weaken_assertion_to_rerun": false
+  },
+  "progression": {
+    "hard_criteria_count": 7,
+    "soft_criteria_count": 8,
+    "soft_required_for_GO": 6,
+    "hard_failure_can_be_overridden": false,
+    "GO_is_causal_evidence": false,
+    "GO_is_adoption_evidence": false,
+    "panel": [
+      "pilot_director",
+      "independent_safety_privacy_reviewer",
+      "independent_methods_reviewer"
+    ]
+  },
+  "launch_gates": [
+    "Q_R_I_and_final_R_accepted",
+    "protected_owner_UAT_passed",
+    "production_release_verified",
+    "oversight_determination_signed",
+    "materials_version_locked",
+    "staff_certified",
+    "support_coverage_rehearsed",
+    "incident_tabletop_passed",
+    "privacy_deletion_rehearsal_passed",
+    "obligation_library_approved",
+    "recruitment_approved",
+    "compensation_disposition_frozen",
+    "cohort_dashboard_ready",
+    "no_open_P0_P1",
+    "recruitment_authorized"
+  ],
+  "authorization": {
+    "runtime": false,
+    "database": false,
+    "provider": false,
+    "money": false,
+    "recruitment": false,
+    "screening": false,
+    "consent_collection": false,
+    "study": false,
+    "merge": false,
+    "deployment": false
+  }
+}
