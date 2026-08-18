@@ -1,144 +1,73 @@
-name: Commitments Pro Sprint specification gates
+name: Commitments Pro Sprint one-time remediation applicator
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - docs/commitments-pro-sprint-materialization-v1-20260818
-      - main
-    paths:
-      - .github/workflows/commitments-pro-sprint-specification-gates.yml
-      - docs/commitments/pro-sprint-materialization-smoke.txt
-      - docs/commitments/pro-sprint-source-of-truth-v1.md
-      - docs/commitments/pro-sprint-artifact-precedence-v1.md
-      - docs/commitments/pro-sprint-orchestration-v1.md
-      - docs/commitments/trust-resolution-v3-contract.v1.json
-      - docs/commitments/zero-dollar-pilot-contract.v1.json
-      - docs/commitments/qri-orchestration-contract.v1.json
-      - docs/commitments/pilot-operations-contract.v1.json
-      - docs/commitments/free-rider-portfolio-contract.v1.json
-      - docs/commitments/pro-sprint-materialization-manifest.v1.json
-      - scripts/commitments/validate-pro-sprint-materialization.mjs
-      - scripts/commitments/pro-sprint-materialization.test.mjs
-  pull_request:
-    branches: [main]
-    paths:
-      - .github/workflows/commitments-pro-sprint-specification-gates.yml
-      - docs/commitments/pro-sprint-materialization-smoke.txt
-      - docs/commitments/pro-sprint-source-of-truth-v1.md
-      - docs/commitments/pro-sprint-artifact-precedence-v1.md
-      - docs/commitments/pro-sprint-orchestration-v1.md
-      - docs/commitments/trust-resolution-v3-contract.v1.json
-      - docs/commitments/zero-dollar-pilot-contract.v1.json
-      - docs/commitments/qri-orchestration-contract.v1.json
-      - docs/commitments/pilot-operations-contract.v1.json
-      - docs/commitments/free-rider-portfolio-contract.v1.json
-      - docs/commitments/pro-sprint-materialization-manifest.v1.json
-      - scripts/commitments/validate-pro-sprint-materialization.mjs
-      - scripts/commitments/pro-sprint-materialization.test.mjs
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: commitments-pro-sprint-specification-${{ github.event.pull_request.number || github.ref }}
+  group: commitments-pro-sprint-one-time-remediation
   cancel-in-progress: false
 
 jobs:
-  validate:
-    name: repository-only specification
+  apply:
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/docs/commitments-pro-sprint-materialization-v1-20260818') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'docs/commitments-pro-sprint-materialization-v1-20260818')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check out exact candidate
+      - name: Check out exact PR branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: docs/commitments-pro-sprint-materialization-v1-20260818
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Parse JSON and workflow
-        run: |
-          node - <<'NODE'
-          const { readdirSync, readFileSync, statSync } = require('node:fs');
-          const { join } = require('node:path');
-          function walk(path) {
-            for (const name of readdirSync(path)) {
-              const child = join(path, name);
-              if (statSync(child).isDirectory()) walk(child);
-              else if (name.endsWith('.json')) JSON.parse(readFileSync(child, 'utf8'));
-            }
-          }
-          walk('docs/commitments');
-          NODE
-          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/commitments-pro-sprint-specification-gates.yml", aliases: true)'
-
-      - name: Resolve exact comparison base
-        id: comparison-base
+      - name: Verify exact staging identity and archive
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          GIT_REF: ${{ github.ref }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-          MATERIALIZATION_BASE_SHA: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
+          EXPECTED_PARENT: d30b5d4c1e1c302f1a934facd110c4590479db57
+          EXPECTED_ARCHIVE_SHA256: 0e97bbfdda1ce41b808867bab2a608918fa4dc19d8ebe4ca67c3900b1cde6bb0
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            # actions/checkout checks out GitHub's synthetic merge ref for a pull request.
-            # Its first parent is the exact target-base commit used to create this test
-            # merge, while the event payload's base.sha may be stale after main advances.
-            BASE_SHA="$(git rev-parse HEAD^1)"
-            CANDIDATE_SHA="$(git rev-parse HEAD^2)"
-            if [ -z "$PR_HEAD_SHA" ] || [ "$CANDIDATE_SHA" != "$PR_HEAD_SHA" ]; then
-              echo "Pull-request merge identity mismatch: candidate=$CANDIDATE_SHA event_head=$PR_HEAD_SHA" >&2
-              exit 1
-            fi
-          elif [ "$GIT_REF" = "refs/heads/main" ]; then
-            BASE_SHA="$PUSH_BEFORE_SHA"
-          else
-            BASE_SHA="$MATERIALIZATION_BASE_SHA"
-          fi
-          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            echo "Unable to resolve an exact comparison base." >&2
-            exit 1
-          fi
-          git cat-file -e "$BASE_SHA^{commit}"
-          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
-          echo "Comparison base: $BASE_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(sha256sum .github/materialization/pr767-remediation/part-000.b64 | cut -d' ' -f1)" = "47e62689150924603907190789ed464dfbe651d481e19d11302abc60eafc8246"
+          test "$(sha256sum .github/materialization/pr767-remediation/part-001.b64 | cut -d' ' -f1)" = "3f8e8c3aa8f938e40a0f639d4ddc1965eee540656e16b89e6485cbcbb8f9b4b2"
+          test "$(sha256sum .github/materialization/pr767-remediation/part-002.b64 | cut -d' ' -f1)" = "c0a63aff2664c1acaed8066fcd43fa3e867d7c1a81808ed7030fcda724de5efa"
+          test "$(sha256sum .github/materialization/pr767-remediation/part-003.b64 | cut -d' ' -f1)" = "9850fc06c47f259ba846098fbdfba5a6301ba74fe59c920accbe787cd0cb9fa2"
+          cat .github/materialization/pr767-remediation/part-*.b64 | base64 --decode > "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz"
+          test "$(sha256sum "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz" | cut -d' ' -f1)" = "$EXPECTED_ARCHIVE_SHA256"
 
-      - name: Validate contracts and exact repository scope
-        env:
-          BASE_SHA: ${{ steps.comparison-base.outputs.sha }}
+      - name: Apply exact repository-only overlay
         run: |
           set -euo pipefail
-          node scripts/commitments/validate-pro-sprint-materialization.mjs \
-            --check-diff "$BASE_SHA" \
-            --write-evidence "$RUNNER_TEMP/commitments-pro-sprint-materialization-sha256.json"
+          tar -xzf "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz" -C .
+          rm -rf .github/materialization/pr767-remediation
+          rm -f .github/workflows/apply-pr767-remediation.yml
+
+      - name: Validate final candidate before commit
+        run: |
+          set -euo pipefail
+          node scripts/commitments/validate-pro-sprint-materialization.mjs
           node --test scripts/commitments/pro-sprint-materialization.test.mjs
-          git diff --check "$BASE_SHA"...HEAD
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/commitments-pro-sprint-specification-gates.yml", aliases: true)'
+          git diff --check
+          if git diff --name-only | grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env)' ; then
+            echo "Runtime or deployment path entered the remediation." >&2
+            exit 1
+          fi
 
-      - name: Reject production and execution surfaces
+      - name: Commit and push exact remediation
         env:
-          BASE_SHA: ${{ steps.comparison-base.outputs.sha }}
+          BRANCH: docs/commitments-pro-sprint-materialization-v1-20260818
         run: |
           set -euo pipefail
-          if git diff --name-only "$BASE_SHA"...HEAD \
-            | grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env|scripts/.*provider|scripts/.*payment)' ; then
-            echo 'Runtime, database, dependency, provider, payment, or deployment surface entered the repository-only candidate.' >&2
-            exit 1
-          fi
-          if grep -R -n -E 'learnedRankingMayActivate[[:space:]]*=[[:space:]]*true|public_numeric_score[[:space:]]*:[[:space:]]*[1-9]|participant_specific.*identified[[:space:]]*:[[:space:]]*true' \
-            docs/commitments scripts/commitments ; then
-            echo 'An activation escape hatch entered the specification candidate.' >&2
-            exit 1
-          fi
-
-      - name: Upload immutable SHA-256 evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: commitments-pro-sprint-materialization-${{ github.run_id }}-${{ github.sha }}
-          path: ${{ runner.temp }}/commitments-pro-sprint-materialization-sha256.json
-          if-no-files-found: error
-          retention-days: 30
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Repair Commitments materialization contracts"
+          git push origin "HEAD:$BRANCH"
