@@ -1,0 +1,327 @@
+name: Review authoritative pre-activation Supabase baseline
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-merge-diagnostic-20260817
+    paths:
+      - .github/workflows/preactivation-baseline-review-controller.yml
+      - .github/preactivation-baseline-review.trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+env:
+  TARGET_BRANCH: database/preactivation-schema-baseline-20260818
+  EXPECTED_TITLE: Add authoritative pre-activation Supabase schema baseline
+  BASELINE_DIR: supabase/baseline/pre_activation
+  CUTOVER_MIGRATION: 20260814042516_account_activation_stage.sql
+
+jobs:
+  synchronize-and-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Normalize the draft pull request
+        id: pr
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mapfile -t rows < <(gh pr list --repo "$REPO" --head "$TARGET_BRANCH" --base main --state open --limit 20 --json number,title --jq '.[] | [.number,.title] | @tsv')
+          if (( ${#rows[@]} == 0 )); then
+            body_file="$(mktemp)"
+            cat > "$body_file" <<'EOF'
+          ## Purpose
+
+          Establish an authoritative, data-free, reproducible pre-activation Supabase schema baseline so an empty database can be reconstructed exactly before applying `20260814042516_account_activation_stage.sql`.
+
+          The existing historical migration directory is retained unchanged and is not represented as a zero-to-current chain. The committed manifest defines the explicit baseline boundary and cutover.
+
+          ## Safety
+
+          Draft and unmerged. No production/shared-QA writes, deployments, alias changes, activation migration application, participant data, or migration-directory rewrite.
+
+          Relates to #714 and draft PR #698.
+          EOF
+            url="$(gh pr create --repo "$REPO" --head "$TARGET_BRANCH" --base main --draft --title "$EXPECTED_TITLE" --body-file "$body_file")"
+            number="${url##*/}"
+          else
+            keep=""
+            for row in "${rows[@]}"; do
+              number="${row%%$'\t'*}"
+              title="${row#*$'\t'}"
+              if [[ "$title" == "$EXPECTED_TITLE" && -z "$keep" ]]; then
+                keep="$number"
+              fi
+            done
+            if [[ -z "$keep" ]]; then
+              keep="${rows[0]%%$'\t'*}"
+              gh pr edit "$keep" --repo "$REPO" --title "$EXPECTED_TITLE"
+            fi
+            for row in "${rows[@]}"; do
+              number="${row%%$'\t'*}"
+              title="${row#*$'\t'}"
+              if [[ "$number" != "$keep" ]]; then
+                gh pr close "$number" --repo "$REPO" --comment "Closed as an accidental duplicate controller request. Superseded by #$keep; no code or review evidence was discarded."
+              fi
+            done
+            number="$keep"
+          fi
+          gh pr ready "$number" --repo "$REPO" --undo >/dev/null 2>&1 || true
+          printf 'number=%s\n' "$number" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the baseline branch
+        uses: actions/checkout@v4
+        with:
+          ref: database/preactivation-schema-baseline-20260818
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Synchronize current main by a normal merge
+        id: identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/preactivation-review logs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags origin main "$TARGET_BRANCH"
+          before_head="$(git rev-parse HEAD)"
+          before_main="$(git rev-parse origin/main)"
+          behind_before="$(git rev-list --count HEAD..origin/main)"
+          if [[ "$behind_before" != "0" ]]; then
+            if ! git merge --no-ff --no-edit origin/main; then
+              git merge --abort || true
+              gh pr comment "$PR_NUMBER" --repo "$REPO" --body "Baseline review stopped: current main does not merge cleanly into the published baseline branch. No force-push, rebase, reset, database write, or deployment occurred."
+              exit 1
+            fi
+            git push origin "HEAD:$TARGET_BRANCH"
+          fi
+          head="$(git rev-parse HEAD)"
+          tree="$(git rev-parse HEAD^{tree})"
+          main="$(git rev-parse origin/main)"
+          merge_base="$(git merge-base HEAD origin/main)"
+          ahead="$(git rev-list --count origin/main..HEAD)"
+          behind="$(git rev-list --count HEAD..origin/main)"
+          remote="$(git rev-parse origin/$TARGET_BRANCH)"
+          test "$behind" = "0"
+          test "$remote" = "$head"
+          test -z "$(git status --porcelain)"
+          {
+            printf 'before_head=%s\n' "$before_head"
+            printf 'before_main=%s\n' "$before_main"
+            printf 'head=%s\n' "$head"
+            printf 'tree=%s\n' "$tree"
+            printf 'main=%s\n' "$main"
+            printf 'merge_base=%s\n' "$merge_base"
+            printf 'ahead=%s\n' "$ahead"
+            printf 'behind=%s\n' "$behind"
+          } | tee artifacts/preactivation-review/identity.txt
+          printf 'head=%s\n' "$head" >> "$GITHUB_OUTPUT"
+          printf 'tree=%s\n' "$tree" >> "$GITHUB_OUTPUT"
+          printf 'main=%s\n' "$main" >> "$GITHUB_OUTPUT"
+          git diff --name-status origin/main...HEAD > artifacts/preactivation-review/changed-files.txt
+          git log --format='%H %P %s' origin/main..HEAD > artifacts/preactivation-review/commit-graph.txt
+          git diff --check origin/main...HEAD
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee logs/npm-ci.log
+
+      - name: Independently audit the committed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee artifacts/preactivation-review/independent-audit.txt
+          import hashlib, json, pathlib, re, sys
+          root = pathlib.Path('.')
+          baseline = root / 'supabase/baseline/pre_activation/schema.sql'
+          catalog = root / 'supabase/baseline/pre_activation/source_catalog.tsv'
+          history = root / 'supabase/baseline/pre_activation/source_migration_history.tsv'
+          manifest_path = root / 'supabase/baseline/pre_activation/manifest.json'
+          required = [baseline, catalog, history, manifest_path]
+          for path in required:
+              if not path.is_file() or path.stat().st_size == 0:
+                  raise SystemExit(f'missing required artifact: {path}')
+          manifest = json.loads(manifest_path.read_text())
+          sql = baseline.read_text()
+          def digest(path):
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+          assert manifest['boundary'] == 'pre_activation'
+          assert manifest['cutover']['next_migration'] == '20260814042516_account_activation_stage.sql'
+          assert manifest['cutover']['replay_legacy_migrations_after_baseline'] is False
+          assert manifest['artifacts']['schema']['sha256'] == digest(baseline)
+          assert manifest['artifacts']['source_catalog']['sha256'] == digest(catalog)
+          assert manifest['artifacts']['source_migration_history']['sha256'] == digest(history)
+          assert 'activation_stage' not in sql
+          assert not re.search(r'(?im)^\s*(insert\s+into|copy\s+[^\n]+\s+from\s+stdin|update\s+|delete\s+from)\b', sql)
+          assert not re.search(r'(?i)\b(create|alter)\s+(database|role|user)\b', sql)
+          assert not re.search(r'(?i)eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}', sql)
+          assert not re.search(r'(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}', sql)
+          assert 'public.profiles' in sql
+          assert 'handle_auth_profile_sync' in sql
+          assert 'on_auth_profile_created' in sql
+          assert 'refusing to apply pre-activation baseline to a non-empty application schema' in sql.lower()
+          print(f"schema_sha256={digest(baseline)}")
+          print(f"catalog_sha256={digest(catalog)}")
+          print(f"migration_history_sha256={digest(history)}")
+          print(f"schema_bytes={baseline.stat().st_size}")
+          print(f"catalog_rows={sum(1 for _ in catalog.open())}")
+          print(f"migration_history_rows={sum(1 for _ in history.open())}")
+          print('data_free=true')
+          print('activation_stage_absent=true')
+          print('auth_profile_trigger_present=true')
+          print('nonempty_guard_present=true')
+          PY
+          bash -n scripts/database/generate-preactivation-baseline.sh
+          bash -n scripts/database/validate-preactivation-baseline.sh
+          node --import tsx --test src/lib/database-preactivation-baseline-contract.test.ts \
+            2>&1 | tee logs/baseline-source-contract.log
+
+      - name: Run an independent clean-room reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/preactivation-review-clean-room
+          scripts/database/validate-preactivation-baseline.sh /tmp/preactivation-review-clean-room \
+            2>&1 | tee logs/clean-room-validation.log
+          test -f /tmp/preactivation-review-clean-room/result.txt
+          cp /tmp/preactivation-review-clean-room/result.txt artifacts/preactivation-review/clean-room-result.txt
+          if [[ -f /tmp/preactivation-review-clean-room/catalog.diff ]]; then
+            cp /tmp/preactivation-review-clean-room/catalog.diff artifacts/preactivation-review/catalog.diff
+            test ! -s /tmp/preactivation-review-clean-room/catalog.diff
+          fi
+          grep -Fx 'catalog_match=true' /tmp/preactivation-review-clean-room/result.txt
+          grep -Fx 'auth_profile_trigger=true' /tmp/preactivation-review-clean-room/result.txt
+          grep -Fx 'activation_stage_absent=true' /tmp/preactivation-review-clean-room/result.txt
+          grep -Fx 'nonempty_guard=true' /tmp/preactivation-review-clean-room/result.txt
+          grep -Fx 'zero_synthetic_residue=true' /tmp/preactivation-review-clean-room/result.txt
+
+      - name: Run repository regression gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee logs/npm-test.log
+          npm run lint -- --quiet 2>&1 | tee logs/eslint.log
+          npx tsc --noEmit --pretty false 2>&1 | tee logs/typescript.log
+          NEXT_PUBLIC_SITE_URL=https://www.moraltrade.org SITE_URL=https://www.moraltrade.org VERCEL=1 VERCEL_ENV=preview \
+            npm run build 2>&1 | tee logs/build.log
+
+      - name: Record reviewed artifact identities
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          schema_sha="$(sha256sum "$BASELINE_DIR/schema.sql" | awk '{print $1}')"
+          catalog_sha="$(sha256sum "$BASELINE_DIR/source_catalog.tsv" | awk '{print $1}')"
+          history_sha="$(sha256sum "$BASELINE_DIR/source_migration_history.tsv" | awk '{print $1}')"
+          manifest_sha="$(sha256sum "$BASELINE_DIR/manifest.json" | awk '{print $1}')"
+          schema_bytes="$(wc -c < "$BASELINE_DIR/schema.sql" | tr -d ' ')"
+          catalog_rows="$(wc -l < "$BASELINE_DIR/source_catalog.tsv" | tr -d ' ')"
+          history_rows="$(wc -l < "$BASELINE_DIR/source_migration_history.tsv" | tr -d ' ')"
+          {
+            printf 'schema_sha256=%s\n' "$schema_sha"
+            printf 'catalog_sha256=%s\n' "$catalog_sha"
+            printf 'migration_history_sha256=%s\n' "$history_sha"
+            printf 'manifest_sha256=%s\n' "$manifest_sha"
+            printf 'schema_bytes=%s\n' "$schema_bytes"
+            printf 'catalog_rows=%s\n' "$catalog_rows"
+            printf 'migration_history_rows=%s\n' "$history_rows"
+          } | tee artifacts/preactivation-review/artifacts.txt
+          printf 'schema_sha=%s\n' "$schema_sha" >> "$GITHUB_OUTPUT"
+          printf 'catalog_sha=%s\n' "$catalog_sha" >> "$GITHUB_OUTPUT"
+          printf 'history_sha=%s\n' "$history_sha" >> "$GITHUB_OUTPUT"
+          printf 'manifest_sha=%s\n' "$manifest_sha" >> "$GITHUB_OUTPUT"
+          printf 'schema_bytes=%s\n' "$schema_bytes" >> "$GITHUB_OUTPUT"
+          printf 'catalog_rows=%s\n' "$catalog_rows" >> "$GITHUB_OUTPUT"
+          printf 'history_rows=%s\n' "$history_rows" >> "$GITHUB_OUTPUT"
+          git status --porcelain > artifacts/preactivation-review/final-status.txt
+          test ! -s artifacts/preactivation-review/final-status.txt
+
+      - name: Publish the independent review
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          HEAD_SHA: ${{ steps.identity.outputs.head }}
+          TREE_SHA: ${{ steps.identity.outputs.tree }}
+          MAIN_SHA: ${{ steps.identity.outputs.main }}
+          SCHEMA_SHA: ${{ steps.evidence.outputs.schema_sha }}
+          CATALOG_SHA: ${{ steps.evidence.outputs.catalog_sha }}
+          HISTORY_SHA: ${{ steps.evidence.outputs.history_sha }}
+          MANIFEST_SHA: ${{ steps.evidence.outputs.manifest_sha }}
+          SCHEMA_BYTES: ${{ steps.evidence.outputs.schema_bytes }}
+          CATALOG_ROWS: ${{ steps.evidence.outputs.catalog_rows }}
+          HISTORY_ROWS: ${{ steps.evidence.outputs.history_rows }}
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          cat > "$body" <<EOF
+          ## Independent baseline review: PASS
+
+          Reviewed exact branch head \`$HEAD_SHA\` (tree \`$TREE_SHA\`) after a normal synchronization with main \`$MAIN_SHA\`.
+
+          Evidence:
+
+          - clean empty Supabase/PostgreSQL 17 reconstruction: passed;
+          - normalized source-versus-reconstructed catalog diff: exactly empty;
+          - canonical Auth-user-to-profile trigger: passed;
+          - \`profiles.activation_stage\` absent at the pre-activation boundary: passed;
+          - second baseline application rejected by the non-empty guard: passed;
+          - synthetic Auth/profile fixture cleanup: zero residue;
+          - repository tests, ESLint, standalone TypeScript, and production build: passed;
+          - production/shared-QA writes, deployments, and activation migration applications: none.
+
+          Artifact identities:
+
+          - schema SHA-256: \`$SCHEMA_SHA\` ($SCHEMA_BYTES bytes)
+          - source catalog SHA-256: \`$CATALOG_SHA\` ($CATALOG_ROWS rows)
+          - source migration-history SHA-256: \`$HISTORY_SHA\` ($HISTORY_ROWS rows)
+          - manifest SHA-256: \`$MANIFEST_SHA\`
+
+          Review conclusion: the committed boundary is a reproducible, data-free, empty-database bootstrap for the deployed pre-activation application catalog. It does not rewrite the historical migration directory and does not authorize application to production or permanent QA. Keep this PR draft and unmerged pending the separate merge decision and Issue #714 hosted use.
+
+          Workflow evidence: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          gh pr review "$PR_NUMBER" --repo "$REPO" --comment --body-file "$body"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$body"
+
+      - name: Upload privacy-safe review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preactivation-baseline-independent-review
+          path: |
+            artifacts/preactivation-review
+            logs
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report a failed review to the pull request
+        if: failure() && steps.pr.outputs.number != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "Independent pre-activation baseline review did not pass. The PR remains draft and unmerged. No production/shared-QA write, migration application, deployment, or alias change was authorized. Inspect workflow ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} before making any merge decision."
