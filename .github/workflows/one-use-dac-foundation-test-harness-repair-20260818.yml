@@ -1,4 +1,4 @@
-name: One-use DAC foundation test-harness repair 20260818
+name: One-use DAC foundation rendered-scope repair 20260818
 
 on:
   pull_request:
@@ -16,8 +16,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: one-use-dac-foundation-test-harness-repair-20260818
-  cancel-in-progress: false
+  group: one-use-dac-foundation-rendered-scope-${{ github.sha }}
+  cancel-in-progress: true
 
 jobs:
   repair:
@@ -25,91 +25,67 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Check out exact branch
+      - name: Check out current repair branch
         uses: actions/checkout@v4
         with:
           ref: fix/dac-public-goods-foundation-reconciliation-20260818
           fetch-depth: 0
 
-      - name: Apply the bounded Playwright readiness repair and update exact scope
+      - name: Verify rendered-readiness repair and update exact reconciliation scope
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           test_path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
           source = test_path.read_text()
-
-          old_helper = '''async function gotoReady(page: Page, path: string) {
-            const response = await page.goto(path);
-            await page.waitForLoadState("networkidle");
-            return response;
-          }'''.replace("          ", "")
-          new_helper = '''async function gotoReady(page: Page, path: string) {
-            return page.goto(path, { waitUntil: "domcontentloaded" });
-          }'''.replace("          ", "")
-          if source.count(old_helper) != 1:
-            raise SystemExit("Expected exactly one gotoReady networkidle helper.")
-
-          networkidle_before = source.count('await page.waitForLoadState("networkidle");')
-          if networkidle_before < 1 or networkidle_before > 10:
-            raise SystemExit(f"Unexpected networkidle count before repair: {networkidle_before}")
-
-          source = source.replace(old_helper, new_helper)
-          source, reload_replacements = re.subn(
-              r'await page\.reload\(\);\n\s*await page\.waitForLoadState\("networkidle"\);',
-              'await page.reload({ waitUntil: "domcontentloaded" });',
-              source,
-          )
           if 'waitForLoadState("networkidle")' in source:
-            raise SystemExit("A networkidle wait remains after the bounded helper/reload repair.")
-          if reload_replacements != networkidle_before - 1:
-            raise SystemExit(
-                f"Expected {networkidle_before - 1} reload replacements, got {reload_replacements}."
-            )
-          test_path.write_text(source)
+            raise SystemExit("The bounded rendered-readiness repair has not landed.")
+          if 'async function gotoReady(page: Page, path: string)' not in source:
+            raise SystemExit("The rendered lifecycle helper is missing.")
+          if 'return page.goto(path);' not in source and 'waitUntil: "domcontentloaded"' not in source:
+            raise SystemExit("The rendered lifecycle helper does not use deterministic page readiness.")
 
           workflow_path = Path(
               ".github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml"
           )
           workflow = workflow_path.read_text()
+          test_token = '      - "tests/mpgf-dac-product-lifecycle.spec.ts"\n'
           trigger_anchor = (
               '      - "supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql"\n'
           )
-          if workflow.count(trigger_anchor) != 2:
-            raise SystemExit("Expected two exact workflow trigger anchors.")
-          workflow = workflow.replace(
-              trigger_anchor,
-              trigger_anchor + '      - "tests/mpgf-dac-product-lifecycle.spec.ts"\n',
-          )
+          if workflow.count(test_token) == 0:
+            if workflow.count(trigger_anchor) != 2:
+              raise SystemExit("Expected two exact workflow trigger anchors.")
+            workflow = workflow.replace(trigger_anchor, trigger_anchor + test_token)
+          elif workflow.count(test_token) != 2:
+            raise SystemExit("Unexpected rendered-test trigger count.")
 
+          expected_token = "          tests/mpgf-dac-product-lifecycle.spec.ts\n"
           expected_anchor = (
               "          supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql\n"
           )
-          if workflow.count(expected_anchor) != 1:
-            raise SystemExit("Expected one exact changed-file scope anchor.")
-          workflow = workflow.replace(
-              expected_anchor,
-              expected_anchor + "          tests/mpgf-dac-product-lifecycle.spec.ts\n",
-          )
+          if expected_token not in workflow:
+            if workflow.count(expected_anchor) != 1:
+              raise SystemExit("Expected one exact changed-file scope anchor.")
+            workflow = workflow.replace(expected_anchor, expected_anchor + expected_token)
 
-          hash_anchor = '            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH"\n'
-          if workflow.count(hash_anchor) != 1:
-            raise SystemExit("Expected one exact source hash anchor.")
-          workflow = workflow.replace(
-              hash_anchor,
-              '            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH" tests/mpgf-dac-product-lifecycle.spec.ts\n',
+          hash_old = '            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH"\n'
+          hash_new = (
+              '            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH" '
+              'tests/mpgf-dac-product-lifecycle.spec.ts\n'
           )
+          if hash_new not in workflow:
+            if workflow.count(hash_old) != 1:
+              raise SystemExit("Expected one exact source hash anchor.")
+            workflow = workflow.replace(hash_old, hash_new)
+
           workflow_path.write_text(workflow)
-          print(f"networkidle_before={networkidle_before}")
-          print(f"reload_replacements={reload_replacements}")
           PY
 
           git diff --check
-          git diff -- tests/mpgf-dac-product-lifecycle.spec.ts \
-            .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
+          git diff -- .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
 
       - name: Commit normally and remove this one-use controller
         shell: bash
@@ -118,7 +94,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/one-use-dac-foundation-test-harness-repair-20260818.yml
-          git add tests/mpgf-dac-product-lifecycle.spec.ts \
-            .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
-          git commit -m "test(mpgf): use deterministic page readiness for DAC lifecycle"
+          git add .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
+          git commit -m "ci(mpgf): include rendered lifecycle readiness repair in exact scope"
           git push origin HEAD:fix/dac-public-goods-foundation-reconciliation-20260818
