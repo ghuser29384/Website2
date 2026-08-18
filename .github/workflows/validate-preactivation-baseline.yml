@@ -1,6 +1,7 @@
 name: Validate authoritative pre-activation Supabase baseline
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - database/preactivation-schema-baseline-20260818
