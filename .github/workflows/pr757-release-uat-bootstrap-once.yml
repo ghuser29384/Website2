@@ -1,0 +1,271 @@
+name: PR 757 release and UAT bootstrap once
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr757-release-uat-bootstrap-once.yml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr757-release-uat-bootstrap-once.yml
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: read
+
+concurrency:
+  group: pr757-release-uat-bootstrap-once
+  cancel-in-progress: false
+
+env:
+  BOOTSTRAP_BRANCH: ops/pr757-release-uat-final-20260818-v3
+  BOOTSTRAP_PATH: .github/workflows/pr757-release-uat-bootstrap-once.yml
+  RELEASE_BRANCH: ops/pr757-release-uat-final-20260818-v2
+  RELEASE_PATH: .github/workflows/pr757-production-release-uat-once.yml
+  REPAIR_MERGE_SHA: f9ae5480ae7c20176f24c5f8b678088b5823fc39
+
+jobs:
+  validate-and-merge-bootstrap:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'ops/pr757-release-uat-final-20260818-v3' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact bootstrap head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Validate exact one-file bootstrap
+        id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "${{ github.event.pull_request.base.ref }}" = 'main'
+          test "${{ github.event.pull_request.draft }}" = 'false'
+          test "${{ github.event.pull_request.head.ref }}" = "$BOOTSTRAP_BRANCH"
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git cat-file -e "${REPAIR_MERGE_SHA}^{commit}"
+          git merge-base --is-ancestor "$REPAIR_MERGE_SHA" "$HEAD_SHA"
+
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          test "$(jq -r '.state' <<<"$pr")" = 'open'
+          test "$(jq -r '.head.sha' <<<"$pr")" = "$HEAD_SHA"
+          test "$(jq -r '.base.ref' <<<"$pr")" = 'main'
+
+          files="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename')"
+          test "$files" = "$BOOTSTRAP_PATH"
+          git diff --check "$EVENT_BASE_SHA...$HEAD_SHA"
+          ruby -e 'require "yaml"; YAML.parse_file(ARGV.fetch(0)) or abort("invalid YAML")' "$BOOTSTRAP_PATH"
+
+          version=1.7.7
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_x86_64.tar.gz" -o "$RUNNER_TEMP/actionlint.tar.gz"
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" "$BOOTSTRAP_PATH"
+
+          grep -Fq 'validate-and-merge-bootstrap:' "$BOOTSTRAP_PATH"
+          grep -Fq 'merge-release-controller:' "$BOOTSTRAP_PATH"
+          grep -Fq "$RELEASE_BRANCH" "$BOOTSTRAP_PATH"
+          grep -Fq "$RELEASE_PATH" "$BOOTSTRAP_PATH"
+          grep -Fq "$REPAIR_MERGE_SHA" "$BOOTSTRAP_PATH"
+
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test -n "$remote_main"
+          echo "remote_main=$remote_main" >> "$GITHUB_OUTPUT"
+
+      - name: Synchronize once if main advanced
+        id: synchronize
+        if: ${{ steps.validate.outputs.remote_main != github.event.pull_request.base.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/update-branch" -f expected_head_sha="$HEAD_SHA")"
+          message="$(jq -r '.message // empty' <<<"$response")"
+          test "$message" = 'Updating pull request branch.'
+          echo 'updated=true' >> "$GITHUB_OUTPUT"
+
+      - name: Wait for release-classification status
+        id: policy
+        if: ${{ steps.synchronize.outputs.updated != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state='pending'
+          for _ in $(seq 1 120); do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/status" --jq '[.statuses[] | select(.context == "release-classification")][0].state // "pending"')"
+            [[ "$state" = 'success' ]] && break
+            [[ "$state" = 'failure' || "$state" = 'error' ]] && exit 1
+            sleep 5
+          done
+          test "$state" = 'success'
+
+      - name: Merge exact bootstrap head
+        if: ${{ steps.synchronize.outputs.updated != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BASE_SHA: ${{ steps.validate.outputs.remote_main }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          test "$(jq -r '.state' <<<"$current")" = 'open'
+          test "$(jq -r '.head.sha' <<<"$current")" = "$HEAD_SHA"
+          test "$(jq -r '.base.sha' <<<"$current")" = "$EXPECTED_BASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE_SHA"
+
+          response="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f merge_method=merge \
+            -f sha="$HEAD_SHA" \
+            -f commit_title='Merge PR 757 release and UAT bootstrap controller' \
+            -f commit_message='Merge the exact one-file operational bootstrap after YAML, actionlint, ancestry, scope, current-base, and release-classification validation. The bootstrap only merges the separately reviewed one-shot production release and authenticated UAT controller; it does not itself deploy production.')"
+          jq -e '.merged == true and (.sha | test("^[0-9a-f]{40}$"))' <<<"$response" >/dev/null
+          merged_sha="$(jq -r '.sha' <<<"$response")"
+          for _ in $(seq 1 30); do
+            [[ "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$merged_sha" ]] && break
+            sleep 2
+          done
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$merged_sha"
+
+  merge-release-controller:
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out exact bootstrap merge
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard the bootstrap merge and reviewed repair ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git cat-file -e "${REPAIR_MERGE_SHA}^{commit}"
+          git merge-base --is-ancestor "$REPAIR_MERGE_SHA" "$GITHUB_SHA"
+          changed="$(git diff --name-only "${GITHUB_SHA}^1" "$GITHUB_SHA" | sed '/^$/d')"
+          test "$changed" = "$BOOTSTRAP_PATH"
+          git diff --check "${GITHUB_SHA}^1" "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$GITHUB_SHA"
+
+      - name: Resolve and validate the one-shot release controller PR
+        id: release_pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pulls="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=all&base=main&head=ghuser29384:${RELEASE_BRANCH}&per_page=100")"
+          matching="$(jq -c '[.[] | select(.head.ref == env.RELEASE_BRANCH)] | sort_by(.created_at) | last // empty' <<<"$pulls")"
+          test -n "$matching"
+          pr_number="$(jq -r '.number' <<<"$matching")"
+          state="$(jq -r '.state' <<<"$matching")"
+          merged="$(jq -r '.merged_at != null' <<<"$matching")"
+          head_sha="$(jq -r '.head.sha' <<<"$matching")"
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]
+
+          if [[ "$merged" = 'true' ]]; then
+            merge_sha="$(jq -r '.merge_commit_sha' <<<"$matching")"
+            git fetch --no-tags origin main
+            git merge-base --is-ancestor "$merge_sha" origin/main
+            echo "already_merged=true" >> "$GITHUB_OUTPUT"
+            echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test "$state" = 'open'
+          test "$(jq -r '.draft' <<<"$matching")" = 'false'
+
+          files="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$pr_number/files?per_page=100" --jq '.[].filename')"
+          test "$files" = "$RELEASE_PATH"
+          file="$(gh api "repos/$GITHUB_REPOSITORY/contents/$RELEASE_PATH?ref=$head_sha" --jq '.content' | tr -d '\n' | base64 -d)"
+          grep -Fq 'name: PR 757 exact production release and UAT once' <<<"$file"
+          grep -Fq 'REPAIR_MERGE_SHA: f9ae5480ae7c20176f24c5f8b678088b5823fc39' <<<"$file"
+          grep -Fq 'Gated Vercel production release' <<<"$file"
+          grep -Fq 'Run explicit listed and custom transition UAT at 390x844' <<<"$file"
+          grep -Fq 'Remove and prove absence of the exact run-owned fixture' <<<"$file"
+          grep -Fq 'Preserve the fail-closed terminal conclusion' <<<"$file"
+
+          echo "already_merged=false" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the release controller policy status
+        if: ${{ steps.release_pr.outputs.already_merged != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.release_pr.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state='pending'
+          for _ in $(seq 1 180); do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/status" --jq '[.statuses[] | select(.context == "release-classification")][0].state // "pending"')"
+            [[ "$state" = 'success' ]] && break
+            [[ "$state" = 'failure' || "$state" = 'error' ]] && exit 1
+            sleep 5
+          done
+          test "$state" = 'success'
+
+      - name: Merge the exact one-shot release controller
+        if: ${{ steps.release_pr.outputs.already_merged != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.release_pr.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.release_pr.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          test "$(jq -r '.state' <<<"$current")" = 'open'
+          test "$(jq -r '.head.sha' <<<"$current")" = "$HEAD_SHA"
+          test "$(jq -r '.base.ref' <<<"$current")" = 'main'
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$GITHUB_SHA"
+
+          response="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f merge_method=merge \
+            -f sha="$HEAD_SHA" \
+            -f commit_title='Merge PR 757 exact production release and UAT controller' \
+            -f commit_message='Merge the separately reviewed one-file controller. Its push run dispatches the permanent exact-SHA Gated Vercel production release, performs authenticated canonical desktop/mobile Create UAT, inspects scoped runtime logs, proves exact fixture cleanup, publishes immutable evidence, and fails closed unless every gate passes.')"
+          jq -e '.merged == true and (.sha | test("^[0-9a-f]{40}$"))' <<<"$response" >/dev/null
+          merged_sha="$(jq -r '.sha' <<<"$response")"
+          for _ in $(seq 1 30); do
+            [[ "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$merged_sha" ]] && break
+            sleep 2
+          done
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$merged_sha"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            -f body="One-shot release controller merged with expected head \`$HEAD_SHA\` by the independently validated bootstrap. The controller's own push workflow now owns the guarded production release, canonical authenticated UAT, runtime-log inspection, fixture cleanup proof, and immutable evidence publication. No production-fix claim is made until that workflow succeeds." >/dev/null
