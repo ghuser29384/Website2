@@ -1,0 +1,456 @@
+name: Authorized DAC production migration 20260818
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/dac-production-migration-20260818.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: moraltrade-dac-production-release
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: f1cd364bf058b28b3b29501aa6528c48f8f39bb7
+  EXPECTED_MAIN_TREE: 46960df193eaa07a94f07c7891590a366d996a5b
+  EXPECTED_PROJECT_REF: jnpoxvalyjtdghnperyu
+  EXPECTED_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+  EXPECTED_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+  BACKUP_RUN_ID: "32147479359"
+  BACKUP_RUN_HEAD: 97b7f19f3feb5c9227bfcf7b49c9eaae15164ab0
+  BACKUP_ARTIFACT_ID: "9328374066"
+  BACKUP_ARTIFACT_DIGEST: sha256:d096c8bad473e9babea3f3fb55747cc78bcf02493ff9378a08e5cbffa7aff54b
+  POSTGRES_IMAGE: postgres:17
+  EVIDENCE_DIR: dac-production-migration-evidence
+
+jobs:
+  migrate:
+    name: Exact nine-migration production cutover and schema verification
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out exact merged main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 0
+
+      - name: Guard immutable release source and current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_MAIN_TREE"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          git diff --check HEAD^
+          mkdir -p "$EVIDENCE_DIR/wrappers"
+          {
+            printf 'main_sha=%s\n' "$EXPECTED_MAIN_SHA"
+            printf 'main_tree=%s\n' "$EXPECTED_MAIN_TREE"
+            printf 'checked_at=%s\n' "$(date -u +%FT%TZ)"
+          } > "$EVIDENCE_DIR/exact-release-source.txt"
+
+      - name: Prove the encrypted pre-migration backup is durable and exact
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$RUNNER_TEMP/backup-run.json"
+          artifact_json="$RUNNER_TEMP/backup-artifact.json"
+          curl -fsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID" \
+            > "$run_json"
+          curl -fsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$BACKUP_ARTIFACT_ID" \
+            > "$artifact_json"
+
+          jq -e \
+            --arg head "$BACKUP_RUN_HEAD" '
+              .status == "completed"
+              and .conclusion == "success"
+              and .head_sha == $head
+            ' "$run_json" >/dev/null
+          jq -e \
+            --argjson id "$BACKUP_ARTIFACT_ID" \
+            --arg digest "$BACKUP_ARTIFACT_DIGEST" \
+            --arg main "$EXPECTED_MAIN_SHA" '
+              .id == $id
+              and .expired == false
+              and .digest == $digest
+              and (.name | contains($main))
+            ' "$artifact_json" >/dev/null
+
+          jq -n \
+            --arg run_id "$BACKUP_RUN_ID" \
+            --arg run_head "$BACKUP_RUN_HEAD" \
+            --arg artifact_id "$BACKUP_ARTIFACT_ID" \
+            --arg artifact_digest "$BACKUP_ARTIFACT_DIGEST" \
+            --arg verified_at "$(date -u +%FT%TZ)" \
+            '{
+              runId: $run_id,
+              runHead: $run_head,
+              artifactId: $artifact_id,
+              artifactDigest: $artifact_digest,
+              completedSuccessfully: true,
+              expired: false,
+              verifiedAt: $verified_at
+            }' > "$EVIDENCE_DIR/backup-proof.json"
+
+      - name: Validate and mask the exact TLS-only production database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          URL_TO_CHECK="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid =
+            ["postgres:", "postgresql:"].includes(url.protocol) &&
+            decodeURIComponent(url.username) === process.env.EXPECTED_POOLER_USER &&
+            url.hostname === process.env.EXPECTED_POOLER_HOST &&
+            url.port === "5432" &&
+            url.pathname === "/postgres" &&
+            url.searchParams.get("sslmode") === "require" &&
+            Boolean(url.password) &&
+            !url.href.includes("hvmxfjjbdcgjjudmthdz");
+          if (!valid) throw new Error("Refusing a database URL outside the exact production target.");
+          NODE
+
+      - name: Pull PostgreSQL 17 migration toolchain
+        run: docker pull "$POSTGRES_IMAGE"
+
+      - name: Verify exact migration hashes and generate atomic timeout wrappers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/migrations.json" <<'JSON'
+          [
+            {"version":"20260806110000","name":"mpgf_pool_review_freeze","path":"supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql","sha256":"0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c"},
+            {"version":"20260806143000","name":"mpgf_pool_publication_materialization","path":"supabase/migrations/20260806143000_mpgf_pool_publication_materialization.sql","sha256":"ee8ab4a2c52893ff9f2d8dfcbf7dc25370768af80e5401978f7c4b09e8cab9e8"},
+            {"version":"20260806173000","name":"mpgf_dac_pledge_intent_ledger","path":"supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql","sha256":"36f558549361a1c0747dab5ecd545c74efbd42be14f6d634cb28e8b01f7c1e9c"},
+            {"version":"20260807050000","name":"mpgf_dac_success_lapse","path":"supabase/migrations/20260807050000_mpgf_dac_success_lapse.sql","sha256":"83d9432f90fb808302249b5b572029d68bfc9aa2be32afbaba710f8e341d0948"},
+            {"version":"20260807100000","name":"mpgf_dac_public_terms_api","path":"supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql","sha256":"356d220c009dd6213b761712a30ce0124d95f075d5fdab5c44da3398a6265a0f"},
+            {"version":"20260812073000","name":"mpgf_dac_terminal_event_constraint_reconciliation","path":"supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql","sha256":"a19653e57a20dff8d01e1dd54b4b77304fe0712fe3356820953945e7b9999cd2"},
+            {"version":"20260812074500","name":"mpgf_dac_terminal_schema_reconciliation","path":"supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql","sha256":"d8dc2a55840425357c8859b87d26fba0415bb1a50c8e739518a88b9686142cbb"},
+            {"version":"20260815010000","name":"mpgf_pool_lifecycle_event_ordering","path":"supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql","sha256":"1d60c1abc73c8842cdcd9694c77d0e29dac4fe1de98a496714c0f2f2f5619766"},
+            {"version":"20260815011000","name":"mpgf_dac_terminal_guard_reconciliation","path":"supabase/migrations/20260815011000_mpgf_dac_terminal_guard_reconciliation.sql","sha256":"c64d521c6adb7a865d9ec5e2f25e70adb09f08f91e0f1bc0ec0610977aafd108"}
+          ]
+          JSON
+
+          python3 - "$RUNNER_TEMP/migrations.json" "$EVIDENCE_DIR" <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          manifest_path = Path(sys.argv[1])
+          evidence = Path(sys.argv[2])
+          manifest = json.loads(manifest_path.read_text())
+          wrappers = evidence / "wrappers"
+          wrappers.mkdir(parents=True, exist_ok=True)
+          ledger = []
+
+          for item in manifest:
+              path = Path(item["path"])
+              raw = path.read_bytes()
+              actual = hashlib.sha256(raw).hexdigest()
+              if actual != item["sha256"]:
+                  raise SystemExit(f"Hash mismatch for {path}: {actual}")
+              source = raw.decode("utf-8")
+              lines = source.splitlines(keepends=True)
+              statement_indexes = [
+                  index for index, line in enumerate(lines)
+                  if line.strip() and not line.lstrip().startswith("--")
+              ]
+              if not statement_indexes:
+                  raise SystemExit(f"Empty migration: {path}")
+              first, last = statement_indexes[0], statement_indexes[-1]
+              if lines[first].strip().lower() != "begin;":
+                  raise SystemExit(f"Migration does not begin transactionally: {path}")
+              if lines[last].strip().lower() != "commit;":
+                  raise SystemExit(f"Migration does not commit transactionally: {path}")
+              lines[first] = "\n"
+              lines[last] = "\n"
+              body = "".join(lines)
+              tag = "$moraltrade_dac_source$"
+              if tag in source:
+                  raise SystemExit(f"Reserved dollar tag occurs in {path}")
+              idempotency = f"moraltrade-dac-release:{item['version']}:{actual}"
+              wrapper = (
+                  "BEGIN;\n"
+                  "SET LOCAL lock_timeout = '5s';\n"
+                  "SET LOCAL statement_timeout = '120s';\n"
+                  "SET LOCAL idle_in_transaction_session_timeout = '180s';\n"
+                  + body
+                  + "\nINSERT INTO supabase_migrations.schema_migrations "
+                    "(version, statements, name, created_by, idempotency_key) VALUES (\n"
+                  + f"  '{item['version']}',\n"
+                  + f"  ARRAY[{tag}{source}{tag}]::text[],\n"
+                  + f"  '{item['name']}',\n"
+                  + "  'chatgpt-owner-authorized-dac-production-release-20260818',\n"
+                  + f"  '{idempotency}'\n"
+                  + ");\nCOMMIT;\n"
+              )
+              wrapper_path = wrappers / f"{item['version']}_{item['name']}.sql"
+              wrapper_path.write_text(wrapper, encoding="utf-8")
+              ledger.append({**item, "actualSha256": actual, "idempotencyKey": idempotency, "wrapper": str(wrapper_path)})
+
+          (evidence / "migration-ledger.json").write_text(json.dumps(ledger, indent=2) + "\n")
+          PY
+
+          jq -r '.[] | "\(.sha256)  \(.path)"' "$EVIDENCE_DIR/migration-ledger.json" \
+            | sha256sum --check --strict
+
+      - name: Fail closed on conflicting production migration history or data
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --quiet \
+              --command "
+                set statement_timeout = '30s';
+                do \$preflight\$
+                declare
+                  expected_versions text[] := array[
+                    '20260806110000','20260806143000','20260806173000',
+                    '20260807050000','20260807100000','20260812073000',
+                    '20260812074500','20260815010000','20260815011000'
+                  ];
+                  expected_names text[] := array[
+                    'mpgf_pool_review_freeze','mpgf_pool_publication_materialization',
+                    'mpgf_dac_pledge_intent_ledger','mpgf_dac_success_lapse',
+                    'mpgf_dac_public_terms_api','mpgf_dac_terminal_event_constraint_reconciliation',
+                    'mpgf_dac_terminal_schema_reconciliation','mpgf_pool_lifecycle_event_ordering',
+                    'mpgf_dac_terminal_guard_reconciliation'
+                  ];
+                begin
+                  if exists (
+                    select 1 from supabase_migrations.schema_migrations
+                    where version = any(expected_versions) or name = any(expected_names)
+                  ) then
+                    raise exception 'one or more DAC migration identities already exist unexpectedly';
+                  end if;
+                  if to_regclass('public.mpgf_pool_proposals') is null then
+                    raise exception 'base pool proposal table is missing';
+                  end if;
+                  if (select count(*) from public.mpgf_pool_proposals) <> 0 then
+                    raise exception 'production pool proposal table is not empty';
+                  end if;
+                  if to_regclass('public.mpgf_public_goods_campaigns') is not null
+                     or to_regclass('public.mpgf_public_goods_pledges') is not null
+                     or to_regclass('public.mpgf_dac_pledge_intents') is not null
+                     or to_regclass('public.mpgf_pool_lifecycle_events') is not null then
+                    raise exception 'unexpected pre-existing DAC lifecycle schema';
+                  end if;
+                end
+                \$preflight\$;
+              "
+          cat > "$EVIDENCE_DIR/pre-migration-state.json" <<JSON
+          {
+            "projectRef": "$EXPECTED_PROJECT_REF",
+            "exactMigrationIdentitiesAbsent": true,
+            "baseProposalRows": 0,
+            "unexpectedDacLifecycleObjects": 0,
+            "checkedAt": "$(date -u +%FT%TZ)"
+          }
+          JSON
+
+      - name: Apply the nine exact migrations atomically in dossier order
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > "$EVIDENCE_DIR/application.log"
+          jq -c '.[]' "$EVIDENCE_DIR/migration-ledger.json" | while IFS= read -r migration; do
+            version="$(jq -r '.version' <<<"$migration")"
+            name="$(jq -r '.name' <<<"$migration")"
+            expected_hash="$(jq -r '.sha256' <<<"$migration")"
+            wrapper="$(jq -r '.wrapper' <<<"$migration")"
+            printf 'applying version=%s name=%s\n' "$version" "$name" \
+              | tee -a "$EVIDENCE_DIR/application.log"
+            docker run --rm \
+              -v "$PWD:/workspace:ro" \
+              "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" \
+                --no-psqlrc \
+                --set ON_ERROR_STOP=1 \
+                --file="/workspace/$wrapper"
+
+            observed="$(docker run --rm "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" \
+                --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
+                --command "select concat_ws('|', version, name, encode(extensions.digest(convert_to(statements[1], 'UTF8'), 'sha256'),'hex')) from supabase_migrations.schema_migrations where version='$version';" \
+              | tr -d '\r' | awk 'NF {line=$0} END {print line}')"
+            test "$observed" = "$version|$name|$expected_hash"
+            printf 'verified version=%s sha256=%s\n' "$version" "$expected_hash" \
+              | tee -a "$EVIDENCE_DIR/application.log"
+          done
+
+      - name: Verify exact terminal production schema, grants, privacy surfaces, and zero data
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --quiet \
+              --command "
+                set statement_timeout = '60s';
+                do \$verify\$
+                declare
+                  migration_count integer;
+                  proposal_count bigint;
+                  campaign_count bigint;
+                  pledge_count bigint;
+                  intent_count bigint;
+                  outcome_count bigint;
+                begin
+                  select count(*) into migration_count
+                  from supabase_migrations.schema_migrations
+                  where version in (
+                    '20260806110000','20260806143000','20260806173000',
+                    '20260807050000','20260807100000','20260812073000',
+                    '20260812074500','20260815010000','20260815011000'
+                  );
+                  if migration_count <> 9 then
+                    raise exception 'expected nine exact DAC migration rows, got %', migration_count;
+                  end if;
+
+                  if to_regclass('public.mpgf_pool_proposal_versions') is null
+                     or to_regclass('public.mpgf_pool_lifecycle_events') is null
+                     or to_regclass('public.mpgf_public_goods_campaigns') is null
+                     or to_regclass('public.mpgf_public_goods_pledges') is null
+                     or to_regclass('public.mpgf_dac_pledge_intents') is null
+                     or to_regclass('public.mpgf_dac_pledge_events') is null
+                     or to_regclass('public.mpgf_dac_campaign_outcomes') is null then
+                    raise exception 'required DAC lifecycle table is missing';
+                  end if;
+
+                  if to_regprocedure('public.mpgf_begin_pool_proposal_review(uuid,uuid,text)') is null
+                     or to_regprocedure('public.mpgf_approve_and_freeze_pool_proposal(uuid,uuid,text)') is null
+                     or to_regprocedure('public.mpgf_publish_pool_proposal(uuid,text,text,uuid,text)') is null
+                     or to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') is null
+                     or to_regprocedure('public.mpgf_review_dac_pledge_eligibility(uuid,uuid,text,integer,text)') is null
+                     or to_regprocedure('public.mpgf_finalize_dac_campaign(text,uuid,text)') is null
+                     or to_regprocedure('public.mpgf_public_dac_campaign_terms(text)') is null then
+                    raise exception 'required DAC lifecycle function is missing';
+                  end if;
+
+                  if exists (
+                    select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+                    where n.nspname='public'
+                      and p.proname in (
+                        'mpgf_begin_pool_proposal_review','mpgf_approve_and_freeze_pool_proposal',
+                        'mpgf_publish_pool_proposal','mpgf_create_dac_pledge',
+                        'mpgf_review_dac_pledge_eligibility','mpgf_finalize_dac_campaign'
+                      )
+                      and (not p.prosecdef or not coalesce(p.proconfig, array[]::text[]) @> array['search_path=pg_catalog, public'])
+                  ) then
+                    raise exception 'security-definer/search-path contract mismatch';
+                  end if;
+
+                  select count(*) into proposal_count from public.mpgf_pool_proposals;
+                  select count(*) into campaign_count from public.mpgf_public_goods_campaigns;
+                  select count(*) into pledge_count from public.mpgf_public_goods_pledges;
+                  select count(*) into intent_count from public.mpgf_dac_pledge_intents;
+                  select count(*) into outcome_count from public.mpgf_dac_campaign_outcomes;
+                  if proposal_count <> 0 or campaign_count <> 0 or pledge_count <> 0 or intent_count <> 0 or outcome_count <> 0 then
+                    raise exception 'unexpected production DAC data after migration';
+                  end if;
+                end
+                \$verify\$;
+              "
+
+          docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
+              --command "
+                select jsonb_build_object(
+                  'migrationCount', count(*),
+                  'versions', jsonb_agg(version order by version),
+                  'names', jsonb_agg(name order by version),
+                  'sourceHashes', jsonb_agg(encode(extensions.digest(convert_to(statements[1], 'UTF8'),'sha256'),'hex') order by version),
+                  'verifiedAt', clock_timestamp()
+                )::text
+                from supabase_migrations.schema_migrations
+                where version in (
+                  '20260806110000','20260806143000','20260806173000',
+                  '20260807050000','20260807100000','20260812073000',
+                  '20260812074500','20260815010000','20260815011000'
+                );
+              " \
+            | tr -d '\r' | awk 'NF {line=$0} END {print line}' \
+            > "$EVIDENCE_DIR/post-migration-registry.json"
+          jq -e '.migrationCount == 9 and (.versions | length) == 9 and (.sourceHashes | length) == 9' \
+            "$EVIDENCE_DIR/post-migration-registry.json" >/dev/null
+
+          cat > "$EVIDENCE_DIR/post-migration-state.json" <<JSON
+          {
+            "projectRef": "$EXPECTED_PROJECT_REF",
+            "exactMigrationRows": 9,
+            "requiredLifecycleTables": true,
+            "requiredLifecycleFunctions": true,
+            "securityDefinerSearchPathContracts": true,
+            "proposalRows": 0,
+            "campaignRows": 0,
+            "pledgeRows": 0,
+            "intentRows": 0,
+            "outcomeRows": 0,
+            "paymentReferences": 0,
+            "verifiedAt": "$(date -u +%FT%TZ)"
+          }
+          JSON
+
+      - name: Fail closed on credential-like evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$EVIDENCE_DIR/wrappers"
+          if grep -RIlE '(postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_|whsec_|Bearer [A-Za-z0-9._-]+)' "$EVIDENCE_DIR"; then
+            echo 'Credential-like material found in migration evidence.' >&2
+            exit 1
+          fi
+
+      - name: Upload immutable production migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moraltrade-dac-production-migration-${{ github.run_id }}-${{ env.EXPECTED_MAIN_SHA }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record migration completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Authorized non-payment DAC production migration complete'
+            echo
+            echo "- Exact merged main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Production project: \`$EXPECTED_PROJECT_REF\`"
+            echo '- Exact ordered migrations applied and registry source hashes verified: 9/9'
+            echo '- Lock timeout: 5s per migration transaction'
+            echo '- Statement timeout: 120s per migration transaction'
+            echo '- Pre-existing and post-migration DAC rows: 0'
+            echo '- Payment references: 0'
+            echo '- Application deployment or canonical alias movement: not performed by this workflow'
+          } >> "$GITHUB_STEP_SUMMARY"
