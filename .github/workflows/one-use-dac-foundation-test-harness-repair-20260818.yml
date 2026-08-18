@@ -37,6 +37,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           test_path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
           source = test_path.read_text()
@@ -51,20 +52,23 @@ jobs:
           }'''.replace("          ", "")
           if source.count(old_helper) != 1:
             raise SystemExit("Expected exactly one gotoReady networkidle helper.")
-          if source.count('await page.waitForLoadState("networkidle");') != 3:
-            raise SystemExit("Expected exactly three networkidle waits before repair.")
-          if source.count("await page.reload();") != 2:
-            raise SystemExit("Expected exactly two plain reloads before repair.")
+
+          networkidle_before = source.count('await page.waitForLoadState("networkidle");')
+          if networkidle_before < 1 or networkidle_before > 10:
+            raise SystemExit(f"Unexpected networkidle count before repair: {networkidle_before}")
 
           source = source.replace(old_helper, new_helper)
-          source = source.replace(
-              'await page.reload();\n  await page.waitForLoadState("networkidle");',
+          source, reload_replacements = re.subn(
+              r'await page\.reload\(\);\n\s*await page\.waitForLoadState\("networkidle"\);',
               'await page.reload({ waitUntil: "domcontentloaded" });',
+              source,
           )
           if 'waitForLoadState("networkidle")' in source:
-            raise SystemExit("A networkidle wait remains after repair.")
-          if source.count('waitUntil: "domcontentloaded"') != 3:
-            raise SystemExit("Expected three deterministic DOM-content readiness waits.")
+            raise SystemExit("A networkidle wait remains after the bounded helper/reload repair.")
+          if reload_replacements != networkidle_before - 1:
+            raise SystemExit(
+                f"Expected {networkidle_before - 1} reload replacements, got {reload_replacements}."
+            )
           test_path.write_text(source)
 
           workflow_path = Path(
@@ -99,6 +103,8 @@ jobs:
               '            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH" tests/mpgf-dac-product-lifecycle.spec.ts\n',
           )
           workflow_path.write_text(workflow)
+          print(f"networkidle_before={networkidle_before}")
+          print(f"reload_replacements={reload_replacements}")
           PY
 
           git diff --check
