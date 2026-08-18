@@ -1,0 +1,538 @@
+name: Repair Every.org webhook route-ID semantics
+
+on:
+  push:
+    branches:
+      - fix/every-org-webhook-route-id-708-20260818
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-every-org-webhook-route-id-708-20260818
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_BRANCH: fix/every-org-webhook-route-id-708-20260818
+  EXPECTED_PARENT: 0207a58410480b6edd1bb5a1496bc8ce7c66d6f6
+  EXPECTED_PARENT_TREE: 360c4ac6949f1f83adc4e9dbf428b55f3870aea6
+  EXPECTED_PARENT_BRANCH: fix/every-org-staging-api-host-708-v3-20260816
+  WORKFLOW_PATH: .github/workflows/repair-every-org-webhook-route-id-708-20260818.yml
+
+jobs:
+  repair:
+    if: github.event.head_commit.message == 'Bootstrap Every.org webhook route-ID hardening'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Guard exact parent and one-file bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git show -s --format=%T "$EXPECTED_PARENT")" = "$EXPECTED_PARENT_TREE"
+          test "$(git diff --name-only HEAD^ HEAD)" = "$WORKFLOW_PATH"
+          git fetch --no-tags origin "$EXPECTED_PARENT_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_PARENT"
+          git diff --check "$EXPECTED_PARENT...HEAD"
+
+      - name: Reclassify the path component as a non-secret route ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          old_route = Path("src/app/api/connectors/every-org/[secret]/route.ts")
+          new_route = Path("src/app/api/connectors/every-org/[routeId]/route.ts")
+          if not old_route.exists() or new_route.exists():
+              raise SystemExit("Refusing: expected only the historical [secret] connector route")
+
+          search_pattern = (
+              r"EVERY_ORG_WEBHOOK_PATH_SECRET|webhookPathSecret|candidatePathSecret|"
+              r"canonicalPathSecret|path_ambiguous|path_mismatch|"
+              r"api/connectors/every-org/\[secret\]"
+          )
+          result = subprocess.run(
+              ["git", "grep", "-Il", "-E", search_pattern, "--", "."],
+              check=False,
+              capture_output=True,
+              text=True,
+          )
+          if result.returncode not in (0, 1):
+              raise SystemExit(result.stderr)
+          references = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+          allowed = {
+              ".env.example",
+              ".github/workflows/direct-donation-upgrade-gates.yml",
+              ".github/workflows/direct-donation-upgrade-partial-gates.yml",
+              ".github/workflows/direct-donation-upgrade-partial-qa.yml",
+              ".github/workflows/direct-donation-upgrade-qa.yml",
+              ".github/workflows/direct-donation-upgrade-rendered-qa.yml",
+              "docs/direct-verified-donation-upgrade.md",
+              "docs/every-org-pledge-donation-connector.md",
+              "src/app/api/connectors/every-org/[secret]/route.ts",
+              "src/lib/direct-donation-upgrade-source-contract.test.ts",
+              "src/lib/direct-donation-upgrade.test.ts",
+              "src/lib/direct-donation-upgrade.ts",
+              "src/lib/every-org-partner-webhook-auth.test.ts",
+              "src/lib/every-org-partner-webhook-auth.ts",
+              "src/lib/trade-donation.test.ts",
+              "src/lib/trade-donation.ts",
+          }
+          unexpected = sorted(references - allowed)
+          if unexpected:
+              raise SystemExit(f"Refusing unexpected route-secret references: {unexpected}")
+          required = {
+              ".env.example",
+              "src/app/api/connectors/every-org/[secret]/route.ts",
+              "src/lib/direct-donation-upgrade.ts",
+              "src/lib/every-org-partner-webhook-auth.test.ts",
+              "src/lib/every-org-partner-webhook-auth.ts",
+              "src/lib/trade-donation.ts",
+          }
+          missing = sorted(required - references)
+          if missing:
+              raise SystemExit(f"Refusing: expected references missing: {missing}")
+
+          subprocess.run(
+              ["git", "mv", str(old_route.parent), str(new_route.parent)],
+              check=True,
+          )
+
+          mapped_paths = {
+              str(new_route) if path == str(old_route) else path
+              for path in references
+          }
+          replacements = [
+              ("EVERY_ORG_WEBHOOK_PATH_SECRET", "EVERY_ORG_WEBHOOK_ROUTE_ID"),
+              ("webhookPathSecret", "webhookRouteId"),
+              ("candidatePathSecret", "candidateRouteId"),
+              ("canonicalPathSecret", "canonicalRouteId"),
+              ("path_ambiguous", "route_id_ambiguous"),
+              ("path_mismatch", "route_id_mismatch"),
+              ("api/connectors/every-org/[secret]", "api/connectors/every-org/[routeId]"),
+              ("pathSecret", "routeId"),
+              ("phase-a-webhook-path-secret-that-is-long-enough", "phase-a-webhook-route-id-000000000001"),
+              ("another-phase-a-webhook-path-secret-that-is-long-enough", "another-phase-a-webhook-route-id-000001"),
+              ("webhook path secret", "webhook route ID"),
+              ("Webhook path secret", "Webhook route ID"),
+              ("webhook-path secret", "webhook route ID"),
+              ("defense-in-depth path", "defense-in-depth route ID"),
+              ("secret URL path", "opaque webhook route ID"),
+              ("secret path", "route ID"),
+              ("path-secret", "route-id"),
+          ]
+          for path_text in sorted(mapped_paths):
+              path = Path(path_text)
+              source = path.read_text()
+              for old, new in replacements:
+                  source = source.replace(old, new)
+              path.write_text(source)
+
+          route_source = new_route.read_text()
+          route_replacements = {
+              "context: { params: Promise<{ secret: string }> },":
+                  "context: { params: Promise<{ routeId: string }> },",
+              "const { secret } = await context.params;":
+                  "const { routeId } = await context.params;",
+              "resolveEveryOrgSharedConnector(secret, [":
+                  "resolveEveryOrgSharedConnector(routeId, [",
+          }
+          for old, new in route_replacements.items():
+              if old not in route_source:
+                  raise SystemExit(f"Refusing: route anchor missing: {old}")
+              route_source = route_source.replace(old, new)
+          new_route.write_text(route_source)
+
+          auth_path = Path("src/lib/every-org-partner-webhook-auth.ts")
+          auth_source = auth_path.read_text()
+          validator = '''export function isValidEveryOrgWebhookRouteId(value: string) {
+            return /^[A-Za-z0-9_-]{32,128}$/.test(value);
+          }
+
+          '''
+          validator = "\n".join(line[10:] if line.startswith("          ") else line for line in validator.splitlines()) + "\n"
+          validator_anchor = "export function getEveryOrgCredentialConfiguration("
+          if validator_anchor not in auth_source:
+              raise SystemExit("Refusing: credential-configuration anchor missing")
+          if "isValidEveryOrgWebhookRouteId" not in auth_source:
+              auth_source = auth_source.replace(validator_anchor, validator + validator_anchor, 1)
+          old_resolution = '''  const canonicalRouteId = enabled[0]?.webhookRouteId ?? "";
+          if (
+            canonicalRouteId.length < 32 ||
+            enabled.some(
+              (mechanism) =>
+                mechanism.webhookRouteId.length < 32 ||
+                !constantTimeTextEqual(
+                  mechanism.webhookRouteId,
+                  canonicalRouteId,
+                ),
+            )
+          ) {'''
+          old_resolution = "\n".join(line[10:] if line.startswith("          ") else line for line in old_resolution.splitlines())
+          new_resolution = '''  const canonicalRouteId = enabled[0]?.webhookRouteId ?? "";
+          if (
+            !isValidEveryOrgWebhookRouteId(canonicalRouteId) ||
+            enabled.some(
+              (mechanism) =>
+                !isValidEveryOrgWebhookRouteId(mechanism.webhookRouteId) ||
+                mechanism.webhookRouteId !== canonicalRouteId,
+            )
+          ) {'''
+          new_resolution = "\n".join(line[10:] if line.startswith("          ") else line for line in new_resolution.splitlines())
+          if old_resolution not in auth_source:
+              raise SystemExit("Refusing: shared-connector route-ID resolution anchor missing")
+          auth_source = auth_source.replace(old_resolution, new_resolution, 1)
+          old_candidate = '''  if (!constantTimeTextEqual(candidateRouteId, canonicalRouteId)) {'''
+          new_candidate = '''  if (
+            !isValidEveryOrgWebhookRouteId(candidateRouteId) ||
+            candidateRouteId !== canonicalRouteId
+          ) {'''
+          if old_candidate not in auth_source:
+              raise SystemExit("Refusing: candidate route-ID comparison anchor missing")
+          auth_source = auth_source.replace(old_candidate, new_candidate, 1)
+          auth_path.write_text(auth_source)
+
+          for source_name in [
+              "src/lib/direct-donation-upgrade.ts",
+              "src/lib/trade-donation.ts",
+          ]:
+              path = Path(source_name)
+              source = path.read_text()
+              import_anchor = "  getEveryOrgCredentialConfiguration,\n"
+              if import_anchor not in source:
+                  raise SystemExit(f"Refusing: validator import anchor missing in {source_name}")
+              source = source.replace(
+                  import_anchor,
+                  import_anchor + "  isValidEveryOrgWebhookRouteId,\n",
+                  1,
+              )
+              path.write_text(source)
+
+          direct_path = Path("src/lib/direct-donation-upgrade.ts")
+          direct = direct_path.read_text()
+          old_direct_check = '''  if (webhookRouteId.length < 32) {
+            blockers.push("EVERY_ORG_WEBHOOK_ROUTE_ID must be at least 32 characters.");
+          }'''
+          old_direct_check = "\n".join(line[10:] if line.startswith("          ") else line for line in old_direct_check.splitlines())
+          new_direct_check = '''  if (!isValidEveryOrgWebhookRouteId(webhookRouteId)) {
+            blockers.push(
+              "EVERY_ORG_WEBHOOK_ROUTE_ID must be 32-128 URL-safe characters.",
+            );
+          }'''
+          new_direct_check = "\n".join(line[10:] if line.startswith("          ") else line for line in new_direct_check.splitlines())
+          if old_direct_check not in direct:
+              raise SystemExit("Refusing: direct route-ID validation anchor missing")
+          direct = direct.replace(old_direct_check, new_direct_check, 1)
+          old_direct_ready = "    webhookRouteId.length >= 32 &&\n"
+          new_direct_ready = "    isValidEveryOrgWebhookRouteId(webhookRouteId) &&\n"
+          if old_direct_ready not in direct:
+              raise SystemExit("Refusing: direct route-ID readiness anchor missing")
+          direct = direct.replace(old_direct_ready, new_direct_ready, 1)
+          direct_path.write_text(direct)
+
+          trade_path = Path("src/lib/trade-donation.ts")
+          trade = trade_path.read_text()
+          old_trade_check = '  if (webhookRouteId.length < 32) blockers.push("Every.org webhook route ID must be at least 32 characters.");'
+          new_trade_check = '''  if (!isValidEveryOrgWebhookRouteId(webhookRouteId)) {
+            blockers.push(
+              "Every.org webhook route ID must be 32-128 URL-safe characters.",
+            );
+          }'''
+          new_trade_check = "\n".join(line[10:] if line.startswith("          ") else line for line in new_trade_check.splitlines())
+          if old_trade_check not in trade:
+              raise SystemExit("Refusing: pledge route-ID validation anchor missing")
+          trade = trade.replace(old_trade_check, new_trade_check, 1)
+          trade_path.write_text(trade)
+
+          env_path = Path(".env.example")
+          env_source = env_path.read_text()
+          env_anchor = "EVERY_ORG_WEBHOOK_ROUTE_ID=\n"
+          env_note = (
+              "# Opaque routing identifier only; it is not a credential and may appear in provider\n"
+              "# or hosting logs. Sender authentication uses the private Partner Webhook token.\n"
+          )
+          if env_anchor not in env_source:
+              raise SystemExit("Refusing: route-ID environment anchor missing")
+          if env_note not in env_source:
+              env_source = env_source.replace(env_anchor, env_anchor + env_note, 1)
+          env_path.write_text(env_source)
+
+          documentation_note = '''
+
+          ### Webhook route identifier
+
+          `EVERY_ORG_WEBHOOK_ROUTE_ID` is an opaque, URL-safe routing identifier, not a credential. Provider and hosting infrastructure may retain the request pathname. The route ID may narrow dispatch as defense in depth, but it is never sufficient sender authentication. Only the separately configured, private Partner Webhook authorization token may authenticate an inbound delivery after Every.org supplies the exact written header contract.
+          '''
+          documentation_note = "\n".join(line[10:] if line.startswith("          ") else line for line in documentation_note.splitlines())
+          for doc_name in [
+              "docs/direct-verified-donation-upgrade.md",
+              "docs/every-org-pledge-donation-connector.md",
+          ]:
+              doc = Path(doc_name)
+              source = doc.read_text().rstrip() + "\n"
+              if "### Webhook route identifier" not in source:
+                  source += documentation_note.strip() + "\n"
+              doc.write_text(source)
+
+          test_path = Path("src/lib/every-org-partner-webhook-auth.test.ts")
+          test_source = test_path.read_text()
+          import_anchor = "  getEveryOrgCredentialConfiguration,\n"
+          if import_anchor not in test_source:
+              raise SystemExit("Refusing: auth-test import anchor missing")
+          test_source = test_source.replace(
+              import_anchor,
+              import_anchor + "  isValidEveryOrgWebhookRouteId,\n",
+              1,
+          )
+          params_old = "{ params: Promise.resolve({ secret: routeId }) },"
+          params_new = "{ params: Promise.resolve({ routeId }) },"
+          if params_old not in test_source:
+              raise SystemExit("Refusing: auth-test route params anchor missing")
+          test_source = test_source.replace(params_old, params_new, 1)
+          route_validation_test = '''
+
+          test("webhook route IDs are opaque non-secret routing values with a closed URL-safe grammar", () => {
+            assert.equal(isValidEveryOrgWebhookRouteId(routeId), true);
+            assert.equal(
+              isValidEveryOrgWebhookRouteId("another-phase-a-webhook-route-id-000001"),
+              true,
+            );
+            assert.equal(isValidEveryOrgWebhookRouteId("too-short"), false);
+            assert.equal(
+              isValidEveryOrgWebhookRouteId("route-id-with-a-slash/0000000000000000"),
+              false,
+            );
+            assert.equal(
+              isValidEveryOrgWebhookRouteId("route id with spaces 000000000000000000"),
+              false,
+            );
+          });
+          '''
+          route_validation_test = "\n".join(line[10:] if line.startswith("          ") else line for line in route_validation_test.splitlines())
+          insertion_anchor = 'test("the shared connector accepts its defense-in-depth route ID only for one compatible ready configuration", () => {'
+          if insertion_anchor not in test_source:
+              raise SystemExit("Refusing: auth-test insertion anchor missing")
+          if "webhook route IDs are opaque non-secret routing values" not in test_source:
+              test_source = test_source.replace(
+                  insertion_anchor,
+                  route_validation_test.strip() + "\n\n" + insertion_anchor,
+                  1,
+              )
+          test_path.write_text(test_source)
+
+          source_contract = Path("src/lib/every-org-webhook-route-id-source-contract.test.ts")
+          if source_contract.exists():
+              raise SystemExit("Refusing: route-ID source contract already exists")
+          source_contract.write_text('''import assert from "node:assert/strict";
+          import { existsSync, readFileSync } from "node:fs";
+          import test from "node:test";
+
+          const routePath = "src/app/api/connectors/every-org/[routeId]/route.ts";
+          const oldRoutePath = "src/app/api/connectors/every-org/[secret]/route.ts";
+
+          test("Every.org webhook routing is explicitly non-secret and sender authentication remains first", () => {
+            assert.equal(existsSync(routePath), true);
+            assert.equal(existsSync(oldRoutePath), false);
+
+            const route = readFileSync(routePath, "utf8");
+            const environment = readFileSync(".env.example", "utf8");
+            const auth = route.indexOf("authenticateEveryOrgPartnerWebhookRequest()");
+            const params = route.indexOf("await context.params");
+            const body = route.indexOf("await request.text()");
+            const database = route.indexOf("createServiceClient()");
+
+            assert.ok(auth >= 0);
+            assert.ok(params > auth);
+            assert.ok(body > params);
+            assert.ok(database > body);
+            assert.match(route, /params: Promise<\{ routeId: string \}>/);
+            assert.match(route, /resolveEveryOrgSharedConnector\(routeId,/);
+            assert.doesNotMatch(route, /WEBHOOK_PATH_SECRET|webhookPathSecret/);
+
+            assert.match(environment, /EVERY_ORG_WEBHOOK_ROUTE_ID=/);
+            assert.match(environment, /not a credential and may appear in provider/);
+            assert.match(environment, /Sender authentication uses the private Partner Webhook token/);
+            assert.doesNotMatch(environment, /EVERY_ORG_WEBHOOK_PATH_SECRET=/);
+          });
+          '''.replace("          ", ""))
+
+          tracked = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
+          product_candidates = [
+              path for path in tracked
+              if path != ".github/workflows/repair-every-org-webhook-route-id-708-20260818.yml"
+          ]
+          stale = []
+          stale_pattern = re.compile(
+              r"EVERY_ORG_WEBHOOK_PATH_SECRET|webhookPathSecret|candidatePathSecret|"
+              r"canonicalPathSecret|path_ambiguous|path_mismatch|"
+              r"api/connectors/every-org/\[secret\]"
+          )
+          for path_text in product_candidates:
+              path = Path(path_text)
+              try:
+                  source = path.read_text()
+              except (UnicodeDecodeError, OSError):
+                  continue
+              if stale_pattern.search(source):
+                  stale.append(path_text)
+          if stale:
+              raise SystemExit(f"Refusing: stale secret-path semantics remain: {stale}")
+          PY
+
+          git diff --check
+          test -f 'src/app/api/connectors/every-org/[routeId]/route.ts'
+          test ! -e 'src/app/api/connectors/every-org/[secret]/route.ts'
+          ! git grep -n -E 'EVERY_ORG_WEBHOOK_PATH_SECRET|webhookPathSecret|candidatePathSecret|canonicalPathSecret|path_ambiguous|path_mismatch|api/connectors/every-org/\[secret\]' -- . ':!.github/workflows/repair-every-org-webhook-route-id-708-20260818.yml'
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused Every.org and Donation Upgrade contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          node --import tsx --test \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/every-org-webhook-route-id-source-contract.test.ts \
+            src/lib/every-org-api-environment.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-split.test.ts \
+            src/lib/direct-donation-upgrade-environment-contract.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/trade-donation.test.ts \
+            src/lib/mpgf.test.ts \
+            | tee evidence/focused-tests.log
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test | tee evidence/repository-tests.log
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --pretty false | tee evidence/typescript.log
+
+      - name: Run ESLint with zero errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet | tee evidence/eslint.log
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -euo pipefail
+          npm run build | tee evidence/build.log
+
+      - name: Commit only the bounded product repair and remove the bootstrap workflow
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm "$WORKFLOW_PATH"
+          git add -A
+          git diff --cached --check
+          mapfile -t changed < <(git diff --cached --name-only "$EXPECTED_PARENT" | sort)
+          printf '%s\n' "${changed[@]}" | tee evidence/changed-paths.txt
+
+          allowed_regex='^(\.env\.example|\.github/workflows/direct-donation-upgrade-(gates|partial-gates|partial-qa|qa|rendered-qa)\.yml|docs/direct-verified-donation-upgrade\.md|docs/every-org-pledge-donation-connector\.md|src/app/api/connectors/every-org/\[(routeId|secret)\]/route\.ts|src/lib/direct-donation-upgrade(-source-contract\.test|-environment-contract\.test|\.test)?\.ts|src/lib/every-org-partner-webhook-auth(\.test)?\.ts|src/lib/every-org-webhook-route-id-source-contract\.test\.ts|src/lib/trade-donation(\.test)?\.ts)$'
+          for path in "${changed[@]}"; do
+            [[ "$path" =~ $allowed_regex ]] || {
+              echo "Unexpected changed path: $path" >&2
+              exit 1
+            }
+          done
+
+          required=(
+            .env.example
+            docs/direct-verified-donation-upgrade.md
+            docs/every-org-pledge-donation-connector.md
+            'src/app/api/connectors/every-org/[routeId]/route.ts'
+            'src/app/api/connectors/every-org/[secret]/route.ts'
+            src/lib/direct-donation-upgrade.ts
+            src/lib/every-org-partner-webhook-auth.test.ts
+            src/lib/every-org-partner-webhook-auth.ts
+            src/lib/every-org-webhook-route-id-source-contract.test.ts
+            src/lib/trade-donation.ts
+          )
+          for expected in "${required[@]}"; do
+            printf '%s\n' "${changed[@]}" | grep -Fxq "$expected"
+          done
+
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git commit -m 'Treat Every.org webhook route ID as non-secret'
+          final_sha="$(git rev-parse HEAD)"
+          final_tree="$(git show -s --format=%T HEAD)"
+          test "$(git rev-parse HEAD^)" = "$(git rev-parse HEAD^^)" || true
+          {
+            echo "final_sha=$final_sha"
+            echo "final_tree=$final_tree"
+          } | tee evidence/final-identity.txt
+          git push origin "HEAD:$EXPECTED_BRANCH"
+          echo "final_sha=$final_sha" >> "$GITHUB_OUTPUT"
+          echo "final_tree=$final_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record sanitized exact-head evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "branch=$GITHUB_REF_NAME"
+            echo "base=$EXPECTED_PARENT"
+            echo "head=${{ steps.commit.outputs.final_sha }}"
+            echo "tree=${{ steps.commit.outputs.final_tree }}"
+            echo "provider_header_contract=unconfirmed"
+            echo "deployment_attempted=false"
+            echo "provider_transaction_attempted=false"
+            echo "checkout_attempted=false"
+            echo "donation_attempted=false"
+            echo "persistent_database_mutation=false"
+          } > evidence/summary.txt
+          ! grep -R -n -E 'sb_secret_|vcp_|gh[pousr]_|postgres(ql)?://[^[:space:]]+:[^[:space:]]+@|eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.' evidence
+
+      - name: Upload exact-head repair evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: every-org-webhook-route-id-repair-${{ github.run_id }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 30
