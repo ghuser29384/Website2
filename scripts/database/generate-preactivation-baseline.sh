@@ -192,20 +192,12 @@ if [[ ! -s "$AUTH_TRIGGERS" ]]; then
   fail "The production auth-to-profile trigger boundary is empty."
 fi
 
-if ! command -v pg_dump >/dev/null 2>&1; then
-  fail "pg_dump is required."
-fi
-
-pg_dump "$PROD_SUPABASE_DB_URL" \
-  --schema-only \
-  --no-owner \
-  --no-comments \
-  --no-security-labels \
-  --no-publications \
-  --no-subscriptions \
-  --schema=public \
-  --schema=moral_trade_private \
-  > "$DUMP_RAW"
+npx --yes supabase@2.110.0 db dump \
+  --db-url "$PROD_SUPABASE_DB_URL" \
+  --schema public,moral_trade_private \
+  --file "$DUMP_RAW" \
+  > "$EVIDENCE_ROOT/logs/supabase-db-dump.log" 2>&1
+test -s "$DUMP_RAW"
 
 python3 - "$DUMP_RAW" "$DUMP_NORMALIZED" <<'PY'
 from pathlib import Path
