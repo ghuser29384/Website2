@@ -1,0 +1,271 @@
+name: Continue Compact outflow exact-head validation v1
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/continue-compact-outflow-validation-v1.yml
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: continue-compact-outflow-validation-v1-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  continue-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+      TRACKING_ISSUE: "734"
+      STACKED_PR: "737"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out current feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Guard bounded stacked scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${STACK_BASE_SHA}^{commit}"
+          test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
+
+          cat > /tmp/durable-files.txt <<'EOF'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          docs/mpgf/compact-authoritative-outflow-ledger-v1.md
+          scripts/test-compact-authoritative-outflow-concurrency.sh
+          src/components/mpgf/mpgf-public-goods-compacts.tsx
+          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.ts
+          supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          tests/mpgf-public-goods-compacts.spec.ts
+          EOF
+          sort -o /tmp/durable-files.txt /tmp/durable-files.txt
+
+          git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/current-files.txt
+          grep -v -E '^\.github/workflows/(continue-compact-outflow-validation-v1|repair-compact-outflow-phase-ordering-v1)\.yml$' /tmp/current-files.txt > /tmp/current-durable-files.txt || true
+          diff -u /tmp/durable-files.txt /tmp/current-durable-files.txt
+          test "$(wc -l < /tmp/current-durable-files.txt)" -eq 14
+
+      - name: Ensure phase-correct workflow and remove controller debris
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/compact-authoritative-outflow-ledger-qa.yml')
+          source = path.read_text(encoding='utf-8')
+
+          if 'Run pre-ledger Compact regression suites' not in source:
+              def replace_once(old: str, new: str, label: str) -> None:
+                  global source
+                  count = source.count(old)
+                  if count != 1:
+                      raise SystemExit(f'Expected one {label}; found {count}.')
+                  source = source.replace(old, new, 1)
+
+              replace_once(
+                  '          mkdir -p compact-outflow-clean/post-baseline-migrations\n',
+                  '          mkdir -p compact-outflow-clean/post-baseline-migrations compact-outflow-clean/pre-ledger-migrations compact-outflow-clean/ledger-migrations\n',
+                  'migration-directory declaration',
+              )
+              replace_once(
+                  '''          done < compact-outflow-clean/post-baseline-migrations.txt
+          for version in 20260816141500 20260816141501 20260816141502 20260816141503; do
+''',
+                  '''          done < compact-outflow-clean/post-baseline-migrations.txt
+          for migration_path in compact-outflow-clean/post-baseline-migrations/*.sql; do
+            case "$(basename "$migration_path")" in
+              20260816141500_compact_authoritative_outflow_ledger_v1.sql|\\
+              20260816141501_compact_authoritative_outflow_freeze_v1.sql|\\
+              20260816141502_compact_authoritative_outflow_hardening_v1.sql|\\
+              20260816141503_compact_authoritative_outflow_replay_fix_v1.sql)
+                cp "$migration_path" compact-outflow-clean/ledger-migrations/
+                ;;
+              *)
+                cp "$migration_path" compact-outflow-clean/pre-ledger-migrations/
+                ;;
+            esac
+          done
+          test "$(find compact-outflow-clean/ledger-migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 4
+          test "$(find compact-outflow-clean/pre-ledger-migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -gt 0
+          for version in 20260816141500 20260816141501 20260816141502 20260816141503; do
+''',
+                  'migration split point',
+              )
+              replace_once(
+                  '      - name: Apply baseline and every production-compatible migration\n',
+                  '      - name: Apply baseline and production-compatible pre-ledger migrations\n',
+                  'pre-ledger apply step name',
+              )
+              replace_once(
+                  '            bash scripts/apply-supabase-migrations-in-order.sh compact-outflow-clean/post-baseline-migrations \\\n',
+                  '            bash scripts/apply-supabase-migrations-in-order.sh compact-outflow-clean/pre-ledger-migrations \\\n',
+                  'pre-ledger migration directory',
+              )
+              replace_once(
+                  '      - name: Generate and compare exact public runtime types\n',
+                  '''      - name: Run pre-ledger Compact regression suites
+        shell: bash
+        run: |
+          set -o pipefail
+          psql "$LOCAL_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \\
+            | tee compact-outflow-clean/pre-ledger-compact-regression.log
+          begin;
+          \\i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \\i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          rollback;
+          SQL
+
+      - name: Apply authoritative-ledger migrations in exact order
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > compact-outflow-clean/ledger-migration-apply.log
+          for migration_path in $(find compact-outflow-clean/ledger-migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do
+            printf 'applying_ledger_migration=%s\\n' "$(basename "$migration_path")" | tee -a compact-outflow-clean/ledger-migration-apply.log
+            psql "$LOCAL_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$migration_path" 2>&1 \\
+              | tee -a compact-outflow-clean/ledger-migration-apply.log
+          done
+          test "$(grep -c '^applying_ledger_migration=' compact-outflow-clean/ledger-migration-apply.log)" -eq 4
+
+      - name: Generate and compare exact public runtime types
+''',
+                  'generated-types insertion point',
+              )
+              replace_once(
+                  '      - name: Run database lint and ledger lifecycle suites\n',
+                  '      - name: Run database lint and authoritative-ledger lifecycle suites\n',
+                  'ledger lifecycle step name',
+              )
+              replace_once(
+                  '''          begin;
+          \\i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \\i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          \\i supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          \\i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          rollback;
+''',
+                  '''          begin;
+          \\i supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          \\i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          rollback;
+''',
+                  'clean final-schema lifecycle block',
+              )
+              replace_once(
+                  '''          begin;
+          \\i supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
+          \\i supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
+          \\i compact-outflow-rollback/migrations/20260813163052_mpgf_public_goods_compacts.sql
+          \\i compact-outflow-rollback/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
+          \\i compact-outflow-rollback/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          \\i compact-outflow-rollback/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          \\i compact-outflow-rollback/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          \\i compact-outflow-rollback/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          \\i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \\i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          \\i supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          \\i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          rollback;
+''',
+                  '''          begin;
+          \\i supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
+          \\i supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
+          \\i compact-outflow-rollback/migrations/20260813163052_mpgf_public_goods_compacts.sql
+          \\i compact-outflow-rollback/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
+          \\i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \\i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          \\i compact-outflow-rollback/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          \\i compact-outflow-rollback/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          \\i compact-outflow-rollback/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          \\i compact-outflow-rollback/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          \\i supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          \\i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          rollback;
+''',
+                  'isolated rollback phase block',
+              )
+              path.write_text(source, encoding='utf-8')
+
+          if 'Run pre-ledger Compact regression suites' not in path.read_text(encoding='utf-8'):
+              raise SystemExit('Phase-ordering repair is absent after normalization.')
+          PY
+
+          rm -f \
+            .github/workflows/repair-compact-outflow-phase-ordering-v1.yml \
+            .github/workflows/continue-compact-outflow-validation-v1.yml
+          git diff --check
+
+      - name: Commit exact durable candidate
+        id: durable
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "ci: phase Compact outflow database validation"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for exact-head ledger QA
+        id: ledger_qa
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.durable.outputs.sha }}
+        run: |
+          set -euo pipefail
+          workflow_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows" --paginate \
+            --jq '.workflows[] | select(.name == "Compact authoritative outflow ledger QA") | .id' | head -n 1)"
+          test -n "$workflow_id"
+          run_id=""
+          conclusion=""
+          for _ in $(seq 1 240); do
+            run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/runs?head_sha=${HEAD_SHA}&per_page=20" \
+              --jq '.workflow_runs | sort_by(.created_at) | reverse | .[0].id // empty')"
+            if [ -n "$run_id" ]; then
+              status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+              conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // empty')"
+              if [ "$status" = completed ]; then
+                break
+              fi
+            fi
+            sleep 30
+          done
+          test -n "$run_id"
+          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+          printf 'conclusion=%s\n' "$conclusion" >> "$GITHUB_OUTPUT"
+          if [ "$conclusion" != success ]; then
+            gh issue comment "$TRACKING_ISSUE" --body "Exact-head ledger QA failed or timed out on \`${HEAD_SHA}\`: run ${run_id}, conclusion \`${conclusion:-unknown}\`. Hosted UAT remains blocked."
+            exit 1
+          fi
+
+      - name: Record non-hosted completion and next gate
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.durable.outputs.sha }}
+          HEAD_TREE: ${{ steps.durable.outputs.tree }}
+          LEDGER_RUN: ${{ steps.ledger_qa.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          gh issue comment "$TRACKING_ISSUE" --body "Phase-ordering repair completed on exact head \`${HEAD_SHA}\` (tree \`${HEAD_TREE}\`). Compact authoritative outflow ledger QA run ${LEDGER_RUN} passed. No merge, deployment, persistent migration, provider call, payment, activation, electorate, or money movement occurred. The next admissible gate is exact-head adjacent QA followed by protected isolated-QA hosted UAT."
+          gh pr comment "$STACKED_PR" --body "Exact-head database phase ordering is repaired and ledger QA run ${LEDGER_RUN} passed on \`${HEAD_SHA}\` (tree \`${HEAD_TREE}\`). PR remains draft and unmerged; hosted UAT is not yet implied by this result."
