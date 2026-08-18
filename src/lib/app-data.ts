@@ -1,5 +1,6 @@
-import { isAuthSessionMissingError, type User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import {
   calculateDonationOffsetPoolProgress,
@@ -19,10 +20,7 @@ import {
   serializeOpportunityBriefCard,
   type BackgroundRequesterOpportunityBriefCard,
 } from "@/lib/background-opportunity-briefs";
-import {
-  AUTH_RESOLUTION_TIMEOUT_MS,
-  resolveAuthUserWithDeadline,
-} from "@/lib/auth-resolution";
+import { resolveAuthenticatedUser } from "@/lib/auth-resolution";
 import { isMissingOptionalLegacyAgreementRelation } from "@/lib/optional-legacy-agreement-relations";
 import {
   chunkForPostgrestIn,
@@ -652,9 +650,7 @@ async function ensureUserProfile(
     .maybeSingle();
 
   if (profileError) {
-    logSupabaseError("Failed to read public.profiles row", profileError, {
-      userId: user.id,
-    });
+    logSupabaseError("Failed to read public.profiles row", profileError);
   }
 
   if (profile) {
@@ -686,9 +682,7 @@ async function ensureUserProfile(
     .maybeSingle();
 
   if (insertError) {
-    logSupabaseError("Failed to create missing public.profiles row", insertError, {
-      userId: user.id,
-    });
+    logSupabaseError("Failed to create missing public.profiles row", insertError);
 
     return {
       profile: seedProfile,
@@ -701,9 +695,7 @@ async function ensureUserProfile(
   }
 
   if (!insertedProfile) {
-    console.error("[supabase] public.profiles upsert returned no profile row", {
-      userId: user.id,
-    });
+    console.error("[supabase] public.profiles upsert returned no profile row");
 
     return {
       profile: seedProfile,
@@ -986,10 +978,7 @@ async function claimGuestInterestsForUser(user: User, supabase: SupabaseServerCl
     .ilike("contact_email", email);
 
   if (error) {
-    logSupabaseError("Failed to claim guest interests for authenticated user", error, {
-      userId: user.id,
-      email,
-    });
+    logSupabaseError("Failed to claim guest interests for authenticated user", error);
   }
 }
 
@@ -1029,30 +1018,25 @@ export function deriveDisplayName(
   );
 }
 
-export async function getViewer() {
+async function resolveViewer() {
   if (!hasSupabaseEnv()) {
     return null;
   }
 
   const supabase = await createClient();
-  const authResult = await resolveAuthUserWithDeadline(supabase.auth.getUser());
-  const {
-    data: { user },
-    error: authError,
-    timedOut,
-  } = authResult;
+  const authResult = await resolveAuthenticatedUser(
+    { getUser: () => supabase.auth.getUser() },
+    {
+      // getViewer needs an authentic full User and immediate session-revocation checks.
+      claimsPolicy: { mode: "disabled", reason: "active_session_required" },
+    },
+  );
 
-  if (authError) {
-    if (timedOut) {
-      console.warn("[supabase] Auth resolution timed out; rendering signed-out state.", {
-        timeoutMs: AUTH_RESOLUTION_TIMEOUT_MS,
-      });
-    } else if (!isAuthSessionMissingError(authError)) {
-      logSupabaseError("Failed to resolve authenticated user", authError);
-    }
+  if (!authResult.ok) {
     return null;
   }
 
+  const user = authResult.user;
   if (!user) {
     return null;
   }
@@ -1067,6 +1051,10 @@ export async function getViewer() {
     profileSyncError: profileResult.profileSyncError,
   } satisfies Viewer;
 }
+
+// React cache is scoped to one server render. It prevents parallel layouts and
+// pages from repeating the same private bootstrap without caching across users.
+export const getViewer = cache(resolveViewer);
 
 function applyPublicProfileSort(query: any, sort: PeopleSort) {
   if (sort === "offers") {
