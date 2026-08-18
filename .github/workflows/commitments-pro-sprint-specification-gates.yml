@@ -80,13 +80,21 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           GIT_REF: ${{ github.ref }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           MATERIALIZATION_BASE_SHA: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            BASE_SHA="$PR_BASE_SHA"
+            # actions/checkout checks out GitHub's synthetic merge ref for a pull request.
+            # Its first parent is the exact target-base commit used to create this test
+            # merge, while the event payload's base.sha may be stale after main advances.
+            BASE_SHA="$(git rev-parse HEAD^1)"
+            CANDIDATE_SHA="$(git rev-parse HEAD^2)"
+            if [ -z "$PR_HEAD_SHA" ] || [ "$CANDIDATE_SHA" != "$PR_HEAD_SHA" ]; then
+              echo "Pull-request merge identity mismatch: candidate=$CANDIDATE_SHA event_head=$PR_HEAD_SHA" >&2
+              exit 1
+            fi
           elif [ "$GIT_REF" = "refs/heads/main" ]; then
             BASE_SHA="$PUSH_BEFORE_SHA"
           else
