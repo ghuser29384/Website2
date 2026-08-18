@@ -1,0 +1,58 @@
+name: Repair issue 723 inspected-signature executor
+
+on:
+  push:
+    branches:
+      - qa/723-authenticated-confirmation-integration-20260817
+    paths:
+      - .github/workflows/bootstrap-issue-723-milestone-manifest-v6-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-issue-723-inspected-signature-executor
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BRANCH: qa/723-authenticated-confirmation-integration-20260817
+      TARGET: .github/workflows/bootstrap-issue-723-milestone-manifest-v5-20260818.yml
+      SELF: .github/workflows/bootstrap-issue-723-milestone-manifest-v6-20260818.yml
+    steps:
+      - name: Check out current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 20
+
+      - name: Correct nested argument-name validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path(".github/workflows/bootstrap-issue-723-milestone-manifest-v5-20260818.yml")
+          text = path.read_text()
+          old = '''          jq -e 'all(.args[]; . == "p_actor_id" or . == "p_agreement_id" or . == "p_agreement_version_id" or . == "p_version_id" or . == "p_expected_agreement_version_id" or . == "p_expected_version" or . == "p_version" or . == "p_idempotency_key")' /tmp/issue-723-lifecycle-functions.json >/dev/null'''
+          new = '''          jq -e 'all(.[]; all(.args[]; . == "p_actor_id" or . == "p_agreement_id" or . == "p_agreement_version_id" or . == "p_version_id" or . == "p_expected_agreement_version_id" or . == "p_expected_version" or . == "p_version" or . == "p_idempotency_key"))' /tmp/issue-723-lifecycle-functions.json >/dev/null'''
+          if text.count(old) != 1:
+              raise SystemExit("Expected one un-nested jq validation expression.")
+          path.write_text(text.replace(old, new))
+          PY
+          rm "$SELF"
+          git diff --check
+          test "$(git diff --name-only HEAD | LC_ALL=C sort | tr '\n' ' ')" = "$TARGET "
+
+      - name: Publish executor correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix issue 723 lifecycle-signature validation"
+          git push origin "HEAD:$BRANCH"
