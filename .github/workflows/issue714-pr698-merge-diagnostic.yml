@@ -4,9 +4,12 @@ on:
   push:
     branches:
       - ops/issue714-pr698-merge-diagnostic-20260817
+    paths:
+      - .github/workflows/issue714-pr698-merge-diagnostic.yml
+      - .github/scripts/issue714-exact-head-visual.spec.ts
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   EXPECTED_HEAD: 335f0ab7e4dc8f95e2f06a082db6b5360caf3f27
@@ -205,3 +208,38 @@ jobs:
             test-results
           if-no-files-found: warn
           retention-days: 21
+
+      - name: Publish run status to helper branch
+        if: always()
+        shell: bash
+        env:
+          FINAL_STATUS: ${{ job.status }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/issue714-helper
+          git clone --quiet --depth=1 --branch "$HELPER_BRANCH" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            /tmp/issue714-helper
+          cd /tmp/issue714-helper
+          mkdir -p .github/issue714-status
+          STATUS_FILE=".github/issue714-status/exact-head-${EXPECTED_HEAD}.txt"
+          {
+            printf 'status=%s\n' "$FINAL_STATUS"
+            printf 'run_id=%s\n' "$RUN_ID"
+            printf 'run_attempt=%s\n' "$RUN_ATTEMPT"
+            printf 'candidate_head=%s\n' "$EXPECTED_HEAD"
+            printf 'candidate_tree=%s\n' "$EXPECTED_TREE"
+            printf 'synchronization_main=%s\n' "$EXPECTED_MAIN"
+            printf 'completed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "$STATUS_FILE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$STATUS_FILE"
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Record Issue 714 exact-head gate status"
+          git push origin "HEAD:$HELPER_BRANCH"
