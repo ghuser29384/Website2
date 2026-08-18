@@ -1,0 +1,159 @@
+name: Issue 734 finalize Compact outflow hosted UAT
+
+on:
+  push:
+    branches:
+      - ops/issue734-compact-outflow-validation-20260818
+    paths:
+      - .github/workflows/issue734-finalize-hosted-uat.yml
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: issue734-finalize-compact-outflow-hosted-uat
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_PR: "737"
+      TRACKING_ISSUE: "734"
+      FEATURE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+    steps:
+      - name: Check out ops branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Wait for exact hosted-UAT conclusion
+        id: hosted
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow_id=""
+          run_id=""
+          conclusion=""
+          candidate_sha=""
+          candidate_tree=""
+
+          for _ in $(seq 1 330); do
+            workflow_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows?per_page=100" \
+              --jq '.workflows[] | select(.name == "Issue 734 Compact authoritative outflow protected UAT") | .id' | head -n 1)"
+            if [ -n "$workflow_id" ]; then
+              run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/runs?branch=${GITHUB_REF_NAME}&per_page=20" \
+                --jq '.workflow_runs | sort_by(.created_at) | reverse | .[0].id // empty')"
+              if [ -n "$run_id" ]; then
+                run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+                status="$(jq -r '.status' <<<"$run_json")"
+                conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+                if [ "$status" = completed ]; then
+                  break
+                fi
+              fi
+            fi
+            sleep 60
+          done
+
+          test -n "$workflow_id"
+          test -n "$run_id"
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${FEATURE_PR}")"
+          candidate_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+          candidate_tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${candidate_sha}" --jq '.tree.sha')"
+          printf 'workflow_id=%s\n' "$workflow_id" >> "$GITHUB_OUTPUT"
+          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+          printf 'conclusion=%s\n' "$conclusion" >> "$GITHUB_OUTPUT"
+          printf 'candidate_sha=%s\n' "$candidate_sha" >> "$GITHUB_OUTPUT"
+          printf 'candidate_tree=%s\n' "$candidate_tree" >> "$GITHUB_OUTPUT"
+
+          if [ "$conclusion" != success ]; then
+            gh issue comment "$TRACKING_ISSUE" --body "Protected hosted UAT run ${run_id} concluded \`${conclusion:-unknown}\`. PR #${FEATURE_PR} remains draft and issue #${TRACKING_ISSUE} remains open; no merge or release is authorized."
+            exit 1
+          fi
+
+      - name: Collect exact evidence metadata
+        id: evidence
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.hosted.outputs.run_id }}
+          CANDIDATE_SHA: ${{ steps.hosted.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")"
+          test "$(jq -r '.status' <<<"$run_json")" = completed
+          test "$(jq -r '.conclusion' <<<"$run_json")" = success
+
+          artifacts_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100")"
+          artifact_count="$(jq -r '.total_count' <<<"$artifacts_json")"
+          test "$artifact_count" -gt 0
+          jq -r '.artifacts[] | [.id,.name,.size_in_bytes,(.digest // ""),.expired] | @tsv' <<<"$artifacts_json" \
+            > /tmp/hosted-artifacts.tsv
+          test -s /tmp/hosted-artifacts.tsv
+
+          jobs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")"
+          jq -r '.jobs[] | [.id,.name,.conclusion] | @tsv' <<<"$jobs_json" > /tmp/hosted-jobs.tsv
+          test -s /tmp/hosted-jobs.tsv
+          test "$(awk -F '\t' '$3 != "success" {count++} END {print count+0}' /tmp/hosted-jobs.tsv)" -eq 0
+
+          {
+            echo 'artifacts<<EOF'
+            cat /tmp/hosted-artifacts.tsv
+            echo EOF
+            echo 'jobs<<EOF'
+            cat /tmp/hosted-jobs.tsv
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update draft PR and close completed implementation issue
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.hosted.outputs.run_id }}
+          CANDIDATE_SHA: ${{ steps.hosted.outputs.candidate_sha }}
+          CANDIDATE_TREE: ${{ steps.hosted.outputs.candidate_tree }}
+          ARTIFACTS: ${{ steps.evidence.outputs.artifacts }}
+          JOBS: ${{ steps.evidence.outputs.jobs }}
+        run: |
+          set -euo pipefail
+          summary="$(cat <<EOF
+          ## Issue #734 exact-head hosted-UAT completion
+
+          - Candidate: \`${CANDIDATE_SHA}\`
+          - Tree: \`${CANDIDATE_TREE}\`
+          - Protected hosted-UAT run: ${RUN_ID}
+          - Job evidence:
+          \`\`\`
+          ${JOBS}
+          \`\`\`
+          - Artifact evidence (`id | name | bytes | digest | expired`):
+          \`\`\`
+          ${ARTIFACTS}
+          \`\`\`
+
+          The candidate remains shadow-only and fail-closed. No production deployment, persistent production/staging migration, canonical alias, provider credential in application runtime, charge, mandate, settlement, custody, activation, electorate, real-member count, or money movement is authorized or performed.
+          EOF
+          )"
+          gh pr comment "$FEATURE_PR" --body "$summary"
+          gh issue comment "$TRACKING_ISSUE" --body "$summary"
+          gh issue close "$TRACKING_ISSUE" --reason completed --comment "All bounded implementation and exact-head source, database, rendered, adjacent, and protected isolated-QA hosted-UAT gates for the authoritative Compact outflow ledger tranche have completed. PR #${FEATURE_PR} remains draft, open, unmerged, and undeployed."
+
+      - name: Remove one-use ops controllers after success
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f \
+            .github/workflows/issue734-compact-outflow-protected-uat.yml \
+            .github/workflows/issue734-finalize-hosted-uat.yml
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "ops: retire issue 734 hosted-UAT controllers"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
