@@ -87,36 +87,37 @@ jobs:
           set -euo pipefail
           umask 077
           mkdir -p "$BACKUP_DIR"
-          cat > "$BACKUP_DIR/preflight.sql" <<'SQL'
-          select concat_ws('|',
-            current_database(),
-            current_setting('server_version'),
-            coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false'),
-            current_setting('default_transaction_read_only'),
-            pg_database_size(current_database())::text,
-            (select count(*)::text from supabase_migrations.schema_migrations),
-            (select max(version) from supabase_migrations.schema_migrations)
-          );
-          SQL
-          docker run --rm \
-            -e DATABASE_URL="$PROD_SUPABASE_DB_URL" \
-            -v "$PWD/$BACKUP_DIR:/backup:ro" \
-            "$POSTGRES_IMAGE" \
-            psql "$PROD_SUPABASE_DB_URL" \
-              --no-psqlrc \
-              --set ON_ERROR_STOP=1 \
-              --tuples-only \
-              --no-align \
-              --file=/backup/preflight.sql \
-            > "$RUNNER_TEMP/production-preflight.txt"
 
-          IFS='|' read -r database server_version ssl read_only database_bytes migration_count latest_migration \
-            < "$RUNNER_TEMP/production-preflight.txt"
+          psql_value() {
+            local sql="$1"
+            docker run --rm \
+              "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" \
+                --no-psqlrc \
+                --set ON_ERROR_STOP=1 \
+                --tuples-only \
+                --no-align \
+                --quiet \
+                --command "$sql" \
+              | tr -d '\r' \
+              | awk 'NF { value=$0 } END { print value }'
+          }
+
+          database="$(psql_value 'select current_database();')"
+          server_version="$(psql_value "select current_setting('server_version');")"
+          ssl="$(psql_value "select coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false');")"
+          read_only="$(psql_value "select current_setting('default_transaction_read_only');")"
+          database_bytes="$(psql_value 'select pg_database_size(current_database());')"
+          migration_count="$(psql_value 'select count(*) from supabase_migrations.schema_migrations;')"
+          latest_migration="$(psql_value 'select max(version) from supabase_migrations.schema_migrations;')"
+
           test "$database" = "postgres"
           [[ "$server_version" =~ ^17\. ]]
           test "$ssl" = "true"
           test "$read_only" = "off"
+          [[ "$database_bytes" =~ ^[0-9]+$ ]]
           test "$database_bytes" -gt 0
+          [[ "$migration_count" =~ ^[0-9]+$ ]]
           test "$migration_count" -gt 0
           [[ "$latest_migration" =~ ^[0-9]{14}$ ]]
 
@@ -140,7 +141,6 @@ jobs:
               latestMigration: $latest_migration,
               checkedAt: $checked_at
             }' > "$BACKUP_DIR/production-preflight.json"
-          rm -f "$BACKUP_DIR/preflight.sql" "$RUNNER_TEMP/production-preflight.txt"
 
       - name: Create a consistent full logical database backup
         shell: bash
@@ -148,7 +148,6 @@ jobs:
           set -euo pipefail
           umask 077
           docker run --rm \
-            -e DATABASE_URL="$PROD_SUPABASE_DB_URL" \
             -v "$PWD/$BACKUP_DIR:/backup" \
             "$POSTGRES_IMAGE" \
             pg_dump \
