@@ -1,0 +1,38 @@
+name: Issue 714 export exact candidate source
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-merge-diagnostic-20260817
+    paths:
+      - .github/workflows/issue714-export-candidate.yml
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HEAD: 335f0ab7e4dc8f95e2f06a082db6b5360caf3f27
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 335f0ab7e4dc8f95e2f06a082db6b5360caf3f27
+          fetch-depth: 1
+      - name: Guard and package source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git archive --format=tar.gz --output=issue714-candidate-335f0ab7.tar.gz HEAD
+          sha256sum issue714-candidate-335f0ab7.tar.gz > issue714-candidate-335f0ab7.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue714-candidate-source-335f0ab7
+          path: |
+            issue714-candidate-335f0ab7.tar.gz
+            issue714-candidate-335f0ab7.tar.gz.sha256
+          retention-days: 2
