@@ -1,0 +1,122 @@
+name: Issue 723 clean convergence v3
+
+on:
+  push:
+    branches:
+      - ops/issue723-converge-clean-20260818
+    paths:
+      - .github/workflows/issue-723-converge-clean-v3-20260818.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: issue-723-clean-convergence
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+    steps:
+      - name: Check out controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+
+      - name: Normalize controller source and force live-main tracking
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/issue-723-converge-clean.mjs")
+          text = path.read_text()
+          text = text.replace('value="${!name:-}"', 'value="\\${!name:-}"')
+          old_fetch = 'git(["fetch", "--no-tags", "--force", "origin", "main", originalRepairHead], repoDir, false);'
+          new_fetch = '''git(["fetch", "--no-tags", "--force", "origin", "main:refs/remotes/origin/main", `${originalProductBranch}:refs/remotes/origin/${originalProductBranch}`], repoDir, false);
+    git(["cat-file", "-e", `${originalRepairHead}^{commit}`], repoDir, false);'''
+          if old_fetch in text:
+              text = text.replace(old_fetch, new_fetch, 1)
+          text = text.replace(
+              'git(["fetch", "--no-tags", "--force", "origin", "main"], repoDir, false);',
+              'git(["fetch", "--no-tags", "--force", "origin", "main:refs/remotes/origin/main"], repoDir, false);',
+          )
+          old_drift = '''      if (currentMain !== mainHead) {
+        rmSync(dir, { recursive: true, force: true });
+        continue;
+      }'''
+          new_drift = '''      if (currentMain !== mainHead) {
+        git(["worktree", "remove", "--force", dir], repoDir, false);
+        try { git(["branch", "-D", productBranch], repoDir, false); } catch {}
+        continue;
+      }'''
+          if old_drift in text:
+              text = text.replace(old_drift, new_drift, 1)
+          path.write_text(text)
+          PY
+          node --check scripts/issue-723-converge-clean.mjs
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Verify isolated-QA credentials are present and non-live
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in QA_SUPABASE_PUBLISHABLE_KEY QA_SUPABASE_SERVICE_ROLE_KEY QA_SUPABASE_DB_URL QA_TEST_PASSWORD QA_STRIPE_SECRET_KEY QA_STRIPE_PUBLISHABLE_KEY QA_STRIPE_WEBHOOK_SECRET QA_EVERY_ORG_WEBHOOK_TOKEN QA_EVERY_ORG_WEBHOOK_PATH_SECRET QA_EVERY_ORG_PARTNER_METADATA_SECRET; do
+            test -n "${!name:-}"
+          done
+          case "$QA_STRIPE_SECRET_KEY" in sk_test_*|rk_test_*) ;; *) exit 1 ;; esac
+          case "$QA_STRIPE_PUBLISHABLE_KEY" in pk_test_*) ;; *) exit 1 ;; esac
+          case "$QA_STRIPE_WEBHOOK_SECRET" in whsec_*) ;; *) exit 1 ;; esac
+          test "${#QA_EVERY_ORG_WEBHOOK_PATH_SECRET}" -ge 32
+          test "${#QA_EVERY_ORG_PARTNER_METADATA_SECRET}" -ge 32
+          [[ "$QA_SUPABASE_DB_URL" == *hvmxfjjbdcgjjudmthdz* ]]
+          [[ "$QA_STRIPE_SECRET_KEY" != sk_live_* ]]
+          [[ "$QA_STRIPE_PUBLISHABLE_KEY" != pk_live_* ]]
+
+      - name: Execute complete clean convergence sequence
+        run: node scripts/issue-723-converge-clean.mjs
+
+      - name: Upload decision-ready controller summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-723-clean-convergence-v3-${{ github.run_id }}
+          path: /tmp/issue-723-final.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Record controller failure without credentials
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          body="Issue #723 clean convergence v3 stopped fail-closed in workflow run ${GITHUB_RUN_ID}. Review the masked Actions log; no production, live-provider, deployment, or real-money action was authorized."
+          gh api "repos/${GITHUB_REPOSITORY}/issues/723/comments" -f body="$body"
