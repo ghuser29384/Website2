@@ -8,6 +8,7 @@ on:
       - ".github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml"
       - "src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts"
       - "supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql"
+      - "tests/mpgf-dac-product-lifecycle.spec.ts"
   push:
     branches:
       - fix/dac-public-goods-foundation-reconciliation-20260818
@@ -15,6 +16,7 @@ on:
       - ".github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml"
       - "src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts"
       - "supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql"
+      - "tests/mpgf-dac-product-lifecycle.spec.ts"
 
 permissions:
   contents: read
@@ -57,7 +59,7 @@ jobs:
           ref: ${{ env.EXPECTED_HEAD_SHA }}
           fetch-depth: 0
 
-      - name: Verify exact candidate and three-file repair scope
+      - name: Verify exact candidate and four-file repair scope
         shell: bash
         run: |
           set -euo pipefail
@@ -70,14 +72,17 @@ jobs:
           .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
           src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts
           supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql
+          tests/mpgf-dac-product-lifecycle.spec.ts
           EOF
           sort -o expected-files.txt expected-files.txt
           diff -u expected-files.txt actual-files.txt
+          test "$(grep -Fc 'waitForLoadState("networkidle")' tests/mpgf-dac-product-lifecycle.spec.ts || true)" = "0"
+          grep -Fq 'return page.goto(path);' tests/mpgf-dac-product-lifecycle.spec.ts
           {
             printf 'head=%s\n' "$(git rev-parse HEAD)"
             printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
             printf 'base=%s\n' "$base"
-            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH"
+            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH" tests/mpgf-dac-product-lifecycle.spec.ts
           } | tee exact-head.txt
 
       - name: Use Node 24
