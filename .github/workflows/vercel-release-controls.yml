@@ -46,3 +46,178 @@ jobs:
           ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) or abort("invalid YAML: #{path}") }' \
             .github/workflows/vercel-release-controls.yml \
             .github/workflows/vercel-release.yml
+
+  observe-or-dispatch-f9ae548:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'ops/vercel-release-controller-f9ae548-20260818'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      EXPECTED_MAIN_SHA: f9ae5480ae7c20176f24c5f8b678088b5823fc39
+      CONTROLLER_BRANCH: ops/vercel-release-controller-f9ae548-20260818
+      CONTROLLER_PATH: .github/workflows/vercel-release-controls.yml
+      RELEASE_WORKFLOW: vercel-release.yml
+      EXISTING_RUN_NOT_BEFORE: '2026-08-18T05:55:29Z'
+      RELEASE_EVIDENCE_PR: '757'
+    steps:
+      - name: Check out exact controller head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Guard immutable main and controller-only scope
+        shell: bash
+        env:
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$EVENT_BASE_BRANCH" = 'main'
+          test "$EVENT_BASE_SHA" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD)" = "$EVENT_HEAD_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_PATH"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+          test "$(git show "$EXPECTED_MAIN_SHA:.github/workflows/vercel-release.yml" | sed -n '1p')" = 'name: Gated Vercel release'
+
+      - name: Reuse an existing exact release or dispatch exactly once
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONTROLLER_PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          api_get() {
+            curl -fsS \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$1"
+          }
+
+          post_comment() {
+            local issue="$1"
+            local body="$2"
+            local payload
+            payload="$(jq -n --arg body "$body" '{body:$body}')"
+            curl -fsS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$issue/comments" \
+              -d "$payload" >/dev/null
+          }
+
+          list_exact_runs() {
+            api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=100" \
+              | jq -c \
+                  --arg sha "$EXPECTED_MAIN_SHA" \
+                  --arg not_before "$EXISTING_RUN_NOT_BEFORE" \
+                  '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "workflow_dispatch" and .created_at >= $not_before)] | sort_by(.created_at)'
+          }
+
+          runs="$(list_exact_runs)"
+          count="$(jq 'length' <<< "$runs")"
+          if (( count > 1 )); then
+            ids="$(jq -r 'map(.id|tostring) | join(",")' <<< "$runs")"
+            body="EXACT_PRODUCTION_RELEASE_F9AE548\nstatus=blocked_duplicate_runs\nhead_sha=$EXPECTED_MAIN_SHA\nrun_ids=$ids\ncontroller_run=$GITHUB_RUN_ID"
+            post_comment "$RELEASE_EVIDENCE_PR" "$body"
+            post_comment "$CONTROLLER_PR" "$body"
+            exit 1
+          fi
+
+          if (( count == 0 )); then
+            payload="$(jq -n \
+              --arg expected_sha "$EXPECTED_MAIN_SHA" \
+              '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$expected_sha,synthetic_auth_fixture_url:""}}')"
+            code="$(curl -sS \
+              -o "$RUNNER_TEMP/dispatch-response.txt" \
+              -w '%{http_code}' \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches" \
+              -d "$payload")"
+            test "$code" = '204'
+            test ! -s "$RUNNER_TEMP/dispatch-response.txt"
+            disposition='dispatched'
+
+            for _ in $(seq 1 60); do
+              sleep 5
+              runs="$(list_exact_runs)"
+              count="$(jq 'length' <<< "$runs")"
+              (( count == 1 )) && break
+              (( count <= 1 ))
+            done
+            test "$count" = '1'
+          else
+            disposition='reused'
+          fi
+
+          run_id="$(jq -r '.[0].id' <<< "$runs")"
+          run_url="$(jq -r '.[0].html_url' <<< "$runs")"
+          initial="EXACT_PRODUCTION_RELEASE_F9AE548\ncontroller_disposition=$disposition\nrun_id=$run_id\nrun_url=$run_url\nhead_sha=$EXPECTED_MAIN_SHA\nstatus=observing\ncontroller_run=$GITHUB_RUN_ID"
+          post_comment "$RELEASE_EVIDENCE_PR" "$initial"
+          post_comment "$CONTROLLER_PR" "$initial"
+
+          for _ in $(seq 1 300); do
+            run="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            test "$(jq -r '.head_sha' <<< "$run")" = "$EXPECTED_MAIN_SHA"
+            test "$(jq -r '.head_branch' <<< "$run")" = 'main'
+            test "$(jq -r '.event' <<< "$run")" = 'workflow_dispatch'
+            status="$(jq -r '.status' <<< "$run")"
+            [[ "$status" == 'completed' ]] && break
+            test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+            sleep 10
+          done
+
+          run="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+          status="$(jq -r '.status' <<< "$run")"
+          conclusion="$(jq -r '.conclusion // "pending"' <<< "$run")"
+          created_at="$(jq -r '.created_at' <<< "$run")"
+          updated_at="$(jq -r '.updated_at' <<< "$run")"
+          attempt="$(jq -r '.run_attempt' <<< "$run")"
+          jobs="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
+          job_summary="$(jq -r '[.jobs[] | "job_id=" + (.id|tostring) + " name=" + .name + " status=" + .status + " conclusion=" + (.conclusion // "pending")] | join("\n")' <<< "$jobs")"
+
+          final="$(cat <<EOF
+EXACT_PRODUCTION_RELEASE_F9AE548_FINAL
+controller_disposition=$disposition
+run_id=$run_id
+run_url=$run_url
+head_sha=$EXPECTED_MAIN_SHA
+head_branch=main
+event=workflow_dispatch
+status=$status
+conclusion=$conclusion
+attempt=$attempt
+created_at=$created_at
+updated_at=$updated_at
+input_target=production
+input_ref=main
+input_expected_sha=$EXPECTED_MAIN_SHA
+input_synthetic_auth_fixture_url=<empty>
+controller_run=$GITHUB_RUN_ID
+$job_summary
+EOF
+)"
+          post_comment "$RELEASE_EVIDENCE_PR" "$final"
+          post_comment "$CONTROLLER_PR" "$final"
+
+          test "$status" = 'completed'
+          test "$conclusion" = 'success'
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
