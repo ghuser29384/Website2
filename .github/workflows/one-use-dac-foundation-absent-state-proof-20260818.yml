@@ -144,7 +144,7 @@ jobs:
           docker exec -i "$POSTGRES_CONTAINER" \
             psql -U postgres -d postgres --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
             < "$EVIDENCE_DIR/postflight.sql" \
-            > "$EVIDENCE_DIR/first-postflight.json"
+            | tail -n 1 > "$EVIDENCE_DIR/first-postflight.json"
           jq -e '
             .tableCount==4 and .rlsTableCount==4 and .columnContractCount==52
             and .policyCount==6
@@ -161,7 +161,7 @@ jobs:
           docker exec -i "$POSTGRES_CONTAINER" \
             psql -U postgres -d postgres --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
             < "$EVIDENCE_DIR/postflight.sql" \
-            > "$EVIDENCE_DIR/second-postflight.json"
+            | tail -n 1 > "$EVIDENCE_DIR/second-postflight.json"
           diff -u \
             <(jq -S . "$EVIDENCE_DIR/first-postflight.json") \
             <(jq -S . "$EVIDENCE_DIR/second-postflight.json")
@@ -194,10 +194,10 @@ jobs:
             printf 'migration_sha256='; sha256sum "$MIGRATION_PATH" | awk '{print $1}'
             printf 'postgres_image=%s\n' "$image_ref"
           } | tee "$EVIDENCE_DIR/source-identity.txt"
-          grep -RIEq 'postgres(ql)?://|eyJ[A-Za-z0-9_-]{12,}\.|Bearer[[:space:]]+[A-Za-z0-9._~+/-]{20,}|PRIVATE KEY' "$EVIDENCE_DIR" && {
+          if grep -RIEq 'postgres(ql)?://|eyJ[A-Za-z0-9_-]{12,}\.|Bearer[[:space:]]+[A-Za-z0-9._~+/-]{20,}|PRIVATE KEY' "$EVIDENCE_DIR"; then
             echo 'Credential-like material found in retained evidence.' >&2
             exit 1
-          } || true
+          fi
 
       - name: Upload immutable absent-state evidence
         if: always()
