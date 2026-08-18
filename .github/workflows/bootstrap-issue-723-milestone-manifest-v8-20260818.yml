@@ -1,0 +1,93 @@
+name: Bind exact finalized milestone hash in issue 723 QA
+
+on:
+  push:
+    branches:
+      - qa/723-authenticated-confirmation-integration-20260817
+    paths:
+      - .github/workflows/bootstrap-issue-723-milestone-manifest-v8-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-issue-723-inspected-signature-executor
+  cancel-in-progress: false
+
+jobs:
+  repair-or-clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BRANCH: qa/723-authenticated-confirmation-integration-20260817
+      TARGET: .github/workflows/bootstrap-issue-723-milestone-manifest-v5-20260818.yml
+      SELF: .github/workflows/bootstrap-issue-723-milestone-manifest-v8-20260818.yml
+    steps:
+      - name: Check out current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 20
+
+      - name: Bind the reviewed hash when the executor remains
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "$TARGET"; then
+            python - <<'PY'
+            import re
+            from pathlib import Path
+            path = Path(".github/workflows/bootstrap-issue-723-milestone-manifest-v5-20260818.yml")
+            text = path.read_text()
+
+            if 'p_manifest_hash: manifestHash' not in text:
+                text = text.replace(
+                    '              "  const values = (actor, functionName) => ({",',
+                    '              "  const values = (actor, functionName, manifestHash = null) => ({",',
+                    1,
+                )
+                anchor = '              "    p_idempotency_key: `pooled-qa:${runId}:${label}:${functionName}:${actor.id}`,",\n'
+                addition = anchor + '''              "    p_manifest_hash: manifestHash,",
+              "    p_expected_manifest_hash: manifestHash,",
+              "    p_milestone_manifest_hash: manifestHash,",
+              "    p_expected_milestone_manifest_hash: manifestHash,",
+              "    p_complete_terms_hash: version.complete_terms_hash,",
+              "    p_expected_complete_terms_hash: version.complete_terms_hash,",
+'''
+                if anchor not in text:
+                    raise SystemExit("Could not find lifecycle value-map anchor.")
+                text = text.replace(anchor, addition, 1)
+
+            finalize_anchor = '              f"  const confirmNames = {json.dumps(confirm_args)};",\n'
+            if 'const finalizedVersion = await loadOne' not in text:
+                insertion = '''              "  const finalizedVersion = await loadOne(\\"trade_agreement_versions\\", version.id);",
+              "  assert.match(String(finalizedVersion.milestone_manifest_hash || \\\"\\\"), /^[0-9a-f]{64}$/);",
+''' + finalize_anchor
+                if finalize_anchor not in text:
+                    raise SystemExit("Could not find confirm-name generation anchor.")
+                text = text.replace(finalize_anchor, insertion, 1)
+
+            text, count = re.subn(
+                r'("\s*const confirmValues = values\(actor, \\\"confirm_trade_agreement_milestone_manifest_v1\\\")\;",)',
+                '"    const confirmValues = values(actor, \\\"confirm_trade_agreement_milestone_manifest_v1\\\", finalizedVersion.milestone_manifest_hash);",',
+                text,
+                count=1,
+            )
+            if count == 0 and 'finalizedVersion.milestone_manifest_hash);",' not in text:
+                raise SystemExit("Could not bind finalized manifest hash to confirmation arguments.")
+
+            path.write_text(text)
+            PY
+          fi
+          rm "$SELF"
+          git diff --check
+
+      - name: Publish exact-hash support or self-cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Bind finalized milestone hash in issue 723 QA"
+          git push origin "HEAD:$BRANCH"
