@@ -1,0 +1,59 @@
+name: PR 758 production release controller cleanup 20260818
+
+on:
+  push:
+    branches:
+      - ops/pr758-production-release-20260818
+    paths:
+      - ".github/workflows/pr758-production-release-cleanup-20260818.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: read
+  pull-requests: write
+
+jobs:
+  close-controller:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ghuser29384/Website2
+      RELEASE_WORKFLOW: pr758-authorized-production-release-20260818.yml
+      REPORT_WORKFLOW: pr758-production-release-report-20260818.yml
+      CONTROLLER_BRANCH: ops/pr758-production-release-20260818
+    steps:
+      - name: Verify production release and reporting completed successfully
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPOSITORY/pulls/758" > "$RUNNER_TEMP/pr758.json"
+          jq -e '.state == "closed" and .merged == true' "$RUNNER_TEMP/pr758.json" >/dev/null
+
+          gh api "repos/$REPOSITORY/issues/697" > "$RUNNER_TEMP/issue697.json"
+          jq -e '.state == "closed"' "$RUNNER_TEMP/issue697.json" >/dev/null
+
+          for workflow in "$RELEASE_WORKFLOW" "$REPORT_WORKFLOW"; do
+            gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=ops%2Fpr758-production-release-20260818&per_page=20" \
+              > "$RUNNER_TEMP/$workflow.json"
+            jq -e '[.workflow_runs[] | select(.status == "completed" and .conclusion == "success")] | length >= 1' \
+              "$RUNNER_TEMP/$workflow.json" >/dev/null
+          done
+
+      - name: Close the temporary production release controller PR without merging
+        shell: bash
+        run: |
+          set -euo pipefail
+          controller_pr="$(gh pr list \
+            --repo "$REPOSITORY" \
+            --state open \
+            --head "$CONTROLLER_BRANCH" \
+            --json number \
+            --jq '.[0].number // empty')"
+          test -n "$controller_pr"
+          gh pr comment "$controller_pr" \
+            --repo "$REPOSITORY" \
+            --body 'Production release and durable reporting completed successfully. Closing this one-use operations controller without merging; it must never be merged.'
+          gh pr close "$controller_pr" --repo "$REPOSITORY"
