@@ -229,10 +229,21 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Install PostgreSQL client
+      - name: Prepare exact PostgreSQL 17 client
+        shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install --yes postgresql-client > /dev/null
+          set -euo pipefail
+          docker pull postgres:17
+          cat > "$RUNNER_TEMP/psql" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker run --rm -i \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            postgres:17 psql "$@"
+          SH
+          chmod 0700 "$RUNNER_TEMP/psql"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Verify all stacked DAC foundations
         shell: bash
