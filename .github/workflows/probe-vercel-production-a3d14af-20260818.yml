@@ -1,0 +1,63 @@
+name: Probe exact production release a3d14af
+
+on:
+  push:
+    branches:
+      - ops/probe-vercel-production-a3d14af-20260818
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+env:
+  EXPECTED_MAIN_SHA: a3d14af469260a0a17b8d0b38c9e65be7b2c1921
+  CONTROLLER_BRANCH: ops/probe-vercel-production-a3d14af-20260818
+  CONTROLLER_WORKFLOW: .github/workflows/probe-vercel-production-a3d14af-20260818.yml
+  TARGET_PR: '743'
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact probe controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/probe-vercel-production-a3d14af-20260818
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Guard immutable main and probe-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_WORKFLOW"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+
+      - name: Report exact production-release run state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          run_json="$(jq -c --arg sha "$EXPECTED_MAIN_SHA" '.workflow_runs | map(select(.head_sha == $sha)) | sort_by(.created_at) | last // empty' <<<"$payload")"
+          if [[ -z "$run_json" ]]; then
+            body="<!-- production-release-probe-a3d14af -->\nNo workflow-dispatch run for exact merged main \`$EXPECTED_MAIN_SHA\` was visible when probe run \`$GITHUB_RUN_ID\` executed."
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$TARGET_PR/comments" -f body="$body" >/dev/null
+            exit 1
+          fi
+          run_id="$(jq -r '.id' <<<"$run_json")"
+          html_url="$(jq -r '.html_url' <<<"$run_json")"
+          status="$(jq -r '.status' <<<"$run_json")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$run_json")"
+          attempt="$(jq -r '.run_attempt' <<<"$run_json")"
+          created="$(jq -r '.created_at' <<<"$run_json")"
+          updated="$(jq -r '.updated_at' <<<"$run_json")"
+          body="<!-- production-release-probe-a3d14af -->\nExact merged-main production release probe:\n\n- SHA: \`$EXPECTED_MAIN_SHA\`\n- run: $html_url\n- run ID: \`$run_id\`\n- attempt: \`$attempt\`\n- status: \`$status\`\n- conclusion: \`$conclusion\`\n- created: \`$created\`\n- updated: \`$updated\`"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$TARGET_PR/comments" -f body="$body" >/dev/null
