@@ -59,6 +59,35 @@ jobs:
             /tmp/workspace-status.txt
           retention-days: 7
 
+  dependency-bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Package portable dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ui-ux-dependencies
+          tar -C "$GITHUB_WORKSPACE" -czf "/tmp/ui-ux-dependencies/node-modules-${GITHUB_SHA}.tar.gz" node_modules
+          node --version | tee /tmp/ui-ux-dependencies/node-version.txt
+          npm --version | tee /tmp/ui-ux-dependencies/npm-version.txt
+          sha256sum /tmp/ui-ux-dependencies/*.tar.gz | tee /tmp/ui-ux-dependencies/archive-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-ux-dependencies-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/ui-ux-dependencies
+          compression-level: 0
+          retention-days: 3
+
   baseline-gallery:
     runs-on: ubuntu-latest
     timeout-minutes: 35
