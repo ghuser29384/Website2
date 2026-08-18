@@ -1,3 +1,4 @@
+# Registered in two steps so the branch workflow is present before its triggering update.
 name: Bootstrap pre-activation baseline boundary files
 
 on:
