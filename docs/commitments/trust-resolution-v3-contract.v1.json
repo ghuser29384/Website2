@@ -1,0 +1,83 @@
+{
+  "schema_version": "moral-trade-trust-resolution-v3.0.0",
+  "status": "repository_only_candidate",
+  "objects": {
+    "factual_outcome": {
+      "unit": "agreement_milestone_role_claim",
+      "required_separations": [
+        "completion_fraction",
+        "decision_confidence",
+        "evidence_provenance",
+        "payout_factor",
+        "additionality"
+      ],
+      "terminal_only_for_reliability": true,
+      "permissible_exit_excluded_from_fulfillment": true,
+      "weak_evidence_is_misconduct": false,
+      "append_only_supersession": true
+    },
+    "contextual_reliability": {
+      "context_specific": true,
+      "dimensions": [
+        "fulfillment",
+        "evidence_integrity",
+        "settlement",
+        "dispute_conduct",
+        "responsiveness"
+      ],
+      "public_numeric_score": false,
+      "default_ranking_effect": false,
+      "minimum_score_eligibility_effect": false,
+      "payment_effect": false,
+      "restriction_effect": false,
+      "safeguard_automation_effect": false,
+      "exposure_suppression_effect": false,
+      "activation_requires_real_independent_out_of_time_calibration": true
+    },
+    "additionality": {
+      "unit": "offer_trade_policy_or_subgroup",
+      "statuses": [
+        "not_assessed",
+        "baseline_attested_only",
+        "baseline_supported_observational",
+        "experiment_supported_policy_effect",
+        "participant_specific_effect_not_identified",
+        "marketplace_created_or_escalated_baseline",
+        "excluded_or_blocked"
+      ],
+      "completion_alone_identifies_causation": false,
+      "participant_specific_effect_enabled": false,
+      "post_exposure_worsening_may_increase_credit": false,
+      "policy_level_effect_may_be_relabelled_individual": false
+    },
+    "safety_eligibility": {
+      "noncompensatory": true,
+      "reliability_can_offset": false,
+      "states": [
+        "eligible",
+        "review_required",
+        "temporarily_paused",
+        "restricted",
+        "ineligible"
+      ],
+      "severe_findings_require_independent_review": true
+    }
+  },
+  "public_contract": {
+    "known_inferred_unknown_separate": true,
+    "raw_evidence_public": false,
+    "reviewer_private_rationale_public": false,
+    "composite_trust_score": null,
+    "participant_causal_credit": false
+  },
+  "authorization": {
+    "runtime_wiring": false,
+    "public_numerical_reliability": false,
+    "ranking_or_eligibility_effect": false,
+    "payment_or_settlement_effect": false,
+    "real_user_study": false,
+    "participant_specific_causal_claim": false,
+    "merge": false,
+    "deployment": false
+  }
+}
