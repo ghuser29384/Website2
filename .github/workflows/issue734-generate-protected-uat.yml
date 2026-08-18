@@ -1,0 +1,325 @@
+name: Issue 734 generate Compact outflow protected UAT
+
+on:
+  push:
+    branches:
+      - ops/issue734-compact-outflow-validation-20260818
+    paths:
+      - .github/workflows/issue734-generate-protected-uat.yml
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: issue734-generate-compact-outflow-protected-uat
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_PR: "737"
+      TRACKING_ISSUE: "734"
+      FEATURE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+      OPS_BRANCH: ops/issue734-compact-outflow-validation-20260818
+    steps:
+      - name: Check out ops branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Wait for exact-head non-hosted green evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          workflow_id_by_regex() {
+            local regex="$1"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows?per_page=100" \
+              --jq ".workflows[] | select(.name | test(\"${regex}\"; \"i\")) | .id" | head -n 1
+          }
+          successful_run() {
+            local workflow_id="$1"
+            local sha="$2"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/runs?head_sha=${sha}&per_page=30" \
+              --jq '.workflow_runs | map(select(.status == "completed" and .conclusion == "success")) | sort_by(.created_at) | reverse | .[0].id // empty'
+          }
+
+          ledger_id="$(workflow_id_by_regex '^Compact authoritative outflow ledger QA$')"
+          compact_id="$(workflow_id_by_regex '^MPGF public-goods compacts QA$')"
+          payment_id="$(workflow_id_by_regex '^Evidence payment release QA$')"
+          visual_id="$(workflow_id_by_regex '^Sitewide canonical visual system$')"
+          release_id="$(workflow_id_by_regex 'release classification')"
+          for value in "$ledger_id" "$compact_id" "$payment_id" "$visual_id" "$release_id"; do test -n "$value"; done
+
+          candidate_sha=""
+          candidate_tree=""
+          ledger_run=""
+          compact_run=""
+          payment_run=""
+          visual_run=""
+          release_run=""
+
+          for _ in $(seq 1 300); do
+            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${FEATURE_PR}")"
+            test "$(jq -r '.state' <<<"$pr_json")" = open
+            test "$(jq -r '.draft' <<<"$pr_json")" = true
+            test "$(jq -r '.merged' <<<"$pr_json")" = false
+            test "$(jq -r '.head.ref' <<<"$pr_json")" = "$FEATURE_BRANCH"
+            candidate_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+
+            files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${FEATURE_PR}/files?per_page=100" --jq '.[].filename' | LC_ALL=C sort)"
+            if [ "$(printf '%s\n' "$files" | sed '/^$/d' | wc -l)" -eq 14 ] \
+               && ! printf '%s\n' "$files" | grep -q -E '^\.github/workflows/(continue|repair)-compact-outflow'; then
+              ledger_run="$(successful_run "$ledger_id" "$candidate_sha")"
+              compact_run="$(successful_run "$compact_id" "$candidate_sha")"
+              payment_run="$(successful_run "$payment_id" "$candidate_sha")"
+              visual_run="$(successful_run "$visual_id" "$candidate_sha")"
+              release_run="$(successful_run "$release_id" "$candidate_sha")"
+              if [ -n "$ledger_run" ] && [ -n "$compact_run" ] && [ -n "$payment_run" ] && [ -n "$visual_run" ] && [ -n "$release_run" ]; then
+                candidate_tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${candidate_sha}" --jq '.tree.sha')"
+                break
+              fi
+            fi
+            sleep 60
+          done
+
+          for value in "$candidate_sha" "$candidate_tree" "$ledger_run" "$compact_run" "$payment_run" "$visual_run" "$release_run"; do test -n "$value"; done
+          printf 'sha=%s\n' "$candidate_sha" >> "$GITHUB_OUTPUT"
+          printf 'tree=%s\n' "$candidate_tree" >> "$GITHUB_OUTPUT"
+          printf 'ledger_run=%s\n' "$ledger_run" >> "$GITHUB_OUTPUT"
+          printf 'compact_run=%s\n' "$compact_run" >> "$GITHUB_OUTPUT"
+          printf 'payment_run=%s\n' "$payment_run" >> "$GITHUB_OUTPUT"
+          printf 'visual_run=%s\n' "$visual_run" >> "$GITHUB_OUTPUT"
+          printf 'release_run=%s\n' "$release_run" >> "$GITHUB_OUTPUT"
+
+      - name: Generate exact-SHA one-use protected-UAT controller from proven template
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.evidence.outputs.sha }}
+          CANDIDATE_TREE: ${{ steps.evidence.outputs.tree }}
+          LEDGER_RUN: ${{ steps.evidence.outputs.ledger_run }}
+          COMPACT_RUN: ${{ steps.evidence.outputs.compact_run }}
+          PAYMENT_RUN: ${{ steps.evidence.outputs.payment_run }}
+          VISUAL_RUN: ${{ steps.evidence.outputs.visual_run }}
+          RELEASE_RUN: ${{ steps.evidence.outputs.release_run }}
+        run: |
+          set -euo pipefail
+          test -f ops/issue734-prior-uat-template.txt
+          sha256sum -c ops/issue734-prior-uat-template.sha256
+
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          template_path = Path('ops/issue734-prior-uat-template.txt')
+          target_path = Path('.github/workflows/issue734-compact-outflow-protected-uat.yml')
+          source = template_path.read_text(encoding='utf-8')
+          candidate = os.environ['CANDIDATE_SHA']
+          tree = os.environ['CANDIDATE_TREE']
+          run_ids = [
+              os.environ['LEDGER_RUN'],
+              os.environ['COMPACT_RUN'],
+              os.environ['PAYMENT_RUN'],
+              os.environ['VISUAL_RUN'],
+              os.environ['RELEASE_RUN'],
+          ]
+
+          required_markers = [
+              'f46178aaad6d2fbd911cc365e2963bb7c73a0098',
+              '80772fa5e02c357eb59fc83286f3a668447de25d',
+              'uatIssue',
+              'protected',
+              'target',
+              'aliases',
+          ]
+          for marker in required_markers:
+              if marker not in source:
+                  raise SystemExit(f'Prior UAT template is missing required marker: {marker}')
+
+          lines = source.splitlines()
+          permissions_index = next(i for i, line in enumerate(lines) if line == 'permissions:')
+          source = '\n'.join([
+              'name: Issue 734 Compact authoritative outflow protected UAT',
+              '',
+              'on:',
+              '  push:',
+              '    branches:',
+              '      - ops/issue734-compact-outflow-validation-20260818',
+              '    paths:',
+              '      - .github/workflows/issue734-compact-outflow-protected-uat.yml',
+              '',
+              *lines[permissions_index:],
+          ]) + '\n'
+
+          replacements = {
+              'f46178aaad6d2fbd911cc365e2963bb7c73a0098': candidate,
+              '80772fa5e02c357eb59fc83286f3a668447de25d': tree,
+              'integration/pr663-compact-v2-current-main-20260815': 'feature/compact-authoritative-outflow-ledger-v1-20260816',
+              'ops/issue725-pr663-integration-protected-uat-20260815': 'ops/issue734-compact-outflow-validation-20260818',
+              'Issue 725': 'Issue 734',
+              'issue 725': 'issue 734',
+              'issue725': 'issue734',
+              'uatIssue=725': 'uatIssue=734',
+              'PR #726': 'PR #737',
+              'pulls/726': 'pulls/737',
+          }
+          for old, new in replacements.items():
+              source = source.replace(old, new)
+
+          # Remove the prior exact-run prerequisite step; a new exact guard is inserted below.
+          step_lines = source.splitlines()
+          blocks: list[list[str]] = []
+          prefix: list[str] = []
+          current: list[str] | None = None
+          for line in step_lines:
+              if line.startswith('      - name:'):
+                  if current is not None:
+                      blocks.append(current)
+                  current = [line]
+              elif current is not None:
+                  current.append(line)
+              else:
+                  prefix.append(line)
+          if current is not None:
+              blocks.append(current)
+
+          old_numeric_ids = set(re.findall(r'\b3\d{10}\b', source))
+          filtered: list[list[str]] = []
+          removed = 0
+          for block in blocks:
+              text = '\n'.join(block)
+              lower = text.lower()
+              is_old_prereq = (
+                  ('prerequisite' in lower or 'exact candidate' in lower)
+                  and ('actions/runs' in lower or any(value in text for value in old_numeric_ids))
+              )
+              if is_old_prereq:
+                  removed += 1
+                  continue
+              filtered.append(block)
+          if removed < 1:
+              raise SystemExit('Could not identify the prior prerequisite-run guard step.')
+
+          guard = [
+              '      - name: Guard exact ledger candidate and non-hosted evidence',
+              '        shell: bash',
+              '        env:',
+              '          GH_TOKEN: ${{ github.token }}',
+              f'          EXPECTED_CANDIDATE_SHA: {candidate}',
+              f'          EXPECTED_CANDIDATE_TREE: {tree}',
+              '        run: |',
+              '          set -euo pipefail',
+              '          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"',
+              '          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_CANDIDATE_TREE"',
+              '          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/737")"',
+              '          test "$(jq -r .head.sha <<<"$pr_json")" = "$EXPECTED_CANDIDATE_SHA"',
+              '          test "$(jq -r .state <<<"$pr_json")" = open',
+              '          test "$(jq -r .draft <<<"$pr_json")" = true',
+              '          test "$(jq -r .merged <<<"$pr_json")" = false',
+          ]
+          for run_id in run_ids:
+              guard.extend([
+                  f'          run_json="$(gh api "repos/${{GITHUB_REPOSITORY}}/actions/runs/{run_id}")"',
+                  '          test "$(jq -r .head_sha <<<"$run_json")" = "$EXPECTED_CANDIDATE_SHA"',
+                  '          test "$(jq -r .status <<<"$run_json")" = completed',
+                  '          test "$(jq -r .conclusion <<<"$run_json")" = success',
+              ])
+
+          insert_at = 1 if filtered else 0
+          filtered.insert(insert_at, guard)
+          source = '\n'.join(prefix + [line for block in filtered for line in block]) + '\n'
+
+          # Ensure the hosted QA database receives all four ledger migrations after Compact hardening.
+          migration_anchor = 'supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql'
+          ledger_migrations = [
+              'supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql',
+              'supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql',
+              'supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql',
+              'supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql',
+          ]
+          transformed: list[str] = []
+          insertion_count = 0
+          for line in source.splitlines():
+              transformed.append(line)
+              if migration_anchor in line:
+                  prefix_text = line.split(migration_anchor, 1)[0]
+                  for migration in ledger_migrations:
+                      transformed.append(prefix_text + migration)
+                  insertion_count += 1
+          if insertion_count < 1:
+              raise SystemExit('Could not locate the Compact hardening migration in the prior UAT template.')
+          source = '\n'.join(transformed) + '\n'
+
+          # Insert a hosted isolated-QA rollback suite before the first unconditional cleanup step.
+          lines = source.splitlines()
+          cleanup_index = next(
+              (i for i, line in enumerate(lines)
+               if line.startswith('      - name:') and 'cleanup' in line.lower()),
+              None,
+          )
+          if cleanup_index is None:
+              raise SystemExit('Could not locate an unconditional cleanup step in the prior UAT template.')
+          hosted_ledger_step = [
+              '      - name: Run hosted ledger authority, privacy, and supersession suites',
+              '        shell: bash',
+              '        env:',
+              '          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}',
+              '          PGSSLMODE: require',
+              '        run: |',
+              '          set -o pipefail',
+              '          mkdir -p compact-outflow-hosted-evidence',
+              '          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<\'SQL\' \\\',
+              '            | tee compact-outflow-hosted-evidence/ledger-hosted-rollback.log',
+              '          begin;',
+              '          \\i supabase/tests/compact_authoritative_outflow_ledger_core.sql',
+              '          \\i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql',
+              '          rollback;',
+              '          SQL',
+          ]
+          lines[cleanup_index:cleanup_index] = hosted_ledger_step
+          source = '\n'.join(lines) + '\n'
+
+          # Extend evidence uploads without exposing credentials.
+          source = source.replace(
+              'path: evidence',
+              'path: |\n            evidence\n            compact-outflow-hosted-evidence',
+          )
+
+          if candidate not in source or tree not in source:
+              raise SystemExit('Generated controller is not bound to the exact candidate identity.')
+          for migration in ledger_migrations:
+              if migration not in source:
+                  raise SystemExit(f'Generated controller omits ledger migration: {migration}')
+          if 'uatIssue=734' not in source and 'uatIssue: 734' not in source and 'uatIssue": "734' not in source:
+              raise SystemExit('Generated controller does not bind metadata to issue 734.')
+
+          target_path.write_text(source, encoding='utf-8')
+          PY
+
+          git diff --check
+          grep -q "$CANDIDATE_SHA" .github/workflows/issue734-compact-outflow-protected-uat.yml
+          grep -q 'compact_authoritative_outflow_ledger_core.sql' .github/workflows/issue734-compact-outflow-protected-uat.yml
+
+      - name: Commit one-use controller and remove generator
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.evidence.outputs.sha }}
+          CANDIDATE_TREE: ${{ steps.evidence.outputs.tree }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/issue734-compact-outflow-protected-uat.yml
+          git rm .github/workflows/issue734-generate-protected-uat.yml
+          git commit -m "ops: stage issue 734 exact-head protected UAT"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          gh issue comment "$TRACKING_ISSUE" --body "Generated and pushed a one-use protected hosted-UAT controller bound to Compact outflow candidate \`${CANDIDATE_SHA}\` (tree \`${CANDIDATE_TREE}\`) after exact-head ledger, Compact, payment, visual, and release gates passed. The controller remains fail-closed and performs no production deployment or payment operation."
