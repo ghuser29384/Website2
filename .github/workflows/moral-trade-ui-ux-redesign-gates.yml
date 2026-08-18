@@ -72,12 +72,15 @@ jobs:
           cache: npm
       - name: Install exact dependencies
         run: npm ci
-      - name: Package portable dependencies
+      - name: Install portable Chromium runtime
+        run: npx playwright install chromium
+      - name: Package portable dependencies and browser
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/ui-ux-dependencies
           tar -C "$GITHUB_WORKSPACE" -czf "/tmp/ui-ux-dependencies/node-modules-${GITHUB_SHA}.tar.gz" node_modules
+          tar -C "$HOME/.cache" -czf "/tmp/ui-ux-dependencies/ms-playwright-${GITHUB_SHA}.tar.gz" ms-playwright
           node --version | tee /tmp/ui-ux-dependencies/node-version.txt
           npm --version | tee /tmp/ui-ux-dependencies/npm-version.txt
           sha256sum /tmp/ui-ux-dependencies/*.tar.gz | tee /tmp/ui-ux-dependencies/archive-sha256.txt
