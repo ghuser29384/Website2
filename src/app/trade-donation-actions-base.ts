@@ -296,8 +296,8 @@ export async function confirmDonationAwareTradeCompletionAction(formData: FormDa
     redirectWithMessage(
       agreementId,
       "error",
-      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence befor final completion.",
-     );
+      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence before final completion.",
+    );
   }
 
   return confirmBaseTradeCompletionAction(formData);
