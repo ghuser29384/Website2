@@ -1,0 +1,87 @@
+{
+  "schema_version": "moral-trade-post-733-qri-v1",
+  "status": "implementation_sequence_not_executed",
+  "bound_base": "7e993158363710e5fe2c3eaa1cbccdb5cd56c235",
+  "accepted_infrastructure": {
+    "pr_733_merge": "c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3",
+    "run_owned_namespace": true,
+    "two_writer_non_interference": true,
+    "ownership_cleanup": true
+  },
+  "Q": {
+    "release_class": "repository_only",
+    "merge_candidate": true,
+    "runtime_code_allowed": false,
+    "fixed_cross_run_identities_allowed": false,
+    "preflight_deletion_allowed": false,
+    "prefix_cleanup_allowed": false,
+    "exact_ownership_cleanup_required": true,
+    "distinct_roles": [
+      "owner",
+      "responder",
+      "initial_reviewer",
+      "appeal_reviewer",
+      "outsider",
+      "administrator"
+    ],
+    "intended_path_count": 10
+  },
+  "initial_R": {
+    "release_class": "runtime_affecting",
+    "merge_candidate_before_Q_merge": false,
+    "intended_path_count": 13,
+    "additive_rls_migrations": 2,
+    "preserved_semantics": [
+      "atomic_acceptance_returned_agreement_id",
+      "anonymous_passive_telemetry_write_free",
+      "locked_next_redirect_contract",
+      "distinct_initial_and_appeal_reviewers",
+      "retained_read_only_audit",
+      "participant_AAL1",
+      "assigned_reviewer_AAL2",
+      "administrator_AAL2",
+      "bilateral_frozen_terms",
+      "prospective_unilateral_exit",
+      "zero_dollar_noncustodial"
+    ]
+  },
+  "I": {
+    "purpose": "proof_only_conventional_merge_of_exact_Q_and_initial_R",
+    "merge_candidate": false,
+    "must_never_be_merged": true,
+    "required_gates": [
+      "source",
+      "database",
+      "auth_rls",
+      "browser",
+      "rendered",
+      "no_money",
+      "cleanup",
+      "artifact_secrecy"
+    ]
+  },
+  "sequence": [
+    "revalidate_main_and_overlap",
+    "create_Q_and_initial_R_from_identical_base",
+    "create_proof_only_I",
+    "execute_complete_proof",
+    "independently_review_Q_R_I",
+    "obtain_owner_authorization_before_Q_merge",
+    "merge_Q_with_expected_head_guard_if_authorized",
+    "reconstruct_final_R_from_Q_containing_main",
+    "run_final_R_exact_head_gates",
+    "execute_protected_owner_UAT",
+    "obtain_separate_runtime_release_and_pilot_authorizations"
+  ],
+  "authorization": {
+    "Q_implementation": false,
+    "R_implementation": false,
+    "I_implementation": false,
+    "Q_merge": false,
+    "runtime_merge": false,
+    "migration": false,
+    "deployment": false,
+    "production_access": false,
+    "provider_or_money": false
+  }
+}
