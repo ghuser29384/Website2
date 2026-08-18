@@ -1,0 +1,245 @@
+name: Complete Compact outflow non-hosted validation v1
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/complete-compact-outflow-nonhosted-v1.yml
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: complete-compact-outflow-nonhosted-v1
+  cancel-in-progress: false
+
+env:
+  STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+  FEATURE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  QA_REF: hvmxfjjbdcgjjudmthdz
+  PR_NUMBER: '737'
+  ISSUE_NUMBER: '734'
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: Check out exact controller head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Fail closed unless the phase-order repair is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
+          workflow=.github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          for marker in \
+            'Prepare exact split migration chain' \
+            'Run legacy Compact regressions before ledger migrations' \
+            'Apply authoritative outflow ledger migrations' \
+            'Run database lint and final-ledger lifecycle suites' \
+            'Execute ordered rollback-only authority lifecycle'; do
+            grep -q "$marker" "$workflow"
+          done
+          git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/controller-scope.txt
+          test "$(wc -l < /tmp/controller-scope.txt)" -eq 15
+          grep -qx '.github/workflows/complete-compact-outflow-nonhosted-v1.yml' /tmp/controller-scope.txt
+          if grep -Ev '^(\.github/workflows/(compact-authoritative-outflow-ledger-qa|complete-compact-outflow-nonhosted-v1)\.yml|docs/mpgf/compact-authoritative-outflow-ledger-v1\.md|scripts/test-compact-authoritative-outflow-concurrency\.sh|src/components/mpgf/mpgf-public-goods-compacts\.tsx|src/lib/mpgf/compact-authoritative-outflow(-contract\.test|\.test)?\.ts|supabase/migrations/2026081614150[0-3]_compact_authoritative_outflow_.*\.sql|supabase/tests/compact_authoritative_outflow_ledger_(authorization|core)\.sql|tests/mpgf-public-goods-compacts\.spec\.ts)$' /tmp/controller-scope.txt; then
+            echo 'Unexpected file outside the frozen ledger plus controller scope.'
+            exit 1
+          fi
+          git diff --check
+
+      - name: Remove controller and freeze exact candidate
+        id: freeze
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/complete-compact-outflow-nonhosted-v1.yml
+          git commit -m 'ops: remove Compact outflow non-hosted controller'
+          git push origin "HEAD:${FEATURE_BRANCH}"
+          candidate_sha="$(git rev-parse HEAD)"
+          candidate_tree="$(git rev-parse HEAD^{tree})"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "candidate_tree=$candidate_tree" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$candidate_sha" > /tmp/candidate-sha.txt
+          printf '%s\n' "$candidate_tree" > /tmp/candidate-tree.txt
+
+      - name: Discover required workflows
+        id: workflows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow list --repo "$GITHUB_REPOSITORY" --all --json id,name,path,state > /tmp/workflows.json
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          workflows = json.loads(Path('/tmp/workflows.json').read_text())
+          wanted = {
+              'ledger': ('compact authoritative outflow ledger qa',),
+              'compact': ('mpgf public-goods compacts qa', 'mpgf public goods compacts qa'),
+              'payment': ('evidence payment release qa',),
+              'visual': ('sitewide canonical visual system', 'canonical visual'),
+              'release': ('release classification',),
+          }
+          output = Path(os.environ['GITHUB_OUTPUT'])
+          rows = []
+          for key, needles in wanted.items():
+              matches = [w for w in workflows if any(n in w['name'].lower() for n in needles)]
+              if len(matches) != 1:
+                  raise SystemExit(f'{key}: expected one workflow, found {[(w["name"], w["path"]) for w in matches]}')
+              row = matches[0]
+              if row.get('state') != 'active':
+                  raise SystemExit(f'{key}: workflow is not active: {row}')
+              rows.append((key, row))
+          with output.open('a') as handle:
+              for key, row in rows:
+                  handle.write(f'{key}_id={row["id"]}\n')
+                  handle.write(f'{key}_path={row["path"]}\n')
+          PY
+
+      - name: Dispatch every exact-head non-hosted gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.freeze.outputs.candidate_sha }}
+          LEDGER_PATH: ${{ steps.workflows.outputs.ledger_path }}
+          COMPACT_PATH: ${{ steps.workflows.outputs.compact_path }}
+          PAYMENT_PATH: ${{ steps.workflows.outputs.payment_path }}
+          VISUAL_PATH: ${{ steps.workflows.outputs.visual_path }}
+          RELEASE_PATH: ${{ steps.workflows.outputs.release_path }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          dispatch() {
+            local workflow="$1"
+            shift
+            gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref "$FEATURE_BRANCH" "$@"
+          }
+          dispatch "$LEDGER_PATH" -f confirm_target="$QA_REF"
+          dispatch "$COMPACT_PATH" -f confirm_target="$QA_REF" || dispatch "$COMPACT_PATH"
+          dispatch "$PAYMENT_PATH"
+          dispatch "$VISUAL_PATH"
+          dispatch "$RELEASE_PATH"
+
+      - name: Wait for exact-head workflow completion
+        id: wait
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.freeze.outputs.candidate_sha }}
+          LEDGER_ID: ${{ steps.workflows.outputs.ledger_id }}
+          COMPACT_ID: ${{ steps.workflows.outputs.compact_id }}
+          PAYMENT_ID: ${{ steps.workflows.outputs.payment_id }}
+          VISUAL_ID: ${{ steps.workflows.outputs.visual_id }}
+          RELEASE_ID: ${{ steps.workflows.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, time
+          from pathlib import Path
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          sha = os.environ['CANDIDATE_SHA']
+          workflows = {
+              'ledger': int(os.environ['LEDGER_ID']),
+              'compact': int(os.environ['COMPACT_ID']),
+              'payment': int(os.environ['PAYMENT_ID']),
+              'visual': int(os.environ['VISUAL_ID']),
+              'release': int(os.environ['RELEASE_ID']),
+          }
+          selected = {}
+          deadline = time.time() + 7200
+          while time.time() < deadline:
+              payload = json.loads(subprocess.check_output([
+                  'gh', 'api', f'repos/{repo}/actions/runs',
+                  '-f', f'head_sha={sha}', '-f', 'per_page=100', '-f', 'exclude_pull_requests=false',
+                  '--method', 'GET',
+              ], text=True))
+              for key, workflow_id in workflows.items():
+                  candidates = [
+                      run for run in payload.get('workflow_runs', [])
+                      if run.get('workflow_id') == workflow_id and run.get('head_sha') == sha
+                  ]
+                  if candidates:
+                      candidates.sort(key=lambda run: run['id'], reverse=True)
+                      selected[key] = candidates[0]
+              if len(selected) == len(workflows) and all(run['status'] == 'completed' for run in selected.values()):
+                  break
+              time.sleep(20)
+          else:
+              raise SystemExit(f'Timed out waiting for exact-head runs; observed={selected}')
+
+          report = {
+              key: {
+                  'id': run['id'],
+                  'name': run['name'],
+                  'conclusion': run['conclusion'],
+                  'url': run['html_url'],
+                  'head_sha': run['head_sha'],
+              }
+              for key, run in selected.items()
+          }
+          Path('/tmp/nonhosted-runs.json').write_text(json.dumps(report, indent=2) + '\n')
+          failures = {key: row for key, row in report.items() if row['conclusion'] != 'success'}
+          if failures:
+              raise SystemExit('Exact-head non-hosted failures: ' + json.dumps(failures, indent=2))
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as handle:
+              for key, row in report.items():
+                  handle.write(f'{key}_run_id={row["id"]}\n')
+                  handle.write(f'{key}_run_url={row["url"]}\n')
+          PY
+
+      - name: Record successful exact-head evidence
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.freeze.outputs.candidate_sha }}
+          CANDIDATE_TREE: ${{ steps.freeze.outputs.candidate_tree }}
+        run: |
+          set -euo pipefail
+          runs="$(cat /tmp/nonhosted-runs.json)"
+          body=$(cat <<EOF
+          ### Exact-head non-hosted validation passed
+
+          - Candidate: \`$CANDIDATE_SHA\`
+          - Tree: \`$CANDIDATE_TREE\`
+          - Stack base: \`$STACK_BASE_SHA\`
+          - The legacy Compact regressions ran before the authoritative-ledger migrations.
+          - Final-ledger lifecycle, authorization, concurrency, no-money, isolated rollback, source/rendered, Compact, payment-release, canonical-visual, and release-classification gates passed on the same exact head.
+
+          \`\`\`json
+          $runs
+          \`\`\`
+
+          This is not merge, deployment, persistent migration, payment, activation, electorate, or public-recruitment authorization. Protected isolated-QA hosted UAT remains the next gate.
+          EOF
+          )
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Record a fail-closed failure
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.freeze.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          body="Non-hosted Compact outflow validation stopped fail closed for candidate \`${CANDIDATE_SHA:-unknown}\`. No hosted Preview, payment/provider action, persistent migration, activation, electorate, or money movement was authorized. Inspect controller run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body" || true
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body" || true
