@@ -1,0 +1,75 @@
+name: Issue 734 extract prior hosted UAT template
+
+on:
+  push:
+    branches:
+      - ops/issue734-compact-outflow-validation-20260818
+    paths:
+      - .github/workflows/issue734-extract-prior-uat-template.yml
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out ops branch and fetch repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Locate the successful issue-725 protected-UAT controller
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --force --prune
+          template_commit=""
+          template_path=""
+
+          while IFS= read -r commit; do
+            while IFS= read -r path; do
+              [ -n "$path" ] || continue
+              content="$(git show "${commit}:${path}" 2>/dev/null || true)"
+              if printf '%s' "$content" | grep -q 'uatIssue' \
+                 && printf '%s' "$content" | grep -q '725' \
+                 && printf '%s' "$content" | grep -qi 'protected' \
+                 && printf '%s' "$content" | grep -q 'f46178aaad6d2fbd911cc365e2963bb7c73a0098'; then
+                template_commit="$commit"
+                template_path="$path"
+                break 2
+              fi
+            done < <(git ls-tree -r --name-only "$commit" -- '.github/workflows/*.yml' '.github/workflows/*.yaml')
+          done < <(git log --all --format='%H' -- .github/workflows | awk '!seen[$0]++')
+
+          if [ -z "$template_commit" ] || [ -z "$template_path" ]; then
+            echo 'No exact issue-725 protected-UAT template was found.' >&2
+            exit 1
+          fi
+
+          mkdir -p ops
+          git show "${template_commit}:${template_path}" > ops/issue734-prior-uat-template.txt
+          printf 'commit=%s\n' "$template_commit" >> "$GITHUB_OUTPUT"
+          printf 'path=%s\n' "$template_path" >> "$GITHUB_OUTPUT"
+          sha256sum ops/issue734-prior-uat-template.txt > ops/issue734-prior-uat-template.sha256
+
+      - name: Commit extracted template and remove extractor
+        shell: bash
+        env:
+          TEMPLATE_COMMIT: ${{ steps.locate.outputs.commit }}
+          TEMPLATE_PATH: ${{ steps.locate.outputs.path }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/issue734-prior-uat-template.txt ops/issue734-prior-uat-template.sha256
+          git rm .github/workflows/issue734-extract-prior-uat-template.yml
+          git commit -m "ops: preserve prior protected-UAT controller template"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          gh issue comment 734 --body "Located and preserved the prior successful protected-UAT controller template from \`${TEMPLATE_COMMIT}:${TEMPLATE_PATH}\` on the issue-734 ops branch. No product branch, database, deployment, provider, payment, activation, or electorate state was changed."
