@@ -15,7 +15,7 @@ concurrency:
 
 env:
   PR700_HEAD: 813573f64eaa17d2ca240c50f76ead9a3b535f97
-  PRODUCT_REPAIR_HEAD: ec59737e66aa6135b822446e4cb4a82372e0b39b
+  PRODUCT_REPAIR_HEAD: 495f714b6dd4753ad78cf3d41945cffc84923876
   AUTH_MIGRATION_PATH: supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
   NEXT_TELEMETRY_DISABLED: "1"
 
@@ -32,14 +32,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Verify exact PR 700 parent and seven-file scope
+      - name: Verify exact PR 700 ancestry, product bytes, and seven-file scope
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$PR700_HEAD"
+          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD"
+          git merge-base --is-ancestor "$PR700_HEAD" HEAD
           actual="$(git diff --name-only "$PR700_HEAD" HEAD | LC_ALL=C sort)"
           expected="$(printf '%s\n' \
             '.github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs' \
@@ -51,11 +52,19 @@ jobs:
             'supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql' \
             | LC_ALL=C sort)"
           test "$actual" = "$expected"
-          test "$(git rev-parse HEAD:src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts)" = "807070193708689e8b48281de3f67ed6bf913a68"
-          test "$(git rev-parse HEAD:supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql)" = "86cbb3ce7b7774c1f7a86e2f19cc5e6fdc0e4b68"
+          for path in \
+            src/app/trade-donation-actions-base.ts \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
+          do
+            test "$(git rev-parse "$PRODUCT_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
+          git diff --check "$PR700_HEAD" HEAD
           grep -F 'import { createClient, createServiceClient } from "@/lib/supabase/server";' src/app/trade-donation-actions-base.ts
           grep -F 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts
           test "$(grep -c 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts)" = "1"
+          grep -F 'Submit and accept separate performance evidence before final completion.' src/app/trade-donation-actions-base.ts
+          ! grep -F 'performance evidence befor final completion' src/app/trade-donation-actions-base.ts
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
@@ -166,14 +175,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Verify exact PR 700 parent
+      - name: Verify exact PR 700 ancestry and product bytes
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$PR700_HEAD"
+          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD"
+          git merge-base --is-ancestor "$PR700_HEAD" HEAD
+          for path in \
+            src/app/trade-donation-actions-base.ts \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
+          do
+            test "$(git rev-parse "$PRODUCT_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4

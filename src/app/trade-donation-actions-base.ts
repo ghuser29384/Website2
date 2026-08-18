@@ -10,11 +10,6 @@ import {
 } from "@/app/core-trade-actions-base";
 import { requireViewer } from "@/lib/app-data";
 import {
-  EVERY_ORG_DIRECT_MINIMUM_CENTS,
-  getTradeDonationPoolConfig,
-  isPooledTradeDonationTerm,
-} from "@/lib/trade-donation-pool";
-import {
   buildEveryOrgTradeDonationUrl,
   getTradeDonationProviderConfig,
   getTradeDonationTarget,
@@ -220,16 +215,12 @@ export async function confirmDonationAwareAgreementVersionAction(formData: FormD
   if (!context?.term) {
     return confirmBaseAgreementVersionAction(formData);
   }
-  const pooled = isPooledTradeDonationTerm(context.term);
   const providerConfig = getTradeDonationProviderConfig();
-  const poolConfig = getTradeDonationPoolConfig();
-  if (pooled ? !poolConfig.readyForParticipantFunding : !providerConfig.ready) {
+  if (!providerConfig.ready) {
     redirectWithMessage(
       agreementId,
       "error",
-      pooled
-        ? poolConfig.blockers[0] ?? "Cross-user pooled settlement is not launch-ready."
-        : providerConfig.blockers[0] ?? "The Every.org connector is not launch-ready.",
+      providerConfig.blockers[0] ?? "The Every.org connector is not launch-ready.",
     );
   }
   if (read(formData, "terms_reviewed") !== "on") {
@@ -305,8 +296,8 @@ export async function confirmDonationAwareTradeCompletionAction(formData: FormDa
     redirectWithMessage(
       agreementId,
       "error",
-      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence befor final completion.",
-     );
+      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence before final completion.",
+    );
   }
 
   return confirmBaseTradeCompletionAction(formData);
@@ -318,15 +309,6 @@ export async function startTradeDonationCheckoutAction(formData: FormData) {
   const viewer = await requireViewer(returnTo);
   if (!isUuid(agreementId)) {
     redirectWithMessage(agreementId, "error", "A valid agreement is required.");
-  }
-
-  const initialContext = await loadTradeDonationAgreementContext(agreementId);
-  if (initialContext?.term && isPooledTradeDonationTerm(initialContext.term)) {
-    redirectWithMessage(
-      agreementId,
-      "error",
-      `Every.org requires at least $${(EVERY_ORG_DIRECT_MINIMUM_CENTS / 100).toFixed(2)}. Fund this obligation through pooled settlement instead.`,
-    );
   }
 
   const config = getTradeDonationProviderConfig();

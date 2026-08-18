@@ -18,12 +18,37 @@ const workflow = readFileSync(
   "utf8",
 );
 
-test("the stacked integration is pinned to exact PR #700 and product-repair identities", () => {
+test("the stacked integration is pinned to exact PR #700 and corrected product-repair identities", () => {
   assert.equal(PR700_HEAD, "813573f64eaa17d2ca240c50f76ead9a3b535f97");
-  assert.equal(PRODUCT_REPAIR_HEAD, "ec59737e66aa6135b822446e4cb4a82372e0b39b");
+  assert.equal(PRODUCT_REPAIR_HEAD, "495f714b6dd4753ad78cf3d41945cffc84923876");
   assert.equal(QA_PROJECT_REF, "hvmxfjjbdcgjjudmthdz");
   assert.equal(INTEGRATION_PATHS.length, 7);
   assert.ok(INTEGRATION_PATHS.includes(AUTHENTICATED_CONFIRMATION_MIGRATION));
+});
+
+test("the generated harness finalizes the canonical milestone manifest before valid confirmations", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
+  assert.match(generated, /create_trade_agreement_milestone_v1/);
+  assert.match(generated, /finalize_trade_milestone_manifest_v1/);
+  assert.match(generated, /p_performer_id:\s*counterparty\.id/);
+  assert.match(generated, /p_payer_id:\s*payer\.id/);
+  assert.match(generated, /p_maximum_amount_cents:\s*0/);
+  assert.match(generated, /milestone_manifest_hash/);
+  assert.doesNotMatch(
+    generated,
+    /admin\.from\("trade_agreement_milestones"\)\.insert/,
+  );
+  const finalizeCall = generated.indexOf(
+    "  await ensureFinalMilestoneManifest({ counterparty, payer, agreement, version, label });",
+  );
+  const confirmationCall = generated.indexOf(
+    "    await confirmAsAuthenticatedParticipant(actor, agreement.id, version.id, label);",
+  );
+  assert.ok(finalizeCall >= 0, "The manifest preparation call is missing.");
+  assert.ok(
+    confirmationCall > finalizeCall,
+    "Bilateral confirmation must happen only after the immutable milestone manifest is finalized.",
+  );
 });
 
 test("the generated harness confirms through each participant's real authenticated session", () => {
@@ -83,6 +108,7 @@ test("the stacked workflow is QA-only, seven-file-scoped, and applies the forwar
     /psql "\$QA_SUPABASE_DB_URL"[\s\S]*--file "\$AUTH_MIGRATION_PATH"/,
   );
   assert.match(workflow, /pooled-settlement-authenticated-caller-integration\.mjs/);
+  assert.match(workflow, /git merge-base --is-ancestor "\$PR700_HEAD" HEAD/);
   assert.doesNotMatch(workflow, /jnpoxvalyjtdghnperyu/);
   assert.doesNotMatch(workflow, /sk_live_|pk_live_|rk_live_/);
 });
