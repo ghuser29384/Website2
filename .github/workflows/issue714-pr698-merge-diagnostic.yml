@@ -9,16 +9,16 @@ permissions:
   contents: read
 
 env:
-  EXPECTED_HEAD: 0e83687f5d0388bdc860bca6035faed5339705e1
-  EXPECTED_TREE: 6736f5b3c91409b9f66caf3b52a67371eb61d5d2
-  EXPECTED_MAIN: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
+  EXPECTED_HEAD: 335f0ab7e4dc8f95e2f06a082db6b5360caf3f27
+  EXPECTED_TREE: b40e49e531767ab5dc0db2ff58a2e9c8f64b6c01
+  EXPECTED_MAIN: f9ae5480ae7c20176f24c5f8b678088b5823fc39
   TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
   HELPER_BRANCH: ops/issue714-pr698-merge-diagnostic-20260817
 
 jobs:
   exact-head-gates:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 100
     steps:
       - name: Check out immutable PR candidate
         uses: actions/checkout@v4
@@ -49,6 +49,7 @@ jobs:
           test "$ACTUAL_TREE" = "$EXPECTED_TREE"
           test "$REMOTE_HEAD" = "$EXPECTED_HEAD"
           test "$ACTUAL_MAIN" = "$EXPECTED_MAIN"
+          test "$MERGE_BASE" = "$EXPECTED_MAIN"
           test "$BEHIND" = '0'
           test -z "$(git status --porcelain)"
           MIGRATION='supabase/migrations/20260814042516_account_activation_stage.sql'
@@ -86,7 +87,7 @@ jobs:
             tests/issue714-exact-head-visual.spec.ts --list --reporter=line \
             2>&1 | tee logs/exact-viewport-discovery.log
 
-      - name: Run focused activation, proxy, route, privacy, and release contracts
+      - name: Run focused activation, auth-resolution, proxy, route, privacy, and release contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -94,6 +95,8 @@ jobs:
             src/account-activation-schema-contract.test.ts \
             src/lib/account-activation.test.ts \
             src/lib/auth-routes.test.ts \
+            src/auth-resolution-wiring.test.ts \
+            src/lib/auth-resolution.test.ts \
             src/lib/supabase/proxy.test.ts \
             src/proxy.test.ts \
             src/walkthrough-next-canonical.test.ts \
@@ -102,6 +105,7 @@ jobs:
             src/live-now-truth-boundary.test.ts \
             src/lib/public-route-smoke.test.ts \
             src/lib/create-interface/unified-entry-routes.test.ts \
+            src/lib/create-interface/create-ui-repairs.test.ts \
             src/lib/release-browser-gate-contract.test.ts \
             src/offers-density-viewport-contract.test.ts \
             2>&1 | tee logs/focused-source-tests.log
@@ -140,6 +144,16 @@ jobs:
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium 2>&1 | tee logs/playwright-install.log
+
+      - name: Run delayed and unavailable auth-resolution browser security suite
+        shell: bash
+        env:
+          CI: "true"
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.auth-resolution.config.ts \
+            --reporter=line --workers=1 \
+            2>&1 | tee logs/auth-resolution-browser.log
 
       - name: Run complete credential-free release browser gate including exact viewports
         shell: bash
