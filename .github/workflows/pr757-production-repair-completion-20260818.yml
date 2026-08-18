@@ -1,0 +1,11 @@
+name: PR 757 production completion controller
+
+on:
+  workflow_dispatch:
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail closed until the audited controller is installed
+        run: exit 1
