@@ -1,17 +1,17 @@
-name: Commitments Pro Sprint one-time remediation applicator
+name: Commitments Pro Sprint retry remediation applicator
 
 on:
-  pull_request:
-    branches: [main]
   push:
     branches:
       - docs/commitments-pro-sprint-materialization-v1-20260818
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
 
 concurrency:
-  group: commitments-pro-sprint-one-time-remediation
+  group: commitments-pro-sprint-retry-remediation
   cancel-in-progress: false
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
 
       - name: Verify exact staging identity and archive
         env:
-          EXPECTED_PARENT: d30b5d4c1e1c302f1a934facd110c4590479db57
+          EXPECTED_PARENT: b77559fddc65823702b82d406d39971b18f425ed
           EXPECTED_ARCHIVE_SHA256: 0e97bbfdda1ce41b808867bab2a608918fa4dc19d8ebe4ca67c3900b1cde6bb0
         run: |
           set -euo pipefail
@@ -42,26 +42,30 @@ jobs:
           cat .github/materialization/pr767-remediation/part-*.b64 | base64 --decode > "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz"
           test "$(sha256sum "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz" | cut -d' ' -f1)" = "$EXPECTED_ARCHIVE_SHA256"
 
-      - name: Apply exact repository-only overlay
+      - name: Apply repository-only contracts without changing workflows
         run: |
           set -euo pipefail
           tar -xzf "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz" -C .
+          git checkout HEAD -- .github/workflows/commitments-pro-sprint-specification-gates.yml
           rm -rf .github/materialization/pr767-remediation
-          rm -f .github/workflows/apply-pr767-remediation.yml
 
-      - name: Validate final candidate before commit
+      - name: Validate candidate before commit
         run: |
           set -euo pipefail
           node scripts/commitments/validate-pro-sprint-materialization.mjs
           node --test scripts/commitments/pro-sprint-materialization.test.mjs
           ruby -e 'require "yaml"; YAML.load_file(".github/workflows/commitments-pro-sprint-specification-gates.yml", aliases: true)'
           git diff --check
+          if git diff --name-only | grep -E '^\.github/workflows/' ; then
+            echo "The runner remediation must not modify workflow files." >&2
+            exit 1
+          fi
           if git diff --name-only | grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env)' ; then
             echo "Runtime or deployment path entered the remediation." >&2
             exit 1
           fi
 
-      - name: Commit and push exact remediation
+      - name: Commit and push non-workflow remediation
         env:
           BRANCH: docs/commitments-pro-sprint-materialization-v1-20260818
         run: |
@@ -69,5 +73,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          if git diff --cached --name-only | grep -E '^\.github/workflows/' ; then
+            echo "Refusing to push a workflow-file change from the Actions token." >&2
+            exit 1
+          fi
           git commit -m "Repair Commitments materialization contracts"
           git push origin "HEAD:$BRANCH"
