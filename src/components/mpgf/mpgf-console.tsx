@@ -549,6 +549,7 @@ export function MpgfConsole({
       ? "Threshold coalition template applied. Replace the project, baseline, threshold, cap, deadline, failure rule, recipient, and evidence terms before saving."
       : "Complete the pool reasoning fields before saving or submitting. This route performs no live authorization, payout, or real-money accounting.",
   );
+  const [lastSavedProposalId, setLastSavedProposalId] = useState<string | null>(null);
   const [weights, setWeights] = useState<Record<string, number>>(() =>
     Object.fromEntries(demoAlternatives.map((alternative) => [alternative.id, alternative.demoPriorityBps])),
   );
@@ -1156,6 +1157,7 @@ export function MpgfConsole({
 
       setProposalConfirmation(result.message);
       if (result.ok) {
+        setLastSavedProposalId(result.data?.id ?? null);
         setPoolProposalIdempotencyKey(createClientMutationKey("mpgf.pool"));
       }
       setPendingAction(null);
@@ -2025,11 +2027,23 @@ export function MpgfConsole({
             </div>
             <div className="mpgf-confirmation" role="status">
               {proposalConfirmation}
+              {lastSavedProposalId ? (
+                <> {" "}
+                  <Link className="inline-link" href={`/mpgf/pools/proposals/${lastSavedProposalId}`}>
+                    View proposal status
+                  </Link>
+                </>
+              ) : null}
             </div>
           </section>
 
           <section className="mpgf-panel">
-            <p className="eyebrow">Visible demo pools</p>
+            <p className="eyebrow">Your pool proposals</p>
+            <h2>Review state and frozen-term receipts</h2>
+            <p>
+              Submission does not publish a pool or open it for pledges. Review, exact-version
+              approval, publication, and terminal outcome each appear on the proposal status page.
+            </p>
             <div className="mpgf-pool-list">
               {persistedState?.poolProposals.map((proposal) => (
                 <article key={proposal.id} className="mpgf-pool-row">
@@ -2076,9 +2090,20 @@ export function MpgfConsole({
                       </p>
                     ) : null}
                   </div>
-                  <span className="mpgf-small">Saved</span>
+                  <Link className="inline-link" href={`/mpgf/pools/proposals/${proposal.id}`}>
+                    View status
+                  </Link>
                 </article>
               ))}
+              {persistedState?.poolProposals.length === 0 ? (
+                <p className="mpgf-small">No persisted pool proposal has been created by this account.</p>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="mpgf-panel">
+            <p className="eyebrow">Reference pools</p>
+            <div className="mpgf-pool-list">
               {demoAlternatives.map((alternative) => (
                 <article key={alternative.id} className="mpgf-pool-row">
                   <div>
