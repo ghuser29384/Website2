@@ -432,6 +432,15 @@ body.font-accessible {
   gap: 0.85rem;
 }
 
+.mpgf-form-span {
+  grid-column: 1 / -1;
+}
+
+.mpgf-break-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .stacked-form {
   display: grid;
   gap: 1rem;
@@ -1183,6 +1192,59 @@ body.font-accessible {
   font-size: 0.86rem;
 }
 
+.mpgf-dac-review-row {
+  grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.85fr);
+  padding: 1rem 0;
+}
+
+.mpgf-dac-review-copy,
+.mpgf-dac-review-actions,
+.mpgf-dac-review-actions form,
+form.mpgf-dac-review-actions {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.mpgf-dac-review-actions form,
+form.mpgf-dac-review-actions {
+  margin: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--mpgf-line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.mpgf-dac-review-actions label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.mpgf-dac-review-actions input,
+.mpgf-dac-review-actions select,
+.mpgf-dac-review-actions textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--mpgf-line);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.mpgf-dac-review-actions input,
+.mpgf-dac-review-actions select {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.65rem;
+}
+
+.mpgf-dac-review-actions textarea {
+  min-height: 5.5rem;
+  padding: 0.65rem;
+  resize: vertical;
+}
+
 @media (max-width: 860px) {
   .mpgf-hero-grid,
   .mpgf-workflow-grid,
@@ -1227,9 +1289,19 @@ body.font-accessible {
   .mpgf-round-board-header {
     grid-template-columns: 1fr;
   }
+
+  .mpgf-dac-review-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 560px) {
+  .mpgf-hero-copy h1 {
+    max-width: 100%;
+    font-size: clamp(2.45rem, 13.5vw, 3rem);
+    overflow-wrap: anywhere;
+  }
+
   .mpgf-kpi-grid,
   .mpgf-console-toolbar,
   .mpgf-admin-grid,
@@ -19076,4 +19148,18 @@ pre,
   .mt-home-start-grid > a {
     transition: none;
   }
+}
+
+.mpgf-code-block {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  background: color-mix(in srgb, var(--surface) 88%, var(--foreground) 12%);
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

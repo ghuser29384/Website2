@@ -15,6 +15,10 @@ interface MpgfPageFrameProps {
   realMoneyReadiness?: MpgfRealMoneyReadiness;
   viewerPresent: boolean;
   actions?: ReactNode;
+  modeItems?: string[];
+  participationTitle?: string;
+  participationItems?: Array<{ label: string; description: string }>;
+  technicalSpecHref?: string;
 }
 
 export function MpgfPageFrame({
@@ -22,11 +26,41 @@ export function MpgfPageFrame({
   children,
   description,
   eyebrow = "Public Goods Fund",
+  modeItems,
+  participationItems,
+  participationTitle = "How participation works",
   realMoneyReadiness,
+  technicalSpecHref = "/mpgf/technical-spec",
   title,
   viewerPresent,
 }: MpgfPageFrameProps) {
   const realMoneyReady = Boolean(realMoneyReadiness?.ready);
+  const resolvedModeItems = modeItems ?? [
+    "Every.org fast route",
+    "Webhook before counting",
+    "Reviewer verification",
+    realMoneyReady ? "Approved external checkout available" : "Direct-to-charity or pledge-only",
+  ];
+  const resolvedParticipationItems = participationItems ?? [
+    {
+      label: "1. Choose route",
+      description: "Use Every.org, a sponsor-backed route when active, or a non-custodial pledge intent.",
+    },
+    {
+      label: "2. Wait for import",
+      description: "Redirects remain pending until provider webhooks or reviewed evidence arrive.",
+    },
+    {
+      label: "3. Review before counting",
+      description: "The fund counts a contribution only after the relevant evidence state is reviewed.",
+    },
+    {
+      label: "Payment route",
+      description: realMoneyReady
+        ? "An approved external provider route is available for eligible signed-in participants"
+        : "Direct-to-charity payment, pledge intent, and reviewed external evidence only",
+    },
+  ];
 
   return (
     <div className="page-shell mpgf-shell">
@@ -45,39 +79,22 @@ export function MpgfPageFrame({
             <h1>{title}</h1>
             <p className="hero-text">{description}</p>
             <div className="mpgf-mode-strip" aria-label="Public Goods Fund mode">
-              <span>Every.org fast route</span>
-              <span>Webhook before counting</span>
-              <span>Reviewer verification</span>
-              <span>{realMoneyReady ? "Approved external checkout available" : "Direct-to-charity or pledge-only"}</span>
+              {resolvedModeItems.map((item) => <span key={item}>{item}</span>)}
             </div>
             {actions ? <div className="hero-actions">{actions}</div> : null}
           </section>
 
           <aside className="mpgf-status-panel" aria-label="Public Goods Fund participation status">
-            <p className="eyebrow">How participation works</p>
+            <p className="eyebrow">{participationTitle}</p>
             <dl>
-              <div>
-                <dt>1. Choose route</dt>
-                <dd>Use Every.org, a sponsor-backed route when active, or a non-custodial pledge intent.</dd>
-              </div>
-              <div>
-                <dt>2. Wait for import</dt>
-                <dd>Redirects remain pending until provider webhooks or reviewed evidence arrive.</dd>
-              </div>
-              <div>
-                <dt>3. Review before counting</dt>
-                <dd>The fund counts a contribution only after the relevant evidence state is reviewed.</dd>
-              </div>
-              <div>
-                <dt>Payment route</dt>
-                <dd>
-                  {realMoneyReady
-                    ? "An approved external provider route is available for eligible signed-in participants"
-                    : "Direct-to-charity payment, pledge intent, and reviewed external evidence only"}
-                </dd>
-              </div>
+              {resolvedParticipationItems.map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>{item.description}</dd>
+                </div>
+              ))}
             </dl>
-            <Link className="inline-link" href="/mpgf/technical-spec">
+            <Link className="inline-link" href={technicalSpecHref}>
               Technical spec
             </Link>
           </aside>
