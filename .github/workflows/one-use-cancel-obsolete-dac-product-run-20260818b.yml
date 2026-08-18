@@ -1,0 +1,52 @@
+name: One-use cancel stale DAC product run 20260818b
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/one-use-cancel-obsolete-dac-product-run-20260818b.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STALE_RUN_ID: "32174371953"
+      CURRENT_RUN_ID: "32174481869"
+    steps:
+      - name: Cancel only the stale exact-head run
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$STALE_RUN_ID" != "$CURRENT_RUN_ID"
+          data="$(curl -fsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$STALE_RUN_ID")"
+          test "$(jq -r '.name' <<<"$data")" = "MPGF DAC product lifecycle gates"
+          test "$(jq -r '.head_sha' <<<"$data")" = "dd4c41f7d39c8a8bd0cc30d1344a64b010b915ed"
+          status="$(jq -r '.status' <<<"$data")"
+          if [[ "$status" == "queued" || "$status" == "pending" || "$status" == "waiting" || "$status" == "requested" || "$status" == "in_progress" ]]; then
+            curl -fsS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$STALE_RUN_ID/cancel" \
+              >/dev/null
+          fi
+          printf 'cancelled_or_terminal=%s\npreserved_current=%s\n' "$STALE_RUN_ID" "$CURRENT_RUN_ID" \
+            | tee cancellation.txt
+
+      - name: Upload cancellation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stale-dac-product-cancellation-${{ github.run_id }}
+          path: cancellation.txt
+          if-no-files-found: error
+          retention-days: 7
