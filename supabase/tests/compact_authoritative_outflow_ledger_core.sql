@@ -350,8 +350,10 @@ do $test$
 declare state jsonb;
 begin
   state := public.get_mpgf_public_goods_compacts_v2_state();
-  if (state#>>'{obligation,eligibleNetSettledOutflowCents}')::bigint <> 0
-     or state::text ~ '8000|payment-a|payment-b|payment-c' then
+  if state#>>'{obligation,coverage}' <> 'complete'
+     or (state#>>'{obligation,eligibleNetSettledOutflowCents}')::bigint <> 0
+     or (state#>>'{obligation,obligationCents}')::bigint <> 0
+     or (state#>'{obligation}')::text ~ 'payment-a|payment-b|payment-c|source_record_key|canonical_event_hash|source_watermark|provider_reference' then
     raise exception 'Cross-user aggregate or source detail leaked: %', state;
   end if;
 end;
