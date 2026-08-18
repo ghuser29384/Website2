@@ -1,0 +1,166 @@
+name: Issue 734 Compact outflow adjacent validation controller
+
+on:
+  push:
+    branches:
+      - ops/issue734-compact-outflow-validation-20260818
+    paths:
+      - .github/workflows/issue734-adjacent-validation-controller.yml
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: issue734-compact-outflow-adjacent-validation
+  cancel-in-progress: false
+
+jobs:
+  validate-adjacent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_PR: "737"
+      TRACKING_ISSUE: "734"
+      FEATURE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+      STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+    steps:
+      - name: Wait for a durable 14-file candidate and exact-head ledger QA
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          ledger_workflow_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows?per_page=100" \
+            --jq '.workflows[] | select(.name == "Compact authoritative outflow ledger QA") | .id' | head -n 1)"
+          test -n "$ledger_workflow_id"
+
+          candidate_sha=""
+          candidate_tree=""
+          ledger_run=""
+          for _ in $(seq 1 300); do
+            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${FEATURE_PR}")"
+            state="$(jq -r '.state' <<<"$pr_json")"
+            draft="$(jq -r '.draft' <<<"$pr_json")"
+            merged="$(jq -r '.merged' <<<"$pr_json")"
+            head_ref="$(jq -r '.head.ref' <<<"$pr_json")"
+            candidate_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+            test "$state" = open
+            test "$draft" = true
+            test "$merged" = false
+            test "$head_ref" = "$FEATURE_BRANCH"
+
+            files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${FEATURE_PR}/files?per_page=100" --jq '.[].filename' | LC_ALL=C sort)"
+            file_count="$(printf '%s\n' "$files" | sed '/^$/d' | wc -l)"
+            controller_count="$(printf '%s\n' "$files" | grep -Ec '^\.github/workflows/(continue-compact-outflow-validation-v1|repair-compact-outflow-phase-ordering-v1)\.yml$' || true)"
+
+            if [ "$file_count" -eq 14 ] && [ "$controller_count" -eq 0 ]; then
+              run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${ledger_workflow_id}/runs?head_sha=${candidate_sha}&per_page=20")"
+              ledger_run="$(jq -r '.workflow_runs | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$run_json")"
+              if [ -n "$ledger_run" ]; then
+                run_state="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ledger_run}")"
+                status="$(jq -r '.status' <<<"$run_state")"
+                conclusion="$(jq -r '.conclusion // empty' <<<"$run_state")"
+                if [ "$status" = completed ] && [ "$conclusion" = success ]; then
+                  candidate_tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${candidate_sha}" --jq '.tree.sha')"
+                  break
+                fi
+                if [ "$status" = completed ] && [ "$conclusion" != success ]; then
+                  gh issue comment "$TRACKING_ISSUE" --body "Exact-head ledger QA run ${ledger_run} concluded \`${conclusion}\` on durable candidate \`${candidate_sha}\`. Adjacent validation and hosted UAT remain blocked."
+                  exit 1
+                fi
+              fi
+            fi
+            sleep 60
+          done
+
+          test -n "$candidate_sha"
+          test -n "$candidate_tree"
+          test -n "$ledger_run"
+          printf 'sha=%s\n' "$candidate_sha" >> "$GITHUB_OUTPUT"
+          printf 'tree=%s\n' "$candidate_tree" >> "$GITHUB_OUTPUT"
+          printf 'ledger_run=%s\n' "$ledger_run" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure exact-head adjacent workflows pass
+        id: adjacent
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          ensure_workflow() {
+            local label="$1"
+            local regex="$2"
+            local workflow_json workflow_id workflow_name existing_run conclusion status dispatch_started run_id
+            workflow_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows?per_page=100" \
+              --jq ".workflows[] | select(.name | test(\"${regex}\"; \"i\")) | {id,name,path}" | head -n 1)"
+            test -n "$workflow_json" || { echo "Missing workflow for ${label}." >&2; return 1; }
+            workflow_id="$(jq -r '.id' <<<"$workflow_json")"
+            workflow_name="$(jq -r '.name' <<<"$workflow_json")"
+
+            existing_run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/runs?head_sha=${CANDIDATE_SHA}&per_page=20" \
+              --jq '.workflow_runs | map(select(.status == "completed" and .conclusion == "success")) | sort_by(.created_at) | reverse | .[0].id // empty')"
+            if [ -n "$existing_run" ]; then
+              printf '%s|%s|%s\n' "$label" "$workflow_name" "$existing_run" | tee -a /tmp/adjacent-runs.txt
+              return 0
+            fi
+
+            dispatch_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/dispatches" -f ref="$FEATURE_BRANCH"
+            run_id=""
+            conclusion=""
+            for _ in $(seq 1 240); do
+              run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/runs?branch=${FEATURE_BRANCH}&event=workflow_dispatch&per_page=30" \
+                --jq ".workflow_runs | map(select(.head_sha == \"${CANDIDATE_SHA}\" and .created_at >= \"${dispatch_started}\")) | sort_by(.created_at) | reverse | .[0].id // empty")"
+              if [ -n "$run_id" ]; then
+                status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+                conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // empty')"
+                if [ "$status" = completed ]; then
+                  break
+                fi
+              fi
+              sleep 30
+            done
+            test -n "$run_id"
+            test "$conclusion" = success
+            printf '%s|%s|%s\n' "$label" "$workflow_name" "$run_id" | tee -a /tmp/adjacent-runs.txt
+          }
+
+          : > /tmp/adjacent-runs.txt
+          ensure_workflow compact '^MPGF public-goods compacts QA$'
+          ensure_workflow payment '^Evidence payment release QA$'
+          ensure_workflow visual '^Sitewide canonical visual system$'
+          ensure_workflow release 'release classification'
+
+          {
+            echo 'runs<<EOF'
+            cat /tmp/adjacent-runs.txt
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Record exact-head adjacent-green boundary
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+          CANDIDATE_TREE: ${{ steps.candidate.outputs.tree }}
+          LEDGER_RUN: ${{ steps.candidate.outputs.ledger_run }}
+          ADJACENT_RUNS: ${{ steps.adjacent.outputs.runs }}
+        run: |
+          set -euo pipefail
+          body="$(cat <<EOF
+          Exact-head non-hosted validation is green for Compact authoritative outflow candidate \`${CANDIDATE_SHA}\` (tree \`${CANDIDATE_TREE}\`).
+
+          - ledger QA: ${LEDGER_RUN}
+          - adjacent runs:
+          \`\`\`
+          ${ADJACENT_RUNS}
+          \`\`\`
+
+          No merge, ready transition, deployment, persistent migration, provider operation, payment, activation, electorate, or money movement occurred. The only remaining completion gate for this tranche is a new exact-SHA protected, unaliased, isolated-QA hosted UAT with unconditional cleanup.
+          EOF
+          )"
+          gh issue comment "$TRACKING_ISSUE" --body "$body"
+          gh pr comment "$FEATURE_PR" --body "$body"
