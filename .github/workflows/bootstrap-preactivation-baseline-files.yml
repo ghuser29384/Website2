@@ -1,4 +1,4 @@
-# Registered in two steps so the branch workflow is present before its triggering update.
+# Temporary controller used to materialize the reviewed baseline tooling.
 name: Bootstrap pre-activation baseline boundary files
 
 on:
@@ -7,19 +7,12 @@ on:
       - database/preactivation-schema-baseline-20260818
     paths:
       - .github/workflows/bootstrap-preactivation-baseline-files.yml
-  pull_request:
-    branches:
-      - main
-    types: [opened, synchronize]
-    paths:
-      - .github/workflows/bootstrap-preactivation-baseline-files.yml
 
 permissions:
   contents: write
 
 jobs:
   bootstrap:
-    if: github.head_ref == '' || github.head_ref == 'database/preactivation-schema-baseline-20260818'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -32,11 +25,11 @@ jobs:
       - name: Materialize reviewed bootstrap files
         shell: bash
         env:
-          ARCHIVE_BLOB_SHA: 8ca1baca93806f8827607322746b8c0f82d081a4
+          ARCHIVE_BLOB_SHA: 658ab05c9732f4b96a6b0999397b7a3904aaa95d
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "${{ github.head_ref || github.ref_name }}" = "database/preactivation-schema-baseline-20260818"
+          test "${{ github.ref_name }}" = "database/preactivation-schema-baseline-20260818"
           curl --fail --silent --show-error \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -44,7 +37,7 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/git/blobs/$ARCHIVE_BLOB_SHA" \
             | jq -r '.content' | tr -d '\n' | base64 --decode > /tmp/preactivation-bootstrap.tar.gz
           test "$(sha256sum /tmp/preactivation-bootstrap.tar.gz | awk '{print $1}')" = \
-            "2aaf44ecf15bb53aea22db10b2589dad93e3a687c917e964a9aa5a1f60b47c78"
+            "739ad7b3d8f63773872b4efc009f0dd87cf184ab0c3b1dfbbc2cdc19fb3e4848"
           python3 - <<'PY'
           import tarfile
           allowed = {
@@ -68,7 +61,6 @@ jobs:
           chmod 0755 \
             scripts/database/generate-preactivation-baseline.sh \
             scripts/database/validate-preactivation-baseline.sh
-          rm .github/workflows/bootstrap-preactivation-baseline-files.yml
           bash -n scripts/database/generate-preactivation-baseline.sh
           bash -n scripts/database/validate-preactivation-baseline.sh
           git diff --check
@@ -80,6 +72,11 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add \
+            scripts/database/preactivation-catalog.sql \
+            scripts/database/generate-preactivation-baseline.sh \
+            scripts/database/validate-preactivation-baseline.sh \
+            docs/database/preactivation-schema-baseline.md
+          test -n "$(git status --porcelain)"
           git commit -m "Add authoritative pre-activation Supabase baseline boundary"
           git push origin HEAD:database/preactivation-schema-baseline-20260818
