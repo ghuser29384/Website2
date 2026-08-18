@@ -1,0 +1,188 @@
+name: Dispatch issue 734 final non-hosted gates v2
+
+on:
+  push:
+    branches:
+      - ops/issue734-compact-outflow-completion-20260818
+    paths:
+      - .github/workflows/dispatch-issue734-final-nonhosted-v2.yml
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: dispatch-issue734-final-nonhosted-v2
+  cancel-in-progress: false
+
+env:
+  FEATURE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+  QA_REF: hvmxfjjbdcgjjudmthdz
+  PR_NUMBER: '737'
+  ISSUE_NUMBER: '734'
+
+jobs:
+  dispatch-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 160
+    steps:
+      - name: Check out operations branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Freeze live 14-file candidate
+        id: candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, time
+          from pathlib import Path
+          repo=os.environ['GITHUB_REPOSITORY']; base=os.environ['STACK_BASE_SHA']; branch=os.environ['FEATURE_BRANCH']
+          allowed={
+            '.github/workflows/compact-authoritative-outflow-ledger-qa.yml','docs/mpgf/compact-authoritative-outflow-ledger-v1.md','scripts/test-compact-authoritative-outflow-concurrency.sh','src/components/mpgf/mpgf-public-goods-compacts.tsx','src/lib/mpgf/compact-authoritative-outflow-contract.test.ts','src/lib/mpgf/compact-authoritative-outflow.test.ts','src/lib/mpgf/compact-authoritative-outflow.ts','supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql','supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql','supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql','supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql','supabase/tests/compact_authoritative_outflow_ledger_authorization.sql','supabase/tests/compact_authoritative_outflow_ledger_core.sql','tests/mpgf-public-goods-compacts.spec.ts'
+          }
+          def gh(*args): return json.loads(subprocess.check_output(['gh',*args],text=True))
+          stable=None; count=0; deadline=time.time()+1800
+          while time.time()<deadline:
+            pr=gh('api',f'repos/{repo}/pulls/{os.environ["PR_NUMBER"]}')
+            if pr['state']!='open' or not pr.get('draft') or pr.get('merged_at') is not None or pr['head']['ref']!=branch: raise SystemExit('PR #737 state/branch drifted.')
+            head=pr['head']['sha']; files={row['filename'] for row in gh('api',f'repos/{repo}/compare/{base}...{head}').get('files',[])}
+            if files==allowed and head==stable: count+=1
+            elif files==allowed: stable=head; count=1
+            else: stable=None; count=0
+            if count>=3:
+              commit=gh('api',f'repos/{repo}/git/commits/{head}')
+              with Path(os.environ['GITHUB_OUTPUT']).open('a') as out: out.write(f'sha={head}\ntree={commit["tree"]["sha"]}\n')
+              break
+            time.sleep(20)
+          else: raise SystemExit('No stable exact 14-file candidate appeared.')
+          PY
+
+      - name: Verify final workflow semantics
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANDIDATE_SHA"
+          git show "$CANDIDATE_SHA:.github/workflows/compact-authoritative-outflow-ledger-qa.yml" > /tmp/qa.yml
+          for marker in 'Prepare exact split migration chain' 'isolated legacy Compact regressions' 'Apply authoritative outflow ledger migrations' 'isolated final-ledger suites' 'savepoint legacy_lifecycle' 'savepoint ledger_authorization'; do grep -q "$marker" /tmp/qa.yml; done
+
+      - name: Discover workflows
+        id: workflows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow list --repo "$GITHUB_REPOSITORY" --all --json id,name,path,state > /tmp/workflows.json
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          rows=json.loads(Path('/tmp/workflows.json').read_text())
+          wanted={'ledger':('compact authoritative outflow ledger qa',),'compact':('mpgf public-goods compacts qa','mpgf public goods compacts qa'),'payment':('evidence payment release qa',),'visual':('sitewide canonical visual system','canonical visual'),'release':('release classification',)}
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as out:
+            for key,needles in wanted.items():
+              matches=[r for r in rows if any(n in r['name'].lower() for n in needles)]
+              if len(matches)!=1 or matches[0].get('state')!='active': raise SystemExit(f'{key}: {matches}')
+              out.write(f'{key}_id={matches[0]["id"]}\n{key}_path={matches[0]["path"]}\n')
+          PY
+
+      - name: Dispatch workflows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEDGER_PATH: ${{ steps.workflows.outputs.ledger_path }}
+          COMPACT_PATH: ${{ steps.workflows.outputs.compact_path }}
+          PAYMENT_PATH: ${{ steps.workflows.outputs.payment_path }}
+          VISUAL_PATH: ${{ steps.workflows.outputs.visual_path }}
+          RELEASE_PATH: ${{ steps.workflows.outputs.release_path }}
+        run: |
+          set -euo pipefail
+          gh workflow run "$LEDGER_PATH" --repo "$GITHUB_REPOSITORY" --ref "$FEATURE_BRANCH" -f confirm_target="$QA_REF"
+          gh workflow run "$COMPACT_PATH" --repo "$GITHUB_REPOSITORY" --ref "$FEATURE_BRANCH" -f confirm_target="$QA_REF" || gh workflow run "$COMPACT_PATH" --repo "$GITHUB_REPOSITORY" --ref "$FEATURE_BRANCH"
+          gh workflow run "$PAYMENT_PATH" --repo "$GITHUB_REPOSITORY" --ref "$FEATURE_BRANCH"
+          gh workflow run "$VISUAL_PATH" --repo "$GITHUB_REPOSITORY" --ref "$FEATURE_BRANCH"
+          gh workflow run "$RELEASE_PATH" --repo "$GITHUB_REPOSITORY" --ref "$FEATURE_BRANCH"
+
+      - name: Wait for conclusions
+        id: conclusions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+          CANDIDATE_TREE: ${{ steps.candidate.outputs.tree }}
+          LEDGER_ID: ${{ steps.workflows.outputs.ledger_id }}
+          COMPACT_ID: ${{ steps.workflows.outputs.compact_id }}
+          PAYMENT_ID: ${{ steps.workflows.outputs.payment_id }}
+          VISUAL_ID: ${{ steps.workflows.outputs.visual_id }}
+          RELEASE_ID: ${{ steps.workflows.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,subprocess,time
+          from pathlib import Path
+          repo=os.environ['GITHUB_REPOSITORY']; sha=os.environ['CANDIDATE_SHA']; ids={k:int(os.environ[f'{k.upper()}_ID']) for k in ['ledger','compact','payment','visual','release']}
+          selected={}; deadline=time.time()+7800
+          while time.time()<deadline:
+            data=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs','--method','GET','-f',f'head_sha={sha}','-f','per_page=100','-f','exclude_pull_requests=false'],text=True))
+            for key,wid in ids.items():
+              rows=[r for r in data.get('workflow_runs',[]) if r.get('workflow_id')==wid and r.get('head_sha')==sha]
+              if rows: selected[key]=sorted(rows,key=lambda r:r['id'],reverse=True)[0]
+            if len(selected)==len(ids) and all(r['status']=='completed' for r in selected.values()): break
+            time.sleep(20)
+          else: raise SystemExit(f'timeout: {selected}')
+          report={'candidate_sha':sha,'candidate_tree':os.environ['CANDIDATE_TREE'],'runs':{k:{'id':r['id'],'name':r['name'],'conclusion':r['conclusion'],'url':r['html_url']} for k,r in selected.items()}}
+          Path('/tmp/report.json').write_text(json.dumps(report,indent=2)+'\n')
+          failed={k:v for k,v in report['runs'].items() if v['conclusion']!='success'}
+          if failed: raise SystemExit(json.dumps(failed,indent=2))
+          PY
+
+      - name: Publish success
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          report="$(cat /tmp/report.json)"
+          body=$(cat <<EOF
+          ### Exact-head non-hosted sequence completed
+
+          \`\`\`json
+          $report
+          \`\`\`
+
+          The final candidate has exactly 14 ledger files. Legacy Compact suites run before ledger migrations; final-ledger suites run afterward; isolated QA uses one outer rollback transaction with per-suite savepoints. PR #737 remains draft, unmerged, undeployed, shadow-only, and fail closed. Protected hosted UAT is the next sequence.
+          EOF
+          )
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Publish failure
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="Issue #734 exact-head non-hosted sequence stopped fail closed. No hosted Preview or release mutation was authorized. Controller: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body" || true
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body" || true
+
+      - name: Remove operations controllers
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for path in .github/workflows/monitor-issue734-nonhosted-v1.yml .github/workflows/dispatch-issue734-final-nonhosted.yml .github/workflows/dispatch-issue734-final-nonhosted-v2.yml; do git rm -f --ignore-unmatch "$path"; done
+          git commit -m 'ops: remove issue 734 validation controllers'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
