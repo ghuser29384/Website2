@@ -1,6 +1,11 @@
 {
-  "schema_version": "moral-trade-trust-resolution-v3.0.0",
+  "schema_version": "moral-trade-trust-resolution-v3.0.1",
   "status": "repository_only_candidate",
+  "terminology": {
+    "human_label": "fulfillment",
+    "legacy_runtime_dimension_key": "fulfilment",
+    "alias_required_until_reviewed_migration": true
+  },
   "objects": {
     "factual_outcome": {
       "unit": "agreement_milestone_role_claim",
@@ -19,7 +24,7 @@
     "contextual_reliability": {
       "context_specific": true,
       "dimensions": [
-        "fulfillment",
+        "fulfilment",
         "evidence_integrity",
         "settlement",
         "dispute_conduct",

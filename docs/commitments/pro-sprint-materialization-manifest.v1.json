@@ -1,15 +1,19 @@
 {
-  "schema_version": "moral-trade-commitments-pro-sprint-materialization-v1",
+  "schema_version": "moral-trade-commitments-pro-sprint-materialization-v1.1",
   "status": "repository_only_candidate_not_merged",
   "issue": 755,
-  "bound_base_sha": "7e993158363710e5fe2c3eaa1cbccdb5cd56c235",
-  "bound_base_tree": "e5283317d448e35106ca0179a267b20087ce0492",
+  "materialization_source_base_sha": "7e993158363710e5fe2c3eaa1cbccdb5cd56c235",
+  "materialization_source_base_tree": "e5283317d448e35106ca0179a267b20087ce0492",
+  "implementation_base_policy": {
+    "fresh_live_main_selected_at_implementation_start": true,
+    "Q_and_initial_R_identical_base_required": true,
+    "historical_materialization_base_may_be_reused_if_stale": false
+  },
   "hash_policy": {
     "algorithm": "sha256",
     "mode": "validator_computes_every_bound_file_and_one_canonical_package_digest",
     "evidence_file": "commitments-pro-sprint-materialization-sha256.json",
-    "precommitted_digest_is_not_used_to_avoid_a_self-referential_manifest"
-      : true
+    "precommitted_digest_is_not_used_to_avoid_a_self_referential_manifest": true
   },
   "files": [
     ".github/workflows/commitments-pro-sprint-specification-gates.yml",
@@ -20,6 +24,7 @@
     "docs/commitments/trust-resolution-v3-contract.v1.json",
     "docs/commitments/zero-dollar-pilot-contract.v1.json",
     "docs/commitments/qri-orchestration-contract.v1.json",
+    "docs/commitments/zero-dollar-owner-uat-release-contract.v1.json",
     "docs/commitments/pilot-operations-contract.v1.json",
     "docs/commitments/free-rider-portfolio-contract.v1.json",
     "scripts/commitments/validate-pro-sprint-materialization.mjs",
@@ -27,7 +32,7 @@
   ],
   "source_bindings": {
     "merged_pr_733": "c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3",
-    "merged_pr_747_and_current_main": "7e993158363710e5fe2c3eaa1cbccdb5cd56c235",
+    "materialization_source_pr_747": "7e993158363710e5fe2c3eaa1cbccdb5cd56c235",
     "preserved_pr_722": "1a52f46d5d877e155dba697300296be32ed87d43",
     "stale_pr_718": "e7359a046d67391a37c92505f4c50694d5b24e1e",
     "trust_source_issue": 715,
@@ -42,7 +47,8 @@
     "participant_specific_causal_credit_active": false,
     "self_classified_human_subjects_exemption": false,
     "recruitment_before_written_determination": false,
-    "dac_is_default_free_rider_solution": false
+    "dac_is_default_free_rider_solution": false,
+    "stale_Q_R_implementation_base_allowed": false
   },
   "authorization": {
     "runtime_implementation": false,

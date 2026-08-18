@@ -87,7 +87,12 @@
     "deletion_rehearsal_required": true
   },
   "incidents": {
-    "levels": ["P0", "P1", "P2", "P3"],
+    "levels": [
+      "P0",
+      "P1",
+      "P2",
+      "P3"
+    ],
     "cohort_pause_on_P0": true,
     "enrollment_hold_on_P1": true,
     "restart_requires_independent_review": true,
@@ -104,7 +109,8 @@
       "pilot_director",
       "independent_safety_privacy_reviewer",
       "independent_methods_reviewer"
-    ]
+    ],
+    "A_to_B_and_post_B_distinct": true
   },
   "launch_gates": [
     "Q_R_I_and_final_R_accepted",

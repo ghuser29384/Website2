@@ -1,5 +1,5 @@
 {
-  "schema_version": "moral-trade-free-rider-portfolio-v1",
+  "schema_version": "moral-trade-free-rider-portfolio-v1.1",
   "status": "research_only_not_authorized",
   "objective": "maximize net safe legitimate public-good provision rather than defend one mechanism",
   "global_decisions": {
@@ -13,6 +13,11 @@
     "base_experimental_contract": "provision_point_full_refund"
   },
   "mechanisms": [
+    {
+      "id": "M0",
+      "name": "unconditional_voluntary_contribution",
+      "disposition": "plain_donation_comparator_not_primary_solution"
+    },
     {
       "id": "M1",
       "name": "provision_point_full_refund",
@@ -96,6 +101,7 @@
     "pressure_and_safety"
   ],
   "experimental_sequence": [
+    "unconditional_contribution_comparator_where_relevant",
     "comprehension_and_simulated_endowment",
     "separate_seed_match_and_early_bonus_arms",
     "repeated_coalition",

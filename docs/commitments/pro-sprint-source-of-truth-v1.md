@@ -1,10 +1,11 @@
-# Moral Trade Commitments Pro Sprint — Source of Truth v1
+# Moral Trade Commitments Pro Sprint — Source of Truth v1.1
 
 ## Status
 
 - **Issue:** #755.
 - **Release class:** repository-only specification and validation package.
-- **Bound base:** `main@7e993158363710e5fe2c3eaa1cbccdb5cd56c235`.
+- **Materialization source base:** `main@7e993158363710e5fe2c3eaa1cbccdb5cd56c235`, tree `e5283317d448e35106ca0179a267b20087ce0492`.
+- **Implementation base rule:** the source base above is historical evidence, not a permitted stale base for Q or R. Q and initial R must be created from the same freshly revalidated live `main` selected at implementation start.
 - **Runtime, database, provider, payment, deployment, recruitment, consent, or study effect:** none.
 - **Merge authorization:** none; keep the pull request draft and unmerged.
 
@@ -12,17 +13,17 @@ This document consolidates the governing decisions from the Commitments Pro Spri
 
 ## Authority and precedence
 
-1. The latest explicit owner decision.
+1. Latest explicit owner decision.
 2. Current live GitHub state and exact immutable evidence.
-3. This source-of-truth document and the machine contracts in the same package.
-4. The reviewed normative content of relevant issues and draft pull requests.
-5. Conceptual and external empirical sources, correctly labeled by evidence class.
-6. Older handoffs, dated audits, local logs, and simulations.
+3. This source-of-truth document and the machine contracts in this package.
+4. Reviewed normative content from relevant issues and draft pull requests.
+5. Conceptual and external empirical sources, labeled by evidence class.
+6. Older handoffs, dated audits, local logs, simulations, and assistant summaries.
 
-Current source state at materialization:
+Current source disposition at materialization:
 
 - PR #733 is merged and supplies run-owned namespace isolation, two-writer Auth/database non-interference, exact ownership cleanup, and artifact-secrecy boundaries.
-- PR #747 is merged and keeps learned ranking fail-closed; `learnedRankingMayActivate=false`.
+- PR #747 supplies the fail-closed learned-ranking readiness boundary; later `main` advances do not activate learned ranking.
 - PR #722 is preserved as the reviewed bilateral-core-loop source with final disposition `split before merge`; it must not be extended or merged as one mixed candidate.
 - PR #718 remains stale and substantively unaccepted; it is not the founding-pilot critical path.
 - PR #635 is a broad private-shadow source of evidence-decision semantics, not a current-main merge candidate.
@@ -36,10 +37,10 @@ Current source state at materialization:
 2. Evidence that an action occurred does not establish that Moral Trade caused it.
 3. Decision confidence, evidence provenance, completion fraction, and payout factor are separate quantities.
 4. Weak or incomplete evidence is not misconduct.
-5. A deliberate-fabrication or impersonation finding requires explicit evidence, a higher standard, and independent second review.
+5. Deliberate fabrication or impersonation requires explicit evidence, a higher standard, and independent second review.
 6. Contextual reliability is role-, action-, evidence-, duration-, and deal-context specific.
 7. Contextual reliability has no public numerical score, default-ranking, minimum-score eligibility, payment, restriction, safeguard, or exposure-suppression effect before separate empirical activation.
-8. Safety and eligibility are non-compensatory; positive history cannot cancel a threat, coercion, identity, privacy, or severe integrity restriction.
+8. Safety and eligibility are non-compensatory; positive history cannot cancel a threat, coercion, identity, privacy, or severe-integrity restriction.
 9. Additionality is an offer-, trade-, policy-, or subgroup-level causal question by default, not a permanent property of a participant.
 10. Participant-specific causal credit remains disabled.
 11. Raw evidence remains private and purpose-limited.
@@ -48,237 +49,176 @@ Current source state at materialization:
 14. Platform or sponsor money is not participant-caused impact.
 15. Baseline-redirected resources are not new money.
 16. Direct causal attribution and cooperative allocation are alternative lenses and are never summed.
-17. Public copy must distinguish known, inferred, and unknown claims.
+17. Public copy distinguishes known, inferred, and unknown claims.
 18. Synthetic tests, protected owner UAT, prior-driven models, and conceptual papers are not real-user calibration or causal evidence.
-19. The project must not self-classify the founding pilot as exempt human-subjects research.
+19. The project does not self-classify the founding pilot as exempt human-subjects research.
 20. No recruitment occurs before a qualified written determination and every launch gate passes.
 
 # Part I — Trust Resolution v3
 
-The idea of one universal “credit score” is replaced by four mechanically separate objects.
+One universal “credit score” is replaced by four mechanically separate objects.
 
-## 1. Factual Outcome Record
+## Factual Outcome Record
 
 Target question:
 
 > Under the exact frozen terms, what occurred, in what native quantity, and how was the decision reached?
 
-Required concepts:
+Required concepts include agreement/version/claim identity, obligated role, exact terms and evidence-rule hashes, native target and completion quantity, completion fraction, provenance, coverage, missingness, contradiction, adjudication, confidence, finality, lineage, integrity, settlement, privacy, retention, and deletion.
 
-- agreement, version, milestone or claim, obligated role, performer, and relying party;
-- mechanism and action category;
-- exact terms, obligation, and evidence-rule hashes;
-- target and completed native quantity;
-- completion fraction between 0 and 1;
-- evidence provenance classes and opaque references;
-- coverage, missingness, and contradiction state;
-- adjudication pathway and decision-confidence band;
-- finality, exclusion, replacement, appeal, correction, and late-cure lineage;
-- integrity finding separate from factual result;
-- settlement state separate from additionality;
-- privacy, access, retention, and deletion state.
+Pending or unresolved cases do not create numerical reliability observations. Permissible exits and force majeure are excluded from fulfillment rates.
 
-Terminal results may include full completion, partial completion, terminal noncompletion, permissible exit, force majeure, mutual prospective cancellation, replacement, appeal, correction, or late cure. Pending or unresolved cases do not create numerical reliability observations. Permissible exits and force majeure are excluded from fulfillment rates.
-
-## 2. Contextual Reliability Record
+## Contextual Reliability Record
 
 Target question:
 
-> Given comparable, independently resolved past factual outcomes, what can be said about future acceptable completion in this specific context?
+> Given comparable, independently resolved past factual outcomes, what can be said about future acceptable completion in this context?
 
-The record preserves raw counts, uncertainty, abstention, independent-audit count, unique counterparties, provenance counts, and five separately inspectable dimensions:
+The five dimensions are fulfillment, evidence integrity, settlement, dispute conduct, and responsiveness. Existing runtime/database identifiers use the legacy key `fulfilment`; implementation must preserve an explicit alias between the prose term `fulfillment` and legacy key `fulfilment` until a separately reviewed migration changes the stored identifier.
 
-- fulfillment;
-- evidence integrity;
-- settlement;
-- dispute conduct;
-- responsiveness.
+Absence of history means `Unproven`, not bad. No numerical output becomes active until real, independent, out-of-time evidence passes the separate calibration protocol. A 200-case sample may support an internal candidate; at least 300 independently resolved decisions plus per-band labels, calibration, subgroup, Brier, reproduction, privacy, and activation gates are required before activation review.
 
-The absence of history means `Unproven`, not bad. Newcomers remain eligible for proportionate, bounded pilots. No numerical output becomes active until real, independent, out-of-time evidence passes the separate calibration protocol; a 200-case sample can support an internal candidate, while at least 300 independently resolved decisions plus per-band labels, calibration, subgroup, Brier, reproduction, privacy, and activation gates are required before activation review.
-
-## 3. Additionality Assessment
+## Additionality Assessment
 
 Target question:
 
 > What changed because of the offer, trade, or policy relative to a defined no-offer state?
 
-Closed statuses include:
+Closed statuses include `not_assessed`, `baseline_attested_only`, `baseline_supported_observational`, `experiment_supported_policy_effect`, `participant_specific_effect_not_identified`, `marketplace_created_or_escalated_baseline`, and `excluded_or_blocked`.
 
-- `not_assessed`;
-- `baseline_attested_only`;
-- `baseline_supported_observational`;
-- `experiment_supported_policy_effect`;
-- `participant_specific_effect_not_identified`;
-- `marketplace_created_or_escalated_baseline`;
-- `excluded_or_blocked`.
+A prospective baseline should be frozen before exact offer exposure where feasible. Post-exposure worsening cannot increase credit. Provider receipts, witnesses, and reviews establish occurrence only. Numerical estimates require an exact estimand, unit, population, treatment, comparison, time window, outcome, design class, uncertainty, missingness, interference, positivity, and transportability limits.
 
-A prospective baseline should be frozen before exact offer exposure when feasible. Post-exposure worsening cannot increase credit. Harmful, marketplace-created, or marketplace-escalated baselines route to block or manual review. Numerical estimates require an exact estimand, unit, population, treatment, comparison, time window, outcome, design class, uncertainty, missingness, interference, positivity, and transportability limits.
+## Safety and Eligibility Status
 
-Provider receipts, witnesses, and reviews establish occurrence only. One-off causal work uses randomized encouragement, price lotteries, waitlists, staggered access, cluster assignment, or justified quasi-experimental designs. Repeated low-stakes actions may later use a separately approved micro-randomized design. The default claim is policy-level intention-to-treat in the exact study population and period.
+This is a separate veto/review plane for threats, extortion, coercion, retaliation, account compromise, identity duplication, impersonation, forged evidence, harmful baseline escalation, third-party harm, unlawful conduct, privacy disclosure, payment abuse, vulnerability, and serious process-integrity failure.
 
-## 4. Safety and Eligibility Status
-
-This is a separate veto or review plane for threats, extortion, coercion, retaliation, account compromise, identity duplication, impersonation, forged evidence, harmful baseline escalation, third-party harm, unlawful conduct, privacy disclosure, payment abuse, vulnerability, and serious process-integrity failure.
-
-Closed states are `eligible`, `review_required`, `temporarily_paused`, `restricted`, and `ineligible`. Restrictions are source-bound, scoped, time-aware, appealable, and non-compensatory. Weak evidence is not itself a severe safety event.
+Closed states are `eligible`, `review_required`, `temporarily_paused`, `restricted`, and `ineligible`. Restrictions are source-bound, scoped, time-aware, appealable, and non-compensatory.
 
 # Part II — Zero-dollar bilateral founding pilot
 
-## Purpose
+## Purpose and cohorts
 
-The first real-user program answers only whether a small number of adults can understand, voluntarily enter, complete, evidence, review, challenge, appeal, and exit one bounded bilateral reciprocal pledge, and whether the product and operations are feasible.
-
-It does not estimate adoption at scale, product-market fit, contextual-reliability calibration, causal additionality, impact, Payment readiness, DAC effectiveness, or free-rider mitigation.
-
-## Cohorts
+The first real-user program asks only whether a small number of adults can understand, voluntarily enter, complete, evidence, review, challenge, appeal, and exit one bounded bilateral reciprocal pledge, and whether the product and operations are feasible.
 
 - Cohort A: 4 dyads / 8 adults, moderated usability.
 - Cohort B: 8–12 additional dyads / 16–24 adults, operational feasibility.
-- At least 8 terminal dyad records are required for a progression judgment.
+- The A→B decision occurs only after all four Cohort A dyads have a terminal or explicitly unresolved closeout and every hard safety/privacy criterion is reviewed.
+- A quantitative post-B progression judgment requires at least 8 terminal dyad records across the program. This floor does not block the earlier qualitative A→B decision.
+
+The pilot does not estimate adoption at scale, product-market fit, reliability calibration, causal additionality, impact, Payment readiness, DAC effectiveness, or free-rider mitigation.
 
 ## Scope
 
-- Adults 18 or older only.
-- Targeted, private recruitment; no public marketplace recruitment.
-- Digital, non-sensitive, public-interest tasks only.
-- Each obligation normally requires 30–90 minutes and never more than 120 minutes.
-- Maximum active period 14 days.
-- Zero out-of-pocket spending and zero platform money or provider object.
-- Exact terms, evidence rule, privacy, challenge, appeal, and prospective exit.
-- Separate product and research consent.
-- At least 15 minutes of cooling-off.
-- A seven-item comprehension gate for both parties.
-- Raw evidence private to authorized participants and reviewers.
-- Day-7 and day-30 follow-up.
+Adults only; targeted private recruitment; digital non-sensitive public-interest tasks; 30–90 minutes normally and never over 120 minutes; maximum 14 days; zero spending; zero payment/provider object; exact terms; separate product/research consent; at least 15 minutes cooling-off; seven-item comprehension; private raw evidence; day-7/day-30 follow-up.
 
-Excluded are health, treatment, diet, medication, sleep, exercise, political voting or donations, religious conversion, sexual or romantic conduct, illegal or harassing action, violence or self-harm, credentials, high-stakes professional advice, employment, grades, housing, immigration, healthcare, caregiving, essential-support leverage, private third-party data, money-dependent actions, and nested mechanisms.
+Health, treatment, diet, medication, sleep, exercise, political voting/donations, religious conversion, sexual/romantic conduct, illegal/harassing action, violence/self-harm, credentials, high-stakes professional advice, employment, grades, housing, immigration, healthcare, caregiving, essential-support leverage, private third-party data, money-dependent actions, and nested mechanisms are excluded.
 
-## Curated obligation library
-
-The first version permits only reviewed templates such as public-source summarization, source-checking three factual claims, public-interest proofreading, reviewed non-sensitive translation, a public webpage accessibility checklist, a public resource map, an approved learning module and quiz, non-sensitive public annotation, and a sourced low-stakes administrative checklist.
-
-No ad hoc task enters Cohorts A or B.
+The v1 obligation library is limited to nine reviewed digital templates. No ad hoc task enters Cohorts A or B.
 
 # Part III — Q / initial R / proof-only I reconstruction
 
-The mixed PR #722 must be split.
+The mixed PR #722 must be split. The materialization source SHA is not the implementation base. At implementation start, revalidate live `main`, inspect overlap on every Q/R path, choose one exact fresh base, and create Q and initial R from that identical base.
 
 ## Q — repository-only evaluator harness
 
-Q contains only the permanent run-owned workflow, run-owned namespace extension, preflight, fixture, cleanup, rollback-only authorization proof, authenticated Playwright evaluator, source/ownership contracts, and audit documentation. It uses the merged #733 namespace primitives and distinct owner, responder, initial-reviewer, appeal-reviewer, outsider, and administrator identities.
+Exact paths:
 
-Q must not contain application runtime, production migration, provider, payment, or deployment behavior. Preflight detects exact residue and never deletes it. Cleanup is exact, ownership-aware, idempotent, failure-safe, and proves zero residue twice. Fixed `810…`, `820…`, `830…`, fixed `@qa.invalid`, first-N discovery, global-order discovery, and prefix cleanup are prohibited.
+```text
+.github/workflows/evidence-payment-release-qa.yml
+scripts/evidence-payment-qa-namespace.mjs
+scripts/evidence-payment-qa-namespace.test.mjs
+scripts/evaluator-core-loop-qa-run-ownership.test.mjs
+supabase/tests/evaluator_core_loop_browser_preflight.sql
+supabase/tests/evaluator_core_loop_browser_fixture.sql
+supabase/tests/evaluator_core_loop_browser_cleanup.sql
+supabase/tests/evaluator_core_loop_evidence_authorization.sql
+tests/evaluator-core-loop-authenticated.spec.ts
+docs/evaluator-core-loop-audit.md
+```
+
+Q uses merged PR #733 run-owned namespace primitives and distinct owner, responder, initial-reviewer, appeal-reviewer, outsider, and administrator identities. It contains no application runtime, production migration, provider, payment, or deployment behavior. Preflight detects exact residue and never deletes it. Cleanup is exact, ownership-aware, idempotent, failure-safe, and proves zero residue twice. Fixed cross-run IDs/emails, first-N/global-order discovery, and prefix cleanup are prohibited.
 
 ## Initial R — runtime extraction
 
-Initial R contains only the accepted zero-dollar product semantics and two additive RLS migrations:
+Exact paths:
 
-- canonical atomic acceptance using the RPC-returned agreement ID;
-- bounded anonymous passive telemetry that remains write-free;
-- locked Next redirect compatibility;
-- distinct initial and appeal reviewer roles;
-- retained read-only audit;
-- participant AAL1, assigned reviewer AAL2, and administrator AAL2 access;
-- bilateral frozen terms;
-- prospective unilateral exit;
-- zero-dollar, noncustodial behavior.
+```text
+src/app/actions.ts
+src/app/api/live-now/feedback/route.ts
+src/app/api/live-now/feedback/route.test.ts
+src/app/trade-review/[milestoneId]/page.tsx
+src/components/core-trade/full-navigation-action-form.tsx
+src/components/core-trade/trade-agreement-stage-base.tsx
+src/components/core-trade/trade-milestone-workflow.tsx
+src/components/marketplace/participant-offer-group.tsx
+src/lib/evidence-weighted-payment-lifecycle.test.ts
+src/lib/marketplace-delta-contract.test.ts
+src/lib/trade-evidence-reviewer-rls-contract.test.ts
+supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql
+supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql
+```
+
+Initial R preserves canonical atomic acceptance using the RPC-returned agreement ID; write-free anonymous passive telemetry; locked Next redirect compatibility; distinct initial and appeal reviewers; retained read-only audit; participant AAL1; assigned reviewer and administrator AAL2; bilateral frozen terms; prospective unilateral exit; and zero-dollar noncustodial behavior.
 
 ## I — proof-only integration
 
-I conventionally combines the exact Q and initial R heads only to run complete source, database, Auth/RLS, browser, rendered, no-money, cleanup, and artifact gates. I is never a merge candidate.
+I conventionally combines exact Q and initial R only to run source, database, Auth/RLS, browser, rendered, no-money, cleanup, and artifact-secrecy gates. Q and R path sets are disjoint; I's intended union is exactly 23 paths. I is never a merge candidate.
 
-After independent review, a separate owner decision is required before Q can merge. Final R is then reconstructed from the new Q-containing `main`; the proof branch does not become merge-ready automatically.
+After independent review, a separate owner decision is required before Q can merge. Final R is reconstructed from the new Q-containing `main`; proof-only I and initial R do not become merge-ready automatically.
 
 # Part IV — Protected owner UAT and release
 
-Owner UAT runs only after final R passes exact-head gates. It uses seven distinct roles: operator, Participant A, Participant B, initial reviewer, appeal reviewer, outsider, and administrator.
+The machine contract `zero-dollar-owner-uat-release-contract.v1.json` governs exact acceptance.
 
-The exact lifecycle is:
+Owner UAT uses operator, Participant A, Participant B, initial reviewer, appeal reviewer, outsider, and administrator; four exact viewport classes; thirteen stages; seven comprehension items for each participant; exact lifecycle counts; zero financial/provider objects; private evidence; distinct appeal review; immediate revocation; prospective exit; two-pass zero residue; and secret-scanned artifacts.
 
-```text
-signed-out discovery
-→ exact offer
-→ private response
-→ atomic selection and competing decline
-→ frozen terms
-→ bilateral confirmation
-→ private evidence
-→ initial factual review
-→ challenge and appeal
-→ retained read-only audit and revocation
-→ prospective unilateral exit
-→ exact cleanup
-```
-
-Required viewports include 1440×1000, 1024×768, 390×844, and 320×568. Both participants must pass all seven comprehension items, including the fact that completion does not establish causation. Exactly one canonical agreement, selected acceptance, exit POST, 303 same-agreement redirect, and counterpart exit notification are required. Duplicate or stale mutations fail closed.
-
-No-money means zero objects as well as zero amount: bonds, receipts, methods, mandates, charges, captures, refunds, transfers, custody balances, payouts, platform bonuses, and provider requests all equal zero.
-
-A passing owner UAT yields only `uat_pass_not_pilot_authorized`. It is not ordinary-user comprehension, adoption, feasibility, production health, or impact evidence.
-
-The release state machine proceeds through specification, Q, initial R, I, Q authorization, final R, final-R acceptance, owner UAT, merge-ready decision, expected-head merge, production preflight, guarded release, post-release verification, recruitment readiness, and pilot launch. No state may be skipped. Production migrations are additive and forward-only; rollback redeploys the previous compatible application rather than rewriting migration history.
+A passing UAT yields only `uat_pass_not_pilot_authorized`. The release state machine runs from specification through Q, initial R, I, Q decision, final R, UAT, expected-head merge, production preflight/release/postflight, recruitment readiness, and pilot launch. No state may be skipped. Migrations are additive/forward-only; rollback redeploys the previous compatible application rather than rewriting migration history.
 
 # Part V — Pilot operations and oversight
 
-## Human-subjects and ethics determination
-
-The project must obtain a written qualified determination addressing applicable authority, human-subjects status, review category, consent, identity, recruitment, compensation, privacy, retention, incidents, amendments, cross-border conditions, and training. The project does not self-designate the 14-day dyadic pilot exempt or outside human-subjects research.
-
-## Roles and separation
+A qualified written determination must address authority, human-subjects status, review category, consent, identity, recruitment, compensation, privacy, retention, incidents, amendments, cross-border conditions, and training. The project does not self-designate exemption.
 
 Required functions include Pilot Director, Safety Officer, Privacy/Data Steward, Facilitator Lead, facilitators, Reviewer Lead, initial reviewer, appeal reviewer, Technical Operator, Recruitment Coordinator, Methods Reviewer, and an independent ethics/human-subjects reviewer.
 
-Initial reviewer differs from appeal reviewer; the facilitator is not sole reviewer of their dyad; the founder cannot override a hard stop; the Pilot Director cannot be the sole safety and progression authority; the Technical Operator has no ordinary raw-evidence access.
+Initial reviewer differs from appeal reviewer; the facilitator is not sole reviewer of their dyad; the founder cannot override a hard stop; the Pilot Director cannot be sole safety/progression authority; the Technical Operator has no ordinary raw-evidence access.
 
-## Support
+A dyad activates only when primary and backup support, Safety, and Technical pause contacts are available and no deadline expires during uncovered hours. Recruitment is targeted/private, with independent power/coercion screens. Government ID is not the default.
 
-A dyad activates only when a primary facilitator is on duty, a backup is reachable, Safety and Technical pause contacts are reachable, and no evidence or challenge deadline expires during uncovered hours. The channel is not a 24/7 emergency service. Immediate danger is directed to local emergency services.
+Any research compensation is fixed, disclosed, sponsor-funded, outside the Moral Trade ledger, and independent of matching, acceptance, completion, evidence, challenge, appeal, or continued enrollment. Trade consideration remains zero.
 
-## Recruitment and screening
+Product and research consent are separate, versioned records. Incidents use P0–P3. P0 pauses the cohort; P1 holds enrollment; restart requires independent review. Raw evidence, rationale, safety records, linkage, and research events remain separate data classes. Retention schedules are provisional until independent approval.
 
-Recruitment is targeted and private. Each party completes a separate power, retaliation, third-party, identity, task, and voluntariness screen. Immediate family, cohabiting intimate partners, material dependents, and relationships controlling employment, grades, housing, immigration, healthcare, caregiving, or essential support are excluded from Cohorts A and B. Government ID is not the default identity method.
-
-## Compensation
-
-Any research compensation is fixed, disclosed, sponsor-funded, outside the Moral Trade ledger, and independent of matching, acceptance, completion, evidence, challenge, appeal, or remaining enrolled. Trade consideration remains zero. Recruitment cannot begin until the exact compensation or no-compensation decision is reviewed and frozen.
-
-## Consent and reconsent
-
-Product and research consent are separate, versioned records with no combined checkbox and no silence-as-consent. Participants receive a copy. Consent does not replace comprehension or power screening. Material changes to risk, data, recipients, retention, compensation, burden, evidence access, withdrawal, randomization, or mechanism require review and ordinarily reconsent. Product exit and research withdrawal remain separate.
-
-## Incidents and privacy
-
-Incidents use P0–P3 severity. P0 pauses the cohort; P1 holds enrollment; restart requires independent review. The workflow protects people first, then contains access, preserves minimum evidence, repairs, recovers, reports as required, and learns. Assertions are never weakened merely to obtain a green rerun.
-
-Raw evidence, reviewer rationale, safety records, linkage, and research events are separate data classes. Raw evidence never enters public output, ranking training, or ordinary analytics. Provisional retention is 30 days for raw evidence after finality/appeal, 90 days for rationale, through day-30 follow-up for linkage, 24 months for deidentified process data and consent, and 12 months for access logs, subject to independent approval. Deletion has a secure request, identity verification, scoped retention explanation, linkage/evidence deletion, export exclusion, receipt, and rehearsal.
-
-## Progression and closeout
-
-Seven hard criteria include zero severe safety/privacy/identity/third-party-harm incident, zero money/provider object, exact bilateral confirmation, prospective exit, approved evidence access, no unsupported participant causal claim, and no hidden term mutation. Any hard failure stops progression.
-
-GO requires all hard criteria, at least six of eight frozen soft criteria, no unresolved trend, and concurrence by the Pilot Director plus independent Safety/Privacy and Methods reviewers. The founder cannot override a hard stop. GO means only that the next approved feasibility stage is justified.
-
-Every dyad receives an explicit closeout. Recruitment, screening, consent, activation, evidence, review, appeal, exit, follow-up, withdrawal, deletion, assistance, incidents, deviations, and missingness are reconciled with exact denominators. External reporting is descriptive, privacy-safe, and never calls completion “verified impact” or claims that Moral Trade caused an individual outcome.
+The A→B decision uses closed Cohort A records and hard criteria. Post-B GO requires all hard criteria, at least six of eight soft criteria, at least eight terminal dyads across the program, no unresolved trend, and concurrence by Pilot Director plus independent Safety/Privacy and Methods reviewers. The founder cannot override a hard stop. GO means only that the next approved feasibility stage is justified.
 
 # Part VI — Moral-public-goods free-rider portfolio
 
 No single voluntary online mechanism is treated as a robust solution.
 
-The experimental base is a provision point with full refund. Candidate arms include a real locked seed, capped fixed 1:1 match, and an early-contributor refund bonus. DAC is an experimental arm, not the default, because failure bonuses do not remove the central success-state incentive to let others pay and can create bonus farming, Sybil, deliberate-failure, and sponsor-reserve risks.
-
-Repeated coalitions with transparent governance may support conditional cooperation, but public noncontributor lists, “free-rider” scores, participant-imposed punishment, retaliation, and unrelated service loss are prohibited. Social information is truthful, aggregate, privacy-safe, optional, and measured for pressure. Club benefits must be narrow, nonessential, and legitimate.
-
-Quadratic funding allocates an already-funded matching pool; it does not create that pool and is deferred until identity, collusion, governance, and budget controls exist. Lotteries remain research- and legal-deferred. Large-scale non-excludable provision must include comparison with legitimately authorized institutional budgets, dues, or taxation; Moral Trade cannot invent compulsory authority.
+- M0: unconditional voluntary contribution, used as a plain-donation comparator rather than a free-rider solution.
+- M1: provision point with full refund, the experimental base.
+- M2: real locked seed.
+- M3: capped fixed 1:1 matching when pre-funded.
+- M4: general refund-bonus/DAC, research-only and not default.
+- M5: early-contributor refund bonus.
+- M6: repeated coalition without peer punishment.
+- M7: truthful, privacy-safe, opt-in social information.
+- M8: peer punishment/negative reputation, rejected.
+- M9: narrow legitimate nonessential club benefits.
+- M10: quadratic funding, later allocation experiment for a pre-funded pool.
+- M11: prize-linked lottery, research/legal deferred.
+- M12: legitimate institution-backed collective budget, a high-value integration path.
 
 Mechanisms are evaluated on net delivered public-good provision after seed, match, bonus, provider, and platform costs—not campaign success alone. Participant contribution, sponsor seed, sponsor match, bonus reserve, bonus paid, refund, fees, baseline redirect, and delivered public good are separate resource classes.
+
+The conceptual sources support the possibility of moral trade and the importance of preventing threats, concentration, and poor collective decision procedures; they do not empirically validate any platform mechanism. Voluntary assurance and DAC remain hypotheses, with core free-riding and outside-funding limitations.
 
 # Governing implementation sequence
 
 1. Independently review this repository-only materialization.
-2. Revalidate live `main` and the complete Q/R path overlap.
-3. Create Q and initial R from the identical exact base.
+2. Revalidate live `main` and all 23 Q/R paths.
+3. Select one exact fresh implementation base and create Q and initial R from it.
 4. Create proof-only I by conventional merge.
-5. Run complete immutable-head proof and independently review Q, R, and I.
+5. Run immutable-head proof and independently review Q, R, and I.
 6. Obtain a separate owner decision before merging Q.
 7. Reconstruct final R from Q-containing `main` and rerun exact-head gates.
 8. Execute protected owner UAT.
