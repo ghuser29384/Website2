@@ -88,17 +88,15 @@ jobs:
           umask 077
           mkdir -p "$BACKUP_DIR"
           cat > "$BACKUP_DIR/preflight.sql" <<'SQL'
-          select jsonb_build_object(
-            'connected', true,
-            'database', current_database(),
-            'server_version', current_setting('server_version'),
-            'ssl', coalesce((select ssl from pg_stat_ssl where pid = pg_backend_pid()), false),
-            'read_only', current_setting('default_transaction_read_only'),
-            'database_bytes', pg_database_size(current_database()),
-            'migration_count', (select count(*) from supabase_migrations.schema_migrations),
-            'latest_migration', (select max(version) from supabase_migrations.schema_migrations),
-            'checked_at', clock_timestamp()
-          )::text;
+          select concat_ws('|',
+            current_database(),
+            current_setting('server_version'),
+            coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false'),
+            current_setting('default_transaction_read_only'),
+            pg_database_size(current_database())::text,
+            (select count(*)::text from supabase_migrations.schema_migrations),
+            (select max(version) from supabase_migrations.schema_migrations)
+          );
           SQL
           docker run --rm \
             -e DATABASE_URL="$PROD_SUPABASE_DB_URL" \
@@ -110,16 +108,39 @@ jobs:
               --tuples-only \
               --no-align \
               --file=/backup/preflight.sql \
-            > "$BACKUP_DIR/production-preflight.json"
-          jq -e '
-              .connected == true
-              and .database == "postgres"
-              and .ssl == true
-              and (.database_bytes | tonumber) > 0
-              and (.migration_count | tonumber) > 0
-              and (.latest_migration | type) == "string"
-            ' "$BACKUP_DIR/production-preflight.json" >/dev/null
-          rm -f "$BACKUP_DIR/preflight.sql"
+            > "$RUNNER_TEMP/production-preflight.txt"
+
+          IFS='|' read -r database server_version ssl read_only database_bytes migration_count latest_migration \
+            < "$RUNNER_TEMP/production-preflight.txt"
+          test "$database" = "postgres"
+          [[ "$server_version" =~ ^17\. ]]
+          test "$ssl" = "true"
+          test "$read_only" = "off"
+          test "$database_bytes" -gt 0
+          test "$migration_count" -gt 0
+          [[ "$latest_migration" =~ ^[0-9]{14}$ ]]
+
+          jq -n \
+            --arg database "$database" \
+            --arg server_version "$server_version" \
+            --arg read_only "$read_only" \
+            --arg latest_migration "$latest_migration" \
+            --argjson ssl true \
+            --argjson database_bytes "$database_bytes" \
+            --argjson migration_count "$migration_count" \
+            --arg checked_at "$(date -u +%FT%TZ)" \
+            '{
+              connected: true,
+              database: $database,
+              serverVersion: $server_version,
+              ssl: $ssl,
+              readOnly: $read_only,
+              databaseBytes: $database_bytes,
+              migrationCount: $migration_count,
+              latestMigration: $latest_migration,
+              checkedAt: $checked_at
+            }' > "$BACKUP_DIR/production-preflight.json"
+          rm -f "$BACKUP_DIR/preflight.sql" "$RUNNER_TEMP/production-preflight.txt"
 
       - name: Create a consistent full logical database backup
         shell: bash
