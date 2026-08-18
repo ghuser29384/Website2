@@ -1,0 +1,235 @@
+name: DAC production pre-migration backup v2 20260818
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/dac-production-backup-v2-20260818.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: moraltrade-dac-production-release
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: f1cd364bf058b28b3b29501aa6528c48f8f39bb7
+  EXPECTED_MAIN_TREE: 46960df193eaa07a94f07c7891590a366d996a5b
+  EXPECTED_PROJECT_REF: jnpoxvalyjtdghnperyu
+  EXPECTED_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+  EXPECTED_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+  POSTGRES_IMAGE: postgres:17
+  BACKUP_DIR: production-backup-evidence-v2
+
+jobs:
+  backup:
+    name: Exact production logical backup and encrypted verification
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact merged main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 0
+
+      - name: Guard immutable source and exact production target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_MAIN_TREE"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          git diff --check HEAD^
+
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          URL_TO_CHECK="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid =
+            ["postgres:", "postgresql:"].includes(url.protocol) &&
+            decodeURIComponent(url.username) === process.env.EXPECTED_POOLER_USER &&
+            url.hostname === process.env.EXPECTED_POOLER_HOST &&
+            url.port === "5432" &&
+            url.pathname === "/postgres" &&
+            url.searchParams.get("sslmode") === "require" &&
+            Boolean(url.password) &&
+            !url.href.includes("hvmxfjjbdcgjjudmthdz");
+          if (!valid) throw new Error("Refusing a database URL outside the exact TLS-only production target.");
+          NODE
+
+      - name: Pull PostgreSQL 17 backup toolchain
+        run: docker pull "$POSTGRES_IMAGE"
+
+      - name: Prove the live production preflight without exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$BACKUP_DIR"
+
+          docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --tuples-only \
+              --no-align \
+              --quiet \
+              --command "select jsonb_build_object(
+                'connected', true,
+                'database', current_database(),
+                'server_version', current_setting('server_version'),
+                'server_version_num', current_setting('server_version_num')::integer,
+                'ssl', coalesce((select ssl from pg_stat_ssl where pid = pg_backend_pid()), false),
+                'read_only', current_setting('default_transaction_read_only'),
+                'database_bytes', pg_database_size(current_database()),
+                'migration_count', (select count(*) from supabase_migrations.schema_migrations),
+                'latest_migration', (select max(version) from supabase_migrations.schema_migrations)
+              )::text;" \
+            | tr -d '\r' \
+            | awk 'NF { line=$0 } END { print line }' \
+            > "$BACKUP_DIR/production-preflight.json"
+
+          jq -e '
+            .connected == true
+            and .database == "postgres"
+            and (.server_version_num | tonumber) >= 170000
+            and .ssl == true
+            and .read_only == "off"
+            and (.database_bytes | tonumber) > 0
+            and (.migration_count | tonumber) > 0
+            and (.latest_migration | test("^[0-9]{14}$"))
+          ' "$BACKUP_DIR/production-preflight.json" >/dev/null
+
+      - name: Create a consistent full logical backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          docker run --rm "$POSTGRES_IMAGE" \
+            pg_dump \
+              --dbname="$PROD_SUPABASE_DB_URL" \
+              --format=custom \
+              --compress=9 \
+              --no-owner \
+              --no-privileges \
+            > "$BACKUP_DIR/moraltrade-production-pre-dac.dump"
+          test -s "$BACKUP_DIR/moraltrade-production-pre-dac.dump"
+          sha256sum "$BACKUP_DIR/moraltrade-production-pre-dac.dump" \
+            | tee "$BACKUP_DIR/plaintext-backup.sha256"
+
+      - name: Verify the custom archive is structurally readable
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -i "$POSTGRES_IMAGE" \
+            pg_restore --list \
+            < "$BACKUP_DIR/moraltrade-production-pre-dac.dump" \
+            > "$BACKUP_DIR/restore-list.txt"
+          test "$(wc -l < "$BACKUP_DIR/restore-list.txt")" -gt 100
+          grep -Eq 'TABLE|SCHEMA|FUNCTION' "$BACKUP_DIR/restore-list.txt"
+
+      - name: Encrypt the backup and verify a byte-exact decrypt round trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          backup_key="$(printf '%s\0%s' "$PROD_SUPABASE_DB_URL" 'moraltrade-dac-release-backup-v1' | sha256sum | awk '{print $1}')"
+          test "${#backup_key}" -eq 64
+          echo "::add-mask::$backup_key"
+          export BACKUP_KEY="$backup_key"
+
+          openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt \
+            -in "$BACKUP_DIR/moraltrade-production-pre-dac.dump" \
+            -out "$BACKUP_DIR/moraltrade-production-pre-dac.dump.enc" \
+            -pass env:BACKUP_KEY
+          test -s "$BACKUP_DIR/moraltrade-production-pre-dac.dump.enc"
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+            -in "$BACKUP_DIR/moraltrade-production-pre-dac.dump.enc" \
+            -out "$RUNNER_TEMP/verified-production-backup.dump" \
+            -pass env:BACKUP_KEY
+          cmp --silent "$BACKUP_DIR/moraltrade-production-pre-dac.dump" "$RUNNER_TEMP/verified-production-backup.dump"
+          rm -f "$RUNNER_TEMP/verified-production-backup.dump"
+          sha256sum "$BACKUP_DIR/moraltrade-production-pre-dac.dump.enc" \
+            | tee "$BACKUP_DIR/encrypted-backup.sha256"
+
+      - name: Write safe backup manifest and delete plaintext
+        shell: bash
+        run: |
+          set -euo pipefail
+          plaintext_sha="$(awk '{print $1}' "$BACKUP_DIR/plaintext-backup.sha256")"
+          encrypted_sha="$(awk '{print $1}' "$BACKUP_DIR/encrypted-backup.sha256")"
+          plaintext_bytes="$(stat -c %s "$BACKUP_DIR/moraltrade-production-pre-dac.dump")"
+          encrypted_bytes="$(stat -c %s "$BACKUP_DIR/moraltrade-production-pre-dac.dump.enc")"
+
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg release_main_sha "$EXPECTED_MAIN_SHA" \
+            --arg release_main_tree "$EXPECTED_MAIN_TREE" \
+            --arg project_ref "$EXPECTED_PROJECT_REF" \
+            --arg plaintext_sha256 "$plaintext_sha" \
+            --arg encrypted_sha256 "$encrypted_sha" \
+            --argjson plaintext_bytes "$plaintext_bytes" \
+            --argjson encrypted_bytes "$encrypted_bytes" \
+            --arg created_at "$(date -u +%FT%TZ)" \
+            '{
+              repository: $repository,
+              releaseMainSha: $release_main_sha,
+              releaseMainTree: $release_main_tree,
+              sourceProjectRef: $project_ref,
+              format: "PostgreSQL 17 custom archive",
+              encryption: "AES-256-CBC, PBKDF2-SHA256, 600000 iterations",
+              keyDerivation: "masked production DB URL plus fixed release context; key not retained",
+              plaintextSha256: $plaintext_sha256,
+              encryptedSha256: $encrypted_sha256,
+              plaintextBytes: $plaintext_bytes,
+              encryptedBytes: $encrypted_bytes,
+              archiveListVerified: true,
+              decryptRoundTripVerified: true,
+              createdAt: $created_at
+            }' > "$BACKUP_DIR/backup-manifest.json"
+
+          rm -f "$BACKUP_DIR/moraltrade-production-pre-dac.dump"
+          test ! -e "$BACKUP_DIR/moraltrade-production-pre-dac.dump"
+          test -s "$BACKUP_DIR/moraltrade-production-pre-dac.dump.enc"
+
+      - name: Fail closed on credential-like evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIlE '(postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_|whsec_|Bearer [A-Za-z0-9._-]+)' "$BACKUP_DIR"; then
+            echo 'Credential-like material found in backup evidence.' >&2
+            exit 1
+          fi
+
+      - name: Upload encrypted backup and immutable verification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: moraltrade-production-pre-dac-backup-v2-${{ github.run_id }}-${{ env.EXPECTED_MAIN_SHA }}
+          path: ${{ env.BACKUP_DIR }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Record completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Production pre-DAC logical backup verified'
+            echo
+            echo "- Exact merged main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Production project: \`$EXPECTED_PROJECT_REF\`"
+            echo '- PostgreSQL custom archive and restore list: verified'
+            echo '- Encryption/decryption round trip: verified'
+            echo '- Plaintext retained in artifact: no'
+            echo '- Production mutation: none'
+          } >> "$GITHUB_STEP_SUMMARY"
