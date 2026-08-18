@@ -1,0 +1,85 @@
+name: Materialize reviewed pre-activation baseline tooling v3
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+    paths:
+      - .github/workflows/materialize-preactivation-baseline-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.head_ref == 'database/preactivation-schema-baseline-20260818'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: database/preactivation-schema-baseline-20260818
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Extract immutable reviewed tooling bundle
+        shell: bash
+        env:
+          ARCHIVE_BLOB_SHA: 081b01aa91272b7d0403b7f4ac11d9f1bb59a01d
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${{ github.repository }}/git/blobs/$ARCHIVE_BLOB_SHA" \
+            | jq -r '.content' | tr -d '\n' | base64 --decode \
+            > /tmp/preactivation-bootstrap-v3.tar.gz
+          printf 'archive_bytes=%s\narchive_sha256=%s\n' \
+            "$(wc -c < /tmp/preactivation-bootstrap-v3.tar.gz | tr -d ' ')" \
+            "$(sha256sum /tmp/preactivation-bootstrap-v3.tar.gz | awk '{print $1}')"
+          python3 - <<'PY'
+          import tarfile
+          from pathlib import Path
+
+          allowed = {
+              'scripts/database/preactivation-catalog.sql',
+              'scripts/database/generate-preactivation-baseline.sh',
+              'scripts/database/validate-preactivation-baseline.sh',
+              'docs/database/preactivation-schema-baseline.md',
+              '.github/workflows/generate-preactivation-baseline.yml',
+              '.github/workflows/validate-preactivation-baseline.yml',
+          }
+          archive_path = Path('/tmp/preactivation-bootstrap-v3.tar.gz')
+          if archive_path.stat().st_size < 1000:
+              raise SystemExit('Immutable tooling archive is unexpectedly small.')
+          with tarfile.open(archive_path, mode='r:gz') as archive:
+              members = archive.getmembers()
+              names = {member.name for member in members}
+              if names != allowed:
+                  raise SystemExit(f'Unexpected archive paths: {sorted(names ^ allowed)}')
+              for member in members:
+                  if member.isdir() or member.issym() or member.islnk():
+                      raise SystemExit(f'Unsafe archive member: {member.name}')
+              archive.extractall('.')
+          PY
+          chmod 0755 \
+            scripts/database/generate-preactivation-baseline.sh \
+            scripts/database/validate-preactivation-baseline.sh
+          rm .github/workflows/materialize-preactivation-baseline-v3.yml
+          bash -n scripts/database/generate-preactivation-baseline.sh
+          bash -n scripts/database/validate-preactivation-baseline.sh
+          git diff --check
+          git status --short
+
+      - name: Commit and push normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          test -n "$(git status --porcelain)"
+          git commit -m 'Install reviewed pre-activation baseline boundary tooling'
+          git push origin HEAD:database/preactivation-schema-baseline-20260818
