@@ -11,7 +11,17 @@ async function migration() {
 
 test("public-goods foundation reconciliation restores exactly the four canonical DAC prerequisites", async () => {
   const source = await migration();
+  const createdTables = Array.from(
+    source.matchAll(/create table if not exists public\.([a-z0-9_]+) \(/g),
+    (match) => match[1],
+  );
 
+  assert.deepEqual(createdTables, [
+    "mpgf_public_goods_match_pools",
+    "mpgf_public_goods_rounds",
+    "mpgf_public_goods_campaigns",
+    "mpgf_public_goods_pledges",
+  ]);
   assert.match(source, /^begin;/);
   assert.match(source, /commit;\s*$/);
 
