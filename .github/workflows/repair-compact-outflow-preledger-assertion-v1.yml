@@ -1,0 +1,81 @@
+name: Repair Compact outflow pre-ledger assertion v1
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/repair-compact-outflow-preledger-assertion-v1.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-compact-outflow-preledger-assertion-v1-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Guard bounded durable scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
+          git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/files.txt
+          grep -v '^\.github/workflows/repair-compact-outflow-preledger-assertion-v1.yml$' /tmp/files.txt > /tmp/durable.txt
+          test "$(wc -l < /tmp/durable.txt)" -eq 14
+          test "$(grep -Ec '^\.github/workflows/compact-authoritative-outflow-ledger-qa.yml$' /tmp/durable.txt)" -eq 1
+          test -f .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -q 'Run pre-ledger Compact regression suites' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -q 'Apply authoritative-ledger migrations in exact order' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+
+      - name: Assert ledger migrations are withheld from the pre-ledger chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/compact-authoritative-outflow-ledger-qa.yml')
+          source = path.read_text(encoding='utf-8')
+          old = '''          for migration in 20260816141500 20260816141501 20260816141502 20260816141503; do
+            grep --fixed-strings --quiet "applying_migration=${migration}_" compact-outflow-clean/full-migration-chain.log
+          done
+'''
+          new = '''          for migration in 20260816141500 20260816141501 20260816141502 20260816141503; do
+            if grep --fixed-strings --quiet "applying_migration=${migration}_" compact-outflow-clean/full-migration-chain.log; then
+              echo "Ledger migration ${migration} was applied before the pre-ledger regressions."
+              exit 1
+            fi
+          done
+'''
+          if old in source:
+              source = source.replace(old, new, 1)
+          elif new not in source:
+              raise SystemExit('Could not identify the pre-ledger migration assertion block.')
+          path.write_text(source, encoding='utf-8')
+          PY
+          git diff --check
+          grep -q 'was applied before the pre-ledger regressions' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+
+      - name: Commit durable repair and remove controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          git rm .github/workflows/repair-compact-outflow-preledger-assertion-v1.yml
+          git commit -m "ci: keep ledger migrations out of pre-ledger validation"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
