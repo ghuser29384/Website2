@@ -1,23 +1,18 @@
 {
   "base": "0207a58410480b6edd1bb5a1496bc8ce7c66d6f6",
   "outcomes": {
-    "build": "skipped",
     "commit": "skipped",
-    "eslint": "skipped",
-    "focused": "skipped",
     "guard": "success",
     "install": "skipped",
     "patch": "failure",
-    "repository": "skipped",
-    "scope": "skipped",
-    "typescript": "skipped"
+    "verify": "skipped"
   },
   "patchLogTail": [
-    "/tmp/apply-every-org-route-id.py:287: SyntaxWarning: invalid escape sequence '\\{'",
+    "/tmp/apply-every-org-route-id.py:292: SyntaxWarning: invalid escape sequence '\\{'",
     "  source_contract.write_text('''import assert from \"node:assert/strict\";",
-    "Refusing unexpected route-secret references: ['.github/workflows/repair-every-org-webhook-route-id-708-20260818.yml', '.github/workflows/run-every-org-webhook-route-id-708-v2-20260818.yml']"
+    "Refusing: shared-connector route-ID resolution anchor missing"
   ],
-  "runId": "32105228320",
+  "runId": "32105412964",
   "schemaVersion": 1,
-  "triggerCommit": "1f238960eebaee710b724b0ac1c352873ed3f9c0"
+  "triggerCommit": "c4865ee7e91a71510acb843d308d196243bd7320"
 }
