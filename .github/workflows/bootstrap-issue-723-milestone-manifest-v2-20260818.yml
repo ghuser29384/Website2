@@ -1,0 +1,338 @@
+name: Converge issue 723 milestone-manifest QA
+
+on:
+  push:
+    branches:
+      - qa/723-authenticated-confirmation-integration-20260817
+    paths:
+      - .github/workflows/bootstrap-issue-723-milestone-manifest-v2-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pooled-settlement-authenticated-caller-integration
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      BRANCH: qa/723-authenticated-confirmation-integration-20260817
+      PRODUCT_BRANCH: fix/723-donation-confirmation-authenticated-caller
+      PR700_HEAD: 813573f64eaa17d2ca240c50f76ead9a3b535f97
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3215
+      POOLED_SETTLEMENT_QA_BASE_URL: http://127.0.0.1:3215
+      POOLED_SETTLEMENT_QA_OUTPUT_DIR: pooled-settlement-authenticated-caller-v2-evidence
+      TRADE_DONATION_POOL_ENABLED: "true"
+      TRADE_DONATION_POOL_MODE: test
+      EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "true"
+      EVERY_ORG_ENVIRONMENT: staging
+      VERCEL_ENV: preview
+      AUTH_MIGRATION_PATH: supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
+    steps:
+      - name: Check out current stacked branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 20
+
+      - name: Lock bases and reject unrelated drift
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --force origin "$PRODUCT_BRANCH" main
+          product_head="$(git rev-parse FETCH_HEAD)"
+          # FETCH_HEAD's first entry is the product branch requested first.
+          product_head="$(git rev-parse "origin/$PRODUCT_BRANCH")"
+          test "$product_head" != "ec59737e66aa6135b822446e4cb4a82372e0b39b"
+          git show "$product_head:src/app/trade-donation-actions-base.ts" | grep -Fq 'before final completion.'
+          ! git show "$product_head:src/app/trade-donation-actions-base.ts" | grep -Fq 'befor final completion.'
+          echo "product_head=$product_head" >> "$GITHUB_OUTPUT"
+
+          allowed='^(\.github/scripts/pooled-settlement-authenticated-caller-integration-(contract|test)\.mjs|\.github/scripts/pooled-settlement-authenticated-caller-integration\.mjs|\.github/workflows/pooled-settlement-authenticated-caller-integration-20260817\.yml|src/app/trade-donation-actions-base\.ts|src/lib/moral-trade/trade-donation-confirmation-authenticated-caller\.test\.ts|supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller\.sql|\.github/workflows/bootstrap-issue-723-milestone-manifest(-v2)?-20260818\.yml)$'
+          unexpected="$(git diff --name-only "$PR700_HEAD" HEAD | grep -Ev "$allowed" || true)"
+          test -z "$unexpected"
+
+      - name: Import corrected product bytes and converge the harness transformation
+        env:
+          PRODUCT_HEAD: ${{ steps.lock.outputs.product_head }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in \
+            src/app/trade-donation-actions-base.ts \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql; do
+            git show "$PRODUCT_HEAD:$path" > "$path"
+          done
+
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          product_head = os.environ["PRODUCT_HEAD"]
+          contract_path = Path(".github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs")
+          contract = contract_path.read_text()
+          contract = re.sub(
+              r'export const PRODUCT_REPAIR_HEAD = "[0-9a-f]{40}";',
+              f'export const PRODUCT_REPAIR_HEAD = "{product_head}";',
+              contract,
+              count=1,
+          )
+
+          # Remove any earlier milestone helper transformation so this workflow
+          # can converge both the original and the first attempted candidate.
+          contract = re.sub(
+              r'\n\s*const milestoneHelpers = \[[\s\S]*?"milestone-manifest preparation helpers",\n\s*\);\n',
+              "\n",
+              contract,
+              count=1,
+          )
+          contract = contract.replace(
+              '  const authenticatedLoop = [\n    "  await prepareMilestoneManifestForAuthenticatedConfirmation({ counterparty, payer, agreement, version, label });",\n',
+              '  const authenticatedLoop = [\n',
+          )
+
+          insertion_marker = '''  source = replaceExactly(
+            source,
+            helperMarker,
+            helpers + helperMarker,
+            "authenticated participant helpers",
+          );
+          '''
+          if contract.count(insertion_marker) != 1:
+              raise SystemExit("Authenticated helper insertion marker is not unique.")
+
+          milestone_block = r'''
+          const milestoneHelpers = [
+            "function participantLifecycleArgs(actor, agreement, version) {",
+            "  return {",
+            "    p_actor_id: actor.id,",
+            "    p_agreement_id: agreement.id,",
+            "    p_agreement_version_id: version.id,",
+            "  };",
+            "}",
+            "",
+            "async function prepareMilestoneManifestForAuthenticatedConfirmation({ counterparty, payer, agreement, version, label }) {",
+            "  const milestone = await insertOne(\"trade_agreement_milestones\", {",
+            "    agreement_id: agreement.id,",
+            "    agreement_version_id: version.id,",
+            "    position: 1,",
+            "    performer_id: counterparty.id,",
+            "    payer_id: payer.id,",
+            "    action_category: \"service\",",
+            "    description: `Synthetic reciprocal milestone for ${label}.`,",
+            "    unit_label: \"completed reciprocal action\",",
+            "    units_total: 1,",
+            "    indivisible: true,",
+            "    maximum_amount_cents: 0,",
+            "    currency: \"USD\",",
+            "    evidence_rule: \"Synthetic QA evidence only.\",",
+            "    status: \"terms\",",
+            "  });",
+            "  assert.equal(milestone.agreement_version_id, version.id);",
+            "",
+            "  const counterpartyClient = await participantAuthenticatedClient(counterparty);",
+            "  const payerClient = await participantAuthenticatedClient(payer);",
+            "  unwrap(",
+            "    await counterpartyClient.rpc(\"finalize_trade_agreement_milestones_v1\", participantLifecycleArgs(counterparty, agreement, version)),",
+            "    `finalize milestone manifest for ${label}` ,",
+            "  );",
+            "  unwrap(",
+            "    await counterpartyClient.rpc(\"confirm_trade_agreement_milestone_manifest_v1\", participantLifecycleArgs(counterparty, agreement, version)),",
+            "    `review milestone manifest for ${label} as ${counterparty.role}` ,",
+            "  );",
+            "  unwrap(",
+            "    await payerClient.rpc(\"confirm_trade_agreement_milestone_manifest_v1\", participantLifecycleArgs(payer, agreement, version)),",
+            "    `review milestone manifest for ${label} as ${payer.role}` ,",
+            "  );",
+            "  record(\"Milestone manifest finalized and reviewed by both authenticated participants\", \"passed\", { agreementId: agreement.id });",
+            "}",
+            "",
+            "",
+          ].join("\\n");
+          source = replaceExactly(
+            source,
+            helperMarker,
+            milestoneHelpers + helperMarker,
+            "milestone-manifest preparation helpers",
+          );
+          '''
+          contract = contract.replace(insertion_marker, insertion_marker + milestone_block)
+
+          loop_marker = '  const authenticatedLoop = [\n'
+          if contract.count(loop_marker) != 1:
+              raise SystemExit("Authenticated loop marker is not unique.")
+          contract = contract.replace(
+              loop_marker,
+              loop_marker + '    "  await prepareMilestoneManifestForAuthenticatedConfirmation({ counterparty, payer, agreement, version, label });",\n',
+              1,
+          )
+          contract_path.write_text(contract)
+
+          test_path = Path(".github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs")
+          tests = test_path.read_text()
+          tests = re.sub(
+              r'\nimport assertMilestoneSequence[\s\S]*?\n\}\);\n?$',
+              "\n",
+              tests,
+              count=1,
+          )
+          tests += r'''
+
+          import assertMilestoneSequence from "node:assert/strict";
+          import { readFile as readMilestoneSequenceSource } from "node:fs/promises";
+          import testMilestoneSequence from "node:test";
+          import { buildAuthenticatedHarnessSource as buildMilestoneSequenceHarness } from "./pooled-settlement-authenticated-caller-integration-contract.mjs";
+
+          testMilestoneSequence("issue-723 milestone-manifest sequencing contract", async () => {
+            const original = await readMilestoneSequenceSource(
+              ".github/scripts/pooled-settlement-qa-e2e.mjs",
+              "utf8",
+            );
+            const generated = buildMilestoneSequenceHarness(original);
+            assertMilestoneSequence.match(generated, /insertOne\("trade_agreement_milestones"/);
+            assertMilestoneSequence.match(generated, /finalize_trade_agreement_milestones_v1/);
+            assertMilestoneSequence.match(generated, /confirm_trade_agreement_milestone_manifest_v1/);
+            const prepare = generated.indexOf(
+              "await prepareMilestoneManifestForAuthenticatedConfirmation",
+            );
+            const negativeProbe = generated.indexOf(
+              "await probeConfirmationAuthorizationBoundary",
+            );
+            const validConfirmation = generated.indexOf(
+              "await confirmAsAuthenticatedParticipant",
+              negativeProbe,
+            );
+            assertMilestoneSequence.ok(prepare >= 0);
+            assertMilestoneSequence.ok(negativeProbe > prepare);
+            assertMilestoneSequence.ok(validConfirmation > negativeProbe);
+          });
+          '''
+          test_path.write_text(tests)
+
+          workflow_path = Path(".github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml")
+          workflow = workflow_path.read_text()
+          workflow = re.sub(
+              r'PRODUCT_REPAIR_HEAD: [0-9a-f]{40}',
+              f'PRODUCT_REPAIR_HEAD: {product_head}',
+              workflow,
+              count=1,
+          )
+          workflow_path.write_text(workflow)
+          PY
+
+          rm -f \
+            .github/workflows/bootstrap-issue-723-milestone-manifest-20260818.yml \
+            .github/workflows/bootstrap-issue-723-milestone-manifest-v2-20260818.yml
+          git diff --check
+          test "$(git diff --name-only "$PR700_HEAD" HEAD | LC_ALL=C sort | tr '\n' ' ')" = ".github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs .github/scripts/pooled-settlement-authenticated-caller-integration.mjs .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs .github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml src/app/trade-donation-actions-base.ts src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql "
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run source, repository, type, and lint gates
+        run: |
+          node --test \
+            .github/scripts/pooled-settlement-qa-e2e.test.mjs \
+            .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs
+          node --import tsx --test \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/trade-donation-pool-environment-source-contract.test.ts \
+            src/lib/trade-donation-pool-stripe-environment-source-contract.test.ts \
+            src/lib/trade-donation-pool-provider-resume-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+          npm test
+          npx tsc --noEmit
+          npm run lint -- --quiet
+
+      - name: Install Chromium and PostgreSQL client
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Verify QA target and apply the authenticated-only privilege migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { QA_PROJECT_REF, databaseUrlTargetsProject } from "./.github/scripts/pooled-settlement-qa-contract.mjs";
+          if (QA_PROJECT_REF !== "hvmxfjjbdcgjjudmthdz") throw new Error("Unexpected QA project.");
+          if (!databaseUrlTargetsProject(process.env.QA_SUPABASE_DB_URL, QA_PROJECT_REF)) {
+            throw new Error("Database URL is not the canonical isolated QA project.");
+          }
+          NODE
+          psql "$QA_SUPABASE_DB_URL" -X --no-psqlrc --set ON_ERROR_STOP=1 --file "$AUTH_MIGRATION_PATH"
+          actual="$(psql "$QA_SUPABASE_DB_URL" -X --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --field-separator '|' --command "select p.prosecdef, coalesce(array_to_string(p.proconfig, ','), ''), has_function_privilege('anon', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'), has_function_privilege('service_role', p.oid, 'EXECUTE') from pg_proc p where p.oid = to_regprocedure('public.confirm_trade_donation_version_v2(uuid,uuid,uuid)');")"
+          test "$actual" = "t|search_path=pg_catalog|f|t|f"
+
+      - name: Bind the synthetic operator allowlist
+        run: echo "ADMIN_EMAILS=pooled-qa-${GITHUB_RUN_ID}-operator@example.test" >> "$GITHUB_ENV"
+
+      - name: Build and start the exact QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          npm run start -- -p 3215 > /tmp/pooled-settlement-next.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3215/ >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          tail -200 /tmp/pooled-settlement-next.log
+          exit 1
+
+      - name: Execute the complete authenticated 19-case matrix
+        run: node .github/scripts/pooled-settlement-authenticated-caller-integration.mjs
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-authenticated-caller-v2-${{ github.run_id }}
+          path: pooled-settlement-authenticated-caller-v2-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish the exact seven-file validated successor
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Complete milestone-manifest preparation for authenticated pooled QA"
+          git push origin "HEAD:$BRANCH"

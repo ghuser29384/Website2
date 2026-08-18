@@ -1,0 +1,259 @@
+name: Bootstrap issue 723 milestone-manifest QA continuation
+
+on:
+  push:
+    branches:
+      - qa/723-authenticated-confirmation-integration-20260817
+    paths:
+      - .github/workflows/bootstrap-issue-723-milestone-manifest-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-issue-723-milestone-manifest
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_PARENT: 2f988fa5c60e4d7ba7ca289bdf49bbacd021cca6
+      BRANCH: qa/723-authenticated-confirmation-integration-20260817
+      PRODUCT_BRANCH: fix/723-donation-confirmation-authenticated-caller
+      OLD_PRODUCT_HEAD: ec59737e66aa6135b822446e4cb4a82372e0b39b
+      PR700_HEAD: 813573f64eaa17d2ca240c50f76ead9a3b535f97
+      BOOTSTRAP: .github/workflows/bootstrap-issue-723-milestone-manifest-20260818.yml
+    steps:
+      - name: Check out exact stacked branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 2
+
+      - name: Verify immutable starting point
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git diff --name-only "$EXPECTED_PARENT" HEAD)" = "$BOOTSTRAP"
+
+      - name: Wait for and import the corrected three-file product candidate
+        id: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 90); do
+            git fetch --no-tags --force --depth=1 origin "$PRODUCT_BRANCH"
+            product_head="$(git rev-parse FETCH_HEAD)"
+            if test "$product_head" != "$OLD_PRODUCT_HEAD" \
+              && git show "FETCH_HEAD:src/app/trade-donation-actions-base.ts" | grep -Fq 'before final completion.' \
+              && ! git show "FETCH_HEAD:src/app/trade-donation-actions-base.ts" | grep -Fq 'befor final completion.' \
+              && ! git cat-file -e "FETCH_HEAD:$BOOTSTRAP" 2>/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" = true
+          echo "product_head=$product_head" >> "$GITHUB_OUTPUT"
+          for path in \
+            src/app/trade-donation-actions-base.ts \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql; do
+            git show "FETCH_HEAD:$path" > "$path"
+          done
+
+      - name: Extend the run-owned harness through the canonical milestone-manifest boundary
+        env:
+          PRODUCT_HEAD: ${{ steps.product.outputs.product_head }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          contract_path = Path(".github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs")
+          contract = contract_path.read_text()
+          old_head = 'export const PRODUCT_REPAIR_HEAD = "ec59737e66aa6135b822446e4cb4a82372e0b39b";'
+          new_head = f'export const PRODUCT_REPAIR_HEAD = "{os.environ["PRODUCT_HEAD"]}";'
+          if contract.count(old_head) != 1:
+              raise SystemExit("Expected one stale product-head constant.")
+          contract = contract.replace(old_head, new_head)
+
+          insertion_marker = '''  source = replaceExactly(
+            source,
+            helperMarker,
+            helpers + helperMarker,
+            "authenticated participant helpers",
+          );
+          '''
+          if contract.count(insertion_marker) != 1:
+              raise SystemExit("Authenticated helper insertion marker was not unique.")
+
+          milestone_block = r'''
+          const milestoneHelpers = [
+            "async function prepareMilestoneManifestForAuthenticatedConfirmation({ counterparty, payer, agreement, version, label }) {",
+            "  const milestone = await insertOne(\"trade_agreement_milestones\", {",
+            "    agreement_id: agreement.id,",
+            "    agreement_version_id: version.id,",
+            "    position: 1,",
+            "    performer_id: counterparty.id,",
+            "    payer_id: payer.id,",
+            "    action_category: \"service\",",
+            "    description: `Synthetic reciprocal milestone for ${label}.`,",
+            "    unit_label: \"completed reciprocal action\",",
+            "    units_total: 1,",
+            "    indivisible: true,",
+            "    maximum_amount_cents: 0,",
+            "    currency: \"USD\",",
+            "    evidence_rule: \"Synthetic QA evidence only.\",",
+            "    status: \"terms\",",
+            "  });",
+            "  assert.equal(milestone.agreement_version_id, version.id);",
+            "",
+            "  const counterpartyClient = await participantAuthenticatedClient(counterparty);",
+            "  const payerClient = await participantAuthenticatedClient(payer);",
+            "  const lifecycleArgs = (actor) => ({",
+            "    p_actor_id: actor.id,",
+            "    p_agreement_id: agreement.id,",
+            "    p_agreement_version_id: version.id,",
+            "  });",
+            "  unwrap(",
+            "    await counterpartyClient.rpc(\"finalize_trade_agreement_milestones_v1\", lifecycleArgs(counterparty)),",
+            "    `finalize milestone manifest for ${label}` ,",
+            "  );",
+            "  unwrap(",
+            "    await counterpartyClient.rpc(\"confirm_trade_agreement_milestone_manifest_v1\", lifecycleArgs(counterparty)),",
+            "    `review milestone manifest for ${label} as ${counterparty.role}` ,",
+            "  );",
+            "  unwrap(",
+            "    await payerClient.rpc(\"confirm_trade_agreement_milestone_manifest_v1\", lifecycleArgs(payer)),",
+            "    `review milestone manifest for ${label} as ${payer.role}` ,",
+            "  );",
+            "  record(\"Milestone manifest finalized and reviewed by both authenticated participants\", \"passed\", { agreementId: agreement.id });",
+            "}",
+            "",
+            "",
+          ].join("\\n");
+          source = replaceExactly(
+            source,
+            helperMarker,
+            milestoneHelpers + helperMarker,
+            "milestone-manifest preparation helpers",
+          );
+          '''
+          contract = contract.replace(insertion_marker, insertion_marker + milestone_block)
+
+          loop_marker = '''  const authenticatedLoop = [
+            "  if (!confirmationBoundaryProbed) {",
+          '''
+          loop_replacement = '''  const authenticatedLoop = [
+            "  await prepareMilestoneManifestForAuthenticatedConfirmation({ counterparty, payer, agreement, version, label });",
+            "  if (!confirmationBoundaryProbed) {",
+          '''
+          if contract.count(loop_marker) != 1:
+              raise SystemExit("Authenticated confirmation loop marker was not unique.")
+          contract = contract.replace(loop_marker, loop_replacement)
+          contract_path.write_text(contract)
+
+          test_path = Path(".github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs")
+          tests = test_path.read_text()
+          marker = "issue-723 milestone-manifest sequencing contract"
+          if marker in tests:
+              raise SystemExit("Milestone-manifest sequencing test already exists.")
+          tests += r'''
+
+          import assertMilestoneSequence from "node:assert/strict";
+          import { readFile as readMilestoneSequenceSource } from "node:fs/promises";
+          import testMilestoneSequence from "node:test";
+          import { buildAuthenticatedHarnessSource as buildMilestoneSequenceHarness } from "./pooled-settlement-authenticated-caller-integration-contract.mjs";
+
+          testMilestoneSequence("issue-723 milestone-manifest sequencing contract", async () => {
+            const original = await readMilestoneSequenceSource(
+              ".github/scripts/pooled-settlement-qa-e2e.mjs",
+              "utf8",
+            );
+            const generated = buildMilestoneSequenceHarness(original);
+            assertMilestoneSequence.match(generated, /insertOne\("trade_agreement_milestones"/);
+            assertMilestoneSequence.match(generated, /finalize_trade_agreement_milestones_v1/);
+            assertMilestoneSequence.match(generated, /confirm_trade_agreement_milestone_manifest_v1/);
+            const prepare = generated.indexOf(
+              "await prepareMilestoneManifestForAuthenticatedConfirmation",
+            );
+            const negativeProbe = generated.indexOf(
+              "await probeConfirmationAuthorizationBoundary",
+            );
+            const validConfirmation = generated.indexOf(
+              "await confirmAsAuthenticatedParticipant",
+              negativeProbe,
+            );
+            assertMilestoneSequence.ok(prepare >= 0);
+            assertMilestoneSequence.ok(negativeProbe > prepare);
+            assertMilestoneSequence.ok(validConfirmation > negativeProbe);
+          });
+          '''
+          test_path.write_text(tests)
+
+          workflow_path = Path(".github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml")
+          workflow = workflow_path.read_text()
+          if workflow.count("PRODUCT_REPAIR_HEAD: ec59737e66aa6135b822446e4cb4a82372e0b39b") != 1:
+              raise SystemExit("Expected one stale workflow product-head constant.")
+          workflow = workflow.replace(
+              "PRODUCT_REPAIR_HEAD: ec59737e66aa6135b822446e4cb4a82372e0b39b",
+              f"PRODUCT_REPAIR_HEAD: {os.environ['PRODUCT_HEAD']}",
+          )
+          guard_marker = '''          test "$(grep -c 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts)" = "1"
+          '''
+          guard_extension = '''          test "$(grep -c 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts)" = "1"
+          git fetch --no-tags --force --depth=1 origin fix/723-donation-confirmation-authenticated-caller
+          for path in \\
+            src/app/trade-donation-actions-base.ts \\
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \\
+            supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql; do
+            test "$(git rev-parse HEAD:$path)" = "$(git rev-parse FETCH_HEAD:$path)"
+          done
+          '''
+          if workflow.count(guard_marker) != 1:
+              raise SystemExit("Source guard marker was not unique.")
+          workflow = workflow.replace(guard_marker, guard_extension)
+          workflow_path.write_text(workflow)
+          PY
+
+          git diff --check
+          test "$(git diff --name-only "$PR700_HEAD" HEAD | grep -v -F "$BOOTSTRAP" | LC_ALL=C sort | tr '\n' ' ')" = ".github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs .github/scripts/pooled-settlement-authenticated-caller-integration.mjs .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs .github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml src/app/trade-donation-actions-base.ts src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql "
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Validate the transformed harness before publication
+        run: |
+          node --test \
+            .github/scripts/pooled-settlement-qa-e2e.test.mjs \
+            .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs
+          node --import tsx --test \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts
+
+      - name: Publish ordinary seven-file successor without bootstrap transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm "$BOOTSTRAP"
+          git diff --check
+          test "$(git diff --name-only "$PR700_HEAD" HEAD | LC_ALL=C sort | tr '\n' ' ')" = ".github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs .github/scripts/pooled-settlement-authenticated-caller-integration.mjs .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs .github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml src/app/trade-donation-actions-base.ts src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql "
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Prepare canonical milestone manifest before authenticated confirmation"
+          git push origin "HEAD:$BRANCH"

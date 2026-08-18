@@ -1,0 +1,99 @@
+name: Extend issue 723 exact-manifest argument support
+
+on:
+  push:
+    branches:
+      - qa/723-authenticated-confirmation-integration-20260817
+    paths:
+      - .github/workflows/bootstrap-issue-723-milestone-manifest-v7-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-issue-723-inspected-signature-executor
+  cancel-in-progress: false
+
+jobs:
+  repair-or-clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BRANCH: qa/723-authenticated-confirmation-integration-20260817
+      TARGET: .github/workflows/bootstrap-issue-723-milestone-manifest-v5-20260818.yml
+      SELF: .github/workflows/bootstrap-issue-723-milestone-manifest-v7-20260818.yml
+    steps:
+      - name: Check out current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 20
+
+      - name: Extend inspected-signature support when the executor remains
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "$TARGET"; then
+            python - <<'PY'
+            from pathlib import Path
+            path = Path(".github/workflows/bootstrap-issue-723-milestone-manifest-v5-20260818.yml")
+            text = path.read_text()
+            old_allowed = '''. == "p_version" or . == "p_idempotency_key"))' /tmp/issue-723-lifecycle-functions.json >/dev/null'''
+            new_allowed = '''. == "p_version" or . == "p_idempotency_key" or . == "p_manifest_hash" or . == "p_expected_manifest_hash" or . == "p_milestone_manifest_hash" or . == "p_expected_milestone_manifest_hash" or . == "p_complete_terms_hash" or . == "p_expected_complete_terms_hash"))' /tmp/issue-723-lifecycle-functions.json >/dev/null'''
+            if old_allowed in text:
+                text = text.replace(old_allowed, new_allowed, 1)
+
+            old_values = '''              "  const values = (actor, functionName) => ({",
+              "    p_actor_id: actor.id,",
+              "    p_agreement_id: agreement.id,",
+              "    p_agreement_version_id: version.id,",
+              "    p_version_id: version.id,",
+              "    p_expected_agreement_version_id: version.id,",
+              "    p_expected_version: version.version,",
+              "    p_version: version.version,",
+              "    p_idempotency_key: `pooled-qa:${runId}:${label}:${functionName}:${actor.id}`,",
+              "  });",'''
+            new_values = '''              "  const values = (actor, functionName, manifestHash = null) => ({",
+              "    p_actor_id: actor.id,",
+              "    p_agreement_id: agreement.id,",
+              "    p_agreement_version_id: version.id,",
+              "    p_version_id: version.id,",
+              "    p_expected_agreement_version_id: version.id,",
+              "    p_expected_version: version.version,",
+              "    p_version: version.version,",
+              "    p_idempotency_key: `pooled-qa:${runId}:${label}:${functionName}:${actor.id}`,",
+              "    p_manifest_hash: manifestHash,",
+              "    p_expected_manifest_hash: manifestHash,",
+              "    p_milestone_manifest_hash: manifestHash,",
+              "    p_expected_milestone_manifest_hash: manifestHash,",
+              "    p_complete_terms_hash: version.complete_terms_hash,",
+              "    p_expected_complete_terms_hash: version.complete_terms_hash,",
+              "  });",'''
+            if old_values in text:
+                text = text.replace(old_values, new_values, 1)
+
+            old_confirm = '''              f"  const confirmNames = {json.dumps(confirm_args)};",
+              "  for (const [actor, client] of [[counterparty, counterpartyClient], [payer, payerClient]]) {",
+              "    const confirmValues = values(actor, \\\"confirm_trade_agreement_milestone_manifest_v1\\\");",'''
+            new_confirm = '''              "  const finalizedVersion = await loadOne(\\\"trade_agreement_versions\\\", version.id);",
+              "  assert.match(String(finalizedVersion.milestone_manifest_hash || \\\"\\\"), /^[0-9a-f]{64}$/);",
+              f"  const confirmNames = {json.dumps(confirm_args)};",
+              "  for (const [actor, client] of [[counterparty, counterpartyClient], [payer, payerClient]]) {",
+              "    const confirmValues = values(actor, \\\"confirm_trade_agreement_milestone_manifest_v1\\\", finalizedVersion.milestone_manifest_hash);",'''
+            if old_confirm in text:
+                text = text.replace(old_confirm, new_confirm, 1)
+            path.write_text(text)
+            PY
+          fi
+          rm "$SELF"
+          git diff --check
+
+      - name: Publish executor extension or self-cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Support exact milestone-manifest hashes in issue 723 QA"
+          git push origin "HEAD:$BRANCH"
