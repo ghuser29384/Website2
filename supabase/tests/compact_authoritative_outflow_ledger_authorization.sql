@@ -7,8 +7,8 @@ insert into auth.users (
   email_change_token_new, email_change_token_current, reauthentication_token,
   is_sso_user, is_anonymous, created_at, updated_at
 ) values
-  ('6c000000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000','authenticated','authenticated','ledger-admin@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()),
-  ('6c000000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','authenticated','authenticated','ledger-user@example.test','',now(),'{}','{}','','','','','',false,false,now(),now());
+  ('6c000000-0000-4000-8000-000000000001','00000000-0000-0000-8000-000000000000','authenticated','authenticated','ledger-admin@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()),
+  ('6c000000-0000-4000-8000-000000000002','00000000-0000-0000-8000-000000000000','authenticated','authenticated','ledger-user@example.test','',now(),'{}','{}','','','','','',false,false,now(),now());
 
 insert into public.profiles (
   id, email, display_name, bio, affiliation, username, account_kind,
@@ -120,20 +120,52 @@ begin
     '6c000000-0000-4000-8000-000000000002','2026-08','qa','USD',
     'compact-authoritative-outflow-ledger/v1','qa.auth.aal2.allowed'
   );
-  if batch_id is null or not exists (
+  if batch_id is null then
+    raise exception 'AAL2 administrator did not receive a provisional batch identifier.';
+  end if;
+  perform pg_catalog.set_config(
+    'moral_trade.test_aal2_batch_id',
+    batch_id::text,
+    true
+  );
+end;
+$test$;
+reset role;
+
+do $test$
+declare
+  batch_setting text := pg_catalog.current_setting(
+    'moral_trade.test_aal2_batch_id',
+    true
+  );
+  batch_id uuid;
+begin
+  if batch_setting is null or batch_setting = '' then
+    raise exception 'AAL2 administrator batch identifier was not retained for privileged verification.';
+  end if;
+  batch_id := batch_setting::uuid;
+  if not exists (
     select 1 from moral_trade_private.compact_outflow_coverage_metadata
     where coverage_snapshot_id = batch_id
       and authority_status = 'provisional'
       and participant_id = '6c000000-0000-4000-8000-000000000002'
-  ) then raise exception 'AAL2 administrator did not create the expected private provisional batch.'; end if;
-  if exists (select 1 from public.mpgf_public_goods_obligation_snapshots where participant_id='6c000000-0000-4000-8000-000000000002')
-     or exists (select 1 from public.mpgf_public_goods_readiness_snapshots)
-     or exists (select 1 from public.mpgf_public_goods_voting_snapshots) then
+  ) then
+    raise exception 'AAL2 administrator did not create the expected private provisional batch.';
+  end if;
+  if exists (
+    select 1 from public.mpgf_public_goods_obligation_snapshots
+    where participant_id='6c000000-0000-4000-8000-000000000002'
+  ) or exists (
+    select 1 from public.mpgf_public_goods_readiness_snapshots
+  ) or exists (
+    select 1 from public.mpgf_public_goods_voting_snapshots
+  ) then
     raise exception 'Provisional authority unexpectedly created downstream financial or governance state.';
   end if;
 end;
 $test$;
 
+set local role authenticated;
 select pg_catalog.set_config(
   'request.jwt.claims',
   '{"sub":"6c000000-0000-4000-8000-000000000002","role":"authenticated","aal":"aal2"}',
@@ -158,6 +190,9 @@ begin
      or has_table_privilege('authenticated','public.mpgf_public_goods_outflow_observations','insert')
      or has_table_privilege('authenticated','public.mpgf_public_goods_outflow_coverage_snapshots','update')
      or has_function_privilege('anon','moral_trade_private.compact_outflow_ingest_batch_v1(uuid,text,text,text,text,text)','execute')
+     or has_function_privilege('authenticated','moral_trade_private.assign_compact_outflow_coverage_order_v1()','execute')
+     or has_function_privilege('authenticated','moral_trade_private.assign_compact_outflow_metadata_order_v1()','execute')
+     or has_function_privilege('authenticated','moral_trade_private.assign_compact_outflow_obligation_order_v1()','execute')
   then raise exception 'Outflow authority privilege matrix is too broad.'; end if;
 end;
 $test$;
