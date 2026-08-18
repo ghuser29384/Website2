@@ -1,6 +1,11 @@
 name: DAC production pre-migration logical backup 20260818
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/dac-production-backup-20260818.yml"
   push:
     branches:
       - ops/dac-production-release-20260818
@@ -26,6 +31,7 @@ env:
 jobs:
   backup:
     name: Exact production logical backup and encrypted restore verification
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -81,26 +87,31 @@ jobs:
           set -euo pipefail
           umask 077
           mkdir -p "$BACKUP_DIR"
+          cat > "$BACKUP_DIR/preflight.sql" <<'SQL'
+          select jsonb_build_object(
+            'connected', true,
+            'database', current_database(),
+            'server_version', current_setting('server_version'),
+            'ssl', coalesce((select ssl from pg_stat_ssl where pid = pg_backend_pid()), false),
+            'read_only', current_setting('default_transaction_read_only'),
+            'database_bytes', pg_database_size(current_database()),
+            'migration_count', (select count(*) from supabase_migrations.schema_migrations),
+            'latest_migration', (select max(version) from supabase_migrations.schema_migrations),
+            'checked_at', clock_timestamp()
+          )::text;
+          SQL
           docker run --rm \
             -e DATABASE_URL="$PROD_SUPABASE_DB_URL" \
+            -v "$PWD/$BACKUP_DIR:/backup:ro" \
             "$POSTGRES_IMAGE" \
-            sh -euc '
-              psql "$DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<"SQL"
-              select jsonb_build_object(
-                ''connected'', true,
-                ''database'', current_database(),
-                ''server_version'', current_setting(''server_version''),
-                ''ssl'', coalesce((select ssl from pg_stat_ssl where pid = pg_backend_pid()), false),
-                ''read_only'', current_setting(''default_transaction_read_only''),
-                ''database_bytes'', pg_database_size(current_database()),
-                ''migration_count'', (select count(*) from supabase_migrations.schema_migrations),
-                ''latest_migration'', (select max(version) from supabase_migrations.schema_migrations),
-                ''checked_at'', clock_timestamp()
-              )::text;
-              SQL
-            ' > "$BACKUP_DIR/production-preflight.json"
-          jq -e \
-            --arg ref "$EXPECTED_PROJECT_REF" '
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --tuples-only \
+              --no-align \
+              --file=/backup/preflight.sql \
+            > "$BACKUP_DIR/production-preflight.json"
+          jq -e '
               .connected == true
               and .database == "postgres"
               and .ssl == true
@@ -108,6 +119,7 @@ jobs:
               and (.migration_count | tonumber) > 0
               and (.latest_migration | type) == "string"
             ' "$BACKUP_DIR/production-preflight.json" >/dev/null
+          rm -f "$BACKUP_DIR/preflight.sql"
 
       - name: Create a consistent full logical database backup
         shell: bash
@@ -118,15 +130,13 @@ jobs:
             -e DATABASE_URL="$PROD_SUPABASE_DB_URL" \
             -v "$PWD/$BACKUP_DIR:/backup" \
             "$POSTGRES_IMAGE" \
-            sh -euc '
-              pg_dump \
-                --dbname="$DATABASE_URL" \
-                --format=custom \
-                --compress=9 \
-                --no-owner \
-                --no-privileges \
-                --file=/backup/moraltrade-production-pre-dac.dump
-            '
+            pg_dump \
+              --dbname="$PROD_SUPABASE_DB_URL" \
+              --format=custom \
+              --compress=9 \
+              --no-owner \
+              --no-privileges \
+              --file=/backup/moraltrade-production-pre-dac.dump
           test -s "$BACKUP_DIR/moraltrade-production-pre-dac.dump"
           sha256sum "$BACKUP_DIR/moraltrade-production-pre-dac.dump" \
             | tee "$BACKUP_DIR/plaintext-backup.sha256"
@@ -138,9 +148,8 @@ jobs:
           docker run --rm \
             -v "$PWD/$BACKUP_DIR:/backup:ro" \
             "$POSTGRES_IMAGE" \
-            sh -euc '
-              pg_restore --list /backup/moraltrade-production-pre-dac.dump
-            ' > "$BACKUP_DIR/restore-list.txt"
+            pg_restore --list /backup/moraltrade-production-pre-dac.dump \
+            > "$BACKUP_DIR/restore-list.txt"
           test "$(wc -l < "$BACKUP_DIR/restore-list.txt")" -gt 100
           grep -Eq 'TABLE|SCHEMA|FUNCTION' "$BACKUP_DIR/restore-list.txt"
 
