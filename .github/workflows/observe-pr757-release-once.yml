@@ -1,0 +1,95 @@
+name: Observe PR 757 exact release dispatch once
+
+on:
+  push:
+    branches:
+      - ops/pr757-production-release-dispatch-20260818
+    paths:
+      - .github/workflows/observe-pr757-release-once.yml
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact observer
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Find exact workflow-dispatch run and record it on PR 757
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN_SHA: f9ae5480ae7c20176f24c5f8b678088b5823fc39
+          EXPECTED_PARENT_SHA: 8c9a9f783bae7fa06156dfdc76361766a98e24ac
+          CONTROLLER_BRANCH: ops/pr757-production-release-dispatch-20260818
+          DISPATCH_NOT_BEFORE: '2026-08-18T05:58:00Z'
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/observe-pr757-release-once.yml'
+          git diff --check HEAD^ HEAD
+
+          run_json=''
+          for attempt in $(seq 1 60); do
+            all_runs="$(curl -fsS \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&branch=main&per_page=30")"
+            run_json="$(jq -c \
+              --arg sha "$EXPECTED_MAIN_SHA" \
+              --arg not_before "$DISPATCH_NOT_BEFORE" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .event == "workflow_dispatch" and .created_at >= $not_before)] | sort_by(.created_at) | last // empty' \
+              <<< "$all_runs")"
+            [[ -n "$run_json" ]] && break
+            sleep 5
+          done
+          test -n "$run_json"
+
+          run_id="$(jq -r '.id' <<< "$run_json")"
+          run_url="$(jq -r '.html_url' <<< "$run_json")"
+          run_status="$(jq -r '.status' <<< "$run_json")"
+          run_conclusion="$(jq -r '.conclusion // "pending"' <<< "$run_json")"
+          head_sha="$(jq -r '.head_sha' <<< "$run_json")"
+          event="$(jq -r '.event' <<< "$run_json")"
+          branch="$(jq -r '.head_branch' <<< "$run_json")"
+          test "$head_sha" = "$EXPECTED_MAIN_SHA"
+          test "$event" = 'workflow_dispatch'
+          test "$branch" = 'main'
+
+          body="$(cat <<EOF
+PR757_EXACT_RELEASE_RUN
+run_id=$run_id
+run_url=$run_url
+head_sha=$head_sha
+head_branch=$branch
+event=$event
+status=$run_status
+conclusion=$run_conclusion
+dispatch_ref=main
+input_target=production
+input_ref=main
+input_expected_sha=$EXPECTED_MAIN_SHA
+input_synthetic_auth_fixture_url=<empty>
+EOF
+)"
+          payload="$(jq -n --arg body "$body" '{body:$body}')"
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/757/comments" \
+            -d "$payload" \
+            | jq -e --arg body "$body" '.body == $body' >/dev/null
