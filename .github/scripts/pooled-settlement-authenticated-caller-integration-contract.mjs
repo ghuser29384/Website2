@@ -39,6 +39,64 @@ export function buildAuthenticatedHarnessSource(input) {
     "authorization probe state",
   );
 
+  const qaEmailBlock = [
+    "function qaEmail(role) {",
+    '  return `pooled-qa-${runId}-${role}@example.test`.toLowerCase();',
+    "}",
+  ].join("\n");
+  const qaIdentityBlock = [
+    qaEmailBlock,
+    "",
+    "function qaUsername(role) {",
+    '  return "pq-" + sha256(runId + ":" + role).slice(0, 20);',
+    "}",
+  ].join("\n");
+  source = replaceExactly(
+    source,
+    qaEmailBlock,
+    qaIdentityBlock,
+    "run-owned profile username helper",
+  );
+
+  source = replaceExactly(
+    source,
+    [
+      '    await admin.from("profiles").upsert({',
+      "      id: user.id,",
+      "      email,",
+      "      display_name: displayName,",
+    ].join("\n"),
+    [
+      '    await admin.from("profiles").upsert({',
+      "      id: user.id,",
+      "      email,",
+      "      username: qaUsername(role),",
+      "      display_name: displayName,",
+    ].join("\n"),
+    "run-owned profile username persistence",
+  );
+
+  source = replaceExactly(
+    source,
+    '  const stage = page.locator("main");',
+    '  const stage = page.locator("#main-content");',
+    "canonical participant content root",
+  );
+
+  source = replaceExactly(
+    source,
+    [
+      "delete from public.trade_evidence_items where agreement_id = any(${agreementIds});",
+      "delete from public.trade_agreement_confirmations where agreement_version_id in (",
+    ].join("\n"),
+    [
+      "delete from public.trade_evidence_items where agreement_id = any(${agreementIds});",
+      "delete from public.trade_agreement_milestones where agreement_id = any(${agreementIds});",
+      "delete from public.trade_agreement_confirmations where agreement_version_id in (",
+    ].join("\n"),
+    "run-owned milestone cleanup",
+  );
+
   const helperMarker = "async function establishAal2(user) {";
   const helpers = [
     "async function participantAuthenticatedClient(user) {",
@@ -228,5 +286,6 @@ export function buildAuthenticatedHarnessSource(input) {
     source,
     /for \(const actor of \[counterparty, payer\]\) \{\s*unwrap\(\s*await admin\.rpc\("confirm_trade_donation_version_v2"/s,
   );
+  assert.doesNotMatch(source, /const stage = page\.locator\("main"\)/);
   return source;
 }

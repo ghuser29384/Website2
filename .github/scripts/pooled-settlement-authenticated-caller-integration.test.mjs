@@ -26,6 +26,15 @@ test("the stacked integration is pinned to exact PR #700 and corrected product-r
   assert.ok(INTEGRATION_PATHS.includes(AUTHENTICATED_CONFIRMATION_MIGRATION));
 });
 
+test("the generated harness creates route-complete run-owned profiles and uses the canonical content root", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
+  assert.match(generated, /function qaUsername\(role\)/);
+  assert.match(generated, /return "pq-" \+ sha256\(runId \+ ":" \+ role\)\.slice\(0, 20\)/);
+  assert.match(generated, /username:\s*qaUsername\(role\)/);
+  assert.match(generated, /const stage = page\.locator\("#main-content"\)/);
+  assert.doesNotMatch(generated, /const stage = page\.locator\("main"\)/);
+});
+
 test("the generated harness finalizes the canonical milestone manifest before valid confirmations", () => {
   const generated = buildAuthenticatedHarnessSource(original);
   assert.match(generated, /create_trade_agreement_milestone_v1/);
@@ -48,6 +57,24 @@ test("the generated harness finalizes the canonical milestone manifest before va
   assert.ok(
     confirmationCall > finalizeCall,
     "Bilateral confirmation must happen only after the immutable milestone manifest is finalized.",
+  );
+});
+
+test("the generated harness cleans run-owned milestone rows before versions and auth users", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
+  const milestoneDelete = generated.indexOf(
+    "delete from public.trade_agreement_milestones where agreement_id = any(${agreementIds});",
+  );
+  const versionDelete = generated.indexOf(
+    "delete from public.trade_agreement_versions where agreement_id = any(${agreementIds});",
+  );
+  const authDelete = generated.indexOf("admin.auth.admin.deleteUser(userId)");
+  assert.ok(milestoneDelete >= 0, "Run-owned milestone cleanup is missing.");
+  assert.ok(versionDelete > milestoneDelete, "Milestones must be deleted before their agreement versions.");
+  assert.ok(authDelete > versionDelete, "Database rows must be removed before synthetic Auth users.");
+  assert.doesNotMatch(
+    generated,
+    /delete from public\.trade_agreement_milestones\s*;/,
   );
 });
 
