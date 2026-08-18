@@ -190,4 +190,119 @@ begin
 end;
 $function$;
 
+-- The base Compact resolver orders public coverage and obligation snapshots by
+-- their public creation timestamps. PostgreSQL now() is transaction-stable, so
+-- multiple immutable snapshots created in one rollback-only test transaction
+-- can otherwise tie and leave UUID order to decide which snapshot is current.
+-- These triggers serialize same-participant inserts and assign strictly
+-- increasing public ordering timestamps without mutating historical rows.
+create or replace function moral_trade_private.assign_compact_outflow_coverage_order_v1()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  next_created_at timestamptz;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      new.participant_id::text || ':coverage-order:' || new.cycle_key,
+      0
+    )
+  );
+  select pg_catalog.greatest(
+    pg_catalog.clock_timestamp(),
+    coalesce(
+      max(existing.created_at) + interval '1 microsecond',
+      pg_catalog.clock_timestamp()
+    )
+  ) into next_created_at
+  from public.mpgf_public_goods_outflow_coverage_snapshots existing
+  where existing.participant_id = new.participant_id
+    and existing.cycle_key = new.cycle_key;
+  new.created_at := next_created_at;
+  return new;
+end;
+$function$;
+
+create or replace function moral_trade_private.assign_compact_outflow_metadata_order_v1()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  next_created_at timestamptz;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      new.participant_id::text || ':coverage-order:' || new.cycle_key,
+      0
+    )
+  );
+  select pg_catalog.greatest(
+    pg_catalog.clock_timestamp(),
+    coalesce(
+      max(existing.created_at) + interval '1 microsecond',
+      pg_catalog.clock_timestamp()
+    )
+  ) into next_created_at
+  from moral_trade_private.compact_outflow_coverage_metadata existing
+  where existing.participant_id = new.participant_id
+    and existing.cycle_key = new.cycle_key;
+  new.created_at := next_created_at;
+  return new;
+end;
+$function$;
+
+create or replace function moral_trade_private.assign_compact_outflow_obligation_order_v1()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  next_frozen_at timestamptz;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      new.participant_id::text || ':financial:' || new.cycle_key,
+      0
+    )
+  );
+  select pg_catalog.greatest(
+    pg_catalog.clock_timestamp(),
+    coalesce(
+      max(existing.frozen_at) + interval '1 microsecond',
+      pg_catalog.clock_timestamp()
+    )
+  ) into next_frozen_at
+  from public.mpgf_public_goods_obligation_snapshots existing
+  where existing.participant_id = new.participant_id
+    and existing.cycle_key = new.cycle_key;
+  new.frozen_at := next_frozen_at;
+  new.created_at := next_frozen_at;
+  return new;
+end;
+$function$;
+
+drop trigger if exists compact_outflow_coverage_order_v1
+  on public.mpgf_public_goods_outflow_coverage_snapshots;
+create trigger compact_outflow_coverage_order_v1
+before insert on public.mpgf_public_goods_outflow_coverage_snapshots
+for each row execute function moral_trade_private.assign_compact_outflow_coverage_order_v1();
+
+drop trigger if exists compact_outflow_metadata_order_v1
+  on moral_trade_private.compact_outflow_coverage_metadata;
+create trigger compact_outflow_metadata_order_v1
+before insert on moral_trade_private.compact_outflow_coverage_metadata
+for each row execute function moral_trade_private.assign_compact_outflow_metadata_order_v1();
+
+drop trigger if exists compact_outflow_obligation_order_v1
+  on public.mpgf_public_goods_obligation_snapshots;
+create trigger compact_outflow_obligation_order_v1
+before insert on public.mpgf_public_goods_obligation_snapshots
+for each row execute function moral_trade_private.assign_compact_outflow_obligation_order_v1();
+
 commit;
