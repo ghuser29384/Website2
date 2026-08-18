@@ -238,6 +238,7 @@ jobs:
           #!/usr/bin/env bash
           set -euo pipefail
           exec docker run --rm -i \
+            -e MPGF_DAC_PRODUCT_QA_PASSWORD \
             -v "$PWD:/workspace" \
             -w /workspace \
             postgres:17 psql "$@"
