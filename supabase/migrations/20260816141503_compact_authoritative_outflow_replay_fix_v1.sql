@@ -305,4 +305,11 @@ create trigger compact_outflow_obligation_order_v1
 before insert on public.mpgf_public_goods_obligation_snapshots
 for each row execute function moral_trade_private.assign_compact_outflow_obligation_order_v1();
 
+revoke all on function moral_trade_private.assign_compact_outflow_coverage_order_v1()
+  from public, anon, authenticated;
+revoke all on function moral_trade_private.assign_compact_outflow_metadata_order_v1()
+  from public, anon, authenticated;
+revoke all on function moral_trade_private.assign_compact_outflow_obligation_order_v1()
+  from public, anon, authenticated;
+
 commit;
