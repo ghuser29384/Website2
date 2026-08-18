@@ -211,7 +211,7 @@ begin
       0
     )
   );
-  select pg_catalog.greatest(
+  select greatest(
     pg_catalog.clock_timestamp(),
     coalesce(
       max(existing.created_at) + interval '1 microsecond',
@@ -241,7 +241,7 @@ begin
       0
     )
   );
-  select pg_catalog.greatest(
+  select greatest(
     pg_catalog.clock_timestamp(),
     coalesce(
       max(existing.created_at) + interval '1 microsecond',
@@ -271,7 +271,7 @@ begin
       0
     )
   );
-  select pg_catalog.greatest(
+  select greatest(
     pg_catalog.clock_timestamp(),
     coalesce(
       max(existing.frozen_at) + interval '1 microsecond',
