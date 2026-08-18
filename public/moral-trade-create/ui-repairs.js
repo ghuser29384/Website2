@@ -249,6 +249,14 @@
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }
 
+  function restoreRequestTopWhenVisible() {
+    const requestScreen = byId("screenRequest");
+    if (!(requestScreen instanceof HTMLElement)) return;
+    if (requestScreen.hidden || !requestScreen.classList.contains("active")) return;
+    window.requestAnimationFrame(restoreRequestTop);
+    window.setTimeout(restoreRequestTop, 0);
+  }
+
   patchSuggestionCatalog();
   syncOtherCauseSubmit();
   syncCausePressed();
@@ -257,6 +265,15 @@
   positionSuggestions();
 
   byId("otherCauseInput")?.addEventListener("input", syncOtherCauseSubmit);
+
+  const requestScreen = byId("screenRequest");
+  if (requestScreen) {
+    new MutationObserver(restoreRequestTopWhenVisible).observe(requestScreen, {
+      attributes: true,
+      attributeFilter: ["class", "hidden"]
+    });
+    restoreRequestTopWhenVisible();
+  }
 
   document.addEventListener("click", markProgrammaticRequestFocus, true);
   document.addEventListener("focusin", (event) => {

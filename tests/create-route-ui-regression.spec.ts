@@ -15,10 +15,61 @@ async function openCreate(page: import("@playwright/test").Page) {
   return create;
 }
 
-async function chooseExistentialRiskSkill(create: FrameLocator) {
-  const causeButton = create.locator('.cause-choice[data-cause="Existential risk"]');
-  await causeButton.click();
+async function expectRequestTransitionClear(create: FrameLocator, expectedCause: string) {
   await expect(create.locator("#screenRequest")).toBeVisible();
+  await expect(create.locator("#requestCause")).toHaveText(expectedCause);
+
+  await expect
+    .poll(() =>
+      create.locator("body").evaluate(() => {
+        const requiredRect = (selector: string) => {
+          const element = document.querySelector(selector);
+          if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+          return element.getBoundingClientRect();
+        };
+        const header = requiredRect(".topbar");
+        const heading = requiredRect("#requestHeading");
+        const chosen = requiredRect(".chosen-strip");
+        return (
+          window.scrollY === 0
+          && heading.top >= header.bottom + 16
+          && chosen.top >= header.bottom + 16
+        );
+      }),
+    )
+    .toBe(true);
+
+  const transition = await create.locator("body").evaluate(() => {
+    const requiredRect = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+      const value = element.getBoundingClientRect();
+      return { top: value.top, bottom: value.bottom };
+    };
+    return {
+      scrollY: window.scrollY,
+      header: requiredRect(".topbar"),
+      heading: requiredRect("#requestHeading"),
+      chosen: requiredRect(".chosen-strip"),
+    };
+  });
+
+  expect(transition.scrollY).toBe(0);
+  expect(transition.heading.top).toBeGreaterThanOrEqual(transition.header.bottom + 16);
+  expect(transition.chosen.top).toBeGreaterThanOrEqual(transition.header.bottom + 16);
+  return transition;
+}
+
+async function chooseExistentialRisk(create: FrameLocator) {
+  const causeButton = create.locator('.cause-choice[data-cause="Existential risk"]');
+  await causeButton.scrollIntoViewIfNeeded();
+  await causeButton.click();
+  await expectRequestTransitionClear(create, "Existential risk");
+  return causeButton;
+}
+
+async function chooseExistentialRiskSkill(create: FrameLocator) {
+  const causeButton = await chooseExistentialRisk(create);
   await create.locator('[data-request-kind="skill"]').click();
   await expect(create.locator("#requestActionInput")).toBeFocused();
   await expect(create.locator("#actionSuggestions")).toBeVisible();
@@ -134,6 +185,38 @@ test.describe("Create route UI regression repairs", () => {
       await create.locator("body").screenshot({
         animations: "disabled",
         path: path.join(captureDirectory, "request-suggestions-repaired-desktop.png"),
+      });
+    }
+  });
+
+  test("keeps listed and custom cause transitions clear of the sticky header on mobile", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    let create = await openCreate(page);
+
+    await chooseExistentialRisk(create);
+    if (captureVisuals) {
+      await mkdir(captureDirectory, { recursive: true });
+      await create.locator("body").screenshot({
+        animations: "disabled",
+        path: path.join(captureDirectory, "request-transition-listed-mobile.png"),
+      });
+    }
+
+    create = await openCreate(page);
+    const customCauseInput = create.locator("#otherCauseInput");
+    const customCauseContinue = create.locator(".other-cause-submit");
+    await customCauseInput.scrollIntoViewIfNeeded();
+    await customCauseInput.fill("Moral uncertainty");
+    await expect(customCauseContinue).toBeEnabled();
+    await customCauseContinue.click();
+    await expectRequestTransitionClear(create, "Moral uncertainty");
+
+    if (captureVisuals) {
+      await create.locator("body").screenshot({
+        animations: "disabled",
+        path: path.join(captureDirectory, "request-transition-custom-mobile.png"),
       });
     }
   });
