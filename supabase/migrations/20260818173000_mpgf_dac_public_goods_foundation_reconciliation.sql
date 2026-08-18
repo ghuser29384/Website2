@@ -262,54 +262,54 @@ grant all on table public.mpgf_public_goods_pledges to service_role;
 
 do $verify$
 declare
-  table_name text;
+  foundation_table_name text;
   column_contract_count integer;
 begin
-  foreach table_name in array array[
+  foreach foundation_table_name in array array[
     'mpgf_public_goods_match_pools',
     'mpgf_public_goods_rounds',
     'mpgf_public_goods_campaigns',
     'mpgf_public_goods_pledges'
   ]
   loop
-    if to_regclass('public.' || table_name) is null then
+    if to_regclass('public.' || foundation_table_name) is null then
       raise exception using
         errcode = '55000',
-        message = format('Required canonical table public.%s is missing.', table_name);
+        message = format('Required canonical table public.%s is missing.', foundation_table_name);
     end if;
 
     if not exists (
       select 1
       from pg_class c
-      where c.oid = ('public.' || table_name)::regclass
+      where c.oid = ('public.' || foundation_table_name)::regclass
         and c.relrowsecurity = true
     ) then
       raise exception using
         errcode = '55000',
-        message = format('RLS is not enabled on public.%s.', table_name);
+        message = format('RLS is not enabled on public.%s.', foundation_table_name);
     end if;
   end loop;
 
   select count(*) into column_contract_count
-  from information_schema.columns
-  where table_schema = 'public'
+  from information_schema.columns as catalog_column
+  where catalog_column.table_schema = 'public'
     and (
-      (table_name = 'mpgf_public_goods_match_pools'
-       and column_name in (
+      (catalog_column.table_name = 'mpgf_public_goods_match_pools'
+       and catalog_column.column_name in (
          'id', 'funder_type', 'budget_cents', 'base_match_ratio',
          'qf_bonus_cents', 'visible_commitment', 'restrictions_json',
          'status', 'created_at'
        ))
       or
-      (table_name = 'mpgf_public_goods_rounds'
-       and column_name in (
+      (catalog_column.table_name = 'mpgf_public_goods_rounds'
+       and catalog_column.column_name in (
          'id', 'name', 'starts_at', 'ends_at', 'match_pool_id',
          'qf_enabled', 'qf_cap_multiple', 'supporter_gate', 'status',
          'created_at'
        ))
       or
-      (table_name = 'mpgf_public_goods_campaigns'
-       and column_name in (
+      (catalog_column.table_name = 'mpgf_public_goods_campaigns'
+       and catalog_column.column_name in (
          'id', 'round_id', 'slug', 'pool_alternative_id', 'title',
          'destination_type', 'destination_ref', 'cause_tags',
          'public_summary', 'threshold_amount_cents',
@@ -318,8 +318,8 @@ begin
          'challenge_window_ends_at', 'created_at'
        ))
       or
-      (table_name = 'mpgf_public_goods_pledges'
-       and column_name in (
+      (catalog_column.table_name = 'mpgf_public_goods_pledges'
+       and catalog_column.column_name in (
          'id', 'campaign_id', 'profile_id', 'user_ref', 'amount_cents',
          'currency', 'visibility_mode', 'is_recurring', 'capture_mode',
          'eligibility_state', 'human_score_bps', 'status',
