@@ -1,0 +1,60 @@
+name: Issue 714 synchronize current main into PR 698
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-merge-diagnostic-20260817
+    paths:
+      - .github/workflows/issue714-resync-current-main.yml
+
+permissions:
+  contents: write
+
+env:
+  TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
+  EXPECTED_HEAD: 0e83687f5d0388bdc860bca6035faed5339705e1
+  EXPECTED_MAIN: f9ae5480ae7c20176f24c5f8b678088b5823fc39
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/issue-675-activation-routing-canonical-walkthrough
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Merge exact current main normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse origin/$TARGET_BRANCH)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git merge --no-ff --no-commit "$EXPECTED_MAIN"; then
+            echo '::group::Unmerged paths'
+            git status --short
+            git diff --name-only --diff-filter=U
+            echo '::endgroup::'
+            echo '::group::Conflict markers'
+            for file in $(git diff --name-only --diff-filter=U); do
+              echo "===== $file ====="
+              sed -n '1,260p' "$file"
+            done
+            echo '::endgroup::'
+            exit 1
+          fi
+          git commit -m "Merge current main into Issue 675 activation candidate"
+          NEW_HEAD="$(git rev-parse HEAD)"
+          PARENTS="$(git show -s --format='%P' HEAD)"
+          test "$(echo "$PARENTS" | wc -w | tr -d ' ')" = '2'
+          echo "new_head=$NEW_HEAD"
+          echo "parents=$PARENTS"
+          git push origin "HEAD:$TARGET_BRANCH"
