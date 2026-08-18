@@ -126,8 +126,8 @@ fi
 
 psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c "
 select
-  to_jsonb(m) ->> 'version' as version,
-  coalesce(to_jsonb(m) ->> 'name', '') as name,
+  to_jsonb(m) ->> 'version' as migration_version,
+  coalesce(to_jsonb(m) ->> 'name', '') as migration_name,
   case
     when coalesce(to_jsonb(m) ->> 'created_by', '') = '' then ''
     when to_jsonb(m) ->> 'created_by' in ('postgres', 'supabase_admin')
