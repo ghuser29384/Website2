@@ -1,10 +1,9 @@
 name: Generate and validate authoritative pre-activation Supabase baseline
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
-    types: [opened, synchronize]
+      - database/preactivation-schema-baseline-20260818
     paths:
       - scripts/database/generate-preactivation-baseline.trigger
   workflow_dispatch:
@@ -18,12 +17,11 @@ concurrency:
 
 jobs:
   generate-and-validate:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'database/preactivation-schema-baseline-20260818'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      SOURCE_MAIN: ${{ github.event.pull_request.base.sha || github.sha }}
+      SOURCE_HEAD: ${{ github.sha }}
+      SOURCE_MAIN: f1cd364bf058b28b3b29501aa6528c48f8f39bb7
       TARGET_BRANCH: database/preactivation-schema-baseline-20260818
       PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
       PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
