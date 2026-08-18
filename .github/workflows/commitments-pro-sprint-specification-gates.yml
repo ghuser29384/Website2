@@ -75,17 +75,36 @@ jobs:
           NODE
           ruby -e 'require "yaml"; YAML.load_file(".github/workflows/commitments-pro-sprint-specification-gates.yml", aliases: true)'
 
-      - name: Validate contracts and exact repository scope
+      - name: Resolve exact comparison base
+        id: comparison-base
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          GIT_REF: ${{ github.ref }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
+          MATERIALIZATION_BASE_SHA: 7e993158363710e5fe2c3eaa1cbccdb5cd56c235
         run: |
           set -euo pipefail
-          BASE_SHA="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-}}"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE_SHA="$PR_BASE_SHA"
+          elif [ "$GIT_REF" = "refs/heads/main" ]; then
+            BASE_SHA="$PUSH_BEFORE_SHA"
+          else
+            BASE_SHA="$MATERIALIZATION_BASE_SHA"
+          fi
           if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            BASE_SHA="7e993158363710e5fe2c3eaa1cbccdb5cd56c235"
+            echo "Unable to resolve an exact comparison base." >&2
+            exit 1
           fi
           git cat-file -e "$BASE_SHA^{commit}"
+          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Comparison base: $BASE_SHA"
+
+      - name: Validate contracts and exact repository scope
+        env:
+          BASE_SHA: ${{ steps.comparison-base.outputs.sha }}
+        run: |
+          set -euo pipefail
           node scripts/commitments/validate-pro-sprint-materialization.mjs \
             --check-diff "$BASE_SHA" \
             --write-evidence "$RUNNER_TEMP/commitments-pro-sprint-materialization-sha256.json"
@@ -93,9 +112,11 @@ jobs:
           git diff --check "$BASE_SHA"...HEAD
 
       - name: Reject production and execution surfaces
+        env:
+          BASE_SHA: ${{ steps.comparison-base.outputs.sha }}
         run: |
           set -euo pipefail
-          if git diff --name-only 7e993158363710e5fe2c3eaa1cbccdb5cd56c235...HEAD \
+          if git diff --name-only "$BASE_SHA"...HEAD \
             | grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env|scripts/.*provider|scripts/.*payment)' ; then
             echo 'Runtime, database, dependency, provider, payment, or deployment surface entered the repository-only candidate.' >&2
             exit 1
