@@ -43,20 +43,20 @@ jobs:
             --exclude='./test-results' \
             --exclude='./playwright-report' \
             --exclude='*.icloud' \
-            -czf repository-workspace.tar.gz .
-          git rev-parse HEAD > workspace-head-sha.txt
-          git rev-parse HEAD^{tree} > workspace-tree-sha.txt
-          git status --short --branch > workspace-status.txt
-          sha256sum repository-workspace.tar.gz > repository-workspace.sha256
+            -czf /tmp/repository-workspace.tar.gz .
+          git rev-parse HEAD > /tmp/workspace-head-sha.txt
+          git rev-parse HEAD^{tree} > /tmp/workspace-tree-sha.txt
+          git status --short --branch > /tmp/workspace-status.txt
+          sha256sum /tmp/repository-workspace.tar.gz > /tmp/repository-workspace.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: repository-workspace-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            repository-workspace.tar.gz
-            repository-workspace.sha256
-            workspace-head-sha.txt
-            workspace-tree-sha.txt
-            workspace-status.txt
+            /tmp/repository-workspace.tar.gz
+            /tmp/repository-workspace.sha256
+            /tmp/workspace-head-sha.txt
+            /tmp/workspace-tree-sha.txt
+            /tmp/workspace-status.txt
           retention-days: 7
 
   baseline-gallery:
