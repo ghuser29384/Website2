@@ -1,0 +1,43 @@
+name: Moral Trade UI/UX redesign gates
+
+on:
+  push:
+    branches:
+      - design/moral-trade-institutional-redesign-20260818
+  pull_request:
+    paths:
+      - "src/**"
+      - "e2e/**"
+      - "tests/**"
+      - "docs/ui-ux/**"
+      - "artifacts/ui-ux/**"
+      - ".github/workflows/moral-trade-ui-ux-redesign-gates.yml"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: moral-trade-ui-ux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive source needed for independent audit
+        run: |
+          zip -q -r repository-source.zip \
+            src e2e tests scripts docs .github \
+            package.json package-lock.json next.config.ts playwright.config.ts \
+            tsconfig.json eslint.config.mjs AGENTS.md \
+            -x "docs/**/*.pdf" "output/**" "**/*.icloud"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repository-source-${{ github.sha }}
+          path: repository-source.zip
+          retention-days: 7
