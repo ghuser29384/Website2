@@ -31,17 +31,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Archive source needed for independent audit
+          fetch-depth: 0
+      - name: Archive exact Git workspace for independent implementation
+        shell: bash
         run: |
-          zip -q -r repository-source.zip \
-            src tests scripts docs .github \
-            package.json package-lock.json next.config.ts playwright.config.ts \
-            tsconfig.json eslint.config.mjs AGENTS.md \
-            -x "docs/**/*.pdf" "output/**" "**/*.icloud"
+          set -euo pipefail
+          tar \
+            --exclude='./node_modules' \
+            --exclude='./.next' \
+            --exclude='./output' \
+            --exclude='./test-results' \
+            --exclude='./playwright-report' \
+            --exclude='*.icloud' \
+            -czf repository-workspace.tar.gz .
+          git rev-parse HEAD > workspace-head-sha.txt
+          git rev-parse HEAD^{tree} > workspace-tree-sha.txt
+          git status --short --branch > workspace-status.txt
+          sha256sum repository-workspace.tar.gz > repository-workspace.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: repository-source-${{ github.event.pull_request.head.sha || github.sha }}
-          path: repository-source.zip
+          name: repository-workspace-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            repository-workspace.tar.gz
+            repository-workspace.sha256
+            workspace-head-sha.txt
+            workspace-tree-sha.txt
+            workspace-status.txt
           retention-days: 7
 
   baseline-gallery:
