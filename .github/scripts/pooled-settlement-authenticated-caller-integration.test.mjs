@@ -1,4 +1,4 @@
-// Exact-head rerun trigger after route-completion and milestone-cleanup hardening.
+// Exact-head rerun trigger after participant UI truth-boundary alignment.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -12,6 +12,7 @@ import {
   QA_PROJECT_REF,
   buildAuthenticatedHarnessSource,
 } from "./pooled-settlement-authenticated-caller-integration-contract.mjs";
+import { alignParticipantUiTruthCopy } from "./pooled-settlement-authenticated-caller-integration.mjs";
 
 const original = readFileSync(".github/scripts/pooled-settlement-qa-e2e.mjs", "utf8");
 const workflow = readFileSync(
@@ -34,6 +35,34 @@ test("the generated harness creates route-complete run-owned profiles and uses t
   assert.match(generated, /username:\s*qaUsername\(role\)/);
   assert.match(generated, /const stage = page\.locator\("#main-content"\)/);
   assert.doesNotMatch(generated, /const stage = page\.locator\("main"\)/);
+});
+
+test("the generated participant UI check follows the current live-trade truth boundary", () => {
+  const generated = alignParticipantUiTruthCopy(
+    buildAuthenticatedHarnessSource(original),
+  );
+  assert.match(generated, /await expectText\(stage, \/Trade is live\\\.\/i\);/);
+  assert.match(
+    generated,
+    /await expectText\(stage, \/Both participants confirmed the same immutable version\\\.\/i\);/,
+  );
+  assert.match(
+    generated,
+    /await expectText\(stage, \/Moral Trade does not hold funds\\\.\/i\);/,
+  );
+  assert.doesNotMatch(generated, /The pooled donation is the activation gate/);
+  assert.doesNotMatch(generated, /presumptive provider-facing donor of record/);
+});
+
+test("participant UI copy alignment fails closed if the obsolete assertion block drifts", () => {
+  const generated = buildAuthenticatedHarnessSource(original).replace(
+    "The pooled donation is the activation gate",
+    "drifted pooled activation copy",
+  );
+  assert.throws(
+    () => alignParticipantUiTruthCopy(generated),
+    /participant UI truth-boundary copy: expected source contract was not found/,
+  );
 });
 
 test("the generated harness finalizes the canonical milestone manifest before valid confirmations", () => {
