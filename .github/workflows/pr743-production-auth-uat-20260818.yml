@@ -1,0 +1,704 @@
+name: PR 743 production Auth-resolution UAT
+
+on:
+  push:
+    branches:
+      - ops/pr743-production-auth-uat-20260818
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: pr743-production-auth-uat-20260818
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr743-production-auth-uat-20260818
+  RELEASE_SHA: a3d14af469260a0a17b8d0b38c9e65be7b2c1921
+  CANONICAL_ORIGINS: https://www.moraltrade.org,https://moraltrade.org
+  APEX_DOMAIN: moraltrade.org
+  WWW_DOMAIN: www.moraltrade.org
+  SUPABASE_REF: jnpoxvalyjtdghnperyu
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  OUTPUT_DIR: auth-resolution-production-uat
+
+jobs:
+  production-auth-uat:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out exact one-use controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact merged main and controller-only scope
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
+          git cat-file -e "${RELEASE_SHA}^{commit}"
+          git merge-base --is-ancestor "$RELEASE_SHA" "$GITHUB_SHA"
+          git diff --check "$RELEASE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$RELEASE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > expected-controller-files.txt <<'FILES'
+          .github/scripts/auth-resolution-production-uat.mjs
+          .github/workflows/pr743-production-auth-uat-20260818.yml
+          FILES
+          diff -u expected-controller-files.txt controller-files.txt
+          test -z "$(git status --porcelain --untracked-files=no)"
+          mkdir -p "$OUTPUT_DIR"
+          {
+            printf 'release_sha=%s\n' "$RELEASE_SHA"
+            printf 'release_tree=%s\n' "$(git rev-parse "$RELEASE_SHA^{tree}")"
+            printf 'controller_sha=%s\n' "$GITHUB_SHA"
+            printf 'controller_tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'controller_branch=%s\n' "$CONTROLLER_BRANCH"
+          } > "$OUTPUT_DIR/controller.txt"
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        id: syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          node --check .github/scripts/auth-resolution-production-uat.mjs
+          ruby -e "require 'yaml'; abort('invalid workflow YAML') unless YAML.parse_file('.github/workflows/pr743-production-auth-uat-20260818.yml')"
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch and require permanent exact-main production release
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${GH_TOKEN:-}"
+          active_count="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=50" \
+            | jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+          test "$active_count" = '0'
+          dispatch_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run .github/workflows/vercel-release.yml \
+            --ref main \
+            -f target=production \
+            -f ref=main \
+            -f expected_sha="$RELEASE_SHA"
+
+          run_id=''
+          for attempt in $(seq 1 90); do
+            runs_json="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=50")"
+            run_id="$(printf '%s' "$runs_json" | jq -r \
+              --arg started "$dispatch_started" \
+              --arg sha "$RELEASE_SHA" '
+                [.workflow_runs[]
+                  | select(.created_at >= $started)
+                  | select(.head_sha == $sha)]
+                | sort_by(.created_at)
+                | last
+                | .id // empty
+              ')"
+            if [[ "$run_id" =~ ^[0-9]+$ ]]; then break; fi
+            sleep 2
+          done
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          echo "VERCEL_RELEASE_RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "release_run_id=$run_id" >> "$GITHUB_OUTPUT"
+          jq -n \
+            --argjson runId "$run_id" \
+            --arg dispatchedAt "$dispatch_started" \
+            --arg releaseSha "$RELEASE_SHA" \
+            '{runId:$runId,dispatchedAt:$dispatchedAt,releaseSha:$releaseSha,target:"production",ref:"main"}' \
+            > "$OUTPUT_DIR/release-run.json"
+          gh run watch "$run_id" --exit-status --interval 15
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+            | jq -e --arg sha "$RELEASE_SHA" '
+                .event == "workflow_dispatch"
+                and .head_sha == $sha
+                and .status == "completed"
+                and .conclusion == "success"
+              ' >/dev/null
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Download and guard immutable production-release evidence
+        id: deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR/permanent-release"
+          gh run download "$VERCEL_RELEASE_RUN_ID" --dir "$OUTPUT_DIR/permanent-release"
+          deployment_url_file="$(find "$OUTPUT_DIR/permanent-release" -name deployment-url.txt -type f -print -quit)"
+          deployment_detail_file="$(find "$OUTPUT_DIR/permanent-release" -name deployment-detail.json -type f -print -quit)"
+          test -f "$deployment_url_file"
+          test -f "$deployment_detail_file"
+          deployment_url="$(tr -d '\r\n' < "$deployment_url_file")"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app$ ]]
+          deployment_id="$(jq -r '.id // .uid // empty' "$deployment_detail_file")"
+          deployment_host="$(jq -r '.url // empty' "$deployment_detail_file")"
+          [[ "$deployment_id" =~ ^dpl_[A-Za-z0-9]+$ ]]
+          [[ "$deployment_host" =~ ^[A-Za-z0-9.-]+\.vercel\.app$ ]]
+          test "$deployment_url" = "https://$deployment_host"
+          jq -e \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$RELEASE_SHA" '
+              ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+              and ((.aliasError // null) == null)
+              and ((.alias // .aliases // []) | any(. == "moraltrade.org"))
+              and ((.alias // .aliases // []) | any(. == "www.moraltrade.org"))
+            ' "$deployment_detail_file" >/dev/null
+          echo "PRODUCTION_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
+          echo "PRODUCTION_DEPLOYMENT_URL=$deployment_url" >> "$GITHUB_ENV"
+          echo "PRODUCTION_DEPLOYMENT_HOST=$deployment_host" >> "$GITHUB_ENV"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          jq -n \
+            --arg deploymentId "$deployment_id" \
+            --arg deploymentUrl "$deployment_url" \
+            --arg projectId "$VERCEL_PROJECT_ID" \
+            --arg releaseSha "$RELEASE_SHA" \
+            '{deploymentId:$deploymentId,deploymentUrl:$deploymentUrl,projectId:$projectId,releaseSha:$releaseSha,target:"production",ready:true,canonicalAliases:["moraltrade.org","www.moraltrade.org"]}' \
+            > "$OUTPUT_DIR/deployment.json"
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Pull exact production service credential and bind checked-in public configuration
+        id: credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull \
+            --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN" \
+            > "$RUNNER_TEMP/vercel-pull.log" 2>&1
+          env_file="$PWD/.vercel/.env.production.local"
+          test -s "$env_file"
+          service_role="$(ENV_FILE="$env_file" bash -c '
+            set +u
+            source "$ENV_FILE"
+            printf "%s" "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          ')"
+          test -n "$service_role"
+
+          supabase_url="$(sed -nE 's/^const DEFAULT_PUBLIC_SUPABASE_URL = "([^"]+)";$/\1/p' src/lib/supabase/config.ts)"
+          publishable_key="$(awk '
+            /^const DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY =/ {
+              getline
+              value=$0
+              sub(/^[[:space:]]*"/, "", value)
+              sub(/";[[:space:]]*$/, "", value)
+              print value
+              exit
+            }
+          ' src/lib/supabase/config.ts)"
+          test -n "$supabase_url"
+          test -n "$publishable_key"
+          observed_ref="$(SUPABASE_URL="$supabase_url" python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          print((urlparse(os.environ['SUPABASE_URL']).hostname or '').split('.')[0])
+          PY
+          )"
+          test "$observed_ref" = "$SUPABASE_REF"
+          echo "::add-mask::$service_role"
+          echo "::add-mask::$publishable_key"
+          umask 077
+          {
+            printf 'export NEXT_PUBLIC_SUPABASE_URL=%q\n' "$supabase_url"
+            printf 'export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%q\n' "$publishable_key"
+            printf 'export SUPABASE_SERVICE_ROLE_KEY=%q\n' "$service_role"
+          } > "$RUNNER_TEMP/auth-uat-secrets.env"
+          rm -rf .vercel "$RUNNER_TEMP/vercel-pull.log"
+          unset service_role publishable_key supabase_url
+          jq -n \
+            --arg projectId "$VERCEL_PROJECT_ID" \
+            --arg supabaseRef "$observed_ref" \
+            --arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{projectId:$projectId,environment:"production",supabaseRef:$supabaseRef,serviceCredentialPresent:true,publicConfigurationSource:"checked-in production defaults",secretValuesRetained:false,observedAt:$observedAt}' \
+            > "$OUTPUT_DIR/environment.json"
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Verify exact deployment and canonical aliases before UAT
+        id: alias_before
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="$RUNNER_TEMP/deployment-before.json"
+          curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${PRODUCTION_DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" > "$raw"
+          jq -e \
+            --arg id "$PRODUCTION_DEPLOYMENT_ID" \
+            --arg host "$PRODUCTION_DEPLOYMENT_HOST" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$RELEASE_SHA" '
+              ((.id // .uid) == $id)
+              and (.url == $host)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $sha)
+            ' "$raw" >/dev/null
+          jq '{id:(.id // .uid),url,projectId:(.projectId // .project.id),readyState:(.readyState // .state),target,githubCommitSha:.meta.githubCommitSha}' \
+            "$raw" > "$OUTPUT_DIR/deployment-before.json"
+          mkdir -p "$OUTPUT_DIR/aliases-before"
+          for alias_name in "$APEX_DOMAIN" "$WWW_DOMAIN"; do
+            key="${alias_name//./-}"
+            alias_raw="$RUNNER_TEMP/alias-before-${key}.json"
+            curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" > "$alias_raw"
+            jq -e --arg alias "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$PRODUCTION_DEPLOYMENT_ID" '
+              (.alias == $alias)
+              and (.projectId == $project)
+              and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+            ' "$alias_raw" >/dev/null
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' \
+              "$alias_raw" > "$OUTPUT_DIR/aliases-before/${key}.json"
+          done
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Create one exact run-owned production Auth fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/auth-uat-secrets.env"
+          qa_user_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+          qa_suffix="$(openssl rand -hex 8)"
+          qa_email="auth-resolution-uat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${qa_suffix}@qa.moraltrade.invalid"
+          qa_password="$(openssl rand -base64 42 | tr -d '\n')"
+          qa_run_id="${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          [[ "$qa_user_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]
+          [[ "$qa_email" =~ ^[a-z0-9._+-]+@qa\.moraltrade\.invalid$ ]]
+          echo "::add-mask::$qa_password"
+          umask 077
+          printf '%s' "$qa_user_id" > "$RUNNER_TEMP/qa-user-id"
+          printf '%s' "$qa_email" > "$RUNNER_TEMP/qa-email"
+          printf '%s' "$qa_password" > "$RUNNER_TEMP/qa-password"
+          printf '%s' "$qa_run_id" > "$RUNNER_TEMP/qa-run-id"
+
+          preflight_auth="$RUNNER_TEMP/auth-preflight.json"
+          preflight_status="$(curl -sS \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -o "$preflight_auth" -w '%{http_code}' \
+            "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${qa_user_id}")"
+          test "$preflight_status" = '404'
+          curl -fsS \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?id=eq.${qa_user_id}&select=id,email" \
+            > "$RUNNER_TEMP/profile-preflight.json"
+          jq -e 'length == 0' "$RUNNER_TEMP/profile-preflight.json" >/dev/null
+          jq -n --arg userId "$qa_user_id" --arg email "$qa_email" --arg runId "$qa_run_id" --arg checkedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{userId:$userId,email:$email,scope:"auth_resolution_production_uat",runId:$runId,authUserAbsent:true,profileAbsent:true,checkedAt:$checkedAt}' \
+            > "$OUTPUT_DIR/fixture-preflight.json"
+
+          body="$(jq -nc \
+            --arg id "$qa_user_id" \
+            --arg email "$qa_email" \
+            --arg password "$qa_password" \
+            --arg runId "$qa_run_id" '
+              {
+                id:$id,
+                email:$email,
+                password:$password,
+                email_confirm:true,
+                user_metadata:{
+                  display_name:"Auth Resolution Production UAT",
+                  full_name:"Auth Resolution Production UAT",
+                  qa_scope:"auth_resolution_production_uat",
+                  qa_run_id:$runId
+                }
+              }')"
+          response="$RUNNER_TEMP/auth-create.json"
+          status="$(curl -sS -X POST \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H 'Content-Type: application/json' \
+            -o "$response" -w '%{http_code}' \
+            --data "$body" \
+            "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users")"
+          unset body qa_password
+          test "$status" = '200' -o "$status" = '201'
+          jq -e --arg id "$qa_user_id" --arg email "$qa_email" --arg run "$qa_run_id" '
+            (.id == $id)
+            and ((.email // "") | ascii_downcase == ($email | ascii_downcase))
+            and (.email_confirmed_at != null)
+            and ((.user_metadata // .raw_user_meta_data).qa_scope == "auth_resolution_production_uat")
+            and ((.user_metadata // .raw_user_meta_data).qa_run_id == $run)
+          ' "$response" >/dev/null
+
+          profile_ready=false
+          for attempt in $(seq 1 30); do
+            curl -fsS \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?id=eq.${qa_user_id}&select=id,email,display_name" \
+              > "$RUNNER_TEMP/profile-create.json"
+            if jq -e --arg id "$qa_user_id" --arg email "$qa_email" '
+              length == 1
+              and .[0].id == $id
+              and ((.[0].email // "") | ascii_downcase == ($email | ascii_downcase))
+              and .[0].display_name == "Auth Resolution Production UAT"
+            ' "$RUNNER_TEMP/profile-create.json" >/dev/null; then
+              profile_ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$profile_ready" = 'true'
+          jq -n --arg userId "$qa_user_id" --arg email "$qa_email" --arg runId "$qa_run_id" --arg createdAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{userId:$userId,email:$email,scope:"auth_resolution_production_uat",runId:$runId,profileCreated:true,createdAt:$createdAt}' \
+            > "$OUTPUT_DIR/fixture.json"
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Run authenticated canonical desktop and exact-mobile UAT
+        id: browser
+        shell: bash
+        run: |
+          set -uo pipefail
+          source "$RUNNER_TEMP/auth-uat-secrets.env"
+          export AUTH_UAT_EXPECTED_MAIN_SHA="$RELEASE_SHA"
+          export AUTH_UAT_EXPECTED_DEPLOYMENT_ID="$PRODUCTION_DEPLOYMENT_ID"
+          export AUTH_UAT_ORIGINS="$CANONICAL_ORIGINS"
+          export AUTH_UAT_OUTPUT_DIR="$OUTPUT_DIR"
+          export AUTH_UAT_USER_ID="$(cat "$RUNNER_TEMP/qa-user-id")"
+          export AUTH_UAT_EMAIL="$(cat "$RUNNER_TEMP/qa-email")"
+          export AUTH_UAT_PASSWORD="$(cat "$RUNNER_TEMP/qa-password")"
+          echo "::add-mask::$AUTH_UAT_PASSWORD"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$OUTPUT_DIR/uat-started-at.txt"
+          set +e
+          node .github/scripts/auth-resolution-production-uat.mjs \
+            > >(tee "$OUTPUT_DIR/browser.log") \
+            2> >(tee "$OUTPUT_DIR/browser.stderr.log" >&2)
+          code=$?
+          set -e
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$OUTPUT_DIR/uat-completed-at.txt"
+          printf '%s\n' "$code" > "$OUTPUT_DIR/browser-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Reverify exact deployment and aliases after UAT
+        id: alias_after
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          code=0
+          raw="$RUNNER_TEMP/deployment-after.json"
+          if [[ -z "${PRODUCTION_DEPLOYMENT_ID:-}" || -z "${PRODUCTION_DEPLOYMENT_HOST:-}" ]]; then
+            code=70
+          else
+            set +e
+            curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v13/deployments/${PRODUCTION_DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" > "$raw"
+            curl_code=$?
+            set -e
+            if [[ "$curl_code" -ne 0 ]] || ! jq -e --arg id "$PRODUCTION_DEPLOYMENT_ID" --arg host "$PRODUCTION_DEPLOYMENT_HOST" --arg project "$VERCEL_PROJECT_ID" --arg sha "$RELEASE_SHA" '
+              ((.id // .uid) == $id)
+              and (.url == $host)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and (.meta.githubCommitSha == $sha)
+            ' "$raw" >/dev/null; then
+              code=71
+            else
+              jq '{id:(.id // .uid),url,projectId:(.projectId // .project.id),readyState:(.readyState // .state),target,githubCommitSha:.meta.githubCommitSha}' \
+                "$raw" > "$OUTPUT_DIR/deployment-after.json"
+            fi
+          fi
+          mkdir -p "$OUTPUT_DIR/aliases-after"
+          if [[ "$code" -eq 0 ]]; then
+            for alias_name in "$APEX_DOMAIN" "$WWW_DOMAIN"; do
+              key="${alias_name//./-}"
+              alias_raw="$RUNNER_TEMP/alias-after-${key}.json"
+              set +e
+              curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" > "$alias_raw"
+              alias_curl=$?
+              set -e
+              if [[ "$alias_curl" -ne 0 ]] || ! jq -e --arg alias "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$PRODUCTION_DEPLOYMENT_ID" '
+                (.alias == $alias)
+                and (.projectId == $project)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+              ' "$alias_raw" >/dev/null; then
+                code=72
+                break
+              fi
+              jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' \
+                "$alias_raw" > "$OUTPUT_DIR/aliases-after/${key}.json"
+            done
+          fi
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Remove and prove absence of exact run-owned fixture
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          code=0
+          deleted=false
+          auth_absent=false
+          profile_absent=false
+          user_id=''
+          email=''
+          run_id=''
+          [[ -s "$RUNNER_TEMP/qa-user-id" ]] && user_id="$(cat "$RUNNER_TEMP/qa-user-id")"
+          [[ -s "$RUNNER_TEMP/qa-email" ]] && email="$(cat "$RUNNER_TEMP/qa-email")"
+          [[ -s "$RUNNER_TEMP/qa-run-id" ]] && run_id="$(cat "$RUNNER_TEMP/qa-run-id")"
+          if [[ -s "$RUNNER_TEMP/auth-uat-secrets.env" && -n "$user_id" ]]; then
+            source "$RUNNER_TEMP/auth-uat-secrets.env"
+            inspect="$RUNNER_TEMP/auth-inspect.json"
+            set +e
+            inspect_status="$(curl -sS \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -o "$inspect" -w '%{http_code}' \
+              "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${user_id}")"
+            inspect_curl=$?
+            set -e
+            if [[ "$inspect_curl" -ne 0 || "$inspect_status" != '200' ]] || ! jq -e --arg id "$user_id" --arg email "$email" --arg run "$run_id" '
+              (.id == $id)
+              and ((.email // "") | ascii_downcase == ($email | ascii_downcase))
+              and ((.user_metadata // .raw_user_meta_data).qa_scope == "auth_resolution_production_uat")
+              and ((.user_metadata // .raw_user_meta_data).qa_run_id == $run)
+            ' "$inspect" >/dev/null; then
+              code=80
+            else
+              set +e
+              delete_status="$(curl -sS -X DELETE \
+                -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+                -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+                -o "$RUNNER_TEMP/auth-delete.json" -w '%{http_code}' \
+                "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${user_id}")"
+              delete_curl=$?
+              set -e
+              if [[ "$delete_curl" -ne 0 || ( "$delete_status" != '200' && "$delete_status" != '204' ) ]]; then
+                code=81
+              else
+                deleted=true
+              fi
+            fi
+            if [[ "$code" -eq 0 ]]; then
+              for attempt in $(seq 1 30); do
+                set +e
+                status="$(curl -sS \
+                  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+                  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+                  -o "$RUNNER_TEMP/auth-after.json" -w '%{http_code}' \
+                  "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${user_id}")"
+                get_code=$?
+                set -e
+                if [[ "$get_code" -eq 0 && "$status" = '404' ]]; then auth_absent=true; break; fi
+                sleep 1
+              done
+              [[ "$auth_absent" == 'true' ]] || code=82
+            fi
+            if [[ "$code" -eq 0 ]]; then
+              for attempt in $(seq 1 30); do
+                curl -fsS \
+                  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+                  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+                  "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?id=eq.${user_id}&select=id,email" \
+                  > "$RUNNER_TEMP/profile-after.json"
+                if jq -e 'length == 0' "$RUNNER_TEMP/profile-after.json" >/dev/null; then profile_absent=true; break; fi
+                sleep 1
+              done
+              [[ "$profile_absent" == 'true' ]] || code=83
+            fi
+          elif [[ -n "$user_id" ]]; then
+            code=84
+          else
+            auth_absent=true
+            profile_absent=true
+          fi
+          jq -n \
+            --arg userId "$user_id" \
+            --arg email "$email" \
+            --arg runId "$run_id" \
+            --argjson deleted "$deleted" \
+            --argjson authAbsent "$auth_absent" \
+            --argjson profileAbsent "$profile_absent" \
+            --argjson exitCode "$code" \
+            --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {
+                userId:(if $userId=="" then null else $userId end),
+                email:(if $email=="" then null else $email end),
+                runId:(if $runId=="" then null else $runId end),
+                scope:"auth_resolution_production_uat",
+                ownershipVerifiedBeforeDelete:($deleted or ($userId=="")),
+                deleted:$deleted,
+                authUserAbsent:$authAbsent,
+                profileAbsent:$profileAbsent,
+                exitCode:$exitCode,
+                completedAt:$completedAt
+              }
+            ' > "$OUTPUT_DIR/cleanup.json"
+          rm -f "$RUNNER_TEMP"/qa-* "$RUNNER_TEMP"/auth-*.json "$RUNNER_TEMP"/profile-*.json
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Validate, privacy-scan, and summarize immutable evidence
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = process.env.OUTPUT_DIR;
+          const fail = (message) => { throw new Error(message); };
+          const readJson = (name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+          const browserExitCode = Number(fs.readFileSync(path.join(dir, 'browser-exit-code.txt'), 'utf8').trim());
+          if (browserExitCode !== 0) fail(`Browser exit code ${browserExitCode}.`);
+          const evidence = readJson('evidence.json');
+          const cleanup = readJson('cleanup.json');
+          const deployment = readJson('deployment.json');
+          const releaseRun = readJson('release-run.json');
+          if (evidence.expectedMainSha !== process.env.RELEASE_SHA) fail('Release SHA mismatch.');
+          if (evidence.expectedDeploymentId !== deployment.deploymentId) fail('Deployment ID mismatch.');
+          if (evidence.routeCount !== 16) fail('Incomplete canonical desktop/mobile route matrix.');
+          if (evidence.browserDiagnosticsClean !== true) fail('Browser diagnostics were not clean.');
+          if (evidence.noApplicationMutationTransmitted !== true) fail('Application mutation boundary failed.');
+          if (evidence.noPaymentProviderRequest !== true) fail('Payment-provider boundary failed.');
+          if (evidence.noOfferPaymentTradeOrSyntheticProductRecordCreated !== true) fail('Product-record boundary failed.');
+          if (!Array.isArray(evidence.results) || evidence.results.length !== 4) fail('Incomplete origin/viewport results.');
+          for (const result of evidence.results) {
+            if (!result.api || !/no-store/i.test(result.api.cacheControl ?? '')) fail('Missing private no-store proof.');
+            if (!/cookie/i.test(result.api.vary ?? '')) fail('Missing Vary Cookie proof.');
+            if (!Array.isArray(result.routes) || result.routes.length !== 4) fail('Incomplete route journey.');
+            for (const route of result.routes) {
+              if (route.status !== 200 || route.signedOutObserved !== false) fail('Authenticated route contract failed.');
+              const screenshot = path.join(dir, route.screenshot);
+              if (!fs.existsSync(screenshot) || fs.statSync(screenshot).size < 1000) fail(`Missing screenshot ${route.screenshot}.`);
+            }
+          }
+          if (cleanup.exitCode !== 0 || cleanup.deleted !== true || cleanup.authUserAbsent !== true || cleanup.profileAbsent !== true) {
+            fail('Exact run-owned fixture cleanup proof failed.');
+          }
+          if (deployment.releaseSha !== process.env.RELEASE_SHA || deployment.target !== 'production' || deployment.ready !== true) {
+            fail('Deployment evidence mismatch.');
+          }
+          const summary = {
+            schemaVersion: 1,
+            releaseSha: evidence.expectedMainSha,
+            releaseRunId: releaseRun.runId,
+            deploymentId: deployment.deploymentId,
+            deploymentUrl: deployment.deploymentUrl,
+            aliases: deployment.canonicalAliases,
+            uatStartedAt: evidence.startedAt,
+            uatFinishedAt: evidence.finishedAt,
+            desktopViewport: { width: 1440, height: 900 },
+            mobileViewport: { width: 390, height: 844 },
+            routeJourneys: evidence.routeCount,
+            authenticatedCanonicalDomains: true,
+            privateNoStoreAndVaryCookie: true,
+            browserDiagnosticsClean: true,
+            applicationMutationRequestsTransmitted: 0,
+            paymentProviderRequests: 0,
+            runOwnedFixtureDeleted: true,
+            authUserAbsent: true,
+            profileAbsent: true,
+            noOfferPaymentTradeOrSyntheticProductRecordCreated: true,
+          };
+          fs.writeFileSync(path.join(dir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
+          NODE
+          code=$?
+          python3 - <<'PY' > "$OUTPUT_DIR/privacy-scan.log"
+          from pathlib import Path
+          import re
+
+          roots = [Path('auth-resolution-production-uat')]
+          files = [path for root in roots if root.exists() for path in root.rglob('*') if path.is_file() and path.stat().st_size <= 25_000_000]
+          patterns = {
+              'jwt': re.compile(rb'eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}'),
+              'bearer': re.compile(rb'Bearer\s+[A-Za-z0-9._~+/-]{20,}', re.I),
+              'refresh_token': re.compile(rb'refresh[_-]?token[\"\'=:\s]+[A-Za-z0-9._~+/-]{16,}', re.I),
+              'supabase_cookie': re.compile(rb'sb-[a-z0-9-]+-auth-token', re.I),
+              'service_role': re.compile(rb'sb_(?:secret|service_role)_[A-Za-z0-9_-]{12,}', re.I),
+              'private_key': re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+              'database_url': re.compile(rb'postgres(?:ql)?://[^\s\"\']+', re.I),
+              'vercel_token': re.compile(rb'(?:VERCEL_TOKEN|x-vercel-protection-bypass)[\"\'=:\s]+[A-Za-z0-9._~+/-]{12,}', re.I),
+          }
+          findings = []
+          for file in files:
+              data = file.read_bytes()
+              for label, pattern in patterns.items():
+                  if pattern.search(data):
+                      findings.append((label, str(file)))
+          print({'filesScanned': len(files), 'findings': findings})
+          if findings:
+              raise SystemExit('Credential-like material found in retained production UAT evidence.')
+          PY
+          privacy_code=$?
+          if [[ "$privacy_code" -ne 0 ]]; then code=90; fi
+          rm -f "$RUNNER_TEMP/auth-uat-secrets.env" "$RUNNER_TEMP"/deployment-*.json "$RUNNER_TEMP"/alias-*.json
+          test -z "$(git status --porcelain --untracked-files=no)" || code=91
+          printf '%s\n' "$code" > "$OUTPUT_DIR/evidence-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload immutable production Auth UAT evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr743-production-auth-uat-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            controller-files.txt
+            expected-controller-files.txt
+            auth-resolution-production-uat/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve fail-closed conclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.guard.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.syntax.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.release.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.deployment.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.credentials.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.alias_before.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.fixture.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.browser.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.alias_after.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.cleanup.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.evidence.outputs.exit_code || '255' }}" = '0'
+
+      - name: Delete one-use controller branch after success
+        if: success()
+        shell: bash
+        run: git push origin --delete "$CONTROLLER_BRANCH"
