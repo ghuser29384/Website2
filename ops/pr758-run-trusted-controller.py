@@ -1,0 +1,377 @@
+#!/usr/bin/env python3
+"""Execute the reviewed PR #740 owner-UAT workflow for exact PR #758.
+
+The runner leaves the reviewed workflow's product, migration, deployment,
+privacy, no-money, fixture, cleanup, and evidence steps intact. It changes only
+immutable candidate/PR/controller identity pins and adds a fail-closed audit for
+any main drift after candidate creation. Checkout, Node setup, and final artifact
+upload are performed by the small wrapper workflow.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+ROOT = Path.cwd()
+SOURCE = ROOT / "controller/.github/workflows/pr740-dac-current-main-integration-uat-20260816.yml"
+EVIDENCE = ROOT / "evidence"
+TRANSFORMED = EVIDENCE / "pr758-transformed-trusted-controller.yml"
+RESULT = EVIDENCE / "controller-runner-result.json"
+
+CANDIDATE_BASE = "a3d14af469260a0a17b8d0b38c9e65be7b2c1921"
+CANDIDATE_HEAD = "2ecdf5736e0bb5e064ef6bc68fda450710d07aa8"
+CANDIDATE_TREE = "1555c5a493027ea6ee240c6ed83c61e37972e8c1"
+CONTROLLER_BRANCH = "ops/pr758-dac-current-main-integration-uat-20260818"
+
+
+def require_replace(text: str, old: str, new: str) -> str:
+    if old not in text:
+        raise RuntimeError(f"Missing reviewed-controller token: {old}")
+    return text.replace(old, new)
+
+
+def transform_trusted_workflow() -> str:
+    text = SOURCE.read_text(encoding="utf-8")
+
+    replacements = [
+        (
+            "PR 740 current-main DAC integration protected Preview owner UAT 20260816",
+            "PR 758 post-Auth current-main DAC integration protected Preview owner UAT 20260818",
+        ),
+        (
+            "ops/pr740-dac-current-main-integration-uat-20260816",
+            CONTROLLER_BRANCH,
+        ),
+        (
+            "CANDIDATE_BASE_SHA: 4587e8c418621440835940d6924f32c02ba3f2d1",
+            f"CANDIDATE_BASE_SHA: {CANDIDATE_BASE}",
+        ),
+        (
+            "CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328",
+            f"CANDIDATE_HEAD_SHA: {CANDIDATE_HEAD}",
+        ),
+        (
+            "CANDIDATE_TREE_SHA: 2d00b09d2077857fcbf6437f79b7b1abcadd9827",
+            f"CANDIDATE_TREE_SHA: {CANDIDATE_TREE}",
+        ),
+        ('INTEGRATION_PR_NUMBER: "740"', 'INTEGRATION_PR_NUMBER: "758"'),
+        ("pulls/740", "pulls/758"),
+        ("pr:740", "pr:758"),
+    ]
+    for old, new in replacements:
+        text = require_replace(text, old, new)
+
+    text = text.replace("PR 740", "PR 758").replace("pr740-", "pr758-")
+    text = require_replace(
+        text,
+        'test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"',
+        'test "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" = "$CONTROLLER_BRANCH"',
+    )
+
+    strict_main = '''          observed_main_sha="$(git -C app rev-parse origin/main)"
+          test "$observed_main_sha" = "$CANDIDATE_BASE_SHA"
+          test "$(git -C app merge-base HEAD origin/main)" = "$CANDIDATE_BASE_SHA"
+          test "$(git -C app status --porcelain)" = ""
+'''
+    audited_main = '''          observed_main_sha="$(git -C app rev-parse origin/main)"
+          git -C app merge-base --is-ancestor "$CANDIDATE_BASE_SHA" "$observed_main_sha"
+          test "$(git -C app merge-base HEAD "$observed_main_sha")" = "$CANDIDATE_BASE_SHA"
+          test "$(git -C app status --porcelain)" = ""
+
+          mkdir -p evidence
+          git -C app diff --name-only "$CANDIDATE_BASE_SHA" "$observed_main_sha" \\
+            | sort -u > evidence/post-candidate-main-drift.txt
+          git -C app diff --name-only "$CANDIDATE_BASE_SHA" "$CANDIDATE_HEAD_SHA" \\
+            | sort -u > evidence/candidate-diff.txt
+          comm -12 evidence/candidate-diff.txt evidence/post-candidate-main-drift.txt \\
+            > evidence/post-candidate-main-overlap.txt
+          test ! -s evidence/post-candidate-main-overlap.txt
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          drift = [
+              line.strip()
+              for line in Path("evidence/post-candidate-main-drift.txt").read_text().splitlines()
+              if line.strip()
+          ]
+          critical_tokens = (
+              "mpgf", "dac", "supabase", "auth", "vercel", "discover",
+              "navigation", "footer", "globals.css", "playwright", "shared-qa",
+              "site.ts", "middleware", "proxy.ts", "offers/page.tsx",
+          )
+          critical = [path for path in drift if any(token in path.lower() for token in critical_tokens)]
+          Path("evidence/post-candidate-main-drift-audit.json").write_text(
+              json.dumps(
+                  {
+                      "pathCount": len(drift),
+                      "paths": drift,
+                      "candidateOverlap": [],
+                      "criticalPaths": critical,
+                      "classification": "disjoint" if not critical else "relevant_drift_blocked",
+                  },
+                  indent=2,
+              ) + "\\n"
+          )
+          if critical:
+              raise SystemExit(f"Post-candidate main drift touches UAT-critical paths: {critical}")
+          PY
+'''
+    text = require_replace(text, strict_main, audited_main)
+
+    strict_pr = '''          jq -e --arg head "$CANDIDATE_HEAD_SHA" --arg base "$CANDIDATE_BASE_SHA" '
+            .state == "open" and .draft == true and .merged == false
+              and .head.sha == $head and .base.sha == $base
+          ' "$RUNNER_TEMP/pr740.json" > /dev/null
+'''
+    audited_pr = '''          jq -e --arg head "$CANDIDATE_HEAD_SHA" '
+            .state == "open" and .draft == true and .merged == false
+              and .head.sha == $head and .base.ref == "main"
+          ' "$RUNNER_TEMP/pr740.json" > /dev/null
+'''
+    text = require_replace(text, strict_pr, audited_pr)
+
+    text = require_replace(
+        text,
+        "repository:{observedMain:$observedMain,exactMainIsFirstParent:true}",
+        "repository:{observedMain:$observedMain,candidateBaseWasExactMainAtCreation:true,postCandidateMainDriftChecked:true,postCandidateMainDriftPathDisjoint:true}",
+    )
+
+    required = (
+        f"CANDIDATE_BASE_SHA: {CANDIDATE_BASE}",
+        f"CANDIDATE_HEAD_SHA: {CANDIDATE_HEAD}",
+        f"CANDIDATE_TREE_SHA: {CANDIDATE_TREE}",
+        f"CONTROLLER_BRANCH: {CONTROLLER_BRANCH}",
+        'INTEGRATION_PR_NUMBER: "758"',
+        "EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz",
+        "FORBIDDEN_PROD_REF: jnpoxvalyjtdghnperyu",
+        "CONDITIONAL_PAYMENTS_MODE: disabled",
+        'MPGF_REAL_MONEY_ENABLED: "false"',
+        'EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"',
+        "pulls/758",
+        "pr:758",
+    )
+    missing = [token for token in required if token not in text]
+    if missing:
+        raise RuntimeError(f"Transformed controller is missing required tokens: {missing}")
+
+    forbidden = (
+        "CANDIDATE_BASE_SHA: 4587e8c418621440835940d6924f32c02ba3f2d1",
+        "CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328",
+        "CANDIDATE_TREE_SHA: 2d00b09d2077857fcbf6437f79b7b1abcadd9827",
+        "ops/pr740-dac-current-main-integration-uat-20260816",
+        "pulls/740",
+        "pr:740",
+    )
+    retained = [token for token in forbidden if token in text]
+    if retained:
+        raise RuntimeError(f"Transformed controller retained stale tokens: {retained}")
+
+    return text
+
+
+EXPRESSION = re.compile(r"\$\{\{\s*([^{}]+?)\s*\}\}")
+STEP_OUTPUT = re.compile(r"^steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)$")
+
+
+def stringify(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return str(value)
+
+
+def resolve_expression(expr: str, env: dict[str, str], outputs: dict[str, dict[str, str]]) -> str:
+    expr = expr.strip()
+    if expr == "github.token":
+        return env.get("GH_TOKEN", "")
+    if expr == "github.run_id":
+        return env.get("GITHUB_RUN_ID", "")
+    if expr.startswith("secrets."):
+        return env.get(expr.split(".", 1)[1], "")
+    if expr.startswith("env."):
+        return env.get(expr.split(".", 1)[1], "")
+    match = STEP_OUTPUT.match(expr)
+    if match:
+        return outputs.get(match.group(1), {}).get(match.group(2), "")
+    raise RuntimeError(f"Unsupported reviewed-controller expression: {expr}")
+
+
+def resolve(value: Any, env: dict[str, str], outputs: dict[str, dict[str, str]]) -> str:
+    text = stringify(value)
+    return EXPRESSION.sub(lambda m: resolve_expression(m.group(1), env, outputs), text)
+
+
+def parse_output_file(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    parsed: dict[str, str] = {}
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if "<<" in line:
+            key, delimiter = line.split("<<", 1)
+            index += 1
+            values: list[str] = []
+            while index < len(lines) and lines[index] != delimiter:
+                values.append(lines[index])
+                index += 1
+            parsed[key] = "\n".join(values)
+        elif "=" in line:
+            key, value = line.split("=", 1)
+            parsed[key] = value
+        index += 1
+    return parsed
+
+
+def should_run(condition: Any, prior_failed: bool, outputs: dict[str, dict[str, str]]) -> bool:
+    if condition is None:
+        return not prior_failed
+    text = stringify(condition).strip()
+    if text == "always()":
+        return True
+    if text.startswith("always() &&"):
+        checks = re.findall(
+            r"steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)\s*!=\s*''",
+            text,
+        )
+        if not checks:
+            raise RuntimeError(f"Unsupported always condition: {text}")
+        return all(outputs.get(step_id, {}).get(key, "") != "" for step_id, key in checks)
+    raise RuntimeError(f"Unsupported reviewed-controller condition: {text}")
+
+
+def main() -> int:
+    EVIDENCE.mkdir(parents=True, exist_ok=True)
+    transformed = transform_trusted_workflow()
+    TRANSFORMED.write_text(transformed, encoding="utf-8")
+    workflow = yaml.safe_load(transformed)
+    job = workflow["jobs"]["owner-uat"]
+
+    global_env = dict(os.environ)
+    for key, value in (workflow.get("env") or {}).items():
+        global_env[str(key)] = stringify(value)
+
+    outputs: dict[str, dict[str, str]] = {}
+    records: list[dict[str, Any]] = []
+    failed = False
+
+    for ordinal, step in enumerate(job["steps"], start=1):
+        name = stringify(step.get("name") or f"step-{ordinal}")
+        step_id = stringify(step.get("id"))
+
+        if "uses" in step:
+            records.append(
+                {
+                    "ordinal": ordinal,
+                    "name": name,
+                    "id": step_id or None,
+                    "status": "handled_by_wrapper",
+                    "uses": stringify(step["uses"]),
+                }
+            )
+            continue
+
+        condition = step.get("if")
+        if not should_run(condition, failed, outputs):
+            records.append(
+                {
+                    "ordinal": ordinal,
+                    "name": name,
+                    "id": step_id or None,
+                    "status": "skipped_after_failure",
+                }
+            )
+            continue
+
+        step_env = dict(global_env)
+        for key, value in (step.get("env") or {}).items():
+            step_env[str(key)] = resolve(value, step_env, outputs)
+
+        working_directory = resolve(step.get("working-directory") or ".", step_env, outputs)
+        cwd = (ROOT / working_directory).resolve()
+        if not cwd.exists():
+            raise RuntimeError(f"Missing working directory for {name}: {cwd}")
+
+        script = resolve(step["run"], step_env, outputs)
+        with tempfile.NamedTemporaryFile(prefix="pr758-output-", delete=False) as output_handle:
+            output_path = Path(output_handle.name)
+        step_env["GITHUB_OUTPUT"] = str(output_path)
+
+        print(f"::group::{ordinal:02d} {name}", flush=True)
+        completed = subprocess.run(
+            ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+            cwd=cwd,
+            env=step_env,
+            check=False,
+        )
+        print("::endgroup::", flush=True)
+
+        captured = parse_output_file(output_path)
+        output_path.unlink(missing_ok=True)
+        if step_id:
+            outputs[step_id] = captured
+
+        records.append(
+            {
+                "ordinal": ordinal,
+                "name": name,
+                "id": step_id or None,
+                "status": "passed" if completed.returncode == 0 else "failed",
+                "returnCode": completed.returncode,
+                "outputKeys": sorted(captured),
+            }
+        )
+        if completed.returncode != 0:
+            failed = True
+
+    RESULT.write_text(
+        json.dumps(
+            {
+                "trustedSource": str(SOURCE.relative_to(ROOT)),
+                "transformedController": str(TRANSFORMED.relative_to(ROOT)),
+                "candidateBase": CANDIDATE_BASE,
+                "candidateHead": global_env.get("CANDIDATE_HEAD_SHA"),
+                "candidateTree": global_env.get("CANDIDATE_TREE_SHA"),
+                "failed": failed,
+                "steps": records,
+                "capturedOutputKeys": {key: sorted(value) for key, value in outputs.items()},
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except BaseException as exc:
+        EVIDENCE.mkdir(parents=True, exist_ok=True)
+        if not RESULT.exists():
+            RESULT.write_text(
+                json.dumps(
+                    {
+                        "failed": True,
+                        "runnerErrorType": type(exc).__name__,
+                        "runnerError": str(exc),
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        raise
