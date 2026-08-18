@@ -1,0 +1,92 @@
+name: Complete PR 757 production repair — final controller
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr757-production-repair-completion-final-20260818.yml
+      - .github/scripts/pr757-production-repair-completion-runner-20260818.py
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr757-production-repair-completion-final-20260818
+  cancel-in-progress: false
+
+jobs:
+  complete-production-repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    environment:
+      name: MoralTrade QA
+
+    steps:
+      - name: Check out the exact one-shot controller merge
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js for the deployed-source and browser harness
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Validate the checked-in runner and workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .github/scripts/pr757-production-repair-completion-runner-20260818.py
+          ruby -e 'require "yaml"; YAML.parse_file(ARGV.fetch(0)) or abort("invalid YAML")' \
+            .github/workflows/pr757-production-repair-completion-final-20260818.yml
+          git diff --check HEAD^1 HEAD
+
+      - name: Resolve, release when required, and run authenticated production acceptance
+        id: controller
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/pr757-production-repair-completion-runner-20260818.py
+
+      - name: Upload immutable completion or blocker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr757-production-repair-completion-${{ github.run_id }}
+          path: create-mobile-transition-production-completion
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Require every production completion invariant
+        if: always()
+        shell: bash
+        env:
+          CONTROLLER_OUTCOME: ${{ steps.controller.outcome }}
+        run: |
+          set -euo pipefail
+          test "$CONTROLLER_OUTCOME" = success
+          test -f create-mobile-transition-production-completion/SUCCESS
+          jq -e '
+            .passed == true
+            and .exitCode == 0
+            and .runtimeRelevantErrorLines == 0
+            and .fixtureCleanup.proved == true
+            and .fixtureCleanup.authUserAbsent == true
+            and .fixtureCleanup.identityAbsent == true
+            and .fixtureCleanup.profileAbsent == true
+            and .fixtureCleanup.sessionAbsent == true
+            and .fixtureCleanup.refreshTokenAbsent == true
+          ' create-mobile-transition-production-completion/status.json >/dev/null
