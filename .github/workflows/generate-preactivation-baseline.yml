@@ -1,9 +1,10 @@
-name: Generate authoritative pre-activation Supabase baseline
+name: Generate and validate authoritative pre-activation Supabase baseline
 
 on:
-  push:
+  pull_request:
     branches:
-      - database/preactivation-schema-baseline-20260818
+      - main
+    types: [opened, synchronize]
     paths:
       - scripts/database/generate-preactivation-baseline.trigger
   workflow_dispatch:
@@ -16,12 +17,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  generate:
+  generate-and-validate:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'database/preactivation-schema-baseline-20260818'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
-      SOURCE_HEAD: ${{ github.sha }}
-      SOURCE_MAIN: f1cd364bf058b28b3b29501aa6528c48f8f39bb7
+      SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_MAIN: ${{ github.event.pull_request.base.sha || github.sha }}
       TARGET_BRANCH: database/preactivation-schema-baseline-20260818
       PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
       PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
@@ -31,7 +33,7 @@ jobs:
       - name: Check out exact generator source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.SOURCE_HEAD }}
           fetch-depth: 0
           persist-credentials: true
 
@@ -44,26 +46,78 @@ jobs:
       - name: Install exact repository dependencies
         run: npm ci
 
-      - name: Generate, verify, commit, and push the baseline
-        id: generate
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Generate the production-derived data-free baseline
         shell: bash
         run: |
           set -euo pipefail
           test -n "${PROD_SUPABASE_DB_URL:-}"
           bash scripts/database/generate-preactivation-baseline.sh
 
-      - name: Package privacy-safe generation evidence
+      - name: Verify source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/database-preactivation-baseline-contract.test.ts
+          npx eslint src/lib/database-preactivation-baseline-contract.test.ts
+          git diff --check
+
+      - name: Reconstruct the pre-activation catalog in a clean local Supabase stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/database/validate-preactivation-baseline.sh \
+            "$GITHUB_WORKSPACE/artifacts/preactivation-baseline-clean-room"
+
+      - name: Run repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit --pretty false
+          npm run build
+
+      - name: Commit and push only the validated generated boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$SOURCE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/baseline/pre_activation \
+            src/lib/database-preactivation-baseline-contract.test.ts
+          git commit -m "Capture authoritative pre-activation Supabase baseline"
+          RESULT_HEAD="$(git rev-parse HEAD)"
+          git push origin "HEAD:$TARGET_BRANCH"
+          printf 'result_head=%s\nresult_tree=%s\n' \
+            "$RESULT_HEAD" \
+            "$(git rev-parse HEAD^{tree})" \
+            >> "${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}/manifests/result.txt"
+
+      - name: Package privacy-safe generation and clean-room evidence
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          EVIDENCE="${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}"
-          mkdir -p evidence
-          if [[ -d "$EVIDENCE/manifests" ]]; then
-            cp -R "$EVIDENCE/manifests" evidence/
+          GENERATED="${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}"
+          mkdir -p evidence/generation evidence/clean-room
+          if [[ -d "$GENERATED/manifests" ]]; then
+            cp -R "$GENERATED/manifests" evidence/generation/
           fi
-          if [[ -d "$EVIDENCE/logs" ]]; then
-            cp -R "$EVIDENCE/logs" evidence/
+          if [[ -d "$GENERATED/logs" ]]; then
+            cp -R "$GENERATED/logs" evidence/generation/
+          fi
+          if [[ -d artifacts/preactivation-baseline-clean-room ]]; then
+            cp -R artifacts/preactivation-baseline-clean-room/. evidence/clean-room/
           fi
           if grep -RIl \
               'postgresql\?://\|eyJ[A-Za-z0-9_-]\{20,\}' \
@@ -73,7 +127,7 @@ jobs:
           find evidence -type f -print0 | sort -z | xargs -0 -r sha256sum \
             > evidence/artifact-sha256.txt
 
-      - name: Upload generation evidence
+      - name: Upload generation and clean-room evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
