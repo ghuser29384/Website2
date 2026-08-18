@@ -1,0 +1,115 @@
+name: Commitments Pro Sprint specification gates
+
+on:
+  push:
+    branches:
+      - docs/commitments-pro-sprint-materialization-v1-20260818
+      - main
+    paths:
+      - .github/workflows/commitments-pro-sprint-specification-gates.yml
+      - docs/commitments/pro-sprint-materialization-smoke.txt
+      - docs/commitments/pro-sprint-source-of-truth-v1.md
+      - docs/commitments/pro-sprint-artifact-precedence-v1.md
+      - docs/commitments/pro-sprint-orchestration-v1.md
+      - docs/commitments/trust-resolution-v3-contract.v1.json
+      - docs/commitments/zero-dollar-pilot-contract.v1.json
+      - docs/commitments/qri-orchestration-contract.v1.json
+      - docs/commitments/pilot-operations-contract.v1.json
+      - docs/commitments/free-rider-portfolio-contract.v1.json
+      - docs/commitments/pro-sprint-materialization-manifest.v1.json
+      - scripts/commitments/validate-pro-sprint-materialization.mjs
+      - scripts/commitments/pro-sprint-materialization.test.mjs
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/commitments-pro-sprint-specification-gates.yml
+      - docs/commitments/pro-sprint-materialization-smoke.txt
+      - docs/commitments/pro-sprint-source-of-truth-v1.md
+      - docs/commitments/pro-sprint-artifact-precedence-v1.md
+      - docs/commitments/pro-sprint-orchestration-v1.md
+      - docs/commitments/trust-resolution-v3-contract.v1.json
+      - docs/commitments/zero-dollar-pilot-contract.v1.json
+      - docs/commitments/qri-orchestration-contract.v1.json
+      - docs/commitments/pilot-operations-contract.v1.json
+      - docs/commitments/free-rider-portfolio-contract.v1.json
+      - docs/commitments/pro-sprint-materialization-manifest.v1.json
+      - scripts/commitments/validate-pro-sprint-materialization.mjs
+      - scripts/commitments/pro-sprint-materialization.test.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitments-pro-sprint-specification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: repository-only specification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Parse JSON and workflow
+        run: |
+          node - <<'NODE'
+          const { readdirSync, readFileSync, statSync } = require('node:fs');
+          const { join } = require('node:path');
+          function walk(path) {
+            for (const name of readdirSync(path)) {
+              const child = join(path, name);
+              if (statSync(child).isDirectory()) walk(child);
+              else if (name.endsWith('.json')) JSON.parse(readFileSync(child, 'utf8'));
+            }
+          }
+          walk('docs/commitments');
+          NODE
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/commitments-pro-sprint-specification-gates.yml", aliases: true)'
+
+      - name: Validate contracts and exact repository scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          BASE_SHA="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-}}"
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA="7e993158363710e5fe2c3eaa1cbccdb5cd56c235"
+          fi
+          git cat-file -e "$BASE_SHA^{commit}"
+          node scripts/commitments/validate-pro-sprint-materialization.mjs \
+            --check-diff "$BASE_SHA" \
+            --write-evidence "$RUNNER_TEMP/commitments-pro-sprint-materialization-sha256.json"
+          node --test scripts/commitments/pro-sprint-materialization.test.mjs
+          git diff --check "$BASE_SHA"...HEAD
+
+      - name: Reject production and execution surfaces
+        run: |
+          set -euo pipefail
+          if git diff --name-only 7e993158363710e5fe2c3eaa1cbccdb5cd56c235...HEAD \
+            | grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env|scripts/.*provider|scripts/.*payment)' ; then
+            echo 'Runtime, database, dependency, provider, payment, or deployment surface entered the repository-only candidate.' >&2
+            exit 1
+          fi
+          if grep -R -n -E 'learnedRankingMayActivate[[:space:]]*=[[:space:]]*true|public_numeric_score[[:space:]]*:[[:space:]]*[1-9]|participant_specific.*identified[[:space:]]*:[[:space:]]*true' \
+            docs/commitments scripts/commitments ; then
+            echo 'An activation escape hatch entered the specification candidate.' >&2
+            exit 1
+          fi
+
+      - name: Upload immutable SHA-256 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-pro-sprint-materialization-${{ github.run_id }}-${{ github.sha }}
+          path: ${{ runner.temp }}/commitments-pro-sprint-materialization-sha256.json
+          if-no-files-found: error
+          retention-days: 30
