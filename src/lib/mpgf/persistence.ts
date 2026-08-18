@@ -487,9 +487,12 @@ function coerceProposalStatus(value: unknown): MpgfPoolProposalRecord["status"] 
     value === "draft" ||
     value === "submitted" ||
     value === "under_review" ||
+    value === "changes_requested" ||
     value === "approved_as_candidate" ||
     value === "rejected" ||
-    value === "withdrawn"
+    value === "withdrawn" ||
+    value === "succeeded" ||
+    value === "lapsed"
   ) {
     return value;
   }
@@ -721,6 +724,13 @@ function mapPoolProposalRow(row: Record<string, unknown>): MpgfPoolProposalRecor
       ? coercePublicGoodsCaptureMode(row.public_goods_payout_method)
       : undefined,
     status: coerceProposalStatus(row.status),
+    termsVersion: row.terms_version == null ? undefined : toNumber(row.terms_version),
+    approvedTermsVersion:
+      row.approved_terms_version == null ? undefined : toNumber(row.approved_terms_version),
+    operativeTermsSha256: toStringOrUndefined(row.operative_terms_sha256),
+    termsLockedAt: toStringOrUndefined(row.terms_locked_at),
+    reviewedAt: toStringOrUndefined(row.reviewed_at),
+    reviewReason: toStringOrUndefined(row.review_reason),
     candidateAlternativeId: toStringOrUndefined(row.candidate_alternative_id),
     createdAt: toStringOrUndefined(row.created_at),
   };
@@ -1931,7 +1941,7 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
       throw new Error(`Could not save MPGF pool proposal: ${summarizeDbError(legacyInsert.error)}`);
     }
 
-    const proposal = {
+    const proposal: MpgfPoolProposalRecord = {
       ...mapPoolProposalRow(legacyInsert.data as Record<string, unknown>),
       summary,
       causeArea,
