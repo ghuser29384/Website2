@@ -1,0 +1,191 @@
+name: Issue 723 clean convergence v8
+
+on:
+  push:
+    branches:
+      - ops/issue723-converge-clean-20260818
+    paths:
+      - .github/workflows/issue-723-converge-clean-v8-20260818.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+
+concurrency:
+  group: issue-723-clean-convergence
+  cancel-in-progress: true
+
+jobs:
+  converge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 155
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+    steps:
+      - name: Check out controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+
+      - name: Normalize controller and use fixed clean branches without Actions PR creation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          path = Path("scripts/issue-723-converge-clean.mjs")
+          text = path.read_text()
+          text = text.replace('value="${!name:-}"', 'value="\\${!name:-}"')
+          text = re.sub(
+              r'const productBranch = `fix/issue723-authenticated-caller-clean-\$\{runId\}`;',
+              'const productBranch = "fix/issue723-authenticated-caller-clean-final-20260818";',
+              text,
+              count=1,
+          )
+          text = re.sub(
+              r'const stackBranch = `qa/issue723-authenticated-caller-clean-\$\{runId\}`;',
+              'const stackBranch = "qa/issue723-authenticated-caller-clean-final-20260818";',
+              text,
+              count=1,
+          )
+          old_fetch = 'git(["fetch", "--no-tags", "--force", "origin", "main", originalRepairHead], repoDir, false);'
+          new_fetch = '''git(["fetch", "--no-tags", "--force", "origin", "main:refs/remotes/origin/main", `${originalProductBranch}:refs/remotes/origin/${originalProductBranch}`], repoDir, false);
+    git(["cat-file", "-e", `${originalRepairHead}^{commit}`], repoDir, false);'''
+          if old_fetch in text:
+              text = text.replace(old_fetch, new_fetch, 1)
+          text = text.replace(
+              'git(["fetch", "--no-tags", "--force", "origin", "main"], repoDir, false);',
+              'git(["fetch", "--no-tags", "--force", "origin", "main:refs/remotes/origin/main"], repoDir, false);',
+          )
+          old_drift = '''      if (currentMain !== mainHead) {
+        rmSync(dir, { recursive: true, force: true });
+        continue;
+      }'''
+          new_drift = '''      if (currentMain !== mainHead) {
+        git(["worktree", "remove", "--force", dir], repoDir, false);
+        try { git(["branch", "-D", productBranch], repoDir, false); } catch {}
+        continue;
+      }'''
+          if old_drift in text:
+              text = text.replace(old_drift, new_drift, 1)
+
+          runner_start = text.index("function integrationRunnerSource() {")
+          runner_end = text.index("function integrationTestSource", runner_start)
+          runner = '''function integrationRunnerSource() {
+  return [
+    'import { readFile, rm, writeFile } from "node:fs/promises";',
+    'import { pathToFileURL } from "node:url";',
+    'import { buildAuthenticatedHarnessSource } from "./pooled-settlement-authenticated-caller-integration-contract.mjs";',
+    '',
+    'const sourcePath = ".github/scripts/pooled-settlement-qa-e2e.mjs";',
+    'const generatedPath = ".github/scripts/.generated-pooled-settlement-authenticated-caller-e2e.mjs";',
+    'const source = await readFile(sourcePath, "utf8");',
+    'const generated = buildAuthenticatedHarnessSource(source);',
+    'await writeFile(generatedPath, generated, "utf8");',
+    'try {',
+    '  const url = `${pathToFileURL(generatedPath).href}?run=${encodeURIComponent(process.env.GITHUB_RUN_ID || String(Date.now()))}`;',
+    '  await import(url);',
+    '} finally {',
+    '  await rm(generatedPath, { force: true });',
+    '}',
+    '',
+  ].join("\\n");
+}
+
+'''
+          if runner_start < 0 or runner_end <= runner_start:
+              raise SystemExit("Could not locate integration runner generator.")
+          text = text[:runner_start] + runner + text[runner_end:]
+
+          product_pr_pattern = re.compile(r'\n      const body = \[[\s\S]*?const url = gh\(\["pr", "create", "--draft", "--base", "main"[\s\S]*?return \{ dir, mainHead, head, prNumber: Number\(url\.split\("/"\)\.pop\(\)\) \};')
+          text, product_count = product_pr_pattern.subn('\n      return { dir, mainHead, head, prNumber: 0 };', text, count=1)
+          if product_count != 1:
+              raise SystemExit("Could not remove product PR creation block.")
+
+          stack_pr_pattern = re.compile(r'\n  const body = \[[\s\S]*?const url = gh\(\["pr", "create", "--draft", "--base", pr700Branch[\s\S]*?return \{ dir, head, prNumber: Number\(url\.split\("/"\)\.pop\(\)\) \};')
+          text, stack_count = stack_pr_pattern.subn('\n  return { dir, head, prNumber: 0 };', text, count=1)
+          if stack_count != 1:
+              raise SystemExit("Could not remove stacked PR creation block.")
+
+          text = text.replace('comment([723, 750, stack.prNumber], body);', 'comment([723, 750, stack.prNumber].filter((number) => number > 0), body);')
+          text = text.replace('comment([723, 745, 750, 700, 208, product.prNumber, stack.prNumber], body);', 'comment([723, 745, 750, 700, 208, product.prNumber, stack.prNumber].filter((number) => number > 0), body);')
+          path.write_text(text)
+          PY
+          node --check scripts/issue-723-converge-clean.mjs
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Verify isolated-QA credentials are present and non-live
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in QA_SUPABASE_PUBLISHABLE_KEY QA_SUPABASE_SERVICE_ROLE_KEY QA_SUPABASE_DB_URL QA_TEST_PASSWORD QA_STRIPE_SECRET_KEY QA_STRIPE_PUBLISHABLE_KEY QA_STRIPE_WEBHOOK_SECRET QA_EVERY_ORG_WEBHOOK_TOKEN QA_EVERY_ORG_WEBHOOK_PATH_SECRET QA_EVERY_ORG_PARTNER_METADATA_SECRET; do
+            test -n "${!name:-}"
+          done
+          case "$QA_STRIPE_SECRET_KEY" in sk_test_*|rk_test_*) ;; *) exit 1 ;; esac
+          case "$QA_STRIPE_PUBLISHABLE_KEY" in pk_test_*) ;; *) exit 1 ;; esac
+          case "$QA_STRIPE_WEBHOOK_SECRET" in whsec_*) ;; *) exit 1 ;; esac
+          [[ "$QA_SUPABASE_DB_URL" == *hvmxfjjbdcgjjudmthdz* ]]
+
+      - name: Execute complete clean convergence sequence
+        run: node scripts/issue-723-converge-clean.mjs
+
+      - name: Publish machine-readable success marker
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/issue-723-final.json
+          mkdir -p status
+          cp /tmp/issue-723-final.json status/issue723-success.json
+          rm -f status/issue723-failure.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A status
+          git commit -m "Record successful issue 723 clean convergence" || true
+          git push origin "HEAD:ops/issue723-converge-clean-20260818"
+
+      - name: Publish machine-readable failure marker
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p status
+          printf '{"status":"failure","controllerRunId":%s,"note":"See masked GitHub Actions logs; no production or real-money action was authorized."}\n' "$GITHUB_RUN_ID" > status/issue723-failure.json
+          rm -f status/issue723-success.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A status
+          git commit -m "Record failed issue 723 convergence" || true
+          git push origin "HEAD:ops/issue723-converge-clean-20260818" || true
+
+      - name: Upload decision-ready controller summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-723-clean-convergence-v8-${{ github.run_id }}
+          path: /tmp/issue-723-final.json
+          if-no-files-found: ignore
+          retention-days: 30
