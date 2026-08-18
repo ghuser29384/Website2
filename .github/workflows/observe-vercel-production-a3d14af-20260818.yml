@@ -1,0 +1,93 @@
+name: Observe exact production release a3d14af
+
+on:
+  push:
+    branches:
+      - ops/observe-vercel-production-a3d14af-20260818
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: observe-vercel-production-a3d14af-20260818
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: a3d14af469260a0a17b8d0b38c9e65be7b2c1921
+  CONTROLLER_BRANCH: ops/observe-vercel-production-a3d14af-20260818
+  CONTROLLER_WORKFLOW: .github/workflows/observe-vercel-production-a3d14af-20260818.yml
+  TARGET_PR: '743'
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Check out exact observer controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/observe-vercel-production-a3d14af-20260818
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Guard immutable main and observer-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_WORKFLOW"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+          test -f .github/workflows/vercel-release.yml
+
+      - name: Locate and await exact production release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id=''
+          for _ in $(seq 1 30); do
+            run_id="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?branch=main&event=workflow_dispatch&per_page=100" \
+                --jq ".workflow_runs | map(select(.head_sha == \"$EXPECTED_MAIN_SHA\")) | sort_by(.created_at) | last | .id // empty"
+            )"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 10
+          done
+
+          if [[ -z "$run_id" ]]; then
+            body="<!-- production-release-observer-a3d14af -->\nExact production release observer could not find a workflow-dispatch run for \`$EXPECTED_MAIN_SHA\` after five minutes. No release conclusion is asserted."
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$TARGET_PR/comments" -f body="$body" >/dev/null
+            exit 1
+          fi
+
+          for _ in $(seq 1 270); do
+            status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.status')"
+            if [[ "$status" == 'completed' ]]; then
+              break
+            fi
+            test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+            sleep 10
+          done
+
+          status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.status')"
+          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.conclusion // empty')"
+          html_url="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.html_url')"
+          run_attempt="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.run_attempt')"
+          created_at="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.created_at')"
+          updated_at="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.updated_at')"
+
+          body="<!-- production-release-observer-a3d14af -->\nExact production release observation for \`$EXPECTED_MAIN_SHA\`:\n\n- run: $html_url\n- run ID: \`$run_id\`\n- attempt: \`$run_attempt\`\n- status: \`$status\`\n- conclusion: \`${conclusion:-none}\`\n- created: \`$created_at\`\n- updated: \`$updated_at\`"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$TARGET_PR/comments" -f body="$body" >/dev/null
+
+          test "$status" = 'completed'
+          test "$conclusion" = 'success'
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
