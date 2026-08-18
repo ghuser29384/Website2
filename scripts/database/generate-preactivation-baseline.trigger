@@ -1,4 +1,4 @@
 issue-714 authoritative pre-activation baseline generation
 source-main=f1cd364bf058b28b3b29501aa6528c48f8f39bb7
-requested-at=2026-08-18T15:08:00Z
-tooling-head=980f19d9d530b326e148a69537c8640bf8167843
+requested-at=2026-08-18T15:15:00Z
+tooling-head=79117e2a484e2cee06cfd9ba500eaf35abb85784
