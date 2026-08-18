@@ -1,0 +1,68 @@
+name: Record successful pre-activation baseline review
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-merge-diagnostic-20260817
+    paths:
+      - .github/workflows/preactivation-baseline-review-marker.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+  actions: read
+
+env:
+  TARGET_BRANCH: database/preactivation-schema-baseline-20260818
+  CONTROLLER_WORKFLOW: preactivation-baseline-review-controller.yml
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/issue714-pr698-merge-diagnostic-20260817
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Require a successful independent review and record immutable identities
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh run list --repo "$REPO" --workflow "$CONTROLLER_WORKFLOW" --branch ops/issue714-pr698-merge-diagnostic-20260817 --limit 1 --json databaseId,conclusion,headSha,status,url,createdAt)"
+          test "$(jq -r '.[0].status' <<<"$run_json")" = completed
+          test "$(jq -r '.[0].conclusion' <<<"$run_json")" = success
+          run_id="$(jq -r '.[0].databaseId' <<<"$run_json")"
+          run_url="$(jq -r '.[0].url' <<<"$run_json")"
+          pr_json="$(gh pr list --repo "$REPO" --head "$TARGET_BRANCH" --base main --state open --limit 10 --json number,title,headRefOid,isDraft,url)"
+          test "$(jq 'length' <<<"$pr_json")" = 1
+          pr_number="$(jq -r '.[0].number' <<<"$pr_json")"
+          test "$(jq -r '.[0].isDraft' <<<"$pr_json")" = true
+          comments="$(gh api --paginate "repos/$REPO/issues/$pr_number/comments" --jq '.[].body')"
+          grep -Fq 'Independent baseline review: PASS' <<<"$comments"
+          branch_head="$(jq -r '.[0].headRefOid' <<<"$pr_json")"
+          main_head="$(gh api "repos/$REPO/git/ref/heads/main" --jq '.object.sha')"
+          branch_tree="$(gh api "repos/$REPO/git/commits/$branch_head" --jq '.tree.sha')"
+          mkdir -p .github/evidence
+          jq -n \
+            --arg review_run_id "$run_id" \
+            --arg review_run_url "$run_url" \
+            --arg review_workflow_head "$(jq -r '.[0].headSha' <<<"$run_json")" \
+            --arg pr_number "$pr_number" \
+            --arg pr_url "$(jq -r '.[0].url' <<<"$pr_json")" \
+            --arg branch_head "$branch_head" \
+            --arg branch_tree "$branch_tree" \
+            --arg main_head "$main_head" \
+            --arg recorded_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{review_run_id:$review_run_id,review_run_url:$review_run_url,review_workflow_head:$review_workflow_head,pr_number:$pr_number,pr_url:$pr_url,branch_head:$branch_head,branch_tree:$branch_tree,main_head:$main_head,recorded_at:$recorded_at,review_conclusion:"success",production_writes:0,shared_qa_writes:0,deployments:0}' \
+            > .github/evidence/preactivation-baseline-review.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/evidence/preactivation-baseline-review.json
+          git commit -m "Record successful pre-activation baseline review"
+          git push origin HEAD:ops/issue714-pr698-merge-diagnostic-20260817
