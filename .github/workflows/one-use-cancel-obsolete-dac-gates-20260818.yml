@@ -1,0 +1,83 @@
+name: One-use cancel obsolete DAC gates 20260818
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/one-use-cancel-obsolete-dac-gates-20260818.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: one-use-cancel-obsolete-dac-gates-20260818
+  cancel-in-progress: false
+
+env:
+  RELEASE_BRANCH: fix/dac-public-goods-foundation-reconciliation-20260818
+  FINAL_HEAD_SHA: d22abab8d809767dee590f88053000b337a4516b
+
+jobs:
+  cancel-obsolete:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Cancel every obsolete queued or running DAC gate on the repair branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs_json="$RUNNER_TEMP/runs.json"
+          curl -fsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?branch=$RELEASE_BRANCH&per_page=100" \
+            > "$runs_json"
+
+          jq -c \
+            --arg head "$FINAL_HEAD_SHA" '
+              .workflow_runs[]
+              | select(
+                  (.name == "MPGF DAC product lifecycle gates"
+                   or .name == "MPGF DAC public-goods foundation reconciliation gates")
+                  and .head_sha != $head
+                  and (.status == "queued"
+                       or .status == "in_progress"
+                       or .status == "pending"
+                       or .status == "waiting"
+                       or .status == "requested")
+                )
+              | {id, name, head_sha, status}
+            ' "$runs_json" > "$RUNNER_TEMP/obsolete-runs.jsonl"
+
+          : > cancelled-runs.txt
+          while IFS= read -r run; do
+            test -n "$run" || continue
+            run_id="$(jq -r '.id' <<<"$run")"
+            name="$(jq -r '.name' <<<"$run")"
+            head="$(jq -r '.head_sha' <<<"$run")"
+            status="$(jq -r '.status' <<<"$run")"
+            printf 'cancel id=%s name=%s head=%s status=%s\n' \
+              "$run_id" "$name" "$head" "$status" \
+              | tee -a cancelled-runs.txt
+            curl -fsS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" \
+              >/dev/null || true
+          done < "$RUNNER_TEMP/obsolete-runs.jsonl"
+
+          printf 'preserved_final_head=%s\n' "$FINAL_HEAD_SHA" \
+            | tee -a cancelled-runs.txt
+
+      - name: Upload cancellation ledger
+        uses: actions/upload-artifact@v4
+        with:
+          name: obsolete-dac-gate-cancellation-${{ github.run_id }}
+          path: cancelled-runs.txt
+          if-no-files-found: error
+          retention-days: 7
