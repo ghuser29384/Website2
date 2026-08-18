@@ -2,9 +2,10 @@
 name: Bootstrap pre-activation baseline boundary files
 
 on:
-  push:
+  pull_request:
     branches:
-      - database/preactivation-schema-baseline-20260818
+      - main
+    types: [opened, synchronize]
     paths:
       - .github/workflows/bootstrap-preactivation-baseline-files.yml
 
@@ -13,6 +14,7 @@ permissions:
 
 jobs:
   bootstrap:
+    if: github.head_ref == 'database/preactivation-schema-baseline-20260818'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -25,11 +27,11 @@ jobs:
       - name: Materialize reviewed bootstrap files
         shell: bash
         env:
-          ARCHIVE_BLOB_SHA: 658ab05c9732f4b96a6b0999397b7a3904aaa95d
+          ARCHIVE_BLOB_SHA: 081b01aa91272b7d0403b7f4ac11d9f1bb59a01d
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "${{ github.ref_name }}" = "database/preactivation-schema-baseline-20260818"
+          test "${{ github.head_ref }}" = "database/preactivation-schema-baseline-20260818"
           curl --fail --silent --show-error \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -37,7 +39,7 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/git/blobs/$ARCHIVE_BLOB_SHA" \
             | jq -r '.content' | tr -d '\n' | base64 --decode > /tmp/preactivation-bootstrap.tar.gz
           test "$(sha256sum /tmp/preactivation-bootstrap.tar.gz | awk '{print $1}')" = \
-            "739ad7b3d8f63773872b4efc009f0dd87cf184ab0c3b1dfbbc2cdc19fb3e4848"
+            "c3671917f1eeb211ddbf35d7403fa8331f0421016ffdbba91215a9d1a0df90de"
           python3 - <<'PY'
           import tarfile
           allowed = {
