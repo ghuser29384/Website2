@@ -1,0 +1,98 @@
+{
+  "schema_version": "moral-trade-zero-dollar-bilateral-pilot-v1",
+  "status": "complete_contract_not_authorized",
+  "scope": {
+    "mechanism": "bilateral_reciprocal_pledge",
+    "money_enabled": false,
+    "provider_enabled": false,
+    "adult_only": true,
+    "targeted_private_recruitment": true,
+    "public_recruitment": false,
+    "maximum_obligation_minutes": 120,
+    "maximum_active_days": 14,
+    "cooling_off_minutes_minimum": 15,
+    "challenge_window_hours": 24,
+    "raw_evidence_private": true,
+    "participant_specific_additionality_enabled": false,
+    "learned_ranking_enabled": false,
+    "public_reliability_enabled": false
+  },
+  "cohorts": {
+    "A": {
+      "dyads": 4,
+      "participants": 8,
+      "mode": "moderated_usability"
+    },
+    "B": {
+      "dyads_minimum": 8,
+      "dyads_maximum": 12,
+      "participants_minimum": 16,
+      "participants_maximum": 24,
+      "mode": "operational_feasibility"
+    }
+  },
+  "lifecycle": [
+    "screening",
+    "separate_product_and_research_consent",
+    "baseline_freeze",
+    "offer_exposure",
+    "comprehension",
+    "cooling_off",
+    "bilateral_confirmation",
+    "performance",
+    "private_evidence",
+    "challenge",
+    "initial_review",
+    "appeal",
+    "factual_finality_or_exit",
+    "day_7_followup",
+    "day_30_followup",
+    "closeout"
+  ],
+  "comprehension_questions": 7,
+  "obligation_templates": [
+    "public_source_summary",
+    "three_claim_source_check",
+    "public_interest_proofreading",
+    "reviewed_non_sensitive_translation",
+    "public_webpage_accessibility_check",
+    "public_resource_map",
+    "approved_learning_module_and_quiz",
+    "non_sensitive_public_annotation",
+    "sourced_low_stakes_checklist"
+  ],
+  "excluded_domains": [
+    "health_or_treatment",
+    "diet_medication_sleep_exercise",
+    "political_vote_or_donation",
+    "religious_conversion",
+    "sexual_or_romantic",
+    "illegal_or_harassing",
+    "violence_or_self_harm",
+    "private_credentials",
+    "high_stakes_professional_advice",
+    "employment_grades_housing_immigration_healthcare_caregiving_or_essential_support",
+    "money_or_provider_dependent",
+    "nested_mechanism"
+  ],
+  "hard_progression_criteria": [
+    "zero_P0_safety_privacy_identity_or_third_party_harm_incident",
+    "zero_money_or_provider_object",
+    "exact_bilateral_confirmation",
+    "prospective_exit_available",
+    "raw_evidence_within_approved_access_class",
+    "zero_unsupported_participant_causal_claim",
+    "zero_hidden_term_mutation"
+  ],
+  "go_means": "next_feasibility_stage_only",
+  "authorization": {
+    "human_subjects_self_exemption": false,
+    "recruitment_before_written_determination": false,
+    "recruitment": false,
+    "screening_identifiable_people": false,
+    "consent_collection": false,
+    "production_release": false,
+    "research_execution": false,
+    "merge": false
+  }
+}
