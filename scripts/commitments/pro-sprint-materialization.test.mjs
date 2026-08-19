@@ -44,6 +44,22 @@ test("duplicate manifest path is rejected", () => {
   assert.ok(validateMaterialization(manifest).includes("duplicate_files"));
 });
 
+test("non-normative smoke transport is rejected", () => {
+  const manifest = clone(loadManifest());
+  manifest.files[0] = "docs/commitments/pro-sprint-materialization-smoke.txt";
+  assert.ok(validateMaterialization(manifest).includes("superseded_file:docs/commitments/pro-sprint-materialization-smoke.txt"));
+});
+
+test("separate merged DAC stream is source-bound but not made the default", () => {
+  const manifest = clone(loadManifest());
+  assert.equal(
+    manifest.source_bindings.merged_separate_dac_pr_758,
+    "f1cd364bf058b28b3b29501aa6528c48f8f39bb7",
+  );
+  manifest.source_bindings.merged_separate_dac_pr_758 = "0".repeat(40);
+  assert.ok(validateMaterialization(manifest).includes("source_binding_pr_758"));
+});
+
 test("active reliability and learned-ranking effects are rejected", () => {
   const manifest = clone(loadManifest());
   manifest.required_invariants.reliability_has_active_product_effect = true;
@@ -153,7 +169,7 @@ test("SHA-256 evidence is complete and deterministic", () => {
   const second = buildHashEvidence(loadManifest());
   assert.deepEqual(first, second);
   assert.equal(first.algorithm, "sha256");
-  assert.equal(first.files.length, 14);
+  assert.equal(first.files.length, 13);
   assert.match(first.canonical_package_sha256, /^[a-f0-9]{64}$/u);
   for (const row of first.files) {
     assert.match(row.sha256, /^[a-f0-9]{64}$/u);
