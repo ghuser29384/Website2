@@ -1,0 +1,83 @@
+name: Clean up obsolete PR 757 controllers 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/next-sequence-diagnostic-20260819
+    paths:
+      - .github/workflows/cleanup-pr757-obsolete-controllers-20260819.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  EVIDENCE_BRANCH: ops/next-sequence-diagnostic-20260819
+  RESULT_DIR: release-uat-result
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out durable evidence branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard successful release evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$EVIDENCE_BRANCH"
+          test -f "$RESULT_DIR/SUCCESS"
+          jq -e '.passed == true' "$RESULT_DIR/final-evidence.json" >/dev/null
+          jq -e '.deleted == true and .authUserAbsent == true and .identityAbsent == true and .profileAbsent == true and .sessionAbsent == true and .refreshTokenAbsent == true' "$RESULT_DIR/cleanup.json" >/dev/null
+
+      - name: Close obsolete operational PR and delete obsolete branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr_state="$(gh api repos/$GITHUB_REPOSITORY/pulls/761 --jq .state)"
+          if [[ "$pr_state" = 'open' ]]; then
+            gh api --method PATCH repos/$GITHUB_REPOSITORY/pulls/761 -f state=closed >/dev/null
+          fi
+
+          branches=(
+            ops/pr757-production-release-dispatch-20260818
+            ops/pr757-exact-release-controller-pr-20260818
+          )
+          deleted=()
+          absent=()
+          for branch in "${branches[@]}"; do
+            if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+              git push origin --delete "$branch"
+              deleted+=("$branch")
+            else
+              absent+=("$branch")
+            fi
+          done
+
+          jq -n \
+            --argjson deleted "$(printf '%s\n' "${deleted[@]:-}" | jq -Rsc 'split("\n") | map(select(length>0))')" \
+            --argjson alreadyAbsent "$(printf '%s\n' "${absent[@]:-}" | jq -Rsc 'split("\n") | map(select(length>0))')" \
+            --arg pr761State "$(gh api repos/$GITHUB_REPOSITORY/pulls/761 --jq .state)" \
+            --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {passed:($pr761State == "closed"),pr761State:$pr761State,deletedBranches:$deleted,alreadyAbsentBranches:$alreadyAbsent,retainedEvidenceBranch:"ops/next-sequence-diagnostic-20260819",completedAt:$completedAt}
+            ' > "$RESULT_DIR/controller-cleanup.json"
+          jq -e '.passed == true' "$RESULT_DIR/controller-cleanup.json" >/dev/null
+
+      - name: Commit sanitized cleanup evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$RESULT_DIR/controller-cleanup.json"
+          git diff --cached --check
+          git commit -m "Record obsolete controller cleanup"
+          git push origin HEAD:"$EVIDENCE_BRANCH"
