@@ -10,6 +10,7 @@ const manifestPath = resolve(root, "docs/commitments/pro-sprint-materialization-
 
 const MATERIALIZATION_BASE = "7e993158363710e5fe2c3eaa1cbccdb5cd56c235";
 const MATERIALIZATION_TREE = "e5283317d448e35106ca0179a267b20087ce0492";
+const MERGED_SEPARATE_DAC_PR_758 = "f1cd364bf058b28b3b29501aa6528c48f8f39bb7";
 export const EXPECTED_Q_PATHS = [
   ".github/workflows/evidence-payment-release-qa.yml",
   "scripts/evidence-payment-qa-namespace.mjs",
@@ -86,13 +87,14 @@ export function validateMaterialization(manifest, options = {}) {
   if (manifest.issue !== 755) errors.push("issue");
   if (manifest.materialization_source_base_sha !== MATERIALIZATION_BASE) errors.push("materialization_source_base_sha");
   if (manifest.materialization_source_base_tree !== MATERIALIZATION_TREE) errors.push("materialization_source_base_tree");
+  if (manifest.source_bindings?.merged_separate_dac_pr_758 !== MERGED_SEPARATE_DAC_PR_758) errors.push("source_binding_pr_758");
   if (manifest.implementation_base_policy?.fresh_live_main_selected_at_implementation_start !== true) errors.push("fresh_implementation_base");
   if (manifest.implementation_base_policy?.Q_and_initial_R_identical_base_required !== true) errors.push("identical_Q_R_base");
   if (manifest.implementation_base_policy?.historical_materialization_base_may_be_reused_if_stale !== false) errors.push("stale_base_policy");
   if (manifest.hash_policy?.algorithm !== "sha256") errors.push("hash_algorithm");
 
   const files = manifest.files ?? [];
-  if (files.length !== 13) errors.push("file_count");
+  if (files.length !== 12) errors.push("file_count");
   if (new Set(files).size !== files.length) errors.push("duplicate_files");
   const allowed = [
     ".github/workflows/commitments-pro-sprint-specification-gates.yml",
@@ -102,7 +104,7 @@ export function validateMaterialization(manifest, options = {}) {
   for (const path of files) {
     if (!allowed.some((prefix) => path === prefix || path.startsWith(prefix))) errors.push(`forbidden_path:${path}`);
     if (!existsSync(resolve(root, path))) errors.push(`missing_file:${path}`);
-    if (/codex-handoff|local-validation|verification-report|global-critical-path-audit|current-state-reconciliation/u.test(path)) {
+    if (/codex-handoff|local-validation|verification-report|global-critical-path-audit|current-state-reconciliation|materialization-smoke/u.test(path)) {
       errors.push(`superseded_file:${path}`);
     }
   }
