@@ -75,19 +75,37 @@ if not valid:
     raise SystemExit("Refusing an unexpected production database target.")
 PY
 
+READONLY_DB_URL="$(python3 - <<'PY_URL'
+import os
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+
+parsed = urlsplit(os.environ["PROD_SUPABASE_DB_URL"])
+query = [
+    (key, value)
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+    if key != "options"
+]
+query.append((
+    "options",
+    "-c default_transaction_read_only=on -c statement_timeout=180000 -c lock_timeout=5000",
+))
+print(urlunsplit(parsed._replace(query=urlencode(query, quote_via=quote))))
+PY_URL
+)"
 echo "::add-mask::$PROD_SUPABASE_DB_URL"
+echo "::add-mask::$READONLY_DB_URL"
 export PGCONNECT_TIMEOUT=15
 export PGSSLMODE=require
-export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=180000 -c lock_timeout=5000"
+unset PGOPTIONS || true
 
-psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc \
-  "select current_setting('transaction_read_only'), current_database()" \
+psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c \
+  "select current_setting('default_transaction_read_only'), current_setting('transaction_read_only'), current_database()" \
   > "$EVIDENCE_ROOT/manifests/source-session.txt"
-if ! grep -qx $'on\tpostgres' "$EVIDENCE_ROOT/manifests/source-session.txt"; then
+if ! grep -qx $'on\ton\tpostgres' "$EVIDENCE_ROOT/manifests/source-session.txt"; then
   fail "The source session is not the expected read-only production database."
 fi
 
-psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
 select json_build_object(
   'auth_users', (select count(*) from auth.users),
   'profiles', case when to_regclass('public.profiles') is null then null else (select count(*) from public.profiles) end,
@@ -117,14 +135,14 @@ if jq -e '.activation_stage_present == true or .activation_transition_functions_
   fail "Production is no longer a pre-activation source."
 fi
 
-psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \
+psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \
   > "$SOURCE_CATALOG_BEFORE"
 LC_ALL=C sort -u "$SOURCE_CATALOG_BEFORE" > "$SOURCE_CATALOG"
 if [[ ! -s "$SOURCE_CATALOG" ]]; then
   fail "The production application catalog is empty."
 fi
 
-psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c "
+psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c "
 select
   to_jsonb(m) ->> 'version' as migration_version,
   coalesce(to_jsonb(m) ->> 'name', '') as migration_name,
@@ -149,7 +167,7 @@ if [[ ! -s "$MIGRATION_HISTORY" ]]; then
   fail "The production migration history is empty."
 fi
 
-psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c "
+psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c "
 select e.extname, n.nspname, e.extversion
 from pg_extension e
 join pg_namespace n on n.oid = e.extnamespace
@@ -157,7 +175,7 @@ where e.extname <> 'plpgsql'
 order by e.extname;
 " > "$EXTENSIONS_TSV"
 
-psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
 select format(
   'create schema if not exists %I; create extension if not exists %I with schema %I;',
   n.nspname,
@@ -170,7 +188,7 @@ where e.extname <> 'plpgsql'
 order by e.extname;
 " > "$EXTENSIONS_SQL"
 
-psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
 select format(
   'drop trigger if exists %I on auth.users;%s%s;',
   t.tgname,
@@ -193,7 +211,7 @@ if [[ ! -s "$AUTH_TRIGGERS" ]]; then
 fi
 
 npx --yes supabase@2.110.0 db dump \
-  --db-url "$PROD_SUPABASE_DB_URL" \
+  --db-url "$READONLY_DB_URL" \
   --schema public,moral_trade_private \
   --file "$DUMP_RAW" \
   > "$EVIDENCE_ROOT/logs/supabase-db-dump.log" 2>&1
@@ -248,7 +266,7 @@ for pattern, label in (
 Path(sys.argv[2]).write_text(normalized)
 PY
 
-psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \
+psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \
   > "$SOURCE_CATALOG_AFTER"
 LC_ALL=C sort -u "$SOURCE_CATALOG_AFTER" > "$WORK_DIR/source-catalog-after.sorted.tsv"
 if ! cmp "$SOURCE_CATALOG" "$WORK_DIR/source-catalog-after.sorted.tsv"; then
