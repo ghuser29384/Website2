@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml"
+      - ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
       - "src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts"
       - "supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql"
       - "tests/mpgf-dac-product-lifecycle.spec.ts"
@@ -14,6 +15,7 @@ on:
       - fix/dac-public-goods-foundation-reconciliation-20260818
     paths:
       - ".github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml"
+      - ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
       - "src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts"
       - "supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql"
       - "tests/mpgf-dac-product-lifecycle.spec.ts"
@@ -59,7 +61,7 @@ jobs:
           ref: ${{ env.EXPECTED_HEAD_SHA }}
           fetch-depth: 0
 
-      - name: Verify exact candidate and four-file repair scope
+      - name: Verify exact candidate and five-file repair scope
         shell: bash
         run: |
           set -euo pipefail
@@ -69,6 +71,7 @@ jobs:
           git diff --check "$base" HEAD
           git diff --name-only "$base" HEAD | sort > actual-files.txt
           cat > expected-files.txt <<'EOF'
+          .github/workflows/mpgf-dac-product-lifecycle-gates.yml
           .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
           src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts
           supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql
@@ -78,11 +81,17 @@ jobs:
           diff -u expected-files.txt actual-files.txt
           test "$(grep -Fc 'waitForLoadState("networkidle")' tests/mpgf-dac-product-lifecycle.spec.ts || true)" = "0"
           grep -Fq 'return page.goto(path);' tests/mpgf-dac-product-lifecycle.spec.ts
+          test "$(grep -Fc 'apt-get' .github/workflows/mpgf-dac-product-lifecycle-gates.yml || true)" = "0"
+          grep -Fq 'docker pull postgres:17' .github/workflows/mpgf-dac-product-lifecycle-gates.yml
           {
             printf 'head=%s\n' "$(git rev-parse HEAD)"
             printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
             printf 'base=%s\n' "$base"
-            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH" tests/mpgf-dac-product-lifecycle.spec.ts
+            sha256sum \
+              "$MIGRATION_PATH" \
+              "$SOURCE_TEST_PATH" \
+              tests/mpgf-dac-product-lifecycle.spec.ts \
+              .github/workflows/mpgf-dac-product-lifecycle-gates.yml
           } | tee exact-head.txt
 
       - name: Use Node 24
@@ -163,10 +172,21 @@ jobs:
           if (!valid) throw new Error("Refusing a database URL outside exact isolated QA.");
           NODE
 
-      - name: Install PostgreSQL client
+      - name: Prepare exact PostgreSQL 17 client
+        shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install --yes postgresql-client > /dev/null
+          set -euo pipefail
+          docker pull postgres:17
+          cat > "$RUNNER_TEMP/psql" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker run --rm -i \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            postgres:17 psql "$@"
+          SH
+          chmod 0700 "$RUNNER_TEMP/psql"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Build rollback-only canonical reconciliation proof
         shell: bash
