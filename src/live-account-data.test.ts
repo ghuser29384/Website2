@@ -37,7 +37,7 @@ test("the live account endpoint reads real profile and agreement state", () => {
   assert.match(route, /eq\("status", "completed"\)/);
   assert.match(route, /from\("profile_payment_accounts"\)/);
   assert.match(route, /from\("wish_profiles"\)/);
-  assert.match(route, /Cache-Control.*private, no-store/s);
+  assert.match(route, /Cache-Control[\s\S]*private, no-store/);
 });
 
 test("the bridge removes the escrow claim and uses truthful missing states", () => {

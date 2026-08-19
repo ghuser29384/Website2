@@ -7,12 +7,8 @@ const productionShell = readFileSync(
   "utf8",
 );
 
-test("the production shell only offers Skip on the first-visit walkthrough route", () => {
-  assert.match(productionShell, /window\.location\.pathname === "\/walkthrough"/);
-  assert.match(
-    productionShell,
-    /new URLSearchParams\(window\.location\.search\)\.get\("first_visit"\) === "1"/,
-  );
-  assert.match(productionShell, /aria-label="Skip walkthrough"/);
-  assert.match(productionShell, /<form action="\/"[^>]*method="get">/);
+test("the production walkthrough does not offer a skip control", () => {
+  assert.doesNotMatch(productionShell, /first_visit/);
+  assert.doesNotMatch(productionShell, /aria-label="Skip walkthrough"/);
+  assert.doesNotMatch(productionShell, /mtw-first-visit-skip/);
 });

@@ -358,13 +358,25 @@ test("MPGF public summary exposes no live disbursement state in demo mode", () =
   assert.match(summary.nonRealMoneyStatus, /non-real-money/i);
 });
 
-test("MPGF direct-working validators pass with the exact-pilot formal source lock", () => {
-  assert.equal(validateMpgfInstructionMechanicalNormalization().status, "passed");
+test("MPGF direct-working validators fail closed when formal source artifacts are absent", () => {
+  const mechanicalNormalization = validateMpgfInstructionMechanicalNormalization();
+  const stateMachineCoverage = validateMpgfStateMachineCoverage();
+  const formalSourceLock = validateFormalMechanismSourceLock();
+  const phaseA = validateMpgfPhaseA();
+
+  assert.equal(mechanicalNormalization.status, "failed");
+  assert.ok(mechanicalNormalization.blockers.some((blocker) => /source artifact is missing/i.test(blocker)));
+  assert.equal(stateMachineCoverage.status, "failed");
+  assert.ok(stateMachineCoverage.blockers.some((blocker) => /planned-state-machine-table\.md/.test(blocker)));
+  assert.equal(formalSourceLock.status, "failed");
+  assert.ok(formalSourceLock.blockers.some((blocker) => /formal-mechanism\.md/.test(blocker)));
+  assert.equal(phaseA.status, "failed");
+  assert.ok(phaseA.blockers.some((blocker) => /repository-capability-inventory\.md/.test(blocker)));
+
   assert.equal(validateMpgfProtocolParameters().status, "passed");
   assert.equal(validateLedgerTemplateRegistry().status, "passed");
   assert.equal(validateLedgerTransactionTemplates().status, "passed");
   assert.equal(validateMpgfDirectWorkingFixtures().status, "passed");
-  assert.equal(validateMpgfStateMachineCoverage().status, "passed");
   assert.equal(validateMpgfStatusValueRegistry().status, "passed");
   assert.equal(validateMpgfSchemaContractCoverage().status, "passed");
   assert.equal(validateMpgfRbacPermissionMatrix().status, "passed");
@@ -382,18 +394,19 @@ test("MPGF direct-working validators pass with the exact-pilot formal source loc
   assert.equal(validateMpgfProductionDeploymentTarget().status, "passed");
   assert.equal(validateMpgfSolverSupportProfile().status, "passed");
   assert.equal(validateMpgfSolverBenchmarkFixtures().status, "passed");
-  assert.equal(validateFormalMechanismSourceLock().status, "passed");
-  assert.equal(validateMpgfPhaseA().status, "passed");
 });
 
-test("MPGF direct-working smoke test passes without real-money mode", () => {
+test("MPGF direct-working smoke test reports missing repository evidence without enabling real money", () => {
   const result = runMpgfDirectWorkingSmokeTest();
 
-  assert.equal(result.status, "passed");
-  assert.equal(result.passed, true);
+  assert.equal(result.status, "failed");
+  assert.equal(result.passed, false);
   assert.equal(result.featureMode, "pledge_only");
-  assert.ok(result.blockers.every((blocker) => typeof blocker === "string"));
+  assert.ok(result.blockers.some((blocker) => blocker.startsWith("validateMpgfInstructionMechanicalNormalization:")));
+  assert.ok(result.blockers.some((blocker) => blocker.startsWith("validateRepositoryCapabilityInventory:")));
+  assert.ok(result.blockers.some((blocker) => blocker.startsWith("validateMpgfStateMachineCoverage:")));
   assert.ok(result.checks.every((check) => typeof check.passed === "boolean"));
+  assert.equal(result.checks.find((check) => check.id === "real-money-gated")?.passed, true);
 });
 
 test("MPGF public runtime readiness avoids repository artifact validators", () => {
@@ -1463,8 +1476,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/sponsor-pools/[poolId]/deposits/route.ts", /recordMpgfPublicGoodsSponsorPoolDeposit/],
     ["src/app/api/mpgf/trade-surplus/commit/route.ts", /commitMpgfPublicGoodsTradeSurplus/],
     ["src/app/api/mpgf/trade-surplus/settle/route.ts", /settleMpgfPublicGoodsTradeSurplus/],
-    ["src/app/api/mpgf/governance/ballots/route.ts", /createMpgfPublicGoodsGovernanceBallot/],
-    ["src/app/api/mpgf/governance/results/route.ts", /getMpgfPublicGoodsGovernanceResultsApi/],
+    ["src/app/api/mpgf/governance/ballots/route.ts", /submitMpgfPhaseOneBallot/],
+    ["src/app/api/mpgf/governance/results/route.ts", /loadMpgfPhaseOneGovernanceState/],
     ["src/app/api/mpgf/challenges/route.ts", /createMpgfPublicGoodsChallenge/],
     ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
     ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
@@ -1645,31 +1658,25 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
   assert.match(mpgfHubPage, /title="Common Ground Budget"/);
-  assert.match(mpgfHubPage, /Preview a Common Ground Budget/);
-  assert.match(mpgfHubPage, /Common Ground Budget status strip/);
-  assert.match(mpgfHubPage, /Public Goods Fund sealed summary/);
-  assert.match(mpgfHubPage, /No charge now/);
-  assert.match(mpgfHubPage, /JIT after gates/);
-  assert.match(mpgfHubPage, /Sealed before close/);
-  assert.match(mpgfHubPage, /Choose your maximum/);
-  assert.match(mpgfHubPage, /Pick projects/);
-  assert.match(mpgfHubPage, /Review and save/);
-  assert.match(mpgfHubPage, /Round clears after gates/);
-  assert.match(mpgfHubPage, /Trust and review/);
-  assert.match(mpgfHubPage, /no-escrow-unless-true/);
-  assert.match(mpgfHubPage, /Review contribution controls/);
+  assert.match(mpgfHubPage, /Build a Common Ground Budget/);
+  assert.match(mpgfHubPage, /One budget, explicit stances, gate-cleared funding/);
+  assert.match(mpgfHubPage, /Choose a maximum budget/);
+  assert.match(mpgfHubPage, /State project preferences/);
+  assert.match(mpgfHubPage, /Review the frozen terms/);
+  assert.match(mpgfHubPage, /Clear only after gates pass/);
+  assert.match(mpgfHubPage, /A preview is not a contribution, charge, match, payout, or certificate/);
+  assert.match(mpgfHubPage, /Moral Trade does not hold participant funds or provide legal escrow/);
+  assert.match(mpgfHubPage, /Project support requires an active fiscal sponsor/);
+  assert.match(mpgfHubPage, /External payment evidence shows that a transaction occurred/);
+  assert.match(mpgfHubPage, /Projects do not clear while threshold, review, challenge, destination, authorization, or settlement blockers remain/);
+  assert.match(mpgfHubPage, /Public progress may remain sealed before close/);
   assert.equal(mpgfHubPage.includes("Start conditional contribution"), false);
-  assert.match(mpgfHubPage, /collective-action metrics/);
-  assert.match(mpgfHubPage, /Exact live\s+threshold satisfaction, supporter counts, active-cluster counts, counterparty gaps/);
-  assert.match(mpgfHubPage, /Public progress/);
-  assert.match(mpgfHubPage, /Base match unlocked/);
-  assert.match(mpgfHubPage, /Estimated bonus range/);
   assert.match(roundBoardComponent, /Your choice/);
   assert.match(roundBoardComponent, /Your maximum/);
   assert.match(roundBoardComponent, /Deployment mode: capped pilot/);
   assert.equal(mpgfHubPage.includes("status.verifiedSupporterCount"), false);
   assert.equal(mpgfHubPage.includes("status.amountProgressBps"), false);
-  assert.match(mpgfHubPage, /Verify identity, authorize conditionally, then wait for review/);
+  assert.match(mpgfHubPage, /Threshold, identity, review, challenge, destination, external-payment, and evidence checks must pass/);
 });
 
 test("MPGF contribution intents verify identity before conditional payment authorization", () => {
@@ -1841,7 +1848,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(databaseTypes, /mpgf_identity_verifications: \{/);
   assert.match(databaseTypes, /mpgf_payment_authorizations: \{/);
   assert.match(databaseTypes, /mpgf_provider_payment_events: \{/);
-  assert.match(contributionPage, /Every\.org fast route/);
+  assert.match(contributionPage, /direct-to-charity Every\.org route/);
   assert.ok(fastRouteIndex >= 0);
   assert.ok(savedCommitmentIndex > fastRouteIndex);
   assert.ok(manualProofIndex > savedCommitmentIndex);
@@ -1849,7 +1856,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.ok(modalSavedCommitmentIndex > modalFastRouteIndex);
   assert.ok(modalManualProofIndex > modalSavedCommitmentIndex);
   assert.match(consoleSource, /Open Every\.org fast route/);
-  assert.match(consoleSource, /Save Stripe commitment/);
+  assert.match(consoleSource, /Save provider commitment/);
   assert.match(consoleSource, /Save pledge intent/);
   assert.match(consoleSource, /Acceptable counterpart buckets/);
   assert.match(consoleSource, /Minimum counterpart-cleared volume/);
@@ -2396,13 +2403,13 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(schemaSql, /comment on table public\.mpgf_every_org_partner_events/);
   assert.match(proofSource, /every_org_partner_webhook/);
   assert.match(kpiSource, /every_org_partner_webhook/);
-  assert.match(donatePageSource, /MPGF webhook\s+import or reviewed fallback/);
-  assert.match(donatePageSource, /Webhook import when available/);
+  assert.match(donatePageSource, /Webhook import handles MPGF-linked gifts/);
+  assert.match(donatePageSource, /if webhook import cannot match this gift/);
   assert.match(donateConfirmPageSource, /webhook-first MPGF reconciliation state/);
   assert.match(donateConfirmPageSource, /Manual recording is not the default path/);
-  assert.match(howItWorksSource, /import by webhook or reviewed fallback/);
-  assert.match(siteSearchSource, /webhook import or reviewed fallback/);
-  assert.match(visitorPathsSource, /webhook import or reviewed fallback/);
+  assert.match(howItWorksSource, /permanentRedirect\("\/#process-heading"\)/);
+  assert.match(siteSearchSource, /Donation offsets/);
+  assert.match(visitorPathsSource, /complete a real donation through Every\.org/);
   assert.doesNotMatch(
     `${donatePageSource}\n${donateConfirmPageSource}\n${howItWorksSource}\n${siteSearchSource}\n${visitorPathsSource}`,
     /optionally record|Optional record/,
@@ -4052,11 +4059,11 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
     assert.match(governancePage, expected);
   }
 
-  assert.match(governanceRoute, /getMpgfPublicGoodsGovernanceApi/);
+  assert.match(governanceRoute, /loadMpgfPhaseOneGovernanceState/);
   assert.match(mpgfHubPage, /\/mpgf\/governance/);
   assert.match(roundPage, /\/mpgf\/governance/);
-  assert.match(realMoneyTermsPage, /AML\/KYC and sanctions checks are production gates/);
-  assert.match(realMoneyTermsPage, /External approval is required before money movement/);
+  assert.match(realMoneyTermsPage, /AML, KYC, KYB, sanctions, and charity-law checks remain external gates/);
+  assert.match(realMoneyTermsPage, /must pass before a payment is represented as complete/);
 });
 
 test("MPGF manual evidence security signs receipt access and stores scan metadata", () => {
@@ -6626,17 +6633,24 @@ test("MPGF public-goods proof pages resolve campaign routes and expose public-sa
   assert.equal(page.includes("assuranceStatus.amountProgressBps"), false);
 });
 
-test("MPGF production completion gate fails while production evidence is only pending", () => {
+test("MPGF production completion gate fails while required production evidence is absent", () => {
   const result = validateMpgfDeploymentEnvironment("completion_gate");
 
   assert.equal(result.status, "failed");
-  assert.ok(result.errors.some((error) => error.id === "deployment-completion-evidence-not-passed"));
+  assert.ok(result.errors.some((error) => error.id === "production-prerequisites-missing"));
+  assert.ok(result.errors.some((error) => error.id === "deployment-completion-evidence"));
+  assert.ok(result.blockers.some((blocker) => /www-auth-session-verification\.md/.test(blocker)));
 });
 
-test("MPGF production runners distinguish completed public evidence from remaining auth evidence", () => {
+test("MPGF production runners distinguish pre-launch configuration from unrun production evidence", () => {
+  const launch = runMpgfProductionDirectWorkingLaunch();
+  const browserVerification = runMpgfWwwDirectWorkingVerification();
+
   assert.equal(validateMpgfDeploymentEnvironment("pre_launch").status, "passed");
-  assert.equal(runMpgfProductionDirectWorkingLaunch().status, "passed");
-  assert.equal(runMpgfWwwDirectWorkingVerification().status, "passed");
+  assert.equal(launch.status, "failed");
+  assert.ok(launch.blockers.some((blocker) => /has not been executed/.test(blocker)));
+  assert.equal(browserVerification.status, "failed");
+  assert.ok(browserVerification.blockers.some((blocker) => /has not recorded a passed production-domain run/.test(blocker)));
   assert.equal(validateMpgfDeploymentEnvironment("completion_gate").status, "failed");
 });
 
@@ -6661,13 +6675,17 @@ test("MPGF completion control plane exposes truthful production blockers", async
   const productionGate = await evaluateMpgfProductionVerificationGate();
   const summary = await loadMpgfProductionControlPlaneSummary();
 
-  assert.equal(solverGate.status, "passed");
-  assert.equal(exactPilotGate.status, "passed");
+  assert.equal(solverGate.status, "blocked");
+  assert.ok(solverGate.blockers.some((blocker) => /benchmark report/i.test(blocker)));
+  assert.equal(exactPilotGate.status, "blocked");
+  assert.ok(exactPilotGate.blockers.some((blocker) => /exact-pilot dry-run/i.test(blocker)));
   assert.equal(payoutGate.status, "pending_review");
-  assert.equal(governanceGate.status, "passed");
+  assert.equal(governanceGate.status, "blocked");
+  assert.ok(governanceGate.blockers.some((blocker) => /state-machine coverage artifact/i.test(blocker)));
   assert.equal(productionGate.status, "blocked");
   assert.equal(summary.status, "blocked");
-  assert.equal(summary.completionProfiles.exactPilotComplete, "passed");
+  assert.equal(summary.completionProfiles.demoComplete, "blocked");
+  assert.equal(summary.completionProfiles.exactPilotComplete, "blocked");
   assert.equal(summary.completionProfiles.realMoneyComplete, "blocked");
   assert.ok(summary.gates.some((gate) => gate.key === "real-money-provider-operations"));
   assert.ok(mpgfGatesForAdminSection("payouts", summary.gates).some((gate) => gate.area === "payout_compliance"));

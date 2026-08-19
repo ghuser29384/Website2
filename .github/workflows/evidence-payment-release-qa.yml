@@ -1,0 +1,364 @@
+name: Evidence payment release QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/evidence-payment-release-qa.yml"
+      - "scripts/evidence-payment-qa-namespace.mjs"
+      - "scripts/evidence-payment-qa-namespace.test.mjs"
+      - "scripts/evidence-payment-qa-run-ownership.test.mjs"
+      - "scripts/evidence-payment-qa-two-writer.mjs"
+      - "src/app/admin/trade-review/**"
+      - "src/app/trade-agreements/**"
+      - "src/app/trade-review/**"
+      - "src/app/trade-milestone-actions.ts"
+      - "src/components/core-trade/trade-milestone-workflow.tsx"
+      - "src/lib/core-trade-base.ts"
+      - "src/lib/supabase/**"
+      - "src/lib/trade-milestone-view.ts"
+      - "supabase/migrations/2026072916552*.sql"
+      - "supabase/migrations/2026072916553*.sql"
+      - "supabase/tests/evidence_weighted_payment*.sql"
+      - "tests/evidence-weighted-payment-authenticated.spec.ts"
+  workflow_dispatch:
+
+concurrency:
+  # This serializes current revisions of the shared Evidence-payment writer.
+  # Stale branches can retain older YAML and opt out, so the primary safety
+  # boundary is the run-owned namespace and exact ownership-aware cleanup.
+  group: evidence-payment-release-qa-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-release-gate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EVIDENCE_PAYMENT_BASE_URL: http://127.0.0.1:3210
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify isolated-QA database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit(
+                  "Refusing a database URL outside the exact TLS-only MoralTrade QA target."
+              )
+          PY
+
+      - name: Derive the run-owned fixture namespace before mutation
+        id: namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/evidence-payment-qa-namespace.mjs \
+            --manifest evidence-payment-namespace.json \
+            --github-env "$GITHUB_ENV" \
+            2>&1 | tee evidence-payment-namespace.log
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("evidence-payment-namespace.json").read_text())
+          print(f"handle={manifest['namespace']['handle']}")
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Record the exact candidate and namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
+          {
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'run_attempt=%s\n' "$GITHUB_RUN_ATTEMPT"
+            printf 'namespace_handle=%s\n' "$EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE"
+            printf 'namespace_sha256=%s\n' "$EVIDENCE_PAYMENT_QA_NAMESPACE_HASH"
+          } | tee evidence-payment-exact-head.txt
+
+      - name: Run exact-head source and ownership gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e "require 'yaml'; abort('invalid workflow YAML') unless YAML.parse_file('.github/workflows/evidence-payment-release-qa.yml')"
+          node --check scripts/evidence-payment-qa-namespace.mjs
+          node --check scripts/evidence-payment-qa-namespace.test.mjs
+          node --check scripts/evidence-payment-qa-run-ownership.test.mjs
+          node --check scripts/evidence-payment-qa-two-writer.mjs
+          node --test \
+            scripts/evidence-payment-qa-namespace.test.mjs \
+            scripts/evidence-payment-qa-run-ownership.test.mjs \
+            2>&1 | tee evidence-payment-run-ownership.log
+          npm test 2>&1 | tee evidence-payment-unit.log
+          npm run lint -- --quiet 2>&1 | tee evidence-payment-lint.log
+          npx tsc --noEmit --pretty false 2>&1 | tee evidence-payment-typescript.log
+          npm run verify:crawlability 2>&1 | tee evidence-payment-crawlability.log
+          git diff --check "$(git merge-base HEAD origin/main)" HEAD
+
+      - name: Verify additive and payment migrations are recorded
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(printf '%s\n' \
+            credibility_model_seed_invariant \
+            evidence_weighted_milestones_additive \
+            evidence_weighted_payment_advisor_indexes \
+            evidence_weighted_payment_completion \
+            evidence_weighted_payment_rls_hardening \
+            evidence_weighted_remaining_fk_indexes \
+            evidence_weighted_rls_identity_binding \
+            evidence_weighted_privacy_authorization_cutover \
+            evidence_weighted_post_cutover_advisor_hardening \
+            evidence_weighted_agreement_completion_compatibility \
+            | sort)"
+          recorded="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | sed '/^[[:space:]]*$/d' | sort
+          select name
+          from supabase_migrations.schema_migrations
+          where name in (
+            'credibility_model_seed_invariant',
+            'evidence_weighted_milestones_additive',
+            'evidence_weighted_payment_advisor_indexes',
+            'evidence_weighted_payment_completion',
+            'evidence_weighted_payment_rls_hardening',
+            'evidence_weighted_remaining_fk_indexes',
+            'evidence_weighted_rls_identity_binding',
+            'evidence_weighted_privacy_authorization_cutover',
+            'evidence_weighted_post_cutover_advisor_hardening',
+            'evidence_weighted_agreement_completion_compatibility'
+          );
+          SQL
+          )"
+          if [[ "$recorded" != "$expected" ]]; then
+            printf 'Expected migration names:\n%s\n' "$expected" >&2
+            printf 'Recorded migration names:\n%s\n' "$recorded" >&2
+            exit 1
+          fi
+
+      - name: Run the transactional database lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evidence_weighted_payment_lifecycle.sql \
+            2>&1 | tee evidence-payment-lifecycle.log
+
+      - name: Run deterministic two-writer Auth and database isolation proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/evidence-payment-qa-two-writer.mjs \
+            2>&1 | tee evidence-payment-two-writer.log
+
+      - name: Preflight and create run-owned authenticated fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export EVIDENCE_PAYMENT_QA_PASSWORD="$qa_password"
+          printf 'EVIDENCE_PAYMENT_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evidence_weighted_payment_browser_fixture.sql \
+            2>&1 | tee evidence-payment-fixture.log
+
+      - name: Verify the run-owned synthetic Auth contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' 2>&1 | tee evidence-payment-auth-contract.log
+          import { createClient } from "@supabase/supabase-js";
+
+          const roles = [
+            ["payer", process.env.EVIDENCE_PAYMENT_QA_PAYER_EMAIL],
+            ["payee", process.env.EVIDENCE_PAYMENT_QA_PAYEE_EMAIL],
+            ["reviewer", process.env.EVIDENCE_PAYMENT_QA_REVIEWER_EMAIL],
+            [
+              "appeal-reviewer",
+              process.env.EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_EMAIL,
+            ],
+            ["outsider", process.env.EVIDENCE_PAYMENT_QA_OUTSIDER_EMAIL],
+            ["administrator", process.env.EVIDENCE_PAYMENT_QA_ADMIN_EMAIL],
+          ];
+          const emailPattern = /^epqa-[0-9a-f]{20}-[a-z-]+@qa\.invalid$/;
+          const emails = roles.map(([role, email]) => {
+            if (!emailPattern.test(email ?? "")) {
+              throw new Error(`Missing run-owned email for ${role}.`);
+            }
+            return email;
+          });
+          if (new Set(emails).size !== emails.length) {
+            throw new Error("Run-owned Auth emails are not unique.");
+          }
+
+          for (const [role, email] of roles) {
+            const client = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL,
+              process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+              {
+                auth: {
+                  autoRefreshToken: false,
+                  detectSessionInUrl: false,
+                  persistSession: false,
+                },
+              },
+            );
+            const { data, error } = await client.auth.signInWithPassword({
+              email,
+              password: process.env.EVIDENCE_PAYMENT_QA_PASSWORD,
+            });
+            if (error || !data.session) {
+              throw new Error(
+                `Synthetic Auth sign-in failed for ${role}: ${error?.message ?? "no session"}`,
+              );
+            }
+            if (data.user?.user_metadata?.qa_namespace !==
+                process.env.EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE) {
+              throw new Error(`Synthetic Auth ownership marker mismatch for ${role}.`);
+            }
+            await client.auth.signOut({ scope: "local" });
+          }
+
+          console.log(
+            JSON.stringify({
+              status: "ok",
+              namespaceHandle:
+                process.env.EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE,
+              roleCount: roles.length,
+            }),
+          );
+          NODE
+
+      - name: Build the exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee evidence-payment-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the exact production build
+        shell: bash
+        run: |
+          npm run start -- -H 127.0.0.1 -p 3210 > evidence-payment-server.log 2>&1 &
+          echo "$!" > evidence-payment-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:3210/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 evidence-payment-server.log
+          exit 1
+
+      - name: Run authenticated desktop, mobile, and authorization QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/evidence-weighted-payment-authenticated.spec.ts \
+            --reporter=line \
+            2>&1 | tee evidence-payment-browser.log
+
+      - name: Remove only this run's fixtures and prove zero residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f scripts/evidence-payment-qa-namespace.mjs ]]; then
+            echo "No checked-out namespace generator; no fixture mutation could have occurred."
+            exit 0
+          fi
+          cleanup_env="$(mktemp)"
+          node scripts/evidence-payment-qa-namespace.mjs \
+            --manifest evidence-payment-namespace.json \
+            --github-env "$cleanup_env" \
+            2>&1 | tee -a evidence-payment-namespace.log
+          set -a
+          # The generator permits only shell-safe values and rejects control
+          # characters before writing this temporary environment file.
+          source "$cleanup_env"
+          set +a
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evidence_weighted_payment_browser_cleanup.sql \
+            2>&1 | tee evidence-payment-cleanup.log
+
+      - name: Upload release-gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-payment-release-qa-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.namespace.outputs.handle }}-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            evidence-payment-*.log
+            evidence-payment-exact-head.txt
+            evidence-payment-namespace.json
+            evidence-payment-two-writer.json
+            playwright-report
+            test-results

@@ -1,0 +1,19 @@
+.mt-feed-actions .mt-feed-create-action {
+  border-color: var(--line-strong, #1c1c18);
+  background: transparent;
+  color: inherit;
+  text-align: center;
+}
+
+.mt-feed-actions .mt-feed-create-action:hover,
+.mt-feed-actions .mt-feed-create-action:focus-visible {
+  background: var(--ink, #12120f);
+  color: var(--paper, #f4f1e9);
+}
+
+@media (max-width: 620px) {
+  .mt-feed-actions .mt-feed-create-action {
+    width: 100%;
+    white-space: normal;
+  }
+}

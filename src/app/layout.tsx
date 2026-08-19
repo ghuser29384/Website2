@@ -14,6 +14,11 @@ import "./activation-critical.css";
 import "./home-process-polish.css";
 import "./home-mode-hover-colors.css";
 import "./search-bar-polish.css";
+import "./canonical-visual-system.css";
+import "./canonical-visual-fidelity-fixes.css";
+import "./canonical-visual-system-remediation.css";
+
+const SITE_FAVICON_PATH = `${SITE_IMAGE_PATH}?v=20260730`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -65,9 +70,26 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: SITE_IMAGE_PATH,
-    shortcut: SITE_IMAGE_PATH,
-    apple: SITE_IMAGE_PATH,
+    icon: [
+      {
+        url: SITE_FAVICON_PATH,
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ],
+    shortcut: [
+      {
+        url: SITE_FAVICON_PATH,
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ],
+    apple: [
+      {
+        url: SITE_FAVICON_PATH,
+        sizes: "512x512",
+      },
+    ],
   },
 };
 
@@ -110,6 +132,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <link href={SITE_FAVICON_PATH} rel="icon" sizes="512x512" type="image/png" />
+        <link href={SITE_FAVICON_PATH} rel="shortcut icon" sizes="512x512" type="image/png" />
+        <link href={SITE_FAVICON_PATH} rel="apple-touch-icon" sizes="512x512" />
         {/* The same static stylesheets also serve the legacy HTML shell. */}
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link href="/moral-trade-input-assist.css" rel="stylesheet" />
@@ -139,7 +164,7 @@ export default function RootLayout({
           <RecommendationLearningTracker />
           <SmartQueryAutoEnhancer />
         </Suspense>
-        <Script src="/moral-trade-input-assist.js" strategy="afterInteractive" />
+        <Script src="/moral-trade-input-assist.js" strategy="lazyOnload" />
         <Script src="/moral-trade-live-feed-diagnostics.js" strategy="afterInteractive" />
         <Script src="/moral-trade-live-learning-diagnostics.js" strategy="afterInteractive" />
         {children}

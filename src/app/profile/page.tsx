@@ -83,7 +83,7 @@ export default async function ProfilePage() {
                 <Link className="button button-primary button-mini" href={viewer ? "/dashboard" : "/login?returnTo=/profile"}>
                   {viewer ? "View settings" : "Sign in to continue"}
                 </Link>
-                <Link className="button button-secondary button-mini" href="/offers">
+                <Link className="button button-secondary button-mini" href="/offers" prefetch={false}>
                   Back to offers
                 </Link>
               </div>

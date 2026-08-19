@@ -1,0 +1,134 @@
+.scope :global(.mt-site-topbar.topbar-with-search) {
+  display: grid;
+  grid-template-areas: "brand nav actions";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.8rem 1.1rem;
+  align-items: center;
+  padding-block: 0.75rem;
+}
+
+.scope :global(.mt-site-topbar .topbar-links) {
+  display: flex;
+  min-width: 0;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.12rem;
+  overflow-x: auto;
+  padding-top: 0;
+  border-top: 0;
+  scrollbar-width: none;
+}
+
+.scope :global(.mt-site-topbar .topbar-links::-webkit-scrollbar) {
+  display: none;
+}
+
+.scope :global(.mt-site-topbar .topbar-links > a),
+.scope :global(.mt-site-topbar .topbar-menu) {
+  flex: 0 0 auto;
+}
+
+.scope :global(.mt-site-topbar .topbar-actions) {
+  display: flex;
+  width: auto;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+@media (max-width: 980px) {
+  .scope :global(.mt-site-topbar.topbar-with-search) {
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+
+  .scope :global(.mt-site-topbar .topbar-links) {
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--line-strong);
+  }
+}
+
+@media (max-width: 760px) {
+  .scope :global(.mt-site-topbar.topbar-with-search) {
+    display: grid;
+    min-height: 0;
+    gap: 0.55rem 0.6rem;
+    padding-block: 0.65rem 0.55rem;
+  }
+
+  .scope :global(.mt-site-topbar .brand) {
+    min-width: 0;
+    justify-content: flex-start;
+    overflow: hidden;
+  }
+
+  .scope :global(.mt-site-topbar .brand .mt-wordmark) {
+    max-width: 100%;
+    font-size: clamp(1rem, 4.8vw, 1.2rem);
+  }
+
+  .scope :global(.mt-site-topbar .topbar-actions) {
+    justify-content: flex-end;
+  }
+
+  .scope :global(.mt-site-topbar .topbar-actions .button-nav) {
+    width: auto;
+    min-height: 2.35rem;
+    padding: 0.52rem 0.7rem;
+    font-size: 0.62rem;
+  }
+
+  .scope :global(.mt-site-topbar .topbar-utility) {
+    min-height: 2.35rem;
+    padding-inline: 0.55rem;
+    font-size: 0.62rem;
+  }
+
+  .scope :global(.mt-site-topbar .topbar-links) {
+    display: flex;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.12rem;
+    overflow-x: auto;
+    padding-top: 0.45rem;
+  }
+
+  .scope :global(.mt-site-topbar .topbar-links > a),
+  .scope :global(.mt-site-topbar .topbar-menu-trigger) {
+    min-height: 2rem;
+    justify-content: center;
+    padding: 0.35rem 0.48rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 360px) {
+  .scope :global(.mt-site-topbar.topbar-with-search) {
+    grid-template-areas:
+      "brand"
+      "actions"
+      "nav";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+  }
+
+  .scope :global(.mt-site-topbar .brand) {
+    min-height: 2.5rem;
+  }
+
+  .scope :global(.mt-site-topbar .topbar-actions) {
+    justify-content: flex-start;
+  }
+}

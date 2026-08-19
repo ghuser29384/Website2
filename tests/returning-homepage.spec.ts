@@ -1,235 +1,154 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-async function expectFullyInViewport(page: Page, locator: Locator) {
-  const box = await locator.boundingBox();
-  const viewport = page.viewportSize();
-
-  expect(box).not.toBeNull();
-  expect(viewport).not.toBeNull();
-  expect(box!.x).toBeGreaterThanOrEqual(0);
-  expect(box!.y).toBeGreaterThanOrEqual(0);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
+async function openHome(page: Page) {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("main#app")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible({ timeout: 30_000 });
 }
 
-test.describe("Returning-user homepage", () => {
+async function expectNoHorizontalOverflow(page: Page) {
+  const dimensions = await page.evaluate(() => ({
+    innerWidth: window.innerWidth,
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+
+  expect(dimensions.clientWidth).toBe(dimensions.innerWidth);
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1);
+}
+
+test.describe("Adaptive homepage", () => {
   test.use({ timezoneId: "UTC" });
 
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(new Date("2026-07-16T15:00:00.000Z"));
   });
-  test("matches the approved desktop trade-deck contract", async ({ page }) => {
+
+  test("renders the current signed-out desktop feed without demo recommendations", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1487, height: 1058 });
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await openHome(page);
 
     await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator("#mt-live-document-heading")).toHaveText(
+      "Current opportunities and next actions",
+    );
+    await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toBeVisible();
 
-    const primary = page.getByRole("navigation", { name: "Primary" });
-    await expect(primary.getByRole("link")).toHaveText([
+    const primary = page.locator("header.topbar nav");
+    await expect(primary).toBeVisible();
+    await expect(primary.getByRole("button", { name: "Open personalized feed" })).toHaveText(
       "Feed",
-      "Now",
+    );
+    await expect(primary.getByRole("button", { name: "Open Discover" })).toHaveText(
       "Discover",
-      "Activity",
-      "Evidence",
-      "Account",
-    ]);
-    await expect(primary.getByRole("link", { name: "Feed" })).toHaveAttribute(
-      "href",
-      "/feed",
     );
-    await expect(primary.getByRole("link", { name: "Now" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    await expect(primary.getByRole("button", { name: "Open Trade controls" })).toHaveText(
+      "Controls",
     );
-    await expect(page.getByTestId("home-offer-trade")).toHaveAttribute(
-      "href",
-      "/offers?view=templates",
-    );
-    await expect(page.getByTestId("home-offer-trade")).toHaveAccessibleName("Offer a trade");
-    const accountMenu = page.getByRole("button", { name: "Open account menu" });
-    await expect(accountMenu.getByTestId("account-avatar").locator("svg")).toBeVisible();
+    await expect(primary.getByRole("button", { name: "Trade", exact: true })).toBeVisible();
+    await expect(primary.getByRole("button", { name: "Commitments", exact: true })).toBeVisible();
+    await expect(primary.getByRole("button", { name: "Open Evidence" })).toHaveText("Evidence");
 
-    await expect(page.getByText("A trade worth considering.", { exact: true })).toHaveCount(0);
+    await expect(page.locator('button[data-action="command"]')).toBeVisible();
+    await expect(page.locator('button[data-action="profile"]')).toHaveAccessibleName("Account");
+    await expect(page.locator('button[data-action="create"]')).toContainText("Create offer");
+
+    await expect(page.locator('button[data-now="focus"]')).toHaveClass(/active/);
+    await expect(page.locator('button[data-now="plan"]')).toHaveText("Plan resources");
+    await expect(page.locator('button[data-now="rules"]')).toHaveText("Standing rules");
+
+    const date = page.locator(".head .date");
+    await expect(date).toHaveAttribute("data-mt-local-date-time", "2026-07-16");
+    await expect(date.locator('time[data-mt-local-date="true"]')).toHaveAttribute(
+      "datetime",
+      "2026-07-16",
+    );
+    await expect(date.locator('time[data-mt-local-date="true"]')).toHaveText(
+      "Thursday, July 16, 2026",
+    );
+    await expect(date.locator('[data-mt-local-greeting="true"]')).toHaveText(
+      "Good afternoon.",
+    );
+
+    const feed = page.locator('[data-mt-live-now="adaptive"]');
+    await expect(feed).toHaveAttribute("data-mt-live-now-state", "signed_out");
     await expect(
-      page.getByText(
-        "Your best match right now, based on your commitments and priorities.",
+      feed.getByRole("heading", {
+        level: 2,
+        name: "Sign in to see a feed based on your moral priorities.",
+      }),
+    ).toBeVisible();
+    await expect(feed.getByText("No profile loaded", { exact: true })).toBeVisible();
+    await expect(feed.getByText("No recommendations shown", { exact: true })).toBeVisible();
+    await expect(
+      feed.getByText(
+        "This page does not guess your priorities or substitute demo recommendations.",
         { exact: true },
       ),
     ).toBeVisible();
-    const localGreeting = page.getByTestId("local-date-greeting");
-    await expect(localGreeting).toHaveAttribute("data-ready", "true");
-    await expect(localGreeting.locator('time[datetime="2026-07-16"]')).toHaveText(
-      "Thursday, July 16, 2026",
-    );
-    await expect(localGreeting.getByText("Good afternoon.", { exact: true })).toBeVisible();
+    await expect(feed.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
 
-    const recommendation = page.getByRole("region", { name: "Recommended moral trade" });
-    const tradeCards = recommendation.locator("article");
-    await expect(tradeCards).toHaveCount(2);
-
-    const offeredCommitment = tradeCards.nth(0);
-    const requestedCommitment = tradeCards.nth(1);
-    await expect(offeredCommitment.getByText("You could offer", { exact: true })).toBeVisible();
-    await expect(
-      offeredCommitment.getByRole("heading", {
-        level: 2,
-        name: "Replace eight car trips with transit.",
-      }),
-    ).toBeVisible();
-    await expect(offeredCommitment.getByText("Verifiable behavior change")).toBeVisible();
-    await expect(offeredCommitment.getByRole("slider", { name: "Trips per month" })).toHaveValue(
-      "8",
-    );
-    await expect(offeredCommitment.getByText("4 – 12 trips", { exact: true })).toBeVisible();
-    await expect(offeredCommitment.getByText("Transit access", { exact: true })).toBeVisible();
-
-    await expect(requestedCommitment.getByText("Mina would offer", { exact: true })).toBeVisible();
-    await expect(
-      requestedCommitment.getByRole("heading", {
-        level: 2,
-        name: "Fund $20 of open civic infrastructure.",
-      }),
-    ).toBeVisible();
-    await expect(requestedCommitment.getByText("Verifiable financial contribution")).toBeVisible();
-    await expect(requestedCommitment.getByRole("slider", { name: "Funding amount" })).toHaveValue(
-      "20",
-    );
-    await expect(requestedCommitment.getByText("$10 – $30", { exact: true })).toBeVisible();
-    await expect(requestedCommitment.getByText("Open governance", { exact: true })).toBeVisible();
-
-    await expect(page.getByRole("button", { name: "Toggle the paired exchange" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
-    const reasons = page.getByRole("region", { name: "Why this match exists" });
-    for (const reason of [
-      "Complementary priorities",
-      "Both terms within rated ranges",
-      "Mina’s track record",
-      "96% on-time verification",
-      "Proof method",
-      "Expires",
-    ]) {
-      await expect(reasons.getByText(reason, { exact: true })).toBeVisible();
-    }
-    await expect(reasons.getByText("Jul 23, 2026", { exact: true })).toBeVisible();
-    await expect(reasons.getByText("7 days left", { exact: true })).toBeVisible();
-
-    const actions = page.getByRole("region", { name: "Trade actions" });
-    await expect(actions.getByRole("link", { name: "Offer this trade" })).toHaveAttribute(
+    await expect(feed.getByRole("link", { name: /Sign in/ })).toHaveAttribute(
       "href",
-      "/create?mode=trade",
+      "/login?returnTo=%2F",
     );
-    await expect(actions.getByRole("link", { name: "Counter this trade" })).toHaveAttribute(
+    await expect(feed.getByRole("link", { name: "Browse all live proposals →" })).toHaveAttribute(
       "href",
-      "/create?mode=trade",
+      "/offers?view=live",
     );
-    await expect(actions.getByRole("button", { name: "Save" })).toBeVisible();
-    await expect(actions.getByRole("button", { name: "Pass" })).toBeVisible();
+    await expect(feed.getByRole("link", { name: "Review profile →" })).toHaveAttribute(
+      "href",
+      "/complete-profile",
+    );
 
-    const filters = page.getByRole("complementary", { name: "More matches and filters" });
-    await expect(filters.getByText("14 more matches", { exact: true })).toBeVisible();
-    await expect(filters.getByRole("link", { name: "View all matches →" })).toHaveAttribute(
-      "href",
-      "/offers",
-    );
-    for (const filter of [
-      "Transit access",
-      "Open governance",
-      "Climate action",
-      "Animal welfare",
-      "Economic equity",
-      "Behavior change",
-      "Financial contribution",
-      "Advocacy",
-    ]) {
-      await expect(filters.getByRole("button", { name: filter, exact: true })).toBeVisible();
+    for (const rule of ["No guessed priorities", "No demo records", "No invented counterparties"]) {
+      await expect(feed.getByText(rule, { exact: true })).toBeVisible();
     }
 
-    await expectFullyInViewport(page, actions);
-    await expectFullyInViewport(page, filters);
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-      ),
-    ).toBe(false);
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollHeight > document.documentElement.clientHeight,
-      ),
-    ).toBe(false);
-
-    await expect(page.getByText("Do more good without agreeing.", { exact: true })).toHaveCount(0);
-    await expect(
-      page.getByRole("navigation", { name: "Ways to use Moral Trade" }),
-    ).toHaveCount(0);
-    await expect(page.getByRole("img", { name: /Mutual-gain field/ })).toHaveCount(0);
+    await expect(page.getByTestId("home-offer-trade")).toHaveCount(0);
+    await expect(page.getByRole("slider")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Recommended moral trade" })).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
   });
 
-  test("keeps the approved controls interactive", async ({ page }) => {
+  test("routes the current homepage actions to Create and sign-in safely", async ({ page }) => {
     await page.setViewportSize({ width: 1487, height: 1058 });
+    await openHome(page);
+
+    await page.locator('button[data-action="create"]').click();
+    await expect(page).toHaveURL(/\/trades\/new(?:[?#]|$)/, { timeout: 30_000 });
+
     await page.goto("/", { waitUntil: "domcontentloaded" });
-
-    const trips = page.getByRole("slider", { name: "Trips per month" });
-    const amount = page.getByRole("slider", { name: "Funding amount" });
-    await trips.fill("10");
-    await amount.fill("25");
-    await expect(trips).toHaveValue("10");
-    await expect(amount).toHaveValue("25");
-
-    const pair = page.getByRole("button", { name: "Toggle the paired exchange" });
-    await pair.click();
-    await expect(pair).toHaveAttribute("aria-pressed", "false");
-
-    const save = page.getByTestId("save-match");
-    await save.click();
-    await expect(save).toHaveAttribute("aria-pressed", "true");
-    await expect(save).toContainText("Saved");
-
-    await page.getByRole("button", { name: "Pass" }).click();
-    await expect(page.getByText("13 more matches", { exact: true })).toBeVisible();
-    await expect(save).toHaveAttribute("aria-pressed", "false");
-    await expect(save).toContainText("Save");
-
-    const transitFilter = page.getByRole("button", { name: "Transit access", exact: true });
-    await transitFilter.click();
-    await expect(transitFilter).toHaveAttribute("aria-pressed", "true");
-
-    const behaviorFilter = page.getByRole("button", { name: "Behavior change", exact: true });
-    await behaviorFilter.click();
-    await expect(behaviorFilter).toHaveAttribute("aria-pressed", "true");
-
-    const account = page.getByRole("button", { name: "Open account menu" });
-    await account.click();
-    await expect(account).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByRole("menuitem", { name: "Profile" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
+    await expect(page.locator('[data-mt-live-now-state="signed_out"]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByRole("link", { name: /Sign in/ }).click();
+    await expect(page).toHaveURL(/\/login\?returnTo=%2F$/, { timeout: 30_000 });
   });
 
-  test("stacks the trade deck without horizontal overflow on mobile", async ({ page }) => {
+  test("stacks the adaptive signed-out feed without horizontal overflow on mobile", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await openHome(page);
 
-    await expect(page.getByText("A trade worth considering.", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
-    await expect(page.getByTestId("home-offer-trade")).toHaveAttribute(
-      "href",
-      "/offers?view=templates",
-    );
-    await expect(page.getByTestId("home-offer-trade")).toBeVisible();
-    await expect(page.getByRole("region", { name: "Recommended moral trade" }).locator("article"))
-      .toHaveCount(2);
-    await expect(page.getByRole("region", { name: "Trade actions" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toBeVisible();
+    await expect(page.locator("header.topbar nav")).toBeVisible();
+    await expect(page.locator('button[data-action="create"]')).toBeVisible();
+    await expect(page.locator('[data-mt-live-now-state="signed_out"]')).toBeVisible();
     await expect(
-      page.getByRole("complementary", { name: "More matches and filters" }),
+      page.getByRole("heading", {
+        level: 2,
+        name: "Sign in to see a feed based on your moral priorities.",
+      }),
     ).toBeVisible();
+    await expect(page.getByRole("link", { name: /Sign in/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Review profile →" })).toBeVisible();
 
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-      ),
-    ).toBe(false);
+    await expect(page.getByTestId("home-offer-trade")).toHaveCount(0);
+    await expect(page.getByRole("slider")).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
   });
 });

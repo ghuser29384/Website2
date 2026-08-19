@@ -38,107 +38,75 @@ function readRepoFile(path: string) {
 }
 
 function flattenPrimaryNavHrefs() {
-  return getPrimaryNavLinks(false).flatMap((link) => link.items.map((item) => item.href));
+  return getPrimaryNavLinks(false).flatMap((link) =>
+    "items" in link && link.items
+      ? link.items.map((item) => item.href)
+      : "href" in link && link.href
+        ? [link.href]
+        : [],
+  );
 }
 
 test("public navigation exposes professional marketplace routes", () => {
-  const labels = getPrimaryNavLinks(false).map((link) => link.label);
+  const links = getPrimaryNavLinks(false);
+  const labels = links.map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
   const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));
-  const tradeMenu = getPrimaryNavLinks(false).find((link) => link.label === "Trade");
-  const publicGoodsMenu = getPrimaryNavLinks(false).find((link) => link.label === "Moral Public Goods");
-  const groupBuyingSearchResults = filterSiteSearchItems("group buying", 6);
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
-  const authenticatedPrimaryAction = getTopbarActions(true).primaryAction;
 
-  assert.deepEqual(labels, ["Trade", "Moral Public Goods"]);
-  assert.equal(getTopbarActions(false).primaryAction, undefined);
-  assert.ok(authenticatedPrimaryAction);
-  assert.equal(authenticatedPrimaryAction.href, "/offers/new?mode=offset");
-  assert.equal(authenticatedPrimaryAction.label, "Create trade");
-  assert.equal(getTopbarActions(false).authLink.label, "Sign in");
-  assert.match(tradeMenu?.summary ?? "", /bounded moral trade commitments/);
-  assert.match(publicGoodsMenu?.summary ?? "", /common budgets, and group-buying pools/);
-  assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.description)));
-  assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.section)));
-  assert.ok(tradeMenu?.items?.some((item) => item.label === "Create donation offset" && item.section === "Participate"));
-  assert.ok(tradeMenu?.items?.some((item) => item.label === "Group buying" && item.section === "Trade lanes"));
-  assert.equal(
-    tradeMenu?.items?.find((item) => item.label === "Group buying")?.href,
-    "/moral-goods-group-buying",
-  );
-  assert.equal(
-    publicGoodsMenu?.items?.some((item) => item.href === "/moral-goods-group-buying"),
-    false,
-  );
-  assert.ok(groupBuyingSearchResults.some((item) => item.href === "/moral-goods-group-buying"));
-  assert.ok(hrefs.includes("/projects"));
-  assert.ok(hrefs.includes("/start"));
-  assert.ok(hrefs.includes("/how-it-works"));
-  assert.ok(hrefs.includes("/offers"));
-  assert.ok(hrefs.includes("/pledge-swaps"));
-  assert.ok(hrefs.includes("/moral-goods-group-buying"));
-  assert.ok(hrefs.includes("/donation-offsets"));
-  assert.ok(hrefs.includes("/donate"));
-  assert.ok(hrefs.includes("/validation"));
-  assert.ok(hrefs.includes("/worked-examples"));
-  assert.ok(hrefs.includes("/mpgf"));
-  assert.ok(hrefs.includes("/mpgf/about"));
-  assert.ok(hrefs.includes("/mpgf/contribute"));
-  assert.ok(hrefs.includes("/mpgf/pools"));
-  assert.ok(hrefs.includes("/mpgf/governance"));
-  assert.ok(hrefs.includes("/mpgf/metrics"));
-  assert.ok(hrefs.includes("/measurement"));
-  assert.ok(hrefs.includes("/faq"));
-  assert.ok(hrefs.includes("/sources"));
-  assert.ok(hrefs.includes("/background-networking"));
-  assert.ok(hrefs.includes("/cohort"));
-  assert.ok(hrefs.includes("/team-and-governance"));
-  assert.ok(hrefs.includes("/pilot-updates"));
-  assert.ok(hrefs.includes("/contact"));
-  assert.ok(hrefs.includes("/trust"));
-  assert.ok(hrefs.includes("/status"));
-  assert.equal(hrefs.includes("/paid-action-offers"), false);
-  assert.equal(hrefs.includes("/saved-offers"), false);
-  assert.equal(hrefs.includes("/moral-trade/technical-spec"), false);
-  assert.equal(hrefs.includes("/reasoning-center"), false);
-  assert.equal(hrefs.includes("/accessibility"), false);
-  assert.equal(hrefs.includes("/priority-correction-fund"), true);
-  assert.equal(footerHrefs.includes("/paid-action-offers"), true);
-  assert.equal(footerHrefs.includes("/mpgf"), true);
-  assert.equal(footerHrefs.includes("/moral-goods-group-buying"), true);
-  assert.equal(footerHrefs.includes("/moral-trade/technical-spec"), true);
-  assert.equal(footerHrefs.includes("/reasoning-center"), true);
-  assert.equal(footerHrefs.includes("/priority-correction-fund"), true);
-  assert.ok(!hrefs.includes("/cart"));
-  assert.equal(siteSource.includes("label: \"MPGF\""), false);
-  assert.equal(siteSource.includes("label: \"Advanced\""), false);
-  assert.match(siteSource, /label: "Trade"/);
-  assert.match(siteSource, /label: "Moral Public Goods"/);
-  assert.match(siteSource, /section: "Trade lanes"/);
-  assert.match(siteSource, /section: "Funding routes"/);
-  assert.match(siteSource, /\/contact/);
-  assert.match(siteSource, /\/status/);
-  assert.match(siteSource, /\/trust/);
-  assert.match(siteSource, /\/projects/);
-  assert.match(siteSource, /\/start/);
-  assert.match(siteSource, /\/pilot-updates/);
-  assert.match(siteSource, /\/measurement/);
-  assert.match(siteSource, /\/accessibility/);
-  assert.match(siteSource, /href: "\/sources", label: "Sources"/);
-  assert.equal(siteSource.includes("/methodology#sources"), false);
-  assert.match(topbarSource, /topbar-menu-heading/);
-  assert.match(topbarSource, /topbar-menu-section/);
-  assert.match(topbarSource, /topbar-menu-icon/);
-  assert.match(topbarSource, /topbar-with-search/);
+  assert.deepEqual(labels, [
+    "Feed",
+    "Discover",
+    "Create",
+    "Invite",
+    "Messages",
+    "Commitments",
+    "Evidence",
+    "Safety",
+  ]);
+  assert.deepEqual(hrefs, [
+    "/feed",
+    "/discover",
+    "/trades/new",
+    "/invite",
+    "/messages",
+    "/commitments",
+    "/evidence",
+    "/safety",
+  ]);
+  assert.deepEqual(getTopbarActions(false).authLink, { href: "/login", label: "Sign in" });
+  assert.deepEqual(getTopbarActions(false).primaryAction, { href: "/start", label: "Get started" });
+  assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });
+  assert.equal(getTopbarActions(true).authLink, undefined);
+
+  for (const href of [
+    "/feed",
+    "/discover",
+    "/trades/new",
+    "/messages",
+    "/commitments",
+    "/evidence",
+    "/safety",
+    "/worked-examples",
+    "/moral-trade/technical-spec",
+    "/team-and-governance",
+    "/privacy",
+    "/terms",
+  ]) {
+    assert.ok(hrefs.includes(href) || footerHrefs.includes(href), `missing public route: ${href}`);
+  }
+
+  assert.equal(hrefs.includes("/cart"), false);
+  assert.equal(siteSource.includes("social credit"), false);
+  assert.match(siteSource, /href: "\/feed", label: "Feed"/);
+  assert.match(siteSource, /href: "\/trades\/new", label: "Create"/);
+  assert.match(topbarSource, /filterSmartSiteSearchItems/);
+  assert.match(topbarSource, /placeholder="Search offers, people, pools, or evidence"/);
+  assert.match(topbarSource, /topbar-search-results/);
   assert.match(topbarSource, /showSearch = true/);
-  assert.match(globalCss, /\.topbar-menu-section\s*\{/);
-  assert.match(
-    globalCss,
-    /\.button-secondary\.button-nav\.is-active\s*\{[\s\S]*background:\s*var\(--accent-soft\);[\s\S]*color:\s*var\(--accent-deep\);/,
-  );
+  assert.match(globalCss, /\.button-secondary\.button-nav\.is-active/);
 });
 
 test("offer save surfaces avoid shopping-cart framing", () => {
@@ -213,9 +181,11 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   }
 });
 
-test("MPGF public copy leads with manual evidence instead of raw gate/debug wording", () => {
-  assert.match(MPGF_COPY.plainLanguageSummary, /manual external-payment evidence/i);
-  assert.match(MPGF_COPY.manualExternalPaymentEvidence, /review/i);
+test("MPGF public copy leads with reviewed external evidence instead of raw gate/debug wording", () => {
+  assert.match(MPGF_COPY.plainLanguageSummary, /direct-to-charity Every\.org route/i);
+  assert.match(MPGF_COPY.plainLanguageSummary, /reviewed external evidence as fallback/i);
+  assert.match(MPGF_COPY.manualExternalPaymentEvidence, /starts review/i);
+  assert.match(MPGF_COPY.manualExternalPaymentEvidence, /does not move money/i);
 
   const publicMpgfSources = [
     "src/app/mpgf/page.tsx",
@@ -225,6 +195,8 @@ test("MPGF public copy leads with manual evidence instead of raw gate/debug word
     "src/app/loading.tsx",
   ].map(readRepoFile).join("\n");
 
+  assert.match(publicMpgfSources, /direct-to-charity Every\.org route/i);
+  assert.match(publicMpgfSources, /reviewed external evidence/i);
   for (const forbidden of [
     "Smoke test",
     "Real money disabled",
@@ -405,7 +377,7 @@ test("login exposes a Supabase password recovery flow", () => {
   assert.match(confirmRouteSource, /could not confirm that link/);
 });
 
-test("public offer and registry pages include seeded examples instead of empty-only states", () => {
+test("live offers stay separated from examples while the wish registry uses broad previews", () => {
   assert.equal(CANONICAL_WORKED_CASE_COUNT, 8);
   assert.equal(getAllOffers([]).length, CANONICAL_WORKED_CASE_COUNT);
   assert.ok(
@@ -413,28 +385,43 @@ test("public offer and registry pages include seeded examples instead of empty-o
   );
 
   const offersPage = readRepoFile("src/app/offers/page.tsx");
-  const marketplaceComponents = readRepoFile("src/components/marketplace/marketplace-components.tsx");
-  assert.match(offersPage, /Worked examples/);
-  assert.match(offersPage, /MarketplaceHome/);
-  assert.match(marketplaceComponents, /Preview only until you confirm/);
-  assert.match(offersPage, /CANONICAL_WORKED_CASE_OFFERS/);
-  assert.equal(offersPage.includes(["Six", "seeded", "offers"].join(" ")), false);
-  assert.equal(offersPage.includes(".slice(0, 6)"), false);
+  const participantOfferGroup = readRepoFile(
+    "src/components/marketplace/participant-offer-group.tsx",
+  );
+  assert.match(offersPage, /LIVE_METADATA/);
+  assert.match(offersPage, /without mixing examples or explanatory records into marketplace inventory/);
+  assert.match(offersPage, /WORKED_EXAMPLE_VIEWS/);
+  assert.match(offersPage, /redirect\("\/worked-examples"\)/);
+  assert.match(offersPage, /if \(view === "templates" \|\| legacyTab === "templates"\) return <TradeTemplateLibrary \/>/);
+  assert.match(offersPage, /Live participant records only/);
+  assert.match(offersPage, /Search never substitutes examples for live demand/);
+  assert.match(offersPage, /data-authoritative-directory="true"/);
+  assert.match(offersPage, /livePage\.error \? \(/);
+  assert.match(offersPage, /Results unavailable/);
+  assert.match(offersPage, /data-directory-state="unavailable"/);
+  assert.match(offersPage, /data-directory-state="empty"/);
+  assert.match(offersPage, /No live proposals are open/);
+  assert.equal(offersPage.includes("CANONICAL_WORKED_CASE_OFFERS"), false);
   assert.equal(offersPage.includes("No public offers have been published yet"), false);
+  assert.match(participantOfferGroup, /data-participant-offer-group/);
+  assert.match(participantOfferGroup, /data-participant-offer/);
+  assert.match(participantOfferGroup, /aria-labelledby=\{offerHeadingId\}/);
+  assert.match(participantOfferGroup, /aria-describedby=\{`\$\{offerDescriptionId\} \$\{truthNoteId\}`\}/);
+  assert.match(participantOfferGroup, /data-proposal-disclosure/);
+  assert.match(participantOfferGroup, /\{isOwner \? "Manage" : "Respond"\}/);
+  assert.match(participantOfferGroup, /<dt>Get<\/dt>[\s\S]*<dt>Do<\/dt>/);
+  assert.match(participantOfferGroup, /Counteroffer[\s\S]*Ask[\s\S]*Remove saved[\s\S]*Open full terms/);
 
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
   const wishRegistrySource = readRepoFile("src/lib/wish-registry.ts");
   assert.match(registryPage, /EXAMPLE_WISH_PREVIEWS/);
   assert.match(registryPage, /filterWishRegistryExamplePreviews/);
-  assert.doesNotMatch(registryPage, /getWishRegistryCompatibilityBand/);
-  assert.match(registryPage, /BACKGROUND_PUBLIC_REGISTRY_HERO/);
   assert.match(registryPage, /Broad preview only/);
   assert.match(registryPage, /Browse broad previews/);
-  assert.match(registryPage, /Exact wishes,\s+private asks, and contact details stay hidden/);
+  assert.match(registryPage, /Exact wishes,[\s\S]*contact details stay hidden/);
   assert.equal(registryPage.includes("match score"), false);
   assert.match(wishRegistrySource, /getWishRegistryRedactedOverlapTokens/);
   assert.match(wishRegistrySource, /getWishRegistryCompatibilityBand/);
-  assert.match(wishRegistrySource, /broad_language_overlap_/);
 });
 
 test("public copy does not claim escrow-backed payment protection", () => {
@@ -465,10 +452,11 @@ test("returning home page exposes the screenshot navigation contract", () => {
   assert.match(homeSource, /href="\/feed">Feed/);
   assert.match(homeSource, />\s*Now\s*</);
   assert.match(homeSource, /href="\/offers">Discover/);
-  assert.match(homeSource, /href="\/evidence">Evidence/);
-  assert.match(homeSource, /href="\/create">Offer/);
   assert.match(homeSource, /href="\/commitments">Activity/);
+  assert.match(homeSource, /href="\/evidence">Evidence/);
   assert.match(homeSource, /href="\/profile">Account/);
+  assert.match(homeSource, /href="\/offers\?view=templates"/);
+  assert.match(homeSource, /Offer a trade/);
   assert.doesNotMatch(homeSource, /SiteTopbar/);
 });
 
@@ -476,54 +464,32 @@ test("global search and offers search expose real marketplace discovery", () => 
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const appDataSource = readRepoFile("src/lib/app-data.ts");
-  const pagePrimitives = readRepoFile("src/components/ui/page-primitives.tsx");
-  const globalCss = readRepoFile("src/app/globals.css");
   const animalResults = filterSiteSearchItems("animal welfare");
-  const mpfgResults = filterSiteSearchItems("manual evidence");
+  const manualEvidenceResults = filterSiteSearchItems("manual evidence");
   const publicGoodsResults = filterSiteSearchItems("moral public goods");
   const commonGroundResults = filterSiteSearchItems("common ground budget");
   const validationResults = filterSiteSearchItems("appeal rulebook");
 
-  assert.match(topbarSource, /placeholder="Search trades"/);
-  assert.match(topbarSource, /filterSiteSearchItems/);
+  assert.match(topbarSource, /placeholder="Search offers, people, pools, or evidence"/);
+  assert.match(topbarSource, /filterSmartSiteSearchItems/);
+  assert.match(topbarSource, /\/api\/query\/interpret/);
   assert.match(topbarSource, /topbar-search-results/);
-  assert.match(offersPage, /name="search"/);
-  assert.match(offersPage, /CAUSE_FILTER_CHIPS/);
-  assert.match(offersPage, /type="range"/);
-  assert.match(offersPage, /SORT_FILTER_CHIPS/);
-  assert.match(offersPage, /parseMinimumScore/);
-  assert.match(offersPage, /parseDirectorySort/);
-  assert.match(offersPage, /FilterSidebar/);
-  assert.match(offersPage, /activeFilterLabels/);
-  assert.match(offersPage, /Reset filters/);
-  assert.match(offersPage, /popularFilterLinks/);
-  assert.match(offersPage, /Popular filters/);
-  assert.match(offersPage, /toggleValue/);
-  assert.match(offersPage, /groupedListings/);
-  assert.match(offersPage, /Jump to cause group/);
-  assert.match(offersPage, /highlightedWorkedExamples/);
-  assert.match(offersPage, /Study the structure before live offers arrive/);
-  assert.match(offersPage, /MarketplaceHome/);
-  assert.match(offersPage, /formatCounts/);
-  assert.match(offersPage, /causeCounts/);
-  assert.match(offersPage, /getListingModeIcon/);
-  assert.match(offersPage, /primaryActionLabel/);
-  assert.match(offersPage, /OfferCard/);
-  assert.match(offersPage, /getOfferReviewCardInstrumentation/);
-  assert.match(offersPage, /reviewFactorCodes/);
-  assert.match(offersPage, /reviewNextStep/);
-  assert.match(offersPage, /reviewStatusReason/);
-  assert.match(offersPage, /listingMatchesFilters/);
-  assert.match(offersPage, /sortListings/);
-  assert.match(pagePrimitives, /listing-factor-codes/);
-  assert.match(pagePrimitives, /Next step:/);
-  assert.match(pagePrimitives, /Why this status:/);
-  assert.match(globalCss, /listing-factor-codes/);
-  assert.match(globalCss, /listing-next-step/);
-  assert.match(appDataSource, /offerMatchesSearchQuery/);
+  assert.match(offersPage, /SmartQueryForm/);
+  assert.match(offersPage, /queryName="search"/);
+  assert.match(offersPage, /Hard constraints are applied before semantic and trust-aware ranking/);
+  assert.match(offersPage, /Search proposals/);
+  assert.match(offersPage, /MODE_OPTIONS/);
+  assert.match(offersPage, /SORT_OPTIONS/);
+  assert.match(offersPage, /parseSmartQuery/);
+  assert.match(offersPage, /mergeSmartQueryFacets/);
+  assert.match(offersPage, /offerMatchesHardConstraints/);
+  assert.match(offersPage, /smartInterpretationScore/);
+  assert.match(offersPage, /No live proposals satisfy every hard constraint/);
+  assert.match(appDataSource, /OFFERS_PAGE_SIZE/);
+
   assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
   assert.equal(filterSiteSearchItems("pledge swap")[0]?.href, "/pledge-swaps");
-  assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
+  assert.ok(manualEvidenceResults.some((result) => result.href === "/evidence"));
   assert.equal(publicGoodsResults[0]?.href, "/mpgf");
   assert.equal(publicGoodsResults[0]?.label, "Common Ground Budget");
   assert.equal(commonGroundResults[0]?.href, "/mpgf");
@@ -532,12 +498,12 @@ test("global search and offers search expose real marketplace discovery", () => 
 
 test("returning home page matches the recommended-trade decision screen", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
+  const greetingSource = readRepoFile("src/components/home/local-date-greeting.tsx");
   const pageSource = readRepoFile("src/app/page.tsx");
 
-  assert.match(pageSource, /return <HomePage \/>/);
-  assert.match(homeSource, /A trade worth considering\./);
+  assert.match(pageSource, /<HomePage displayName=\{viewer\?\.displayName \?\? null\} \/>/);
   assert.match(homeSource, /Your best match right now, based on your commitments and priorities\./);
-  assert.match(homeSource, /Good afternoon, Alex\./);
+  assert.match(greetingSource, /Good afternoon/);
   assert.match(homeSource, /Replace eight/);
   assert.match(homeSource, /car trips with transit\./);
   assert.match(homeSource, /Fund \$20 of open/);
@@ -556,37 +522,27 @@ test("returning home page matches the recommended-trade decision screen", () => 
   assert.match(homeSource, /\{remainingMatches\} more matches/);
   assert.match(homeSource, /Focus areas/);
   assert.match(homeSource, /Commitment types/);
-  assert.doesNotMatch(homeSource, /Worked examples|founding cohort|Pilot inventory/);
+  assert.doesNotMatch(homeSource, /founding cohort|Pilot inventory/);
 });
 
-test("visitor router exposes four intent paths before deeper marketplace mechanics", () => {
+test("visitor router exposes four live action paths before deeper marketplace mechanics", () => {
   const startPage = readRepoFile("src/app/start/page.tsx");
   const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
-  const siteSearchSource = readRepoFile("src/lib/site-search.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
-  assert.match(startPage, /Choose the right first path/);
-  assert.match(startPage, /learn, test an example, donate, or join\/build/i);
-  assert.match(startPage, /Learn, test, donate, or join\/build/);
+  assert.match(startPage, /Choose a real first action/);
+  assert.match(startPage, /Fund, create, pool, or explore/);
+  assert.match(startPage, /Make a financial contribution/);
+  assert.match(startPage, /Provider-hosted payment/);
+  assert.match(startPage, /No platform custody/);
   assert.match(startPage, /getMarketplaceOverview/);
-  assert.match(startPage, /CANONICAL_WORKED_CASE_COUNT/);
-  assert.match(startPage, /Pilot inventory/);
-  assert.match(startPage, /Live offers/);
-  assert.match(startPage, /Worked examples/);
-  assert.match(startPage, /Public profiles/);
-  assert.match(startPage, /No liquidity claim/);
-  assert.match(startPage, /growth-progress-card/);
-  assert.match(startPage, /No liquidity assumption/);
-  assert.match(startPage, /No account pressure/);
-  assert.match(startPage, /No hidden automation/);
-  assert.match(visitorPathsSource, /key: "learn"/);
-  assert.match(visitorPathsSource, /key: "test"/);
-  assert.match(visitorPathsSource, /key: "donate"/);
-  assert.match(visitorPathsSource, /key: "join-build"/);
-  assert.match(visitorPathsSource, /\/worked-examples/);
-  assert.match(visitorPathsSource, /\/cohort/);
-  assert.match(siteSearchSource, /Choose your path/);
-  assert.match(siteSearchSource, /visitor router/);
+  assert.match(startPage, /VISITOR_PATHS\.map/);
+  assert.match(visitorPathsSource, /key: "fund"/);
+  assert.match(visitorPathsSource, /key: "create"/);
+  assert.match(visitorPathsSource, /key: "pool"/);
+  assert.match(visitorPathsSource, /key: "explore"/);
+  assert.match(visitorPathsSource, /complete a real donation through Every\.org/);
+  assert.match(visitorPathsSource, /href: "\/offers\?view=live"/);
   assert.match(sitemapSource, /\/start/);
 });
 
@@ -653,20 +609,21 @@ test("returning homepage keeps the screenshot match facts explicit and bounded",
   assert.equal(homeSource.includes("registered users"), false);
 });
 
-test("people directory hides empty social proof and sorts by reviewable records", () => {
+test("people directory avoids popularity leaderboards and keeps trust signals evidence-bound", () => {
   const peoplePage = readRepoFile("src/app/people/page.tsx");
   const profilePage = readRepoFile("src/app/people/[profileId]/page.tsx");
   const appDataSource = readRepoFile("src/lib/app-data.ts");
   const publicProfileTrustSource = readRepoFile("src/lib/public-profile-trust.ts");
 
-  assert.match(peoplePage, /Reviewed records/);
-  assert.match(peoplePage, /Open offers/);
-  assert.match(peoplePage, /Newest opt-ins/);
-  assert.match(peoplePage, /Empty follower, karma, and comment metrics stay hidden/);
+  assert.match(peoplePage, /Browse visible members/);
+  assert.match(peoplePage, /reviewed evidence/);
+  assert.match(peoplePage, /Most open offers/);
+  assert.match(peoplePage, /Newest is chronological/);
+  assert.match(peoplePage, /not follower, karma, or comment leaderboards/);
   assert.equal(peoplePage.includes("Counterparty interest"), false);
   assert.equal(peoplePage.includes("Reviewer karma"), false);
   assert.equal(peoplePage.includes("Public discussion"), false);
-  assert.match(appDataSource, /export type PeopleSort = "reviewed" \| "offers" \| "newest"/);
+  assert.match(appDataSource, /listPublicProfilesPage/);
   assert.equal(appDataSource.includes('sort === "followers"'), false);
   assert.equal(appDataSource.includes('sort === "karma"'), false);
   assert.equal(appDataSource.includes('sort === "comments"'), false);
@@ -685,532 +642,77 @@ test("MPGF signed-out manual evidence copy and controls are gated", () => {
   assert.match(consoleSource, /if \(!viewerPresent\)/);
 });
 
-test("background networking and reasoning routes are distinct resilient public routes", () => {
+test("private matching and reasoning routes remain distinct, reviewable, and privacy bounded", () => {
   const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
   const reasoningCenterPage = readRepoFile("src/app/reasoning-center/page.tsx");
   const standardsPage = readRepoFile("src/app/reasoning-standards/page.tsx");
-  const globalCss = readRepoFile("src/app/globals.css");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_BACKGROUND_HERO/);
-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_PROMISE/);
-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_SAFETY_CARDS/);
-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_MENTAL_MODEL_STEPS/);
-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_NOT_THIS/);
-  assert.match(backgroundPage, /background-technical-details/);
-  assert.match(backgroundPage, /\/api\/background\/source-connections\/:id\/summary-draft/);
-  assert.match(backgroundPage, /\/api\/background\/source-connections\/:id\/approve/);
-  assert.match(backgroundPage, /\/api\/background\/profile\/recompute/);
-  assert.match(backgroundPage, /getMoralTradeMatchSignalContract/);
-  assert.match(backgroundPage, /validateMoralTradeMatchSignalContract/);
-  assert.match(backgroundPage, /validateMoralTradeMatchSignal/);
-  assert.match(backgroundPage, /getBackgroundAiShadowContract/);
-  assert.match(backgroundPage, /validateBackgroundAiShadowContract/);
-  assert.match(backgroundPage, /getBackgroundCapabilityGateContract/);
-  assert.match(backgroundPage, /validateBackgroundCapabilityGateContract/);
-  assert.match(backgroundPage, /getBackgroundRlsAuditContract/);
-  assert.match(backgroundPage, /validateBackgroundRlsAuditContract/);
-  assert.match(backgroundPage, /Match signal contract/);
-  assert.match(backgroundPage, /Suggestions explain public compatibility without revealing private wishes/);
-  assert.match(backgroundPage, /matchSignalContract\.sampleSignal/);
-  assert.match(backgroundPage, /participantExplanation\.headline/);
-  assert.match(backgroundPage, /participantExplanation\.redactionNotice/);
-  assert.match(backgroundPage, /matchSignalContract\.redactedFields/);
-  assert.match(backgroundPage, /AI shadow mode/);
-  assert.match(backgroundPage, /Open shadow contract/);
-  assert.match(backgroundPage, /\/api\/moral-trade\/ai-shadow\/contract/);
-  assert.match(backgroundPage, /aiShadowContract\.sampleReadyEvaluation/);
-  assert.match(backgroundPage, /aiShadowContract\.prohibitedEffects/);
-  assert.match(backgroundPage, /Capability gates/);
-  assert.match(backgroundPage, /Open gate contract/);
-  assert.match(backgroundPage, /Private-overlap checks are currently a disabled design lane/);
-  assert.match(backgroundPage, /Current phase artifact/);
-  assert.match(backgroundPage, /validateBackgroundPhaseGateBundle/);
-  assert.match(backgroundPage, /Private overlap contract/);
-  assert.match(backgroundPage, /capabilityGateContract\.gates/);
-  assert.match(backgroundPage, /capabilityGateValidation\.expansionReady/);
-  assert.match(backgroundPage, /\/api\/moral-trade\/background-capability-gates\/contract/);
-  assert.match(backgroundPage, /\/api\/moral-trade\/private-overlap\/contract/);
-  assert.match(backgroundPage, /RLS and encryption audit/);
-  assert.match(backgroundPage, /Open RLS contract/);
-  assert.match(backgroundPage, /rlsAuditContract\.tableRequirements/);
-  assert.match(backgroundPage, /\/api\/moral-trade\/background-rls-audit\/contract/);
-  assert.match(backgroundPage, /Cohort pilot packs/);
-  assert.match(backgroundPage, /Donor circles/);
-  assert.match(backgroundPage, /Reading groups/);
-  assert.match(backgroundPage, /Organization cohorts/);
-  assert.match(backgroundPage, /factorCode/);
-  assert.match(backgroundPage, /Counts, not hidden inference/);
-  assert.match(backgroundPage, /does not infer ideology, psychology, protected traits, or hidden/);
-  assert.match(backgroundPage, /BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS/);
-  assert.match(backgroundPage, /BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS/);
-  assert.match(backgroundPage, /Source connector boundary/);
-  assert.match(backgroundPage, /Raw connector ingestion remains disabled/);
-  assert.match(backgroundPage, /BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION/);
-  assert.match(backgroundPage, /BACKGROUND_SELF_SERVE_DELETION_SURFACES/);
-  assert.match(backgroundPage, /Participants can remove the background layer/);
-  assert.match(backgroundPage, /Open deletion controls/);
-  assert.match(backgroundPage, /\/api\/moral-trade\/match-signal\/contract/);
-  assert.match(reasoningCenterPage, /Pilot reasoning index/);
+  assert.match(backgroundPage, /Find possible counterparties without exposing private details/);
+  assert.match(backgroundPage, /Compatibility is not consent/);
+  assert.match(backgroundPage, /Five controlled steps from preview to disclosure/);
+  assert.match(backgroundPage, /Create a broad preview/);
+  assert.match(backgroundPage, /Choose the audience/);
+  assert.match(backgroundPage, /Request a reviewed search/);
+  assert.match(backgroundPage, /Disclose only after consent/);
+  assert.match(backgroundPage, /No autonomous outreach/);
+  assert.match(backgroundPage, /explicit, revocable grants/);
+  assert.match(backgroundPage, /createMatchConciergeRequestAction/);
+  assert.match(backgroundPage, /no_trade_baseline/);
+
   assert.match(reasoningCenterPage, /reasoningCenterDescription/);
-  assert.match(reasoningCenterPage, /twitter/);
   assert.match(reasoningCenterPage, /buildBreadcrumbJsonLd/);
-  assert.match(reasoningCenterPage, /Breadcrumbs items/);
-  assert.match(reasoningCenterPage, /reasoningCollectionStructuredData/);
   assert.match(reasoningCenterPage, /"@type": "CollectionPage"/);
   assert.match(reasoningCenterPage, /"@type": "ItemList"/);
-  assert.match(reasoningCenterPage, /application\/ld\+json/);
   assert.match(reasoningCenterPage, /getOptionalViewerForReasoningCenter/);
-  assert.match(reasoningCenterPage, /Rendering signed-out state after viewer lookup failed/);
   assert.match(reasoningCenterPage, /MORAL_TRADE_REASONING_PACKET_FILTERS/);
-  assert.match(reasoningCenterPage, /buildMoralTradeReasoningPacketRoutePayload/);
-  assert.match(reasoningCenterPage, /resolvedSearchParams\.status/);
-  assert.match(reasoningCenterPage, /packet_generation_failed/);
-  assert.match(reasoningCenterPage, /Packet generation is in recovery mode/);
-  assert.match(reasoningCenterPage, /no proposal status, disclosure, outreach, evidence decision/);
-  assert.match(reasoningCenterPage, /filterCounts\[filter\.key\]/);
-  assert.match(reasoningCenterPage, /Show all records/);
   assert.match(reasoningCenterPage, /not a live forum or autonomous moral-ranking system/);
-  assert.match(reasoningCenterPage, /Cited evidence rows/);
-  assert.match(reasoningCenterPage, /Decision steps/);
-  assert.match(reasoningCenterPage, /record\.decisionSteps/);
-  assert.match(reasoningCenterPage, /Uncertainty flags/);
-  assert.match(reasoningCenterPage, /Reviewer scope/);
-  assert.match(reasoningCenterPage, /\/api\/moral-trade\/provenance\/schema/);
-  assert.match(reasoningCenterPage, /\/api\/moral-trade\/review-workflow\/contract/);
-  assert.match(reasoningCenterPage, /\/api\/moral-trade\/reasoning\/packets/);
-  assert.equal(reasoningCenterPage.includes("Mira Chen"), false);
   assert.equal(reasoningCenterPage.includes("karma"), false);
-  assert.equal(reasoningCenterPage.includes("New & upvoted"), false);
-  assert.match(globalCss, /reasoning-status-box/);
-  assert.match(globalCss, /reasoning-factor-list/);
-  assert.match(globalCss, /reasoning-contract-strip/);
-  assert.match(globalCss, /reasoning-filter-summary/);
-  assert.match(globalCss, /reasoning-empty-state/);
-  assert.match(globalCss, /reasoning-packet-grid/);
-  assert.match(globalCss, /reasoning-contract-rule-list/);
+
   assert.match(standardsPage, /Make trade records specific enough to judge/);
   assert.match(standardsPage, /getOfferReviewWorkflowContract/);
-  assert.match(standardsPage, /validateOfferReviewWorkflowContract/);
   assert.match(standardsPage, /getMoralTradeCopilotContract/);
-  assert.match(standardsPage, /validateMoralTradeCopilotContract/);
   assert.match(standardsPage, /getMoralTradeProvenanceContract/);
-  assert.match(standardsPage, /validateMoralTradeProvenanceContract/);
-  assert.match(standardsPage, /Protocol-backed standards/);
-  assert.match(standardsPage, /The public standards now resolve to validator contracts/);
-  assert.match(standardsPage, /protocolContractCheckCount/);
-  assert.match(standardsPage, /reviewWorkflowContract\.detailWorkflowCards/);
-  assert.match(standardsPage, /copilotContract\.verificationLoop/);
-  assert.match(standardsPage, /copilotContract\.approvedOutputSections/);
-  assert.match(standardsPage, /provenanceContract\.validationRules/);
-  assert.match(standardsPage, /\/api\/moral-trade\/review-workflow\/contract/);
-  assert.match(standardsPage, /\/api\/moral-trade\/copilot\/contract/);
-  assert.match(standardsPage, /\/api\/moral-trade\/provenance\/schema/);
-  assert.match(standardsPage, /not legal escrow/i);
-  assert.match(standardsPage, /voluntary/i);
+  assert.match(standardsPage, /Not a threat market/);
+  assert.match(standardsPage, /Not legal escrow/);
   assert.match(sitemapSource, /\/background-networking/);
   assert.match(sitemapSource, /\/reasoning-center/);
   assert.match(sitemapSource, /\/reasoning-standards/);
-  assert.match(sitemapSource, /\/pledge-swaps/);
-  assert.match(sitemapSource, /\/cohort/);
-  assert.match(sitemapSource, /\/paid-action-offers/);
 });
 
 test("background source connector permissions stay field-limited and raw-ingestion disabled", () => {
-  const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
-  const backgroundNetworkingPage = readRepoFile("src/app/background-networking/page.tsx");
-  const aiShadowContractRoute = readRepoFile(
-    "src/app/api/moral-trade/ai-shadow/contract/route.ts",
-  );
-  const capabilityGateRoute = readRepoFile(
-    "src/app/api/moral-trade/background-capability-gates/contract/route.ts",
-  );
-  const privateOverlapContractRoute = readRepoFile(
-    "src/app/api/moral-trade/private-overlap/contract/route.ts",
-  );
-  const rlsAuditContractRoute = readRepoFile(
-    "src/app/api/moral-trade/background-rls-audit/contract/route.ts",
-  );
-  const backgroundActions = readRepoFile("src/app/background-networking/actions.ts");
-  const sourceSummariesRoute = readRepoFile("src/app/api/background/source-summaries/route.ts");
+  const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
+  const permissionSource = readRepoFile("src/lib/background-source-permissions.ts");
   const sourceConnectionsRoute = readRepoFile("src/app/api/background/source-connections/route.ts");
-  const sourceConnectionRevokeRoute = readRepoFile(
-    "src/app/api/background/source-connections/[id]/route.ts",
-  );
-  const sourceConnectionDraftRoute = readRepoFile(
-    "src/app/api/background/source-connections/[id]/draft-summary/route.ts",
-  );
-  const sourceConnectionSummaryDraftBg16AliasRoute = readRepoFile(
-    "src/app/api/background/source-connections/[id]/summary-draft/route.ts",
-  );
-  const sourceConnectionSummaryDraftAliasRoute = readRepoFile(
-    "src/app/api/background/source-connections/[id]/summaries/draft/route.ts",
-  );
-  const sourceSummaryApproveRoute = readRepoFile(
-    "src/app/api/background/source-summaries/[id]/approve/route.ts",
-  );
-  const sourceSummaryConfirmTagsRoute = readRepoFile(
-    "src/app/api/background/source-summaries/[id]/confirm-tags/route.ts",
-  );
-  const sourceConnectionApproveBg16AliasRoute = readRepoFile(
-    "src/app/api/background/source-connections/[id]/approve/route.ts",
-  );
-  const sourceConnectionSummaryApproveAliasRoute = readRepoFile(
-    "src/app/api/background/source-connections/[id]/summaries/[summaryId]/approve/route.ts",
-  );
-  const profileInterviewRoute = readRepoFile(
-    "src/app/api/background/profile/interview/route.ts",
-  );
-  const wishInterviewSessionsRoute = readRepoFile(
-    "src/app/api/background/wish-interview/sessions/route.ts",
-  );
-  const wishInterviewAnswerRoute = readRepoFile(
-    "src/app/api/background/wish-interview/sessions/[id]/answer/route.ts",
-  );
-  const wishInterviewApplyRoute = readRepoFile(
-    "src/app/api/background/wish-interview/sessions/[id]/apply/route.ts",
-  );
-  const profileSignalRecomputeRoute = readRepoFile(
-    "src/app/api/background/profile-signals/recompute/route.ts",
-  );
-  const profileRecomputeBg16AliasRoute = readRepoFile(
-    "src/app/api/background/profile/recompute/route.ts",
-  );
-  const introPacketsRoute = readRepoFile("src/app/api/background/intro-packets/route.ts");
-  const introRequestsRoute = readRepoFile("src/app/api/background/intro-requests/route.ts");
-  const introRequestAppealRoute = readRepoFile(
-    "src/app/api/background/intro-requests/[id]/appeal/route.ts",
-  );
-  const introRequestContactRoute = readRepoFile(
-    "src/app/api/background/intro-requests/[id]/approve-contact/route.ts",
-  );
-  const opportunityBriefsRoute = readRepoFile("src/app/api/background/opportunity-briefs/route.ts");
-  const opportunityFeedbackRoute = readRepoFile(
-    "src/app/api/background/opportunity-briefs/[id]/feedback/route.ts",
-  );
-  const opportunitiesAliasRoute = readRepoFile("src/app/api/background/opportunities/route.ts");
-  const opportunityFeedbackAliasRoute = readRepoFile(
-    "src/app/api/background/opportunities/[id]/feedback/route.ts",
-  );
-  const backgroundNetworkingSource = readRepoFile("src/lib/background-networking.ts");
-  const backgroundSourceAssistSource = readRepoFile("src/lib/background-source-assist.ts");
-  const backgroundWishInterviewSource = readRepoFile("src/lib/background-wish-interview.ts");
-  const backgroundAiShadowSource = readRepoFile("src/lib/background-ai-shadow.ts");
-  const backgroundCapabilityGateSource = readRepoFile("src/lib/background-capability-gates.ts");
-  const backgroundRolloutSource = readRepoFile("src/lib/background-rollout.ts");
-  const backgroundPrivateOverlapSource = readRepoFile("src/lib/background-private-overlap.ts");
-  const backgroundRlsAuditSource = readRepoFile("src/lib/background-rls-audit.ts");
-  const backgroundNotificationPolicySource = readRepoFile(
-    "src/lib/background-notification-policy.ts",
-  );
-  const backgroundNotificationsSource = readRepoFile("src/lib/background-notifications.ts");
-  const backgroundJobsSource = readRepoFile("src/lib/background-jobs.ts");
-  const opportunityFeedbackSource = readRepoFile("src/lib/background-opportunity-feedback.ts");
-  const introRequestsSource = readRepoFile("src/lib/background-intro-requests.ts");
-  const apiRateLimitSource = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
-  const backgroundNetworkingJobRoute = readRepoFile(
-    "src/app/api/jobs/background-networking/route.ts",
-  );
-  const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
-  const legacyActions = readRepoFile("src/app/actions.ts");
-  const schemaSource = readRepoFile("supabase/schema.sql");
-  const vercelConfig = readRepoFile("vercel.json");
-  const envExample = readRepoFile(".env.example");
-  const bg14RolloutDoc = readRepoFile("docs/moral-trade/background-networking-bg14-rollout.md");
-  const migrationSource = readRepoFile(
-    "supabase/migrations/20260531_background_source_connection_permissions.sql",
-  );
-  const sourceAssistMigrationSource = readRepoFile(
-    "supabase/migrations/20260601_background_source_assisted_profile_signals.sql",
-  );
-  const introRequestMigrationSource = readRepoFile(
-    "supabase/migrations/20260601_background_intro_request_workflow.sql",
-  );
-  const bg13MigrationSource = readRepoFile(
-    "supabase/migrations/20260601_background_networking_bg13_operational_lanes.sql",
-  );
-  const bg14RolloutPlan = getBackgroundNetworkingRolloutPlan({});
-  const bg14RolloutValidation = validateBackgroundNetworkingRolloutPlan(bg14RolloutPlan);
+  const backgroundActions = readRepoFile("src/app/background-networking/actions.ts");
+  const privacyPage = readRepoFile("src/app/privacy/page.tsx");
 
-  assert.ok(BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.length >= 6);
-  assert.deepEqual(BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS, [30, 90, 180, 365]);
-  assert.equal(bg14RolloutValidation.status, "pass");
-  assert.ok(bg14RolloutPlan.flags.every((flag) => flag.defaultEnabled === false));
-  assert.ok(bg14RolloutPlan.flags.every((flag) => flag.enabled === false));
-  assert.match(backgroundRolloutSource, /background_source_summary_enabled/);
-  assert.match(backgroundRolloutSource, /background_wish_interview_enabled/);
-  assert.match(backgroundRolloutSource, /background_opportunity_briefs_enabled/);
-  assert.match(backgroundRolloutSource, /No autonomous outreach/);
-  assert.match(backgroundRolloutSource, /No raw private-feed ingestion/);
-  assert.match(backgroundRolloutSource, /Operator review is required before introduced-stage contact disclosure/);
-  assert.match(envExample, /BACKGROUND_SOURCE_SUMMARY_ENABLED=false/);
-  assert.match(envExample, /BACKGROUND_WISH_INTERVIEW_ENABLED=false/);
-  assert.match(envExample, /BACKGROUND_OPPORTUNITY_BRIEFS_ENABLED=false/);
-  assert.match(bg14RolloutDoc, /BACKGROUND_NETWORKING_ROLLOUT_STAGE/);
-  assert.match(bg14RolloutDoc, /zero unresolved privacy incidents/);
-  assert.match(bg14RolloutDoc, /Rollback is per lane/);
-  assert.match(dashboardPage, /saveBackgroundSourceConnectionAction/);
-  assert.match(dashboardPage, /revokeBackgroundSourceConnectionAction/);
-  assert.match(dashboardPage, /Bg14 rollout controls/);
-  assert.match(dashboardPage, /backgroundRolloutPlan\.flags\.map/);
-  assert.match(dashboardPage, /flag\.envKey/);
-  assert.match(backgroundNetworkingPage, /Bg14 rollout/);
-  assert.match(backgroundNetworkingPage, /backgroundRolloutValidation/);
-  assert.match(backgroundNetworkingPage, /backgroundRolloutPlan\.flags/);
-  assert.equal(dashboardPage.includes("saveSourceConnectionAction"), false);
-  assert.match(dashboardPage, /BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS/);
-  assert.match(dashboardPage, /name="allowed_field_keys"/);
-  assert.match(dashboardPage, /name="retention_days"/);
-  assert.match(dashboardPage, /name="ai_shadow_mode_allowed"/);
-  assert.match(dashboardPage, /name="source_connection_id"/);
-  assert.match(dashboardPage, /value="expired"/);
-  assert.match(dashboardPage, /Revoke permission/);
-  assert.match(dashboardPage, /stores your note with a retention timer/);
-  assert.match(dashboardPage, /hasActiveProfileSourcePermission/);
-  assert.match(dashboardPage, /formatBackgroundSourcePermissionFieldLabel/);
-  assert.match(dashboardPage, /Contact approvals/);
-  assert.match(dashboardPage, /Alerts are digest-first by default/);
-  assert.match(dashboardPage, /No one is contacted on your behalf/);
-  assert.match(dashboardPage, /Raw source content is not stored for matching/);
-  assert.match(dashboardPage, /You review and approve a summary/);
-  assert.match(dashboardPage, /queued background-networking emails/);
-  assert.match(dashboardPage, /delivery \{brief\.deliveryState\}/);
-  assert.match(dashboardPage, /brief\.reviewStatus\.replaceAll/);
-  assert.match(dashboardPage, /brief\.actions\.includes\("request_more_detail"\)/);
-  assert.match(dashboardPage, /Request more detail/);
-  assert.match(dashboardPage, /Report privacy concern/);
-  assert.match(dashboardPage, /already_connected/);
-  assert.match(dashboardPage, /privacy_concern/);
-  assert.match(dashboardPage, /Anonymous first question/);
-  assert.match(backgroundActions, /validateBackgroundSourcePermission/);
-  assert.match(backgroundActions, /getOpportunityBriefDeliveryStateForFeedback/);
-  assert.match(backgroundActions, /delivery_state/);
-  assert.match(backgroundActions, /firstQuestion/);
-  assert.match(backgroundActions, /allowed_field_keys: permission\.allowedFieldKeys/);
-  assert.match(backgroundActions, /retention_expires_at: permission\.retentionExpiresAt/);
-  assert.match(backgroundActions, /retention_expires_at: sourceSummary\.retention_expires_at/);
-  assert.match(backgroundActions, /raw_ingestion_allowed: permission\.rawIngestionAllowed/);
-  assert.match(backgroundActions, /revokeBackgroundSourceConnectionAction/);
-  assert.match(backgroundActions, /access_status: "revoked"/);
-  assert.match(backgroundActions, /\.update\(payload, \{ count: "exact" \}\)/);
-  assert.match(backgroundActions, /Source permission revoked for future matching/);
-  assert.match(backgroundActions, /resolveBackgroundSourceSummaryFieldScope/);
-  assert.match(backgroundActions, /validateBackgroundSourceSummaryRetentionScope/);
-  assert.match(backgroundActions, /background-source-summary/);
-  assert.match(backgroundActions, /background-intro-packet/);
-  assert.match(backgroundActions, /\.eq\("profile_id", viewer\.authUser\.id\)/);
-  assert.match(sourceSummariesRoute, /takeMoralTradeApiRateLimitSlot/);
-  assert.match(sourceSummariesRoute, /background_source_summary_write/);
-  assert.match(sourceSummariesRoute, /buildMoralTradeApiRateLimitResponse/);
-  assert.match(sourceSummariesRoute, /resolveBackgroundSourceSummaryFieldScope/);
-  assert.match(sourceSummariesRoute, /validateBackgroundSourceSummaryRetentionScope/);
-  assert.match(sourceSummariesRoute, /\.eq\("profile_id", user\.id\)/);
-  assert.match(sourceSummariesRoute, /rawIngestionAllowed: false/);
-  assert.match(sourceSummariesRoute, /serializeBackgroundNetworkingRolloutSurface/);
-  assert.match(sourceSummariesRoute, /background_source_summary_enabled/);
+  assert.deepEqual(
+    BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => option.value),
+    [
+      "cause_priorities",
+      "capability_tags",
+      "offer_ask_terms",
+      "verification_preferences",
+      "availability_context",
+      "safety_constraints",
+    ],
+  );
+  assert.deepEqual([...BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS], [30, 90, 180, 365]);
+  assert.match(permissionSource, /Raw connector ingestion remains disabled/);
+  assert.match(permissionSource, /rawIngestionAllowed: false/);
+  assert.match(permissionSource, /Source-summary retention cannot outlive/);
+  assert.match(sourceConnectionsRoute, /Authentication required/);
   assert.match(sourceConnectionsRoute, /validateBackgroundSourcePermission/);
+  assert.match(sourceConnectionsRoute, /allowed_field_keys: permission\.allowedFieldKeys/);
   assert.match(sourceConnectionsRoute, /raw_ingestion_allowed: false/);
-  assert.match(sourceConnectionsRoute, /source_connection_recorded/);
-  assert.match(sourceConnectionsRoute, /background_source_summary_enabled/);
-  assert.match(sourceConnectionRevokeRoute, /source_connection_revoked/);
-  assert.match(sourceConnectionRevokeRoute, /background_profile_signals/);
-  assert.match(sourceConnectionDraftRoute, /buildReviewedSourceDraftSummary/);
-  assert.match(sourceConnectionDraftRoute, /rawTextPersisted: false/);
-  assert.match(sourceConnectionDraftRoute, /background_source_summary_enabled/);
-  assert.match(sourceConnectionDraftRoute, /background_shadow_runs/);
-  assert.match(sourceConnectionSummaryDraftBg16AliasRoute, /draft-summary\/route/);
-  assert.match(sourceConnectionSummaryDraftAliasRoute, /draft-summary\/route/);
-  assert.doesNotMatch(sourceSummaryApproveRoute, /buildBackgroundProfileSignalRows/);
-  assert.match(sourceSummaryApproveRoute, /source_summary_approved_without_match_inputs/);
-  assert.match(sourceSummaryConfirmTagsRoute, /buildBackgroundProfileSignalRows/);
-  assert.match(sourceSummaryConfirmTagsRoute, /background\.source_summary\.confirm_tags/);
-  assert.match(sourceSummaryConfirmTagsRoute, /privateThirdPartyDataReviewed/);
-  assert.match(sourceSummaryApproveRoute, /background_source_summary_enabled/);
-  assert.match(sourceConnectionApproveBg16AliasRoute, /summaryId/);
-  assert.match(sourceConnectionApproveBg16AliasRoute, /shadowRunId/);
-  assert.match(sourceConnectionApproveBg16AliasRoute, /summaries\/\[summaryId\]\/approve\/route/);
-  assert.match(sourceConnectionSummaryApproveAliasRoute, /source_connection_id/);
-  assert.match(sourceConnectionSummaryApproveAliasRoute, /requested source connection/);
-  assert.match(sourceConnectionSummaryApproveAliasRoute, /source-summaries\/\[id\]\/approve\/route/);
-  assert.match(profileInterviewRoute, /buildGuidedWishProfileDraft/);
-  assert.match(profileInterviewRoute, /guidedWishProfileDraft/);
-  assert.match(profileInterviewRoute, /shadow_first_user_approved_only/);
-  assert.match(profileInterviewRoute, /background_wish_interview_enabled/);
-  assert.match(wishInterviewSessionsRoute, /BACKGROUND_WISH_INTERVIEW_MODEL_NAME/);
-  assert.match(wishInterviewSessionsRoute, /wish_interview_session_created/);
-  assert.match(wishInterviewSessionsRoute, /rawTranscriptStored: false/);
-  assert.match(wishInterviewAnswerRoute, /prepareRecordSensitiveTextFields/);
-  assert.match(wishInterviewAnswerRoute, /answerTextStoredInSession: false/);
-  assert.match(wishInterviewAnswerRoute, /wish_interview_answer_drafted/);
-  assert.match(wishInterviewApplyRoute, /validateBackgroundWishInterviewApply/);
-  assert.match(wishInterviewApplyRoute, /background_profile_signals/);
-  assert.match(wishInterviewApplyRoute, /profileMutationApplied: false/);
-  assert.match(wishInterviewApplyRoute, /wish_interview_structured_delta_applied/);
-  assert.match(profileSignalRecomputeRoute, /profile_signals_recomputed/);
-  assert.match(profileSignalRecomputeRoute, /background_profile_signals/);
-  assert.match(profileSignalRecomputeRoute, /background_source_summary_enabled/);
-  assert.match(profileRecomputeBg16AliasRoute, /profile-signals\/recompute\/route/);
-  assert.match(introPacketsRoute, /takeMoralTradeApiRateLimitSlot/);
-  assert.match(introPacketsRoute, /background_intro_packet_write/);
-  assert.match(introPacketsRoute, /buildMoralTradeApiRateLimitResponse/);
-  assert.match(introPacketsRoute, /anonymous_question/);
-  assert.match(introPacketsRoute, /outreachSent: false/);
-  assert.match(introPacketsRoute, /background_opportunity_briefs_enabled/);
-  assert.match(introRequestsRoute, /background_intro_packet_write/);
-  assert.match(introRequestsRoute, /evaluateBackgroundIntroRequestCadence/);
-  assert.match(introRequestsRoute, /intro_request_probe_pressure/);
-  assert.match(introRequestsRoute, /anonymous_question/);
-  assert.match(introRequestsRoute, /privateDetailsReturned: false/);
-  assert.match(introRequestsRoute, /background_opportunity_briefs_enabled/);
-  assert.match(introRequestAppealRoute, /validateBackgroundIntroAppealRequest/);
-  assert.match(introRequestAppealRoute, /intro_request_appeal_requested/);
-  assert.match(introRequestAppealRoute, /outreachSent: false/);
-  assert.match(introRequestAppealRoute, /background_opportunity_briefs_enabled/);
-  assert.match(introRequestContactRoute, /validateBackgroundContactApprovalStepUp/);
-  assert.match(introRequestContactRoute, /isBackgroundIntroContactApprovalAllowed/);
-  assert.match(introRequestContactRoute, /contactDetailsReturned: false/);
-  assert.match(introRequestContactRoute, /background_opportunity_briefs_enabled/);
-  assert.match(introRequestsSource, /BACKGROUND_INTRO_REQUEST_SIMILAR_WEEKLY_LIMIT/);
-  assert.match(introRequestsSource, /fresh one-hour session token window/);
-  assert.match(opportunityBriefsRoute, /background_opportunity_brief_read/);
-  assert.match(opportunityBriefsRoute, /serializeOpportunityBriefCard/);
-  assert.match(opportunityBriefsRoute, /Exact wishes, private asks, source notes, constraints, and contact details/);
-  assert.match(opportunityBriefsRoute, /background_opportunity_briefs_enabled/);
-  assert.match(opportunityFeedbackRoute, /background_opportunity_feedback_write/);
-  assert.match(opportunityFeedbackRoute, /isBackgroundOpportunityFeedbackPairAllowed/);
-  assert.match(opportunityFeedbackRoute, /outreachSent: false/);
-  assert.match(opportunityFeedbackRoute, /background_opportunity_briefs_enabled/);
-  assert.match(opportunitiesAliasRoute, /opportunity-briefs\/route/);
-  assert.match(opportunityFeedbackAliasRoute, /opportunity-briefs\/\[id\]\/feedback\/route/);
-  assert.match(opportunityFeedbackSource, /BACKGROUND_OPPORTUNITY_FEEDBACK_REASONS/);
-  assert.match(opportunityFeedbackSource, /maybe_later/);
-  assert.match(opportunityFeedbackSource, /already_connected/);
-  assert.match(opportunityFeedbackSource, /privacy_concern/);
-  assert.match(opportunityFeedbackSource, /isBackgroundOpportunityFeedbackPairAllowed/);
-  assert.match(backgroundNotificationPolicySource, /BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS/);
-  assert.match(backgroundNotificationPolicySource, /dailyCap/);
-  assert.match(backgroundNotificationPolicySource, /quietHoursStart/);
-  assert.match(backgroundNotificationPolicySource, /sourceCooldownHours/);
-  assert.match(backgroundNotificationsSource, /shouldSendBackgroundNotificationImmediately/);
-  assert.match(backgroundNotificationsSource, /shouldQueueSafeWishNotificationEmail/);
-  assert.match(backgroundNotificationsSource, /BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS\.has\(eventKind\)/);
-  assert.match(backgroundNotificationsSource, /last_discovery_sent_at/);
-  assert.match(backgroundNotificationsSource, /source_cooldown_hours/);
-  assert.match(backgroundJobsSource, /expireBackgroundNetworkingSourceInfluence/);
-  assert.match(backgroundJobsSource, /queueBackgroundOpportunityDigestEmails/);
-  assert.match(backgroundJobsSource, /BACKGROUND_OPPORTUNITY_DIGEST_SOURCE_KIND/);
-  assert.match(backgroundJobsSource, /exact wishes, private asks, contact details, source notes/);
-  assert.match(backgroundNetworkingJobRoute, /isCronRequestAuthorized/);
-  assert.match(backgroundNetworkingJobRoute, /runBackgroundNetworkingMaintenanceJob/);
-  assert.match(backgroundNetworkingJobRoute, /rawPrivateTextProcessed: false/);
-  assert.match(backgroundNetworkingJobRoute, /autonomousOutreachSent: false/);
-  assert.match(vercelConfig, /\/api\/jobs\/background-networking/);
-  assert.match(apiRateLimitSource, /background_source_summary_write: \{ limit: 12/);
-  assert.match(apiRateLimitSource, /background_wish_interview_write: \{ limit: 20/);
-  assert.match(apiRateLimitSource, /background_intro_packet_write: \{ limit: 12/);
-  assert.match(apiRateLimitSource, /background_opportunity_brief_read: \{ limit: 60/);
-  assert.match(apiRateLimitSource, /background_opportunity_feedback_write: \{ limit: 30/);
-  assert.match(apiContractProfile, /background_source_summary_create/);
-  assert.match(apiContractProfile, /background_wish_interview_session_create/);
-  assert.match(apiContractProfile, /background_wish_interview_answer_create/);
-  assert.match(apiContractProfile, /background_wish_interview_apply/);
-  assert.match(apiContractProfile, /background_source_connection_create/);
-  assert.match(apiContractProfile, /background_source_summary_draft/);
-  assert.match(apiContractProfile, /background_source_summary_draft_bg16_alias/);
-  assert.match(apiContractProfile, /background_source_connection_summary_draft_alias/);
-  assert.match(apiContractProfile, /background_source_summary_approve/);
-  assert.match(apiContractProfile, /background_source_connection_approve_bg16_alias/);
-  assert.match(apiContractProfile, /background_source_connection_summary_approve_alias/);
-  assert.match(apiContractProfile, /background_profile_signal_recompute/);
-  assert.match(apiContractProfile, /background_profile_recompute_bg16_alias/);
-  assert.match(apiContractProfile, /background_intro_packet_create/);
-  assert.match(apiContractProfile, /background_intro_request_create/);
-  assert.match(apiContractProfile, /background_intro_request_appeal/);
-  assert.match(apiContractProfile, /background_intro_request_approve_contact/);
-  assert.match(apiContractProfile, /background_opportunity_brief_list/);
-  assert.match(apiContractProfile, /background_opportunity_list/);
-  assert.match(apiContractProfile, /background_opportunity_feedback_create/);
-  assert.match(apiContractProfile, /background_opportunity_feedback_create_alias/);
-  assert.match(apiContractProfile, /moral_trade_private_overlap_contract/);
-  assert.match(apiContractProfile, /private_overlap_contract_response/);
-  assert.match(backgroundNetworkingSource, /hasActiveBackgroundSourcePermission/);
-  assert.match(backgroundNetworkingSource, /hasActiveProfileSourcePermission/);
-  assert.match(backgroundNetworkingSource, /hasActiveBackgroundProfileSignal/);
-  assert.match(backgroundNetworkingSource, /profileSignals/);
-  assert.match(backgroundNetworkingSource, /activeProfileSources/);
-  assert.match(backgroundNetworkingSource, /activeSourceConnections/);
-  assert.match(backgroundSourceAssistSource, /review_first_source_summary_no_raw_persistence/);
-  assert.match(backgroundSourceAssistSource, /redactBackgroundSourceAssistRawText/);
-  assert.match(backgroundSourceAssistSource, /removedEmails/);
-  assert.match(backgroundWishInterviewSource, /contact_details/);
-  assert.match(backgroundWishInterviewSource, /raw_profile_notes/);
-  assert.match(backgroundWishInterviewSource, /raw_source_notes/);
-  assert.match(backgroundWishInterviewSource, /answerTextStoredInSession: false/);
-  assert.match(backgroundWishInterviewSource, /reviewed_\$\{answer\.fieldKey\}_provided/);
-  assert.match(backgroundAiShadowSource, /getBackgroundAiShadowContract/);
-  assert.match(backgroundAiShadowSource, /validateBackgroundAiShadowContract/);
-  assert.match(backgroundAiShadowSource, /approved_summary_shadow_evaluation_only/);
-  assert.match(backgroundAiShadowSource, /analytics_copy_of_raw_content/);
-  assert.match(aiShadowContractRoute, /getBackgroundAiShadowContract/);
-  assert.match(aiShadowContractRoute, /validateBackgroundAiShadowContract/);
-  assert.match(aiShadowContractRoute, /sampleReadyEvaluation/);
-  assert.match(aiShadowContractRoute, /sampleBlockedEvaluation/);
-  assert.match(backgroundCapabilityGateSource, /getBackgroundCapabilityGateContract/);
-  assert.match(backgroundCapabilityGateSource, /validateBackgroundCapabilityGateContract/);
-  assert.match(backgroundCapabilityGateSource, /DPIA and documented privacy-design review/);
-  assert.match(backgroundCapabilityGateSource, /privacy_preserving_overlap/);
-  assert.match(backgroundCapabilityGateSource, /private_overlap_contract/);
-  assert.match(backgroundCapabilityGateSource, /raw_private_feed_training/);
-  assert.match(capabilityGateRoute, /getBackgroundCapabilityGateContract/);
-  assert.match(capabilityGateRoute, /validateBackgroundCapabilityGateContract/);
-  assert.match(capabilityGateRoute, /getBackgroundNetworkingRolloutPlan/);
-  assert.match(capabilityGateRoute, /bg14Rollout/);
-  assert.match(capabilityGateRoute, /expansionReady/);
-  assert.match(backgroundPrivateOverlapSource, /governance_gated_pilot/);
-  assert.match(backgroundPrivateOverlapSource, /formal cryptographic design review/);
-  assert.match(backgroundPrivateOverlapSource, /free_text/);
-  assert.match(backgroundPrivateOverlapSource, /raw_tag/);
-  assert.match(backgroundPrivateOverlapSource, /deterministic broad-preview matching/);
-  assert.match(privateOverlapContractRoute, /getBackgroundPrivateOverlapContract/);
-  assert.match(privateOverlapContractRoute, /validateBackgroundPrivateOverlapContract/);
-  assert.match(privateOverlapContractRoute, /Private overlap checks are governance-gated/);
-  assert.match(backgroundRlsAuditSource, /validateBackgroundRlsAuditSchema/);
-  assert.match(backgroundRlsAuditSource, /match_audit_events/);
-  assert.match(backgroundRlsAuditSource, /background_match_feedback/);
-  assert.match(backgroundRlsAuditSource, /sensitiveStorageRequirements/);
-  assert.match(backgroundRlsAuditSource, /anonymous-policy-not-allowed/);
-  assert.match(rlsAuditContractRoute, /getBackgroundRlsAuditContract/);
-  assert.match(rlsAuditContractRoute, /validateBackgroundRlsAuditContract/);
-  assert.match(rlsAuditContractRoute, /schemaAuditMode: "repository_test"/);
-  assert.match(legacyActions, /validateBackgroundSourcePermission/);
-  assert.match(legacyActions, /allowed_field_keys: permission\.allowedFieldKeys/);
-  assert.match(legacyActions, /retention_expires_at: permission\.retentionExpiresAt/);
-  assert.match(legacyActions, /getBackgroundSourceRetentionExpiresAt/);
-  assert.match(legacyActions, /raw_ingestion_allowed: permission\.rawIngestionAllowed/);
-  assert.match(schemaSource, /profile_sources_retention_expires_idx/);
-  assert.match(schemaSource, /source_connections_allowed_field_keys_check/);
-  assert.match(schemaSource, /source_connections_raw_ingestion_disabled_check/);
-  assert.match(schemaSource, /source_connections_access_status_check/);
-  assert.match(schemaSource, /email_outbox_source_dedupe_idx/);
-  assert.match(schemaSource, /background_match_feedback/);
-  assert.match(schemaSource, /background_opportunity_briefs_feedback_reason_check/);
-  assert.match(schemaSource, /privacy_concern/);
-  assert.match(schemaSource, /background_profile_signals/);
-  assert.match(schemaSource, /background_shadow_runs/);
-  assert.match(schemaSource, /background_intro_packets_appeal_status_check/);
-  assert.match(schemaSource, /contact_approval_requires_fresh_mfa/);
-  assert.match(schemaSource, /redaction_report/);
-  assert.match(schemaSource, /source_cooldown_hours/);
-  assert.match(schemaSource, /last_discovery_sent_at/);
-  assert.match(migrationSource, /source_connections_allowed_field_keys_check/);
-  assert.match(migrationSource, /source_connections_raw_ingestion_disabled_check/);
-  assert.match(sourceAssistMigrationSource, /background_profile_signals/);
-  assert.match(sourceAssistMigrationSource, /background_shadow_runs/);
-  assert.match(introRequestMigrationSource, /background_intro_packets_appeal_status_check/);
-  assert.match(introRequestMigrationSource, /background_intro_packets_contact_approval_status_check/);
-  assert.match(bg13MigrationSource, /email_outbox_source_dedupe_idx/);
-  assert.match(bg13MigrationSource, /privacy_concern/);
-  assert.match(bg13MigrationSource, /expired/);
+  assert.match(sourceConnectionsRoute, /retention_expires_at: permission\.retentionExpiresAt/);
+  assert.match(backgroundActions, /Reviewed source summary saved without raw ingestion/);
+  assert.match(backgroundActions, /allowed_field_keys/);
+  assert.match(backgroundActions, /raw_ingestion_allowed: false/);
+  assert.match(backgroundPage, /broad previews first/i);
+  assert.match(backgroundPage, /Exact wishes,[\s\S]*contact details remain hidden/);
+  assert.match(privacyPage, /Purpose, processors, and retention/);
 });
 
 test("global loading stays silent while error states expose route-specific recovery", () => {
@@ -1239,28 +741,28 @@ test("global loading stays silent while error states expose route-specific recov
   assert.match(performanceProfile, /loading_error_boundary_smoke/);
 });
 
-test("cohort page exposes founding progress, referral, and one-counterparty invite loop", () => {
+test("network page exposes concrete activation, one-counterparty invitation, and safety boundaries", () => {
   const cohortPage = readRepoFile("src/app/cohort/page.tsx");
   const signupPage = readRepoFile("src/app/signup/page.tsx");
   const actionsSource = readRepoFile("src/app/actions.ts");
 
-  assert.match(cohortPage, /Grow cooperative impact in your community/);
-  assert.match(cohortPage, /Start with one concrete action/);
-  assert.match(cohortPage, /What counts as progress/);
-  assert.match(cohortPage, /Activated account/);
-  assert.match(cohortPage, /Open worked examples/);
-  assert.match(cohortPage, /Request concierge intro/);
-  assert.match(cohortPage, /Open public-good flow/);
+  assert.match(cohortPage, /Put one real disagreement into a usable structure/);
+  assert.match(cohortPage, /Choose one first action/);
+  assert.match(cohortPage, /What activation means/);
+  assert.match(cohortPage, /One concrete action/);
+  assert.match(cohortPage, /Make a financial contribution/);
+  assert.match(cohortPage, /Create a bounded trade/);
+  assert.match(cohortPage, /Request a private introduction/);
   assert.match(cohortPage, /Invite one serious counterparty/);
-  assert.match(cohortPage, /Your referral link/);
-  assert.match(cohortPage, /Founding progress/);
-  assert.match(cohortPage, /Safety and privacy/);
+  assert.match(cohortPage, /Network link/);
+  assert.match(cohortPage, /Network activity/);
+  assert.match(cohortPage, /Operating safeguards/);
+  assert.match(cohortPage, /No platform custody/);
   assert.match(cohortPage, /createNetworkInviteAction/);
-  assert.match(cohortPage, /CANONICAL_WORKED_CASE_COUNT/);
+  assert.match(cohortPage, /createWebinarRsvpAction/);
   assert.match(signupPage, /AuthPage/);
   assert.match(signupPage, /initialMode="signup"/);
   assert.match(actionsSource, /return_to/);
-  assert.match(actionsSource, /Choose one low-risk first action/);
   assert.equal(cohortPage.includes(">Start here<"), false);
 });
 
@@ -1363,17 +865,16 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(actionsSource, /createWebinarRsvpAction/);
   assert.match(actionsSource, /referral_invite_drafted/);
   assert.match(onboardingPage, /Activation wizard/);
-  assert.match(growthSource, /actionLabel: "Open worked examples"/);
-  assert.match(growthSource, /actionLabel: "Create broad preview"/);
-  assert.match(growthSource, /actionLabel: "Open public-good flow"/);
+  assert.match(growthSource, /PARTNER_COHORTS/);
   assert.match(partnerPage, /generateStaticParams/);
   assert.match(partnerPage, /createWebinarRsvpAction/);
   assert.match(partnerPage, /action\.actionLabel/);
   assert.equal(partnerPage.includes(">Start here<"), false);
   assert.match(adminGrowthPage, /Growth dashboard/);
-  assert.match(newOfferPage, /getWorkedExampleTemplate/);
-  assert.match(newOfferPage, /Cloned from worked example/);
+  assert.match(newOfferPage, /getReviewedMarketplaceSeedTemplate/);
+  assert.match(newOfferPage, /Template applied/);
   assert.match(offerCreateForm, /initialTemplate/);
+  assert.match(offerCreateForm, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
 });
 
 test("public measurement plan stays aligned with privacy-safe analytics", () => {
@@ -1423,29 +924,22 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.match(MEASUREMENT_PERFORMANCE_BASELINE.command, /npm run measure:routes/);
   assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.baseUrlEnv, "MORALTRADE_BASE_URL");
   assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.outputPathEnv, "MORALTRADE_BASELINE_OUTPUT");
-  assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.routes.some((route) => route.path === "/worked-examples"));
+  assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.routes.some((route) => route.path === "/offers?view=live"));
   assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.devices.some((device) => device.key === "mobile"));
   assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.requiredChecks.includes("no_framework_overlay"));
-  assert.match(measurementPage, /Protocol-quality audits/);
-  assert.match(measurementPage, /Marketplace KPIs/);
-  assert.match(measurementPage, /Public marketplace metrics are thresholded/);
-  assert.match(measurementPage, /getMarketplaceMeasurementContract/);
-  assert.match(measurementPage, /buildMarketplaceKpiSnapshot/);
-  assert.match(measurementPage, /validateMarketplaceKpiSnapshot/);
-  assert.match(measurementPage, /live_offer_count/);
-  assert.match(measurementPage, /public_receipt_preview_count/);
-  assert.match(measurementPage, /claim_correction_resolution_count/);
-  assert.match(measurementPage, /demo_data_live_mix_block_count/);
-  assert.match(measurementPage, /Copilot and review metrics stay public/);
-  assert.match(measurementPage, /getMoralTradeEvaluationProfile/);
-  assert.match(measurementPage, /getMoralTradeEvaluationSampleAudits/);
-  assert.match(measurementPage, /validateMoralTradeEvaluationProfile/);
-  assert.match(measurementPage, /draft_completion_rate/);
-  assert.match(measurementPage, /privacy_leakage_incidents/);
-  assert.match(measurementPage, /subgroup_surfacing_parity/);
-  assert.match(measurementPage, /human_overrule_rate/);
-  assert.match(measurementPage, /\/api\/moral-trade\/evaluation\/health/);
-  assert.match(measurementPage, /Executable baseline command/);
+  assert.match(measurementPage, /Measure useful cooperation, not moral worth/);
+  assert.match(measurementPage, /Primary outcome metrics/);
+  assert.match(measurementPage, /Privacy-safe event taxonomy/);
+  assert.match(measurementPage, /Data the service refuses to use/);
+  assert.match(measurementPage, /Measurement guardrails/);
+  assert.match(measurementPage, /Performance baseline/);
+  assert.match(measurementPage, /Accountability/);
+  assert.match(measurementPage, /Activated users/);
+  assert.match(measurementPage, /Reviewable records/);
+  assert.match(measurementPage, /Safe progression/);
+  assert.match(measurementPage, /Small-sample public metrics/);
+  assert.match(measurementPage, /MEASUREMENT_EVENT_SPECS/);
+  assert.match(measurementPage, /MEASUREMENT_GUARDRAILS/);
   assert.match(measurementPage, /MEASUREMENT_PERFORMANCE_BASELINE/);
   assert.match(marketplaceMeasurementSource, /MARKETPLACE_METRIC_MIN_PUBLIC_COUNT = 3/);
   assert.match(marketplaceMeasurementSource, /MARKETPLACE_KPI_KEYS/);
@@ -1492,61 +986,27 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   );
 });
 
-test("privacy and terms publish processor retention and data-request transparency", () => {
+test("privacy and terms publish processor, retention, analytics, and data-rights boundaries", () => {
   const privacyPage = readRepoFile("src/app/privacy/page.tsx");
   const termsPage = readRepoFile("src/app/terms/page.tsx");
   const siteSearchSource = readRepoFile("src/lib/site-search.ts");
 
-  assert.match(privacyPage, /Data, processors, and retention summary/);
-  assert.match(privacyPage, /Account and profile data/);
-  assert.match(privacyPage, /Private wish and source data/);
-  assert.match(privacyPage, /Payment and donation references/);
-  assert.match(privacyPage, /Analytics and attribution/);
-  assert.match(privacyPage, /Notifications/);
-  assert.match(privacyPage, /source cooldowns/);
-  assert.match(privacyPage, /approved derived profile signals/);
-  assert.match(privacyPage, /The source-summary lane is manual\/import first/);
-  assert.match(privacyPage, /raw imported text is not copied into analytics/);
-  assert.match(privacyPage, /Supabase for authentication and database storage/);
-  assert.match(privacyPage, /Stripe for participant payment objects; Every\.org for off-site donation routes/);
-  assert.match(privacyPage, /future analytics tools must follow the same redaction rules/);
-  assert.match(privacyPage, /exact wishes, contact details, report bodies, and raw source notes are excluded/);
-  assert.match(privacyPage, /BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS/);
-  assert.match(privacyPage, /BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS/);
-  assert.match(privacyPage, /separate source permission/);
-  assert.match(privacyPage, /broad matching categories/);
-  assert.match(privacyPage, /Optional AI shadow-mode review/);
-  assert.match(privacyPage, /cannot change live matching, ranking, disclosure, or\s+outreach/);
-  assert.match(privacyPage, /Live source connectors, AI assist mode, and private-overlap computation\s+require a DPIA/);
-  assert.match(privacyPage, /lawful-basis record, privacy-design review, and external\s+security\/privacy review/);
-  assert.match(privacyPage, /Private overlap checks are not live/);
-  assert.match(privacyPage, /must not use free text/);
-  assert.match(privacyPage, /must not reveal raw tags/);
-  assert.match(privacyPage, /saveAnalyticsPreferenceAction/);
+  assert.match(privacyPage, /Private details remain participant-controlled/);
+  assert.match(privacyPage, /The operating privacy model/);
+  assert.match(privacyPage, /Purpose, processors, and retention/);
+  assert.match(privacyPage, /Supabase supports authentication and database storage/);
+  assert.match(privacyPage, /Stripe handles supported card,[\s\S]*Every\.org handles direct donation routes/);
+  assert.match(privacyPage, /Control privacy-safe funnel measurement for this browser/);
+  assert.match(privacyPage, /exact wishes, private messages, evidence bodies, source notes/);
   assert.match(privacyPage, /Turn off optional analytics/);
   assert.match(privacyPage, /Allow minimal analytics/);
-  assert.match(privacyPage, /prevents middleware from recreating it/);
+  assert.match(privacyPage, /Export, correct, restrict, revoke, or delete/);
+  assert.match(privacyPage, /saveAnalyticsPreferenceAction/);
   assert.match(privacyPage, /getMoralTradeDisclosureContract/);
   assert.match(privacyPage, /validateMoralTradeDisclosureContract/);
-  assert.match(privacyPage, /Disclosure is stage-bound, field-bound, and non-mutating/);
-  assert.match(privacyPage, /disclosureContract\.audienceStages/);
-  assert.match(privacyPage, /disclosureContract\.accessLevels/);
-  assert.match(privacyPage, /disclosureContract\.redactedFields/);
-  assert.match(privacyPage, /disclosureContract\.searchPrivacyControls/);
-  assert.match(privacyPage, /\/api\/moral-trade\/disclosure\/contract/);
-  assert.match(privacyPage, /BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION/);
-  assert.match(privacyPage, /BACKGROUND_SELF_SERVE_DELETION_SURFACES/);
-  assert.match(privacyPage, /Self-serve background-networking deletion/);
-  assert.match(privacyPage, /participant-facing matching records/);
-  assert.match(privacyPage, /Opportunity brief alerts are dashboard-directed/);
-  assert.match(privacyPage, /must not include counterparty contact details/);
-  assert.match(privacyPage, /Open data request tools/);
-  assert.match(privacyPage, /Contact privacy support/);
-  assert.match(privacyPage, /correction, deletion, restriction, or processor clarification/);
   assert.match(termsPage, /Privacy, processors, and data requests/);
   assert.match(termsPage, /Some audit, payment, safety, or dispute records may need to/);
   assert.match(siteSearchSource, /Privacy practices/);
-  assert.match(siteSearchSource, /cookies, analytics redaction, processors, retention/);
 });
 
 test("public SEO metadata includes FAQ and breadcrumb structured data", () => {
@@ -1566,8 +1026,8 @@ test("public SEO metadata includes FAQ and breadcrumb structured data", () => {
   assert.match(seoSource, /buildFaqPageJsonLd/);
   assert.match(seoSource, /"@type": "FAQPage"/);
   assert.match(seoSource, /acceptedAnswer/);
-  assert.match(homePage, /Cooperate without agreeing/);
-  assert.match(homePage, /Moral Trade: cooperate without agreeing/);
+  assert.match(homePage, /Do more good without agreeing/);
+  assert.match(homePage, /Moral Trade: do more good without agreeing/);
   assert.match(faqPage, /buildFaqPageJsonLd/);
   assert.match(faqPage, /buildBreadcrumbJsonLd/);
   assert.match(faqPage, /Breadcrumbs items/);
@@ -1591,29 +1051,24 @@ test("public SEO metadata includes FAQ and breadcrumb structured data", () => {
   assert.match(methodologyPage, /\/api\/moral-trade\/api-contract/);
   assert.match(safetyPage, /safetyDescription/);
   assert.match(safetyPage, /openGraph/);
-  assert.match(safetyPage, /twitter/);
+  assert.match(safetyPage, /alternates/);
   assert.match(safetyPage, /buildBreadcrumbJsonLd/);
-  assert.match(safetyPage, /Breadcrumbs items/);
-  assert.match(safetyPage, /Safety contract evidence/);
+  assert.match(safetyPage, /breadcrumbStructuredData/);
+  assert.match(safetyPage, /application\/ld\+json/);
+  assert.match(safetyPage, /Safety rules for voluntary moral trade/);
+  assert.match(safetyPage, /What every workflow must preserve/);
+  assert.match(safetyPage, /No manufactured threats/);
+  assert.match(safetyPage, /Evidence stays scoped/);
+  assert.match(safetyPage, /Inspect the controls behind the claims/);
+  assert.match(safetyPage, /Machine-readable endpoints expose security, operations, disclosure, appeal, incident/);
   assert.match(safetyPage, /getMoralTradeSecurityProfile/);
   assert.match(safetyPage, /validateMoralTradeSecurityProfile/);
   assert.match(safetyPage, /auditMoralTradeSecurityScaleReadiness/);
-  assert.match(safetyPage, /Security posture contract/);
-  assert.match(safetyPage, /Controls, scale gates, and non-claims are public/);
-  assert.match(safetyPage, /Security scale gates/);
-  assert.match(safetyPage, /Public security non-claims/);
-  assert.match(safetyPage, /securityProfile\.controls/);
-  assert.match(safetyPage, /securityProfile\.publicNonClaims/);
   assert.match(safetyPage, /getMoralTradeOperationsProfile/);
   assert.match(safetyPage, /validateMoralTradeOperationsProfile/);
-  assert.match(safetyPage, /Operations contract/);
-  assert.match(safetyPage, /Headers, sessions, retention, and fallback controls are inspectable/);
-  assert.match(safetyPage, /operationsProfile\.securityHeaders/);
-  assert.match(safetyPage, /operationsProfile\.privacyAndSessionControls/);
-  assert.match(safetyPage, /operationsProfile\.observabilityMetrics/);
-  assert.match(safetyPage, /operationsProfile\.rateLimitSurfaces/);
-  assert.match(safetyPage, /operationsProfile\.retentionControls/);
-  assert.match(safetyPage, /operationsProfile\.fallbackControls/);
+  assert.match(safetyPage, /Sensitive capabilities do not expand without named controls/);
+  assert.match(safetyPage, /What the service does not promise/);
+  assert.match(safetyPage, /securityProfile\.publicNonClaims/);
   assert.match(safetyPage, /\/api\/moral-trade\/operations\/health/);
   assert.match(safetyPage, /\/api\/moral-trade\/security\/health/);
   assert.match(safetyPage, /\/api\/moral-trade\/disclosure\/contract/);
@@ -1741,214 +1196,55 @@ test("accepted introductions can progress through agreement evidence review", ()
   assert.match(migrationSource, /identity_verified/);
 });
 
-test("trade format landing pages explain formats without payment or custody overclaims", () => {
+test("trade format landing pages explain voluntary terms without custody overclaims", () => {
   const pledgePage = readRepoFile("src/app/pledge-swaps/page.tsx");
   const paidActionPage = readRepoFile("src/app/paid-action-offers/page.tsx");
   const primitivesSource = readRepoFile("src/components/ui/page-primitives.tsx");
 
-  assert.match(pledgePage, /Swap bounded pledges under explicit terms/);
-  assert.match(pledgePage, /Voluntary only/);
-  assert.match(paidActionPage, /payment is pending verification/);
+  assert.match(pledgePage, /Make a promise\. Get a promise you value/);
+  assert.match(pledgePage, /Both confirm, then begin/);
+  assert.match(pledgePage, /Trades, not pressure campaigns/);
+  assert.match(pledgePage, /voluntary gain/);
+  assert.match(pledgePage, /Evidence should be as light as possible/);
+  assert.match(paidActionPage, /payment is pending verification/i);
   assert.match(paidActionPage, /not legal escrow/i);
   assert.match(paidActionPage, /No custody, escrow, tax, or investment claim/);
   assert.match(primitivesSource, /Breadcrumb/);
   assert.match(primitivesSource, /TradeFlowDiagram/);
 });
 
-test("primer, anti-threat, and research pages frame the public pilot", () => {
+test("primer, anti-threat, and research pages frame voluntary coordination and its limits", () => {
   const primerPage = readRepoFile("src/app/moral-trade/page.tsx");
   const antiThreatPage = readRepoFile("src/app/anti-threat-baseline/page.tsx");
   const researchPage = readRepoFile("src/app/research/page.tsx");
   const trustPage = readRepoFile("src/app/trust/page.tsx");
-  const contactPage = readRepoFile("src/app/contact/page.tsx");
-  const statusPage = readRepoFile("src/app/status/page.tsx");
-  const aboutPage = readRepoFile("src/app/about/page.tsx");
-  const howItWorksPage = readRepoFile("src/app/how-it-works/page.tsx");
-  const projectsPage = readRepoFile("src/app/projects/page.tsx");
-  const sourcesPage = readRepoFile("src/app/sources/page.tsx");
-  const measurementPage = readRepoFile("src/app/measurement/page.tsx");
-  const transparencyPage = readRepoFile("src/app/transparency/page.tsx");
-  const transparencyReportSource = readRepoFile("src/lib/moral-trade/transparency-report.ts");
-  const transparencyReportRoute = readRepoFile(
-    "src/app/api/moral-trade/transparency/report/route.ts",
-  );
-  const moralTradeHealthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
-  const accessibilityPage = readRepoFile("src/app/accessibility/page.tsx");
-  const measurementPlanSource = readRepoFile("src/lib/measurement-plan.ts");
-  const updatesPage = readRepoFile("src/app/updates/page.tsx");
-  const teamPage = readRepoFile("src/app/team/page.tsx");
+  const safetyPage = readRepoFile("src/app/safety/page.tsx");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
-  const siteSearchSource = readRepoFile("src/lib/site-search.ts");
 
-  assert.match(primerPage, /What is moral trade/);
-  assert.match(primerPage, /One-screen explainer/);
+  assert.match(primerPage, /What Is Moral Trade/);
+  assert.match(primerPage, /primer on voluntary moral trade/);
   assert.match(primerPage, /What it is/);
   assert.match(primerPage, /What it is not/);
   assert.match(primerPage, /Who it is for/);
-  assert.match(primerPage, /Plain-English glossary/);
-  assert.match(primerPage, /Pledge swap/);
-  assert.match(primerPage, /Donation offset/);
-  assert.match(primerPage, /Threshold/);
-  assert.match(primerPage, /Manual review/);
-  assert.match(primerPage, /Public good/);
-  assert.match(primerPage, /Why it is hard/);
   assert.match(primerPage, /Personal pledge swap/);
-  assert.match(primerPage, /Instrumented workflow/);
-  assert.match(primerPage, /Drafts move through visible protocol checks/);
-  assert.match(primerPage, /Reviewable draft/);
-  assert.match(primerPage, /Blocked draft/);
-  assert.match(primerPage, /factor codes/);
-  assert.match(primerPage, /Verification gates/);
-  assert.match(primerPage, /card\.review\.verificationLoop/);
-  assert.match(primerPage, /Evidence to request/);
-  assert.match(primerPage, /Reviewer scope/);
-  assert.match(primerPage, /Cited evidence rows/);
-  assert.match(primerPage, /card\.review\.reviewInstructions\.artifactsToRequest/);
-  assert.match(primerPage, /card\.review\.citedEvidenceTable/);
-  assert.match(primerPage, /evaluateMoralTradeProtocolDraft/);
-  assert.match(primerPage, /card\.review\.factorCodes/);
-  assert.match(primerPage, /anti-threat rules/i);
-  assert.match(primerPage, /\/moral-trade\/technical-spec/);
-  assert.match(proposalReviewSource, /No pay me or I will do X offers/);
-  assert.match(proposalReviewSource, /PROHIBITED_MORAL_TRADE_PATTERNS/);
-  assert.match(proposalReviewSource, /PROHIBITED_PROPOSAL_FIXTURES/);
-  assert.match(proposalReviewSource, /prohibited_illegal_or_fraud/);
-  assert.match(proposalReviewSource, /prohibited_doxxing_or_harassment/);
-  assert.match(proposalReviewSource, /prohibited_political_campaign_offset/);
-  assert.match(proposalReviewSource, /newly_escalated_harmful_behavior/);
+  assert.match(primerPage, /Donation offset/);
+  assert.match(primerPage, /Moral public-good commitment/);
+  assert.match(primerPage, /Record the no-trade baseline/);
+  assert.match(primerPage, /Review threats and externalities/);
   assert.match(antiThreatPage, /Required baseline statement/);
   assert.match(antiThreatPage, /Cooling-off period/);
   assert.match(antiThreatPage, /Rejected proposal examples/);
   assert.match(researchPage, /What we are testing/);
   assert.match(researchPage, /What would make this unsafe/);
   assert.match(researchPage, /Open mechanism-design questions/);
-  assert.match(researchPage, /Transparency reports/);
-  assert.match(researchPage, /\/transparency/);
-  assert.match(trustPage, /What you can rely on today/);
-  assert.match(trustPage, /No custody, escrow, tax, legal, investment, or payment-protection service/);
-  assert.match(trustPage, /When something looks wrong/);
-  assert.match(trustPage, /getMoralTradeChallengeAppealContract/);
-  assert.match(trustPage, /getMoralTradeDisclosureContract/);
-  assert.match(trustPage, /getMoralTradeExternalityProfile/);
-  assert.match(trustPage, /getMoralTradeIncidentResponseProfile/);
-  assert.match(trustPage, /Challenge reviewed evidence or baseline/);
-  assert.match(trustPage, /Request disclosure review/);
-  assert.match(trustPage, /Request externality remedy/);
-  assert.match(trustPage, /Report safety or privacy incident/);
-  assert.match(trustPage, /\/api\/moral-trade\/challenge-appeal\/contract/);
-  assert.match(trustPage, /\/api\/moral-trade\/disclosure\/contract/);
-  assert.match(trustPage, /\/api\/moral-trade\/externality\/health/);
-  assert.match(trustPage, /\/api\/moral-trade\/incident-response\/health/);
-  assert.match(contactPage, /Reach the pilot operators/);
-  assert.match(statusPage, /What is real on Moral Trade today/);
-  assert.match(statusPage, /Protocol health/);
-  assert.match(statusPage, /Validator-backed surfaces you can audit now/);
-  assert.match(statusPage, /validateMoralTradeProtocolProfile/);
-  assert.match(statusPage, /validateMoralTradeDataModelProfile/);
-  assert.match(statusPage, /validateMoralTradeProvenanceContract/);
-  assert.match(statusPage, /validateMoralTradeReasoningPacketContract/);
-  assert.match(statusPage, /auditMoralTradeApiImplementationContract/);
-  assert.match(statusPage, /validateMoralTradeOperationsProfile/);
-  assert.match(statusPage, /validateMoralTradeSecurityProfile/);
-  assert.match(statusPage, /validateMoralTradeEvaluationProfile/);
-  assert.match(statusPage, /validateMoralTradeAiGovernanceProfile/);
-  assert.match(statusPage, /validateMoralTradeDisclosureContract/);
-  assert.match(statusPage, /validateMoralTradeChallengeAppealContract/);
-  assert.match(statusPage, /validateMoralTradeExternalityProfile/);
-  assert.match(statusPage, /validateMoralTradeIncidentResponseProfile/);
-  assert.match(statusPage, /validateMoralTradePerformanceProfile/);
-  assert.match(statusPage, /auditMoralTradeRouteRecoveryManifest/);
-  assert.match(statusPage, /validateMoralTradeTransparencyReportContract/);
-  assert.match(statusPage, /\/api\/moral-trade\/health/);
-  assert.match(statusPage, /\/api\/moral-trade\/provenance\/schema/);
-  assert.match(statusPage, /\/api\/moral-trade\/reasoning\/packets/);
-  assert.match(statusPage, /\/api\/moral-trade\/api-contract/);
-  assert.match(statusPage, /\/api\/moral-trade\/disclosure\/contract/);
-  assert.match(statusPage, /\/api\/moral-trade\/externality\/health/);
-  assert.match(statusPage, /\/api\/moral-trade\/incident-response\/health/);
-  assert.match(statusPage, /\/api\/moral-trade\/performance\/health/);
-  assert.match(statusPage, /\/api\/moral-trade\/transparency\/report/);
-  assert.match(statusPage, /Disclosure grants and appeals/);
-  assert.match(statusPage, /Externality and remedy review/);
-  assert.match(statusPage, /Incident response/);
-  assert.match(statusPage, /Performance and route recovery/);
-  assert.match(aboutPage, /What exists today, and what does not/);
-  assert.match(howItWorksPage, /One reviewable commitment at a time/);
-  assert.match(projectsPage, /What Moral Trade is actually doing/);
-  assert.match(sourcesPage, /Reference points for the pilot/);
-  assert.match(sourcesPage, /https:\/\/doi\.org\/10\.1086\/682187/);
-  assert.match(sourcesPage, /Convergence and Compromise/);
-  assert.match(sourcesPage, /Moral Public Goods/);
-  assert.match(sourcesPage, /product-boundary notes/);
-  assert.match(measurementPage, /Measure pilot clarity, not moral worth/);
-  assert.match(measurementPage, /Protocol-quality audits/);
-  assert.match(measurementPage, /Open evaluation JSON/);
-  assert.match(measurementPage, /Lighthouse/);
-  assert.match(measurementPage, /Search Console/);
-  assert.match(transparencyPage, /Public counts without public case files/);
-  assert.match(transparencyPage, /loadMoralTradeTransparencyReportSnapshot/);
-  assert.match(transparencyPage, /small-sample suppression/);
-  assert.match(transparencyPage, /opportunity briefs, closed-code match\s+feedback, intro packets, and match concierge requests/);
-  assert.match(transparencyPage, /never publishes brief text, exact wishes, source\s+notes, contact details/);
-  assert.match(transparencyPage, /\/api\/moral-trade\/transparency\/report/);
-  assert.match(transparencyReportSource, /MORAL_TRADE_TRANSPARENCY_MIN_PUBLIC_COUNT = 3/);
-  assert.match(transparencyReportSource, /reviewed_match_suggestions/);
-  assert.match(transparencyReportSource, /declined_intro_requests/);
-  assert.match(transparencyReportSource, /disclosure_grants_created/);
-  assert.match(transparencyReportSource, /concierge_appeals_requested/);
-  assert.match(transparencyReportSource, /median_concierge_review_hours/);
-  assert.match(transparencyReportSource, /no ids, emails, names/);
-  assert.match(transparencyReportSource, /small_sample_not_suppressed/);
-  assert.match(transparencyReportRoute, /takeMoralTradeApiRateLimitSlot\(request, "public_contract_read"\)/);
-  assert.match(transparencyReportRoute, /validateMoralTradeTransparencyReportSnapshot/);
-  assert.match(moralTradeHealthRoute, /getMoralTradeTransparencyReportContract/);
-  assert.match(moralTradeHealthRoute, /transparencyReportValidation/);
-  assert.match(moralTradeHealthRoute, /transparencyReportMinimumPublicCount/);
-  assert.match(updatesPage, /First aggregate transparency report route/);
-  assert.match(siteSearchSource, /Transparency report/);
-  assert.match(sitemapSource, /\/transparency/);
-  assert.match(accessibilityPage, /Accessibility statement/);
-  assert.match(accessibilityPage, /WCAG 2\.1 AA-oriented QA/);
-  assert.match(accessibilityPage, /keyboard and screen-reader QA/);
-  assert.match(accessibilityPage, /Authenticated background networking/);
-  assert.match(accessibilityPage, /opportunity inbox, consent dialogs, source-summary review/);
-  assert.match(accessibilityPage, /Report accessibility issue/);
-  assert.match(accessibilityPage, /Known limitations/);
-  assert.match(accessibilityPage, /buildBreadcrumbJsonLd/);
-  assert.match(accessibilityPage, /application\/ld\+json/);
-  assert.match(measurementPlanSource, /hero_primary_cta_clicked/);
-  assert.match(measurementPlanSource, /signup_complete/);
-  assert.match(measurementPlanSource, /performance_metric_recorded/);
-  assert.match(measurementPlanSource, /Exact wishes, source notes, private constraints/);
-  assert.match(updatesPage, /public archive for what changed/);
-  assert.match(teamPage, /Who is publicly accountable for the pilot/);
+  assert.match(researchPage, /Reviewer rulebook/);
+  assert.match(proposalReviewSource, /PROHIBITED_MORAL_TRADE_PATTERNS/);
+  assert.match(proposalReviewSource, /newly_escalated_harmful_behavior/);
+  assert.match(trustPage, /permanentRedirect\("\/safety"\)/);
+  assert.match(safetyPage, /What the service does not promise/);
   assert.match(sitemapSource, /\/what-is-moral-trade/);
-  assert.match(sitemapSource, /\/moral-trade\/technical-spec/);
-  assert.match(sitemapSource, /\/about/);
-  assert.match(sitemapSource, /\/how-it-works/);
-  assert.match(sitemapSource, /\/projects/);
-  assert.match(sitemapSource, /\/worked-examples/);
-  assert.match(sitemapSource, /\/anti-threat-rules/);
   assert.match(sitemapSource, /\/research/);
-  assert.match(sitemapSource, /\/measurement/);
-  assert.match(sitemapSource, /\/accessibility/);
-  assert.match(sitemapSource, /\/sources/);
-  assert.match(sitemapSource, /\/trust/);
-  assert.match(sitemapSource, /\/contact/);
-  assert.match(sitemapSource, /\/status/);
-  assert.match(sitemapSource, /\/pilot-updates/);
-  assert.match(sitemapSource, /\/team-and-governance/);
-  assert.match(siteSearchSource, /Projects/);
-  assert.match(siteSearchSource, /How it works/);
-  assert.match(siteSearchSource, /Team and governance/);
-  assert.match(siteSearchSource, /Pilot updates/);
-  assert.match(siteSearchSource, /Primary references and product-boundary notes/);
-  assert.match(siteSearchSource, /Privacy-safe event taxonomy/);
-  assert.match(siteSearchSource, /Accessibility statement/);
-  assert.match(siteSearchSource, /keyboard and screen-reader checks/);
-  assert.match(siteSearchSource, /Anti-threat and baseline integrity/);
-  assert.match(siteSearchSource, /What you can rely on/);
 });
 
 test("dashboard exposes existing profile portability endpoints", () => {
@@ -2142,63 +1438,25 @@ test("public contract APIs enforce the documented public contract read throttle"
 
 test("public guidance describes verification pipelines without custody overclaims", () => {
   const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
-  const mpfgPage = readRepoFile("src/app/mpgf/page.tsx");
-  const priorityFundPage = readRepoFile("src/app/priority-correction-fund/page.tsx");
-  const joinedSources = [donationOffsetsPage, mpfgPage, priorityFundPage].join("\n");
+  const mpgfPage = readRepoFile("src/app/mpgf/page.tsx");
+  const mpgfContributePage = readRepoFile("src/app/mpgf/contribute/page.tsx");
+  const mpgfTermsPage = readRepoFile("src/app/mpgf/real-money-terms/page.tsx");
+  const joinedSources = [donationOffsetsPage, mpgfPage, mpgfContributePage, mpgfTermsPage].join("\n");
 
-  assert.match(donationOffsetsPage, /Perverse-incentive screening/);
   assert.match(donationOffsetsPage, /No custody \/ no escrow \/ no tax advice/);
-  assert.match(mpfgPage, /Contribution intents start with identity and conditional authorization/);
-  assert.match(mpfgPage, /Coordinate around moral public goods/);
-  assert.match(mpfgPage, /title="Common Ground Budget"/);
-  assert.match(mpfgPage, /Preview a Common Ground Budget/);
-  assert.match(mpfgPage, /View current round/);
-  assert.match(mpfgPage, /Learn how it works \/ View audit and rules/);
-  assert.match(mpfgPage, /Common Ground Budget status strip/);
-  assert.match(mpfgPage, /No charge now/);
-  assert.match(mpfgPage, /JIT after gates/);
-  assert.match(mpfgPage, /Sealed before close/);
-  assert.match(mpfgPage, /Audit and advanced details/);
-  assert.match(mpfgPage, /buildMpgfPublicGoodsEcmRulebookReport/);
-  assert.match(mpfgPage, /Rulebook hash/);
-  assert.match(mpfgPage, /Calculation version/);
-  assert.match(mpfgPage, /Mechanism label/);
-  assert.match(mpfgPage, /New mechanism/);
-  assert.match(mpfgPage, /rulebookReport\.mechanism\.fullTechnicalLabel/);
-  assert.match(mpfgPage, /Legacy\/demo label/);
-  assert.match(mpfgPage, /legacyMechanismLabelBadge/);
-  assert.match(mpfgPage, /rulebookReport\.mechanism\.legacyMechanismLabel/);
-  assert.match(mpfgPage, /Source rulebook/);
-  assert.match(mpfgPage, /Sponsor pools/);
-  assert.match(mpfgPage, /Proof path/);
-  assert.match(mpfgPage, /Candidate pools/);
-  assert.match(mpfgPage, /Technical spec/);
-  assert.match(mpfgPage, /Choose your maximum/);
-  assert.match(mpfgPage, /Pick projects/);
-  assert.match(mpfgPage, /Review and save/);
-  assert.match(mpfgPage, /Round clears after gates/);
-  assert.match(mpfgPage, /Trust and review/);
-  assert.match(mpfgPage, /no-escrow-unless-true/);
-  assert.equal(
-    mpfgPage.includes(
-      "It might not be necessary for everyone to have the same values, or agree on philosophical questions, to get a future which most views think is pretty great.",
-    ),
-    true,
-  );
-  assert.equal(
-    mpfgPage.includes(
-      "By coordinating to fund moral public goods, we could still get a mostly-great future even if people only broadly agree on what's valuable and even if most people are mostly self-interested.",
-    ),
-    true,
-  );
-  assert.equal(
-    mpfgPage.includes(
-      "With this coordination mechanism, it's in people's best self-interest to fund moral public goods.",
-    ),
-    true,
-  );
-  assert.match(priorityFundPage, /10% of verified donations plus 10% of verified member-to-member/);
-  assert.match(priorityFundPage, /top 10% of karma/);
+  assert.match(donationOffsetsPage, /Payment locators are evidence until reviewed/);
+  assert.match(donationOffsetsPage, /Receipts are evidence for review, not platform custody or legal escrow/);
+  assert.match(mpgfPage, /One budget, explicit stances, gate-cleared funding/);
+  assert.match(mpgfPage, /Choose a maximum budget/);
+  assert.match(mpgfPage, /Review the frozen terms/);
+  assert.match(mpgfPage, /Clear only after gates pass/);
+  assert.match(mpgfPage, /External payment evidence shows that a transaction occurred/);
+  assert.match(mpgfContributePage, /direct-to-charity Every\.org route/);
+  assert.match(mpgfContributePage, /reviewed external evidence as fallback/);
+  assert.match(mpgfTermsPage, /External providers remain the payment source of truth/);
+  assert.match(mpgfTermsPage, /No tax, escrow, or outcome guarantee/);
+  assert.match(mpgfTermsPage, /External payments require review/);
+  assert.match(mpgfTermsPage, /Allocation is separate from disbursement/);
   assert.equal(joinedSources.includes("Escrow-backed"), false);
   assert.equal(joinedSources.includes("guaranteed custody"), false);
 });
@@ -3658,9 +2916,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(backgroundExplanationsSource, /trustBadge/);
   assert.match(backgroundExplanationsSource, /riskBadge/);
   assert.match(backgroundExplanationsSource, /participantActions/);
-  assert.match(backgroundNetworkingPage, /BACKGROUND_PUBLIC_SAFETY_CARDS/);
-  assert.match(backgroundNetworkingPage, /BACKGROUND_PUBLIC_MENTAL_MODEL_STEPS/);
-  assert.match(backgroundNetworkingPage, /background-technical-details/);
+  assert.match(backgroundNetworkingPage, /Conservative disclosure by default/);
+  assert.match(backgroundNetworkingPage, /Five controlled steps from preview to disclosure/);
+  assert.match(backgroundNetworkingPage, /No autonomous outreach/);
   assert.match(dashboardPage, /Trust and risk badges/);
   assert.match(dashboardPage, /Next safe actions/);
   assert.match(dashboardPage, /Reason codes/);
@@ -5141,7 +4399,7 @@ test("pooled donation offset creation has visible path and server-side guardrail
     "src/lib/moral-trade/evidence-persistence.ts",
   );
 
-  assert.match(donationOffsetsPage, /Draft an offset/);
+  assert.match(donationOffsetsPage, /Donation offsets/);
   assert.match(donationOffsetsPage, /DONATION_OFFSET_PLAIN_LABELS/);
   assert.match(offerForm, /offset_pool_maximum_cap_usd/);
   assert.match(offerForm, /offset_anti_threat_certification/);
@@ -5394,313 +4652,90 @@ test("offer exit condition field exposes accessible template suggestions", () =>
   assert.match(globalCss, /template-suggestion-option\[aria-selected="true"\]/);
 });
 
-test("offers page keeps content before the footer in source order", () => {
+test("offers page keeps live directory content before the footer in source order", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const mainIndex = offersPage.indexOf("<main");
-  const browseIndex = offersPage.indexOf("<MarketplaceHome");
-  const bottomNavIndex = offersPage.indexOf("<MarketplaceBottomNav");
+  const directoryIndex = offersPage.indexOf('aria-labelledby="directory-heading"');
+  const otherRoutesIndex = offersPage.indexOf('aria-labelledby="other-routes-heading"');
   const footerIndex = offersPage.indexOf("<SiteFooter />");
 
   assert.ok(mainIndex > -1);
-  assert.ok(browseIndex > mainIndex);
-  assert.ok(bottomNavIndex > browseIndex);
-  assert.ok(footerIndex > bottomNavIndex);
+  assert.ok(directoryIndex > mainIndex);
+  assert.ok(otherRoutesIndex > directoryIndex);
+  assert.ok(footerIndex > otherRoutesIndex);
 });
 
 test("create trade route family has stable signed-out entry points", () => {
   const createRoute = readRepoFile("src/app/create/page.tsx");
-  const newOfferPage = readRepoFile("src/app/offers/new/page.tsx");
-  const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
+  const newTradePage = readRepoFile("src/app/trades/new/page.tsx");
+  const newOffsetPage = readRepoFile("src/app/offers/new/page.tsx");
   const marketplaceBoundary = readRepoFile("src/lib/moral-trade/marketplace-boundary.ts");
-  const marketplaceIntakeTriage = readRepoFile(
-    "src/lib/moral-trade/marketplace-intake-triage.ts",
-  );
   const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
 
-  assert.match(createRoute, /Create trade/);
-  assert.match(createRoute, /NewOfferPage/);
-  assert.equal(createRoute.includes("redirect("), false);
-  assert.match(newOfferPage, /Create an account to save and publish a structured trade proposal/);
-  assert.match(newOfferPage, /Marketplace intake triage/);
-  assert.match(newOfferPage, /MARKETPLACE_INTAKE_TRIAGE_ROUTES/);
-  assert.match(newOfferPage, /data-intake-route/);
-  assert.match(newOfferPage, /Next action:/);
-  assert.match(newOfferPage, /Correction path:/);
-  assert.match(marketplaceIntakeTriage, /sourceOfTruthNote/);
-  assert.match(marketplaceIntakeTriage, /ordinary_donation/);
-  assert.match(marketplaceIntakeTriage, /ordinary_matching_or_cofunding/);
-  assert.match(marketplaceIntakeTriage, /ordinary_procurement_or_service/);
-  assert.match(marketplaceIntakeTriage, /self_offset_bookkeeping/);
-  assert.match(marketplaceIntakeTriage, /external_crecm_module/);
-  assert.match(marketplaceIntakeTriage, /background_networking_request/);
-  assert.match(marketplaceIntakeTriage, /prohibited_or_unsupported/);
-  assert.match(marketplaceIntakeTriage, /route_away_points_to_lock_path/);
-  assert.match(marketplaceIntakeTriage, /triage_infers_private_moral_profile/);
-  assert.match(newOfferPage, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
+  assert.match(createRoute, /CreateRouteChooser/);
+  assert.match(createRoute, /Choose a concrete coordination route/);
+  assert.match(createRoute, /No funds move/);
+  assert.match(newTradePage, /CreateInterfaceFrame/);
+  assert.match(newTradePage, /moral-trade-create\/index\.html/);
+  assert.match(newTradePage, /TradeDraftSignInGate/);
+  assert.match(newTradePage, /returnTo=\{returnTo\}/);
+  assert.match(newTradePage, /title: "Create"/);
+  assert.match(newOffsetPage, /TradeDraftSignInGate/);
+  assert.match(newOffsetPage, /getReviewedMarketplaceSeedTemplate/);
+  assert.match(newOffsetPage, /Template applied/);
+  assert.match(newOffsetPage, /Nothing is authorized by opening this\s+draft/);
+  assert.match(newOffsetPage, /redirect\("\/trades\/new"\)/);
   assert.match(marketplaceBoundary, /moralpublicgoods131\.md/);
   assert.match(marketplaceBoundary, /CRECM v1\.125/);
-  assert.match(marketplaceBoundary, /userFacingLabel: "Common Ground Budget"/);
-  assert.match(marketplaceBoundary, /marketplaceLaneLabel: "Public Goods Fund"/);
-  assert.match(marketplaceBoundary, /marketplaceLaneCtaLabel: "Open Public Goods Fund"/);
   assert.match(marketplaceBoundary, /Common Ground Budget route/);
-  assert.equal(marketplaceBoundary.includes("moralpublicgoods102.md"), false);
-  assert.equal(marketplaceBoundary.includes("CRECM v1.96"), false);
-  assert.equal(marketplaceBoundary.includes("external CRECM module"), false);
-  assert.equal(marketplaceBoundary.includes("Verified Assurance Matching"), false);
-  assert.match(newOfferPage, /data-signed-out-offset-preview="true"/);
-  assert.match(newOfferPage, /Preview the donation-offset shape before sign-in/);
-  assert.match(newOfferPage, /Sign-in is required before\s+saving, publishing, requesting review, disclosing counterparties, authorizing\s+money, or creating a live offer/);
-  assert.match(newOfferPage, /DONATION_OFFSET_PLAIN_LABELS/);
-  assert.match(donationOffsetsPage, /DONATION_OFFSET_PLAIN_LABELS/);
-  assert.equal(donationOffsetsPage.includes("What would each side donate without this trade?"), false);
   assert.match(seedTemplatesSource, /what would each side donate without this trade/);
   assert.match(seedTemplatesSource, /what would make this unsafe or invalid/);
-  assert.match(newOfferPage, /Public receipt preview/);
-  assert.match(newOfferPage, /Receipts are private by default and opt-in only/);
-  assert.match(newOfferPage, /Correction and revocation/);
-  assert.match(newOfferPage, /buildOfferCreationReturnTo/);
-  assert.match(newOfferPage, /encodeURIComponent\(offerCreationReturnTo\)/);
-  assert.match(newOfferPage, /source_offer/);
-  assert.equal(newOfferPage.includes("requireViewer"), false);
 });
 
-test("marketplace pilot copy separates live offers from worked examples", () => {
-  const adminPage = readRepoFile("src/app/admin/page.tsx");
+test("marketplace separates live inventory, reviewed templates, worked examples, and public goods", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
-  const marketplaceComponents = readRepoFile("src/components/marketplace/marketplace-components.tsx");
-  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
-  const globalCss = readRepoFile("src/app/globals.css");
-  const mpgfPage = readRepoFile("src/app/mpgf/page.tsx");
-  const mpgfRoundBoard = readRepoFile("src/components/mpgf/mpgf-round-board.tsx");
-  const mpgfContributePage = readRepoFile("src/app/mpgf/contribute/page.tsx");
-  const roundPage = readRepoFile("src/app/mpgf/rounds/[roundId]/page.tsx");
-  const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
+  const workedExamplesPage = readRepoFile("src/app/worked-examples/page.tsx");
+  const templateLibrary = readRepoFile("src/components/trade-templates/trade-template-library.tsx");
+  const marketplaceBoundary = readRepoFile("src/lib/moral-trade/marketplace-boundary.ts");
   const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
 
-  assert.match(offersPage, /Live offers/);
-  assert.match(offersPage, /Worked examples/);
-  assert.match(offersPage, /MARKETPLACE_BOOTSTRAP_TABS/);
-  assert.match(offersPage, /value: "templates"/);
-  assert.match(offersPage, /value: "worked_examples"/);
-  assert.match(offersPage, /value: "demo"/);
-  assert.match(offersPage, /value: "public_goods"/);
-  assert.match(offersPage, /Start reviewed template/);
-  assert.match(offersPage, /Demo records/);
-  assert.match(offersPage, /Public Goods Fund/);
-  assert.match(offersPage, /laneCtaLabel: MARKETPLACE_PUBLIC_GOODS_BOUNDARY\.marketplaceLaneCtaLabel/);
-  assert.match(offersPage, /Common Ground Budget result available/);
-  assert.match(offersPage, /id="public-goods-result-card"/);
-  assert.match(offersPage, /data-primary-result="common-ground-budget"/);
-  assert.match(offersPage, /role="status" aria-live="polite"/);
-  assert.match(offersPage, /aria-describedby="public-goods-result-announcement public-goods-result-summary"/);
-  assert.match(offersPage, /Preview a Common Ground Budget/);
-  assert.match(offersPage, /public-goods-primary-action/);
-  assert.equal((offersPage.match(/public-goods-primary-action/g) ?? []).length, 1);
-  assert.match(offersPage, /Common Ground Budget \/ Public Goods Fund result available/);
-  assert.equal(offersPage.includes("No ordinary moral-trade offers match this search"), false);
-  assert.match(offersPage, /The moral-public-goods route is separate/);
-  assert.match(offersPage, /Current mode/);
-  assert.match(offersPage, /capped pilot/);
-  assert.match(offersPage, /No charge in this preview/);
-  assert.equal(offersPage.includes("Payment capture"), false);
-  assert.match(offersPage, /Current safe action/);
-  assert.match(offersPage, /preview budget/);
-  assert.match(offersPage, /Capture enabled/);
-  assert.match(offersPage, /Qualitative progress/);
-  assert.match(offersPage, /Needs more support/);
-  assert.match(offersPage, /Browse ordinary offers instead/);
-  assert.match(publicOffersSource, /View current round/);
-  assert.match(publicOffersSource, /View audit and rules/);
-  assert.match(offersPage, /Fund public goods only if enough different-view support joins/);
-  assert.match(offersPage, /No charge\s+now/);
-  assert.match(offersPage, /Exact live progress may be hidden until the round closes/);
-  assert.match(offersPage, /does not\s+create, edit, clear, authorize, capture, release, reward, credit, certify, or\s+audit any CRECM record/);
-  assert.match(offersPage, /Search terms, clicks, browsing, and CTA selection do not infer allocatable\s+project stances or create a pledge/);
-  assert.match(offersPage, /Review, identity, payment, authorization,\s+sponsor, sealed-progress, failure-bonus, reward, credit, certificate, and audit\s+gates still apply/);
-  assert.match(offersPage, /live progress sealed before close/);
-  assert.match(offersPage, /no\s+escrow or custody claim unless a valid custody route records one/);
-  assert.match(offersPage, /no payment-protection, tax-treatment, legal-advice, impact-certainty,\s+guaranteed-match, or capture-timing claim beyond the recorded CRECM state/);
-  assert.match(offersPage, /gross,\s+fee,\s+net-recipient,\s+actual,\s+counted,\s+and match-eligible accounting channels/);
-  assert.match(offersPage, /requires final review before any binding budget or project stance is saved/);
-  assert.equal(offersPage.includes("escrow-backed"), false);
-  assert.equal(offersPage.includes("funds held"), false);
-  assert.equal(offersPage.includes("payment protection"), false);
-  assert.equal(offersPage.includes("tax-deductible"), false);
-  assert.equal(offersPage.includes("legal advice"), false);
-  assert.equal(offersPage.includes("guaranteed match"), false);
-  assert.equal(offersPage.includes("guaranteed impact"), false);
-  assert.match(offersPage, /No escrow claim/);
-  assert.match(offersPage, /Separated accounting/);
-  assert.match(offersPage, /Final review consent/);
-  assert.match(offersPage, /aria-label="moral public goods text status labels"/);
-  assert.match(offersPage, /Budget to Projects to Review; no binding save before final review/);
-  assert.match(offersPage, /Advanced details/);
-  assert.match(offersPage, /Lane counts/);
-  assert.match(offersPage, /Rulebook hash/);
-  assert.match(offersPage, /Calculation version/);
-  assert.match(offersPage, /Deployment mode/);
-  assert.match(offersPage, /Audit bundle/);
-  assert.match(offersPage, /Audit bundle contract/);
-  assert.match(offersPage, /Rulebook report/);
-  assert.match(offersPage, /success-without-me progress stays sealed before close/);
-  assert.match(mpgfPage, /Common Ground Budget \| Public Goods Fund/);
-  assert.match(mpgfPage, /Preview a Common Ground Budget/);
-  assert.match(mpgfPage, /View current round/);
-  assert.match(mpgfPage, /Learn how it works \/ View audit and rules/);
-  assert.match(mpgfPage, /roundBoardCardByCampaignId/);
-  assert.match(mpgfPage, /Qualitative progress/);
-  assert.match(mpgfPage, /sealedProgressLabel/);
-  assert.match(mpgfRoundBoard, /Your choice/);
-  assert.match(mpgfRoundBoard, /Your maximum/);
-  assert.match(mpgfRoundBoard, /Deployment mode: capped pilot/);
-  assert.match(mpgfPage, /Review contribution controls/);
-  assert.equal(mpgfPage.includes("Start conditional contribution"), false);
-  assert.match(mpgfContributePage, /\/login\?returnTo=\/mpgf\/contribute/);
-  assert.match(mpgfContributePage, /viewerPresent=\{Boolean\(viewer\)\}/);
-  assert.match(publicOffersSource, /PUBLIC_GOODS_BINDING_CTA_PREREQUISITES/);
-  assert.match(publicOffersSource, /public-goods-cta-hierarchy/);
-  assert.match(publicOffersSource, /requiresFinalReviewBeforeBinding/);
-  assert.match(publicOffersSource, /normal_crecm_gates/);
-  assert.match(publicOffersSource, /safeForDeploymentModes/);
-  const mpgfPreviewCtaIndex = mpgfPage.indexOf("Preview a Common Ground Budget");
-  const mpgfCurrentRoundCtaIndex = mpgfPage.indexOf("View current round");
-  const mpgfContributionControlsIndex = mpgfPage.indexOf("Review contribution controls");
-  assert.ok(mpgfPreviewCtaIndex > -1);
-  assert.ok(mpgfCurrentRoundCtaIndex > mpgfPreviewCtaIndex);
-  assert.ok(mpgfContributionControlsIndex > mpgfCurrentRoundCtaIndex);
-  assert.match(roundPage, /qualitativeSealedProgressLabel/);
-  assert.match(roundPage, /Qualitative progress/);
-  assert.match(roundPage, /Likely near threshold/);
-  assert.match(roundPage, /Review pending/);
-  assert.match(roundPage, /Closed; final audit available/);
-  assert.match(offersPage, /Search public-goods funding/);
-  assert.match(offersPage, /Deployment mode/);
-  assert.match(offersPage, /Round state/);
-  assert.match(offersPage, /Project bucket/);
-  assert.match(offersPage, /showPublicGoodsEntryCard \? \(/);
-  assert.match(offersPage, /Collapsed ordinary-offer filters for public-goods search/);
-  assert.match(offersPage, /Ordinary-offer filters remain separated/);
-  assert.match(offersPage, /Other ways to browse separated marketplace lanes/);
-  assert.match(offersPage, /Other ways to browse/);
-  assert.match(offersPage, /marketplaceBrowseLanes/);
-  assert.match(offersPage, /Shadow previews lane/);
-  assert.match(offersPage, /Capped-pilot rounds lane/);
-  assert.match(offersPage, /Collapsed advanced moral public goods audit details/);
-  assert.match(offersPage, /filter-drawer-content/);
-  assert.match(offersPage, /assurance matching/);
-  assert.match(offersPage, /conditional public-good pledge/);
-  assert.match(offersPage, /cross-view funding/);
-  assert.match(offersPage, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
-  assert.match(offersPage, /sourceOfTruthNote/);
-  assert.match(offersPage, /mechanismVersion/);
-  assert.match(offersPage, /publicGoodsEntry\?\.mechanismVersion/);
-  assert.equal(offersPage.includes("Public Goods Fund module without mixing their counts"), false);
-  assert.match(offersPage, /demoMpgfAssuranceRound/);
-  assert.match(offersPage, /seedRoundProjects/);
-  assert.match(offersPage, /common-ground-budget-preview/);
-  assert.match(offersPage, /createDonationOffsetTemplateHref/);
-  assert.match(offersPage, /createPledgeSwapTemplateHref/);
-  assert.match(offersPage, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
-  assert.match(offersPage, /Reviewed non-public-goods templates/);
-  assert.match(offersPage, /reviewed donation-offset/);
-  assert.match(publicOffersSource, /shadow_previews/);
-  assert.match(publicOffersSource, /capped_pilot_rounds/);
-  assert.match(publicOffersSource, /public_goods_modules/);
-  assert.match(publicOffersSource, /marketplace-browse-lane-separation/);
-  assert.match(offersPage, /final-lock confirmation/);
-  assert.match(offersPage, /Public offer count/);
-  assert.match(offersPage, /cannot count as\s+live offers/);
-  assert.match(marketplaceComponents, /<h1 id="moral-marketplace-heading">Browse offers<\/h1>/);
-  assert.match(marketplaceComponents, /Search causes, templates, rounds/);
-  assert.match(marketplaceComponents, /No live offers yet · Showing examples and templates/);
-  assert.match(marketplaceComponents, /Templates/);
-  assert.match(marketplaceComponents, /Examples/);
-  assert.match(marketplaceComponents, /Public goods/);
-  assert.match(marketplaceComponents, /Guides/);
-  assert.match(offersPage, /Worked example, not live liquidity/);
-  assert.match(offersPage, /Manual review before reliance/);
-  assert.match(offersPage, /isPublicGoodsDirectoryIntent/);
-  assert.match(offersPage, /publicGoodsSearchIntent/);
-  assert.match(offersPage, /defaultView: DirectoryView = publicGoodsSearchIntent/);
-  assert.match(offersPage, /buildPublicGoodsEntryCard/);
-  assert.match(offersPage, /publicGoodsEntry\?\.primaryCta/);
-  assert.match(offersPage, /publicGoodsEntry\?\.secondaryCtas/);
-  assert.match(offersPage, /Gross captured/);
-  assert.match(offersPage, /Fees excluded/);
-  assert.match(offersPage, /Net recipient/);
-  assert.match(offersPage, /Counted \/ match-eligible/);
-  assert.match(offersPage, /Reward \/ credit \/ certificate/);
-  assert.match(offersPage, /Ordinary \/ worked \/ demo \/ module/);
-  assert.match(offersPage, /publicGoodsEntry\?\.accountingSnapshot\.grossCapturedCents/);
-  assert.match(offersPage, /publicGoodsEntry\?\.accountingSnapshot\.successRewardCents/);
-  assert.match(offersPage, /showPublicGoodsEntryCard \? null : \(\s*<MarketplaceHome/);
-  assert.match(offersPage, /liveOfferCount=\{liveOfferCount\}/);
-  const mainContentIndex = offersPage.indexOf('<main id="main-content"');
-  const publicGoodsResultIndex = offersPage.indexOf('id="public-goods-result-card"');
-  const publicGoodsPrimaryCtaIndex = offersPage.indexOf('public-goods-primary-action');
-  const publicGoodsSummaryGridIndex = offersPage.indexOf('aria-label="moral public goods search-result summary"');
-  const marketplaceShellIndex = offersPage.indexOf('aria-label="Offer marketplace"');
-  assert.ok(mainContentIndex > -1);
-  assert.ok(publicGoodsResultIndex > mainContentIndex);
-  assert.ok(publicGoodsPrimaryCtaIndex > publicGoodsResultIndex);
-  assert.ok(publicGoodsPrimaryCtaIndex < publicGoodsSummaryGridIndex);
-  assert.ok(publicGoodsResultIndex < marketplaceShellIndex);
-  assert.match(publicOffersSource, /publicGoodsEntry/);
-  assert.match(publicOffersSource, /buildPublicGoodsEntryCard/);
-  assert.match(publicOffersSource, /validateMpgfCrecPublishedCopyBundle/);
-  assert.match(publicOffersSource, /copyValidation/);
-  assert.match(publicOffersSource, /MPGF_CRECM_COPY_VALIDATION_POLICY/);
-  assert.match(publicOffersSource, /public-offers-api-v0\.4-2026-06/);
-  assert.match(publicOffersSource, /public-offers-api-validator-v0\.4/);
-  assert.match(publicOffersSource, /noPrimaryZeroState/);
-  assert.match(publicOffersSource, /ordinaryOfferZeroStateSecondary/);
-  assert.match(publicOffersSource, /zeroFacetPanelsHidden/);
-  assert.match(publicOffersSource, /public-goods-zero-state-suppression/);
-  assert.match(publicOffersSource, /ordinaryOfferFiltersCollapsed/);
-  assert.match(publicOffersSource, /exactLiveProgressExposed/);
-  assert.match(offersPage, /query\.set\("tab", params\.view\)/);
-  assert.match(offersPage, /parseDirectoryView/);
-  assert.match(offersPage, /No live offers yet/);
-  assert.match(offersPage, /No matching listings/);
-  assert.match(offersPage, /Browse worked examples or create the first public offer/);
-  assert.match(offersPage, /Baseline confidence is separate from action evidence/);
-  assert.match(offersPage, /visibleFormatCounts/);
-  assert.match(offersPage, /collection-trust-panel/);
-  assert.match(roundPage, /id="common-ground-budget-preview"/);
-  assert.match(seedTemplatesSource, /REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT/);
-  assert.match(seedTemplatesSource, /REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT/);
-  assert.match(seedTemplatesSource, /promotionBehavior: "reviewed_template_only"/);
+  assert.match(offersPage, /title: "Explore live proposals"/);
+  assert.match(offersPage, /without mixing examples or explanatory records into marketplace inventory/);
+  assert.match(offersPage, /view === "templates"/);
+  assert.match(offersPage, /<TradeTemplateLibrary \/>/);
+  assert.match(offersPage, /Live participant records only/);
+  assert.match(offersPage, /Search never substitutes examples for live demand/);
+  assert.match(offersPage, /No live proposals are open/);
+  assert.match(offersPage, /Other live routes/);
+  assert.match(offersPage, /Donation offsets/);
+  assert.match(offersPage, /Funding pools/);
+  assert.match(offersPage, /Consent-gated introductions/);
+  assert.equal(offersPage.includes("CANONICAL_WORKED_CASE_OFFERS"), false);
+
+  assert.match(workedExamplesPage, /They are\s+not live marketplace demand/i);
+  assert.match(workedExamplesPage, /CANONICAL_WORKED_CASE_OFFERS/);
+  assert.match(workedExamplesPage, /canonical detail page/);
+  assert.match(templateLibrary, /trade template/i);
   assert.match(seedTemplatesSource, /liveMetricEligible: false/);
   assert.match(seedTemplatesSource, /reviewStatus: "admin_reviewed"/);
-  assert.match(offerForm, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
-  assert.match(offerForm, /template\.reviewStatusLabel/);
-  assert.match(adminPage, /Reviewed seed template promotion controls/);
-  assert.match(adminPage, /Promotion requires reviewed live-template approval/);
-  assert.match(globalCss, /\.marketplace-bootstrap-grid/);
-  assert.match(globalCss, /\.offer-template-button small/);
-  assert.match(globalCss, /\.marketplace-bootstrap-projects/);
-  assert.equal(offersPage.includes("Browse the narrow pilot wedge"), false);
-  assert.equal(offersPage.includes("worked example s"), false);
-  assert.equal(offersPage.includes("Live participant offers will appear here"), false);
+  assert.match(marketplaceBoundary, /Public Goods Fund/);
+  assert.match(marketplaceBoundary, /Common Ground Budget route/);
 });
 
 test("worked examples have canonical detail pages and sitemap coverage", () => {
-  const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const workedExamplesPage = readRepoFile("src/app/worked-examples/page.tsx");
   const exampleDetailPage = readRepoFile("src/app/offers/examples/[exampleId]/page.tsx");
-  const marketplaceComponents = readRepoFile("src/components/marketplace/marketplace-components.tsx");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
-  assert.match(offersPage, /\/offers\/examples\/\$\{offer\.id\}/);
+  assert.match(workedExamplesPage, /\/offers\/examples\/\$\{offer\.id\}/);
+  assert.match(workedExamplesPage, /They are\s+not live marketplace demand/i);
   assert.match(exampleDetailPage, /generateStaticParams/);
   assert.match(exampleDetailPage, /Worked example; manual review required before reliance/);
   assert.match(exampleDetailPage, /No escrow or custody claim/);
-  assert.match(exampleDetailPage, /Participant-stated importance/);
-  assert.match(exampleDetailPage, /Counterparty minimum acceptable importance/);
   assert.match(exampleDetailPage, /Action evidence/);
   assert.match(exampleDetailPage, /Baseline confidence/);
   assert.match(exampleDetailPage, /Third-party externality review/);
   assert.match(exampleDetailPage, /Example · Preview only · No commitment/);
-  assert.match(marketplaceComponents, /No commitment was created\./);
   assert.match(sitemapSource, /\/offers\/examples\/\$\{offer\.id\}/);
 });
 

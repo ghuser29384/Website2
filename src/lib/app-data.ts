@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import {
   calculateDonationOffsetPoolProgress,
@@ -19,6 +20,12 @@ import {
   serializeOpportunityBriefCard,
   type BackgroundRequesterOpportunityBriefCard,
 } from "@/lib/background-opportunity-briefs";
+import { resolveAuthenticatedUser } from "@/lib/auth-resolution";
+import { isMissingOptionalLegacyAgreementRelation } from "@/lib/optional-legacy-agreement-relations";
+import {
+  chunkForPostgrestIn,
+  PUBLIC_PROFILE_OFFERS_PAGE_SIZE,
+} from "@/lib/public-profile-offers";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
@@ -118,7 +125,6 @@ export type PublicLocationGranularity = "hidden" | "country" | "region" | "city"
 export const OFFERS_PAGE_SIZE = 24;
 export const PEOPLE_PAGE_SIZE = 24;
 export const DASHBOARD_PAGE_SIZE = 50;
-const AUTH_RESOLUTION_TIMEOUT_MS = 1_500;
 
 interface LoggedErrorLike {
   code?: string | null;
@@ -216,6 +222,7 @@ export interface AgreementRecord extends AgreementRow {
   payments: AgreementPaymentRow[];
   paymentSchedules: AgreementPaymentScheduleRow[];
   events: AgreementEventRow[];
+  legacyEvidenceReviewAvailable: boolean;
   evidenceItems: AgreementEvidenceItemRow[];
   reviewCases: AgreementReviewCaseRow[];
   performanceBonds: PerformanceBondRow[];
@@ -388,6 +395,7 @@ export interface DashboardDataResult {
 export interface PublicProfilePageData {
   profile: PublicProfileSummary | null;
   offers: OfferRecord[];
+  offersPage: PaginatedResult<OfferRecord>;
   profileRecommendations: OfferRecommendationRecord[];
   authoredCommentCount: number;
 }
@@ -446,6 +454,14 @@ function buildFallbackProfile(user: User, profile?: Partial<ProfileRow> | null) 
         user,
         profile ? { display_name: profile.display_name ?? null } : null,
     ),
+    username: profile?.username ?? null,
+    public_invitation_mentions_enabled:
+      profile?.public_invitation_mentions_enabled ?? true,
+    avatar_url: profile?.avatar_url ?? null,
+    account_kind: profile?.account_kind ?? "individual",
+    accepts_group_invitations: profile?.accepts_group_invitations ?? true,
+    organization_approval_count: profile?.organization_approval_count ?? 1,
+    affiliation: profile?.affiliation ?? "",
     city: profile?.city ?? null,
     region: profile?.region ?? null,
     country: profile?.country ?? null,
@@ -633,9 +649,7 @@ async function ensureUserProfile(
     .maybeSingle();
 
   if (profileError) {
-    logSupabaseError("Failed to read public.profiles row", profileError, {
-      userId: user.id,
-    });
+    logSupabaseError("Failed to read public.profiles row", profileError);
   }
 
   if (profile) {
@@ -667,9 +681,7 @@ async function ensureUserProfile(
     .maybeSingle();
 
   if (insertError) {
-    logSupabaseError("Failed to create missing public.profiles row", insertError, {
-      userId: user.id,
-    });
+    logSupabaseError("Failed to create missing public.profiles row", insertError);
 
     return {
       profile: seedProfile,
@@ -682,9 +694,7 @@ async function ensureUserProfile(
   }
 
   if (!insertedProfile) {
-    console.error("[supabase] public.profiles upsert returned no profile row", {
-      userId: user.id,
-    });
+    console.error("[supabase] public.profiles upsert returned no profile row");
 
     return {
       profile: seedProfile,
@@ -715,8 +725,20 @@ async function getProfileSummaryMap(
   }
 
   const supabase = await createClient();
-  const [{ data: profiles, error: profilesError }, followsResult, previewResult, badgesResult] = await Promise.all([
-    supabase.from("profiles").select("*").in("id", uniqueProfileIds),
+  const [
+    { data: publicProfiles, error: profilesError },
+    selfProfileResult,
+    followsResult,
+    previewResult,
+    badgesResult,
+  ] = await Promise.all([
+    (supabase as any)
+      .from("public_profile_cards_v1")
+      .select("*")
+      .in("id", uniqueProfileIds),
+    viewerId && uniqueProfileIds.includes(viewerId)
+      ? supabase.from("profiles").select("*").eq("id", viewerId).maybeSingle()
+      : Promise.resolve({ data: null as ProfileRow | null, error: null }),
     viewerId
       ? supabase
           .from("user_follows")
@@ -734,6 +756,9 @@ async function getProfileSummaryMap(
 
   if (profilesError) {
     throw new Error(profilesError.message);
+  }
+  if (selfProfileResult.error) {
+    throw new Error(selfProfileResult.error.message);
   }
   if (followsResult.error) {
     throw new Error(followsResult.error.message);
@@ -761,8 +786,16 @@ async function getProfileSummaryMap(
     }
   }
 
+  const selfProfile = selfProfileResult.data as ProfileRow | null;
+  const profiles = ((publicProfiles ?? []) as Array<Omit<ProfileRow, "email">>).map(
+    (profile) =>
+      selfProfile?.id === profile.id
+        ? selfProfile
+        : ({ ...profile, email: "" } satisfies ProfileRow),
+  );
+
   return new Map(
-    ((profiles ?? []) as ProfileRow[]).map((profile) => {
+    profiles.map((profile) => {
       const preview = previewMap.get(profile.id);
 
       return [
@@ -798,7 +831,26 @@ async function getProfileSummaryMap(
   );
 }
 
+export async function getPublicProfileSummary(
+  profileId: string,
+  viewerId?: string | null,
+) {
+  const profileMap = await getProfileSummaryMap(viewerId, [profileId]);
+  return profileMap.get(profileId) ?? null;
+}
+
 async function hydrateOffers(
+  offers: OfferRow[],
+  viewerId?: string | null,
+): Promise<OfferRecord[]> {
+  const hydrated: OfferRecord[] = [];
+  for (const offerChunk of chunkForPostgrestIn(offers)) {
+    hydrated.push(...(await hydrateOffersChunk(offerChunk, viewerId)));
+  }
+  return hydrated;
+}
+
+async function hydrateOffersChunk(
   offers: OfferRow[],
   viewerId?: string | null,
 ): Promise<OfferRecord[]> {
@@ -925,10 +977,7 @@ async function claimGuestInterestsForUser(user: User, supabase: SupabaseServerCl
     .ilike("contact_email", email);
 
   if (error) {
-    logSupabaseError("Failed to claim guest interests for authenticated user", error, {
-      userId: user.id,
-      email,
-    });
+    logSupabaseError("Failed to claim guest interests for authenticated user", error);
   }
 }
 
@@ -968,50 +1017,25 @@ export function deriveDisplayName(
   );
 }
 
-export async function getViewer() {
+async function resolveViewer() {
   if (!hasSupabaseEnv()) {
     return null;
   }
 
   const supabase = await createClient();
-  const authResult = await Promise.race([
-    supabase.auth.getUser().then((result) => ({
-      ...result,
-      timedOut: false,
-    })),
-    new Promise<{
-      data: { user: null };
-      error: { message: string };
-      timedOut: true;
-    }>((resolve) => {
-      setTimeout(
-        () =>
-          resolve({
-            data: { user: null },
-            error: { message: "Timed out resolving authenticated user." },
-            timedOut: true,
-          }),
-        AUTH_RESOLUTION_TIMEOUT_MS,
-      );
-    }),
-  ]);
-  const {
-    data: { user },
-    error: authError,
-    timedOut,
-  } = authResult;
+  const authResult = await resolveAuthenticatedUser(
+    { getUser: () => supabase.auth.getUser() },
+    {
+      // getViewer needs an authentic full User and immediate session-revocation checks.
+      claimsPolicy: { mode: "disabled", reason: "active_session_required" },
+    },
+  );
 
-  if (authError) {
-    if (timedOut) {
-      console.warn("[supabase] Auth resolution timed out; rendering signed-out state.", {
-        timeoutMs: AUTH_RESOLUTION_TIMEOUT_MS,
-      });
-    } else {
-      logSupabaseError("Failed to resolve authenticated user", authError);
-    }
+  if (!authResult.ok) {
     return null;
   }
 
+  const user = authResult.user;
   if (!user) {
     return null;
   }
@@ -1026,6 +1050,10 @@ export async function getViewer() {
     profileSyncError: profileResult.profileSyncError,
   } satisfies Viewer;
 }
+
+// React cache is scoped to one server render. It prevents parallel layouts and
+// pages from repeating the same private bootstrap without caching across users.
+export const getViewer = cache(resolveViewer);
 
 function applyPublicProfileSort(query: any, sort: PeopleSort) {
   if (sort === "offers") {
@@ -1346,7 +1374,9 @@ export async function getMarketplaceOverview(): Promise<MarketplaceOverview> {
   const [openOffersResult, profilesResult, completedAgreementsResult, donationOffsetOverview] =
     await Promise.all([
       supabase.from("offers").select("id", { count: "exact", head: true }).eq("status", "open"),
-      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      (supabase as any)
+        .from("public_profile_cards_v1")
+        .select("id", { count: "exact", head: true }),
       supabase
         .from("agreements")
         .select("id", { count: "exact", head: true })
@@ -1900,17 +1930,19 @@ export async function listPublicProfilesPage(
   const normalizedPage = normalizePage(page);
   const offset = (normalizedPage - 1) * pageSize;
   const supabase = await createClient();
-  const query = applyPublicProfileSort(supabase.from("profiles").select("*"), sort).range(
-    offset,
-    offset + pageSize,
-  );
+  const query = applyPublicProfileSort(
+    (supabase as any).from("public_profile_cards_v1").select("*"),
+    sort,
+  ).range(offset, offset + pageSize - 1);
   const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const profiles = (data ?? []) as ProfileRow[];
+  const profiles = ((data ?? []) as Array<Omit<ProfileRow, "email">>).map(
+    (profile) => ({ ...profile, email: "" }) satisfies ProfileRow,
+  );
   const profileMap = await getProfileSummaryMap(
     viewerId,
     profiles.map((profile) => profile.id),
@@ -1945,34 +1977,88 @@ export async function listProfileOffers(profileId: string, viewerId?: string | n
   return hydrateOffers((data ?? []) as OfferRow[], viewerId);
 }
 
-export async function getPublicProfilePageData(profileId: string, viewerId?: string | null) {
+export async function listPublicProfileOffersPage(
+  profileId: string,
+  viewerId?: string | null,
+  page = 1,
+  pageSize = PUBLIC_PROFILE_OFFERS_PAGE_SIZE,
+): Promise<PaginatedResult<OfferRecord>> {
+  const normalizedPage = normalizePage(page);
+  if (!hasSupabaseEnv()) {
+    return buildPaginatedResult([], normalizedPage, pageSize);
+  }
+
+  const offset = (normalizedPage - 1) * pageSize;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("offers")
+    .select("*")
+    .eq("owner_id", profileId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const hydrated = await hydrateOffers((data ?? []) as OfferRow[], viewerId);
+  return buildPaginatedResult(hydrated, normalizedPage, pageSize);
+}
+
+export async function getPublicProfilePageData(
+  profileId: string,
+  viewerId?: string | null,
+  requestedOfferPage = 1,
+) {
+  const requestedPage = normalizePage(requestedOfferPage);
   if (!hasSupabaseEnv()) {
     return {
       profile: null,
       offers: [],
+      offersPage: buildPaginatedResult([], requestedPage, PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
       profileRecommendations: [],
       authoredCommentCount: 0,
     } satisfies PublicProfilePageData;
   }
 
-  const supabase = await createClient();
-  const [profileMap, offers, recommendations, { data: comments, error: commentsError }] =
-    await Promise.all([
-      getProfileSummaryMap(viewerId, [profileId]),
-      listProfileOffers(profileId, viewerId),
-      listProfileRecommendations(profileId),
-      supabase.from("offer_comments").select("*").eq("author_id", profileId),
-    ]);
+  const profile = await getPublicProfileSummary(profileId, viewerId);
+  if (!profile) {
+    return {
+      profile: null,
+      offers: [],
+      offersPage: buildPaginatedResult([], requestedPage, PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
+      profileRecommendations: [],
+      authoredCommentCount: 0,
+    } satisfies PublicProfilePageData;
+  }
 
-  if (commentsError) {
-    throw new Error(commentsError.message);
+  const maximumPage = Math.max(
+    1,
+    Math.ceil(profile.offerCount / PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
+  );
+  const offerPage = Math.min(requestedPage, maximumPage);
+  const supabase = await createClient();
+  const [offersPage, recommendations, commentsResult] = await Promise.all([
+    listPublicProfileOffersPage(profileId, viewerId, offerPage),
+    listProfileRecommendations(profileId),
+    supabase
+      .from("offer_comments")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", profileId),
+  ]);
+
+  if (commentsResult.error) {
+    throw new Error(commentsResult.error.message);
   }
 
   return {
-    profile: profileMap.get(profileId) ?? null,
-    offers,
+    profile,
+    offers: offersPage.items,
+    offersPage,
     profileRecommendations: recommendations,
-    authoredCommentCount: (comments ?? []).length,
+    authoredCommentCount: commentsResult.count ?? 0,
   } satisfies PublicProfilePageData;
 }
 
@@ -2103,10 +2189,19 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
   if (eventsError) {
     throw new Error(eventsError.message);
   }
-  if (evidenceItemsError) {
+  const evidenceItemsUnavailable = isMissingOptionalLegacyAgreementRelation(
+    evidenceItemsError,
+    "agreement_evidence_items",
+  );
+  const reviewCasesUnavailable = isMissingOptionalLegacyAgreementRelation(
+    reviewCasesError,
+    "agreement_review_cases",
+  );
+
+  if (evidenceItemsError && !evidenceItemsUnavailable) {
     throw new Error(evidenceItemsError.message);
   }
-  if (reviewCasesError) {
+  if (reviewCasesError && !reviewCasesUnavailable) {
     throw new Error(reviewCasesError.message);
   }
   if (performanceBondsError) {
@@ -2285,6 +2380,8 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
       payments: paymentsByAgreement.get(agreement.id) ?? [],
       paymentSchedules: paymentSchedulesByAgreement.get(agreement.id) ?? [],
       events: eventsByAgreement.get(agreement.id) ?? [],
+      legacyEvidenceReviewAvailable:
+        !evidenceItemsUnavailable && !reviewCasesUnavailable,
       evidenceItems: evidenceItemsByAgreement.get(agreement.id) ?? [],
       reviewCases: reviewCasesByAgreement.get(agreement.id) ?? [],
       performanceBonds: agreementPerformanceBonds,

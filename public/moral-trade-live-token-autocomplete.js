@@ -13,6 +13,7 @@
   const REMOTE_MIN_QUERY_LENGTH = 2;
   const REMOTE_DEBOUNCE_MS = 180;
   const RECIPIENT_CAUSE_SCORE_MINIMUM = 45;
+  const AUTO_RESOLVE_DELAY_MS = 650;
 
   let panel = null;
   let activeToken = null;
@@ -26,6 +27,8 @@
   let selectingSuggestion = false;
 
   const preparedTokens = new WeakSet();
+  const composingTokens = new WeakSet();
+  const correctionTimers = new WeakMap();
   const organizationSearchCache = new Map();
 
   function normalize(value) {
@@ -229,7 +232,7 @@
       .slice(0, MAX_RESULTS);
   }
 
-  function localSuggestions(context, query) {
+  function localSuggestions(context, query, token = activeToken) {
     const assist = getAssistApi();
     if (!assist) return [];
 
@@ -256,11 +259,82 @@
       return mergeSuggestions(organizations, priorities);
     }
 
-    return assist.rankSuggestions(context, query).map((suggestion, index) => ({
+    const options =
+      typeof assist.contextOptionsForElement === "function"
+        ? assist.contextOptionsForElement(token, context)
+        : {};
+    return assist.rankSuggestions(context, query, options).map((suggestion, index) => ({
       ...suggestion,
       kind: context,
       _rank: Number(suggestion.score || 0) - index / 100,
     }));
+  }
+
+  function clearCorrectionTimer(token) {
+    const timer = correctionTimers.get(token);
+    if (timer) window.clearTimeout(timer);
+    correctionTimers.delete(token);
+  }
+
+  function createTokenResolver(token) {
+    const clause = token.closest(".clause");
+    if (!clause) return () => token;
+
+    const label = normalize(clause.querySelector(".clause-label")?.textContent);
+    const matchingClauses = Array.from(document.querySelectorAll(".clause")).filter(
+      (candidate) =>
+        normalize(candidate.querySelector(".clause-label")?.textContent) === label,
+    );
+    const clauseIndex = matchingClauses.indexOf(clause);
+    const tokenIndex = Array.from(clause.querySelectorAll(TOKEN_SELECTOR)).indexOf(token);
+    const context = tokenContext(token);
+
+    return () => {
+      if (token.isConnected) return token;
+
+      const currentClauses = Array.from(document.querySelectorAll(".clause")).filter(
+        (candidate) =>
+          normalize(candidate.querySelector(".clause-label")?.textContent) === label,
+      );
+      const currentClause = currentClauses[clauseIndex];
+      if (!currentClause) return token;
+
+      const currentTokens = Array.from(currentClause.querySelectorAll(TOKEN_SELECTOR));
+      const indexedToken = currentTokens[tokenIndex];
+      if (indexedToken && tokenContext(indexedToken) === context) return indexedToken;
+      return currentTokens.find((candidate) => tokenContext(candidate) === context) || token;
+    };
+  }
+
+  function correctToken(token, context) {
+    const assist = getAssistApi();
+    if (
+      !assist ||
+      typeof assist.correctElement !== "function" ||
+      composingTokens.has(token)
+    ) {
+      return false;
+    }
+    const options =
+      typeof assist.contextOptionsForElement === "function"
+        ? assist.contextOptionsForElement(token, context)
+        : {};
+    return assist.correctElement(token, context, {
+      ...options,
+      resolveElement: createTokenResolver(token),
+    });
+  }
+
+  function scheduleTokenCorrection(token, context) {
+    clearCorrectionTimer(token);
+    if (!context || composingTokens.has(token)) return;
+    const assist = getAssistApi();
+    const delay = Number(assist?.autoResolveDelayMs) || AUTO_RESOLVE_DELAY_MS;
+    const timer = window.setTimeout(() => {
+      correctionTimers.delete(token);
+      correctToken(token, context);
+    }, delay);
+    correctionTimers.set(token, timer);
   }
 
   function remoteSuggestions(payload) {
@@ -425,7 +499,7 @@
     cancelRemoteSearch();
     const sequence = ++renderSequence;
     const query = String(token.textContent || "").trim();
-    const localResults = localSuggestions(context, query);
+    const localResults = localSuggestions(context, query, token);
     const shouldSearchOrganizations =
       context === RECIPIENT_CONTEXT && normalize(query).length >= REMOTE_MIN_QUERY_LENGTH;
 
@@ -460,6 +534,16 @@
         token.removeAttribute("data-mt-selected-source");
       }
       if (document.activeElement === token) renderSuggestions(token);
+      scheduleTokenCorrection(token, context);
+    });
+    token.addEventListener("compositionstart", () => {
+      composingTokens.add(token);
+      clearCorrectionTimer(token);
+    });
+    token.addEventListener("compositionend", () => {
+      composingTokens.delete(token);
+      renderSuggestions(token);
+      scheduleTokenCorrection(token, context);
     });
     token.addEventListener("keydown", (event) => {
       if (activeToken !== token || !panel || panel.hidden) return;
@@ -481,6 +565,8 @@
       }
     });
     token.addEventListener("blur", () => {
+      clearCorrectionTimer(token);
+      correctToken(token, context);
       window.setTimeout(() => {
         if (activeToken === token && (!panel || !panel.contains(document.activeElement))) closePanel();
       }, 80);

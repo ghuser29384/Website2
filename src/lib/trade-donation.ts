@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { getSiteUrl } from "@/lib/supabase/config";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const MIN_TRADE_DONATION_CENTS = 100;
 export const MAX_TRADE_DONATION_CENTS = 50_000;
@@ -480,7 +480,7 @@ function firstRow<T>(data: T | T[] | null | undefined): T | null {
 export async function loadTradeDonationAgreementContext(
   agreementId: string,
 ): Promise<TradeDonationAgreementContext | null> {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data: agreement, error: agreementError } = await supabase
     .from("agreements")
     .select("*")

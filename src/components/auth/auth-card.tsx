@@ -367,7 +367,7 @@ export async function AuthPage({
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-mt-surface="auth">
       <aside className={styles.storyPanel} aria-label="About Moral Trade">
         <Link className={styles.brand} href="/" aria-label="Moral Trade, home">
           <BrandMark />

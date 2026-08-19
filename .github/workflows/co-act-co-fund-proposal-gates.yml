@@ -1,0 +1,124 @@
+name: Proposal-only Co-Act and Co-Fund gates
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/co-act-co-fund-proposal-gates.yml"
+      - "docs/co-act-co-fund-create-spec.md"
+      - "docs/co-act-co-fund-current-main-audit.md"
+      - "public/moral-trade-create/common-ground.js"
+      - "src/instrumentation-client.ts"
+      - "src/lib/create-interface/common-ground-validation.test.ts"
+      - "src/lib/create-interface/group-contribution*"
+      - "src/lib/create-interface/persistence.ts"
+      - "src/lib/create-interface/persistence.test.ts"
+      - "src/lib/create-interface/source-contract.test.ts"
+      - "src/lib/create-interface/types.ts"
+      - "src/lib/create-interface/validation.ts"
+      - "src/lib/create-interface/validation.test.ts"
+      - "tests/create-group-contribution-proposal.spec.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: co-act-co-fund-proposal-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  proposal-release-gates:
+    name: Contracts, absolute gates, build, and rendered workflow
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Check out exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused Co-Act and Co-Fund contracts
+        run: >-
+          node --import tsx --test
+          src/lib/create-interface/group-contribution*.test.ts
+          src/lib/create-interface/persistence.test.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/validation.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run absolute ESLint
+        run: npm run lint
+
+      - name: Run absolute TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build the production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Verify event-base ancestry, clean diff, and absence of temporary machinery
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+            git cat-file -e "$BASE_SHA^{commit}"
+          else
+            git fetch origin main
+            BASE_SHA="$(git rev-parse origin/main)"
+          fi
+          git merge-base --is-ancestor "$BASE_SHA" HEAD || {
+            echo "Candidate does not contain its recorded base $BASE_SHA." >&2
+            exit 1
+          }
+          git diff --check "$BASE_SHA"...HEAD
+          test ! -e .github/co-act-co-fund-product-payload
+          test ! -e .github/workflows/materialize-co-act-co-fund-product.yml
+          test ! -e .github/workflows/co-act-co-fund-source-export.yml
+          if find .github/workflows -maxdepth 1 -type f \( \
+            -name 'co-act-co-fund-finalize-*.yml' -o \
+            -name 'co-act-co-fund-hardening-*.yml' -o \
+            -name 'co-act-co-fund-policy-finalizer-*.yml' -o \
+            -name 'co-act-co-fund-proposal-gate.yml' -o \
+            -name 'co-act-co-fund-proposal-gate-v*.yml' \
+          \) | grep -q .; then
+            echo 'Temporary Co-Act/Co-Fund controller remains in the candidate.' >&2
+            exit 1
+          fi
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run real Create iframe proposal workflow
+        env:
+          CREATE_ROUTE_CAPTURE: "1"
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: co-act-co-fund-proposal-evidence-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14

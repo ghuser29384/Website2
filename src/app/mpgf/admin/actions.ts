@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { getViewer } from "@/lib/app-data";
@@ -14,6 +15,7 @@ import type { MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode } fro
 
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
+  rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
 };
 
 const approvableGateKeys = new Set([
@@ -92,6 +94,47 @@ async function recordAdminAuditLog(input: {
     actor_user_id: input.actorUserId,
     audit_json: input.auditJson,
   });
+}
+
+export async function approveMpgfFailureBonusScheduleAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const proposalId = readRequired(formData, "proposal_id");
+  const rationale = readRequired(formData, "rationale");
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(proposalId)) {
+    throw new Error("Failure-bonus schedule approval requires a valid proposal ID.");
+  }
+  if (rationale.length < 20) {
+    throw new Error("Failure-bonus schedule approval requires a substantive rationale of at least 20 characters.");
+  }
+
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const result = await supabase.rpc("mpgf_approve_failure_bonus_premium_schedule", {
+    proposal_id_input: proposalId,
+    reviewer_id_input: viewer.authUser.id,
+    rationale_input: rationale,
+  });
+
+  if (result.error) {
+    throw new Error(`Could not approve the complete failure-bonus schedule: ${result.error.message}`);
+  }
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.failure_bonus_schedule.approve",
+    targetType: "mpgf_pool_proposal",
+    targetId: proposalId,
+    auditJson: {
+      proposalId,
+      approvalMode: "atomic_complete_schedule",
+      rationale,
+      result: result.data,
+    },
+  });
+
+  revalidatePath("/mpgf/admin");
+  revalidatePath("/mpgf/admin/failure-bonus");
+  revalidatePath("/mpgf/pools");
 }
 
 export async function approveMpgfRealMoneyGateAction(formData: FormData) {
@@ -331,4 +374,268 @@ export async function recordMpgfPublicGoodsReviewAction(formData: FormData) {
   revalidatePath("/mpgf/pools");
   revalidatePath(`/mpgf/pools/${result.campaign.slug}`);
   revalidatePath("/mpgf/admin/public-goods");
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function validateUuid(value: string, label: string) {
+  if (!uuidPattern.test(value)) {
+    throw new Error(`${label} must be a valid UUID.`);
+  }
+}
+
+function validateSubstantiveReason(value: string, label: string) {
+  if (value.length < 20) {
+    throw new Error(`${label} must be at least 20 characters.`);
+  }
+  if (value.length > 2_000) {
+    throw new Error(`${label} must be 2,000 characters or fewer.`);
+  }
+}
+
+function firstRpcRow(data: unknown) {
+  return Array.isArray(data) ? data[0] ?? null : data;
+}
+
+function revalidateMpgfDacLifecycleRoutes(input?: {
+  proposalId?: string;
+  campaignId?: string;
+  campaignSlug?: string;
+}) {
+  revalidatePath("/mpgf/admin");
+  revalidatePath("/mpgf/admin/dac-lifecycle");
+  revalidatePath("/mpgf/pools");
+  revalidatePath("/mpgf/pools/new");
+  if (input?.proposalId) revalidatePath(`/mpgf/pools/proposals/${input.proposalId}`);
+  if (input?.campaignId) revalidatePath(`/mpgf/campaigns/${input.campaignId}`);
+  if (input?.campaignSlug) revalidatePath(`/mpgf/campaigns/${input.campaignSlug}`);
+}
+
+async function runDacLifecycleRpc(input: {
+  rpcName: string;
+  args: Record<string, unknown>;
+  errorLabel: string;
+}) {
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const result = await supabase.rpc(input.rpcName, input.args);
+  if (result.error) {
+    throw new Error(`${input.errorLabel}: ${result.error.message}`);
+  }
+  return firstRpcRow(result.data);
+}
+
+export async function beginMpgfDacProposalReviewAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const proposalId = readRequired(formData, "proposal_id");
+  const reason = readRequired(formData, "reason");
+  validateUuid(proposalId, "Proposal ID");
+  validateSubstantiveReason(reason, "Review rationale");
+
+  const result = await runDacLifecycleRpc({
+    rpcName: "mpgf_begin_pool_proposal_review",
+    args: {
+      p_proposal_id: proposalId,
+      p_reviewer_id: viewer.authUser.id,
+      p_reason: reason,
+    },
+    errorLabel: "Could not begin DAC proposal review",
+  });
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.dac_proposal.review_begin",
+    targetType: "mpgf_pool_proposal",
+    targetId: proposalId,
+    auditJson: { reason, result },
+  });
+  revalidateMpgfDacLifecycleRoutes({ proposalId });
+}
+
+export async function requestMpgfDacProposalChangesAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const proposalId = readRequired(formData, "proposal_id");
+  const reason = readRequired(formData, "reason");
+  validateUuid(proposalId, "Proposal ID");
+  validateSubstantiveReason(reason, "Change request");
+
+  const result = await runDacLifecycleRpc({
+    rpcName: "mpgf_request_pool_proposal_changes",
+    args: {
+      p_proposal_id: proposalId,
+      p_reviewer_id: viewer.authUser.id,
+      p_reason: reason,
+    },
+    errorLabel: "Could not request DAC proposal changes",
+  });
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.dac_proposal.changes_requested",
+    targetType: "mpgf_pool_proposal",
+    targetId: proposalId,
+    auditJson: { reason, result },
+  });
+  revalidateMpgfDacLifecycleRoutes({ proposalId });
+}
+
+export async function rejectMpgfDacProposalAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const proposalId = readRequired(formData, "proposal_id");
+  const reason = readRequired(formData, "reason");
+  validateUuid(proposalId, "Proposal ID");
+  validateSubstantiveReason(reason, "Rejection rationale");
+
+  const result = await runDacLifecycleRpc({
+    rpcName: "mpgf_reject_pool_proposal",
+    args: {
+      p_proposal_id: proposalId,
+      p_reviewer_id: viewer.authUser.id,
+      p_reason: reason,
+    },
+    errorLabel: "Could not reject the DAC proposal",
+  });
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.dac_proposal.reject",
+    targetType: "mpgf_pool_proposal",
+    targetId: proposalId,
+    auditJson: { reason, result },
+  });
+  revalidateMpgfDacLifecycleRoutes({ proposalId });
+}
+
+export async function approveAndFreezeMpgfDacProposalAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const proposalId = readRequired(formData, "proposal_id");
+  const reason = readRequired(formData, "reason");
+  validateUuid(proposalId, "Proposal ID");
+  validateSubstantiveReason(reason, "Approval rationale");
+
+  const result = await runDacLifecycleRpc({
+    rpcName: "mpgf_approve_and_freeze_pool_proposal",
+    args: {
+      p_proposal_id: proposalId,
+      p_reviewer_id: viewer.authUser.id,
+      p_reason: reason,
+    },
+    errorLabel: "Could not approve and freeze the DAC proposal",
+  });
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.dac_proposal.approve_and_freeze",
+    targetType: "mpgf_pool_proposal",
+    targetId: proposalId,
+    auditJson: { reason, result },
+  });
+  revalidateMpgfDacLifecycleRoutes({ proposalId });
+}
+
+export async function publishMpgfDacProposalAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const proposalId = readRequired(formData, "proposal_id");
+  const roundId = readRequired(formData, "round_id");
+  const slug = readRequired(formData, "slug").toLowerCase();
+  const reason = readRequired(formData, "reason");
+  validateUuid(proposalId, "Proposal ID");
+  validateSubstantiveReason(reason, "Publication rationale");
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length < 3 || slug.length > 96) {
+    throw new Error("Campaign slug must be 3–96 lowercase letters, numbers, or single hyphens.");
+  }
+
+  const result = await runDacLifecycleRpc({
+    rpcName: "mpgf_publish_pool_proposal",
+    args: {
+      p_proposal_id: proposalId,
+      p_round_id: roundId,
+      p_slug: slug,
+      p_publisher_id: viewer.authUser.id,
+      p_reason: reason,
+    },
+    errorLabel: "Could not publish the exact frozen DAC proposal",
+  }) as Record<string, unknown> | null;
+  const campaignId = typeof result?.public_campaign_id === "string" ? result.public_campaign_id : undefined;
+  const campaignSlug = typeof result?.public_slug === "string" ? result.public_slug : slug;
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.dac_proposal.publish",
+    targetType: "mpgf_pool_proposal",
+    targetId: proposalId,
+    auditJson: { roundId, slug, reason, result },
+  });
+  revalidateMpgfDacLifecycleRoutes({ proposalId, campaignId, campaignSlug });
+}
+
+export async function reviewMpgfDacPledgeEligibilityAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const pledgeId = readRequired(formData, "pledge_id");
+  const eligibilityState = readRequired(formData, "eligibility_state");
+  const humanScoreBps = Number(String(formData.get("human_score_bps") ?? "0"));
+  const reason = readRequired(formData, "reason");
+  validateUuid(pledgeId, "Pledge ID");
+  validateSubstantiveReason(reason, "Eligibility rationale");
+  if (!["eligible", "duplicate_identity", "below_minimum", "blocked"].includes(eligibilityState)) {
+    throw new Error("Choose a final DAC eligibility state.");
+  }
+  if (!Number.isInteger(humanScoreBps) || humanScoreBps < 0 || humanScoreBps > 10_000) {
+    throw new Error("Human score must be an integer from 0 to 10,000 basis points.");
+  }
+  if (eligibilityState === "eligible" && humanScoreBps < 1) {
+    throw new Error("An eligible pledge requires a positive human score.");
+  }
+  const effectiveHumanScoreBps = eligibilityState === "eligible" ? humanScoreBps : 0;
+
+  const result = await runDacLifecycleRpc({
+    rpcName: "mpgf_review_dac_pledge_eligibility",
+    args: {
+      p_pledge_id: pledgeId,
+      p_reviewer_id: viewer.authUser.id,
+      p_eligibility_state: eligibilityState,
+      p_human_score_bps: effectiveHumanScoreBps,
+      p_reason: reason,
+    },
+    errorLabel: "Could not finalize DAC pledge eligibility",
+  }) as Record<string, unknown> | null;
+  const campaignId = typeof result?.reviewed_campaign_id === "string" ? result.reviewed_campaign_id : undefined;
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.dac_pledge.eligibility_review",
+    targetType: "mpgf_public_goods_pledge",
+    targetId: pledgeId,
+    auditJson: { eligibilityState, humanScoreBps: effectiveHumanScoreBps, reason, result },
+  });
+  revalidateMpgfDacLifecycleRoutes({ campaignId });
+  redirect(`/mpgf/admin/dac-lifecycle?reviewed=${encodeURIComponent(pledgeId)}`);
+}
+
+export async function finalizeMpgfDacCampaignAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const campaignId = readRequired(formData, "campaign_id");
+  const reason = readRequired(formData, "reason");
+  validateSubstantiveReason(reason, "Terminal-outcome rationale");
+
+  const result = await runDacLifecycleRpc({
+    rpcName: "mpgf_finalize_dac_campaign",
+    args: {
+      p_campaign_id: campaignId,
+      p_reviewer_id: viewer.authUser.id,
+      p_reason: reason,
+    },
+    errorLabel: "Could not finalize the DAC campaign",
+  }) as Record<string, unknown> | null;
+  const proposalId = typeof result?.finalized_pool_proposal_id === "string"
+    ? result.finalized_pool_proposal_id
+    : undefined;
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.dac_campaign.finalize",
+    targetType: "mpgf_public_goods_campaign",
+    targetId: campaignId,
+    auditJson: { reason, result },
+  });
+  revalidateMpgfDacLifecycleRoutes({ proposalId, campaignId });
 }

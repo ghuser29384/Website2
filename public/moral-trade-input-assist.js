@@ -6,6 +6,10 @@
 
   const CATALOG_URL = "/moral-trade-input-standards.json";
   const MAX_RESULTS = 7;
+  const AUTO_RESOLVE_DELAY_MS = 650;
+  const AUTO_RESOLVE_MIN_CONFIDENCE = 0.88;
+  const AUTO_RESOLVE_MIN_MARGIN = 0.08;
+  const MAX_TOPIC_TOKENS = 8;
   const WEBSITE_PATTERN =
     /\b((?:https?:\/\/|www\.)[^\s<>"']+|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:org|com|net|io|edu|gov)(?:\/[^\s<>"']*)?)/gi;
   const TRAILING_PUNCTUATION = /[),.;:!?\]}]+$/;
@@ -34,6 +38,63 @@
     "to",
     "with",
   ]);
+  const TOPIC_STOP_WORDS = new Set([
+    ...STOP_WORDS,
+    "about",
+    "agreed",
+    "do",
+    "fixed",
+    "help",
+    "i",
+    "if",
+    "into",
+    "ll",
+    "me",
+    "my",
+    "one",
+    "please",
+    "project",
+    "some",
+    "task",
+    "that",
+    "this",
+    "through",
+    "undertake",
+    "will",
+    "work",
+    "would",
+  ]);
+  const GENERIC_TOPIC_WORDS = new Set([
+    "action",
+    "article",
+    "brief",
+    "campaign",
+    "class",
+    "course",
+    "deliverable",
+    "document",
+    "feature",
+    "hours",
+    "lesson",
+    "module",
+    "output",
+    "paper",
+    "prototype",
+    "report",
+    "session",
+    "shift",
+    "summary",
+  ]);
+  const AUTO_RESOLVE_CONTEXTS = new Set([
+    "priorities",
+    "recipients",
+    "commitments",
+    "evidence",
+    "durations",
+    "baselines",
+    "exits",
+    "organizations",
+  ]);
 
   let catalog = null;
   let activeControl = null;
@@ -41,6 +102,8 @@
   let activeIndex = -1;
   let suggestionPanel = null;
   let hoverCard = null;
+  let correctionNotice = null;
+  let correctionNoticeTimer = 0;
   let hoverTimer = 0;
   let hideTimer = 0;
 
@@ -48,6 +111,10 @@
   const preparedDateControls = new WeakSet();
   const preparedForms = new WeakSet();
   const websitePreviews = new WeakMap();
+  const correctionTimers = new WeakMap();
+  const ignoredCorrectionValues = new WeakMap();
+  const ignoredCorrectionKeys = new Map();
+  const composingControls = new WeakSet();
 
   function normalize(value) {
     return String(value || "")
@@ -62,6 +129,108 @@
     return normalize(value)
       .split(/\s+/)
       .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
+  }
+
+  function editDistance(leftValue, rightValue) {
+    const left = normalize(leftValue).slice(0, 160);
+    const right = normalize(rightValue).slice(0, 160);
+    if (left === right) return 0;
+    if (!left) return right.length;
+    if (!right) return left.length;
+
+    let previousPrevious = null;
+    let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+    for (let row = 1; row <= left.length; row += 1) {
+      const current = new Array(right.length + 1).fill(0);
+      current[0] = row;
+      for (let column = 1; column <= right.length; column += 1) {
+        const substitutionCost = left[row - 1] === right[column - 1] ? 0 : 1;
+        current[column] = Math.min(
+          previous[column] + 1,
+          current[column - 1] + 1,
+          previous[column - 1] + substitutionCost,
+        );
+        if (
+          previousPrevious &&
+          row > 1 &&
+          column > 1 &&
+          left[row - 1] === right[column - 2] &&
+          left[row - 2] === right[column - 1]
+        ) {
+          current[column] = Math.min(
+            current[column],
+            previousPrevious[column - 2] + substitutionCost,
+          );
+        }
+      }
+      previousPrevious = previous;
+      previous = current;
+    }
+
+    return previous[right.length];
+  }
+
+  function similarity(leftValue, rightValue) {
+    const left = normalize(leftValue);
+    const right = normalize(rightValue);
+    const longest = Math.max(left.length, right.length);
+    if (!longest) return 1;
+    return Math.max(0, 1 - editDistance(left, right) / longest);
+  }
+
+  function candidatePhrases(suggestion) {
+    return [suggestion.label, ...(Array.isArray(suggestion.aliases) ? suggestion.aliases : [])]
+      .map(normalize)
+      .filter(Boolean);
+  }
+
+  function contiguousPhraseSimilarity(queryValue, candidateValue) {
+    const queryTokens = normalize(queryValue).split(/\s+/).filter(Boolean);
+    const candidateTokens = normalize(candidateValue).split(/\s+/).filter(Boolean);
+    if (!queryTokens.length || !candidateTokens.length) return 0;
+
+    let best = similarity(queryValue, candidateValue);
+    const minimumWindow = Math.max(1, candidateTokens.length - 1);
+    const maximumWindow = Math.min(queryTokens.length, candidateTokens.length + 1);
+    for (let width = minimumWindow; width <= maximumWindow; width += 1) {
+      for (let start = 0; start + width <= queryTokens.length; start += 1) {
+        best = Math.max(
+          best,
+          similarity(queryTokens.slice(start, start + width).join(" "), candidateValue),
+        );
+      }
+    }
+    return best;
+  }
+
+  function phraseConfidence(queryValue, candidateValue) {
+    const query = normalize(queryValue);
+    const candidate = normalize(candidateValue);
+    if (!query || !candidate) return 0;
+    if (query === candidate) return 1;
+
+    const queryTokens = query.split(" ");
+    const candidateTokens = candidate.split(" ");
+    if (
+      query.startsWith(candidate) &&
+      queryTokens.length <= candidateTokens.length + 1 &&
+      query.length - candidate.length <= Math.max(6, Math.ceil(candidate.length * 0.4))
+    ) {
+      return 0.94;
+    }
+    if (
+      candidate.startsWith(query) &&
+      candidate.length - query.length <= Math.max(2, Math.ceil(candidate.length * 0.16))
+    ) {
+      return 0.9;
+    }
+
+    const distance = editDistance(query, candidate);
+    const longest = Math.max(query.length, candidate.length);
+    if (distance === 1 && longest >= 5) return 0.93;
+    if (distance === 2 && longest >= 12) return 0.9;
+    return similarity(query, candidate);
   }
 
   function suggestionValue(suggestion) {
@@ -105,7 +274,249 @@
       if (haystack.includes(token)) score += 8;
     }
 
+    const fuzzyConfidence = Math.max(
+      0,
+      ...candidatePhrases(suggestion).map((candidate) =>
+        contiguousPhraseSimilarity(normalizedQuery, candidate),
+      ),
+    );
+    if (fuzzyConfidence >= 0.58) score += Math.round(fuzzyConfidence * 70);
+
     return score;
+  }
+
+  function resolveCanonicalMatch(context, query) {
+    const normalizedQuery = normalize(query);
+    if (
+      !AUTO_RESOLVE_CONTEXTS.has(context) ||
+      normalizedQuery.length < 3 ||
+      normalizedQuery.length > 120
+    ) {
+      return null;
+    }
+
+    const canonicalEntries =
+      context === "recipients"
+        ? [...entriesForContext("priorities"), ...entriesForContext("organizations")]
+        : entriesForContext(context);
+    const ranked = canonicalEntries
+      .map((suggestion, catalogIndex) => {
+        const confidence = Math.max(
+          0,
+          ...candidatePhrases(suggestion).map((candidate) => {
+            const queryTokenCount = normalizedQuery.split(" ").length;
+            const candidateTokenCount = candidate.split(" ").length;
+            if (queryTokenCount > candidateTokenCount + 1) return 0;
+            if (candidateTokenCount > queryTokenCount + 1) return 0;
+            if (
+              normalizedQuery.length >
+              candidate.length + Math.max(6, Math.ceil(candidate.length * 0.4))
+            ) {
+              return 0;
+            }
+            return phraseConfidence(normalizedQuery, candidate);
+          }),
+        );
+        return { catalogIndex, confidence, suggestion };
+      })
+      .filter((entry) => entry.confidence >= AUTO_RESOLVE_MIN_CONFIDENCE)
+      .sort(
+        (left, right) =>
+          right.confidence - left.confidence || left.catalogIndex - right.catalogIndex,
+      );
+
+    const best = ranked[0];
+    if (!best) return null;
+    const next = ranked[1];
+    if (next && best.confidence - next.confidence < AUTO_RESOLVE_MIN_MARGIN) return null;
+
+    const canonicalValue = suggestionValue(best.suggestion);
+    if (!canonicalValue || normalize(canonicalValue) === normalizedQuery) return null;
+    return {
+      ...best.suggestion,
+      canonicalValue,
+      confidence: best.confidence,
+    };
+  }
+
+  function commitmentIntents() {
+    return catalog && Array.isArray(catalog.commitmentIntents)
+      ? catalog.commitmentIntents
+      : [];
+  }
+
+  function intentMatch(intent, query) {
+    const normalizedQuery = normalize(query);
+    const queryTokens = normalizedQuery.split(" ").filter(Boolean);
+    let best = 0;
+    let matchedAlias = "";
+
+    for (const aliasValue of [intent.key, ...(intent.aliases || [])]) {
+      const alias = normalize(aliasValue);
+      if (!alias) continue;
+      const surroundedQuery = ` ${normalizedQuery} `;
+      if (surroundedQuery.includes(` ${alias} `)) {
+        const exactScore = 1 + Math.min(0.08, alias.length / 500);
+        if (exactScore > best) {
+          best = exactScore;
+          matchedAlias = alias;
+        }
+        continue;
+      }
+
+      const aliasTokens = alias.split(" ");
+      const width = aliasTokens.length;
+      for (let start = 0; start + width <= queryTokens.length; start += 1) {
+        const candidate = queryTokens.slice(start, start + width).join(" ");
+        const candidateSimilarity = similarity(candidate, alias);
+        const minimum = alias.length <= 4 ? 0.79 : 0.72;
+        if (candidateSimilarity >= minimum && candidateSimilarity > best) {
+          best = candidateSimilarity;
+          matchedAlias = candidate;
+        }
+      }
+    }
+
+    return best >= 0.72 ? { intent, matchedAlias, score: best } : null;
+  }
+
+  function matchedCommitmentIntents(query) {
+    return commitmentIntents()
+      .map((intent, index) => {
+        const match = intentMatch(intent, query);
+        return match ? { ...match, index } : null;
+      })
+      .filter(Boolean)
+      .sort((left, right) => right.score - left.score || left.index - right.index);
+  }
+
+  function priorityPhraseMatches(query) {
+    const normalizedQuery = normalize(query);
+    if (!normalizedQuery || !catalog || !Array.isArray(catalog.priorities)) return [];
+
+    return catalog.priorities
+      .map((priority, index) => {
+        let score = 0;
+        let matchedPhrase = "";
+        const phrases = candidatePhrases(priority);
+        phrases.forEach((phrase, phraseIndex) => {
+          const exactPhrase = ` ${normalizedQuery} `.includes(` ${phrase} `);
+          const phraseScore = exactPhrase
+            ? (phraseIndex === 0 ? 1.08 : 1) + Math.min(0.08, phrase.length / 500)
+            : contiguousPhraseSimilarity(normalizedQuery, phrase);
+          if (phraseScore > score) {
+            score = phraseScore;
+            matchedPhrase = phrase;
+          }
+        });
+        return { index, matchedPhrase, priority, score };
+      })
+      .filter((entry) => entry.score >= 0.78)
+      .sort((left, right) => right.score - left.score || left.index - right.index);
+  }
+
+  function canonicalPriorityTopic(query, excludedPhrases = new Set()) {
+    const matches = priorityPhraseMatches(query).filter(
+      (entry) => !excludedPhrases.has(entry.matchedPhrase),
+    );
+    const best = matches[0];
+    if (!best) return "";
+    const next = matches[1];
+    if (next && best.score - next.score < 0.06) return "";
+    return String(best.priority.label || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+  }
+
+  function inferredTopic(query, intentMatchResult, topicHint = "") {
+    const actionAliases = new Set();
+    if (intentMatchResult) {
+      [intentMatchResult.intent.key, ...(intentMatchResult.intent.aliases || [])].forEach(
+        (aliasValue) => {
+          normalize(aliasValue)
+            .split(" ")
+            .filter(Boolean)
+            .forEach((token) => actionAliases.add(token));
+        },
+      );
+    }
+    const canonicalTopic = canonicalPriorityTopic(query, actionAliases);
+    if (canonicalTopic) return canonicalTopic;
+
+    const normalizedQuery = normalize(query);
+    const residualTokens = normalizedQuery
+      .split(" ")
+      .filter(Boolean)
+      .filter((token) => !TOPIC_STOP_WORDS.has(token))
+      .filter((token) => !GENERIC_TOPIC_WORDS.has(token))
+      .filter((token) => !/^\d+(?:\.\d+)?$/.test(token))
+      .filter(
+        (token) =>
+          ![...actionAliases].some(
+            (aliasToken) =>
+              token === aliasToken ||
+              (Math.max(token.length, aliasToken.length) >= 5 &&
+                similarity(token, aliasToken) >= 0.72),
+          ),
+      )
+      .slice(0, MAX_TOPIC_TOKENS);
+    const residual = residualTokens.join(" ").trim();
+    if (residual) return residual;
+
+    const canonicalHint = canonicalPriorityTopic(topicHint);
+    if (canonicalHint) return canonicalHint;
+    return normalize(topicHint)
+      .split(" ")
+      .filter((token) => token && !TOPIC_STOP_WORDS.has(token))
+      .slice(0, MAX_TOPIC_TOKENS)
+      .join(" ");
+  }
+
+  function fillTopic(template, topic) {
+    const article = /^[aeiou]/i.test(topic) ? "an" : "a";
+    return String(template || "")
+      .replaceAll("a {topic}", `${article} ${topic}`)
+      .replaceAll("{topic}", topic);
+  }
+
+  function composeCommitmentSuggestions(query, options = {}) {
+    const matches = matchedCommitmentIntents(query);
+    const best = matches[0];
+    if (!best) return [];
+
+    const topic = inferredTopic(query, best, options.topicHint);
+    if (!topic || !Array.isArray(best.intent.templates)) return [];
+    const normalizedQuery = normalize(query);
+
+    return best.intent.templates
+      .map((template, templateIndex) => {
+        const templateAliases = [
+          template.label,
+          ...(Array.isArray(template.aliases) ? template.aliases : []),
+        ];
+        const templateRelevance = Math.max(
+          0,
+          ...templateAliases.map((alias) => {
+            const normalizedAlias = normalize(fillTopic(alias, topic));
+            if (` ${normalizedQuery} `.includes(` ${normalizedAlias} `)) return 1;
+            return contiguousPhraseSimilarity(normalizedQuery, normalizedAlias);
+          }),
+        );
+        return {
+          ...template,
+          label: fillTopic(template.label, topic),
+          value: fillTopic(template.value || template.label, topic),
+          description: fillTopic(template.description || "", topic),
+          aliases: (template.aliases || []).map((alias) => fillTopic(alias, topic)),
+          composed: true,
+          intent: best.intent.key,
+          topic,
+          catalogIndex: -100 + templateIndex,
+          score: 260 - templateIndex + (templateRelevance >= 0.82 ? 38 : 0),
+        };
+      })
+      .sort((left, right) => right.score - left.score || left.catalogIndex - right.catalogIndex);
   }
 
   function entriesForContext(context) {
@@ -120,14 +531,26 @@
     return Array.isArray(catalog[context]) ? catalog[context] : [];
   }
 
-  function rankSuggestions(context, query) {
-    return entriesForContext(context)
+  function rankSuggestions(context, query, options = {}) {
+    const composed =
+      context === "commitments" ? composeCommitmentSuggestions(query, options) : [];
+    const standard = entriesForContext(context)
       .map((suggestion, catalogIndex) => ({
         ...suggestion,
         catalogIndex,
         score: scoreSuggestion(suggestion, query),
       }))
       .filter((suggestion) => !normalize(query) || suggestion.score > 0)
+      .sort((a, b) => b.score - a.score || a.catalogIndex - b.catalogIndex);
+
+    const seen = new Set();
+    return [...composed, ...standard]
+      .filter((suggestion) => {
+        const key = normalize(suggestion.label || suggestion.value);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .sort((a, b) => b.score - a.score || a.catalogIndex - b.catalogIndex)
       .slice(0, MAX_RESULTS);
   }
@@ -197,6 +620,196 @@
     return null;
   }
 
+  function elementValue(element) {
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      return element.value;
+    }
+    return element instanceof HTMLElement ? element.textContent || "" : "";
+  }
+
+  function correctionElementKey(element) {
+    if (!(element instanceof Element)) return "";
+
+    const clause = element.closest(".clause");
+    if (clause) {
+      const label = normalize(clause.querySelector(".clause-label")?.textContent);
+      const matchingClauses = Array.from(document.querySelectorAll(".clause")).filter(
+        (candidate) =>
+          normalize(candidate.querySelector(".clause-label")?.textContent) === label,
+      );
+      const clauseIndex = matchingClauses.indexOf(clause);
+      const controls = Array.from(
+        clause.querySelectorAll(
+          'input, textarea, [contenteditable]:not([contenteditable="false"])',
+        ),
+      );
+      const controlIndex = controls.indexOf(element);
+      const context = normalize(
+        element.getAttribute("data-mt-autocomplete-context") ||
+          element.getAttribute("data-mt-autocomplete"),
+      );
+      if (label && clauseIndex >= 0 && controlIndex >= 0) {
+        return `clause:${label}:${clauseIndex}:${context}:${controlIndex}`;
+      }
+    }
+
+    const form = element.closest("form");
+    const formKey = normalize(
+      form?.getAttribute("id") || form?.getAttribute("name") || form?.getAttribute("action"),
+    );
+    const controlKey = normalize(
+      element.getAttribute("id") ||
+        element.getAttribute("name") ||
+        element.getAttribute("aria-label"),
+    );
+    return controlKey ? `control:${formKey}:${controlKey}` : "";
+  }
+
+  function setElementValue(element, value) {
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      const prototype =
+        element instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+      if (descriptor && descriptor.set) descriptor.set.call(element, value);
+      else element.value = value;
+    } else if (element instanceof HTMLElement) {
+      element.textContent = value;
+    } else {
+      return false;
+    }
+
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
+  function contextOptionsForElement(element, context) {
+    if (context !== "commitments" || !(element instanceof Element)) return {};
+
+    const form = element.closest("form");
+    const descriptor =
+      element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? normalize(controlDescriptor(element))
+        : normalize(
+            [
+              element.getAttribute("aria-label"),
+              element.getAttribute("title"),
+              element.closest(".clause")?.querySelector(".clause-label")?.textContent,
+              element.closest("label")?.textContent,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          );
+    const requested = /\b(counterparty|their|requested|other participant)\b/.test(descriptor);
+    const preferredName = requested ? "requested_cause" : "offered_cause";
+    const alternateName = requested ? "offered_cause" : "requested_cause";
+    const namedValue = (name) => {
+      const field = form?.querySelector(`[name="${name}"]`);
+      return field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement
+        ? field.value.trim()
+        : "";
+    };
+    const explicitTopic = namedValue(preferredName) || namedValue(alternateName);
+    if (explicitTopic) return { topicHint: explicitTopic };
+
+    const priorityControls = form
+      ? Array.from(
+          form.querySelectorAll(
+            '[data-mt-autocomplete="priorities"], [data-mt-autocomplete-context="priorities"]',
+          ),
+        )
+      : [];
+    const visibleTopic = priorityControls
+      .map((control) => elementValue(control).trim())
+      .find(Boolean);
+    return visibleTopic ? { topicHint: visibleTopic } : {};
+  }
+
+  function ensureCorrectionNotice() {
+    if (correctionNotice) return correctionNotice;
+
+    correctionNotice = document.createElement("div");
+    correctionNotice.className = "mt-input-assist-correction";
+    correctionNotice.hidden = true;
+    correctionNotice.setAttribute("role", "status");
+    correctionNotice.setAttribute("aria-live", "polite");
+    correctionNotice.setAttribute("aria-atomic", "true");
+    document.body.appendChild(correctionNotice);
+    return correctionNotice;
+  }
+
+  function hideCorrectionNotice() {
+    window.clearTimeout(correctionNoticeTimer);
+    correctionNoticeTimer = 0;
+    if (correctionNotice) correctionNotice.hidden = true;
+  }
+
+  function showCorrectionNotice(element, previousValue, canonicalValue, resolveElement) {
+    const notice = ensureCorrectionNotice();
+    notice.replaceChildren();
+
+    const message = document.createElement("span");
+    message.textContent = `Changed “${previousValue}” to “${canonicalValue}”.`;
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.textContent = "Undo";
+    undo.addEventListener("click", () => {
+      const currentElement =
+        typeof resolveElement === "function" ? resolveElement() || element : element;
+      const ignoredValue = normalize(previousValue);
+      ignoredCorrectionValues.set(currentElement, ignoredValue);
+      const stableKey =
+        correctionElementKey(currentElement) || correctionElementKey(element);
+      if (stableKey) ignoredCorrectionKeys.set(stableKey, ignoredValue);
+      setElementValue(currentElement, previousValue);
+      if (currentElement instanceof HTMLElement) currentElement.focus();
+      hideCorrectionNotice();
+    });
+    notice.append(message, undo);
+    notice.hidden = false;
+
+    window.clearTimeout(correctionNoticeTimer);
+    correctionNoticeTimer = window.setTimeout(hideCorrectionNotice, 7000);
+  }
+
+  function correctElement(element, context, options = {}) {
+    if (!element || !AUTO_RESOLVE_CONTEXTS.has(context)) return false;
+    const currentValue = elementValue(element).trim();
+    if (!currentValue) return false;
+    const stableKey = correctionElementKey(element);
+    const ignoredValue =
+      ignoredCorrectionValues.get(element) ||
+      (stableKey ? ignoredCorrectionKeys.get(stableKey) : undefined);
+    if (ignoredValue && ignoredValue === normalize(currentValue)) return false;
+    if (ignoredValue && ignoredValue !== normalize(currentValue)) {
+      ignoredCorrectionValues.delete(element);
+      if (stableKey) ignoredCorrectionKeys.delete(stableKey);
+    }
+
+    const match = resolveCanonicalMatch(context, currentValue, options);
+    if (!match || !setElementValue(element, match.canonicalValue)) return false;
+    showCorrectionNotice(element, currentValue, match.canonicalValue, options.resolveElement);
+    return true;
+  }
+
+  function clearCorrectionTimer(element) {
+    const timer = correctionTimers.get(element);
+    if (timer) window.clearTimeout(timer);
+    correctionTimers.delete(element);
+  }
+
+  function scheduleCanonicalCorrection(element, context, options = {}) {
+    clearCorrectionTimer(element);
+    if (!AUTO_RESOLVE_CONTEXTS.has(context) || composingControls.has(element)) return;
+    const timer = window.setTimeout(() => {
+      correctionTimers.delete(element);
+      if (!composingControls.has(element)) correctElement(element, context, options);
+    }, AUTO_RESOLVE_DELAY_MS);
+    correctionTimers.set(element, timer);
+  }
+
   function eligibleControl(control) {
     if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
       return false;
@@ -224,6 +837,14 @@
     if (!(form instanceof HTMLFormElement) || preparedForms.has(form)) return;
     preparedForms.add(form);
     form.addEventListener("submit", () => {
+      form
+        .querySelectorAll("input, textarea")
+        .forEach((control) => {
+          const context = inferContext(control);
+          if (context) {
+            correctElement(control, context, contextOptionsForElement(control, context));
+          }
+        });
       const values = {
         client_local_date: localCalendarDate(),
         client_time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -338,7 +959,11 @@
       return;
     }
 
-    activeResults = rankSuggestions(context, control.value);
+    activeResults = rankSuggestions(
+      context,
+      control.value,
+      contextOptionsForElement(control, context),
+    );
     activeIndex = activeResults.length ? 0 : -1;
     panel.replaceChildren();
 
@@ -602,8 +1227,31 @@
       updateWebsitePreview(control);
     });
     control.addEventListener("input", () => {
-      if (document.activeElement === control && inferContext(control)) renderSuggestions(control);
+      const activeContext = inferContext(control);
+      if (document.activeElement === control && activeContext) renderSuggestions(control);
+      if (activeContext) {
+        scheduleCanonicalCorrection(
+          control,
+          activeContext,
+          contextOptionsForElement(control, activeContext),
+        );
+      }
       updateWebsitePreview(control);
+    });
+    control.addEventListener("compositionstart", () => {
+      composingControls.add(control);
+      clearCorrectionTimer(control);
+    });
+    control.addEventListener("compositionend", () => {
+      composingControls.delete(control);
+      const activeContext = inferContext(control);
+      if (activeContext) {
+        scheduleCanonicalCorrection(
+          control,
+          activeContext,
+          contextOptionsForElement(control, activeContext),
+        );
+      }
     });
     control.addEventListener("keydown", (event) => {
       if (activeControl !== control || !suggestionPanel || suggestionPanel.hidden) return;
@@ -625,6 +1273,15 @@
       }
     });
     control.addEventListener("blur", () => {
+      clearCorrectionTimer(control);
+      const activeContext = inferContext(control);
+      if (!composingControls.has(control) && activeContext) {
+        correctElement(
+          control,
+          activeContext,
+          contextOptionsForElement(control, activeContext),
+        );
+      }
       window.setTimeout(() => {
         if (
           activeControl === control &&
@@ -696,12 +1353,19 @@
   }
 
   window.MoralTradeInputAssist = {
+    autoResolveDelayMs: AUTO_RESOLVE_DELAY_MS,
+    composeCommitmentSuggestions,
+    contextOptionsForElement,
+    correctElement,
+    editDistance,
     extractWebsiteMentions,
     findDonationRoute,
     inferContext,
     normalize,
     rankSuggestions,
+    resolveCanonicalMatch,
     scoreSuggestion,
+    similarity,
   };
 
   fetch(CATALOG_URL, { credentials: "same-origin" })
@@ -714,6 +1378,7 @@
       CONTEXT_KEYS.forEach((key) => {
         if (!Array.isArray(catalog[key])) catalog[key] = [];
       });
+      if (!Array.isArray(catalog.commitmentIntents)) catalog.commitmentIntents = [];
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", start, { once: true });
       } else {

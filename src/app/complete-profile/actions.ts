@@ -17,6 +17,7 @@ import {
   buildPersistedProfilePriorities,
   getRankedProfileCauseAreas,
   getRankedProfilePriorityLabels,
+  normalizeProfilePriorityAllocation,
 } from "@/lib/profile-priorities";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -44,10 +45,17 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
   );
 
   if (!hasSupabaseEnv()) {
-    redirectWithMessage(returnTo, "error", "Account storage is unavailable. Contact support before continuing.");
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Account storage is unavailable. Contact support before continuing.",
+    );
   }
 
-  const walkthroughDraft = createWalkthroughProfileDraft({
+  const profileSource =
+    read(formData, "profile_source") === "direct" ? "direct" : "walkthrough";
+
+  const profileDraft = createWalkthroughProfileDraft({
     originalCause: read(formData, "walkthrough_cause"),
     causeArea: read(formData, "cause_area"),
     offerType: read(formData, "offer_type"),
@@ -59,12 +67,30 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     firstAction: read(formData, "first_action"),
   });
 
-  if (!walkthroughDraft) {
-    redirectWithMessage(returnTo, "error", "The walkthrough profile could not be verified. Return to the walkthrough and try again.");
+  if (!profileDraft) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "The profile setup could not be verified. Reload Complete Profile and try again.",
+    );
   }
+
+  const rawPriorityAllocation = read(formData, "priority_allocation");
+  const normalizedPriorityAllocation = normalizeProfilePriorityAllocation(
+    rawPriorityAllocation,
+  );
+  const rankedCauseAreas = normalizedPriorityAllocation
+    ? getRankedProfileCauseAreas(normalizedPriorityAllocation)
+    : [];
+  const primaryCauseArea =
+    profileSource === "direct"
+      ? rankedCauseAreas[0] ?? profileDraft.causeArea
+      : profileDraft.causeArea;
 
   const submission = normalizeCompleteProfileSubmission({
     displayName: read(formData, "display_name"),
+    username: read(formData, "username"),
+    publicInvitationMentionsEnabled: read(formData, "public_invitation_mentions_enabled"),
     role: read(formData, "role"),
     affiliation: read(formData, "affiliation"),
     bio: read(formData, "bio"),
@@ -72,27 +98,29 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     monthlyTime: read(formData, "monthly_time"),
     contactRule: read(formData, "contact_rule"),
     privateProfile: read(formData, "private_profile"),
-    offerType: walkthroughDraft.offerType,
-    causeArea: walkthroughDraft.causeArea,
-    matchGet: walkthroughDraft.matchGet,
-    priorityAllocation: read(formData, "priority_allocation"),
+    offerType: profileDraft.offerType,
+    causeArea: primaryCauseArea,
+    matchGet: profileDraft.matchGet,
+    priorityAllocation: rawPriorityAllocation,
   });
 
   if (!submission) {
     redirectWithMessage(
       returnTo,
       "error",
-      "Review your priorities, add a display name and role, then check the participation limits before saving.",
+      "Review your priorities, choose a valid username, add a display name and role, then check the participation limits before saving.",
     );
   }
 
   const persistedPriorities = buildPersistedProfilePriorities(
     submission.priorityAllocation,
   );
-  const rankedCauseAreas = getRankedProfileCauseAreas(submission.priorityAllocation);
-  const savedCauseAreas = rankedCauseAreas.includes(walkthroughDraft.causeArea)
-    ? rankedCauseAreas
-    : [...rankedCauseAreas, walkthroughDraft.causeArea];
+  const savedCauseAreas =
+    profileSource === "direct"
+      ? rankedCauseAreas
+      : rankedCauseAreas.includes(profileDraft.causeArea)
+        ? rankedCauseAreas
+        : [...rankedCauseAreas, profileDraft.causeArea];
 
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
@@ -100,7 +128,9 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
 
   let privatePreferences: ReturnType<typeof prepareCompleteProfilePrivatePreferences>;
   try {
-    privatePreferences = prepareCompleteProfilePrivatePreferences(submission);
+    privatePreferences = prepareCompleteProfilePrivatePreferences(submission, {
+      includeOfferType: profileSource === "walkthrough",
+    });
   } catch (error) {
     console.error("Failed to encrypt complete-profile preferences", error);
     redirectWithMessage(
@@ -123,6 +153,8 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     .from("profiles")
     .update({
       display_name: submission.displayName,
+      username: submission.username,
+      public_invitation_mentions_enabled: submission.publicInvitationMentionsEnabled,
       affiliation: submission.affiliation,
       bio: submission.bio,
     })
@@ -130,7 +162,16 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
 
   if (profileError) {
     console.error("Failed to update complete profile identity", profileError);
-    redirectWithMessage(returnTo, "error", "Your identity details could not be saved. Try again.");
+    const usernameConflict =
+      profileError.code === "23505" ||
+      /username.*(?:claimed|reserved|unique|already)/iu.test(profileError.message ?? "");
+    redirectWithMessage(
+      returnTo,
+      "error",
+      usernameConflict
+        ? "That username is already claimed or reserved. Choose another username."
+        : "Your identity details could not be saved. Try again.",
+    );
   }
 
   const { error: onboardingError } = await (supabase as any)
@@ -139,13 +180,16 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
       {
         cause_areas: savedCauseAreas,
         completed_at: new Date().toISOString(),
-        first_action: walkthroughDraft.firstAction,
-        invite_target: walkthroughDraft.matchName,
-        participant_kind: walkthroughDraft.participantKind,
-        primary_goal: walkthroughDraft.primaryGoal,
+        first_action: profileDraft.firstAction,
+        invite_target: profileSource === "walkthrough" ? profileDraft.matchName : "",
+        participant_kind: profileDraft.participantKind,
+        primary_goal: profileDraft.primaryGoal,
         priority_allocations: persistedPriorities,
         profile_id: viewer.authUser.id,
-        referral_source: "Moral Trade walkthrough",
+        referral_source:
+          profileSource === "walkthrough"
+            ? "Moral Trade walkthrough"
+            : "Direct Complete Profile",
         status: "completed",
       },
       { onConflict: "profile_id" },
@@ -153,12 +197,17 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
 
   if (onboardingError) {
     console.error("Failed to save complete profile onboarding", onboardingError);
-    redirectWithMessage(returnTo, "error", "The walkthrough selections could not be attached to your profile.");
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "The profile selections could not be attached to your account.",
+    );
   }
 
-  const { openToPayment, openToPledges } = getCompleteProfileOfferOpenness(
-    walkthroughDraft.offerType,
-  );
+  const { openToPayment, openToPledges } =
+    profileSource === "walkthrough"
+      ? getCompleteProfileOfferOpenness(profileDraft.offerType)
+      : { openToPayment: false, openToPledges: false };
   const privacyStage = getCompleteProfilePrivacyStage(
     submission.privateProfile,
     submission.contactRule,
@@ -166,7 +215,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
   const publicPreview = buildCompleteProfilePublicPreview(submission);
   const wishProfileBasePayload = {
     profile_id: viewer.authUser.id,
-    participant_kind: walkthroughDraft.participantKind,
+    participant_kind: profileDraft.participantKind,
     collective_name: "",
     causes: savedCauseAreas,
     location_city: null,
@@ -249,8 +298,10 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     console.error("Failed to attach ranked priorities to profile synthesis", synthesisError);
   }
 
-  const cookieStore = await cookies();
-  cookieStore.delete(WALKTHROUGH_PROFILE_COOKIE_NAME);
+  if (profileSource === "walkthrough") {
+    const cookieStore = await cookies();
+    cookieStore.delete(WALKTHROUGH_PROFILE_COOKIE_NAME);
+  }
 
   revalidatePath("/complete-profile");
   revalidatePath("/dashboard");

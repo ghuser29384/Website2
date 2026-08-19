@@ -25,8 +25,43 @@ export interface TradeDraftValues {
   privacyScope: string;
   exitConditions: string;
   notes: string;
-  publicEvidenceCertification: boolean;
   voluntaryCertification: boolean;
+}
+
+export interface TradeDraftSourceContext {
+  mode: "counteroffer";
+  counterpartyName: string;
+  sourceUrl: string;
+  sourceOpportunityId: string;
+  exposureRequestId: string;
+  sourceRevision: number;
+  matchContextStorageKey: string;
+  duplicateDraftCount: number;
+  sourceSnapshot: {
+    offeredCause: string;
+    requestedCause: string;
+    offerAction: string;
+    requestAction: string;
+    verification: string;
+    duration: string;
+  };
+}
+
+type ImportedReviewKey =
+  | "counterparty"
+  | "offered_cause"
+  | "requested_cause"
+  | "proposed_action"
+  | "requested_action"
+  | "duration"
+  | "evidence_rule";
+
+interface TransientFeedMatchContext {
+  actionFitLabel: string;
+  matchPercent: number | null;
+  ownerAlias: string;
+  reason: string;
+  reasonDetails: string[];
 }
 
 interface TradeDraftWorkbenchProps {
@@ -35,6 +70,7 @@ interface TradeDraftWorkbenchProps {
   initialValues?: Partial<TradeDraftValues>;
   saveAction: (formData: FormData) => void | Promise<void>;
   submissionKey: string;
+  sourceContext?: TradeDraftSourceContext | null;
   templateLabel?: string | null;
 }
 
@@ -49,10 +85,9 @@ const DEFAULT_VALUES: TradeDraftValues = {
   evidenceDueDate: "",
   evidenceRule: "",
   maximumBurden: "",
-  privacyScope: "Agreement evidence and public-safe source copies are public by default. Private messages remain private. A documented safety exception may withhold specific proof.",
+  privacyScope: "Original evidence, identities, payment details, and exact timestamps stay private. Only safe outcome metadata may be published: action category, lifecycle status, confidence band, completion fraction, payout percentage, and calendar date.",
   exitConditions: "",
   notes: "",
-  publicEvidenceCertification: false,
   voluntaryCertification: false,
 };
 
@@ -65,6 +100,28 @@ const STEP_LABELS = [
   "Evidence",
   "Review",
 ] as const;
+
+const IMPORTED_REVIEW_LABELS: ReadonlyArray<{
+  key: ImportedReviewKey;
+  label: string;
+}> = [
+  { key: "counterparty", label: "Counterparty" },
+  { key: "offered_cause", label: "Priority you advance" },
+  { key: "requested_cause", label: "Priority you want advanced" },
+  { key: "proposed_action", label: "Your commitment" },
+  { key: "requested_action", label: "Counterparty commitment" },
+  { key: "duration", label: "Duration" },
+  { key: "evidence_rule", label: "Evidence requirements" },
+];
+
+const VALUE_REVIEW_KEY: Partial<Record<keyof TradeDraftValues, ImportedReviewKey>> = {
+  offeredCause: "offered_cause",
+  requestedCause: "requested_cause",
+  proposedAction: "proposed_action",
+  requestedAction: "requested_action",
+  duration: "duration",
+  evidenceRule: "evidence_rule",
+};
 
 const DATE_SNAPSHOT_SUBSCRIBE = () => () => {};
 
@@ -162,6 +219,7 @@ export function TradeDraftWorkbench({
   initialValues,
   saveAction,
   submissionKey,
+  sourceContext = null,
   templateLabel,
 }: TradeDraftWorkbenchProps) {
   const [step, setStep] = useState(0);
@@ -190,9 +248,59 @@ export function TradeDraftWorkbench({
     useState(false);
   const [commandHandoffState, setCommandHandoffState] =
     useState<CommandHandoffState>(acceptCommandHandoff ? "loading" : null);
+  const [importedReviews, setImportedReviews] = useState<Record<ImportedReviewKey, boolean>>(
+    () =>
+      Object.fromEntries(
+        IMPORTED_REVIEW_LABELS.map(({ key }) => [key, false]),
+      ) as Record<ImportedReviewKey, boolean>,
+  );
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
+  const [transientMatchContext, setTransientMatchContext] =
+    useState<TransientFeedMatchContext | null>(null);
   const commandHandoff = useRef<
     ReturnType<typeof consumeCommandCenterHandoff> | undefined
   >(undefined);
+
+  useEffect(() => {
+    if (!sourceContext?.matchContextStorageKey) return;
+    try {
+      const raw = window.sessionStorage.getItem(sourceContext.matchContextStorageKey);
+      window.sessionStorage.removeItem(sourceContext.matchContextStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const createdAt = Number(parsed.createdAt);
+      if (!Number.isFinite(createdAt) || Date.now() - createdAt > 30 * 60 * 1000) return;
+      const reasonDetails = Array.isArray(parsed.reasonDetails)
+        ? parsed.reasonDetails
+            .filter((item): item is string => typeof item === "string")
+            .map((item) => item.trim().slice(0, 240))
+            .filter(Boolean)
+            .slice(0, 6)
+        : [];
+      const rawPercent = Number(parsed.matchPercent);
+      const timeoutId = window.setTimeout(() => {
+        setTransientMatchContext({
+          actionFitLabel:
+            typeof parsed.actionFitLabel === "string"
+              ? parsed.actionFitLabel.trim().slice(0, 40)
+              : "",
+          matchPercent: Number.isFinite(rawPercent)
+            ? Math.max(0, Math.min(100, Math.round(rawPercent)))
+            : null,
+          ownerAlias:
+            typeof parsed.ownerAlias === "string"
+              ? parsed.ownerAlias.trim().slice(0, 100)
+              : "",
+          reason:
+            typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 240) : "",
+          reasonDetails,
+        });
+      }, 0);
+      return () => window.clearTimeout(timeoutId);
+    } catch {
+      // Match context is intentionally optional and session-only.
+    }
+  }, [sourceContext?.matchContextStorageKey]);
 
   useEffect(() => {
     if (!acceptCommandHandoff) return;
@@ -245,9 +353,15 @@ export function TradeDraftWorkbench({
   const evidenceMinimumDate =
     values.startDate && values.startDate > localToday ? values.startDate : localToday;
 
-  const finalTermsComplete = STEP_LABELS.every(
+  const termsComplete = STEP_LABELS.every(
     (_label, index) => validateStep(index, values, localToday) === null,
   );
+  const importedReviewsComplete =
+    !sourceContext || IMPORTED_REVIEW_LABELS.every(({ key }) => importedReviews[key]);
+  const duplicateDecisionComplete =
+    !sourceContext || sourceContext.duplicateDraftCount === 0 || duplicateAcknowledged;
+  const finalTermsComplete =
+    termsComplete && importedReviewsComplete && duplicateDecisionComplete;
 
   function update<K extends keyof TradeDraftValues>(key: K, value: TradeDraftValues[K]) {
     setValues((current) => {
@@ -260,7 +374,20 @@ export function TradeDraftWorkbench({
       }
       return next;
     });
+    const importedKey = VALUE_REVIEW_KEY[key];
+    if (sourceContext && importedKey) {
+      setImportedReviews((current) => ({ ...current, [importedKey]: false }));
+    }
     setError(null);
+  }
+
+  function importedLabel(label: string, key: ImportedReviewKey) {
+    return (
+      <span className={styles.fieldLabelLine} data-imported-field={key}>
+        <span>{label}</span>
+        {sourceContext ? <span className={styles.sourceBadge}>From source</span> : null}
+      </span>
+    );
   }
 
   function nextStep() {
@@ -301,15 +428,40 @@ export function TradeDraftWorkbench({
         <input name="privacy_scope" type="hidden" value={values.privacyScope} />
         <input name="exit_conditions" type="hidden" value={values.exitConditions} />
         <input name="notes" type="hidden" value={values.notes} />
+        {sourceContext ? (
+          <>
+            <input name="source_opportunity_type" type="hidden" value="offer" />
+            <input
+              name="source_opportunity_id"
+              type="hidden"
+              value={sourceContext.sourceOpportunityId}
+            />
+            <input
+              name="exposure_request_id"
+              type="hidden"
+              value={sourceContext.exposureRequestId}
+            />
+            <input
+              name="source_terms_version"
+              type="hidden"
+              value={sourceContext.sourceRevision}
+            />
+            {IMPORTED_REVIEW_LABELS.map(({ key }) =>
+              importedReviews[key] ? (
+                <input key={key} name={`review_${key}`} type="hidden" value="true" />
+              ) : null,
+            )}
+            {duplicateAcknowledged ? (
+              <input name="duplicate_acknowledged" type="hidden" value="true" />
+            ) : null}
+          </>
+        ) : null}
         {values.voluntaryCertification ? (
           <input name="voluntary_certification" type="hidden" value="on" />
         ) : null}
-        {values.publicEvidenceCertification ? (
-          <input name="public_evidence_certification" type="hidden" value="on" />
-        ) : null}
 
         <header className={styles.top}>
-          <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/">
+          <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/" prefetch={false}>
             <MoralTradeWordmark />
           </Link>
           <div aria-label="Draft progress" className={styles.progress}>
@@ -327,6 +479,72 @@ export function TradeDraftWorkbench({
         </header>
 
         <div>
+          {sourceContext ? (
+            <section className={styles.sourceContext} aria-label="Feed source context">
+              <div className={styles.sourceContextHead}>
+                <div>
+                  <span className={styles.kicker}>Counteroffer source</span>
+                  <h2>Based on {sourceContext.counterpartyName}&apos;s open offer</h2>
+                </div>
+                <Link className={styles.inlineButton} href={sourceContext.sourceUrl}>
+                  View original
+                </Link>
+              </div>
+              <p>
+                The original participant is preselected as the counterparty. Nothing has been
+                sent, and this Phase-1 draft cannot be published, invited, messaged, or converted
+                into an agreement. A true counteroffer remains linked to its exact source revision.
+              </p>
+              <dl className={styles.sourceTerms}>
+                <div>
+                  <dt>They offered</dt>
+                  <dd>{sourceContext.sourceSnapshot.offerAction}</dd>
+                </div>
+                <div>
+                  <dt>They requested</dt>
+                  <dd>{sourceContext.sourceSnapshot.requestAction}</dd>
+                </div>
+                <div>
+                  <dt>Source revision</dt>
+                  <dd>{sourceContext.sourceRevision}</dd>
+                </div>
+              </dl>
+              <div className={styles.matchContext}>
+                <strong>Why it appeared in your Feed</strong>
+                {transientMatchContext ? (
+                  <>
+                    <p>
+                      {transientMatchContext.matchPercent !== null
+                        ? `${transientMatchContext.matchPercent}% match · `
+                        : ""}
+                      {transientMatchContext.actionFitLabel || transientMatchContext.reason || "Feed match"}
+                    </p>
+                    {transientMatchContext.reasonDetails.length ? (
+                      <ul>
+                        {transientMatchContext.reasonDetails.map((detail) => (
+                          <li key={detail}>{detail}</li>
+                        ))}
+                      </ul>
+                    ) : transientMatchContext.reason ? (
+                      <p>{transientMatchContext.reason}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p>
+                    This source was verified against your authenticated exposure receipt. Match
+                    scores and explanations are session-only and are not stored with the draft.
+                  </p>
+                )}
+              </div>
+              {sourceContext.duplicateDraftCount > 0 ? (
+                <div className={`${styles.message} ${styles.messageError}`} role="status">
+                  You already have {sourceContext.duplicateDraftCount} active draft
+                  {sourceContext.duplicateDraftCount === 1 ? "" : "s"} based on this source.
+                  You may create another only after explicitly acknowledging the duplicate below.
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           {formMessage ? (
             <div
               className={`${styles.message} ${
@@ -374,7 +592,7 @@ export function TradeDraftWorkbench({
                   </div>
                   <div className={`${styles.fields} ${styles.fieldGrid}`}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Priority you advance</span>
+                      {importedLabel("Priority you advance", "offered_cause")}
                       <input
                         autoComplete="off"
                         autoFocus
@@ -390,7 +608,7 @@ export function TradeDraftWorkbench({
                       </span>
                     </label>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Priority you want advanced</span>
+                      {importedLabel("Priority you want advanced", "requested_cause")}
                       <input
                         autoComplete="off"
                         className={styles.input}
@@ -416,7 +634,7 @@ export function TradeDraftWorkbench({
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Your commitment</span>
+                      {importedLabel("Your commitment", "proposed_action")}
                       <textarea
                         autoComplete="off"
                         autoFocus
@@ -446,7 +664,7 @@ export function TradeDraftWorkbench({
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Counterparty commitment</span>
+                      {importedLabel("Counterparty commitment", "requested_action")}
                       <textarea
                         autoComplete="off"
                         autoFocus
@@ -504,7 +722,7 @@ export function TradeDraftWorkbench({
                   <div className={styles.fields}>
                     <div className={`${styles.fieldGrid} ${styles.fieldGridThree}`}>
                       <label className={styles.field}>
-                        <span className={styles.fieldLabel}>Duration</span>
+                        {importedLabel("Duration", "duration")}
                         <input
                           autoComplete="off"
                           autoFocus
@@ -596,11 +814,11 @@ export function TradeDraftWorkbench({
                 <>
                   <div className={styles.prompt}>
                     <h1>What evidence will show completion?</h1>
-                    <p>Choose a standardized evidence type or describe another clear record. Certified public-safe copies are public by default; private messages remain private.</p>
+                    <p>Choose a standardized evidence type or describe another clear record. Original evidence stays private to participants and assigned reviewers.</p>
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Evidence</span>
+                      {importedLabel("Evidence", "evidence_rule")}
                       <textarea
                         autoComplete="off"
                         autoFocus
@@ -616,7 +834,7 @@ export function TradeDraftWorkbench({
                       </span>
                     </label>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Public evidence and safety scope</span>
+                      <span className={styles.fieldLabel}>Evidence privacy and public metadata</span>
                       <textarea
                         autoComplete="off"
                         className={styles.textarea}
@@ -626,7 +844,7 @@ export function TradeDraftWorkbench({
                       />
                     </label>
                     <span className={styles.helper}>
-                      Remove exact addresses, account numbers, private contact details, and unrelated personal information before evidence submission. A narrow, documented safety exception may withhold specific proof.
+                      Submit only what the reviewer needs. Public outcome metadata never includes identities, the amount, provider, receipt, exact timestamps, links, or files.
                     </span>
                   </div>
                 </>
@@ -691,9 +909,62 @@ export function TradeDraftWorkbench({
                     </div>
                     <div className={styles.receiptRow}>
                       <dt>Evidence visibility</dt>
-                      <dd>{concise(values.privacyScope, "Public by default")}</dd>
+                      <dd>{concise(values.privacyScope, "Originals private")}</dd>
                     </div>
                   </dl>
+
+                  {sourceContext ? (
+                    <section className={styles.importReview} aria-labelledby="import-review-heading">
+                      <div>
+                        <span className={styles.kicker}>Imported-field review</span>
+                        <h2 id="import-review-heading">Confirm each material field separately.</h2>
+                        <p>
+                          Editing an imported field clears its confirmation. These confirmations
+                          are stored; the Feed match score and reasons are not.
+                        </p>
+                      </div>
+                      <div className={styles.importReviewGrid}>
+                        {IMPORTED_REVIEW_LABELS.map(({ key, label }) => (
+                          <label className={styles.importReviewItem} key={key}>
+                            <input
+                              checked={importedReviews[key]}
+                              onChange={(event) =>
+                                setImportedReviews((current) => ({
+                                  ...current,
+                                  [key]: event.target.checked,
+                                }))
+                              }
+                              type="checkbox"
+                            />
+                            <span>
+                              <strong>{label}</strong>
+                              <small>
+                                {key === "counterparty"
+                                  ? sourceContext.counterpartyName
+                                  : "Reviewed against the original source"}
+                              </small>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {sourceContext.duplicateDraftCount > 0 ? (
+                        <label className={`${styles.importReviewItem} ${styles.duplicateReview}`}>
+                          <input
+                            checked={duplicateAcknowledged}
+                            onChange={(event) => setDuplicateAcknowledged(event.target.checked)}
+                            type="checkbox"
+                          />
+                          <span>
+                            <strong>Create another draft from this source</strong>
+                            <small>
+                              I understand that {sourceContext.duplicateDraftCount} active draft
+                              {sourceContext.duplicateDraftCount === 1 ? " already exists" : "s already exist"}.
+                            </small>
+                          </span>
+                        </label>
+                      ) : null}
+                    </section>
+                  ) : null}
 
                   <label className={styles.certification}>
                     <input
@@ -707,26 +978,14 @@ export function TradeDraftWorkbench({
                     </span>
                   </label>
 
-                  <label className={styles.certification}>
-                    <input
-                      className={styles.checkbox}
-                      checked={values.publicEvidenceCertification}
-                      onChange={(event) => update("publicEvidenceCertification", event.target.checked)}
-                      type="checkbox"
-                    />
-                    <span>
-                      I understand that evidence submitted under an active agreement is public by default. I will submit only public-safe copies with sensitive identifiers and unrelated personal information removed.
-                    </span>
-                  </label>
-
                   <div className={styles.safetyList}>
                     <div className={styles.safetyItem}>
                       <strong>No payment or custody</strong>
                       <span>This route records non-financial commitments. Moral Trade does not hold or release funds here.</span>
                     </div>
                     <div className={styles.safetyItem}>
-                      <strong>Public-safe evidence</strong>
-                      <span>Evidence is public by default; only necessary, redacted, or certified public-safe copies should be submitted.</span>
+                      <strong>Private evidence originals</strong>
+                      <span>Only safe outcome metadata is public. Files, links, identities, payment details, and exact timestamps remain private.</span>
                     </div>
                     <div className={styles.safetyItem}>
                       <strong>Separate confirmation</strong>
@@ -756,7 +1015,7 @@ export function TradeDraftWorkbench({
             </div>
             <div className={styles.guardrail}>
               <TradeFlowIcon name="evidence" />
-              Public-safe evidence specified
+              Private evidence scope specified
             </div>
             <div className={styles.guardrail}>
               <TradeFlowIcon name="lock" />
@@ -787,7 +1046,11 @@ export function TradeDraftWorkbench({
           ) : (
             <>
               <span className={styles.footerNote}>
-                Save privately, or certify voluntariness and public-safe evidence before submitting once for operator review.
+                {sourceContext
+                  ? importedReviewsComplete && duplicateDecisionComplete
+                    ? "Save a private source-bound counteroffer, or submit it for operator review. It will not be delivered in Phase 1."
+                    : "Review every imported field and resolve the duplicate warning before saving."
+                  : "Save privately, or certify voluntariness before submitting once for operator review."}
               </span>
               <PendingSubmitButton
                 className={`${styles.button} ${styles.buttonDark}`}
@@ -800,11 +1063,7 @@ export function TradeDraftWorkbench({
               </PendingSubmitButton>
               <PendingSubmitButton
                 className={`${styles.button} ${styles.buttonPrimary}`}
-                disabled={
-                  !finalTermsComplete ||
-                  !values.voluntaryCertification ||
-                  !values.publicEvidenceCertification
-                }
+                disabled={!finalTermsComplete || !values.voluntaryCertification}
                 name="intent"
                 pendingLabel="Submitting for review..."
                 value="submit"
@@ -826,10 +1085,14 @@ export function TradeDraftSignInGate({ returnTo = "/trades/new" }: { returnTo?: 
   return (
     <main className={`${styles.page} ${styles.gate}`} id="main-content" tabIndex={-1}>
       <header className={styles.gateHeader}>
-        <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/">
+        <Link aria-label="Moral Trade, home" className={styles.brandLink} href="/" prefetch={false}>
           <MoralTradeWordmark />
         </Link>
-        <Link className={`${styles.button} ${styles.buttonBack}`} href="/discover">
+        <Link
+          className={`${styles.button} ${styles.buttonBack}`}
+          href="/discover"
+          prefetch={false}
+        >
           Exit
         </Link>
       </header>
