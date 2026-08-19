@@ -49,11 +49,16 @@ jobs:
       - name: Install exact repository dependencies
         run: npm ci
 
-      - name: Install PostgreSQL client
+      - name: Verify PostgreSQL client
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            timeout 300s sudo apt-get update -qq
+            timeout 300s sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+          pg_dump --version
 
       - name: Generate the production-derived data-free baseline
         shell: bash
