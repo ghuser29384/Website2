@@ -1,0 +1,11 @@
+{
+  "base_seed": 69520260814,
+  "base_sha": "79ca382c3bdc325dfc5a28e2cbbafc1b95640386",
+  "draws_per_scenario_and_basis": 200000,
+  "frozen_input_set_hash": "4af76469f2f1efc8444c1d5702a99e5df4d404110c04b3380ff451579098caac",
+  "original_first_complete_run_commit": "2b3a2c2d",
+  "output_set_hash": "e8395b1f0c9bedef843bb7535f3b02358e08d56253b89686092fc464512a0f1f",
+  "preservation_rule": "The literal first complete run remains at Git commit 2b3a2c2d; preserve it and REVISION_LOG.md.",
+  "schema_version": 1,
+  "status": "complete_corrected_frozen_parameter_run"
+}

@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "frozen_before_results": true,
+  "scenarios": [
+    {
+      "id": "central",
+      "description": "Owner trajectory with AI-proposed central priors and adaptive coverage controller.",
+      "multipliers": {},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "thin_market",
+      "description": "Sparse compatible demand and supply with weak repeat density.",
+      "multipliers": {"liquidity": 0.45, "redirect_compatibility": 0.65, "direct_efficiency": 0.60, "repeat_use": 0.72, "coact_completion": 0.70},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "trust_evidence_failure",
+      "description": "Trust and evidence burden block otherwise compatible activity.",
+      "multipliers": {"trust": 0.50, "evidence": 0.50, "reliability": 0.72, "direct_efficiency": 0.70, "dac_demand": 0.65},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "redirect_dominant",
+      "description": "Allocation shifts toward redirects and away from direct trade and pools.",
+      "multipliers": {"redirect_allocation": 1.65, "direct_allocation": 0.50, "dac_allocation": 0.55, "redirect_compatibility": 1.20},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "direct_trade_underperformance",
+      "description": "Price/evidence mismatch and Co-Act attrition weaken direct mechanisms.",
+      "multipliers": {"direct_efficiency": 0.35, "coact_completion": 0.40, "price_fit": 0.65},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "strong_network_repeat",
+      "description": "Strong network thickness, trust, retention, and repeat use.",
+      "multipliers": {"liquidity": 1.50, "trust": 1.15, "repeat_use": 1.60, "retention": 1.01, "coact_completion": 1.20, "redirect_compatibility": 1.15},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "reserve_constrained_dacs",
+      "description": "High willing pledge flow collides with slow reserve replenishment.",
+      "multipliers": {"dac_demand": 2.30, "bonus_liability": 1.25, "strategic_delay": 1.20},
+      "dac_policy": "stress_percentile",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "high_bonus_surcharge_sensitive",
+      "description": "Contributors respond to high early bonuses but pool success is strongly surcharge-sensitive.",
+      "multipliers": {"bonus_response": 1.80, "surcharge_sensitivity": 1.80, "bonus_liability": 1.35, "dac_demand": 1.20},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_15_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "near_zero_additionality",
+      "description": "Almost all activity is would-do-anyway or displaced rather than caused.",
+      "multipliers": {"cash_additionality": 0.05, "time_additionality": 0.05, "displacement": 1.60, "rescued_share": 0.10},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "voluntary_pools",
+      "description": "Explicit voluntary-only fixed-5% pool policy with stronger strategic free-riding.",
+      "multipliers": {"strategic_delay": 1.50, "free_riding": 1.45, "dac_demand": 0.85},
+      "dac_policy": "fixed_0.05",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.0
+    },
+    {
+      "id": "compulsory_5pct_governance",
+      "description": "Noncentral governance rule redirects 5% of recent Moral Trade amount to user-selected pools and may reduce retention.",
+      "multipliers": {"dac_demand": 1.60, "retention": 0.95, "trust": 0.92, "repeat_use": 0.92},
+      "dac_policy": "coverage_controller",
+      "bonus_schedule": "linear_10_to_2",
+      "compulsory_governance_share": 0.05
+    }
+  ]
+}
