@@ -45,7 +45,7 @@ test("the repair stylesheet makes the broken states explicit and viewport-aware"
   assert.match(repairCss, /\.other-cause-submit:disabled/);
 });
 
-test("the repair script scopes examples and suggestions, preserves the anchor, and bounds the list", () => {
+test("the repair script scopes examples and suggestions, preserves every request transition anchor, and bounds the list", () => {
   for (const cause of [
     "Existential risk",
     "Future flourishing",
@@ -69,6 +69,15 @@ test("the repair script scopes examples and suggestions, preserves the anchor, a
     /vegetarian|Help grow Moral Trade|GiveDirectly/i,
   );
   assert.match(repairScript, /window\.scrollTo\(\{ top: 0, left: 0, behavior: "auto" \}\)/);
+  const transitionRestore = repairScript.match(
+    /function restoreRequestTopWhenVisible\(\)[\s\S]*?\n  }/,
+  );
+  assert.ok(transitionRestore, "request-step visibility must trigger a canonical top restoration");
+  assert.doesNotMatch(transitionRestore[0], /innerWidth/);
+  assert.match(repairScript, /new MutationObserver\(restoreRequestTopWhenVisible\)/);
+  assert.match(repairScript, /attributeFilter: \["class", "hidden"\]/);
+  assert.match(repairScript, /window\.requestAnimationFrame\(restoreRequestTop\)/);
+  assert.match(repairScript, /window\.setTimeout\(restoreRequestTop, 0\)/);
   assert.match(repairScript, /Math\.min\(276, Math\.floor\(available\)\)/);
   assert.match(repairScript, /submit\.disabled = input\.value\.trim\(\)\.length === 0/);
   assert.match(repairScript, /aria-current/);
