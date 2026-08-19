@@ -1,0 +1,3 @@
+authoritative pre-activation baseline capture trigger
+2026-08-18T15:20:00Z
+source main f1cd364bf058b28b3b29501aa6528c48f8f39bb7
