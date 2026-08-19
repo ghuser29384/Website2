@@ -1,4 +1,4 @@
-name: Resume authorized DAC production migration after forward fix
+name: Complete authorized DAC production database cutover
 
 on:
   pull_request:
@@ -22,23 +22,21 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  EXPECTED_MAIN_SHA: 4bc8cd28205915d313286136b7335d5aeb7f3c49
+  EXPECTED_MAIN_TREE: 3c75122bffe5fb3d98bea6da97a04d9cbc87282d
   EXPECTED_PROJECT_REF: jnpoxvalyjtdghnperyu
   EXPECTED_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
   EXPECTED_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
-  FORWARD_FIX_PR_HEAD: e1799fed95e16ed06e159048b70eeafbd4e7f468
-  FORWARD_FIX_VERSION: "20260818173000"
-  FORWARD_FIX_NAME: mpgf_dac_public_goods_foundation_reconciliation
-  FORWARD_FIX_PATH: supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql
   BACKUP_RUN_ID: "32147479359"
   BACKUP_RUN_HEAD: 97b7f19f3feb5c9227bfcf7b49c9eaae15164ab0
   BACKUP_ARTIFACT_ID: "9328374066"
   BACKUP_ARTIFACT_DIGEST: sha256:d096c8bad473e9babea3f3fb55747cc78bcf02493ff9378a08e5cbffa7aff54b
   POSTGRES_IMAGE: postgres:17
-  EVIDENCE_DIR: dac-production-migration-resume-evidence
+  EVIDENCE_DIR: dac-production-database-cutover-evidence
 
 jobs:
   migrate:
-    name: Apply reviewed forward fix and complete exact DAC schema cutover
+    name: Apply eleven exact DAC migrations and prove terminal database state
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -47,38 +45,31 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
-      - name: Check out exact then-current main
+      - name: Check out exact authorized main
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
           fetch-depth: 0
 
-      - name: Guard merged forward fix, immutable migration source, and current main
+      - name: Guard exact source identity and unchanged current main
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_MAIN_TREE"
           remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          test -n "$remote_main"
-          test "$(git rev-parse HEAD)" = "$remote_main"
-          git cat-file -e "$FORWARD_FIX_PR_HEAD^{commit}"
-          git merge-base --is-ancestor "$FORWARD_FIX_PR_HEAD" HEAD
-          test -f "$FORWARD_FIX_PATH"
-          git diff --exit-code "$FORWARD_FIX_PR_HEAD" HEAD -- "$FORWARD_FIX_PATH"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
           git diff --check HEAD^
-
           mkdir -p "$EVIDENCE_DIR/wrappers"
           {
-            printf 'main_sha=%s\n' "$(git rev-parse HEAD)"
-            printf 'main_tree=%s\n' "$(git rev-parse HEAD^{tree})"
-            printf 'forward_fix_pr_head=%s\n' "$FORWARD_FIX_PR_HEAD"
-            printf 'forward_fix_sha256=%s\n' "$(sha256sum "$FORWARD_FIX_PATH" | awk '{print $1}')"
+            printf 'main_sha=%s\n' "$EXPECTED_MAIN_SHA"
+            printf 'main_tree=%s\n' "$EXPECTED_MAIN_TREE"
+            printf 'remote_main=%s\n' "$remote_main"
             printf 'checked_at=%s\n' "$(date -u +%FT%TZ)"
           } | tee "$EVIDENCE_DIR/exact-release-source.txt"
-          echo "RELEASE_MAIN_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "RELEASE_MAIN_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
 
-      - name: Prove durable encrypted pre-migration backup
+      - name: Prove durable encrypted pre-migration backup remains available
         shell: bash
         run: |
           set -euo pipefail
@@ -94,28 +85,22 @@ jobs:
             -H 'Accept: application/vnd.github+json' \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$BACKUP_ARTIFACT_ID" \
             > "$artifact_json"
-
           jq -e --arg head "$BACKUP_RUN_HEAD" '
-            .status == "completed"
-            and .conclusion == "success"
-            and .head_sha == $head
+            .status == "completed" and .conclusion == "success" and .head_sha == $head
           ' "$run_json" >/dev/null
           jq -e \
             --argjson id "$BACKUP_ARTIFACT_ID" \
             --arg digest "$BACKUP_ARTIFACT_DIGEST" \
             --arg original "f1cd364bf058b28b3b29501aa6528c48f8f39bb7" '
-            .id == $id
-            and .expired == false
-            and .digest == $digest
-            and (.name | contains($original))
+            .id == $id and .expired == false and .digest == $digest and (.name | contains($original))
           ' "$artifact_json" >/dev/null
-
           jq -n \
-            --arg run_id "$BACKUP_RUN_ID" \
-            --arg artifact_id "$BACKUP_ARTIFACT_ID" \
+            --arg runId "$BACKUP_RUN_ID" \
+            --arg head "$BACKUP_RUN_HEAD" \
+            --arg artifactId "$BACKUP_ARTIFACT_ID" \
             --arg digest "$BACKUP_ARTIFACT_DIGEST" \
-            --arg verified_at "$(date -u +%FT%TZ)" \
-            '{runId:$run_id,artifactId:$artifact_id,digest:$digest,completedSuccessfully:true,expired:false,verifiedAt:$verified_at}' \
+            --arg verifiedAt "$(date -u +%FT%TZ)" \
+            '{runId:$runId,head:$head,artifactId:$artifactId,digest:$digest,completedSuccessfully:true,expired:false,verifiedAt:$verifiedAt}' \
             > "$EVIDENCE_DIR/backup-proof.json"
 
       - name: Validate and mask exact TLS-only production database target
@@ -138,28 +123,33 @@ jobs:
           if (!valid) throw new Error("Refusing a database URL outside the exact production target.");
           NODE
 
-      - name: Pull PostgreSQL 17 migration toolchain
-        run: docker pull "$POSTGRES_IMAGE"
+      - name: Pull exact PostgreSQL 17 client image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$POSTGRES_IMAGE"
+          docker image inspect "$POSTGRES_IMAGE" --format '{{index .RepoDigests 0}}' \
+            | tee "$EVIDENCE_DIR/postgres-image.txt"
 
-      - name: Verify exact source hashes and generate resumable atomic wrappers
+      - name: Verify exact migration sources and generate atomic resumable wrappers
         shell: bash
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/migrations.json" <<'JSON'
           [
-            {"version":"20260818173000","name":"mpgf_dac_public_goods_foundation_reconciliation","path":"supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql","expected_sha256":null,"kind":"forward_fix"},
-            {"version":"20260806110000","name":"mpgf_pool_review_freeze","path":"supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql","expected_sha256":"0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c","kind":"already_applied"},
-            {"version":"20260806143000","name":"mpgf_pool_publication_materialization","path":"supabase/migrations/20260806143000_mpgf_pool_publication_materialization.sql","expected_sha256":"ee8ab4a2c52893ff9f2d8dfcbf7dc25370768af80e5401978f7c4b09e8cab9e8","kind":"dossier"},
-            {"version":"20260806173000","name":"mpgf_dac_pledge_intent_ledger","path":"supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql","expected_sha256":"36f558549361a1c0747dab5ecd545c74efbd42be14f6d634cb28e8b01f7c1e9c","kind":"dossier"},
-            {"version":"20260807050000","name":"mpgf_dac_success_lapse","path":"supabase/migrations/20260807050000_mpgf_dac_success_lapse.sql","expected_sha256":"83d9432f90fb808302249b5b572029d68bfc9aa2be32afbaba710f8e341d0948","kind":"dossier"},
-            {"version":"20260807100000","name":"mpgf_dac_public_terms_api","path":"supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql","expected_sha256":"356d220c009dd6213b761712a30ce0124d95f075d5fdab5c44da3398a6265a0f","kind":"dossier"},
-            {"version":"20260812073000","name":"mpgf_dac_terminal_event_constraint_reconciliation","path":"supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql","expected_sha256":"a19653e57a20dff8d01e1dd54b4b77304fe0712fe3356820953945e7b9999cd2","kind":"dossier"},
-            {"version":"20260812074500","name":"mpgf_dac_terminal_schema_reconciliation","path":"supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql","expected_sha256":"d8dc2a55840425357c8859b87d26fba0415bb1a50c8e739518a88b9686142cbb","kind":"dossier"},
-            {"version":"20260815010000","name":"mpgf_pool_lifecycle_event_ordering","path":"supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql","expected_sha256":"1d60c1abc73c8842cdcd9694c77d0e29dac4fe1de98a496714c0f2f2f5619766","kind":"dossier"},
-            {"version":"20260815011000","name":"mpgf_dac_terminal_guard_reconciliation","path":"supabase/migrations/20260815011000_mpgf_dac_terminal_guard_reconciliation.sql","expected_sha256":"c64d521c6adb7a865d9ec5e2f25e70adb09f08f91e0f1bc0ec0610977aafd108","kind":"dossier"}
+            {"order":1,"version":"20260806110000","name":"mpgf_pool_review_freeze","path":"supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql","expected_sha256":"0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c","kind":"already_applied"},
+            {"order":2,"version":"20260818173000","name":"mpgf_dac_public_goods_foundation_reconciliation","path":"supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql","expected_sha256":"e89a199cbdbb767d88a03585764bce774f533449519b67d04c082683f0638aa0","kind":"apply_or_verify"},
+            {"order":3,"version":"20260806143000","name":"mpgf_pool_publication_materialization","path":"supabase/migrations/20260806143000_mpgf_pool_publication_materialization.sql","expected_sha256":"ee8ab4a2c52893ff9f2d8dfcbf7dc25370768af80e5401978f7c4b09e8cab9e8","kind":"apply_or_verify"},
+            {"order":4,"version":"20260806173000","name":"mpgf_dac_pledge_intent_ledger","path":"supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql","expected_sha256":"36f558549361a1c0747dab5ecd545c74efbd42be14f6d634cb28e8b01f7c1e9c","kind":"apply_or_verify"},
+            {"order":5,"version":"20260807050000","name":"mpgf_dac_success_lapse","path":"supabase/migrations/20260807050000_mpgf_dac_success_lapse.sql","expected_sha256":"83d9432f90fb808302249b5b572029d68bfc9aa2be32afbaba710f8e341d0948","kind":"apply_or_verify"},
+            {"order":6,"version":"20260807100000","name":"mpgf_dac_public_terms_api","path":"supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql","expected_sha256":"356d220c009dd6213b761712a30ce0124d95f075d5fdab5c44da3398a6265a0f","kind":"apply_or_verify"},
+            {"order":7,"version":"20260812073000","name":"mpgf_dac_terminal_event_constraint_reconciliation","path":"supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql","expected_sha256":"a19653e57a20dff8d01e1dd54b4b77304fe0712fe3356820953945e7b9999cd2","kind":"apply_or_verify"},
+            {"order":8,"version":"20260812074500","name":"mpgf_dac_terminal_schema_reconciliation","path":"supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql","expected_sha256":"d8dc2a55840425357c8859b87d26fba0415bb1a50c8e739518a88b9686142cbb","kind":"apply_or_verify"},
+            {"order":9,"version":"20260815010000","name":"mpgf_pool_lifecycle_event_ordering","path":"supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql","expected_sha256":"1d60c1abc73c8842cdcd9694c77d0e29dac4fe1de98a496714c0f2f2f5619766","kind":"apply_or_verify"},
+            {"order":10,"version":"20260815011000","name":"mpgf_dac_terminal_guard_reconciliation","path":"supabase/migrations/20260815011000_mpgf_dac_terminal_guard_reconciliation.sql","expected_sha256":"c64d521c6adb7a865d9ec5e2f25e70adb09f08f91e0f1bc0ec0610977aafd108","kind":"apply_or_verify"},
+            {"order":11,"version":"20260818174000","name":"mpgf_dac_public_aggregate_column_privacy","path":"supabase/migrations/20260818174000_mpgf_dac_public_aggregate_column_privacy.sql","expected_sha256":"0c3e7596f5f6b0d69d9438347f82ad79b6d0663511d3aec7cf333681fef9f581","kind":"apply_or_verify"}
           ]
           JSON
-
           python3 - "$RUNNER_TEMP/migrations.json" "$EVIDENCE_DIR" <<'PY'
           from __future__ import annotations
           import hashlib
@@ -179,16 +169,15 @@ jobs:
               raw = path.read_bytes()
               source = raw.decode("utf-8")
               actual = hashlib.sha256(raw).hexdigest()
-              expected = item.get("expected_sha256")
-              if expected is not None and actual != expected:
-                  raise SystemExit(f"Hash mismatch for {path}: expected {expected}, got {actual}")
+              if actual != item["expected_sha256"]:
+                  raise SystemExit(f"Hash mismatch for {path}: expected {item['expected_sha256']}, got {actual}")
               lines = source.splitlines(keepends=True)
               meaningful = [i for i, line in enumerate(lines) if line.strip() and not line.lstrip().startswith("--")]
               if not meaningful:
                   raise SystemExit(f"Empty migration: {path}")
               first, last = meaningful[0], meaningful[-1]
               if lines[first].strip().lower() != "begin;" or lines[last].strip().lower() != "commit;":
-                  raise SystemExit(f"Migration must have exact outer transaction delimiters: {path}")
+                  raise SystemExit(f"Migration lacks exact outer transaction delimiters: {path}")
               lines[first] = "\n"
               lines[last] = "\n"
               body = "".join(lines)
@@ -207,100 +196,129 @@ jobs:
                   + f"  '{item['version']}',\n"
                   + f"  ARRAY[{tag}{source}{tag}]::text[],\n"
                   + f"  '{item['name']}',\n"
-                  + "  'chatgpt-owner-authorized-dac-production-resume-20260818',\n"
+                  + "  'chatgpt-owner-authorized-dac-production-cutover-20260819',\n"
                   + f"  '{idempotency}'\n"
                   + ");\nCOMMIT;\n"
               )
-              wrapper_path = wrappers / f"{item['version']}_{item['name']}.sql"
+              wrapper_path = wrappers / f"{item['order']:02d}_{item['version']}_{item['name']}.sql"
               wrapper_path.write_text(wrapper, encoding="utf-8")
               ledger.append({**item, "sha256": actual, "idempotencyKey": idempotency, "wrapper": str(wrapper_path)})
 
           (evidence / "migration-ledger.json").write_text(json.dumps(ledger, indent=2) + "\n")
           PY
-
           jq -r '.[] | "\(.sha256)  \(.path)"' "$EVIDENCE_DIR/migration-ledger.json" \
             | sha256sum --check --strict
+          test "$(jq 'length' "$EVIDENCE_DIR/migration-ledger.json")" = "11"
 
-      - name: Fail closed on production history, schema, and data anomalies
+      - name: Fail closed on migration history, schema, and production data anomalies
         shell: bash
         run: |
           set -euo pipefail
-          first_hash="0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c"
-          docker run --rm "$POSTGRES_IMAGE" \
-            psql "$PROD_SUPABASE_DB_URL" \
-              --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
-              --command "
-                set statement_timeout = '30s';
-                do \$preflight\$
-                declare
-                  first_count integer;
-                  first_name text;
-                  first_source_hash text;
-                  target_versions text[] := array[
-                    '20260818173000','20260806110000','20260806143000','20260806173000',
-                    '20260807050000','20260807100000','20260812073000','20260812074500',
-                    '20260815010000','20260815011000'
-                  ];
-                begin
-                  select count(*), max(name), max(encode(extensions.digest(convert_to(statements[1], 'UTF8'), 'sha256'),'hex'))
-                    into first_count, first_name, first_source_hash
-                  from supabase_migrations.schema_migrations
-                  where version = '20260806110000';
-                  if first_count <> 1
-                     or first_name <> 'mpgf_pool_review_freeze'
-                     or first_source_hash <> '$first_hash' then
-                    raise exception 'The already-applied first DAC migration does not match the authorized exact source.';
-                  end if;
+          ledger_json="$(jq -c '[.[] | {version,name,sha256}]' "$EVIDENCE_DIR/migration-ledger.json")"
+          cat > "$RUNNER_TEMP/preflight.sql" <<SQL
+          \set ON_ERROR_STOP on
+          set statement_timeout = '30s';
+          do \$preflight\$
+          declare
+            expected jsonb := '$ledger_json'::jsonb;
+            item jsonb;
+            observed_name text;
+            observed_hash text;
+            table_name text;
+            table_rows bigint;
+          begin
+            if to_regclass('supabase_migrations.schema_migrations') is null then
+              raise exception 'Migration registry is missing.';
+            end if;
+            if to_regclass('public.mpgf_pool_proposals') is null
+               or to_regclass('public.mpgf_pool_reviewers') is null
+               or to_regclass('public.mpgf_pool_proposal_versions') is null
+               or to_regclass('public.mpgf_pool_lifecycle_events') is null then
+              raise exception 'The exact first-migration proposal schema is incomplete.';
+            end if;
 
-                  if exists (
-                    select 1
-                    from supabase_migrations.schema_migrations m
-                    where (m.version = any(target_versions) or m.name in (
-                      'mpgf_dac_public_goods_foundation_reconciliation',
-                      'mpgf_pool_review_freeze','mpgf_pool_publication_materialization',
-                      'mpgf_dac_pledge_intent_ledger','mpgf_dac_success_lapse',
-                      'mpgf_dac_public_terms_api','mpgf_dac_terminal_event_constraint_reconciliation',
-                      'mpgf_dac_terminal_schema_reconciliation','mpgf_pool_lifecycle_event_ordering',
-                      'mpgf_dac_terminal_guard_reconciliation'
-                    ))
-                    and m.version not in (select value->>'version' from jsonb_array_elements('$(jq -c . "$EVIDENCE_DIR/migration-ledger.json")'::jsonb))
-                  ) then
-                    raise exception 'Conflicting DAC migration identity exists.';
-                  end if;
+            for item in select value from jsonb_array_elements(expected)
+            loop
+              select name,
+                     case when statements is null or array_length(statements,1) is null then null
+                          else encode(extensions.digest(convert_to(statements[1], 'UTF8'), 'sha256'),'hex') end
+                into observed_name, observed_hash
+              from supabase_migrations.schema_migrations
+              where version = item->>'version';
+              if found and (
+                observed_name is distinct from item->>'name'
+                or observed_hash is distinct from item->>'sha256'
+              ) then
+                raise exception 'Conflicting migration registry row for %: %/%', item->>'version', observed_name, observed_hash;
+              end if;
+              if exists (
+                select 1 from supabase_migrations.schema_migrations
+                where name = item->>'name' and version <> item->>'version'
+              ) then
+                raise exception 'Migration name % exists at a conflicting version.', item->>'name';
+              end if;
+            end loop;
 
-                  if to_regclass('public.mpgf_pool_proposals') is null
-                     or to_regclass('public.mpgf_pool_reviewers') is null
-                     or to_regclass('public.mpgf_pool_proposal_versions') is null
-                     or to_regclass('public.mpgf_pool_lifecycle_events') is null then
-                    raise exception 'The exact first-migration schema is incomplete.';
-                  end if;
+            select name,
+                   encode(extensions.digest(convert_to(statements[1], 'UTF8'), 'sha256'),'hex')
+              into observed_name, observed_hash
+            from supabase_migrations.schema_migrations
+            where version = '20260806110000';
+            if observed_name is distinct from 'mpgf_pool_review_freeze'
+               or observed_hash is distinct from '0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c' then
+              raise exception 'The required already-applied first DAC migration is not exact.';
+            end if;
 
-                  if (select count(*) from public.mpgf_pool_proposals) <> 0
-                     or (select count(*) from public.mpgf_pool_reviewers) <> 0
-                     or (select count(*) from public.mpgf_pool_proposal_versions) <> 0
-                     or (select count(*) from public.mpgf_pool_lifecycle_events) <> 0 then
-                    raise exception 'Unexpected production DAC proposal/reviewer/version/event data exists.';
-                  end if;
+            if not exists (
+              select 1 from supabase_migrations.schema_migrations where version='20260818173000'
+            ) and (
+              to_regclass('public.mpgf_public_goods_match_pools') is not null
+              or to_regclass('public.mpgf_public_goods_rounds') is not null
+              or to_regclass('public.mpgf_public_goods_campaigns') is not null
+              or to_regclass('public.mpgf_public_goods_pledges') is not null
+            ) then
+              raise exception 'Unregistered or partial public-goods foundation schema exists.';
+            end if;
 
-                  if not exists (
-                    select 1 from supabase_migrations.schema_migrations
-                    where version = '20260818173000'
-                  ) and (
-                    to_regclass('public.mpgf_public_goods_match_pools') is not null
-                    or to_regclass('public.mpgf_public_goods_rounds') is not null
-                    or to_regclass('public.mpgf_public_goods_campaigns') is not null
-                    or to_regclass('public.mpgf_public_goods_pledges') is not null
-                  ) then
-                    raise exception 'Unregistered or partial public-goods foundation schema exists.';
-                  end if;
-                end
-                \$preflight\$;
-              "
-          cat > "$EVIDENCE_DIR/pre-migration-state.json" <<JSON
-          {"projectRef":"$EXPECTED_PROJECT_REF","firstExactMigrationVerified":true,"proposalRows":0,"reviewerRows":0,"versionRows":0,"lifecycleEventRows":0,"checkedAt":"$(date -u +%FT%TZ)"}
-          JSON
+            foreach table_name in array array[
+              'mpgf_pool_proposals','mpgf_pool_reviewers','mpgf_pool_proposal_versions','mpgf_pool_lifecycle_events',
+              'mpgf_public_goods_match_pools','mpgf_public_goods_rounds','mpgf_public_goods_campaigns','mpgf_public_goods_pledges',
+              'mpgf_dac_pledge_intents','mpgf_dac_pledge_events','mpgf_dac_campaign_outcomes'
+            ]
+            loop
+              if to_regclass('public.' || table_name) is not null then
+                execute format('select count(*) from public.%I', table_name) into table_rows;
+                if table_rows <> 0 then
+                  raise exception 'Unexpected production rows in %: %', table_name, table_rows;
+                end if;
+              end if;
+            end loop;
+            if to_regclass('public.mpgf_public_goods_pledges') is not null then
+              select count(*) into table_rows
+              from public.mpgf_public_goods_pledges where payment_intent_ref is not null;
+              if table_rows <> 0 then
+                raise exception 'Unexpected production payment references: %', table_rows;
+              end if;
+            end if;
+          end;
+          \$preflight\$;
+          select jsonb_build_object(
+            'projectRef', '$EXPECTED_PROJECT_REF',
+            'firstMigrationExact', true,
+            'unexpectedRows', 0,
+            'paymentReferences', 0,
+            'checkedAt', clock_timestamp()
+          )::text;
+          SQL
+          docker run --rm -v "$RUNNER_TEMP:/work:ro" "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --tuples-only --no-align --quiet --file /work/preflight.sql \
+            | tr -d '\r' | awk 'NF {line=$0} END {print line}' \
+            > "$EVIDENCE_DIR/pre-migration-state.json"
+          jq -e '.firstMigrationExact == true and .unexpectedRows == 0 and .paymentReferences == 0' \
+            "$EVIDENCE_DIR/pre-migration-state.json" >/dev/null
 
-      - name: Apply or verify reviewed forward fix and remaining dossier migrations
+      - name: Apply or exact-hash verify all eleven migrations in authorized order
         shell: bash
         run: |
           set -euo pipefail
@@ -309,8 +327,8 @@ jobs:
           registry_row() {
             local version="$1"
             docker run --rm "$POSTGRES_IMAGE" \
-              psql "$PROD_SUPABASE_DB_URL" \
-                --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                --tuples-only --no-align --quiet \
                 --command "select concat_ws('|', version, name, encode(extensions.digest(convert_to(statements[1], 'UTF8'), 'sha256'),'hex')) from supabase_migrations.schema_migrations where version='$version';" \
               | tr -d '\r' | awk 'NF {line=$0} END {print line}'
           }
@@ -331,166 +349,191 @@ jobs:
                 | tee -a "$EVIDENCE_DIR/application.log"
               return
             fi
-
-            same_name_count="$(docker run --rm "$POSTGRES_IMAGE" \
-              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
-                --command "select count(*) from supabase_migrations.schema_migrations where name='$name';" \
-              | tr -d '\r' | awk 'NF {line=$0} END {print line}')"
-            test "$same_name_count" = "0"
-
             if test "$kind" = "already_applied"; then
               echo "Required already-applied migration is absent: $version $name" >&2
               exit 1
             fi
-
+            same_name_count="$(docker run --rm "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                --tuples-only --no-align --quiet \
+                --command "select count(*) from supabase_migrations.schema_migrations where name='$name';" \
+              | tr -d '\r' | awk 'NF {line=$0} END {print line}')"
+            test "$same_name_count" = "0"
             printf 'applying version=%s name=%s sha256=%s\n' "$version" "$name" "$expected_hash" \
               | tee -a "$EVIDENCE_DIR/application.log"
             docker run --rm -v "$PWD:/workspace:ro" "$POSTGRES_IMAGE" \
-              psql "$PROD_SUPABASE_DB_URL" \
-                --no-psqlrc --set ON_ERROR_STOP=1 --file="/workspace/$wrapper"
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                --file="/workspace/$wrapper"
             observed="$(registry_row "$version")"
             test "$observed" = "$version|$name|$expected_hash"
             printf 'verified-new version=%s name=%s sha256=%s\n' "$version" "$name" "$expected_hash" \
               | tee -a "$EVIDENCE_DIR/application.log"
           }
 
-          # Forward fix first; then preserve the original nine-migration dossier order.
-          apply_or_verify "$(jq -c '.[] | select(.kind == "forward_fix")' "$EVIDENCE_DIR/migration-ledger.json")"
-          jq -c '.[] | select(.kind == "already_applied" or .kind == "dossier")' "$EVIDENCE_DIR/migration-ledger.json" \
-            | while IFS= read -r migration; do
-                apply_or_verify "$migration"
-              done
+          while IFS= read -r migration; do
+            apply_or_verify "$migration"
+          done < <(jq -c 'sort_by(.order)[]' "$EVIDENCE_DIR/migration-ledger.json")
 
-      - name: Verify terminal schema, RLS, grants, exact hashes, and zero production data
+      - name: Verify terminal schema, RLS, column privacy, grants, exact hashes, and zero data
         shell: bash
         run: |
           set -euo pipefail
-          ledger_json="$(jq -c . "$EVIDENCE_DIR/migration-ledger.json")"
-          docker run --rm "$POSTGRES_IMAGE" \
-            psql "$PROD_SUPABASE_DB_URL" \
-              --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
-              --command "
-                set statement_timeout = '60s';
-                do \$verify\$
-                declare
-                  item jsonb;
-                  observed_name text;
-                  observed_hash text;
-                  row_count bigint;
-                begin
-                  for item in select value from jsonb_array_elements('$ledger_json'::jsonb)
-                  loop
-                    select name, encode(extensions.digest(convert_to(statements[1], 'UTF8'), 'sha256'),'hex')
-                      into observed_name, observed_hash
-                    from supabase_migrations.schema_migrations
-                    where version = item->>'version';
-                    if observed_name is distinct from item->>'name'
-                       or observed_hash is distinct from item->>'sha256' then
-                      raise exception 'Migration registry mismatch for %', item->>'version';
-                    end if;
-                  end loop;
+          ledger_json="$(jq -c '[.[] | {version,name,sha256}]' "$EVIDENCE_DIR/migration-ledger.json")"
+          cat > "$RUNNER_TEMP/postflight.sql" <<SQL
+          \set ON_ERROR_STOP on
+          set statement_timeout = '60s';
+          do \$verify\$
+          declare
+            expected jsonb := '$ledger_json'::jsonb;
+            item jsonb;
+            observed_name text;
+            observed_hash text;
+            table_name text;
+            role_name text;
+            column_name text;
+            table_rows bigint;
+            safe_campaign_columns constant text[] := array[
+              'id','round_id','slug','title','destination_type','destination_ref','cause_tags','public_summary',
+              'threshold_amount_cents','threshold_supporters','deadline_at','verification_method','baseline_rule',
+              'exit_rule','review_status','pool_proposal_id','threshold_visibility','progress_visibility',
+              'published_terms_version','published_terms_sha256','published_at','created_at'
+            ];
+            private_campaign_columns constant text[] := array[
+              'pool_alternative_id','challenge_window_ends_at','first_accepted_pledge_at','published_by'
+            ];
+            safe_outcome_columns constant text[] := array[
+              'id','campaign_id','pool_proposal_id','terms_version','terms_sha256','outcome_status',
+              'eligible_amount_cents','eligible_supporter_count','threshold_amount_cents','threshold_supporters',
+              'deadline_at','evaluated_at','outcome_sha256','created_at'
+            ];
+            private_outcome_columns constant text[] := array['finalized_by','reason','outcome_json'];
+          begin
+            for item in select value from jsonb_array_elements(expected)
+            loop
+              select name,
+                     encode(extensions.digest(convert_to(statements[1], 'UTF8'), 'sha256'),'hex')
+                into observed_name, observed_hash
+              from supabase_migrations.schema_migrations
+              where version = item->>'version';
+              if observed_name is distinct from item->>'name'
+                 or observed_hash is distinct from item->>'sha256' then
+                raise exception 'Migration registry mismatch for %', item->>'version';
+              end if;
+            end loop;
+            if (select count(*) from supabase_migrations.schema_migrations
+                where version in (select value->>'version' from jsonb_array_elements(expected))) <> 11 then
+              raise exception 'Expected eleven exact DAC migration registry rows.';
+            end if;
 
-                  if to_regclass('public.mpgf_public_goods_match_pools') is null
-                     or to_regclass('public.mpgf_public_goods_rounds') is null
-                     or to_regclass('public.mpgf_public_goods_campaigns') is null
-                     or to_regclass('public.mpgf_public_goods_pledges') is null
-                     or to_regclass('public.mpgf_dac_pledge_intents') is null
-                     or to_regclass('public.mpgf_dac_pledge_events') is null
-                     or to_regclass('public.mpgf_dac_campaign_outcomes') is null then
-                    raise exception 'Required terminal DAC table is missing.';
-                  end if;
+            foreach table_name in array array[
+              'mpgf_pool_proposals','mpgf_pool_reviewers','mpgf_pool_proposal_versions','mpgf_pool_lifecycle_events',
+              'mpgf_public_goods_match_pools','mpgf_public_goods_rounds','mpgf_public_goods_campaigns','mpgf_public_goods_pledges',
+              'mpgf_dac_pledge_intents','mpgf_dac_pledge_events','mpgf_dac_campaign_outcomes'
+            ]
+            loop
+              if to_regclass('public.' || table_name) is null then
+                raise exception 'Required terminal DAC table is missing: %', table_name;
+              end if;
+              if not exists (
+                select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+                where n.nspname='public' and c.relname=table_name and c.relrowsecurity
+              ) then
+                raise exception 'RLS is disabled on required table: %', table_name;
+              end if;
+              execute format('select count(*) from public.%I', table_name) into table_rows;
+              if table_rows <> 0 then
+                raise exception 'Unexpected production rows in %: %', table_name, table_rows;
+              end if;
+            end loop;
 
-                  if to_regprocedure('public.mpgf_begin_pool_proposal_review(uuid,uuid,text)') is null
-                     or to_regprocedure('public.mpgf_approve_and_freeze_pool_proposal(uuid,uuid,text)') is null
-                     or to_regprocedure('public.mpgf_publish_pool_proposal(uuid,text,text,uuid,text)') is null
-                     or to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') is null
-                     or to_regprocedure('public.mpgf_review_dac_pledge_eligibility(uuid,uuid,text,integer,text)') is null
-                     or to_regprocedure('public.mpgf_finalize_dac_campaign(text,uuid,text)') is null
-                     or to_regprocedure('public.mpgf_public_dac_campaign_terms(text)') is null then
-                    raise exception 'Required terminal DAC function is missing.';
-                  end if;
+            if to_regprocedure('public.mpgf_begin_pool_proposal_review(uuid,uuid,text)') is null
+               or to_regprocedure('public.mpgf_approve_and_freeze_pool_proposal(uuid,uuid,text)') is null
+               or to_regprocedure('public.mpgf_publish_pool_proposal(uuid,text,text,uuid,text)') is null
+               or to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') is null
+               or to_regprocedure('public.mpgf_review_dac_pledge_eligibility(uuid,uuid,text,integer,text)') is null
+               or to_regprocedure('public.mpgf_finalize_dac_campaign(text,uuid,text)') is null
+               or to_regprocedure('public.mpgf_public_dac_campaign_terms(text)') is null then
+              raise exception 'A required terminal DAC function is missing.';
+            end if;
 
-                  if exists (
-                    select 1
-                    from pg_class c join pg_namespace n on n.oid=c.relnamespace
-                    where n.nspname='public'
-                      and c.relname in (
-                        'mpgf_public_goods_match_pools','mpgf_public_goods_rounds',
-                        'mpgf_public_goods_campaigns','mpgf_public_goods_pledges',
-                        'mpgf_dac_pledge_intents','mpgf_dac_pledge_events',
-                        'mpgf_dac_campaign_outcomes'
-                      )
-                      and not c.relrowsecurity
-                  ) then
-                    raise exception 'RLS is disabled on a required DAC table.';
-                  end if;
+            if exists (
+              select 1 from information_schema.role_table_grants
+              where table_schema='public'
+                and table_name in ('mpgf_public_goods_campaigns','mpgf_dac_campaign_outcomes')
+                and grantee in ('PUBLIC','anon','authenticated')
+                and privilege_type='SELECT'
+            ) then
+              raise exception 'A public DAC aggregate table retains table-level SELECT.';
+            end if;
 
-                  if has_table_privilege('anon','public.mpgf_public_goods_pledges','INSERT')
-                     or has_table_privilege('anon','public.mpgf_public_goods_pledges','UPDATE')
-                     or has_table_privilege('anon','public.mpgf_public_goods_pledges','DELETE')
-                     or has_table_privilege('authenticated','public.mpgf_dac_pledge_intents','INSERT')
-                     or has_table_privilege('authenticated','public.mpgf_dac_pledge_events','INSERT')
-                     or has_table_privilege('authenticated','public.mpgf_dac_campaign_outcomes','INSERT') then
-                    raise exception 'Unexpected direct mutation grant exists.';
-                  end if;
+            foreach role_name in array array['anon','authenticated']
+            loop
+              foreach column_name in array safe_campaign_columns loop
+                if not has_column_privilege(role_name,'public.mpgf_public_goods_campaigns',column_name,'SELECT') then
+                  raise exception '% cannot select reviewed campaign column %', role_name, column_name;
+                end if;
+              end loop;
+              foreach column_name in array private_campaign_columns loop
+                if has_column_privilege(role_name,'public.mpgf_public_goods_campaigns',column_name,'SELECT') then
+                  raise exception '% can select private campaign column %', role_name, column_name;
+                end if;
+              end loop;
+              foreach column_name in array safe_outcome_columns loop
+                if not has_column_privilege(role_name,'public.mpgf_dac_campaign_outcomes',column_name,'SELECT') then
+                  raise exception '% cannot select reviewed outcome column %', role_name, column_name;
+                end if;
+              end loop;
+              foreach column_name in array private_outcome_columns loop
+                if has_column_privilege(role_name,'public.mpgf_dac_campaign_outcomes',column_name,'SELECT') then
+                  raise exception '% can select private outcome column %', role_name, column_name;
+                end if;
+              end loop;
+            end loop;
 
-                  if not has_table_privilege('anon','public.mpgf_public_goods_campaigns','SELECT')
-                     or not has_function_privilege('anon','public.mpgf_public_dac_campaign_terms(text)','EXECUTE') then
-                    raise exception 'Required public exact-terms read surface is unavailable.';
-                  end if;
+            if has_table_privilege('anon','public.mpgf_public_goods_pledges','INSERT,UPDATE,DELETE')
+               or has_table_privilege('authenticated','public.mpgf_dac_pledge_intents','INSERT,UPDATE,DELETE')
+               or has_table_privilege('authenticated','public.mpgf_dac_pledge_events','INSERT,UPDATE,DELETE')
+               or has_table_privilege('authenticated','public.mpgf_dac_campaign_outcomes','INSERT,UPDATE,DELETE') then
+              raise exception 'Unexpected direct public/authenticated DAC mutation privilege exists.';
+            end if;
+            if not has_function_privilege('anon','public.mpgf_public_dac_campaign_terms(text)','EXECUTE')
+               or not has_function_privilege('authenticated','public.mpgf_create_dac_pledge(text,bigint,text,text,text)','EXECUTE') then
+              raise exception 'A required public/authenticated DAC RPC grant is missing.';
+            end if;
 
-                  select
-                    (select count(*) from public.mpgf_pool_proposals)
-                    + (select count(*) from public.mpgf_pool_reviewers)
-                    + (select count(*) from public.mpgf_pool_proposal_versions)
-                    + (select count(*) from public.mpgf_pool_lifecycle_events)
-                    + (select count(*) from public.mpgf_public_goods_match_pools)
-                    + (select count(*) from public.mpgf_public_goods_rounds)
-                    + (select count(*) from public.mpgf_public_goods_campaigns)
-                    + (select count(*) from public.mpgf_public_goods_pledges)
-                    + (select count(*) from public.mpgf_dac_pledge_intents)
-                    + (select count(*) from public.mpgf_dac_pledge_events)
-                    + (select count(*) from public.mpgf_dac_campaign_outcomes)
-                    into row_count;
-                  if row_count <> 0 then
-                    raise exception 'Unexpected production DAC/public-goods rows exist after schema cutover: %', row_count;
-                  end if;
-                end
-                \$verify\$;
-              "
-
-          docker run --rm "$POSTGRES_IMAGE" \
-            psql "$PROD_SUPABASE_DB_URL" \
-              --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
-              --command "
-                select jsonb_build_object(
-                  'projectRef', '$EXPECTED_PROJECT_REF',
-                  'releaseMainSha', '$RELEASE_MAIN_SHA',
-                  'releaseMainTree', '$RELEASE_MAIN_TREE',
-                  'registeredExactMigrations', (
-                    select count(*) from supabase_migrations.schema_migrations
-                    where version in (
-                      '20260818173000','20260806110000','20260806143000','20260806173000',
-                      '20260807050000','20260807100000','20260812073000','20260812074500',
-                      '20260815010000','20260815011000'
-                    )
-                  ),
-                  'requiredTables', 11,
-                  'requiredFunctionsPresent', true,
-                  'rlsVerified', true,
-                  'leastPrivilegeVerified', true,
-                  'dacAndPublicGoodsRows', 0,
-                  'paymentReferences', 0,
-                  'verifiedAt', clock_timestamp()
-                )::text;
-              " \
+            select count(*) into table_rows
+            from public.mpgf_public_goods_pledges where payment_intent_ref is not null;
+            if table_rows <> 0 then
+              raise exception 'Unexpected production payment references: %', table_rows;
+            end if;
+          end;
+          \$verify\$;
+          select jsonb_build_object(
+            'projectRef', '$EXPECTED_PROJECT_REF',
+            'releaseMainSha', '$EXPECTED_MAIN_SHA',
+            'releaseMainTree', '$EXPECTED_MAIN_TREE',
+            'registeredExactMigrations', 11,
+            'requiredTables', 11,
+            'requiredFunctionsPresent', true,
+            'rlsVerified', true,
+            'columnPrivacyVerified', true,
+            'leastPrivilegeVerified', true,
+            'dacAndPublicGoodsRows', 0,
+            'paymentReferences', 0,
+            'verifiedAt', clock_timestamp()
+          )::text;
+          SQL
+          docker run --rm -v "$RUNNER_TEMP:/work:ro" "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --tuples-only --no-align --quiet --file /work/postflight.sql \
             | tr -d '\r' | awk 'NF {line=$0} END {print line}' \
             > "$EVIDENCE_DIR/post-migration-state.json"
           jq -e '
-            .registeredExactMigrations == 10
+            .registeredExactMigrations == 11
             and .requiredTables == 11
             and .requiredFunctionsPresent == true
             and .rlsVerified == true
+            and .columnPrivacyVerified == true
             and .leastPrivilegeVerified == true
             and .dacAndPublicGoodsRows == 0
             and .paymentReferences == 0
@@ -500,26 +543,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
 
-      - name: Remove executable wrappers and scan evidence for credentials
+      - name: Remove executable wrappers and scan retained evidence for credentials
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           rm -rf "$EVIDENCE_DIR/wrappers"
           if grep -RIlE '(postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_|whsec_|Bearer [A-Za-z0-9._-]+)' "$EVIDENCE_DIR"; then
-            echo 'Credential-like material found in migration evidence.' >&2
+            echo 'Credential-like material found in retained migration evidence.' >&2
             exit 1
           fi
 
-      - name: Upload immutable migration-resume evidence
+      - name: Upload immutable production database cutover evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: moraltrade-dac-production-migration-resume-${{ github.run_id }}
+          name: moraltrade-dac-production-database-cutover-${{ github.run_id }}
           path: ${{ env.EVIDENCE_DIR }}
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
       - name: Record database cutover completion
@@ -529,14 +572,13 @@ jobs:
           {
             echo '### DAC production database cutover complete'
             echo
-            echo "- Exact then-current main: \`$RELEASE_MAIN_SHA\`"
-            echo "- Main tree: \`$RELEASE_MAIN_TREE\`"
+            echo "- Exact main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Main tree: \`$EXPECTED_MAIN_TREE\`"
             echo "- Production project: \`$EXPECTED_PROJECT_REF\`"
-            echo '- Separately reviewed additive forward fix: applied or exact-hash verified'
-            echo '- Original dossier migrations: 9/9 exact-hash verified'
-            echo '- Lock timeout: 5s per migration transaction'
-            echo '- Statement timeout: 120s per migration transaction'
-            echo '- Required RLS and least-privilege grants: verified'
+            echo '- Exact migration registry rows: 11/11'
+            echo '- Required tables and functions: verified'
+            echo '- RLS and least privilege: verified'
+            echo '- Public safe-column grants and private-column denial: verified'
             echo '- Production DAC/public-goods rows: 0'
             echo '- Payment references: 0'
             echo '- Application deployment and canonical aliases: unchanged by this workflow'
