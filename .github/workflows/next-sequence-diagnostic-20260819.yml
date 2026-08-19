@@ -1,0 +1,224 @@
+name: Diagnose exact next production sequence 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/next-sequence-diagnostic-20260819
+    paths:
+      - .github/workflows/next-sequence-diagnostic-20260819.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+env:
+  CONTROLLER_BRANCH: ops/next-sequence-diagnostic-20260819
+  CONTROLLER_PATH: .github/workflows/next-sequence-diagnostic-20260819.yml
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  PROD_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  REPORT_DIR: next-sequence-diagnostic
+
+jobs:
+  diagnose:
+    environment:
+      name: MoralTrade QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard one-file controller and exact remote main
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          main_sha="$(git rev-parse HEAD^)"
+          test "$(git rev-list --count HEAD^..HEAD)" = '1'
+          test "$(git diff --name-only HEAD^ HEAD)" = "$CONTROLLER_PATH"
+          git diff --check HEAD^ HEAD
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$main_sha"
+          mkdir -p "$REPORT_DIR"
+          printf '%s\n' "$main_sha" > "$REPORT_DIR/main-sha.txt"
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client jq > /dev/null
+
+      - name: Resolve exact canonical production deployment and migration readiness
+        id: diagnose
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_SHA: ${{ steps.guard.outputs.main_sha }}
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          echo "::add-mask::$VERCEL_TOKEN_VALUE"
+          mkdir -p "$REPORT_DIR/aliases"
+
+          deployment_ids=()
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"
+            raw="$RUNNER_TEMP/${key}.json"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN_VALUE" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}" \
+              > "$raw"
+            alias_value="$(jq -r '.alias // empty' "$raw")"
+            project_value="$(jq -r '.projectId // empty' "$raw")"
+            deployment_id="$(jq -r '.deploymentId // .deployment.id // .deployment.uid // empty' "$raw")"
+            test "$alias_value" = "$alias_name"
+            test "$project_value" = "$VERCEL_PROJECT_ID"
+            test -n "$deployment_id"
+            deployment_ids+=("$deployment_id")
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' \
+              "$raw" > "$REPORT_DIR/aliases/${key}.json"
+          done
+          test "${deployment_ids[0]}" = "${deployment_ids[1]}"
+          deployment_id="${deployment_ids[0]}"
+
+          detail="$RUNNER_TEMP/deployment.json"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN_VALUE" \
+            "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_TEAM_ID}" \
+            > "$detail"
+          jq -e \
+            --arg id "$deployment_id" \
+            --arg project "$VERCEL_PROJECT_ID" '
+              ((.id // .uid) == $id)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha | test("^[0-9a-f]{40}$"))
+            ' "$detail" >/dev/null
+          prod_sha="$(jq -r '.meta.githubCommitSha' "$detail")"
+          deployment_host="$(jq -r '.url' "$detail")"
+          jq '{id:(.id // .uid),url,projectId:(.projectId // .project.id),readyState:(.readyState // .state),target,githubCommitSha:.meta.githubCommitSha,aliasError}' \
+            "$detail" > "$REPORT_DIR/deployment.json"
+
+          git cat-file -e "${MAIN_SHA}^{commit}"
+          if ! git cat-file -e "${prod_sha}^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$prod_sha"
+          fi
+          git cat-file -e "${prod_sha}^{commit}"
+          git merge-base --is-ancestor "$prod_sha" "$MAIN_SHA"
+
+          git diff --name-only "$prod_sha" "$MAIN_SHA" -- 'supabase/migrations/*.sql' \
+            | sed '/^$/d' > "$REPORT_DIR/migrations-since-production.txt"
+          : > "$REPORT_DIR/pending-migrations.txt"
+
+          migration_count="$(wc -l < "$REPORT_DIR/migrations-since-production.txt" | tr -d ' ')"
+          if [[ "$migration_count" -gt 0 ]]; then
+            test -n "$PROD_DB_URL"
+            echo "::add-mask::$PROD_DB_URL"
+            PROD_DB_URL="$PROD_DB_URL" python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          parsed = urlparse(os.environ['PROD_DB_URL'])
+          expected = os.environ['PROD_SUPABASE_REF']
+          query = parse_qs(parsed.query)
+          valid = (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and bool(parsed.password)
+              and parsed.path == '/postgres'
+              and (
+                  expected in (parsed.username or '')
+                  or expected in (parsed.hostname or '')
+                  or query.get('project', [''])[0] == expected
+              )
+          )
+          if not valid:
+              raise SystemExit('Refusing a database URL outside exact Moral Trade production.')
+          PY
+
+            PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_DB_URL" \
+              --no-psqlrc -X -Atv ON_ERROR_STOP=1 \
+              -c "select version::text from supabase_migrations.schema_migrations order by version" \
+              > "$REPORT_DIR/recorded-migration-versions.txt"
+
+            while IFS= read -r migration_path; do
+              [[ -n "$migration_path" ]] || continue
+              filename="$(basename "$migration_path")"
+              version="${filename%%_*}"
+              [[ "$version" =~ ^[0-9]+$ ]]
+              if ! grep -Fxq "$version" "$REPORT_DIR/recorded-migration-versions.txt"; then
+                printf '%s\n' "$migration_path" >> "$REPORT_DIR/pending-migrations.txt"
+              fi
+            done < "$REPORT_DIR/migrations-since-production.txt"
+          fi
+
+          active_release_ids="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=30" \
+            --jq --arg sha "$MAIN_SHA" '[.workflow_runs[] | select(.head_sha == $sha and (.status == "queued" or .status == "in_progress")) | .id] | join(",")')"
+          recent_success_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=30" \
+            --jq --arg sha "$MAIN_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty')"
+
+          pending_count="$(wc -l < "$REPORT_DIR/pending-migrations.txt" | tr -d ' ')"
+          decision=''
+          if [[ "$prod_sha" = "$MAIN_SHA" ]]; then
+            decision='ALREADY_RELEASED'
+          elif [[ -n "$active_release_ids" ]]; then
+            decision='RELEASE_IN_PROGRESS'
+          elif [[ "$pending_count" -gt 0 ]]; then
+            decision='BLOCKED_PENDING_MIGRATION'
+          else
+            decision='READY_TO_RELEASE'
+          fi
+
+          jq -n \
+            --arg decision "$decision" \
+            --arg mainSha "$MAIN_SHA" \
+            --arg productionSha "$prod_sha" \
+            --arg deploymentId "$deployment_id" \
+            --arg deploymentHost "$deployment_host" \
+            --arg activeReleaseIds "$active_release_ids" \
+            --arg recentSuccessfulExactReleaseId "$recent_success_id" \
+            --argjson migrationsSinceProduction "$migration_count" \
+            --argjson pendingMigrations "$pending_count" \
+            --arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {
+                decision:$decision,
+                mainSha:$mainSha,
+                productionSha:$productionSha,
+                deploymentId:$deploymentId,
+                deploymentHost:$deploymentHost,
+                activeReleaseIds:$activeReleaseIds,
+                recentSuccessfulExactReleaseId:$recentSuccessfulExactReleaseId,
+                migrationsSinceProduction:$migrationsSinceProduction,
+                pendingMigrations:$pendingMigrations,
+                observedAt:$observedAt
+              }
+            ' > "$REPORT_DIR/report.json"
+          touch "$REPORT_DIR/$decision"
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+
+      - name: Commit sanitized diagnostic result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$REPORT_DIR/report.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$REPORT_DIR"
+          git diff --cached --check
+          git commit -m "Record exact next-sequence diagnostic"
+          git push origin HEAD:"$CONTROLLER_BRANCH"
