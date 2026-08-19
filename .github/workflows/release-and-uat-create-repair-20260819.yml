@@ -1,0 +1,655 @@
+name: Release and UAT exact Create repair 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/next-sequence-diagnostic-20260819
+    paths:
+      - .github/workflows/release-and-uat-create-repair-20260819.yml
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  CONTROLLER_BRANCH: ops/next-sequence-diagnostic-20260819
+  CONTROLLER_PATH: .github/workflows/release-and-uat-create-repair-20260819.yml
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_CLI_VERSION: 50.38.1
+  PROD_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  OUTPUT_DIR: create-repair-production-uat
+  RESULT_DIR: release-uat-result
+
+jobs:
+  release-and-uat:
+    environment:
+      name: MoralTrade QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: Check out exact controller and guard diagnostic decision
+        id: guard
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact current main and READY_TO_RELEASE result
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f next-sequence-diagnostic/READY_TO_RELEASE
+          test -s next-sequence-diagnostic/report.json
+          decision="$(jq -r '.decision' next-sequence-diagnostic/report.json)"
+          main_sha="$(jq -r '.mainSha' next-sequence-diagnostic/report.json)"
+          production_sha_before="$(jq -r '.productionSha' next-sequence-diagnostic/report.json)"
+          test "$decision" = 'READY_TO_RELEASE'
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$production_sha_before" =~ ^[0-9a-f]{40}$ ]]
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$main_sha"
+          git cat-file -e "${main_sha}^{commit}"
+          git merge-base --is-ancestor f9ae5480ae7c20176f24c5f8b678088b5823fc39 "$main_sha"
+          test "$(git show "$main_sha:public/moral-trade-create/ui-repairs.js" | grep -c 'restoreRequestTopWhenVisible')" -ge 2
+          mkdir -p "$OUTPUT_DIR" "$RESULT_DIR"
+          cp next-sequence-diagnostic/report.json "$OUTPUT_DIR/preflight-diagnostic.json"
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "production_sha_before=$production_sha_before" >> "$GITHUB_OUTPUT"
+
+      - name: Adopt or dispatch exactly one Gated Vercel production release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_SHA: ${{ steps.preflight.outputs.main_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow='vercel-release.yml'
+          workflow_state="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow" --jq .state)"
+          test "$workflow_state" = 'active'
+
+          exact_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&per_page=50")"
+          success_run_id="$(jq -r --arg sha "$MAIN_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$exact_runs")"
+          active_run_id="$(jq -r --arg sha "$MAIN_SHA" '[.workflow_runs[] | select(.head_sha == $sha and (.status == "queued" or .status == "in_progress"))] | sort_by(.created_at) | last | .id // empty' <<<"$exact_runs")"
+
+          dispatched=false
+          dispatched_at=''
+          run_id=''
+          if [[ -n "$success_run_id" ]]; then
+            run_id="$success_run_id"
+          elif [[ -n "$active_run_id" ]]; then
+            run_id="$active_run_id"
+          else
+            dispatched=true
+            dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            jq -n \
+              --arg ref 'main' \
+              --arg target 'production' \
+              --arg release_ref 'main' \
+              --arg expected_sha "$MAIN_SHA" \
+              --arg fixture '' \
+              '{ref:$ref,inputs:{target:$target,ref:$release_ref,expected_sha:$expected_sha,synthetic_auth_fixture_url:$fixture}}' \
+              > "$RUNNER_TEMP/release-dispatch.json"
+            gh api --method POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
+              --input "$RUNNER_TEMP/release-dispatch.json" >/dev/null
+
+            for attempt in $(seq 1 90); do
+              candidates="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=50")"
+              run_id="$(jq -r --arg sha "$MAIN_SHA" --arg at "$dispatched_at" '[.workflow_runs[] | select(.head_sha == $sha and .created_at >= $at)] | sort_by(.created_at) | last | .id // empty' <<<"$candidates")"
+              [[ -n "$run_id" ]] && break
+              sleep 4
+            done
+            test -n "$run_id"
+          fi
+
+          for attempt in $(seq 1 480); do
+            run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            status="$(jq -r '.status' <<<"$run")"
+            [[ "$status" = 'completed' ]] && break
+            sleep 15
+          done
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+          test "$(jq -r '.status' <<<"$run")" = 'completed'
+          test "$(jq -r '.conclusion' <<<"$run")" = 'success'
+          test "$(jq -r '.head_sha' <<<"$run")" = "$MAIN_SHA"
+          test "$(jq -r '.event' <<<"$run")" = 'workflow_dispatch'
+          jq '{id,name,status,conclusion,event,head_sha,head_branch,created_at,updated_at,html_url,run_attempt}' <<<"$run" \
+            > "$OUTPUT_DIR/release-workflow.json"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "dispatched=$dispatched" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve exact READY production deployment and both canonical aliases
+        id: deployment
+        env:
+          MAIN_SHA: ${{ steps.preflight.outputs.main_sha }}
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          echo "::add-mask::$VERCEL_TOKEN_VALUE"
+          mkdir -p "$OUTPUT_DIR/aliases-before"
+
+          deployment_id=''
+          deployment_host=''
+          for attempt in $(seq 1 120); do
+            raw="$RUNNER_TEMP/deployments.json"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN_VALUE" \
+              "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}&target=production&limit=50" \
+              > "$raw"
+            candidate="$(jq -c --arg sha "$MAIN_SHA" '[.deployments[] | select((.meta.githubCommitSha // "") == $sha and ((.readyState // .state // "") == "READY"))] | sort_by(.createdAt) | last // empty' "$raw")"
+            if [[ -n "$candidate" ]]; then
+              deployment_id="$(jq -r '.uid // .id' <<<"$candidate")"
+              deployment_host="$(jq -r '.url' <<<"$candidate")"
+              break
+            fi
+            sleep 10
+          done
+          test -n "$deployment_id"
+          test -n "$deployment_host"
+
+          detail="$RUNNER_TEMP/deployment-detail.json"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN_VALUE" \
+            "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_TEAM_ID}" \
+            > "$detail"
+          jq -e \
+            --arg id "$deployment_id" \
+            --arg host "$deployment_host" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$MAIN_SHA" '
+              ((.id // .uid) == $id)
+              and (.url == $host)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+            ' "$detail" >/dev/null
+          jq '{id:(.id // .uid),url,projectId:(.projectId // .project.id),readyState:(.readyState // .state),target,githubCommitSha:.meta.githubCommitSha,aliasError}' \
+            "$detail" > "$OUTPUT_DIR/deployment.json"
+
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"
+            alias_raw="$RUNNER_TEMP/alias-before-${key}.json"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN_VALUE" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}" \
+              > "$alias_raw"
+            jq -e \
+              --arg alias "$alias_name" \
+              --arg project "$VERCEL_PROJECT_ID" \
+              --arg deployment "$deployment_id" '
+                (.alias == $alias)
+                and (.projectId == $project)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+              ' "$alias_raw" >/dev/null
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' \
+              "$alias_raw" > "$OUTPUT_DIR/aliases-before/${key}.json"
+          done
+
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_host=$deployment_host" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.preflight.outputs.main_sha }}
+          fetch-depth: 0
+
+      - name: Materialize proven Create production UAT harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin ops/pr727-production-create-uat-final-20260817
+          mkdir -p .github/scripts "$OUTPUT_DIR"
+          for file in create-production-uat.mjs create-production-uat-fixture.sql create-production-uat-cleanup.sql; do
+            git show "origin/ops/pr727-production-create-uat-final-20260817:.github/scripts/$file" \
+              > ".github/scripts/$file"
+          done
+          node --check .github/scripts/create-production-uat.mjs
+          grep -Fq 'transitionGeometry' .github/scripts/create-production-uat.mjs
+          grep -Fq 'mobile-390x844' .github/scripts/create-production-uat.mjs
+          grep -Fq 'desktop-1644x900' .github/scripts/create-production-uat.mjs
+
+      - name: Set up Node.js, Chromium, and PostgreSQL client
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client jq curl > /dev/null
+
+      - name: Validate production database and public Auth configuration
+        id: db_preflight
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PROD_DB_URL"
+          echo "::add-mask::$PROD_DB_URL"
+          PROD_DB_URL="$PROD_DB_URL" python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          parsed = urlparse(os.environ['PROD_DB_URL'])
+          expected = os.environ['PROD_SUPABASE_REF']
+          query = parse_qs(parsed.query)
+          valid = (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and bool(parsed.password)
+              and parsed.path == '/postgres'
+              and (
+                  expected in (parsed.username or '')
+                  or expected in (parsed.hostname or '')
+                  or query.get('project', [''])[0] == expected
+              )
+          )
+          if not valid:
+              raise SystemExit('Refusing a database URL outside exact Moral Trade production.')
+          PY
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_DB_URL" \
+            --no-psqlrc -X -Atv ON_ERROR_STOP=1 \
+            -c "select to_regclass('auth.users') is not null and to_regclass('auth.identities') is not null and to_regclass('public.profiles') is not null;" \
+            | grep -Fxq 't'
+
+          supabase_url="$(sed -nE 's/^const DEFAULT_PUBLIC_SUPABASE_URL = "([^"]+)";$/\1/p' src/lib/supabase/config.ts)"
+          publishable_key="$(awk '/^const DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY =/ {getline; gsub(/^[[:space:]]*"|";[[:space:]]*$/, ""); print; exit}' src/lib/supabase/config.ts)"
+          test -n "$supabase_url"
+          test -n "$publishable_key"
+          observed_ref="$(SUPABASE_URL="$supabase_url" python3 -c 'import os; from urllib.parse import urlparse; print((urlparse(os.environ["SUPABASE_URL"]).hostname or "").split(".")[0])')"
+          test "$observed_ref" = "$PROD_SUPABASE_REF"
+          echo "::add-mask::$publishable_key"
+          umask 077
+          printf 'export NEXT_PUBLIC_SUPABASE_URL=%q\nexport NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%q\nexport PROD_SUPABASE_DB_URL=%q\n' \
+            "$supabase_url" "$publishable_key" "$PROD_DB_URL" \
+            > "$RUNNER_TEMP/create-uat-secrets.env"
+          jq -n \
+            --arg supabaseRef "$observed_ref" \
+            --arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {target:"Moral Trade production Supabase",supabaseRef:$supabaseRef,credentialSource:"MoralTrade QA protected environment",secretValuesRetained:false,observedAt:$observedAt}
+            ' > "$OUTPUT_DIR/environment.json"
+
+      - name: Create one run-owned Auth-only production fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          qa_user_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+          qa_email="create-repair-uat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(openssl rand -hex 6)@qa.moraltrade.invalid"
+          qa_password="$(openssl rand -base64 36 | tr -d '\n')"
+          qa_run_id="${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          echo "::add-mask::$qa_password"
+          umask 077
+          printf '%s' "$qa_user_id" > "$RUNNER_TEMP/qa-user-id"
+          printf '%s' "$qa_email" > "$RUNNER_TEMP/qa-email"
+          printf '%s' "$qa_password" > "$RUNNER_TEMP/qa-password"
+          printf '%s' "$qa_run_id" > "$RUNNER_TEMP/qa-run-id"
+          export CREATE_UAT_USER_ID="$qa_user_id" CREATE_UAT_EMAIL="$qa_email" CREATE_UAT_PASSWORD="$qa_password" CREATE_UAT_RUN_ID="$qa_run_id"
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc -X -Atv ON_ERROR_STOP=1 \
+            --file .github/scripts/create-production-uat-fixture.sql \
+            > "$OUTPUT_DIR/fixture-sql.log"
+          grep -Fq '"fixturePassed": true' "$OUTPUT_DIR/fixture-sql.log"
+          jq -n \
+            --arg userId "$qa_user_id" \
+            --arg runId "$qa_run_id" \
+            --arg createdAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {userId:$userId,scope:"create_repair_production_uat",runId:$runId,transactionalFixture:true,createdAt:$createdAt}
+            ' > "$OUTPUT_DIR/fixture.json"
+
+      - name: Run authenticated canonical desktop and mobile Create UAT
+        id: browser
+        continue-on-error: true
+        env:
+          MAIN_SHA: ${{ steps.preflight.outputs.main_sha }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          export CREATE_UAT_EXPECTED_MAIN_SHA="$MAIN_SHA"
+          export CREATE_UAT_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export CREATE_UAT_ORIGINS='https://www.moraltrade.org,https://moraltrade.org'
+          export CREATE_UAT_OUTPUT_DIR="$OUTPUT_DIR"
+          export CREATE_UAT_USER_ID="$(cat "$RUNNER_TEMP/qa-user-id")"
+          export CREATE_UAT_EMAIL="$(cat "$RUNNER_TEMP/qa-email")"
+          export CREATE_UAT_PASSWORD="$(cat "$RUNNER_TEMP/qa-password")"
+          echo "::add-mask::$CREATE_UAT_PASSWORD"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$OUTPUT_DIR/uat-started-at.txt"
+          set +e
+          node .github/scripts/create-production-uat.mjs \
+            > >(tee "$OUTPUT_DIR/browser.log") \
+            2> >(tee "$OUTPUT_DIR/browser.stderr.log" >&2)
+          code=$?
+          set -e
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$OUTPUT_DIR/uat-completed-at.txt"
+          printf '%s\n' "$code" > "$OUTPUT_DIR/browser-exit-code.txt"
+          exit "$code"
+
+      - name: Run explicit custom-cause mobile transition smoke
+        id: custom
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          qa_email="$(cat "$RUNNER_TEMP/qa-email")"
+          qa_password="$(cat "$RUNNER_TEMP/qa-password")"
+          echo "::add-mask::$qa_password"
+          cat > "$RUNNER_TEMP/custom-transition-uat.mjs" <<'NODE'
+          import { chromium } from "playwright";
+          import { writeFile } from "node:fs/promises";
+
+          const email = process.env.QA_EMAIL;
+          const password = process.env.QA_PASSWORD;
+          const output = process.env.OUTPUT_DIR;
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+          const page = await context.newPage();
+          const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [], firstParty5xx: [] };
+          page.on("console", (message) => {
+            if (message.type() === "error") diagnostics.consoleErrors.push(message.text());
+          });
+          page.on("pageerror", (error) => diagnostics.pageErrors.push(String(error)));
+          page.on("requestfailed", (request) => diagnostics.failedRequests.push({ url: request.url(), failure: request.failure()?.errorText ?? "unknown" }));
+          page.on("response", (response) => {
+            const url = new URL(response.url());
+            if ((url.hostname === "moraltrade.org" || url.hostname === "www.moraltrade.org") && response.status() >= 500) {
+              diagnostics.firstParty5xx.push({ url: response.url(), status: response.status() });
+            }
+          });
+
+          await page.goto("https://www.moraltrade.org/login?returnTo=%2Fcreate", { waitUntil: "domcontentloaded" });
+          const emailInput = page.locator('input[type="email"]');
+          const passwordInput = page.locator('input[type="password"]');
+          await emailInput.fill(email);
+          await passwordInput.fill(password);
+          await page.getByRole("button", { name: /sign in/i }).click();
+          await page.waitForURL(/\/create(?:[/?#]|$)/, { timeout: 30000 });
+          await page.goto("https://www.moraltrade.org/create", { waitUntil: "domcontentloaded" });
+          const frame = page.frameLocator('iframe[title*="Create"]');
+          await frame.locator("#causeHeading").waitFor({ state: "visible", timeout: 30000 });
+          const custom = frame.locator("#otherCauseInput");
+          await custom.scrollIntoViewIfNeeded();
+          await custom.fill("Moral uncertainty");
+          const submit = frame.locator(".other-cause-submit");
+          await submit.click();
+          await frame.locator("#screenRequest").waitFor({ state: "visible", timeout: 10000 });
+          const geometry = await frame.locator("body").evaluate(() => {
+            const rect = (selector) => {
+              const element = document.querySelector(selector);
+              if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+              const r = element.getBoundingClientRect();
+              return { top: r.top, right: r.right, bottom: r.bottom, left: r.left };
+            };
+            return {
+              scrollY: window.scrollY,
+              innerWidth: window.innerWidth,
+              clientWidth: document.documentElement.clientWidth,
+              scrollWidth: document.documentElement.scrollWidth,
+              header: rect(".topbar"),
+              heading: rect("#requestHeading"),
+              chosen: rect(".chosen-strip"),
+              cause: document.querySelector("#requestCause")?.textContent?.trim() ?? "",
+            };
+          });
+          if (geometry.cause !== "Moral uncertainty") throw new Error(`Unexpected custom cause: ${geometry.cause}`);
+          if (geometry.scrollY !== 0) throw new Error(`Custom transition retained scrollY=${geometry.scrollY}`);
+          if (geometry.heading.top < geometry.header.bottom + 16) throw new Error("Custom transition obscures the request heading.");
+          if (geometry.chosen.top < geometry.header.bottom + 16) throw new Error("Custom transition obscures the selected-cause strip.");
+          if (geometry.clientWidth !== geometry.innerWidth || geometry.scrollWidth > geometry.innerWidth + 1) throw new Error("Custom transition has horizontal overflow.");
+          if (diagnostics.consoleErrors.length || diagnostics.pageErrors.length || diagnostics.firstParty5xx.length) {
+            throw new Error(`Custom transition browser diagnostics failed: ${JSON.stringify(diagnostics)}`);
+          }
+          await page.screenshot({ path: `${output}/create-production-custom-mobile-390x844.png`, fullPage: true });
+          await writeFile(`${output}/custom-transition.json`, JSON.stringify({ geometry, diagnostics }, null, 2));
+          await browser.close();
+          NODE
+          QA_EMAIL="$qa_email" QA_PASSWORD="$qa_password" OUTPUT_DIR="$OUTPUT_DIR" \
+            node "$RUNNER_TEMP/custom-transition-uat.mjs"
+
+      - name: Reverify deployment and aliases after UAT
+        id: aliases_after
+        if: always()
+        continue-on-error: true
+        env:
+          MAIN_SHA: ${{ steps.preflight.outputs.main_sha }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          DEPLOYMENT_HOST: ${{ steps.deployment.outputs.deployment_host }}
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$VERCEL_TOKEN_VALUE"
+          mkdir -p "$OUTPUT_DIR/aliases-after"
+          detail="$RUNNER_TEMP/deployment-after.json"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN_VALUE" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}" \
+            > "$detail"
+          jq -e \
+            --arg id "$DEPLOYMENT_ID" \
+            --arg host "$DEPLOYMENT_HOST" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$MAIN_SHA" '
+              ((.id // .uid) == $id)
+              and (.url == $host)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and (.meta.githubCommitSha == $sha)
+            ' "$detail" >/dev/null
+          jq '{id:(.id // .uid),url,projectId:(.projectId // .project.id),readyState:(.readyState // .state),target,githubCommitSha:.meta.githubCommitSha}' \
+            "$detail" > "$OUTPUT_DIR/deployment-after.json"
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"
+            raw="$RUNNER_TEMP/alias-after-${key}.json"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN_VALUE" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}" \
+              > "$raw"
+            jq -e \
+              --arg alias "$alias_name" \
+              --arg project "$VERCEL_PROJECT_ID" \
+              --arg deployment "$DEPLOYMENT_ID" '
+                (.alias == $alias)
+                and (.projectId == $project)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+              ' "$raw" >/dev/null
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' \
+              "$raw" > "$OUTPUT_DIR/aliases-after/${key}.json"
+          done
+
+      - name: Remove and prove absence of exact run-owned fixture
+        id: cleanup
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/create-uat-secrets.env"
+          source "$RUNNER_TEMP/create-uat-secrets.env"
+          user_id="$(cat "$RUNNER_TEMP/qa-user-id")"
+          email="$(cat "$RUNNER_TEMP/qa-email")"
+          run_id="$(cat "$RUNNER_TEMP/qa-run-id")"
+          export CREATE_UAT_USER_ID="$user_id" CREATE_UAT_EMAIL="$email" CREATE_UAT_RUN_ID="$run_id"
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc -X -Atv ON_ERROR_STOP=1 \
+            --file .github/scripts/create-production-uat-cleanup.sql \
+            > "$OUTPUT_DIR/cleanup-sql.log" \
+            2> "$OUTPUT_DIR/cleanup-sql.stderr.log"
+          grep -Fq '"cleanupPassed": true' "$OUTPUT_DIR/cleanup-sql.log"
+          jq -n \
+            --arg userId "$user_id" \
+            --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {userId:$userId,deleted:true,authUserAbsent:true,identityAbsent:true,profileAbsent:true,sessionAbsent:true,refreshTokenAbsent:true,exitCode:0,completedAt:$completedAt}
+            ' > "$OUTPUT_DIR/cleanup.json"
+          rm -f "$RUNNER_TEMP"/qa-user-id "$RUNNER_TEMP"/qa-email "$RUNNER_TEMP"/qa-password "$RUNNER_TEMP"/qa-run-id "$RUNNER_TEMP"/create-uat-secrets.env
+
+      - name: Collect bounded Vercel runtime-log evidence
+        id: runtime_logs
+        if: always()
+        continue-on-error: true
+        env:
+          DEPLOYMENT_HOST: ${{ steps.deployment.outputs.deployment_host }}
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$VERCEL_TOKEN_VALUE"
+          started="$(cat "$OUTPUT_DIR/uat-started-at.txt")"
+          completed="$(cat "$OUTPUT_DIR/uat-completed-at.txt")"
+          set +e
+          timeout 45s npx --yes "vercel@$VERCEL_CLI_VERSION" logs "https://${DEPLOYMENT_HOST}" \
+            --token "$VERCEL_TOKEN_VALUE" \
+            --since "$started" \
+            --until "$completed" \
+            --json \
+            > "$OUTPUT_DIR/vercel-runtime-logs.jsonl" \
+            2> "$OUTPUT_DIR/vercel-runtime-logs.stderr.log"
+          cli_code=$?
+          set -e
+          error_lines=0
+          if [[ -s "$OUTPUT_DIR/vercel-runtime-logs.jsonl" ]]; then
+            error_lines="$(grep -Eic '"level"[[:space:]]*:[[:space:]]*"(error|fatal)"|(^|[^0-9])5[0-9]{2}([^0-9]|$)|uncaught|unhandled|panic' "$OUTPUT_DIR/vercel-runtime-logs.jsonl" || true)"
+          fi
+          jq -n \
+            --arg startedAt "$started" \
+            --arg completedAt "$completed" \
+            --argjson cliExitCode "$cli_code" \
+            --argjson relevantErrorLines "$error_lines" \
+            --arg inspectedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {startedAt:$startedAt,completedAt:$completedAt,cliExitCode:$cliExitCode,relevantErrorLines:$relevantErrorLines,inspectedAt:$inspectedAt}
+            ' > "$OUTPUT_DIR/runtime-log-scan.json"
+          test "$error_lines" -eq 0
+
+      - name: Validate terminal evidence and credential boundary
+        id: evidence
+        if: always()
+        env:
+          MAIN_SHA: ${{ steps.preflight.outputs.main_sha }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          RELEASE_RUN_ID: ${{ steps.release.outputs.run_id }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          CUSTOM_OUTCOME: ${{ steps.custom.outcome }}
+          ALIAS_OUTCOME: ${{ steps.aliases_after.outcome }}
+          CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          passed=true
+          reasons=()
+          [[ "$BROWSER_OUTCOME" = 'success' ]] || { passed=false; reasons+=("canonical browser UAT failed"); }
+          [[ "$CUSTOM_OUTCOME" = 'success' ]] || { passed=false; reasons+=("custom cause UAT failed"); }
+          [[ "$ALIAS_OUTCOME" = 'success' ]] || { passed=false; reasons+=("post-UAT alias verification failed"); }
+          [[ "$CLEANUP_OUTCOME" = 'success' ]] || { passed=false; reasons+=("fixture cleanup failed"); }
+          jq -e '.deleted == true and .authUserAbsent == true and .identityAbsent == true and .profileAbsent == true and .sessionAbsent == true and .refreshTokenAbsent == true and .exitCode == 0' \
+            "$OUTPUT_DIR/cleanup.json" >/dev/null || { passed=false; reasons+=("cleanup absence proof invalid"); }
+          test -s "$OUTPUT_DIR/create-production-desktop-1644x900.png" || { passed=false; reasons+=("desktop screenshot missing"); }
+          test -s "$OUTPUT_DIR/create-production-mobile-390x844.png" || { passed=false; reasons+=("mobile screenshot missing"); }
+          test -s "$OUTPUT_DIR/create-production-custom-mobile-390x844.png" || { passed=false; reasons+=("custom mobile screenshot missing"); }
+          test -s "$OUTPUT_DIR/summary.json" || { passed=false; reasons+=("canonical summary missing"); }
+          test -s "$OUTPUT_DIR/custom-transition.json" || { passed=false; reasons+=("custom transition geometry missing"); }
+          if [[ -s "$OUTPUT_DIR/summary.json" ]]; then
+            jq -e --arg sha "$MAIN_SHA" --arg deployment "$DEPLOYMENT_ID" '.expectedMainSha == $sha and .expectedDeploymentId == $deployment' \
+              "$OUTPUT_DIR/summary.json" >/dev/null || { passed=false; reasons+=("canonical summary identity mismatch"); }
+          fi
+          if grep -RIlE 'postgres(ql)?://[^[:space:]]+:[^[:space:]]+@|create-repair-uat-[^[:space:]]+@qa\.moraltrade\.invalid' "$OUTPUT_DIR" > "$RUNNER_TEMP/leaks.txt" 2>/dev/null && [[ -s "$RUNNER_TEMP/leaks.txt" ]]; then
+            passed=false
+            reasons+=("credential or email leaked into evidence")
+          fi
+          printf '%s\n' "${reasons[@]:-}" > "$OUTPUT_DIR/failure-reasons.txt"
+          jq -n \
+            --argjson passed "$passed" \
+            --arg mainSha "$MAIN_SHA" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --arg releaseRunId "$RELEASE_RUN_ID" \
+            --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {passed:$passed,mainSha:$mainSha,deploymentId:$deploymentId,releaseRunId:($releaseRunId|tonumber),completedAt:$completedAt}
+            ' > "$OUTPUT_DIR/final-evidence.json"
+          if [[ "$passed" = true ]]; then
+            touch "$RESULT_DIR/SUCCESS"
+          else
+            touch "$RESULT_DIR/FAILED"
+          fi
+          cp "$OUTPUT_DIR/final-evidence.json" "$RESULT_DIR/final-evidence.json"
+          cp "$OUTPUT_DIR/deployment.json" "$RESULT_DIR/deployment.json"
+          cp "$OUTPUT_DIR/cleanup.json" "$RESULT_DIR/cleanup.json" || true
+          cp "$OUTPUT_DIR/runtime-log-scan.json" "$RESULT_DIR/runtime-log-scan.json" || true
+          cp "$OUTPUT_DIR/release-workflow.json" "$RESULT_DIR/release-workflow.json"
+          test "$passed" = true
+
+      - name: Upload immutable release and UAT evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-repair-production-uat-${{ github.run_id }}
+          path: create-repair-production-uat
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Post completion evidence to PRs 757, 727, and 741
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_SHA: ${{ steps.preflight.outputs.main_sha }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          RELEASE_RUN_ID: ${{ steps.release.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          started="$(cat "$OUTPUT_DIR/uat-started-at.txt")"
+          completed="$(cat "$OUTPUT_DIR/uat-completed-at.txt")"
+          body="Production Create transition repair verified. Exact released main SHA: \`$MAIN_SHA\`. Gated Vercel release run: \`$RELEASE_RUN_ID\`. READY production deployment: \`$DEPLOYMENT_ID\`. Authenticated canonical production UAT passed at 1644×900 and 390×844 on both \`www.moraltrade.org\` and \`moraltrade.org\`, including predefined and custom cause transitions, sticky-header clearance, request entry, autocomplete, accessibility state, contrast, overflow, console/network checks, and post-UAT alias identity. UAT interval: \`$started\` through \`$completed\`. The run-owned Auth fixture, identity, profile, sessions, and refresh tokens were proven absent after cleanup. No offer, payment, agreement, trade, or product record was created. Evidence: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
+          for issue in 757 727 741; do
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$issue/comments" -f body="$body" >/dev/null
+          done
+
+      - name: Commit sanitized terminal marker to controller branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RESULT_DIR/final-evidence.json"
+          git switch "$CONTROLLER_BRANCH"
+          git pull --ff-only origin "$CONTROLLER_BRANCH"
+          rm -rf "$RESULT_DIR"
+          mkdir -p "$RESULT_DIR"
+          cp "$GITHUB_WORKSPACE/create-repair-production-uat/final-evidence.json" "$RESULT_DIR/final-evidence.json"
+          cp "$GITHUB_WORKSPACE/create-repair-production-uat/deployment.json" "$RESULT_DIR/deployment.json"
+          cp "$GITHUB_WORKSPACE/create-repair-production-uat/release-workflow.json" "$RESULT_DIR/release-workflow.json"
+          cp "$GITHUB_WORKSPACE/create-repair-production-uat/cleanup.json" "$RESULT_DIR/cleanup.json" || true
+          cp "$GITHUB_WORKSPACE/create-repair-production-uat/runtime-log-scan.json" "$RESULT_DIR/runtime-log-scan.json" || true
+          if jq -e '.passed == true' "$RESULT_DIR/final-evidence.json" >/dev/null; then
+            touch "$RESULT_DIR/SUCCESS"
+          else
+            touch "$RESULT_DIR/FAILED"
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$RESULT_DIR"
+          git diff --cached --check
+          git commit -m "Record exact release and Create production UAT result"
+          git push origin HEAD:"$CONTROLLER_BRANCH"
