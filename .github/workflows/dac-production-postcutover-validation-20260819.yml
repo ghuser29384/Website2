@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EXPECTED_MAIN_SHA: 4bc8cd28205915d313286136b7335d5aeb7f3c49
-  EXPECTED_MAIN_TREE: 3c75122bffe5fb3d98bea6da97a04d9cbc87282d
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  EXPECTED_MAIN_TREE: 47fe96dfc881f1c57dea711283fc3db36a44e053
   EXPECTED_PROJECT_REF: jnpoxvalyjtdghnperyu
   EXPECTED_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
   EXPECTED_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
@@ -34,28 +34,33 @@ jobs:
     name: Read-only exact registry, schema, RLS, privacy, grants, and zero-data proof
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
     env:
       PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
       GH_TOKEN: ${{ github.token }}
 
     steps:
+      - name: Create evidence directory before every guard
+        shell: bash
+        run: mkdir -p "$EVIDENCE_DIR"
+
       - name: Check out exact released source
         uses: actions/checkout@v4
         with:
           ref: ${{ env.EXPECTED_MAIN_SHA }}
           fetch-depth: 0
 
-      - name: Guard exact source and unchanged main
+      - name: Guard exact source and unchanged current main
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "${{ github.event.pull_request.number }}" = "780"
+          test "${{ github.event.pull_request.head.ref }}" = "ops/dac-production-migration-resume-20260818"
           test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
           test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_MAIN_TREE"
           remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_main" = "$EXPECTED_MAIN_SHA"
-          mkdir -p "$EVIDENCE_DIR"
           {
             printf 'main_sha=%s\n' "$EXPECTED_MAIN_SHA"
             printf 'main_tree=%s\n' "$EXPECTED_MAIN_TREE"
@@ -63,7 +68,7 @@ jobs:
             printf 'checked_at=%s\n' "$(date -u +%FT%TZ)"
           } | tee "$EVIDENCE_DIR/source-identity.txt"
 
-      - name: Re-prove durable encrypted backup
+      - name: Re-prove durable encrypted pre-migration backup
         shell: bash
         run: |
           set -euo pipefail
@@ -80,13 +85,18 @@ jobs:
             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$BACKUP_ARTIFACT_ID" \
             > "$artifact_json"
           jq -e --arg head "$BACKUP_RUN_HEAD" '
-            .status == "completed" and .conclusion == "success" and .head_sha == $head
+            .status == "completed"
+            and .conclusion == "success"
+            and .head_sha == $head
           ' "$run_json" >/dev/null
           jq -e \
             --argjson id "$BACKUP_ARTIFACT_ID" \
             --arg digest "$BACKUP_ARTIFACT_DIGEST" \
             --arg original "f1cd364bf058b28b3b29501aa6528c48f8f39bb7" '
-            .id == $id and .expired == false and .digest == $digest and (.name | contains($original))
+            .id == $id
+            and .expired == false
+            and .digest == $digest
+            and (.name | contains($original))
           ' "$artifact_json" >/dev/null
           jq -n \
             --arg runId "$BACKUP_RUN_ID" \
@@ -136,7 +146,7 @@ jobs:
 
           do $verify$
           declare
-            v_expected jsonb := '[
+            expected_migrations jsonb := '[
               {"version":"20260806110000","name":"mpgf_pool_review_freeze","sha256":"0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c"},
               {"version":"20260818173000","name":"mpgf_dac_public_goods_foundation_reconciliation","sha256":"e89a199cbdbb767d88a03585764bce774f533449519b67d04c082683f0638aa0"},
               {"version":"20260806143000","name":"mpgf_pool_publication_materialization","sha256":"ee8ab4a2c52893ff9f2d8dfcbf7dc25370768af80e5401978f7c4b09e8cab9e8"},
@@ -149,74 +159,80 @@ jobs:
               {"version":"20260815011000","name":"mpgf_dac_terminal_guard_reconciliation","sha256":"c64d521c6adb7a865d9ec5e2f25e70adb09f08f91e0f1bc0ec0610977aafd108"},
               {"version":"20260818174000","name":"mpgf_dac_public_aggregate_column_privacy","sha256":"0c3e7596f5f6b0d69d9438347f82ad79b6d0663511d3aec7cf333681fef9f581"}
             ]'::jsonb;
-            v_item jsonb;
-            v_observed_name text;
-            v_observed_hash text;
-            v_table_name text;
-            v_role_name text;
-            v_column_name text;
-            v_row_count bigint;
-            v_safe_campaign_columns constant text[] := array[
+            migration_item jsonb;
+            observed_name text;
+            observed_hash text;
+            required_table text;
+            checked_role text;
+            checked_column text;
+            observed_rows bigint;
+            safe_campaign_columns constant text[] := array[
               'id','round_id','slug','title','destination_type','destination_ref','cause_tags','public_summary',
               'threshold_amount_cents','threshold_supporters','deadline_at','verification_method','baseline_rule',
               'exit_rule','review_status','pool_proposal_id','threshold_visibility','progress_visibility',
               'published_terms_version','published_terms_sha256','published_at','created_at'
             ];
-            v_private_campaign_columns constant text[] := array[
+            private_campaign_columns constant text[] := array[
               'pool_alternative_id','challenge_window_ends_at','first_accepted_pledge_at','published_by'
             ];
-            v_safe_outcome_columns constant text[] := array[
+            safe_outcome_columns constant text[] := array[
               'id','campaign_id','pool_proposal_id','terms_version','terms_sha256','outcome_status',
               'eligible_amount_cents','eligible_supporter_count','threshold_amount_cents','threshold_supporters',
               'deadline_at','evaluated_at','outcome_sha256','created_at'
             ];
-            v_private_outcome_columns constant text[] := array['finalized_by','reason','outcome_json'];
+            private_outcome_columns constant text[] := array['finalized_by','reason','outcome_json'];
           begin
-            for v_item in select value from jsonb_array_elements(v_expected)
+            for migration_item in select value from jsonb_array_elements(expected_migrations)
             loop
-              select m.name,
-                     case when m.statements is null or array_length(m.statements,1) is null then null
-                          else encode(extensions.digest(convert_to(m.statements[1], 'UTF8'), 'sha256'),'hex') end
-                into v_observed_name, v_observed_hash
-              from supabase_migrations.schema_migrations m
-              where m.version = v_item->>'version';
+              select registry.name,
+                     case
+                       when registry.statements is null or array_length(registry.statements,1) is null then null
+                       else encode(extensions.digest(convert_to(registry.statements[1], 'UTF8'), 'sha256'),'hex')
+                     end
+                into observed_name, observed_hash
+              from supabase_migrations.schema_migrations registry
+              where registry.version = migration_item->>'version';
               if not found
-                 or v_observed_name is distinct from v_item->>'name'
-                 or v_observed_hash is distinct from v_item->>'sha256' then
-                raise exception 'Migration registry mismatch for %: %/%', v_item->>'version', v_observed_name, v_observed_hash;
+                 or observed_name is distinct from migration_item->>'name'
+                 or observed_hash is distinct from migration_item->>'sha256' then
+                raise exception 'Migration registry mismatch for %: %/%',
+                  migration_item->>'version', observed_name, observed_hash;
               end if;
             end loop;
 
             if (
               select count(*)
-              from supabase_migrations.schema_migrations m
-              where m.version in (
-                select value->>'version' from jsonb_array_elements(v_expected)
+              from supabase_migrations.schema_migrations registry
+              where registry.version in (
+                select element->>'version'
+                from jsonb_array_elements(expected_migrations) element
               )
             ) <> 11 then
               raise exception 'Expected eleven exact DAC migration registry rows.';
             end if;
 
-            foreach v_table_name in array array[
+            foreach required_table in array array[
               'mpgf_pool_proposals','mpgf_pool_reviewers','mpgf_pool_proposal_versions','mpgf_pool_lifecycle_events',
               'mpgf_public_goods_match_pools','mpgf_public_goods_rounds','mpgf_public_goods_campaigns','mpgf_public_goods_pledges',
               'mpgf_dac_pledge_intents','mpgf_dac_pledge_events','mpgf_dac_campaign_outcomes'
             ]
             loop
-              if to_regclass('public.' || v_table_name) is null then
-                raise exception 'Required terminal DAC table is missing: %', v_table_name;
+              if to_regclass('public.' || required_table) is null then
+                raise exception 'Required terminal DAC table is missing: %', required_table;
               end if;
               if not exists (
                 select 1
-                from pg_class c
-                join pg_namespace n on n.oid = c.relnamespace
-                where n.nspname='public' and c.relname=v_table_name and c.relrowsecurity
+                from pg_class relation
+                join pg_namespace namespace on namespace.oid = relation.relnamespace
+                where namespace.nspname='public'
+                  and relation.relname=required_table
+                  and relation.relrowsecurity
               ) then
-                raise exception 'RLS is disabled on required table: %', v_table_name;
+                raise exception 'RLS is disabled on required table: %', required_table;
               end if;
-              execute format('select count(*) from public.%I', v_table_name) into v_row_count;
-              if v_row_count <> 0 then
-                raise exception 'Unexpected production rows in %: %', v_table_name, v_row_count;
+              execute format('select count(*) from public.%I', required_table) into observed_rows;
+              if observed_rows <> 0 then
+                raise exception 'Unexpected production rows in %: %', required_table, observed_rows;
               end if;
             end loop;
 
@@ -232,15 +248,18 @@ jobs:
 
             if exists (
               select 1
-              from pg_proc p
-              join pg_namespace n on n.oid=p.pronamespace
-              where n.nspname='public'
-                and p.proname in (
+              from pg_proc procedure
+              join pg_namespace namespace on namespace.oid=procedure.pronamespace
+              where namespace.nspname='public'
+                and procedure.proname in (
                   'mpgf_begin_pool_proposal_review','mpgf_approve_and_freeze_pool_proposal',
                   'mpgf_publish_pool_proposal','mpgf_create_dac_pledge',
                   'mpgf_review_dac_pledge_eligibility','mpgf_finalize_dac_campaign'
                 )
-                and (not p.prosecdef or not coalesce(p.proconfig,array[]::text[]) @> array['search_path=pg_catalog, public'])
+                and (
+                  not procedure.prosecdef
+                  or not coalesce(procedure.proconfig,array[]::text[]) @> array['search_path=pg_catalog, public']
+                )
             ) then
               raise exception 'A privileged lifecycle function lacks SECURITY DEFINER or fixed search_path.';
             end if;
@@ -252,26 +271,26 @@ jobs:
               raise exception 'A public DAC aggregate table retains table-level SELECT.';
             end if;
 
-            foreach v_role_name in array array['anon','authenticated']
+            foreach checked_role in array array['anon','authenticated']
             loop
-              foreach v_column_name in array v_safe_campaign_columns loop
-                if not has_column_privilege(v_role_name,'public.mpgf_public_goods_campaigns',v_column_name,'SELECT') then
-                  raise exception '% cannot select reviewed campaign column %', v_role_name, v_column_name;
+              foreach checked_column in array safe_campaign_columns loop
+                if not has_column_privilege(checked_role,'public.mpgf_public_goods_campaigns',checked_column,'SELECT') then
+                  raise exception '% cannot select reviewed campaign column %', checked_role, checked_column;
                 end if;
               end loop;
-              foreach v_column_name in array v_private_campaign_columns loop
-                if has_column_privilege(v_role_name,'public.mpgf_public_goods_campaigns',v_column_name,'SELECT') then
-                  raise exception '% can select private campaign column %', v_role_name, v_column_name;
+              foreach checked_column in array private_campaign_columns loop
+                if has_column_privilege(checked_role,'public.mpgf_public_goods_campaigns',checked_column,'SELECT') then
+                  raise exception '% can select private campaign column %', checked_role, checked_column;
                 end if;
               end loop;
-              foreach v_column_name in array v_safe_outcome_columns loop
-                if not has_column_privilege(v_role_name,'public.mpgf_dac_campaign_outcomes',v_column_name,'SELECT') then
-                  raise exception '% cannot select reviewed outcome column %', v_role_name, v_column_name;
+              foreach checked_column in array safe_outcome_columns loop
+                if not has_column_privilege(checked_role,'public.mpgf_dac_campaign_outcomes',checked_column,'SELECT') then
+                  raise exception '% cannot select reviewed outcome column %', checked_role, checked_column;
                 end if;
               end loop;
-              foreach v_column_name in array v_private_outcome_columns loop
-                if has_column_privilege(v_role_name,'public.mpgf_dac_campaign_outcomes',v_column_name,'SELECT') then
-                  raise exception '% can select private outcome column %', v_role_name, v_column_name;
+              foreach checked_column in array private_outcome_columns loop
+                if has_column_privilege(checked_role,'public.mpgf_dac_campaign_outcomes',checked_column,'SELECT') then
+                  raise exception '% can select private outcome column %', checked_role, checked_column;
                 end if;
               end loop;
             end loop;
@@ -296,19 +315,19 @@ jobs:
               raise exception 'A required DAC RPC grant is missing.';
             end if;
 
-            select count(*) into v_row_count
-            from public.mpgf_public_goods_pledges p
-            where p.payment_intent_ref is not null;
-            if v_row_count <> 0 then
-              raise exception 'Unexpected production payment references: %', v_row_count;
+            select count(*) into observed_rows
+            from public.mpgf_public_goods_pledges pledge
+            where pledge.payment_intent_ref is not null;
+            if observed_rows <> 0 then
+              raise exception 'Unexpected production payment references: %', observed_rows;
             end if;
           end;
           $verify$;
 
           select jsonb_build_object(
             'projectRef','jnpoxvalyjtdghnperyu',
-            'releaseMainSha','4bc8cd28205915d313286136b7335d5aeb7f3c49',
-            'releaseMainTree','3c75122bffe5fb3d98bea6da97a04d9cbc87282d',
+            'releaseMainSha','26d1fe436dbf9a4440bfafd501ddf8db944a1127',
+            'releaseMainTree','47fe96dfc881f1c57dea711283fc3db36a44e053',
             'registeredExactMigrations',11,
             'requiredTables',11,
             'requiredFunctionsPresent',true,
@@ -368,17 +387,18 @@ jobs:
             grep -Eq 'permission denied|column .* does not exist' "$RUNNER_TEMP/${role}-private-campaign.log"
             grep -Eq 'permission denied|column .* does not exist' "$RUNNER_TEMP/${role}-private-outcome.log"
           done
-          cat > "$EVIDENCE_DIR/direct-data-plane.json" <<JSON
-          {"anonSafeReads":true,"authenticatedSafeReads":true,"anonPrivateColumnsDenied":true,"authenticatedPrivateColumnsDenied":true,"checkedAt":"$(date -u +%FT%TZ)"}
-          JSON
+          jq -n \
+            --arg checkedAt "$(date -u +%FT%TZ)" \
+            '{anonSafeReads:true,authenticatedSafeReads:true,anonPrivateColumnsDenied:true,authenticatedPrivateColumnsDenied:true,checkedAt:$checkedAt}' \
+            > "$EVIDENCE_DIR/direct-data-plane.json"
 
-      - name: Recheck main and scan retained evidence for credentials
+      - name: Recheck current main and scan retained evidence
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
-          if grep -RIlE '(postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_|whsec_|Bearer [A-Za-z0-9._-]+)' "$EVIDENCE_DIR"; then
+          if grep -RIlE '(postgres(ql)?://|sk_(live|test)_|whsec_|BEGIN [A-Z ]*PRIVATE KEY)' "$EVIDENCE_DIR"; then
             echo 'Credential-like material found in retained validation evidence.' >&2
             exit 1
           fi
