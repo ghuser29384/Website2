@@ -270,10 +270,35 @@ for raw_line in source.splitlines():
     output.append(line)
 
 normalized = "\n".join(output).strip() + "\n"
+
+# A schema-only dump legitimately contains DML inside stored functions. Reject only
+# executable top-level data statements while tracking PostgreSQL dollar-quoted bodies.
+dollar_quote = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
+top_level_dml = re.compile(
+    r'^\s*(COPY|INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)'
+    r'\s+(?:ONLY\s+)?(?:(?:"public"|"moral_trade_private")|(?:public|moral_trade_private))\.',
+    re.IGNORECASE,
+)
+active_dollar_quote: str | None = None
+violations: list[tuple[int, str]] = []
+for line_number, line in enumerate(normalized.splitlines(), start=1):
+    if active_dollar_quote is None:
+        match = top_level_dml.match(line)
+        if match:
+  violations.append((line_number, match.group(1).upper()))
+    for token_match in dollar_quote.finditer(line):
+        token = token_match.group(0)
+        if active_dollar_quote is None:
+  active_dollar_quote = token
+        elif token == active_dollar_quote:
+  active_dollar_quote = None
+if active_dollar_quote is not None:
+    raise SystemExit("Unterminated dollar-quoted body in normalized schema dump.")
+if violations:
+    summary = ", ".join(f"line {line}: {kind}" for line, kind in violations)
+    raise SystemExit(f"Forbidden top-level application data statement(s): {summary}")
+
 for pattern, label in (
-    (r"(?i)\bCOPY\s+(?:public|moral_trade_private)\.", "COPY data"),
-    (r"(?i)\bINSERT\s+INTO\s+(?:public|moral_trade_private)\.", "application data"),
-    (r"(?i)\bINSERT\s+INTO\s+auth\.users\b", "Auth user data"),
     (r"(?i)\bCREATE\s+DATABASE\b", "database creation"),
     (r"(?i)\bALTER\s+DATABASE\b", "database mutation"),
     (r"(?i)\bactivation_stage\b", "post-boundary activation schema"),
@@ -373,10 +398,6 @@ commit;
 SQL
 
 for forbidden in \
-  'COPY public.' \
-  'COPY moral_trade_private.' \
-  'INSERT INTO public.' \
-  'INSERT INTO moral_trade_private.' \
   'activation_stage' \
   'complete_walkthrough_activation_v1' \
   'complete_profile_activation_v1'; do
@@ -463,6 +484,27 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+function findTopLevelApplicationDataStatements(sql: string): string[] {
+  const dollarQuote = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/g;
+  const topLevelDml = /^\s*(COPY|INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+(?:ONLY\s+)?(?:(?:"public"|"moral_trade_private")|(?:public|moral_trade_private))\./i;
+  let activeDollarQuote: string | null = null;
+  const violations: string[] = [];
+  for (const [index, line] of sql.split(/\r?\n/).entries()) {
+    if (activeDollarQuote === null) {
+      const match = topLevelDml.exec(line);
+      if (match) violations.push(`line ${index + 1}: ${match[1].toUpperCase()}`);
+    }
+    dollarQuote.lastIndex = 0;
+    for (const match of line.matchAll(dollarQuote)) {
+      const token = match[0];
+      if (activeDollarQuote === null) activeDollarQuote = token;
+      else if (token === activeDollarQuote) activeDollarQuote = null;
+    }
+  }
+  assert.equal(activeDollarQuote, null, "dollar-quoted body must terminate");
+  return violations;
+}
+
 const root = "supabase/baseline/pre_activation";
 const manifest = JSON.parse(readFileSync(`${root}/manifest.json`, "utf8")) as {
   baseline_id: string;
@@ -489,8 +531,7 @@ test("pre-activation baseline manifest binds every authoritative artifact", () =
 test("pre-activation baseline is data-free, guarded, portable, and activation-free", () => {
   const sql = readFileSync(`${root}/schema.sql`, "utf8");
   assert.match(sql, /Pre-activation baseline requires an empty application schema/);
-  assert.doesNotMatch(sql, /COPY (?:public|moral_trade_private)\./);
-  assert.doesNotMatch(sql, /INSERT INTO (?:public|moral_trade_private)\./);
+  assert.deepEqual(findTopLevelApplicationDataStatements(sql), []);
   assert.doesNotMatch(sql, /activation_stage/);
   assert.doesNotMatch(sql, /complete_(?:walkthrough|profile)_activation_v1/);
   assert.doesNotMatch(sql, /^\\(?:un)?restrict\b/m);
