@@ -1,0 +1,542 @@
+name: One-use DAC public privacy production 20260819
+
+on:
+  push:
+    branches:
+      - ops/dac-public-privacy-production-20260819-authoritative-v11
+    paths:
+      - .github/workflows/one-use-dac-public-privacy-production-20260819.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: moraltrade-dac-production-release
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ghuser29384/Website2
+      FOUNDATION_PR: "772"
+      PRIVACY_PR: "777"
+      EXPECTED_PROD_REF: jnpoxvalyjtdghnperyu
+      EXPECTED_PROD_HOST: aws-1-us-west-2.pooler.supabase.com
+      EXPECTED_PROD_USER: postgres.jnpoxvalyjtdghnperyu
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      EXPECTED_QA_HOST: aws-0-us-west-1.pooler.supabase.com
+      EVIDENCE_DIR: dac-public-privacy-production-evidence
+      POSTGRES_IMAGE: postgres:17
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact then-current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Inspect and freeze exact release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          initial_main="$(git rev-parse HEAD)"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$initial_main" = "$remote_main"
+
+          gh api "repos/$REPOSITORY/pulls/$FOUNDATION_PR" > "$RUNNER_TEMP/foundation.json"
+          gh api "repos/$REPOSITORY/pulls/$PRIVACY_PR" > "$RUNNER_TEMP/privacy.json"
+          jq -e '.merged == true and .merged_at != null' "$RUNNER_TEMP/foundation.json" >/dev/null
+          foundation_merge="$(jq -r '.merge_commit_sha' "$RUNNER_TEMP/foundation.json")"
+          git fetch origin "$foundation_merge"
+          git merge-base --is-ancestor "$foundation_merge" "$initial_main"
+
+          privacy_head="$(jq -r '.head.sha' "$RUNNER_TEMP/privacy.json")"
+          privacy_ref="$(jq -r '.head.ref' "$RUNNER_TEMP/privacy.json")"
+          privacy_merged="$(jq -r '.merged' "$RUNNER_TEMP/privacy.json")"
+          test "$privacy_ref" = "fix/dac-public-aggregate-column-privacy-20260818"
+
+          mapfile -t pr_files < <(gh api --paginate "repos/$REPOSITORY/pulls/$PRIVACY_PR/files" --jq '.[].filename' | sort -u)
+          test "${#pr_files[@]}" -eq 3
+          printf '%s\n' "${pr_files[@]}" | tee "$EVIDENCE_DIR/privacy-pr-files.txt"
+          workflow_path="$(printf '%s\n' "${pr_files[@]}" | grep -E '^\.github/workflows/mpgf-dac-public-aggregate-column-privacy-gates\.ya?ml$')"
+          migration_path="$(printf '%s\n' "${pr_files[@]}" | grep -E '^supabase/migrations/[0-9]{14}_mpgf_dac_public.*(aggregate|column).*privacy.*\.sql$')"
+          test_path="$(printf '%s\n' "${pr_files[@]}" | grep -E '^src/lib/mpgf/.*(aggregate|column).*privacy.*\.test\.(ts|tsx)$')"
+          test -n "$workflow_path"
+          test -n "$migration_path"
+          test -n "$test_path"
+
+          git fetch origin "$privacy_head"
+          if test "$privacy_merged" = "false"; then
+            if test "$(jq -r '.base.ref' "$RUNNER_TEMP/privacy.json")" != "main"; then
+              gh api --method PATCH "repos/$REPOSITORY/pulls/$PRIVACY_PR" -f base=main > "$RUNNER_TEMP/privacy-retargeted.json"
+            fi
+            gh api "repos/$REPOSITORY/pulls/$PRIVACY_PR" > "$RUNNER_TEMP/privacy-after-retarget.json"
+            jq -e '.base.ref == "main" and .state == "open" and .merged == false' "$RUNNER_TEMP/privacy-after-retarget.json" >/dev/null
+
+            git checkout --detach "$initial_main"
+            git merge --no-commit --no-ff "$privacy_head"
+            mapfile -t candidate_files < <(git diff --cached --name-only | sort -u)
+            test "${#candidate_files[@]}" -eq 3
+            diff -u <(printf '%s\n' "${pr_files[@]}" | sort -u) <(printf '%s\n' "${candidate_files[@]}" | sort -u)
+          else
+            privacy_merge="$(jq -r '.merge_commit_sha' "$RUNNER_TEMP/privacy.json")"
+            git fetch origin "$privacy_merge"
+            git merge-base --is-ancestor "$privacy_head" "$initial_main"
+            git merge-base --is-ancestor "$privacy_merge" "$initial_main"
+          fi
+
+          test -f "$migration_path"
+          test -f "$test_path"
+          migration_sha="$(sha256sum "$migration_path" | awk '{print $1}')"
+          migration_file="$(basename "$migration_path")"
+          migration_version="${migration_file%%_*}"
+          migration_name="${migration_file#*_}"
+          migration_name="${migration_name%.sql}"
+          [[ "$migration_version" =~ ^[0-9]{14}$ ]]
+          [[ "$migration_sha" =~ ^[0-9a-f]{64}$ ]]
+
+          {
+            printf 'initial_main=%s\n' "$initial_main"
+            printf 'foundation_merge=%s\n' "$foundation_merge"
+            printf 'privacy_head=%s\n' "$privacy_head"
+            printf 'privacy_merged_at_start=%s\n' "$privacy_merged"
+            printf 'migration_path=%s\n' "$migration_path"
+            printf 'migration_version=%s\n' "$migration_version"
+            printf 'migration_name=%s\n' "$migration_name"
+            printf 'migration_sha256=%s\n' "$migration_sha"
+            printf 'frozen_at=%s\n' "$(date -u +%FT%TZ)"
+          } | tee "$EVIDENCE_DIR/release-inputs.txt"
+
+          echo "INITIAL_MAIN=$initial_main" >> "$GITHUB_ENV"
+          echo "PRIVACY_HEAD=$privacy_head" >> "$GITHUB_ENV"
+          echo "PRIVACY_MERGED_AT_START=$privacy_merged" >> "$GITHUB_ENV"
+          echo "MIGRATION_PATH=$migration_path" >> "$GITHUB_ENV"
+          echo "MIGRATION_VERSION=$migration_version" >> "$GITHUB_ENV"
+          echo "MIGRATION_NAME=$migration_name" >> "$GITHUB_ENV"
+          echo "MIGRATION_SHA=$migration_sha" >> "$GITHUB_ENV"
+          echo "TEST_PATH=$test_path" >> "$GITHUB_ENV"
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Run exact candidate repository gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test "$TEST_PATH" | tee "$EVIDENCE_DIR/focused-test.log"
+          npm test | tee "$EVIDENCE_DIR/repository-tests.log"
+          npm run lint -- --quiet | tee "$EVIDENCE_DIR/lint.log"
+          npx tsc --noEmit | tee "$EVIDENCE_DIR/typecheck.log"
+          npm run build | tee "$EVIDENCE_DIR/build.log"
+          git diff --check
+
+      - name: Validate exact database targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$QA_SUPABASE_DB_URL"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, unquote, urlparse
+
+          def verify(env_name, expected_host, expected_ref, expected_user=None):
+              raw = os.environ[env_name]
+              parsed = urlparse(raw)
+              ssl = parse_qs(parsed.query).get("sslmode", ["require"])
+              username = unquote(parsed.username or "")
+              valid = (
+                  parsed.scheme in {"postgres", "postgresql"}
+                  and parsed.hostname == expected_host
+                  and parsed.port == 5432
+                  and parsed.path == "/postgres"
+                  and ssl == ["require"]
+                  and bool(parsed.password)
+                  and expected_ref in username
+                  and (expected_user is None or username == expected_user)
+              )
+              if not valid:
+                  raise SystemExit(f"Refusing database URL outside exact {env_name} target")
+
+          verify("QA_SUPABASE_DB_URL", os.environ["EXPECTED_QA_HOST"], os.environ["EXPECTED_QA_REF"])
+          verify("PROD_SUPABASE_DB_URL", os.environ["EXPECTED_PROD_HOST"], os.environ["EXPECTED_PROD_REF"], os.environ["EXPECTED_PROD_USER"])
+          PY
+
+      - name: Pull exact PostgreSQL 17 client
+        run: docker pull "$POSTGRES_IMAGE"
+
+      - name: Prove migration on isolated QA in a rollback-only transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path(os.environ["MIGRATION_PATH"])
+          source = path.read_text()
+          stripped = source.rstrip()
+          if not source.lstrip().lower().startswith("begin;"):
+              raise SystemExit("Privacy migration must begin with begin;")
+          if not stripped.lower().endswith("commit;"):
+              raise SystemExit("Privacy migration must end with commit;")
+          body = stripped[:-len("commit;")]
+          verification = r'''
+          do $privacy_verify$
+          declare
+            public_campaign_columns integer;
+            public_outcome_columns integer;
+            total_rows bigint;
+          begin
+            if has_table_privilege('anon','public.mpgf_public_goods_campaigns','SELECT')
+               or has_table_privilege('authenticated','public.mpgf_public_goods_campaigns','SELECT')
+               or has_table_privilege('anon','public.mpgf_dac_campaign_outcomes','SELECT')
+               or has_table_privilege('authenticated','public.mpgf_dac_campaign_outcomes','SELECT') then
+              raise exception 'Table-level public SELECT remains after privacy hardening.';
+            end if;
+
+            if has_column_privilege('anon','public.mpgf_public_goods_campaigns','published_by','SELECT')
+               or has_column_privilege('anon','public.mpgf_public_goods_campaigns','pool_alternative_id','SELECT')
+               or has_column_privilege('anon','public.mpgf_public_goods_campaigns','challenge_window_ends_at','SELECT')
+               or has_column_privilege('anon','public.mpgf_public_goods_campaigns','first_accepted_pledge_at','SELECT')
+               or has_column_privilege('authenticated','public.mpgf_public_goods_campaigns','published_by','SELECT')
+               or has_column_privilege('authenticated','public.mpgf_public_goods_campaigns','pool_alternative_id','SELECT')
+               or has_column_privilege('authenticated','public.mpgf_public_goods_campaigns','challenge_window_ends_at','SELECT')
+               or has_column_privilege('authenticated','public.mpgf_public_goods_campaigns','first_accepted_pledge_at','SELECT')
+               or has_column_privilege('anon','public.mpgf_dac_campaign_outcomes','finalized_by','SELECT')
+               or has_column_privilege('anon','public.mpgf_dac_campaign_outcomes','reason','SELECT')
+               or has_column_privilege('anon','public.mpgf_dac_campaign_outcomes','outcome_json','SELECT')
+               or has_column_privilege('authenticated','public.mpgf_dac_campaign_outcomes','finalized_by','SELECT')
+               or has_column_privilege('authenticated','public.mpgf_dac_campaign_outcomes','reason','SELECT')
+               or has_column_privilege('authenticated','public.mpgf_dac_campaign_outcomes','outcome_json','SELECT') then
+              raise exception 'A reviewed private/control-plane column remains publicly selectable.';
+            end if;
+
+            select count(*) into public_campaign_columns
+            from information_schema.column_privileges
+            where table_schema='public' and table_name='mpgf_public_goods_campaigns'
+              and grantee in ('anon','authenticated') and privilege_type='SELECT';
+            select count(*) into public_outcome_columns
+            from information_schema.column_privileges
+            where table_schema='public' and table_name='mpgf_dac_campaign_outcomes'
+              and grantee in ('anon','authenticated') and privilege_type='SELECT';
+            if public_campaign_columns = 0 or public_outcome_columns = 0 then
+              raise exception 'Reviewed aggregate column read surface is absent.';
+            end if;
+
+            if not exists (
+              select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relname='mpgf_public_goods_campaigns' and c.relrowsecurity
+            ) or not exists (
+              select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relname='mpgf_dac_campaign_outcomes' and c.relrowsecurity
+            ) then
+              raise exception 'RLS is disabled after privacy hardening.';
+            end if;
+
+            if not has_function_privilege('anon','public.mpgf_public_dac_campaign_terms(text)','EXECUTE') then
+              raise exception 'Public exact-terms RPC is unavailable.';
+            end if;
+
+            select
+              (select count(*) from public.mpgf_pool_proposals)
+              + (select count(*) from public.mpgf_pool_reviewers)
+              + (select count(*) from public.mpgf_pool_proposal_versions)
+              + (select count(*) from public.mpgf_pool_lifecycle_events)
+              + (select count(*) from public.mpgf_public_goods_match_pools)
+              + (select count(*) from public.mpgf_public_goods_rounds)
+              + (select count(*) from public.mpgf_public_goods_campaigns)
+              + (select count(*) from public.mpgf_public_goods_pledges)
+              + (select count(*) from public.mpgf_dac_pledge_intents)
+              + (select count(*) from public.mpgf_dac_pledge_events)
+              + (select count(*) from public.mpgf_dac_campaign_outcomes)
+              into total_rows;
+            if total_rows <> 0 then
+              raise exception 'Shared QA DAC/public-goods residue exists: %', total_rows;
+            end if;
+          end;
+          $privacy_verify$;
+          rollback;
+          '''
+          Path("privacy-qa-rollback.sql").write_text(body + verification)
+          PY
+          docker run --rm -i -v "$PWD:/workspace:ro" -w /workspace "$POSTGRES_IMAGE" \
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --file privacy-qa-rollback.sql \
+            2>&1 | tee "$EVIDENCE_DIR/qa-rollback-proof.log"
+
+      - name: Recheck main and merge exact privacy PR when still open
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$current_remote_main" = "$INITIAL_MAIN"
+
+          gh api "repos/$REPOSITORY/pulls/$PRIVACY_PR" > "$RUNNER_TEMP/privacy-before-merge.json"
+          if jq -e '.merged == false' "$RUNNER_TEMP/privacy-before-merge.json" >/dev/null; then
+            test "$(jq -r '.head.sha' "$RUNNER_TEMP/privacy-before-merge.json")" = "$PRIVACY_HEAD"
+            test "$(jq -r '.base.ref' "$RUNNER_TEMP/privacy-before-merge.json")" = "main"
+            if jq -e '.draft == true' "$RUNNER_TEMP/privacy-before-merge.json" >/dev/null; then
+              gh api --method POST "repos/$REPOSITORY/pulls/$PRIVACY_PR/ready_for_review" >/dev/null
+            fi
+            gh api --method PUT "repos/$REPOSITORY/pulls/$PRIVACY_PR/merge" \
+              -f merge_method=merge \
+              -f sha="$PRIVACY_HEAD" \
+              -f commit_title='Merge PR #777: restrict direct public DAC aggregate columns' \
+              -f commit_message='Merge the separately reviewed, seedless grant-only privacy hardening after exact current-main repository and rollback-only isolated-QA validation.' \
+              > "$RUNNER_TEMP/privacy-merge-result.json"
+            jq -e '.merged == true' "$RUNNER_TEMP/privacy-merge-result.json" >/dev/null
+            release_main="$(jq -r '.sha' "$RUNNER_TEMP/privacy-merge-result.json")"
+          else
+            release_main="$INITIAL_MAIN"
+          fi
+
+          for attempt in $(seq 1 30); do
+            observed="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+            test "$observed" = "$release_main" && break
+            test "$attempt" -lt 30
+            sleep 2
+          done
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$release_main"
+          git checkout --detach "$release_main"
+          test -f "$MIGRATION_PATH"
+          test "$(sha256sum "$MIGRATION_PATH" | awk '{print $1}')" = "$MIGRATION_SHA"
+          echo "RELEASE_MAIN=$release_main" >> "$GITHUB_ENV"
+          printf 'release_main=%s\n' "$release_main" | tee "$EVIDENCE_DIR/merged-release-main.txt"
+
+      - name: Prove durable encrypted pre-DAC backup remains available
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPOSITORY/actions/runs/32147479359" > "$RUNNER_TEMP/backup-run.json"
+          gh api "repos/$REPOSITORY/actions/artifacts/9328374066" > "$RUNNER_TEMP/backup-artifact.json"
+          jq -e '.status=="completed" and .conclusion=="success" and .head_sha=="97b7f19f3feb5c9227bfcf7b49c9eaae15164ab0"' "$RUNNER_TEMP/backup-run.json" >/dev/null
+          jq -e '.expired==false and .digest=="sha256:d096c8bad473e9babea3f3fb55747cc78bcf02493ff9378a08e5cbffa7aff54b"' "$RUNNER_TEMP/backup-artifact.json" >/dev/null
+          jq -n --arg verifiedAt "$(date -u +%FT%TZ)" '{run:32147479359,artifact:9328374066,digest:"sha256:d096c8bad473e9babea3f3fb55747cc78bcf02493ff9378a08e5cbffa7aff54b",expired:false,verifiedAt:$verifiedAt}' > "$EVIDENCE_DIR/backup-proof.json"
+
+      - name: Build atomic production migration wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path(os.environ["MIGRATION_PATH"])
+          source = path.read_text()
+          lines = source.splitlines(keepends=True)
+          meaningful = [i for i, line in enumerate(lines) if line.strip() and not line.lstrip().startswith("--")]
+          first, last = meaningful[0], meaningful[-1]
+          if lines[first].strip().lower() != "begin;" or lines[last].strip().lower() != "commit;":
+              raise SystemExit("Migration lacks exact outer transaction delimiters")
+          lines[first] = "\n"
+          lines[last] = "\n"
+          body = "".join(lines)
+          tag = "$moraltrade_privacy_source$"
+          if tag in source:
+              raise SystemExit("Reserved source tag collision")
+          version = os.environ["MIGRATION_VERSION"]
+          name = os.environ["MIGRATION_NAME"]
+          digest = os.environ["MIGRATION_SHA"]
+          wrapper = (
+              "BEGIN;\n"
+              "SET LOCAL lock_timeout = '5s';\n"
+              "SET LOCAL statement_timeout = '120s';\n"
+              "SET LOCAL idle_in_transaction_session_timeout = '180s';\n"
+              + body
+              + "\nINSERT INTO supabase_migrations.schema_migrations "
+                "(version, statements, name, created_by, idempotency_key) VALUES (\n"
+              + f"  '{version}',\n"
+              + f"  ARRAY[{tag}{source}{tag}]::text[],\n"
+              + f"  '{name}',\n"
+              + "  'chatgpt-owner-authorized-dac-public-privacy-20260819',\n"
+              + f"  'moraltrade-dac-public-privacy:{version}:{digest}'\n"
+              + ");\nCOMMIT;\n"
+          )
+          Path("privacy-production-wrapper.sql").write_text(wrapper)
+          PY
+
+      - name: Apply or exact-hash verify production privacy hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          observed="$(docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
+              --command "select concat_ws('|',version,name,encode(extensions.digest(convert_to(statements[1],'UTF8'),'sha256'),'hex')) from supabase_migrations.schema_migrations where version='$MIGRATION_VERSION';" \
+            | tr -d '\r' | awk 'NF {line=$0} END {print line}')"
+
+          if test -n "$observed"; then
+            test "$observed" = "$MIGRATION_VERSION|$MIGRATION_NAME|$MIGRATION_SHA"
+            echo "verified-existing $observed" | tee "$EVIDENCE_DIR/production-application.log"
+          else
+            same_name="$(docker run --rm "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
+                --command "select count(*) from supabase_migrations.schema_migrations where name='$MIGRATION_NAME';" \
+              | tr -d '\r' | awk 'NF {line=$0} END {print line}')"
+            test "$same_name" = "0"
+            docker run --rm -i -v "$PWD:/workspace:ro" -w /workspace "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                --file privacy-production-wrapper.sql \
+              2>&1 | tee "$EVIDENCE_DIR/production-application.log"
+          fi
+
+      - name: Verify terminal production privacy, schema, and zero-data state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
+              --command "
+                set statement_timeout='60s';
+                do \$verify\$
+                declare
+                  observed_name text;
+                  observed_hash text;
+                  public_campaign_columns integer;
+                  public_outcome_columns integer;
+                  total_rows bigint;
+                begin
+                  select name, encode(extensions.digest(convert_to(statements[1],'UTF8'),'sha256'),'hex')
+                    into observed_name, observed_hash
+                  from supabase_migrations.schema_migrations
+                  where version='$MIGRATION_VERSION';
+                  if observed_name is distinct from '$MIGRATION_NAME' or observed_hash is distinct from '$MIGRATION_SHA' then
+                    raise exception 'Production privacy migration registry mismatch.';
+                  end if;
+
+                  if has_table_privilege('anon','public.mpgf_public_goods_campaigns','SELECT')
+                     or has_table_privilege('authenticated','public.mpgf_public_goods_campaigns','SELECT')
+                     or has_table_privilege('anon','public.mpgf_dac_campaign_outcomes','SELECT')
+                     or has_table_privilege('authenticated','public.mpgf_dac_campaign_outcomes','SELECT') then
+                    raise exception 'Table-level public SELECT remains.';
+                  end if;
+
+                  if has_column_privilege('anon','public.mpgf_public_goods_campaigns','published_by','SELECT')
+                     or has_column_privilege('anon','public.mpgf_public_goods_campaigns','pool_alternative_id','SELECT')
+                     or has_column_privilege('anon','public.mpgf_public_goods_campaigns','challenge_window_ends_at','SELECT')
+                     or has_column_privilege('anon','public.mpgf_public_goods_campaigns','first_accepted_pledge_at','SELECT')
+                     or has_column_privilege('authenticated','public.mpgf_public_goods_campaigns','published_by','SELECT')
+                     or has_column_privilege('authenticated','public.mpgf_public_goods_campaigns','pool_alternative_id','SELECT')
+                     or has_column_privilege('authenticated','public.mpgf_public_goods_campaigns','challenge_window_ends_at','SELECT')
+                     or has_column_privilege('authenticated','public.mpgf_public_goods_campaigns','first_accepted_pledge_at','SELECT')
+                     or has_column_privilege('anon','public.mpgf_dac_campaign_outcomes','finalized_by','SELECT')
+                     or has_column_privilege('anon','public.mpgf_dac_campaign_outcomes','reason','SELECT')
+                     or has_column_privilege('anon','public.mpgf_dac_campaign_outcomes','outcome_json','SELECT')
+                     or has_column_privilege('authenticated','public.mpgf_dac_campaign_outcomes','finalized_by','SELECT')
+                     or has_column_privilege('authenticated','public.mpgf_dac_campaign_outcomes','reason','SELECT')
+                     or has_column_privilege('authenticated','public.mpgf_dac_campaign_outcomes','outcome_json','SELECT') then
+                    raise exception 'Private/control-plane column remains publicly selectable.';
+                  end if;
+
+                  select count(*) into public_campaign_columns from information_schema.column_privileges
+                  where table_schema='public' and table_name='mpgf_public_goods_campaigns'
+                    and grantee in ('anon','authenticated') and privilege_type='SELECT';
+                  select count(*) into public_outcome_columns from information_schema.column_privileges
+                  where table_schema='public' and table_name='mpgf_dac_campaign_outcomes'
+                    and grantee in ('anon','authenticated') and privilege_type='SELECT';
+                  if public_campaign_columns=0 or public_outcome_columns=0 then
+                    raise exception 'Reviewed public aggregate column surface is absent.';
+                  end if;
+
+                  if not exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='mpgf_public_goods_campaigns' and c.relrowsecurity)
+                     or not exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='mpgf_dac_campaign_outcomes' and c.relrowsecurity) then
+                    raise exception 'RLS is disabled.';
+                  end if;
+                  if not has_function_privilege('anon','public.mpgf_public_dac_campaign_terms(text)','EXECUTE') then
+                    raise exception 'Public exact-terms RPC unavailable.';
+                  end if;
+
+                  select
+                    (select count(*) from public.mpgf_pool_proposals)
+                    + (select count(*) from public.mpgf_pool_reviewers)
+                    + (select count(*) from public.mpgf_pool_proposal_versions)
+                    + (select count(*) from public.mpgf_pool_lifecycle_events)
+                    + (select count(*) from public.mpgf_public_goods_match_pools)
+                    + (select count(*) from public.mpgf_public_goods_rounds)
+                    + (select count(*) from public.mpgf_public_goods_campaigns)
+                    + (select count(*) from public.mpgf_public_goods_pledges)
+                    + (select count(*) from public.mpgf_dac_pledge_intents)
+                    + (select count(*) from public.mpgf_dac_pledge_events)
+                    + (select count(*) from public.mpgf_dac_campaign_outcomes)
+                    into total_rows;
+                  if total_rows <> 0 then raise exception 'Unexpected production DAC/public-goods rows: %',total_rows; end if;
+                  if (select count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null) <> 0 then
+                    raise exception 'Unexpected production payment references.';
+                  end if;
+                end;
+                \$verify\$;
+              "
+
+          docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
+              --command "select jsonb_build_object('releaseMain','$RELEASE_MAIN','migrationVersion','$MIGRATION_VERSION','migrationName','$MIGRATION_NAME','migrationSha256','$MIGRATION_SHA','tableLevelPublicSelect',false,'privateColumnsPubliclySelectable',false,'reviewedAggregateColumnsAvailable',true,'rlsVerified',true,'dacPublicGoodsRows',0,'paymentReferences',0,'verifiedAt',clock_timestamp())::text;" \
+            | tr -d '\r' | awk 'NF {line=$0} END {print line}' > "$EVIDENCE_DIR/production-postflight.json"
+          jq -e '.tableLevelPublicSelect==false and .privateColumnsPubliclySelectable==false and .reviewedAggregateColumnsAvailable==true and .rlsVerified==true and .dacPublicGoodsRows==0 and .paymentReferences==0' "$EVIDENCE_DIR/production-postflight.json" >/dev/null
+
+      - name: Recheck immutable release source and remove executable wrappers
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -n "${RELEASE_MAIN:-}"; then
+            test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_MAIN"
+          fi
+          rm -f privacy-production-wrapper.sql privacy-qa-rollback.sql
+          if grep -RIlE '(postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_|whsec_|Bearer [A-Za-z0-9._-]+)' "$EVIDENCE_DIR"; then
+            echo 'Credential-like material found in retained evidence.' >&2
+            exit 1
+          fi
+
+      - name: Upload immutable privacy-production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moraltrade-dac-public-privacy-production-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record bounded sequence completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### DAC public aggregate privacy production sequence complete'
+            echo
+            echo "- Exact main: \`$RELEASE_MAIN\`"
+            echo "- Privacy migration: \`$MIGRATION_VERSION $MIGRATION_NAME\`"
+            echo "- Source SHA-256: \`$MIGRATION_SHA\`"
+            echo '- Table-level anonymous/authenticated SELECT: revoked'
+            echo '- Reviewed aggregate column SELECT: preserved'
+            echo '- Listed private/control-plane columns: denied'
+            echo '- RLS and public exact-terms RPC: verified'
+            echo '- Production DAC/public-goods rows: 0'
+            echo '- Production payment references: 0'
+            echo '- Vercel deployment and canonical aliases: unchanged by this sequence'
+          } >> "$GITHUB_STEP_SUMMARY"
