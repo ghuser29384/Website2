@@ -496,33 +496,19 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
-test("returning home page matches the recommended-trade decision screen", () => {
-  const homeSource = readRepoFile("src/components/home/home-page.tsx");
-  const greetingSource = readRepoFile("src/components/home/local-date-greeting.tsx");
+test("root landing follows the account activation contract instead of a hard-coded trade card", () => {
   const pageSource = readRepoFile("src/app/page.tsx");
+  const activationSource = readRepoFile("src/lib/account-activation.ts");
 
-  assert.match(pageSource, /<HomePage displayName=\{viewer\?\.displayName \?\? null\} \/>/);
-  assert.match(homeSource, /Your best match right now, based on your commitments and priorities\./);
-  assert.match(greetingSource, /Good afternoon/);
-  assert.match(homeSource, /Replace eight/);
-  assert.match(homeSource, /car trips with transit\./);
-  assert.match(homeSource, /Fund \$20 of open/);
-  assert.match(homeSource, /civic infrastructure\./);
-  assert.match(homeSource, /You could offer/);
-  assert.match(homeSource, /Mina would offer/);
-  assert.match(homeSource, /Both say yes/);
-  assert.match(homeSource, /Complementary priorities/);
-  assert.match(homeSource, /96% on-time verification/);
-  assert.match(homeSource, /Proof method/);
-  assert.match(homeSource, /Offer this trade/);
-  assert.match(homeSource, /Counter this trade/);
-  assert.match(homeSource, /saved \? "Saved" : "Save"/);
-  assert.match(homeSource, /<span>Pass<\/span>/);
-  assert.match(homeSource, /useState\(14\)/);
-  assert.match(homeSource, /\{remainingMatches\} more matches/);
-  assert.match(homeSource, /Focus areas/);
-  assert.match(homeSource, /Commitment types/);
-  assert.doesNotMatch(homeSource, /founding cohort|Pilot inventory/);
+  assert.match(pageSource, /getAccountLandingPath/);
+  assert.match(pageSource, /authenticated: Boolean\(viewer\)/);
+  assert.match(pageSource, /hasWalkthroughProfileDraft: Boolean\(profileDraft\)/);
+  assert.match(pageSource, /redirect\(/);
+  assert.doesNotMatch(pageSource, /<HomePage/);
+  assert.match(activationSource, /return "\/discover"/);
+  assert.match(activationSource, /return "\/walkthrough"/);
+  assert.match(activationSource, /return "\/complete-profile"/);
+  assert.match(activationSource, /return "\/feed"/);
 });
 
 test("visitor router exposes four live action paths before deeper marketplace mechanics", () => {

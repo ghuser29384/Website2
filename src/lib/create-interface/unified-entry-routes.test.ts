@@ -4,6 +4,7 @@ import test from "node:test";
 import { gunzipSync } from "node:zlib";
 
 const proxySource = readFileSync("src/proxy.ts", "utf8");
+const rootPageSource = readFileSync("src/app/page.tsx", "utf8");
 const liveLoader = readFileSync("public/moral-trade-live.html", "utf8");
 const createRouter = readFileSync("public/moral-trade-live-create-router.js", "utf8");
 const feedIdentity = readFileSync("public/moral-trade-live-feed-identity.js", "utf8");
@@ -54,12 +55,12 @@ function escapePattern(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-test("the root route remains the Moral Trade Feed and home page", () => {
-  assert.match(
-    proxySource,
-    /function rewriteToLiveHome[\s\S]*liveUrl\.pathname = "\/moral-trade-live\.html"/,
-  );
-  assert.match(proxySource, /if \(pathname === "\/"\)[\s\S]*return rewriteToLiveHome\(request\)/);
+test("the root route delegates landing decisions to account activation state", () => {
+  assert.doesNotMatch(proxySource, /function rewriteToLiveHome/);
+  assert.doesNotMatch(proxySource, /if \(pathname === "\/"\)/);
+  assert.match(rootPageSource, /getAccountLandingPath/);
+  assert.match(rootPageSource, /authenticated: Boolean\(viewer\)/);
+  assert.match(rootPageSource, /redirect\([\s\S]*getAccountLandingPath/);
 });
 
 test("the live Trade entry opens the durable Create adapter without retaining a second builder", () => {
@@ -72,7 +73,6 @@ test("the live Trade entry opens the durable Create adapter without retaining a 
   assert.match(createRouter, /\[data-page="trade"\]/);
   assert.match(createRouter, /\[data-action="create"\]/);
   assert.match(createRouter, /window\.location\.assign\(CREATE_HREF\)/);
-
   assert.doesNotMatch(liveLoader, /moral-trade-live-trade-feed\.(?:js|css)/);
   assert.doesNotMatch(liveLoader, /stripLegacyTradeSidebar|data-mt-live-trade-feed/);
 });
@@ -128,6 +128,6 @@ test("Create and Create Offer entries share the durable Create adapter", () => {
   );
   assert.match(
     proxySource,
-    /matcher: \["\/", "\/walkthrough", "\/create", "\/offers", "\/offers\/:path\*"\]/,
+    /matcher: \["\/walkthrough", "\/create", "\/offers", "\/offers\/:path\*"\]/,
   );
 });
