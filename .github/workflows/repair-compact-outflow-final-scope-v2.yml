@@ -1,6 +1,11 @@
-name: Repair Compact outflow final scope v3
+name: Repair Compact outflow final scope v4
 
 on:
+  pull_request:
+    branches:
+      - agent/mpgf-public-goods-compacts
+    paths:
+      - .github/workflows/repair-compact-outflow-final-scope-v2.yml
   push:
     branches:
       - feature/compact-authoritative-outflow-ledger-v1-20260816
@@ -12,11 +17,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: repair-compact-outflow-final-scope-v3-${{ github.ref_name }}
+  group: repair-compact-outflow-final-scope-v4-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: false
 
 env:
-  EXPECTED_PARENT_SHA: 70ad494cda7b4a826b0d13078eaf069d6d932895
+  EXPECTED_CONTROLLER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  EXPECTED_PARENT_SHA: e13a88e263d9dfd72677ccdedd061d5a28140677
   STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
 
 jobs:
@@ -28,12 +34,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.sha }}
+          ref: ${{ env.EXPECTED_CONTROLLER_SHA }}
 
       - name: Verify bounded controller lineage
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROLLER_SHA"
           test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
           test "$(git diff --name-only HEAD^...HEAD)" = ".github/workflows/repair-compact-outflow-final-scope-v2.yml"
           test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
@@ -200,4 +207,4 @@ on conflict (id) do update set
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/compact-authoritative-outflow-ledger-qa.yml scripts/test-compact-authoritative-outflow-concurrency.sh
           git commit -m "ci: close Compact outflow validation gaps"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
