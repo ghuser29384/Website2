@@ -328,6 +328,7 @@ begin;
 
 set local lock_timeout = '5s';
 set local statement_timeout = '10min';
+set local check_function_bodies = false;
 
 DO $baseline_guard$
 DECLARE
@@ -531,6 +532,7 @@ test("pre-activation baseline manifest binds every authoritative artifact", () =
 test("pre-activation baseline is data-free, guarded, portable, and activation-free", () => {
   const sql = readFileSync(`${root}/schema.sql`, "utf8");
   assert.match(sql, /Pre-activation baseline requires an empty application schema/);
+  assert.match(sql, /set local check_function_bodies = false;/);
   assert.deepEqual(findTopLevelApplicationDataStatements(sql), []);
   assert.doesNotMatch(sql, /activation_stage/);
   assert.doesNotMatch(sql, /complete_(?:walkthrough|profile)_activation_v1/);
