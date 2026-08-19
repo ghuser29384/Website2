@@ -25,9 +25,11 @@ directory alone.
 
 A hand-maintained `supabase/schema.sql` also exists, but it is not the database
 source of truth for this boundary. The authoritative baseline is generated from
-the deployed pre-activation production **application catalog** under an enforced
-read-only transaction, committed with an immutable manifest, and reconstructed
-in a fresh local Supabase stack before review.
+the deployed pre-activation production **application catalog**. Every `psql`
+catalog read begins an explicit `READ ONLY` transaction; the separate schema
+capture uses `pg_dump --schema-only`, which performs catalog reads and does not
+mutate the source. The resulting files are committed with an immutable manifest
+and reconstructed in a fresh local Supabase stack before review.
 
 ## Scope
 
@@ -58,9 +60,9 @@ It deliberately excludes:
 - the repository and source commit;
 - the exact synchronized `main` commit;
 - the production project reference used only as provenance;
-- enforced read-only production access;
-- SHA-256 digests for the baseline SQL, normalized source catalog, and source
-  migration ledger;
+- explicit read-only catalog transactions and schema-only dump access;
+- SHA-256 digests for the baseline SQL, normalized source catalog, source
+  extension inventory, and source migration ledger;
 - the explicit cutover to
   `20260814042516_account_activation_stage.sql`;
 - that no legacy migration is replayed after the baseline and before the
@@ -72,6 +74,7 @@ The generated artifacts are:
 supabase/baseline/pre_activation/schema.sql
 supabase/baseline/pre_activation/source_catalog.tsv
 supabase/baseline/pre_activation/source_migration_history.tsv
+supabase/baseline/pre_activation/source_extensions.tsv
 supabase/baseline/pre_activation/manifest.json
 ```
 
@@ -81,18 +84,23 @@ workflow and review every resulting diff.
 ## Safety properties
 
 The baseline starts with a transaction-scoped guard. It aborts unless the target
-contains zero non-extension application relations in `public` and
-`moral_trade_private`. It must never be applied to production, ordinary QA, or
-another non-empty application database.
+contains zero non-extension application relations, functions, and application-
+owned `auth.users` triggers in the declared boundary. It must never be applied
+to production, ordinary QA, or another non-empty application database.
 
 Generation is fail-closed:
 
 - the checkout, published branch, and synchronized `main` identities must match;
 - the production database URL must match the pinned pooler host and role;
-- `default_transaction_read_only=on` is forced and read back before extraction;
-- generation stops if production already contains `activation_stage`;
+- each `psql` source read begins an explicit `READ ONLY` transaction, and the
+  session proof verifies `transaction_read_only=on`;
+- the only separate source read is `pg_dump --schema-only`, which does not
+  mutate the source;
+- generation stops if production already contains `activation_stage` or either
+  activation-transition function;
 - the source application catalog and source migration ledger must both be
   non-empty;
+- the catalog is captured before and after the dump and must not drift;
 - only schema is exported;
 - data statements and credential-shaped text fail permanent tests;
 - generated artifacts are committed only after a clean-room reconstruction
