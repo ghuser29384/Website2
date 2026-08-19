@@ -3,7 +3,7 @@ name: Generate and validate authoritative pre-activation Supabase baseline
 on:
   push:
     branches:
-      - database/preactivation-schema-baseline-20260818
+      - database/preactivation-schema-baseline-clean-20260819
     paths:
       - scripts/database/generate-preactivation-baseline.trigger
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: preactivation-baseline-generation
+  group: preactivation-baseline-generation-clean-20260819
   cancel-in-progress: false
 
 jobs:
@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 180
     env:
       SOURCE_HEAD: ${{ github.sha }}
-      SOURCE_MAIN: f1cd364bf058b28b3b29501aa6528c48f8f39bb7
-      TARGET_BRANCH: database/preactivation-schema-baseline-20260818
+      SOURCE_MAIN: 4bc8cd28205915d313286136b7335d5aeb7f3c49
+      TARGET_BRANCH: database/preactivation-schema-baseline-clean-20260819
       PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
       PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
       PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
