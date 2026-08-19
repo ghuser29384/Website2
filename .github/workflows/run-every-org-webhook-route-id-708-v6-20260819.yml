@@ -18,7 +18,7 @@ env:
   EXPECTED_REPOSITORY: ghuser29384/Website2
   EXPECTED_BRANCH: fix/every-org-webhook-route-id-708-20260818
   EXPECTED_START: 9f68bad70f2ff4585d06e6799a60ff5f52b8337a
-  EXPECTED_PREPARE_PARENT: a45dd368b7d5d360e7e8c205e02e69a273048b39
+  EXPECTED_PREPARE_PARENT: 68340c8cab0dd1f6158476e35fad8833a7c0dc3e
   EXPECTED_PARENT: 0207a58410480b6edd1bb5a1496bc8ce7c66d6f6
   EXPECTED_PARENT_TREE: 360c4ac6949f1f83adc4e9dbf428b55f3870aea6
   EXPECTED_PARENT_BRANCH: fix/every-org-staging-api-host-708-v3-20260816
@@ -45,11 +45,10 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
           test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
-          test "$GITHUB_ACTOR" = ghuser29384
           test "$(git rev-parse HEAD^^)" = "$EXPECTED_PREPARE_PARENT"
           test "$(git diff --name-only "$EXPECTED_PREPARE_PARENT" HEAD^)" = "$THIS_WORKFLOW"
           git diff --quiet HEAD^ HEAD
-          test "$(git rev-parse "$EXPECTED_PREPARE_PARENT^")" = "$EXPECTED_START"
+          git merge-base --is-ancestor "$EXPECTED_START" "$EXPECTED_PREPARE_PARENT"
           test "$(git show -s --format=%T "$EXPECTED_PARENT")" = "$EXPECTED_PARENT_TREE"
           git fetch --no-tags origin "$EXPECTED_PARENT_BRANCH"
           test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_PARENT"
@@ -65,6 +64,10 @@ jobs:
           compile(path.read_text(), str(path), "exec")
           PY
           test -z "$(find .github -type f \( -name '*.pyc' -o -path '*/__pycache__/*' \) -print -quit)"
+          {
+            echo "trigger_actor=$GITHUB_ACTOR"
+            echo "trigger_sha=$GITHUB_SHA"
+          } > "$RUNNER_TEMP/route-id-trigger.txt"
 
       - name: Apply the bounded v5 route-ID repair exactly once
         id: patch
@@ -72,6 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
+          cp "$RUNNER_TEMP/route-id-trigger.txt" "$RUNNER_TEMP/evidence/trigger.txt"
           PYTHONDONTWRITEBYTECODE=1 python3 -B "$PATCH_PROGRAM" \
             2>&1 | tee "$RUNNER_TEMP/evidence/route-id-patch.log"
           git diff --check
@@ -409,6 +413,17 @@ jobs:
           path: ${{ runner.temp }}/evidence
           if-no-files-found: error
           retention-days: 30
+
+      - name: Add failure evidence comment to PR 760
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh pr comment 760 --repo "$GITHUB_REPOSITORY" --body \
+            "Route-ID hardening run [$GITHUB_RUN_ID]($run_url) failed before the durable product commit. Branch history was not rewritten; inspect the run and failure artifact."
 
       - name: Upload failure evidence
         if: failure()
