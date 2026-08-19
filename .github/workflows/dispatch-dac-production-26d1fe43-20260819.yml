@@ -1,15 +1,16 @@
 name: Dispatch exact DAC production release 26d1fe43
 
 on:
-  push:
+  pull_request:
     branches:
-      - ops/dispatch-dac-production-26d1fe43-20260819
+      - main
     paths:
       - ".github/workflows/dispatch-dac-production-26d1fe43-20260819.yml"
 
 permissions:
   actions: write
   contents: read
+  pull-requests: read
 
 concurrency:
   group: dispatch-dac-production-26d1fe43-20260819
@@ -21,6 +22,7 @@ env:
 
 jobs:
   dispatch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -29,20 +31,22 @@ jobs:
       - name: Check out exact one-use dispatcher
         uses: actions/checkout@v4
         with:
-          ref: ops/dispatch-dac-production-26d1fe43-20260819
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Guard exact main parent and one-file controller scope
+      - name: Guard exact main ancestry and one-file controller scope
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
-          test "$GITHUB_REF_NAME" = "ops/dispatch-dac-production-26d1fe43-20260819"
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "${{ github.event.pull_request.number }}" = "788"
+          test "${{ github.event.pull_request.head.ref }}" = "ops/dispatch-dac-production-26d1fe43-20260819"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
-          test "$(git diff --name-only HEAD^ HEAD | wc -l | tr -d ' ')" = "1"
-          test "$(git diff --name-only HEAD^ HEAD)" = "$CONTROLLER_PATH"
-          git diff --check HEAD^ HEAD
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_PATH"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
 
       - name: Dispatch permanent gated Vercel production workflow
         shell: bash
