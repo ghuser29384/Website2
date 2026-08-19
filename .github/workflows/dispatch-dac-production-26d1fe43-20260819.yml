@@ -1,0 +1,164 @@
+name: Dispatch and observe exact DAC production release 26d1fe43
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/dispatch-dac-production-26d1fe43-20260819.yml"
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: dispatch-dac-production-26d1fe43-20260819
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  CONTROLLER_PATH: .github/workflows/dispatch-dac-production-26d1fe43-20260819.yml
+  EVIDENCE_DIR: dac-production-release-dispatch-evidence
+
+jobs:
+  dispatch-and-observe:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact one-use dispatcher
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact main ancestry and one-file controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "${{ github.event.pull_request.number }}" = "788"
+          test "${{ github.event.pull_request.head.ref }}" = "ops/dispatch-dac-production-26d1fe43-20260819"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_PATH"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+          mkdir -p "$EVIDENCE_DIR"
+          {
+            printf 'dispatcher_head=%s\n' "$(git rev-parse HEAD)"
+            printf 'expected_main=%s\n' "$EXPECTED_MAIN_SHA"
+            printf 'checked_at=%s\n' "$(date -u +%FT%TZ)"
+          } | tee "$EVIDENCE_DIR/source-identity.txt"
+
+      - name: Locate existing exact release run or dispatch once
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          list_runs() {
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow vercel-release.yml \
+              --event workflow_dispatch \
+              --commit "$EXPECTED_MAIN_SHA" \
+              --limit 20 \
+              --json databaseId,headSha,status,conclusion,createdAt,event,workflowName,url
+          }
+
+          runs_json="$(list_runs)"
+          printf '%s\n' "$runs_json" > "$EVIDENCE_DIR/release-runs-before.json"
+          release_run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" '[.[] | select(.headSha == $sha and .event == "workflow_dispatch")] | sort_by(.createdAt) | last | .databaseId // empty' <<<"$runs_json")"
+
+          if test -z "$release_run_id"; then
+            payload="$(jq -n --arg sha "$EXPECTED_MAIN_SHA" '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$sha,synthetic_auth_fixture_url:""}}')"
+            gh api --method POST \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+              --input - <<<"$payload"
+            for attempt in $(seq 1 60); do
+              sleep 2
+              runs_json="$(list_runs)"
+              release_run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" '[.[] | select(.headSha == $sha and .event == "workflow_dispatch")] | sort_by(.createdAt) | last | .databaseId // empty' <<<"$runs_json")"
+              test -n "$release_run_id" && break
+              test "$attempt" -lt 60
+            done
+            printf '%s\n' "$runs_json" > "$EVIDENCE_DIR/release-runs-after-dispatch.json"
+          else
+            cp "$EVIDENCE_DIR/release-runs-before.json" "$EVIDENCE_DIR/release-runs-after-dispatch.json"
+          fi
+
+          test -n "$release_run_id"
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_RUN_ID=$release_run_id" >> "$GITHUB_ENV"
+          printf '%s\n' "$release_run_id" > "$EVIDENCE_DIR/release-run-id.txt"
+          echo "Observing permanent release run $release_run_id" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for permanent gated release conclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run watch "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
+          gh run view "$RELEASE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,headSha,status,conclusion,createdAt,updatedAt,event,workflowName,url,jobs \
+            > "$EVIDENCE_DIR/release-run-final.json"
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '
+            .headSha == $sha
+            and .event == "workflow_dispatch"
+            and .status == "completed"
+            and .conclusion == "success"
+          ' "$EVIDENCE_DIR/release-run-final.json" >/dev/null
+
+      - name: Record exact permanent release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/artifacts?per_page=100" \
+            > "$EVIDENCE_DIR/release-artifacts.json"
+          jq -e '.artifacts | length > 0' "$EVIDENCE_DIR/release-artifacts.json" >/dev/null
+          jq -e '[.artifacts[] | select(.expired == false and (.name | startswith("gated-vercel-release-production-")))] | length == 1' \
+            "$EVIDENCE_DIR/release-artifacts.json" >/dev/null
+
+      - name: Recheck exact main and scan evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          if grep -RIlE '(postgres(ql)?://|sk_(live|test)_|whsec_|BEGIN [A-Z ]*PRIVATE KEY|Bearer [A-Za-z0-9._-]{20,})' "$EVIDENCE_DIR"; then
+            echo 'Credential-like material found in dispatcher evidence.' >&2
+            exit 1
+          fi
+
+      - name: Upload immutable dispatch and release-observation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dac-production-release-dispatch-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record release completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Exact DAC production application release completed'
+            echo
+            echo "- Released main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Permanent release run: \`$RELEASE_RUN_ID\`"
+            echo '- Target: production'
+            echo '- Synthetic-auth fixture URL: empty'
+            echo '- Permanent gated release conclusion: success'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+# One-use dispatcher and observer only. Never merge.
