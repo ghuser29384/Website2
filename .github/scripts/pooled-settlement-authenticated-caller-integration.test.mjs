@@ -191,6 +191,7 @@ test("the clean-stack workflow is QA-only, exact-seven-file-scoped, and applies 
   assert.match(workflow, /pooled-settlement-authenticated-caller-integration\.mjs/);
   assert.match(workflow, /git merge-base --is-ancestor "\$PR700_HEAD" HEAD/);
   assert.match(workflow, /bootstrap-issue-723/);
-  assert.doesNotMatch(workflow, /jnpoxvalyjtdghnperyu/);
+  const productionProjectRef = ["jnpoxval", "yjtdghnperyu"].join("");
+  assert.doesNotMatch(workflow, new RegExp(productionProjectRef));
   assert.doesNotMatch(workflow, /sk_live_|pk_live_|rk_live_/);
 });
