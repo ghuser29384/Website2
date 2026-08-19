@@ -105,5 +105,6 @@ jobs:
         with:
           name: pr737-phase-order-repair-${{ github.run_id }}
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
           path: export
