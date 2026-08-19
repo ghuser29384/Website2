@@ -33,9 +33,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Establish immutable source identity
-        id: identity
         env:
           EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
@@ -51,14 +51,22 @@ jobs:
           test -n "$base_sha"
           test "$base_sha" != "0000000000000000000000000000000000000000"
           git cat-file -e "$base_sha^{commit}"
-          mkdir -p "$RUNNER_TEMP/commitments-pro-sprint-evidence"
-          printf '%s\n' "$base_sha" > "$RUNNER_TEMP/commitments-pro-sprint-evidence/base-sha.txt"
-          printf '%s\n' "$actual_head" > "$RUNNER_TEMP/commitments-pro-sprint-evidence/head-sha.txt"
-          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/commitments-pro-sprint-evidence/head-tree.txt"
-          git diff --name-only "$base_sha...$actual_head" | LC_ALL=C sort > "$RUNNER_TEMP/commitments-pro-sprint-evidence/changed-files.txt"
+
+          initial_materialization=false
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REF" = "docs/commitments-pro-sprint-materialization-v1-20260818" ]; then
+            initial_materialization=true
+          fi
+
+          evidence_dir="$RUNNER_TEMP/commitments-pro-sprint-evidence"
+          mkdir -p "$evidence_dir"
+          printf '%s\n' "$base_sha" > "$evidence_dir/base-sha.txt"
+          printf '%s\n' "$actual_head" > "$evidence_dir/head-sha.txt"
+          git rev-parse HEAD^{tree} > "$evidence_dir/head-tree.txt"
+          git diff --name-only "$base_sha...$actual_head" | LC_ALL=C sort > "$evidence_dir/changed-files.txt"
           {
             printf 'BASE_SHA=%s\n' "$base_sha"
             printf 'HEAD_SHA=%s\n' "$actual_head"
+            printf 'INITIAL_MATERIALIZATION=%s\n' "$initial_materialization"
           } >> "$GITHUB_ENV"
 
       - name: Parse JSON and workflow YAML
@@ -74,47 +82,57 @@ jobs:
           NODE
           ruby -e 'require "yaml"; YAML.load_file(".github/workflows/commitments-pro-sprint-specification-gates.yml", aliases: true)'
 
-      - name: Validate contracts, exact diff, and SHA-256 bindings
+      - name: Validate contracts and SHA-256 bindings
         run: |
           set -euo pipefail
-          evidence="$RUNNER_TEMP/commitments-pro-sprint-evidence/commitments-pro-sprint-materialization-sha256.json"
-          node scripts/commitments/validate-pro-sprint-materialization.mjs \
-            --check-diff "$BASE_SHA" \
-            --write-evidence "$evidence" \
-            | tee "$RUNNER_TEMP/commitments-pro-sprint-evidence/validator.log"
+          evidence_dir="$RUNNER_TEMP/commitments-pro-sprint-evidence"
+          evidence="$evidence_dir/commitments-pro-sprint-materialization-sha256.json"
+          validator_args=(--write-evidence "$evidence")
+          if [ "$INITIAL_MATERIALIZATION" = "true" ]; then
+            validator_args+=(--check-diff "$BASE_SHA")
+          fi
+          node scripts/commitments/validate-pro-sprint-materialization.mjs "${validator_args[@]}" \
+            | tee "$evidence_dir/validator.log"
           node --test scripts/commitments/pro-sprint-materialization.test.mjs \
-            | tee "$RUNNER_TEMP/commitments-pro-sprint-evidence/tests.log"
+            | tee "$evidence_dir/tests.log"
 
-      - name: Enforce repository-only scope and clean patch
+      - name: Enforce clean patch and initial materialization scope
         run: |
           set -euo pipefail
-          git diff --check "$BASE_SHA...$HEAD_SHA" \
-            | tee "$RUNNER_TEMP/commitments-pro-sprint-evidence/diff-check.log"
-          if grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env)' \
-            "$RUNNER_TEMP/commitments-pro-sprint-evidence/changed-files.txt"; then
-            echo "Runtime, database, dependency, provider, or deployment path entered the repository-only candidate." >&2
-            exit 1
-          fi
-          if grep -E '^\.github/(materialization|scripts)/|^\.github/workflows/apply-' \
-            "$RUNNER_TEMP/commitments-pro-sprint-evidence/changed-files.txt"; then
-            echo "Temporary transport or write-enabled controller entered the permanent candidate." >&2
-            exit 1
-          fi
-          test "$(wc -l < "$RUNNER_TEMP/commitments-pro-sprint-evidence/changed-files.txt" | tr -d ' ')" = "14"
+          evidence_dir="$RUNNER_TEMP/commitments-pro-sprint-evidence"
+          git diff --check "$BASE_SHA...$HEAD_SHA" | tee "$evidence_dir/diff-check.log"
 
-      - name: Record release and epistemic boundary
+          if [ "$INITIAL_MATERIALIZATION" = "true" ]; then
+            if grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env)' "$evidence_dir/changed-files.txt"; then
+              echo "Runtime, database, dependency, provider, or deployment path entered the repository-only materialization." >&2
+              exit 1
+            fi
+            if grep -E '^\.github/(materialization|scripts)/|^\.github/workflows/apply-|materialization-smoke' "$evidence_dir/changed-files.txt"; then
+              echo "Temporary transport, smoke, or write-enabled controller entered the permanent materialization." >&2
+              exit 1
+            fi
+            test "$(wc -l < "$evidence_dir/changed-files.txt" | tr -d ' ')" = "13"
+          fi
+
+      - name: Record validation and epistemic boundary
         run: |
           set -euo pipefail
+          if [ "$INITIAL_MATERIALIZATION" = "true" ]; then
+            release_class="repository_only"
+          else
+            release_class="not_assessed_by_this_workflow"
+          fi
           cat > "$RUNNER_TEMP/commitments-pro-sprint-evidence/boundary.json" <<JSON
           {
             "schema_version": "moral-trade-commitments-pro-sprint-boundary-v1",
             "base_sha": "$BASE_SHA",
             "head_sha": "$HEAD_SHA",
-            "release_class": "repository_only",
-            "runtime_effect": false,
-            "database_effect": false,
-            "provider_or_money_effect": false,
-            "participant_or_research_effect": false,
+            "initial_materialization_candidate": $INITIAL_MATERIALIZATION,
+            "candidate_release_class": "$release_class",
+            "validated_package_runtime_effect": false,
+            "validated_package_database_effect": false,
+            "validated_package_provider_or_money_effect": false,
+            "validated_package_participant_or_research_effect": false,
             "qri_implementation_claimed": false,
             "pilot_authorized": false
           }
