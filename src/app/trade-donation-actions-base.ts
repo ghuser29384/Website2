@@ -10,6 +10,11 @@ import {
 } from "@/app/core-trade-actions-base";
 import { requireViewer } from "@/lib/app-data";
 import {
+  EVERY_ORG_DIRECT_MINIMUM_CENTS,
+  getTradeDonationPoolConfig,
+  isPooledTradeDonationTerm,
+} from "@/lib/trade-donation-pool";
+import {
   buildEveryOrgTradeDonationUrl,
   getTradeDonationProviderConfig,
   getTradeDonationTarget,
@@ -215,12 +220,16 @@ export async function confirmDonationAwareAgreementVersionAction(formData: FormD
   if (!context?.term) {
     return confirmBaseAgreementVersionAction(formData);
   }
+  const pooled = isPooledTradeDonationTerm(context.term);
   const providerConfig = getTradeDonationProviderConfig();
-  if (!providerConfig.ready) {
+  const poolConfig = getTradeDonationPoolConfig();
+  if (pooled ? !poolConfig.readyForParticipantFunding : !providerConfig.ready) {
     redirectWithMessage(
       agreementId,
       "error",
-      providerConfig.blockers[0] ?? "The Every.org connector is not launch-ready.",
+      pooled
+        ? poolConfig.blockers[0] ?? "Cross-user pooled settlement is not launch-ready."
+        : providerConfig.blockers[0] ?? "The Every.org connector is not launch-ready.",
     );
   }
   if (read(formData, "terms_reviewed") !== "on") {
@@ -309,6 +318,15 @@ export async function startTradeDonationCheckoutAction(formData: FormData) {
   const viewer = await requireViewer(returnTo);
   if (!isUuid(agreementId)) {
     redirectWithMessage(agreementId, "error", "A valid agreement is required.");
+  }
+
+  const initialContext = await loadTradeDonationAgreementContext(agreementId);
+  if (initialContext?.term && isPooledTradeDonationTerm(initialContext.term)) {
+    redirectWithMessage(
+      agreementId,
+      "error",
+      `Every.org requires at least $${(EVERY_ORG_DIRECT_MINIMUM_CENTS / 100).toFixed(2)}. Fund this obligation through pooled settlement instead.`,
+    );
   }
 
   const config = getTradeDonationProviderConfig();
