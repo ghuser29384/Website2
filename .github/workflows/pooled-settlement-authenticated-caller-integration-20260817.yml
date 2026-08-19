@@ -84,8 +84,19 @@ jobs:
             src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts
             supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
           )
-          ! grep -nH -F 'jnpoxvalyjtdghnperyu' "${changed_files[@]}"
-          ! grep -nHE '(sk_live_|pk_live_|rk_live_)[A-Za-z0-9]{8,}' "${changed_files[@]}"
+          production_project_ref="$(printf '%s%s' 'jnpoxval' 'yjtdghnperyu')"
+          if grep -nH -F "$production_project_ref" "${changed_files[@]}"; then
+            echo "A production project reference is reachable from the clean stack." >&2
+            exit 1
+          fi
+          stripe_live_marker="$(printf '%s%s' 'sk_l' 'ive_')"
+          publishable_live_marker="$(printf '%s%s' 'pk_l' 'ive_')"
+          restricted_live_marker="$(printf '%s%s' 'rk_l' 'ive_')"
+          live_key_pattern="(${stripe_live_marker}|${publishable_live_marker}|${restricted_live_marker})[A-Za-z0-9]{8,}"
+          if grep -nHE "$live_key_pattern" "${changed_files[@]}"; then
+            echo "A live-provider key pattern is reachable from the clean stack." >&2
+            exit 1
+          fi
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
