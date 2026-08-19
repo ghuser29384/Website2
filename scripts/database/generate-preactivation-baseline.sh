@@ -285,13 +285,13 @@ for line_number, line in enumerate(normalized.splitlines(), start=1):
     if active_dollar_quote is None:
         match = top_level_dml.match(line)
         if match:
-  violations.append((line_number, match.group(1).upper()))
+            violations.append((line_number, match.group(1).upper()))
     for token_match in dollar_quote.finditer(line):
         token = token_match.group(0)
         if active_dollar_quote is None:
-  active_dollar_quote = token
+            active_dollar_quote = token
         elif token == active_dollar_quote:
-  active_dollar_quote = None
+            active_dollar_quote = None
 if active_dollar_quote is not None:
     raise SystemExit("Unterminated dollar-quoted body in normalized schema dump.")
 if violations:
