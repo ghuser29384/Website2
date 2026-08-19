@@ -1,0 +1,287 @@
+name: PR 737 exact-head non-hosted controller
+
+on:
+  push:
+    branches:
+      - ops/pr737-nonhosted-gates-20260819
+    paths:
+      - .github/workflows/pr737-exact-head-nonhosted-controller.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: pr737-exact-head-nonhosted-20260819
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  EXPECTED_HEAD: 35bc063fdee4ea151a62e8cee17ab529b3273b14
+  EXPECTED_TREE: ce5c9e4a4dac9d83651966a12a8b3c0d8cd66eb2
+  STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+  PR_NUMBER: "737"
+  ISSUE_NUMBER: "734"
+  QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+
+jobs:
+  dispatch-observe-and-record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Check out controller source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify frozen candidate identity and durable scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_branch_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')"
+          test "$actual_branch_sha" = "$EXPECTED_HEAD"
+
+          actual_pr_sha="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
+          test "$actual_pr_sha" = "$EXPECTED_HEAD"
+
+          actual_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_HEAD" --jq '.tree.sha')"
+          test "$actual_tree" = "$EXPECTED_TREE"
+
+          changed="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename' | LC_ALL=C sort)"
+          test "$(wc -l <<<"$changed" | tr -d ' ')" = "15"
+          cat > /tmp/expected-scope.txt <<'EOF'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          docs/mpgf/compact-authoritative-outflow-ledger-v1.md
+          scripts/test-compact-authoritative-outflow-concurrency.sh
+          src/components/mpgf/mpgf-public-goods-compacts.tsx
+          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.ts
+          supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          tests/mpgf-public-goods-compacts.spec.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected-scope.txt
+          diff -u /tmp/expected-scope.txt <(printf '%s\n' "$changed")
+
+      - name: Validate release classification against trusted policy
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg state pending \
+            --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg description "Validating release classification and evidence" \
+            --arg context release-classification \
+            '{state:$state,target_url:$target_url,description:$description,context:$context}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_HEAD" --input - >/dev/null
+
+          pr_body="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')"
+          if PR_BODY="$pr_body" node scripts/validate-release-pr-body.mjs; then
+            conclusion=success
+            state=success
+            description="Release classification policy passed"
+          else
+            conclusion=failure
+            state=failure
+            description="Release classification policy failed"
+          fi
+          jq -n \
+            --arg state "$state" \
+            --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg description "$description" \
+            --arg context release-classification \
+            '{state:$state,target_url:$target_url,description:$description,context:$context}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_HEAD" --input - >/dev/null
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+      - name: Reuse or dispatch every exact-head non-hosted workflow
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest_exact_run() {
+            local workflow="$1"
+            local runs
+            runs="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$workflow" \
+              --branch "$TARGET_BRANCH" \
+              --limit 100 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,event)"
+            jq -c --arg head "$EXPECTED_HEAD" \
+              '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0] // {}' \
+              <<<"$runs"
+          }
+
+          ensure_run() {
+            local label="$1"
+            local workflow="$2"
+            local input_name="${3:-}"
+            local input_value="${4:-}"
+            local latest run_id status conclusion dispatch_at runs
+
+            latest="$(latest_exact_run "$workflow")"
+            run_id="$(jq -r '.databaseId // empty' <<<"$latest")"
+            status="$(jq -r '.status // empty' <<<"$latest")"
+            conclusion="$(jq -r '.conclusion // empty' <<<"$latest")"
+
+            if [[ -n "$run_id" && ( "$status" != "completed" || "$conclusion" == "success" ) ]]; then
+              echo "Reusing $label run $run_id ($status/${conclusion:-none})."
+            else
+              dispatch_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              if [[ -n "$input_name" ]]; then
+                gh workflow run "$workflow" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --ref "$TARGET_BRANCH" \
+                  -f "$input_name=$input_value"
+              else
+                gh workflow run "$workflow" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --ref "$TARGET_BRANCH"
+              fi
+
+              run_id=""
+              for attempt in $(seq 1 90); do
+                runs="$(gh run list \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --workflow "$workflow" \
+                  --branch "$TARGET_BRANCH" \
+                  --event workflow_dispatch \
+                  --limit 100 \
+                  --json databaseId,headSha,status,conclusion,createdAt,url,event)"
+                run_id="$(jq -r --arg head "$EXPECTED_HEAD" --arg started "$dispatch_at" \
+                  '[.[] | select(.headSha == $head and .createdAt >= $started)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' \
+                  <<<"$runs")"
+                [[ -n "$run_id" ]] && break
+                sleep 5
+              done
+              test -n "$run_id"
+              echo "Dispatched $label run $run_id."
+            fi
+
+            echo "${label}_run_id=$run_id" >> "$GITHUB_OUTPUT"
+          }
+
+          ensure_run ledger compact-authoritative-outflow-ledger-qa.yml
+          ensure_run compact mpgf-public-goods-compacts-qa.yml confirm_target "$QA_PROJECT_REF"
+          ensure_run payment evidence-payment-release-qa.yml
+          ensure_run visual sitewide-canonical-visual-system.yml
+
+      - name: Wait for and inspect every exact-head workflow
+        id: wait
+        env:
+          LEDGER_RUN_ID: ${{ steps.locate.outputs.ledger_run_id }}
+          COMPACT_RUN_ID: ${{ steps.locate.outputs.compact_run_id }}
+          PAYMENT_RUN_ID: ${{ steps.locate.outputs.payment_run_id }}
+          VISUAL_RUN_ID: ${{ steps.locate.outputs.visual_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          inspect_run() {
+            local label="$1"
+            local run_id="$2"
+            test -n "$run_id"
+            gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --interval 15 || true
+            gh run view "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json databaseId,headSha,status,conclusion,url,jobs,workflowName,createdAt,updatedAt \
+              > "/tmp/${label}.json"
+            local observed_head status conclusion
+            observed_head="$(jq -r '.headSha // empty' "/tmp/${label}.json")"
+            status="$(jq -r '.status // empty' "/tmp/${label}.json")"
+            conclusion="$(jq -r '.conclusion // empty' "/tmp/${label}.json")"
+            [[ "$observed_head" == "$EXPECTED_HEAD" ]] || conclusion=failure
+            [[ "$status" == completed ]] || conclusion=failure
+            echo "${label}_conclusion=${conclusion:-failure}" >> "$GITHUB_OUTPUT"
+          }
+
+          inspect_run ledger "$LEDGER_RUN_ID"
+          inspect_run compact "$COMPACT_RUN_ID"
+          inspect_run payment "$PAYMENT_RUN_ID"
+          inspect_run visual "$VISUAL_RUN_ID"
+
+      - name: Reverify frozen candidate after all gates
+        id: freeze
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')"
+          [[ "$actual" == "$EXPECTED_HEAD" ]]
+          actual_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_HEAD" --jq '.tree.sha')"
+          [[ "$actual_tree" == "$EXPECTED_TREE" ]]
+          echo "conclusion=success" >> "$GITHUB_OUTPUT"
+
+      - name: Record exact-head non-hosted result
+        if: always()
+        env:
+          LEDGER_RUN_ID: ${{ steps.locate.outputs.ledger_run_id }}
+          COMPACT_RUN_ID: ${{ steps.locate.outputs.compact_run_id }}
+          PAYMENT_RUN_ID: ${{ steps.locate.outputs.payment_run_id }}
+          VISUAL_RUN_ID: ${{ steps.locate.outputs.visual_run_id }}
+          LEDGER_CONCLUSION: ${{ steps.wait.outputs.ledger_conclusion }}
+          COMPACT_CONCLUSION: ${{ steps.wait.outputs.compact_conclusion }}
+          PAYMENT_CONCLUSION: ${{ steps.wait.outputs.payment_conclusion }}
+          VISUAL_CONCLUSION: ${{ steps.wait.outputs.visual_conclusion }}
+          RELEASE_CONCLUSION: ${{ steps.release.outputs.conclusion }}
+          FREEZE_CONCLUSION: ${{ steps.freeze.outputs.conclusion }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(cat <<EOF
+          <!-- pr737-exact-head-nonhosted-20260819 -->
+          ## PR #737 exact-head non-hosted validation
+
+          - Candidate SHA: \`$EXPECTED_HEAD\`
+          - Candidate tree: \`$EXPECTED_TREE\`
+          - Stacked base SHA: \`$STACK_BASE_SHA\`
+          - Durable differential: exactly 15 files
+          - Authoritative-ledger QA: **${LEDGER_CONCLUSION:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${LEDGER_RUN_ID:-0}
+          - Existing Compact QA: **${COMPACT_CONCLUSION:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${COMPACT_RUN_ID:-0}
+          - Evidence/payment-release QA: **${PAYMENT_CONCLUSION:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${PAYMENT_RUN_ID:-0}
+          - Canonical visual QA: **${VISUAL_CONCLUSION:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${VISUAL_RUN_ID:-0}
+          - Release classification: **${RELEASE_CONCLUSION:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Exact-head freeze recheck: **${FREEZE_CONCLUSION:-not-completed}**
+
+          Preview authorization is withheld unless every listed conclusion is \`success\` on the frozen SHA. This controller did not merge, mark ready, deploy, migrate a persistent environment, access production private data, call a payment or identity provider, create provider objects, activate a Compact, open an electorate, or move money.
+          EOF
+          )"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Enforce same-SHA success before hosted UAT
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.wait.outputs.ledger_conclusion }}" = success
+          test "${{ steps.wait.outputs.compact_conclusion }}" = success
+          test "${{ steps.wait.outputs.payment_conclusion }}" = success
+          test "${{ steps.wait.outputs.visual_conclusion }}" = success
+          test "${{ steps.release.outputs.conclusion }}" = success
+          test "${{ steps.freeze.outputs.conclusion }}" = success
+
+      - name: Remove one-use controller branch
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete "$GITHUB_REF_NAME"
