@@ -1,0 +1,431 @@
+name: Pooled settlement authenticated-caller clean-stack integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa/723-authenticated-confirmation-clean-stack-20260818-v1
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: pooled-settlement-authenticated-caller-integration
+  cancel-in-progress: false
+
+env:
+  PR700_HEAD: 813573f64eaa17d2ca240c50f76ead9a3b535f97
+  PRODUCT_REPAIR_HEAD: 495f714b6dd4753ad78cf3d41945cffc84923876
+  AUTH_MIGRATION_PATH: supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  source:
+    name: Exact clean-stack source and fail-closed preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    outputs:
+      ready: ${{ steps.preflight.outputs.ready }}
+      unsafe: ${{ steps.preflight.outputs.unsafe }}
+    steps:
+      - name: Check out exact clean-stack candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact PR 700 ancestry, product bytes, and seven-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD"
+          git merge-base --is-ancestor "$PR700_HEAD" HEAD
+
+          actual="$(git diff --name-only "$PR700_HEAD" HEAD | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs' \
+            '.github/scripts/pooled-settlement-authenticated-caller-integration.mjs' \
+            '.github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs' \
+            '.github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml' \
+            'src/app/trade-donation-actions-base.ts' \
+            'src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts' \
+            'supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql' \
+            | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+
+          if git ls-tree -r --name-only HEAD | grep -q '^\.github/workflows/bootstrap-issue-723-'; then
+            echo "Temporary issue-723 bootstrap residue is forbidden." >&2
+            exit 1
+          fi
+
+          for path in \
+            src/app/trade-donation-actions-base.ts \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
+          do
+            test "$(git rev-parse "$PRODUCT_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
+
+          git diff --check "$PR700_HEAD" HEAD
+          grep -F 'import { createClient, createServiceClient } from "@/lib/supabase/server";' src/app/trade-donation-actions-base.ts
+          grep -F 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts
+          test "$(grep -c 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts)" = "1"
+          grep -F 'Submit and accept separate performance evidence before final completion.' src/app/trade-donation-actions-base.ts
+          ! grep -F 'performance evidence befor final completion' src/app/trade-donation-actions-base.ts
+
+          changed_files=(
+            .github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs
+            .github/scripts/pooled-settlement-authenticated-caller-integration.mjs
+            .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs
+            .github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml
+            src/app/trade-donation-actions-base.ts
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts
+            supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
+          )
+          ! grep -nH -F 'jnpoxvalyjtdghnperyu' "${changed_files[@]}"
+          ! grep -nHE '(sk_live_|pk_live_|rk_live_)[A-Za-z0-9]{8,}' "${changed_files[@]}"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Generate and inspect the exact transformed harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+          import { buildAuthenticatedHarnessSource } from "./.github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs";
+          import { alignParticipantUiTruthCopy } from "./.github/scripts/pooled-settlement-authenticated-caller-integration.mjs";
+          const original = await readFile(".github/scripts/pooled-settlement-qa-e2e.mjs", "utf8");
+          const generated = alignParticipantUiTruthCopy(buildAuthenticatedHarnessSource(original));
+          await writeFile("/tmp/issue-723-generated-harness.mjs", generated, "utf8");
+          NODE
+          grep -Fq 'finalize_trade_agreement_milestones_v1' /tmp/issue-723-generated-harness.mjs
+          grep -Fq 'confirm_trade_agreement_milestone_manifest_v1' /tmp/issue-723-generated-harness.mjs
+          grep -Fq 'await prepareMilestoneManifestForAuthenticatedConfirmation' /tmp/issue-723-generated-harness.mjs
+          grep -Fq 'await probeConfirmationAuthorizationBoundary' /tmp/issue-723-generated-harness.mjs
+          grep -Fq 'await confirmAsAuthenticatedParticipant' /tmp/issue-723-generated-harness.mjs
+          ! grep -Eq 'set_config\([^)]*request\.jwt\.claims' /tmp/issue-723-generated-harness.mjs
+          ! grep -Eq 'from\("trade_agreement_confirmations"\)\.insert' /tmp/issue-723-generated-harness.mjs
+          ! grep -Eq 'delete from public\.trade_agreement_milestones[[:space:]]*;' /tmp/issue-723-generated-harness.mjs
+
+      - name: Test original and clean-stack QA harness contracts
+        run: |
+          node --test \
+            .github/scripts/pooled-settlement-qa-e2e.test.mjs \
+            .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs
+
+      - name: Run authorization and pooled-settlement contracts
+        run: |
+          node --import tsx --test \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/trade-donation-pool-environment-source-contract.test.ts \
+            src/lib/trade-donation-pool-stripe-environment-source-contract.test.ts \
+            src/lib/trade-donation-pool-provider-resume-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- --quiet
+
+      - name: Build with pooled settlement disabled
+        env:
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Classify isolated-QA configuration without fallbacks
+        id: preflight
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+          QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+          QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+          QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+          QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+          QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+          QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+          QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+          POOLED_SETTLEMENT_QA_OUTPUT_DIR: pooled-settlement-authenticated-caller-preflight
+        run: node .github/scripts/pooled-settlement-qa-e2e.mjs --preflight-only
+
+      - name: Upload sanitized preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-authenticated-caller-clean-preflight-${{ github.run_id }}
+          path: pooled-settlement-authenticated-caller-preflight/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  authenticated-e2e:
+    name: Authenticated 19-case matrix on clean stack
+    needs: source
+    if: needs.source.outputs.ready == 'true' && needs.source.outputs.unsafe != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3215
+      POOLED_SETTLEMENT_QA_BASE_URL: http://127.0.0.1:3215
+      POOLED_SETTLEMENT_QA_OUTPUT_DIR: pooled-settlement-authenticated-caller-evidence
+      TRADE_DONATION_POOL_ENABLED: "true"
+      TRADE_DONATION_POOL_MODE: test
+      EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "true"
+      EVERY_ORG_ENVIRONMENT: staging
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact clean-stack candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact PR 700 ancestry, exact scope, and product bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD"
+          git merge-base --is-ancestor "$PR700_HEAD" HEAD
+          test "$(git diff --name-only "$PR700_HEAD" HEAD | wc -l | tr -d ' ')" = "7"
+          ! git ls-tree -r --name-only HEAD | grep -q '^\.github/workflows/bootstrap-issue-723-'
+          for path in \
+            src/app/trade-donation-actions-base.ts \
+            src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
+          do
+            test "$(git rev-parse "$PRODUCT_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium and PostgreSQL client
+        shell: bash
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Verify QA target, apply privilege migration, and inspect lifecycle signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import {
+            QA_PROJECT_REF,
+            databaseUrlTargetsProject,
+          } from "./.github/scripts/pooled-settlement-qa-contract.mjs";
+          if (QA_PROJECT_REF !== "hvmxfjjbdcgjjudmthdz") {
+            throw new Error("Unexpected QA project reference.");
+          }
+          if (!databaseUrlTargetsProject(process.env.QA_SUPABASE_DB_URL, QA_PROJECT_REF)) {
+            throw new Error("QA_SUPABASE_DB_URL does not target the canonical isolated QA project.");
+          }
+          NODE
+
+          psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$AUTH_MIGRATION_PATH"
+
+          actual="$(psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align --field-separator '|' \
+            --command "select p.prosecdef, coalesce(array_to_string(p.proconfig, ','), ''), has_function_privilege('anon', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'), has_function_privilege('service_role', p.oid, 'EXECUTE') from pg_proc p where p.oid = to_regprocedure('public.confirm_trade_donation_version_v2(uuid,uuid,uuid)');")"
+          test "$actual" = "t|search_path=pg_catalog|f|t|f"
+
+          psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align <<'SQL' > /tmp/issue-723-lifecycle-functions.json
+          select coalesce(
+            json_agg(
+              json_build_object(
+                'name', p.proname,
+                'signature', p.oid::regprocedure::text,
+                'argumentNames', coalesce(p.proargnames[1:p.pronargs], array[]::text[]),
+                'argumentTypes', coalesce(
+                  (
+                    select array_agg(format_type(argument.arg_oid, null) order by argument.ordinality)
+                    from unnest(p.proargtypes::oid[]) with ordinality as argument(arg_oid, ordinality)
+                  ),
+                  array[]::text[]
+                )
+              )
+              order by p.proname, p.oid::regprocedure::text
+            ),
+            '[]'::json
+          )::text
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in (
+              'finalize_trade_agreement_milestones_v1',
+              'confirm_trade_agreement_milestone_manifest_v1'
+            );
+          SQL
+
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFile } from "node:fs/promises";
+          const rows = JSON.parse((await readFile("/tmp/issue-723-lifecycle-functions.json", "utf8")).trim() || "[]");
+          const required = [
+            "finalize_trade_agreement_milestones_v1",
+            "confirm_trade_agreement_milestone_manifest_v1",
+          ];
+          const allowed = new Map([
+            ["p_actor_id", new Set(["uuid"])],
+            ["p_agreement_id", new Set(["uuid"])],
+            ["p_agreement_version_id", new Set(["uuid"])],
+            ["p_version_id", new Set(["uuid"])],
+            ["p_expected_agreement_version_id", new Set(["uuid"])],
+            ["p_expected_version", new Set(["smallint", "integer", "bigint"])],
+            ["p_version", new Set(["smallint", "integer", "bigint"])],
+            ["p_idempotency_key", new Set(["text", "character varying"])],
+            ["p_manifest_hash", new Set(["text", "character varying"])],
+            ["p_expected_manifest_hash", new Set(["text", "character varying"])],
+            ["p_milestone_manifest_hash", new Set(["text", "character varying"])],
+            ["p_expected_milestone_manifest_hash", new Set(["text", "character varying"])],
+            ["p_complete_terms_hash", new Set(["text", "character varying"])],
+            ["p_expected_complete_terms_hash", new Set(["text", "character varying"])],
+          ]);
+          assert.equal(rows.length, required.length, JSON.stringify(rows));
+          for (const name of required) {
+            const matches = rows.filter((row) => row.name === name);
+            assert.equal(matches.length, 1, `${name} must have exactly one public overload.`);
+            const row = matches[0];
+            assert.equal(row.argumentNames.length, row.argumentTypes.length);
+            assert.ok(row.argumentNames.length > 0);
+            for (let index = 0; index < row.argumentNames.length; index += 1) {
+              const allowedTypes = allowed.get(row.argumentNames[index]);
+              assert.ok(allowedTypes, `${name} contains unknown argument ${row.argumentNames[index]}.`);
+              assert.ok(allowedTypes.has(row.argumentTypes[index]), `${name}.${row.argumentNames[index]} has unexpected type ${row.argumentTypes[index]}.`);
+            }
+          }
+          NODE
+
+          mkdir -p "$POOLED_SETTLEMENT_QA_OUTPUT_DIR"
+          cp /tmp/issue-723-lifecycle-functions.json \
+            "$POOLED_SETTLEMENT_QA_OUTPUT_DIR/lifecycle-function-contracts.json"
+
+      - name: Bind the synthetic operator allowlist
+        shell: bash
+        run: echo "ADMIN_EMAILS=pooled-qa-${GITHUB_RUN_ID}-operator@example.test" >> "$GITHUB_ENV"
+
+      - name: Build exact isolated-QA runtime
+        run: npm run build
+
+      - name: Start exact isolated-QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -p 3215 > /tmp/pooled-settlement-next.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3215/ > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          tail -100 /tmp/pooled-settlement-next.log
+          exit 1
+
+      - name: Execute all 19 authenticated QA scenarios
+        run: node .github/scripts/pooled-settlement-authenticated-caller-integration.mjs
+
+      - name: Upload sanitized authenticated evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-authenticated-caller-clean-qa-${{ github.run_id }}
+          path: pooled-settlement-authenticated-caller-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  report:
+    name: Publish exact-run status locator
+    if: always()
+    needs:
+      - source
+      - authenticated-e2e
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish sanitized commit status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RESULT: ${{ needs.source.result }}
+          E2E_RESULT: ${{ needs.authenticated-e2e.result }}
+        run: |
+          set -euo pipefail
+          state=failure
+          description="Clean-stack QA failed before completing the authenticated matrix"
+          if [[ "$SOURCE_RESULT" == "success" && "$E2E_RESULT" == "success" ]]; then
+            state=success
+            description="Clean-stack source gates and authenticated 19-case QA passed"
+          elif [[ "$SOURCE_RESULT" == "success" && "$E2E_RESULT" == "skipped" ]]; then
+            state=error
+            description="Authenticated clean-stack QA was blocked or skipped"
+          fi
+          export STATUS_STATE="$state"
+          export STATUS_DESCRIPTION="$description"
+          export STATUS_TARGET_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          node --input-type=module <<'NODE' > /tmp/status.json
+          const payload = {
+            state: process.env.STATUS_STATE,
+            target_url: process.env.STATUS_TARGET_URL,
+            description: process.env.STATUS_DESCRIPTION,
+            context: "qa/pooled-settlement-authenticated-caller-clean-stack",
+          };
+          process.stdout.write(JSON.stringify(payload));
+          NODE
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data-binary @/tmp/status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
