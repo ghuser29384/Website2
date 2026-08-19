@@ -11,6 +11,7 @@ SUPABASE_VERSION="2.110.0"
 CLEAN_ROOM_ROOT="$(mktemp -d "${RUNNER_TEMP:-/tmp}/website2-preactivation-clean-room.XXXXXX")"
 LOCAL_CONFIG="$CLEAN_ROOM_ROOT/supabase/config.toml"
 PROJECT_ID="website2_preactivation_baseline_clean_room_${GITHUB_RUN_ID:-$$}"
+DB_CONTAINER="supabase_db_${PROJECT_ID}"
 LOCAL_DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 TARGET_CATALOG="$OUTPUT_DIR/target-catalog.tsv"
 TARGET_CATALOG_NORMALIZED="$OUTPUT_DIR/target-catalog.normalized.tsv"
@@ -96,6 +97,21 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 pg_isready -d "$LOCAL_DB_URL"
+docker inspect "$DB_CONTAINER" >/dev/null
+
+psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+select rolname || E'\t' || rolsuper || E'\t' || rolcanlogin || E'\t' || pg_has_role(current_user, oid, 'MEMBER')
+from pg_roles
+where rolname in ('postgres', 'supabase_admin')
+order by rolname;
+" > "$OUTPUT_DIR/administrative-roles.txt"
+
+docker exec "$DB_CONTAINER" \
+  psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -Atqc \
+  "select current_user || E'\t' || session_user || E'\t' || rolsuper from pg_roles where rolname = current_user;" \
+  > "$OUTPUT_DIR/baseline-administrator.txt"
+grep -Eq '^supabase_admin[[:space:]]+supabase_admin[[:space:]]+t$' \
+  "$OUTPUT_DIR/baseline-administrator.txt"
 
 PRE_RELATIONS="$(psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
 select count(*)
@@ -117,8 +133,9 @@ printf 'pre_application_relations=%s\n' "$PRE_RELATIONS" > "$OUTPUT_DIR/clean-ro
 
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 START_SECONDS="$(date +%s)"
-psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -f "$BASELINE_SQL" \
-  > "$OUTPUT_DIR/baseline-apply.log" 2>&1
+docker exec -i "$DB_CONTAINER" \
+  psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -f - \
+  < "$BASELINE_SQL" > "$OUTPUT_DIR/baseline-apply.log" 2>&1
 END_SECONDS="$(date +%s)"
 ENDED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf 'started_at=%s\nended_at=%s\nduration_seconds=%s\n' \
@@ -132,8 +149,9 @@ LC_ALL=C diff -u "$SOURCE_CATALOG" "$TARGET_CATALOG_NORMALIZED" \
   > "$OUTPUT_DIR/catalog.diff"
 test ! -s "$OUTPUT_DIR/catalog.diff"
 
-if psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -f "$BASELINE_SQL" \
-  > "$OUTPUT_DIR/nonempty-reapply.log" 2>&1; then
+if docker exec -i "$DB_CONTAINER" \
+  psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -f - \
+  < "$BASELINE_SQL" > "$OUTPUT_DIR/nonempty-reapply.log" 2>&1; then
   echo "The baseline did not reject a non-empty application schema." >&2
   exit 1
 fi
@@ -215,5 +233,5 @@ printf 'baseline_sha256=%s\nsource_catalog_sha256=%s\ntarget_catalog_sha256=%s\n
   "$(sha256sum "$SOURCE_CATALOG" | awk '{print $1}')" \
   "$(sha256sum "$TARGET_CATALOG_NORMALIZED" | awk '{print $1}')" \
   > "$OUTPUT_DIR/digests.txt"
-printf 'catalog_match=true\nauth_profile_trigger=true\nactivation_stage_absent=true\nnonempty_guard=true\nzero_synthetic_residue=true\n' \
+printf 'catalog_match=true\nauth_profile_trigger=true\nactivation_stage_absent=true\nnonempty_guard=true\nadmin_replay=true\nzero_synthetic_residue=true\n' \
   > "$OUTPUT_DIR/result.txt"
