@@ -243,17 +243,42 @@ jobs:
           rollback;
           SQL
       - name: Concurrent canonical freeze
+        shell: bash
         run: |
+          set -euo pipefail
           chmod +x scripts/test-compact-authoritative-outflow-concurrency.sh
           COMPACT_OUTFLOW_TEST_DB_URL="$DB_URL" bash scripts/test-compact-authoritative-outflow-concurrency.sh 2>&1 | tee db-evidence/concurrency.log
       - name: No-money readback
         shell: bash
         run: |
           set -euo pipefail
+          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee db-evidence/no-money-assertion.log
+          do $assert$
+          begin
+            if exists (
+              select 1 from public.mpgf_public_goods_compacts where status = 'active'
+            ) then
+              raise exception 'Authoritative outflow QA unexpectedly activated a Compact.';
+            end if;
+            if exists (
+              select 1 from public.mpgf_public_goods_voting_snapshots
+            ) then
+              raise exception 'Authoritative outflow QA unexpectedly opened an electorate.';
+            end if;
+            if exists (
+              select 1
+              from public.mpgf_public_goods_dormant_authorization_snapshots
+              where provider_reference_hash is not null
+            ) then
+              raise exception 'Authoritative outflow QA unexpectedly created a payment provider reference.';
+            end if;
+          end;
+          $assert$;
+          SQL
           psql "$DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' | tee db-evidence/no-money.txt
           select 'activation|' || count(*) from public.mpgf_public_goods_compacts where status='active'
           union all select 'electorate|' || count(*) from public.mpgf_public_goods_voting_snapshots
-          union all select 'payment_refs|' || count(*) from public.mpgf_public_goods_dormant_authorization_snapshots where provider_reference is not null
+          union all select 'payment_refs|' || count(*) from public.mpgf_public_goods_dormant_authorization_snapshots where provider_reference_hash is not null
           order by 1;
           SQL
           grep -qx 'activation|0' db-evidence/no-money.txt
