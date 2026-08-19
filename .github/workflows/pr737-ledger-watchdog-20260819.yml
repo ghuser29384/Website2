@@ -1,0 +1,101 @@
+name: PR 737 ledger exact-head watchdog 20260819
+
+on:
+  push:
+    branches:
+      - ops/pr737-ledger-watchdog-20260819
+    paths:
+      - .github/workflows/pr737-ledger-watchdog-20260819.yml
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr737-ledger-watchdog-20260819
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  EXPECTED_HEAD: 35bc063fdee4ea151a62e8cee17ab529b3273b14
+  STALLED_RUN_ID: "32225356129"
+  LEDGER_WORKFLOW_ID: "335613052"
+
+jobs:
+  retry-stalled-exact-head-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Verify immutable candidate and stalled run
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')"
+          test "$actual" = "$EXPECTED_HEAD"
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STALLED_RUN_ID")"
+          test "$(jq -r '.head_sha' <<<"$run")" = "$EXPECTED_HEAD"
+          test "$(jq -r '.workflow_id' <<<"$run")" = "$LEDGER_WORKFLOW_ID"
+          test "$(jq -r '.status' <<<"$run")" = "in_progress"
+          started="$(jq -r '.run_started_at' <<<"$run")"
+          started_epoch="$(date -u -d "$started" +%s)"
+          now_epoch="$(date -u +%s)"
+          test "$((now_epoch - started_epoch))" -ge 1200
+
+      - name: Cancel only the stalled exact-head run
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$STALLED_RUN_ID/cancel" >/dev/null
+          for attempt in $(seq 1 60); do
+            status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STALLED_RUN_ID" --jq '.status')"
+            [[ "$status" == "completed" ]] && break
+            sleep 5
+          done
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STALLED_RUN_ID" --jq '.status')" = "completed"
+
+      - name: Dispatch a fresh run on the identical candidate
+        id: dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          dispatch_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n --arg ref "$TARGET_BRANCH" '{ref:$ref}' \
+            | gh api --method POST \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/$LEDGER_WORKFLOW_ID/dispatches" \
+                --input - >/dev/null
+
+          run_id=""
+          for attempt in $(seq 1 90); do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$LEDGER_WORKFLOW_ID/runs?event=workflow_dispatch&per_page=20")"
+            run_id="$(jq -r --arg head "$EXPECTED_HEAD" --arg started "$dispatch_at" \
+              '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $started)] | sort_by(.created_at) | reverse | .[0].id // empty' \
+              <<<"$runs")"
+            [[ -n "$run_id" ]] && break
+            sleep 5
+          done
+          test -n "$run_id"
+          observed="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+          test "$(jq -r '.head_sha' <<<"$observed")" = "$EXPECTED_HEAD"
+          test "$(jq -r '.head_branch' <<<"$observed")" = "$TARGET_BRANCH"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Record bounded retry
+        env:
+          NEW_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="The exact-head authoritative-ledger QA run \`$STALLED_RUN_ID\` was cancelled after remaining in \`npm ci\` for more than 20 minutes. A fresh run was dispatched on the identical frozen candidate \`$EXPECTED_HEAD\`: https://github.com/$GITHUB_REPOSITORY/actions/runs/$NEW_RUN_ID. This retry changed no candidate file, deployment, database, provider, Compact, electorate, or payment state."
+          gh pr comment 737 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 734 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Remove one-use watchdog branch
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete "$GITHUB_REF_NAME"
