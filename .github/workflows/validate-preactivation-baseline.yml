@@ -1,0 +1,99 @@
+name: Validate authoritative pre-activation Supabase baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - database/preactivation-schema-baseline-20260818
+    paths:
+      - supabase/baseline/pre_activation/**
+      - src/lib/database-preactivation-baseline-contract.test.ts
+  pull_request:
+    paths:
+      - supabase/baseline/pre_activation/**
+      - scripts/database/validate-preactivation-baseline.sh
+      - scripts/database/preactivation-catalog.sql
+      - src/lib/database-preactivation-baseline-contract.test.ts
+      - docs/database/preactivation-schema-baseline.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preactivation-baseline-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  clean-room:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm ci
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Verify source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/database-preactivation-baseline-contract.test.ts
+          npx eslint src/lib/database-preactivation-baseline-contract.test.ts
+          git diff --check
+
+      - name: Build the pre-activation database in a clean local Supabase stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/database/validate-preactivation-baseline.sh \
+            "$GITHUB_WORKSPACE/artifacts/preactivation-baseline-clean-room"
+
+      - name: Run repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit --pretty false
+          npm run build
+
+      - name: Build evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/preactivation-baseline-clean-room
+          printf 'head=%s\ntree=%s\n' \
+            "$(git rev-parse HEAD)" \
+            "$(git rev-parse HEAD^{tree})" \
+            > artifacts/preactivation-baseline-clean-room/git-identity.txt
+          find artifacts/preactivation-baseline-clean-room -type f -print0 \
+            | sort -z \
+            | xargs -0 -r sha256sum \
+            > artifacts/preactivation-baseline-clean-room/artifact-sha256.txt
+
+      - name: Upload clean-room evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preactivation-baseline-clean-room-${{ github.run_id }}
+          path: artifacts/preactivation-baseline-clean-room
+          if-no-files-found: warn
+          retention-days: 21
