@@ -1,23 +1,22 @@
 name: PR 737 exact-head non-hosted controller
 
 on:
-  push:
+  pull_request:
     branches:
-      - ops/pr737-nonhosted-gates-20260819
+      - main
     paths:
       - .github/workflows/pr737-exact-head-nonhosted-controller.yml
-  workflow_dispatch:
 
 permissions:
   actions: write
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
   statuses: write
 
 concurrency:
   group: pr737-exact-head-nonhosted-20260819
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ github.token }}
@@ -34,7 +33,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
-      - name: Check out controller source
+      - name: Check out trusted controller source
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
@@ -277,11 +276,3 @@ jobs:
           test "${{ steps.wait.outputs.visual_conclusion }}" = success
           test "${{ steps.release.outputs.conclusion }}" = success
           test "${{ steps.freeze.outputs.conclusion }}" = success
-
-      - name: Remove one-use controller branch
-        if: always()
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          git push origin --delete "$GITHUB_REF_NAME"
