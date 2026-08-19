@@ -1699,6 +1699,30 @@ export interface Database {
         };
         Relationships: [];
       };
+      profile_priority_resource_allocations: {
+        Row: {
+          profile_id: string;
+          resource_type: "money" | "ordinary_action" | "skilled_work" | "career";
+          allocation: Json;
+          allocation_version: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          resource_type: "money" | "ordinary_action" | "skilled_work" | "career";
+          allocation: Json;
+          allocation_version?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          allocation?: Json;
+          allocation_version?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       user_follows: {
         Row: {
           follower_id: string;
@@ -11140,6 +11164,14 @@ export interface Database {
       };
     };
     Functions: {
+      replace_profile_priority_allocations_v1: {
+        Args: {
+          p_general_allocation: Json;
+          p_general_cause_areas: string[];
+          p_resource_overrides: Json;
+        };
+        Returns: number;
+      };
       normalize_profile_username_v1: {
         Args: { p_username: string };
         Returns: string;

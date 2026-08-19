@@ -7,11 +7,10 @@ import { getFormMessage } from "@/lib/form-state";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
   buildInitialProfilePriorityAllocation,
-  normalizeProfilePriorityAllocation,
+  normalizePersistedProfilePriorityAllocation,
   PROFILE_PRIORITY_OPTIONS,
-  serializeProfilePriorityAllocation,
   type ProfilePriorityAllocation,
-  type ProfilePriorityId,
+  type ProfilePriorityResourceAllocationMap,
 } from "@/lib/profile-priorities";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -39,25 +38,6 @@ function asStringArray(value: unknown) {
     : [];
 }
 
-function allocationFromPersisted(value: unknown): ProfilePriorityAllocation | null {
-  if (!Array.isArray(value)) return null;
-
-  const allocation = Object.fromEntries(
-    PROFILE_PRIORITY_OPTIONS.map((priority) => [priority.id, 0]),
-  ) as ProfilePriorityAllocation;
-  const allowedIds = new Set<string>(PROFILE_PRIORITY_OPTIONS.map((priority) => priority.id));
-
-  for (const candidate of value) {
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
-    const id = String((candidate as { id?: unknown }).id ?? "");
-    const sparks = Number((candidate as { sparks?: unknown }).sparks);
-    if (!allowedIds.has(id) || !Number.isInteger(sparks) || sparks < 0) continue;
-    allocation[id as ProfilePriorityId] = sparks;
-  }
-
-  return normalizeProfilePriorityAllocation(serializeProfilePriorityAllocation(allocation));
-}
-
 function fallbackAllocation(causes: readonly string[]) {
   const causeSet = new Set(causes);
   const prioritized = PROFILE_PRIORITY_OPTIONS.filter((priority) => causeSet.has(priority.causeArea));
@@ -83,12 +63,21 @@ export default async function ProfilePrioritiesPage({
 
   const supabase = await createClient();
   const typedSupabase = supabase as any;
-  const [onboardingResult, wishProfileResult, savedSearchesResult] = await Promise.all([
+  const [
+    onboardingResult,
+    resourceAllocationsResult,
+    wishProfileResult,
+    savedSearchesResult,
+  ] = await Promise.all([
     typedSupabase
       .from("cohort_onboarding_profiles")
       .select("priority_allocations,cause_areas")
       .eq("profile_id", viewer.authUser.id)
       .maybeSingle(),
+    supabase
+      .from("profile_priority_resource_allocations")
+      .select("resource_type,allocation")
+      .eq("profile_id", viewer.authUser.id),
     typedSupabase
       .from("wish_profiles")
       .select("causes")
@@ -114,10 +103,26 @@ export default async function ProfilePrioritiesPage({
     ...savedSearchCauses,
   ];
   const initialAllocation =
-    allocationFromPersisted(onboardingResult.data?.priority_allocations) ??
+    normalizePersistedProfilePriorityAllocation(
+      onboardingResult.data?.priority_allocations,
+    ) ??
     fallbackAllocation(fallbackCauses);
+  const initialResourceAllocations: ProfilePriorityResourceAllocationMap = {};
+  let invalidResourceAllocation = false;
+  for (const row of resourceAllocationsResult.data ?? []) {
+    const allocation = normalizePersistedProfilePriorityAllocation(row.allocation);
+    if (!allocation) {
+      invalidResourceAllocation = true;
+      continue;
+    }
+    initialResourceAllocations[row.resource_type] = allocation;
+  }
   const loadError =
-    onboardingResult.error || wishProfileResult.error || savedSearchesResult.error;
+    onboardingResult.error ||
+    resourceAllocationsResult.error ||
+    wishProfileResult.error ||
+    savedSearchesResult.error ||
+    invalidResourceAllocation;
 
   return (
     <>
@@ -137,7 +142,11 @@ export default async function ProfilePrioritiesPage({
           saving.
         </div>
       ) : null}
-      <ProfilePriorityEditor initialAllocation={initialAllocation} returnTo={returnTo} />
+      <ProfilePriorityEditor
+        initialAllocation={initialAllocation}
+        initialResourceAllocations={initialResourceAllocations}
+        returnTo={returnTo}
+      />
     </>
   );
 }

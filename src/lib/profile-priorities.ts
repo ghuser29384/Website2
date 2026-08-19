@@ -114,6 +114,59 @@ export const PROFILE_PRIORITY_OPTIONS = [
 export type ProfilePriorityId = (typeof PROFILE_PRIORITY_OPTIONS)[number]["id"];
 export type ProfilePriorityAllocation = Record<ProfilePriorityId, number>;
 
+export const PROFILE_PRIORITY_RESOURCE_OPTIONS = [
+  {
+    id: "money",
+    label: "Money",
+    prompt:
+      "How would you allocate 100 sparks across causes when deciding where your moral spending goes?",
+  },
+  {
+    id: "ordinary_action",
+    label: "Ordinary actions",
+    prompt:
+      "How would you allocate 100 sparks across causes when deciding which everyday behavior changes to make?",
+  },
+  {
+    id: "skilled_work",
+    label: "Skilled work",
+    prompt:
+      "How would you allocate 100 sparks across causes when deciding where to use your skills?",
+  },
+  {
+    id: "career",
+    label: "Career effort",
+    prompt:
+      "How would you allocate 100 sparks across causes when deciding which career paths or major projects to pursue?",
+  },
+] as const;
+
+export type ProfilePriorityResourceType =
+  (typeof PROFILE_PRIORITY_RESOURCE_OPTIONS)[number]["id"];
+export type ProfilePriorityResourceAllocationMap = Partial<
+  Record<ProfilePriorityResourceType, ProfilePriorityAllocation>
+>;
+
+export type ProfilePriorityOpportunityResourceType =
+  | "donation"
+  | "funding"
+  | "payer_side"
+  | "behavioral_commitment"
+  | "research"
+  | "software"
+  | "analysis"
+  | "operations"
+  | "skilled_contribution"
+  | "career"
+  | "long_duration_project"
+  | "other";
+
+export interface ResolvedProfilePriorityAllocation {
+  allocation: ProfilePriorityAllocation;
+  resourceType: ProfilePriorityResourceType | null;
+  source: "general" | "resource_override";
+}
+
 export interface PersistedProfilePriority {
   id: ProfilePriorityId;
   label: string;
@@ -128,6 +181,25 @@ const priorityById = new Map(
 );
 const priorityIds = PROFILE_PRIORITY_OPTIONS.map((priority) => priority.id);
 const priorityIdSet = new Set<string>(priorityIds);
+const profilePriorityResourceTypeSet = new Set<string>(
+  PROFILE_PRIORITY_RESOURCE_OPTIONS.map((resource) => resource.id),
+);
+
+const opportunityResourceMap: Partial<
+  Record<ProfilePriorityOpportunityResourceType, ProfilePriorityResourceType>
+> = {
+  donation: "money",
+  funding: "money",
+  payer_side: "money",
+  behavioral_commitment: "ordinary_action",
+  research: "skilled_work",
+  software: "skilled_work",
+  analysis: "skilled_work",
+  operations: "skilled_work",
+  skilled_contribution: "skilled_work",
+  career: "career",
+  long_duration_project: "career",
+};
 
 const walkthroughPriorityMap: Record<string, ProfilePriorityId> = {
   "Wild animal suffering": "wild-animal-welfare",
@@ -239,6 +311,118 @@ export function normalizeProfilePriorityAllocation(
 
   const assigned = getAssignedProfilePrioritySparks(allocation);
   return assigned > 0 && assigned <= COMPLETE_PROFILE_SPARK_COUNT ? allocation : null;
+}
+
+export function normalizePersistedProfilePriorityAllocation(
+  value: unknown,
+): ProfilePriorityAllocation | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > priorityIds.length) {
+    return null;
+  }
+
+  const allocation = Object.fromEntries(
+    priorityIds.map((id) => [id, 0]),
+  ) as ProfilePriorityAllocation;
+  const seen = new Set<string>();
+
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+    const id = String((candidate as { id?: unknown }).id ?? "");
+    const sparks = Number((candidate as { sparks?: unknown }).sparks);
+    if (
+      !priorityIdSet.has(id) ||
+      seen.has(id) ||
+      !Number.isInteger(sparks) ||
+      sparks <= 0 ||
+      sparks > COMPLETE_PROFILE_SPARK_COUNT
+    ) {
+      return null;
+    }
+    seen.add(id);
+    allocation[id as ProfilePriorityId] = sparks;
+  }
+
+  return getAssignedProfilePrioritySparks(allocation) <= COMPLETE_PROFILE_SPARK_COUNT
+    ? allocation
+    : null;
+}
+
+export function normalizeProfilePriorityResourceAllocations(
+  value: unknown,
+): ProfilePriorityResourceAllocationMap | null {
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!Array.isArray(parsed) || parsed.length > PROFILE_PRIORITY_RESOURCE_OPTIONS.length) {
+    return null;
+  }
+
+  const normalized: ProfilePriorityResourceAllocationMap = {};
+  const seen = new Set<string>();
+  for (const candidate of parsed) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+    const resourceType = String(
+      (candidate as { resourceType?: unknown }).resourceType ?? "",
+    );
+    if (!profilePriorityResourceTypeSet.has(resourceType) || seen.has(resourceType)) {
+      return null;
+    }
+    const allocation = normalizeProfilePriorityAllocation(
+      (candidate as { allocation?: unknown }).allocation,
+    );
+    if (!allocation) return null;
+    seen.add(resourceType);
+    normalized[resourceType as ProfilePriorityResourceType] = allocation;
+  }
+
+  return normalized;
+}
+
+export function serializeProfilePriorityResourceAllocations(
+  allocations: ProfilePriorityResourceAllocationMap,
+) {
+  return JSON.stringify(
+    PROFILE_PRIORITY_RESOURCE_OPTIONS.flatMap(({ id: resourceType }) => {
+      const allocation = allocations[resourceType];
+      return allocation
+        ? [
+            {
+              resourceType,
+              allocation: JSON.parse(serializeProfilePriorityAllocation(allocation)),
+            },
+          ]
+        : [];
+    }),
+  );
+}
+
+export function getProfilePriorityResourceTypeForOpportunity(
+  resourceType: ProfilePriorityOpportunityResourceType,
+) {
+  return opportunityResourceMap[resourceType] ?? null;
+}
+
+export function resolveProfilePriorityAllocationForOpportunity(
+  general: ProfilePriorityAllocation,
+  overrides: ProfilePriorityResourceAllocationMap,
+  opportunityResourceType: ProfilePriorityOpportunityResourceType,
+): ResolvedProfilePriorityAllocation {
+  const resourceType = getProfilePriorityResourceTypeForOpportunity(
+    opportunityResourceType,
+  );
+  const override = resourceType ? overrides[resourceType] : null;
+
+  return {
+    allocation: override ?? general,
+    resourceType,
+    source: override ? "resource_override" : "general",
+  };
 }
 
 export function serializeProfilePriorityAllocation(allocation: ProfilePriorityAllocation) {

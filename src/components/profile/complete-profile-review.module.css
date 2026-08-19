@@ -213,6 +213,50 @@
   line-height: 1.35;
 }
 
+.resourceSelector {
+  margin-top: 22px;
+  display: grid;
+  border-top: 1px solid var(--ink);
+}
+
+.resourceSelector button {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.resourceSelector button:hover,
+.resourceSelector button[aria-pressed="true"] {
+  color: var(--blue);
+}
+
+.resourceSelector button[aria-pressed="true"] {
+  border-bottom-color: var(--blue);
+}
+
+.resourceSelector span {
+  overflow: hidden;
+  font-family: var(--serif);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resourceSelector small {
+  color: var(--muted);
+  font-size: 7px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .honestyNote {
   margin-top: 25px;
   padding: 17px 0;
@@ -284,6 +328,57 @@
   gap: 0;
   padding: 30px 42px;
   background: var(--paper);
+}
+
+.resourceContext {
+  margin-bottom: 20px;
+  padding: 14px 0 16px;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 22px;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
+}
+
+.resourceContext span {
+  color: var(--violet);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.resourceContext p {
+  max-width: 68ch;
+  margin: 8px 0 0;
+  font-family: var(--serif);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.resourceContext small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.resourceAction {
+  min-height: 44px;
+  flex: none;
+  padding: 0 12px;
+  border: 1px solid var(--blue);
+  border-radius: 0;
+  background: transparent;
+  color: var(--blue) !important;
+  cursor: pointer;
+  font-size: 8px;
+}
+
+.resourceAction:hover {
+  background: var(--blue);
+  color: #fff !important;
 }
 
 .mosaicHeadline {
@@ -1046,6 +1141,7 @@
   }
 
   .introDescription,
+  .resourceSelector,
   .honestyNote,
   .instructionBlock {
     grid-column: 2;
@@ -1123,6 +1219,7 @@
   }
 
   .honestyNote,
+  .resourceSelector,
   .instructionBlock {
     margin-top: 18px;
   }
@@ -1134,6 +1231,15 @@
   .mosaicStage {
     min-height: auto;
     padding: 24px 15px;
+  }
+
+  .resourceContext {
+    display: block;
+  }
+
+  .resourceAction {
+    width: 100%;
+    margin-top: 14px;
   }
 
   .mosaicHeadline {

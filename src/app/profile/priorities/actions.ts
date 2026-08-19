@@ -10,9 +10,12 @@ import {
   getRankedProfileCauseAreas,
   getRankedProfilePriorityLabels,
   normalizeProfilePriorityAllocation,
+  normalizeProfilePriorityResourceAllocations,
+  PROFILE_PRIORITY_RESOURCE_OPTIONS,
 } from "@/lib/profile-priorities";
 import { NOW_PROFILE_PRIORITY_SEARCH_LABEL } from "@/lib/profile-priority-search";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 function readOptional(formData: FormData, key: string) {
@@ -53,60 +56,60 @@ export async function saveProfilePrioritySearchAction(formData: FormData) {
       "Assign at least five of your 100 sparks before saving.",
     );
   }
+  const resourceAllocations = normalizeProfilePriorityResourceAllocations(
+    readOptional(formData, "resource_allocations"),
+  );
+  if (!resourceAllocations) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "The resource-specific allocations could not be verified. Reload and try again.",
+    );
+  }
 
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
-  const typedSupabase = supabase as any;
   const priorityAllocations = buildPersistedProfilePriorities(allocation);
+  const persistedResourceOverrides = PROFILE_PRIORITY_RESOURCE_OPTIONS.flatMap(
+    ({ id: resourceType }) => {
+      const resourceAllocation = resourceAllocations[resourceType];
+      return resourceAllocation
+        ? [
+            {
+              allocation: buildPersistedProfilePriorities(resourceAllocation),
+              resourceType,
+            },
+          ]
+        : [];
+    },
+  );
   const causes = getRankedProfileCauseAreas(allocation);
   const causePriorities = getRankedProfilePriorityLabels(allocation);
   const updatedAt = new Date().toISOString();
 
-  const { data: updatedOnboarding, error: onboardingUpdateError } = await typedSupabase
-    .from("cohort_onboarding_profiles")
-    .update({
-      cause_areas: causes,
-      priority_allocations: priorityAllocations,
-      updated_at: updatedAt,
-    })
-    .eq("profile_id", viewer.authUser.id)
-    .select("profile_id")
-    .maybeSingle();
+  const { error: allocationWriteError } = await supabase.rpc(
+    "replace_profile_priority_allocations_v1",
+    {
+      p_general_allocation: priorityAllocations as unknown as Json,
+      p_general_cause_areas: causes,
+      p_resource_overrides: persistedResourceOverrides as unknown as Json,
+    },
+  );
 
-  if (onboardingUpdateError) {
-    console.error("[profile-priorities] Failed to update the saved spark allocation", {
-      message: onboardingUpdateError.message,
+  if (allocationWriteError) {
+    console.error("[profile-priorities] Failed to save the atomic allocation set", {
+      code: allocationWriteError.code,
+      message: allocationWriteError.message,
       profileId: viewer.authUser.id,
     });
-    redirectWithMessage(returnTo, "error", "We could not save your priority allocation.");
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "No priority changes were saved. Review the allocations and try again.",
+    );
   }
 
-  if (!updatedOnboarding) {
-    const { error: onboardingInsertError } = await typedSupabase
-      .from("cohort_onboarding_profiles")
-      .insert({
-        cause_areas: causes,
-        completed_at: updatedAt,
-        first_action: "Review matching opportunities",
-        participant_kind: "individual",
-        primary_goal: "Personalize live opportunities",
-        priority_allocations: priorityAllocations,
-        profile_id: viewer.authUser.id,
-        referral_source: "Profile priorities",
-        status: "completed",
-        updated_at: updatedAt,
-      });
-
-    if (onboardingInsertError) {
-      console.error("[profile-priorities] Failed to create the saved spark allocation", {
-        message: onboardingInsertError.message,
-        profileId: viewer.authUser.id,
-      });
-      redirectWithMessage(returnTo, "error", "We could not save your priority allocation.");
-    }
-  }
-
-  const { error: synthesisError } = await typedSupabase
+  const { error: synthesisError } = await supabase
     .from("profile_syntheses")
     .upsert(
       {
@@ -122,7 +125,7 @@ export async function saveProfilePrioritySearchAction(formData: FormData) {
     });
   }
 
-  const { error: wishProfileError } = await typedSupabase
+  const { error: wishProfileError } = await supabase
     .from("wish_profiles")
     .update({ causes })
     .eq("profile_id", viewer.authUser.id);
@@ -185,6 +188,6 @@ export async function saveProfilePrioritySearchAction(formData: FormData) {
   redirectWithMessage(
     successTo,
     "message",
-    "Priorities saved. Your feed now uses the new 100-spark allocation.",
+    "Priorities saved privately. Current live ranking continues to use your general 100-spark allocation.",
   );
 }

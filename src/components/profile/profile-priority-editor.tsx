@@ -12,10 +12,14 @@ import {
   getProfilePriority,
   normalizeProfilePriorityAllocation,
   PROFILE_PRIORITY_OPTIONS,
+  PROFILE_PRIORITY_RESOURCE_OPTIONS,
   rankProfilePriorities,
   serializeProfilePriorityAllocation,
+  serializeProfilePriorityResourceAllocations,
   type ProfilePriorityAllocation,
   type ProfilePriorityId,
+  type ProfilePriorityResourceAllocationMap,
+  type ProfilePriorityResourceType,
 } from "@/lib/profile-priorities";
 
 import styles from "./complete-profile-review.module.css";
@@ -90,17 +94,40 @@ function SaveButton() {
 
 interface ProfilePriorityEditorProps {
   initialAllocation: ProfilePriorityAllocation;
+  initialResourceAllocations: ProfilePriorityResourceAllocationMap;
   returnTo: string;
 }
 
 const priorityOrder = PROFILE_PRIORITY_OPTIONS.map((priority) => priority.id);
+type ProfilePriorityView = "general" | ProfilePriorityResourceType;
+
+const profilePriorityViews = [
+  {
+    id: "general",
+    label: "General",
+    prompt: "How would you allocate 100 sparks across causes as your default prior?",
+  },
+  ...PROFILE_PRIORITY_RESOURCE_OPTIONS,
+] as const;
 
 export function ProfilePriorityEditor({
   initialAllocation,
+  initialResourceAllocations,
   returnTo,
 }: ProfilePriorityEditorProps) {
-  const [allocation, setAllocation] = useState<ProfilePriorityAllocation>(initialAllocation);
+  const [generalAllocation, setGeneralAllocation] =
+    useState<ProfilePriorityAllocation>(initialAllocation);
+  const [resourceAllocations, setResourceAllocations] =
+    useState<ProfilePriorityResourceAllocationMap>(initialResourceAllocations);
+  const [activeView, setActiveView] = useState<ProfilePriorityView>("general");
   const [focusedPriorityId, setFocusedPriorityId] = useState<ProfilePriorityId | null>(null);
+  const activeResourceType = activeView === "general" ? null : activeView;
+  const activeOverride = activeResourceType
+    ? resourceAllocations[activeResourceType]
+    : null;
+  const allocation = activeOverride ?? generalAllocation;
+  const isInherited = Boolean(activeResourceType && !activeOverride);
+  const activeViewOption = profilePriorityViews.find(({ id }) => id === activeView)!;
   const assigned = getAssignedProfilePrioritySparks(allocation);
   const unassigned = COMPLETE_PROFILE_SPARK_COUNT - assigned;
   const ranking = rankProfilePriorities(allocation, priorityOrder);
@@ -114,7 +141,9 @@ export function ProfilePriorityEditor({
   );
 
   function adjust(id: ProfilePriorityId, delta: -1 | 1) {
-    setAllocation((current) => {
+    if (isInherited) return;
+
+    const update = (current: ProfilePriorityAllocation) => {
       if (delta === -1 && current[id] === 0) return current;
       const total = getAssignedProfilePrioritySparks(current);
 
@@ -131,18 +160,39 @@ export function ProfilePriorityEditor({
       }
 
       return { ...current, [id]: current[id] + delta };
-    });
+    };
+
+    if (activeResourceType) {
+      setResourceAllocations((current) => ({
+        ...current,
+        [activeResourceType]: update(current[activeResourceType] ?? generalAllocation),
+      }));
+      return;
+    }
+    setGeneralAllocation(update);
   }
 
   const serializedAllocation = serializeProfilePriorityAllocation(allocation);
   const allocationIsValid = Boolean(normalizeProfilePriorityAllocation(serializedAllocation));
+  const serializedGeneralAllocation = serializeProfilePriorityAllocation(generalAllocation);
+  const serializedResourceAllocations =
+    serializeProfilePriorityResourceAllocations(resourceAllocations);
 
   return (
     <section aria-labelledby="profile-priorities-heading" className={styles.profilePage}>
       <form action={saveProfilePrioritySearchAction}>
         <input name="return_to" type="hidden" value={`/profile/priorities?returnTo=${encodeURIComponent(returnTo)}`} />
         <input name="success_to" type="hidden" value={returnTo} />
-        <input name="priority_allocation" type="hidden" value={serializedAllocation} />
+        <input
+          name="priority_allocation"
+          type="hidden"
+          value={serializedGeneralAllocation}
+        />
+        <input
+          name="resource_allocations"
+          type="hidden"
+          value={serializedResourceAllocations}
+        />
 
         <header className={styles.profileHeader}>
           <Link aria-label="Moral Trade home" className={styles.brandLockup} href="/">
@@ -163,8 +213,34 @@ export function ProfilePriorityEditor({
             <p className={styles.sectionLabel}>Private profile</p>
             <h1 id="profile-priorities-heading">Adjust your 100 sparks.</h1>
             <p className={styles.introDescription}>
-              Move your attention between priorities. Your live feed will use the saved weighting.
+              Set one general prior, then optionally customize how different resources follow it.
             </p>
+            <div
+              aria-label="Priority allocation resource"
+              className={styles.resourceSelector}
+              role="group"
+            >
+              {profilePriorityViews.map((view) => (
+                <button
+                  aria-pressed={activeView === view.id}
+                  key={view.id}
+                  onClick={() => {
+                    setActiveView(view.id);
+                    setFocusedPriorityId(null);
+                  }}
+                  type="button"
+                >
+                  <span>{view.label}</span>
+                  <small>
+                    {view.id === "general"
+                      ? "Default"
+                      : resourceAllocations[view.id]
+                        ? "Customized"
+                        : "Uses general"}
+                  </small>
+                </button>
+              ))}
+            </div>
             <div className={styles.honestyNote}>
               <Icon className={styles.icon} name="info" />
               <p>
@@ -186,7 +262,9 @@ export function ProfilePriorityEditor({
             <button
               className={styles.textAction}
               onClick={() => {
-                setAllocation(initialAllocation);
+                setGeneralAllocation(initialAllocation);
+                setResourceAllocations(initialResourceAllocations);
+                setActiveView("general");
                 setFocusedPriorityId(null);
               }}
               type="button"
@@ -199,7 +277,54 @@ export function ProfilePriorityEditor({
             </Link>
           </aside>
 
-          <main className={styles.mosaicStage}>
+          <main
+            aria-label={`${activeViewOption.label} allocation editor`}
+            className={styles.mosaicStage}
+          >
+            <div className={styles.resourceContext}>
+              <div>
+                <span>{activeViewOption.label} allocation</span>
+                <p>{activeViewOption.prompt}</p>
+                <small>
+                  {activeResourceType
+                    ? isInherited
+                      ? "This view follows your general profile, including future general edits."
+                      : "This private override stays separate when your general allocation changes."
+                    : "This remains the live default when no applicable resource override is selected."}
+                </small>
+              </div>
+              {activeResourceType ? (
+                isInherited ? (
+                  <button
+                    className={styles.resourceAction}
+                    onClick={() => {
+                      setResourceAllocations((current) => ({
+                        ...current,
+                        [activeResourceType]: { ...generalAllocation },
+                      }));
+                    }}
+                    type="button"
+                  >
+                    Customize
+                  </button>
+                ) : (
+                  <button
+                    className={styles.resourceAction}
+                    onClick={() => {
+                      setResourceAllocations((current) => {
+                        const next = { ...current };
+                        delete next[activeResourceType];
+                        return next;
+                      });
+                      setFocusedPriorityId(null);
+                    }}
+                    type="button"
+                  >
+                    Use general allocation again
+                  </button>
+                )
+              ) : null}
+            </div>
             <div className={styles.mosaicHeadline}>
               <div>
                 <span>Personal emphasis</span>
@@ -259,7 +384,7 @@ export function ProfilePriorityEditor({
                     <strong>{allocation[id] * COMPLETE_PROFILE_SPARK_VALUE}</strong>
                     <button
                       aria-label={`Decrease ${priority.name}`}
-                      disabled={!allocation[id]}
+                      disabled={isInherited || !allocation[id]}
                       onClick={() => adjust(id, -1)}
                       type="button"
                     >
@@ -267,6 +392,7 @@ export function ProfilePriorityEditor({
                     </button>
                     <button
                       aria-label={`Increase ${priority.name}`}
+                      disabled={isInherited}
                       onClick={() => adjust(id, 1)}
                       type="button"
                     >
@@ -301,7 +427,13 @@ export function ProfilePriorityEditor({
                       {index + 1}
                     </span>
                     <span className={styles.rankLabel}>{priority.shortName}</span>
-                    {allocation[id] && allocationRowIds.includes(id) ? (
+                    {isInherited ? (
+                      <span className={styles.rankTrailing}>
+                        {allocation[id]
+                          ? `${allocation[id] * COMPLETE_PROFILE_SPARK_VALUE} sparks`
+                          : "Unassigned"}
+                      </span>
+                    ) : allocation[id] && allocationRowIds.includes(id) ? (
                       <span className={styles.rankTrailing}>
                         {allocation[id] * COMPLETE_PROFILE_SPARK_VALUE} sparks
                       </span>
@@ -335,7 +467,10 @@ export function ProfilePriorityEditor({
             </ol>
             <div className={styles.railFooter}>
               <p>Ties remain tied. Unassigned sparks are intentional, not opposition.</p>
-              <p>Saving changes only your private profile and personalized feed.</p>
+              <p>
+                Allocations stay private. Current live ranking continues to use the general vector;
+                resource overrides are saved for a separately reviewed integration.
+              </p>
             </div>
           </aside>
         </div>

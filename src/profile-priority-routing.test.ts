@@ -35,15 +35,17 @@ test("the no-match priority actions open the profile spark editor and preserve t
   assert.match(html, /href="\/complete-profile">Set priorities →/);
 });
 
-test("the profile priorities route edits and persists the canonical 100-spark allocation", () => {
+test("the profile priorities route edits the general vector plus explicit private overrides", () => {
   assert.match(priorityPage, /ProfilePriorityEditor/);
   assert.match(priorityPage, /priority_allocations,cause_areas/);
+  assert.match(priorityPage, /profile_priority_resource_allocations/);
   assert.match(priorityEditor, /Adjust your 100 sparks/);
   assert.match(priorityEditor, /name="priority_allocation"/);
+  assert.match(priorityEditor, /name="resource_allocations"/);
   assert.match(priorityEditor, /COMPLETE_PROFILE_SPARK_VALUE/);
   assert.match(priorityAction, /normalizeProfilePriorityAllocation/);
-  assert.match(priorityAction, /priority_allocations: priorityAllocations/);
+  assert.match(priorityAction, /replace_profile_priority_allocations_v1/);
   assert.match(priorityAction, /cause_priorities: causePriorities/);
-  assert.match(priorityAction, /Your feed now uses the new 100-spark allocation/);
+  assert.match(priorityAction, /Current live ranking continues to use your general 100-spark allocation/);
   assert.doesNotMatch(priorityPage, /redirect\("\/walkthrough"\)/);
 });
