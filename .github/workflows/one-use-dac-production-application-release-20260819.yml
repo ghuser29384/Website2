@@ -1,0 +1,654 @@
+name: One-use DAC production application release 20260819
+
+on:
+  push:
+    branches:
+      - ops/dac-production-application-release-20260819
+    paths:
+      - .github/workflows/one-use-dac-production-application-release-20260819.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: moraltrade-dac-production-release
+  cancel-in-progress: false
+
+env:
+  REPOSITORY: ghuser29384/Website2
+  EXPECTED_PROD_REF: jnpoxvalyjtdghnperyu
+  EXPECTED_PROD_HOST: aws-1-us-west-2.pooler.supabase.com
+  EXPECTED_PROD_USER: postgres.jnpoxvalyjtdghnperyu
+  ROLLBACK_DEPLOYMENT_ID: dpl_5uNGHmgrNDjraHVRukXyNPeGRgEk
+  ROLLBACK_SOURCE_SHA: fd5588e789e2b8cc4b49d372a0c74146b366520d
+  POSTGRES_IMAGE: postgres:17
+  EVIDENCE_DIR: dac-production-application-release-evidence
+  PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out exact then-current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Freeze exact source and reject unsafe post-privacy drift
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/pre-alias" "$EVIDENCE_DIR/post-alias" "$EVIDENCE_DIR/runtime"
+          release_main="$(git rev-parse HEAD)"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$release_main" = "$remote_main"
+
+          for pr in 758 772 777; do
+            gh api "repos/$REPOSITORY/pulls/$pr" > "$RUNNER_TEMP/pr-$pr.json"
+            jq -e '.merged == true and .merged_at != null' "$RUNNER_TEMP/pr-$pr.json" >/dev/null
+            merge_sha="$(jq -r '.merge_commit_sha' "$RUNNER_TEMP/pr-$pr.json")"
+            git fetch origin "$merge_sha"
+            git merge-base --is-ancestor "$merge_sha" "$release_main"
+          done
+
+          privacy_merge="$(jq -r '.merge_commit_sha' "$RUNNER_TEMP/pr-777.json")"
+          if test "$release_main" != "$privacy_merge"; then
+            git diff --name-only "$privacy_merge" "$release_main" | sort -u > "$EVIDENCE_DIR/post-privacy-drift-files.txt"
+            test -s "$EVIDENCE_DIR/post-privacy-drift-files.txt"
+            if grep -Ev '^(analysis/|docs/|README(\.md)?$)' "$EVIDENCE_DIR/post-privacy-drift-files.txt" | grep -q .; then
+              echo 'Unsafe runtime, workflow, dependency, database, auth, payment, or deployment drift exists after the privacy merge.' >&2
+              exit 1
+            fi
+          else
+            : > "$EVIDENCE_DIR/post-privacy-drift-files.txt"
+          fi
+
+          {
+            printf 'release_main=%s\n' "$release_main"
+            printf 'release_tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'privacy_merge=%s\n' "$privacy_merge"
+            printf 'rollback_deployment_id=%s\n' "$ROLLBACK_DEPLOYMENT_ID"
+            printf 'rollback_source_sha=%s\n' "$ROLLBACK_SOURCE_SHA"
+            printf 'frozen_at=%s\n' "$(date -u +%FT%TZ)"
+          } | tee "$EVIDENCE_DIR/release-source.txt"
+          echo "RELEASE_MAIN=$release_main" >> "$GITHUB_ENV"
+          echo "RELEASE_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
+
+      - name: Validate exact production database and release secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${VERCEL_TOKEN:-}"
+          test -n "${VERCEL_ORG_ID:-}"
+          test -n "${VERCEL_PROJECT_ID:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$VERCEL_TOKEN"
+          echo "::add-mask::$VERCEL_ORG_ID"
+          echo "::add-mask::$VERCEL_PROJECT_ID"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, unquote, urlparse
+          parsed = urlparse(os.environ['PROD_SUPABASE_DB_URL'])
+          valid = (
+              parsed.scheme in {'postgres','postgresql'}
+              and parsed.hostname == os.environ['EXPECTED_PROD_HOST']
+              and parsed.port == 5432
+              and parsed.path == '/postgres'
+              and unquote(parsed.username or '') == os.environ['EXPECTED_PROD_USER']
+              and parse_qs(parsed.query).get('sslmode',['require']) == ['require']
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit('Refusing a database URL outside the exact production target.')
+          PY
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and run release gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: production
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test \
+            src/lib/mpgf/dac-lifecycle-model.test.ts \
+            src/lib/mpgf/dac-public-terms-migration.test.ts \
+            src/lib/mpgf/dac-terminal-event-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-terminal-schema-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts \
+            src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-public-aggregate-column-privacy-migration.test.ts \
+            | tee "$EVIDENCE_DIR/focused-tests.log"
+          npm test | tee "$EVIDENCE_DIR/repository-tests.log"
+          npm run lint -- --quiet | tee "$EVIDENCE_DIR/lint.log"
+          npx tsc --noEmit | tee "$EVIDENCE_DIR/typecheck.log"
+          npm run build | tee "$EVIDENCE_DIR/repository-build.log"
+          git diff --check
+
+      - name: Pull PostgreSQL 17 and verify production schema/privacy/no-money state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$POSTGRES_IMAGE"
+          docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
+              --command "
+                set statement_timeout='60s';
+                do \$verify\$
+                declare total_rows bigint;
+                begin
+                  if to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') is null
+                     or to_regprocedure('public.mpgf_finalize_dac_campaign(text,uuid,text)') is null
+                     or to_regprocedure('public.mpgf_public_dac_campaign_terms(text)') is null then
+                    raise exception 'Required DAC RPC missing.';
+                  end if;
+                  if has_table_privilege('anon','public.mpgf_public_goods_campaigns','SELECT')
+                     or has_table_privilege('authenticated','public.mpgf_public_goods_campaigns','SELECT')
+                     or has_column_privilege('anon','public.mpgf_public_goods_campaigns','published_by','SELECT')
+                     or has_column_privilege('authenticated','public.mpgf_dac_campaign_outcomes','outcome_json','SELECT') then
+                    raise exception 'Production DAC public privacy contract is not hardened.';
+                  end if;
+                  if not has_function_privilege('anon','public.mpgf_public_dac_campaign_terms(text)','EXECUTE') then
+                    raise exception 'Public exact-terms RPC is unavailable.';
+                  end if;
+                  select
+                    (select count(*) from public.mpgf_pool_proposals)
+                    + (select count(*) from public.mpgf_pool_reviewers)
+                    + (select count(*) from public.mpgf_pool_proposal_versions)
+                    + (select count(*) from public.mpgf_pool_lifecycle_events)
+                    + (select count(*) from public.mpgf_public_goods_match_pools)
+                    + (select count(*) from public.mpgf_public_goods_rounds)
+                    + (select count(*) from public.mpgf_public_goods_campaigns)
+                    + (select count(*) from public.mpgf_public_goods_pledges)
+                    + (select count(*) from public.mpgf_dac_pledge_intents)
+                    + (select count(*) from public.mpgf_dac_pledge_events)
+                    + (select count(*) from public.mpgf_dac_campaign_outcomes)
+                    into total_rows;
+                  if total_rows <> 0 then raise exception 'Unexpected production DAC/public-goods rows: %',total_rows; end if;
+                  if (select count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null) <> 0 then
+                    raise exception 'Unexpected payment references.';
+                  end if;
+                end;
+                \$verify\$;
+              "
+          printf '{"schema":true,"privacy":true,"dacPublicGoodsRows":0,"paymentReferences":0,"verifiedAt":"%s"}\n' "$(date -u +%FT%TZ)" > "$EVIDENCE_DIR/production-db-preflight.json"
+
+      - name: Select the repository-pinned Vercel CLI and link the exact project
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(grep -RhoE 'vercel@[0-9]+\.[0-9]+\.[0-9]+' .github/workflows scripts package.json package-lock.json 2>/dev/null | sed 's/.*@//' | sort -V | tail -n1)"
+          test -n "$version"
+          cat > "$RUNNER_TEMP/vercel" <<SH
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec npx --yes vercel@$version "\$@"
+          SH
+          chmod 0700 "$RUNNER_TEMP/vercel"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          mkdir -p .vercel
+          jq -n --arg orgId "$VERCEL_ORG_ID" --arg projectId "$VERCEL_PROJECT_ID" '{orgId:$orgId,projectId:$projectId}' > .vercel/project.json
+          printf 'vercel_cli_version=%s\n' "$version" | tee "$EVIDENCE_DIR/vercel-cli.txt"
+
+      - name: Pull and audit exact production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/vercel-pull.log"
+          test -f .vercel/.env.production.local
+          node <<'NODE'
+          const fs = require('fs');
+          const path = '.vercel/.env.production.local';
+          const out = process.env.GITHUB_ENV;
+          const text = fs.readFileSync(path, 'utf8');
+          const env = {};
+          for (const raw of text.split(/\r?\n/)) {
+            if (!raw || raw.startsWith('#') || !raw.includes('=')) continue;
+            const index = raw.indexOf('=');
+            const key = raw.slice(0, index);
+            let value = raw.slice(index + 1);
+            if (value.startsWith('"') && value.endsWith('"')) {
+              try { value = JSON.parse(value); } catch { value = value.slice(1, -1); }
+            } else if (value.startsWith("'") && value.endsWith("'")) {
+              value = value.slice(1, -1);
+            }
+            env[key] = value;
+          }
+          const required = {
+            CONDITIONAL_PAYMENTS_MODE: 'disabled',
+            TRADE_DONATION_POOL_ENABLED: 'false',
+            TRADE_DONATION_POOL_MODE: 'disabled',
+            DIRECT_DONATION_UPGRADES_ENABLED: 'false',
+            DIRECT_DONATION_UPGRADE_MODE: 'disabled',
+          };
+          for (const [key, expected] of Object.entries(required)) {
+            if (env[key] !== expected) throw new Error(`${key} must equal ${expected}`);
+          }
+          const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || '';
+          if (!supabaseUrl.includes(process.env.EXPECTED_PROD_REF) || supabaseUrl.includes('hvmxfjjbdcgjjudmthdz')) {
+            throw new Error('Production build is not exclusively bound to the production Supabase project.');
+          }
+          const exportKeys = [
+            'NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY','SUPABASE_SERVICE_ROLE_KEY',
+            'CONDITIONAL_PAYMENTS_MODE','TRADE_DONATION_POOL_ENABLED','TRADE_DONATION_POOL_MODE',
+            'DIRECT_DONATION_UPGRADES_ENABLED','DIRECT_DONATION_UPGRADE_MODE'
+          ];
+          let appended = '';
+          for (const key of exportKeys) {
+            if (!(key in env)) continue;
+            process.stdout.write(`::add-mask::${env[key]}\n`);
+            appended += `${key}<<__MT_ENV__\n${env[key]}\n__MT_ENV__\n`;
+          }
+          fs.appendFileSync(out, appended);
+          fs.writeFileSync(process.env.EVIDENCE_DIR + '/production-env-contract.json', JSON.stringify({
+            productionProjectBound: true,
+            qaProjectExcluded: true,
+            conditionalPaymentsMode: env.CONDITIONAL_PAYMENTS_MODE,
+            tradeDonationPoolEnabled: env.TRADE_DONATION_POOL_ENABLED,
+            tradeDonationPoolMode: env.TRADE_DONATION_POOL_MODE,
+            directDonationUpgradesEnabled: env.DIRECT_DONATION_UPGRADES_ENABLED,
+            directDonationUpgradeMode: env.DIRECT_DONATION_UPGRADE_MODE,
+          }, null, 2) + '\n');
+          NODE
+
+      - name: Capture immutable pre-release rollback target
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/moraltrade.org?teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/pre-release-canonical-deployment.json"
+          old_id="$(jq -r '.id' "$EVIDENCE_DIR/pre-release-canonical-deployment.json")"
+          old_url="$(jq -r '.url' "$EVIDENCE_DIR/pre-release-canonical-deployment.json")"
+          [[ "$old_id" =~ ^dpl_ ]]
+          [[ "$old_url" =~ \.vercel\.app$ ]]
+          echo "OLD_DEPLOYMENT_ID=$old_id" >> "$GITHUB_ENV"
+          echo "OLD_DEPLOYMENT_URL=https://$old_url" >> "$GITHUB_ENV"
+          printf 'old_deployment_id=%s\nold_deployment_url=https://%s\n' "$old_id" "$old_url" > "$EVIDENCE_DIR/rollback-target.txt"
+
+      - name: Build exact production artifact
+        shell: bash
+        env:
+          VERCEL_GIT_PROVIDER: github
+          VERCEL_GIT_REPO_OWNER: ghuser29384
+          VERCEL_GIT_REPO_SLUG: Website2
+          VERCEL_GIT_COMMIT_REF: main
+          VERCEL_GIT_COMMIT_SHA: ${{ env.RELEASE_MAIN }}
+          VERCEL_GIT_COMMIT_MESSAGE: Owner-authorized non-payment DAC production release
+        run: |
+          set -euo pipefail
+          vercel build --prod --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/vercel-build.log"
+          test -f .vercel/output/config.json
+          find .vercel/output -type f -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE_DIR/prebuilt-files.sha256"
+          sha256sum "$EVIDENCE_DIR/prebuilt-files.sha256" | awk '{print $1}' > "$EVIDENCE_DIR/prebuilt-tree.sha256"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_MAIN"
+
+      - name: Deploy exact production target without assigning domains
+        shell: bash
+        env:
+          VERCEL_GIT_PROVIDER: github
+          VERCEL_GIT_REPO_OWNER: ghuser29384
+          VERCEL_GIT_REPO_SLUG: Website2
+          VERCEL_GIT_COMMIT_REF: main
+          VERCEL_GIT_COMMIT_SHA: ${{ env.RELEASE_MAIN }}
+          VERCEL_GIT_COMMIT_MESSAGE: Owner-authorized non-payment DAC production release
+        run: |
+          set -euo pipefail
+          vercel deploy --help | grep -q -- '--skip-domain'
+          set +e
+          deployment_output="$(vercel deploy --prebuilt --prod --skip-domain --yes --token="$VERCEL_TOKEN" 2> >(tee "$EVIDENCE_DIR/vercel-deploy.stderr.log" >&2))"
+          status=$?
+          set -e
+          printf '%s\n' "$deployment_output" | tee "$EVIDENCE_DIR/vercel-deploy.stdout.log"
+          test "$status" -eq 0
+          deployment_url="$(printf '%s\n' "$deployment_output" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app$ ]]
+          deployment_host="${deployment_url#https://}"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host?teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/new-deployment.json"
+          deployment_id="$(jq -r '.id' "$EVIDENCE_DIR/new-deployment.json")"
+          test "$(jq -r '.readyState' "$EVIDENCE_DIR/new-deployment.json")" = READY
+          test "$(jq -r '.target' "$EVIDENCE_DIR/new-deployment.json")" = production
+          bound_sha="$(jq -r '.gitSource.sha // .meta.githubCommitSha // .meta.githubCommitRef // empty' "$EVIDENCE_DIR/new-deployment.json")"
+          if test "$bound_sha" != "$RELEASE_MAIN"; then
+            jq -e --arg sha "$RELEASE_MAIN" '(.meta.githubCommitSha==$sha) or (.gitSource.sha==$sha)' "$EVIDENCE_DIR/new-deployment.json" >/dev/null
+          fi
+          aliases_count="$(jq '.alias | length' "$EVIDENCE_DIR/new-deployment.json")"
+          test "$aliases_count" -eq 0
+          echo "NEW_DEPLOYMENT_URL=$deployment_url" >> "$GITHUB_ENV"
+          echo "NEW_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
+          printf 'deployment_id=%s\ndeployment_url=%s\n' "$deployment_id" "$deployment_url" > "$EVIDENCE_DIR/new-deployment-identity.txt"
+
+      - name: Prepare deterministic production-UAT database client
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/psql" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker run --rm -i \
+            -e MPGF_DAC_PRODUCT_QA_PASSWORD \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            postgres:17 psql "$@"
+          SH
+          chmod 0700 "$RUNNER_TEMP/psql"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Clean any interrupted deterministic production-UAT residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+            2>&1 | tee "$EVIDENCE_DIR/pre-alias/pre-cleanup.log"
+
+      - name: Create pre-alias production-UAT fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export MPGF_DAC_PRODUCT_QA_PASSWORD="$qa_password"
+          printf 'MPGF_DAC_PRODUCT_QA_PASSWORD<<__MT_PW__\n%s\n__MT_PW__\n' "$qa_password" >> "$GITHUB_ENV"
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_fixture.sql \
+            2>&1 | tee "$EVIDENCE_DIR/pre-alias/fixture.log"
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run complete unaliased production deployment acceptance
+        shell: bash
+        env:
+          ADMIN_EMAILS: dac-product-reviewer@qa.invalid
+          MPGF_DAC_PRODUCT_BASE_URL: ${{ env.NEW_DEPLOYMENT_URL }}
+          PLAYWRIGHT_BASE_URL: ${{ env.NEW_DEPLOYMENT_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ env.NEW_DEPLOYMENT_URL }}
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+        run: |
+          set -euo pipefail
+          date -u +%s > "$EVIDENCE_DIR/runtime/pre-alias-start-epoch.txt"
+          date -u +%FT%TZ > "$EVIDENCE_DIR/runtime/pre-alias-start.txt"
+          curl -fsS --retry 12 --retry-all-errors --retry-delay 5 "$NEW_DEPLOYMENT_URL/discover" -o "$EVIDENCE_DIR/pre-alias/discover.html"
+          npx playwright test tests/mpgf-dac-product-lifecycle.spec.ts --project=chromium --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/pre-alias/playwright.log"
+          date -u +%s > "$EVIDENCE_DIR/runtime/pre-alias-end-epoch.txt"
+          date -u +%FT%TZ > "$EVIDENCE_DIR/runtime/pre-alias-end.txt"
+
+      - name: Clean and prove zero residue after pre-alias acceptance
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+            2>&1 | tee "$EVIDENCE_DIR/pre-alias/cleanup.log"
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<'SQL' \
+            | tee "$EVIDENCE_DIR/pre-alias/zero-residue.txt"
+          with ids as (
+            select array[
+              'ca111111-1111-4111-8111-111111111111'::uuid,
+              'cb222222-2222-4222-8222-222222222222'::uuid,
+              'cc333333-3333-4333-8333-333333333333'::uuid,
+              'cd444444-4444-4444-8444-444444444444'::uuid
+            ] users,
+            array[
+              'ce555555-5555-4555-8555-555555555555'::uuid,
+              'cf666666-6666-4666-8666-666666666666'::uuid,
+              'c0777777-7777-4777-8777-777777777777'::uuid
+            ] proposals
+          )
+          select 'fixture_residue=' || (
+            (select count(*) from auth.users,ids where auth.users.id=any(ids.users))
+            + (select count(*) from auth.identities,ids where auth.identities.user_id=any(ids.users))
+            + (select count(*) from public.profiles,ids where public.profiles.id=any(ids.users))
+            + (select count(*) from public.mpgf_pool_proposals,ids where id=any(ids.proposals))
+            + (select count(*) from public.mpgf_pool_proposal_versions,ids where proposal_id=any(ids.proposals))
+            + (select count(*) from public.mpgf_pool_lifecycle_events,ids where proposal_id=any(ids.proposals))
+          ) from ids;
+          select 'payment_refs=' || count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null or status='captured';
+          SQL
+          grep -Fxq 'fixture_residue=0' "$EVIDENCE_DIR/pre-alias/zero-residue.txt"
+          grep -Fxq 'payment_refs=0' "$EVIDENCE_DIR/pre-alias/zero-residue.txt"
+
+      - name: Recheck immutable source before canonical alias mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_MAIN"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$NEW_DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/new-deployment-pre-alias.json"
+          jq -e '.readyState=="READY" and .target=="production"' "$EVIDENCE_DIR/new-deployment-pre-alias.json" >/dev/null
+
+      - name: Move both canonical domains atomically with rollback record
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'ALIAS_MUTATION_STARTED=true' >> "$GITHUB_ENV"
+          vercel alias set "$NEW_DEPLOYMENT_URL" moraltrade.org --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/alias-moraltrade.log"
+          vercel alias set "$NEW_DEPLOYMENT_URL" www.moraltrade.org --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/alias-www.log"
+          for domain in moraltrade.org www.moraltrade.org; do
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$domain?teamId=$VERCEL_ORG_ID" \
+              > "$EVIDENCE_DIR/alias-${domain//./-}.json"
+            test "$(jq -r '.id' "$EVIDENCE_DIR/alias-${domain//./-}.json")" = "$NEW_DEPLOYMENT_ID"
+          done
+          echo 'ALIASES_MOVED=true' >> "$GITHUB_ENV"
+
+      - name: Recreate canonical-domain production-UAT fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_fixture.sql \
+            2>&1 | tee "$EVIDENCE_DIR/post-alias/fixture.log"
+
+      - name: Run complete canonical-domain production acceptance
+        shell: bash
+        env:
+          ADMIN_EMAILS: dac-product-reviewer@qa.invalid
+          MPGF_DAC_PRODUCT_BASE_URL: https://www.moraltrade.org
+          PLAYWRIGHT_BASE_URL: https://www.moraltrade.org
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+        run: |
+          set -euo pipefail
+          date -u +%s > "$EVIDENCE_DIR/runtime/post-alias-start-epoch.txt"
+          date -u +%FT%TZ > "$EVIDENCE_DIR/runtime/post-alias-start.txt"
+          curl -fsS --retry 12 --retry-all-errors --retry-delay 5 https://www.moraltrade.org/discover -o "$EVIDENCE_DIR/post-alias/discover.html"
+          npx playwright test tests/mpgf-dac-product-lifecycle.spec.ts --project=chromium --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/post-alias/playwright.log"
+          date -u +%s > "$EVIDENCE_DIR/runtime/post-alias-end-epoch.txt"
+          date -u +%FT%TZ > "$EVIDENCE_DIR/runtime/post-alias-end.txt"
+
+      - name: Clean production-UAT fixtures unconditionally
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+            2>&1 | tee "$EVIDENCE_DIR/post-alias/cleanup.log"
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
+            --command "select 'dac_public_goods_rows=' || (
+              (select count(*) from public.mpgf_pool_proposals)
+              +(select count(*) from public.mpgf_pool_reviewers)
+              +(select count(*) from public.mpgf_pool_proposal_versions)
+              +(select count(*) from public.mpgf_pool_lifecycle_events)
+              +(select count(*) from public.mpgf_public_goods_match_pools)
+              +(select count(*) from public.mpgf_public_goods_rounds)
+              +(select count(*) from public.mpgf_public_goods_campaigns)
+              +(select count(*) from public.mpgf_public_goods_pledges)
+              +(select count(*) from public.mpgf_dac_pledge_intents)
+              +(select count(*) from public.mpgf_dac_pledge_events)
+              +(select count(*) from public.mpgf_dac_campaign_outcomes)
+            ); select 'payment_refs=' || count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null or status='captured';" \
+            | tee "$EVIDENCE_DIR/post-alias/zero-residue.txt"
+          grep -Fxq 'dac_public_goods_rows=0' "$EVIDENCE_DIR/post-alias/zero-residue.txt"
+          grep -Fxq 'payment_refs=0' "$EVIDENCE_DIR/post-alias/zero-residue.txt"
+
+      - name: Inspect deployment-scoped runtime logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel logs --help | grep -q -- '--since'
+          vercel logs --help | grep -q -- '--until'
+          vercel logs --help | grep -q -- '--json'
+          start_epoch="$(cat "$EVIDENCE_DIR/runtime/pre-alias-start-epoch.txt")"
+          end_epoch="$(cat "$EVIDENCE_DIR/runtime/post-alias-end-epoch.txt")"
+          vercel logs "$NEW_DEPLOYMENT_URL" --since "$start_epoch" --until "$end_epoch" --json --token="$VERCEL_TOKEN" \
+            > "$EVIDENCE_DIR/runtime/deployment-logs.jsonl"
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+          path = Path('dac-production-application-release-evidence/runtime/deployment-logs.jsonl')
+          errors = []
+          payment = []
+          leaks = []
+          count = 0
+          for line in path.read_text(errors='replace').splitlines():
+              if not line.strip():
+                  continue
+              try:
+                  row = json.loads(line)
+              except Exception:
+                  continue
+              count += 1
+              text = json.dumps(row, sort_keys=True)
+              level = str(row.get('level','')).lower()
+              status = row.get('statusCode') or row.get('status')
+              if level in {'error','fatal'} or (isinstance(status,int) and status >= 500):
+                  errors.append(row)
+              if re.search(r'(?i)(paymentintent|setupintent|checkout session|stripe|every\.org|capture|charge)', text):
+                  payment.append(row)
+              if re.search(r'(?i)(service_role|private key|postgres(?:ql)?://|whsec_|sk_live_|sk_test_)', text):
+                  leaks.append(row)
+          summary = {'entries':count,'errorsOr5xx':len(errors),'paymentProviderSignals':len(payment),'secretLeakSignals':len(leaks)}
+          Path('dac-production-application-release-evidence/runtime/log-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          if errors or payment or leaks:
+              raise SystemExit(summary)
+          PY
+
+      - name: Verify final canonical identity, source, privacy, and zero money
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_MAIN"
+          for domain in moraltrade.org www.moraltrade.org; do
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$domain?teamId=$VERCEL_ORG_ID" \
+              > "$EVIDENCE_DIR/final-${domain//./-}.json"
+            test "$(jq -r '.id' "$EVIDENCE_DIR/final-${domain//./-}.json")" = "$NEW_DEPLOYMENT_ID"
+            test "$(jq -r '.readyState' "$EVIDENCE_DIR/final-${domain//./-}.json")" = READY
+          done
+          curl -fsSI https://moraltrade.org/discover > "$EVIDENCE_DIR/final-moraltrade-headers.txt"
+          curl -fsSI https://www.moraltrade.org/discover > "$EVIDENCE_DIR/final-www-headers.txt"
+          docker run --rm "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
+              --command "do \$final\$ begin
+                if has_table_privilege('anon','public.mpgf_public_goods_campaigns','SELECT')
+                   or has_column_privilege('anon','public.mpgf_public_goods_campaigns','published_by','SELECT') then
+                  raise exception 'Final privacy regression.';
+                end if;
+                if (select count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null or status='captured') <> 0 then
+                  raise exception 'Final payment reference regression.';
+                end if;
+              end \$final\$;"
+          jq -n \
+            --arg releaseMain "$RELEASE_MAIN" \
+            --arg releaseTree "$RELEASE_TREE" \
+            --arg deploymentId "$NEW_DEPLOYMENT_ID" \
+            --arg deploymentUrl "$NEW_DEPLOYMENT_URL" \
+            --arg verifiedAt "$(date -u +%FT%TZ)" \
+            '{releaseMain:$releaseMain,releaseTree:$releaseTree,deploymentId:$deploymentId,deploymentUrl:$deploymentUrl,canonicalDomains:["moraltrade.org","www.moraltrade.org"],paymentModes:"disabled",productionDatabasePrivacy:"verified",dacPublicGoodsRows:0,paymentReferences:0,verifiedAt:$verifiedAt}' \
+            > "$EVIDENCE_DIR/final-release.json"
+
+      - name: Restore prior canonical deployment on any post-alias failure
+        if: failure() && env.ALIAS_MUTATION_STARTED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$OLD_DEPLOYMENT_URL" moraltrade.org --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/rollback-moraltrade.log"
+          vercel alias set "$OLD_DEPLOYMENT_URL" www.moraltrade.org --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/rollback-www.log"
+          for domain in moraltrade.org www.moraltrade.org; do
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$domain?teamId=$VERCEL_ORG_ID" \
+              | jq -e --arg old "$OLD_DEPLOYMENT_ID" '.id==$old' >/dev/null
+          done
+
+      - name: Remove secrets and executable residue from retained evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          if grep -RIlE '(postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_|whsec_|Bearer [A-Za-z0-9._-]+)' "$EVIDENCE_DIR"; then
+            echo 'Credential-like material found in release evidence.' >&2
+            exit 1
+          fi
+
+      - name: Upload immutable production release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moraltrade-dac-production-application-release-${{ github.run_id }}-${{ env.RELEASE_MAIN }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record completed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Moral Trade non-payment DAC production release complete'
+            echo
+            echo "- Exact source: \`$RELEASE_MAIN\`"
+            echo "- Exact tree: \`$RELEASE_TREE\`"
+            echo "- Vercel deployment: \`$NEW_DEPLOYMENT_ID\`"
+            echo "- Deployment URL: \`$NEW_DEPLOYMENT_URL\`"
+            echo '- Canonical aliases: moraltrade.org and www.moraltrade.org'
+            echo '- Unaliased and canonical production lifecycle acceptance: passed'
+            echo '- Runtime errors / 5xx / payment-provider / secret-leak signals: 0'
+            echo '- Production DAC/public-goods fixture residue: 0'
+            echo '- Production payment references: 0'
+            echo '- Payment and provider modes: disabled'
+          } >> "$GITHUB_STEP_SUMMARY"
