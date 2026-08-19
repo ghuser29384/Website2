@@ -1,0 +1,134 @@
+name: Patch pre-activation baseline replay and evidence hygiene
+
+on:
+  push:
+    branches:
+      - database/preactivation-schema-baseline-clean-20260819
+    paths:
+      - .github/workflows/patch-preactivation-baseline-replay-and-evidence.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-preactivation-baseline-replay-and-evidence
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: database/preactivation-schema-baseline-clean-20260819
+  EXPECTED_PARENT: 1fa86a17acf4d9c4c3a00372315149f555d9a88e
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: database/preactivation-schema-baseline-clean-20260819
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Preserve pg_dump replay semantics and redact disposable credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          python3 - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          generator = Path("scripts/database/generate-preactivation-baseline.sh")
+          source = generator.read_text()
+
+          old_settings = """set local lock_timeout = '5s';
+          set local statement_timeout = '10min';
+
+          DO $baseline_guard$
+          """.replace("          ", "")
+          new_settings = """set local lock_timeout = '5s';
+          set local statement_timeout = '10min';
+          set local check_function_bodies = false;
+
+          DO $baseline_guard$
+          """.replace("          ", "")
+          if source.count(old_settings) != 1:
+              raise SystemExit("Expected the baseline transaction settings exactly once.")
+          source = source.replace(old_settings, new_settings)
+
+          old_assertion = """  assert.match(sql, /Pre-activation baseline requires an empty application schema/);
+            assert.deepEqual(findTopLevelApplicationDataStatements(sql), []);
+          """.replace("            ", "")
+          new_assertion = """  assert.match(sql, /Pre-activation baseline requires an empty application schema/);
+            assert.match(sql, /set local check_function_bodies = false;/);
+            assert.deepEqual(findTopLevelApplicationDataStatements(sql), []);
+          """.replace("            ", "")
+          if source.count(old_assertion) != 1:
+              raise SystemExit("Expected the generated baseline guard assertion exactly once.")
+          source = source.replace(old_assertion, new_assertion)
+          generator.write_text(source)
+
+          workflow = Path(".github/workflows/generate-preactivation-baseline.yml")
+          workflow_source = workflow.read_text()
+          old_scan = r'''          if grep -RIl \
+              'postgresql\?://\|eyJ[A-Za-z0-9_-]\{20,\}' \
+              evidence 2>/dev/null > evidence/credential-scan-matches.txt; then
+            test ! -s evidence/credential-scan-matches.txt
+          fi
+          '''
+          new_scan = r'''          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          ansi_escape = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+          replacements = (
+              (re.compile(r"postgres(?:ql)?://[^\s\x1b]+", re.IGNORECASE), "[redacted-local-database-url]"),
+              (re.compile(r"\bsb_(?:publishable|secret)_[A-Za-z0-9_-]+\b"), "[redacted-local-api-key]"),
+              (re.compile(r"\beyJ[A-Za-z0-9_-]{20,}(?:\.[A-Za-z0-9_-]+){1,2}\b"), "[redacted-jwt]"),
+          )
+          clean_room = Path("evidence/clean-room")
+          if clean_room.is_dir():
+              for path in clean_room.glob("*.log"):
+                  text = ansi_escape.sub("", path.read_text(errors="replace"))
+                  for pattern, replacement in replacements:
+                      text = pattern.sub(replacement, text)
+                  path.write_text(text)
+          PY
+          if grep -REIl \
+              'postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sb_(publishable|secret)_[A-Za-z0-9_-]+' \
+              evidence 2>/dev/null > evidence/credential-scan-matches.txt; then
+            test ! -s evidence/credential-scan-matches.txt
+          fi
+          '''
+          if workflow_source.count(old_scan) != 1:
+              raise SystemExit("Expected the evidence credential scan exactly once.")
+          workflow.write_text(workflow_source.replace(old_scan, new_scan))
+
+          trigger = Path("scripts/database/generate-preactivation-baseline.trigger")
+          requested_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+          trigger.write_text(
+              "issue-714 authoritative pre-activation baseline generation\n"
+              "source-main=26d1fe436dbf9a4440bfafd501ddf8db944a1127\n"
+              f"requested-at={requested_at}\n"
+              "purpose=pg-dump-function-body-replay-and-redacted-clean-room-evidence-r5\n"
+          )
+          PY
+
+          rm .github/workflows/patch-preactivation-baseline-replay-and-evidence.yml
+          bash -n scripts/database/generate-preactivation-baseline.sh
+          bash -n scripts/database/validate-preactivation-baseline.sh
+          grep -F "set local check_function_bodies = false;" scripts/database/generate-preactivation-baseline.sh
+          grep -F "assert.match(sql, /set local check_function_bodies = false;/);" scripts/database/generate-preactivation-baseline.sh
+          grep -F "redacted-local-database-url" .github/workflows/generate-preactivation-baseline.yml
+          grep -F "sb_(publishable|secret)" .github/workflows/generate-preactivation-baseline.yml
+          git diff --check
+
+      - name: Commit and push normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Preserve baseline function-body replay semantics"
+          git push origin "HEAD:$TARGET_BRANCH"
