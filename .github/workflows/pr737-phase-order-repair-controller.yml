@@ -1,4 +1,4 @@
-name: PR 737 adjacent Compact phase-order repair controller
+name: PR 737 adjacent Compact phase-order repair exporter
 
 on:
   pull_request:
@@ -9,27 +9,24 @@ on:
       - .github/scripts/pr737_phase_order_repair.py
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 concurrency:
-  group: pr737-phase-order-repair-controller
-  cancel-in-progress: false
+  group: pr737-phase-order-repair-exporter
+  cancel-in-progress: true
 
 env:
-  GH_TOKEN: ${{ github.token }}
   TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
   EXPECTED_TARGET_HEAD: 460336e9b8a0934d06a346f8451837001198c977
   STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
   TARGET_CONTROLLER_PATH: .github/workflows/repair-pr737-adjacent-compact-phase-order.yml
 
 jobs:
-  repair:
+  export:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      - name: Check out controller source
+      - name: Check out exporter source
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -48,13 +45,13 @@ jobs:
           set -euo pipefail
           cd target
           test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_HEAD"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')" = "$EXPECTED_TARGET_HEAD"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_TARGET_HEAD"
           test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
           test -f "$TARGET_CONTROLLER_PATH"
           test "$(git rev-parse HEAD^)" = "35bc063fdee4ea151a62e8cee17ab529b3273b14"
           test "$(git diff --name-only HEAD^...HEAD)" = "$TARGET_CONTROLLER_PATH"
 
-      - name: Transform, verify, commit, and push
+      - name: Transform and verify candidate files
         shell: bash
         run: |
           set -euo pipefail
@@ -91,20 +88,22 @@ jobs:
           grep -Fq 'adjacent Compact QA runs legacy regressions before ledger authority hardening' src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
           git diff --check
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            .github/workflows/compact-authoritative-outflow-ledger-qa.yml \
-            .github/workflows/mpgf-public-goods-compacts-qa.yml \
-            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
-          git commit -m "ci: phase-order adjacent Compact regressions"
-          git push origin "HEAD:$TARGET_BRANCH"
+          mkdir -p "$GITHUB_WORKSPACE/export/.github/workflows" "$GITHUB_WORKSPACE/export/src/lib/mpgf"
+          cp .github/workflows/compact-authoritative-outflow-ledger-qa.yml "$GITHUB_WORKSPACE/export/.github/workflows/"
+          cp .github/workflows/mpgf-public-goods-compacts-qa.yml "$GITHUB_WORKSPACE/export/.github/workflows/"
+          cp src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts "$GITHUB_WORKSPACE/export/src/lib/mpgf/"
+          cp /tmp/actual.txt "$GITHUB_WORKSPACE/export/durable-scope.txt"
+          printf '%s\n' "$EXPECTED_TARGET_HEAD" > "$GITHUB_WORKSPACE/export/parent-sha.txt"
+          sha256sum \
+            "$GITHUB_WORKSPACE/export/.github/workflows/compact-authoritative-outflow-ledger-qa.yml" \
+            "$GITHUB_WORKSPACE/export/.github/workflows/mpgf-public-goods-compacts-qa.yml" \
+            "$GITHUB_WORKSPACE/export/src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts" \
+            > "$GITHUB_WORKSPACE/export/sha256.txt"
 
-      - name: Record bounded repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          new_head="$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')"
-          body="PR #737 adjacent Compact QA phase ordering was repaired in candidate \`$new_head\`. Legacy Compact lifecycle and concurrency regressions now run before the four authoritative-ledger migrations; final-schema types, lint, and no-money assertions run afterward. The temporary target controller was removed. No merge, deployment, persistent migration, provider request, Compact activation, electorate opening, or money movement occurred."
-          gh pr comment 737 --repo "$GITHUB_REPOSITORY" --body "$body"
-          gh issue comment 734 --repo "$GITHUB_REPOSITORY" --body "$body"
+      - name: Upload verified transformed files
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr737-phase-order-repair-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 7
+          path: export
