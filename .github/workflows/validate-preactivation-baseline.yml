@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - database/preactivation-schema-baseline-20260818
+      - database/preactivation-schema-baseline-clean-20260819
     paths:
       - supabase/baseline/pre_activation/**
       - src/lib/database-preactivation-baseline-contract.test.ts
