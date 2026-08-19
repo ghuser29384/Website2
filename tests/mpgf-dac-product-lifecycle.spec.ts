@@ -178,9 +178,7 @@ async function browserContext(
 }
 
 async function gotoReady(page: Page, path: string) {
-  const response = await page.goto(path);
-  await page.waitForLoadState("networkidle");
-  return response;
+  return page.goto(path);
 }
 
 function recursivelyCollectKeys(value: unknown, keys = new Set<string>()) {
@@ -295,7 +293,6 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   await expect(page.getByRole("heading", { name: /^\$25(?:\.00)? conditional pledge recorded$/ })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("No payment method, authorization, charge, or capture was created by this receipt.")).toBeVisible();
   await page.reload();
-  await page.waitForLoadState("networkidle");
   await expect(page.getByText("Your private receipts", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /^\$25(?:\.00)? · pledged$/ })).toBeVisible();
   await expect(page.getByText(/^Consent: sha256:[0-9a-f]{64}$/)).toBeVisible();
