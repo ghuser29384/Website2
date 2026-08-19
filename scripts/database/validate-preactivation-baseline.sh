@@ -10,7 +10,7 @@ OUTPUT_DIR="${1:-$ROOT/artifacts/preactivation-baseline-clean-room}"
 SUPABASE_VERSION="2.110.0"
 CLEAN_ROOM_ROOT="$(mktemp -d "${RUNNER_TEMP:-/tmp}/website2-preactivation-clean-room.XXXXXX")"
 LOCAL_CONFIG="$CLEAN_ROOM_ROOT/supabase/config.toml"
-PROJECT_ID="website2_preactivation_baseline_clean_room_${GITHUB_RUN_ID:-$$}"
+PROJECT_ID="website2_preactivation_${GITHUB_RUN_ID:-$$}"
 DB_CONTAINER="supabase_db_${PROJECT_ID}"
 LOCAL_DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 TARGET_CATALOG="$OUTPUT_DIR/target-catalog.tsv"
@@ -23,6 +23,10 @@ mkdir -p "$OUTPUT_DIR" "$CLEAN_ROOM_ROOT/supabase"
 
 if [[ ! -s "$BASELINE_SQL" || ! -s "$SOURCE_CATALOG" ]]; then
   echo "The generated baseline and source catalog are required." >&2
+  exit 1
+fi
+if (( ${#PROJECT_ID} > 40 )); then
+  echo "The disposable Supabase project id must remain at most 40 characters." >&2
   exit 1
 fi
 
