@@ -1,81 +1,129 @@
-name: Commitments Pro Sprint retry remediation applicator
+name: Commitments Pro Sprint specification gates
 
 on:
-  push:
-    branches:
-      - docs/commitments-pro-sprint-materialization-v1-20260818
   pull_request:
     branches: [main]
+    paths:
+      - .github/workflows/commitments-pro-sprint-specification-gates.yml
+      - docs/commitments/**
+      - scripts/commitments/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/commitments-pro-sprint-specification-gates.yml
+      - docs/commitments/**
+      - scripts/commitments/**
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: commitments-pro-sprint-retry-remediation
+  group: commitments-pro-sprint-specification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
-  apply:
-    if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/docs/commitments-pro-sprint-materialization-v1-20260818') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'docs/commitments-pro-sprint-materialization-v1-20260818')
+  specification:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check out exact PR branch
+      - name: Check out exact candidate
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: docs/commitments-pro-sprint-materialization-v1-20260818
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Verify exact staging identity and archive
+      - name: Establish immutable source identity
+        id: identity
         env:
-          EXPECTED_PARENT: b77559fddc65823702b82d406d39971b18f425ed
-          EXPECTED_ARCHIVE_SHA256: 0e97bbfdda1ce41b808867bab2a608918fa4dc19d8ebe4ca67c3900b1cde6bb0
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
-          test "$(sha256sum .github/materialization/pr767-remediation/part-000.b64 | cut -d' ' -f1)" = "47e62689150924603907190789ed464dfbe651d481e19d11302abc60eafc8246"
-          test "$(sha256sum .github/materialization/pr767-remediation/part-001.b64 | cut -d' ' -f1)" = "3f8e8c3aa8f938e40a0f639d4ddc1965eee540656e16b89e6485cbcbb8f9b4b2"
-          test "$(sha256sum .github/materialization/pr767-remediation/part-002.b64 | cut -d' ' -f1)" = "c0a63aff2664c1acaed8066fcd43fa3e867d7c1a81808ed7030fcda724de5efa"
-          test "$(sha256sum .github/materialization/pr767-remediation/part-003.b64 | cut -d' ' -f1)" = "9850fc06c47f259ba846098fbdfba5a6301ba74fe59c920accbe787cd0cb9fa2"
-          cat .github/materialization/pr767-remediation/part-*.b64 | base64 --decode > "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz"
-          test "$(sha256sum "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz" | cut -d' ' -f1)" = "$EXPECTED_ARCHIVE_SHA256"
+          actual_head="$(git rev-parse HEAD)"
+          test "$actual_head" = "$EXPECTED_HEAD_SHA"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_sha="$PR_BASE_SHA"
+          else
+            base_sha="$PUSH_BEFORE_SHA"
+          fi
+          test -n "$base_sha"
+          test "$base_sha" != "0000000000000000000000000000000000000000"
+          git cat-file -e "$base_sha^{commit}"
+          mkdir -p "$RUNNER_TEMP/commitments-pro-sprint-evidence"
+          printf '%s\n' "$base_sha" > "$RUNNER_TEMP/commitments-pro-sprint-evidence/base-sha.txt"
+          printf '%s\n' "$actual_head" > "$RUNNER_TEMP/commitments-pro-sprint-evidence/head-sha.txt"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/commitments-pro-sprint-evidence/head-tree.txt"
+          git diff --name-only "$base_sha...$actual_head" | LC_ALL=C sort > "$RUNNER_TEMP/commitments-pro-sprint-evidence/changed-files.txt"
+          {
+            printf 'BASE_SHA=%s\n' "$base_sha"
+            printf 'HEAD_SHA=%s\n' "$actual_head"
+          } >> "$GITHUB_ENV"
 
-      - name: Apply repository-only contracts without changing workflows
+      - name: Parse JSON and workflow YAML
         run: |
           set -euo pipefail
-          tar -xzf "$RUNNER_TEMP/pr767-remediation-overlay.tar.gz" -C .
-          git checkout HEAD -- .github/workflows/commitments-pro-sprint-specification-gates.yml
-          rm -rf .github/materialization/pr767-remediation
-
-      - name: Validate candidate before commit
-        run: |
-          set -euo pipefail
-          node scripts/commitments/validate-pro-sprint-materialization.mjs
-          node --test scripts/commitments/pro-sprint-materialization.test.mjs
+          node <<'NODE'
+          const { readFileSync, readdirSync } = require('node:fs');
+          const { join } = require('node:path');
+          const dir = 'docs/commitments';
+          for (const name of readdirSync(dir).filter((value) => value.endsWith('.json'))) {
+            JSON.parse(readFileSync(join(dir, name), 'utf8'));
+          }
+          NODE
           ruby -e 'require "yaml"; YAML.load_file(".github/workflows/commitments-pro-sprint-specification-gates.yml", aliases: true)'
-          git diff --check
-          if git diff --name-only | grep -E '^\.github/workflows/' ; then
-            echo "The runner remediation must not modify workflow files." >&2
-            exit 1
-          fi
-          if git diff --name-only | grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env)' ; then
-            echo "Runtime or deployment path entered the remediation." >&2
-            exit 1
-          fi
 
-      - name: Commit and push non-workflow remediation
-        env:
-          BRANCH: docs/commitments-pro-sprint-materialization-v1-20260818
+      - name: Validate contracts, exact diff, and SHA-256 bindings
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --name-only | grep -E '^\.github/workflows/' ; then
-            echo "Refusing to push a workflow-file change from the Actions token." >&2
+          evidence="$RUNNER_TEMP/commitments-pro-sprint-evidence/commitments-pro-sprint-materialization-sha256.json"
+          node scripts/commitments/validate-pro-sprint-materialization.mjs \
+            --check-diff "$BASE_SHA" \
+            --write-evidence "$evidence" \
+            | tee "$RUNNER_TEMP/commitments-pro-sprint-evidence/validator.log"
+          node --test scripts/commitments/pro-sprint-materialization.test.mjs \
+            | tee "$RUNNER_TEMP/commitments-pro-sprint-evidence/tests.log"
+
+      - name: Enforce repository-only scope and clean patch
+        run: |
+          set -euo pipefail
+          git diff --check "$BASE_SHA...$HEAD_SHA" \
+            | tee "$RUNNER_TEMP/commitments-pro-sprint-evidence/diff-check.log"
+          if grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env)' \
+            "$RUNNER_TEMP/commitments-pro-sprint-evidence/changed-files.txt"; then
+            echo "Runtime, database, dependency, provider, or deployment path entered the repository-only candidate." >&2
             exit 1
           fi
-          git commit -m "Repair Commitments materialization contracts"
-          git push origin "HEAD:$BRANCH"
+          if grep -E '^\.github/(materialization|scripts)/|^\.github/workflows/apply-' \
+            "$RUNNER_TEMP/commitments-pro-sprint-evidence/changed-files.txt"; then
+            echo "Temporary transport or write-enabled controller entered the permanent candidate." >&2
+            exit 1
+          fi
+          test "$(wc -l < "$RUNNER_TEMP/commitments-pro-sprint-evidence/changed-files.txt" | tr -d ' ')" = "14"
+
+      - name: Record release and epistemic boundary
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/commitments-pro-sprint-evidence/boundary.json" <<JSON
+          {
+            "schema_version": "moral-trade-commitments-pro-sprint-boundary-v1",
+            "base_sha": "$BASE_SHA",
+            "head_sha": "$HEAD_SHA",
+            "release_class": "repository_only",
+            "runtime_effect": false,
+            "database_effect": false,
+            "provider_or_money_effect": false,
+            "participant_or_research_effect": false,
+            "qri_implementation_claimed": false,
+            "pilot_authorized": false
+          }
+          JSON
+
+      - name: Upload immutable specification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-pro-sprint-specification-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/commitments-pro-sprint-evidence
+          if-no-files-found: error
+          retention-days: 30
