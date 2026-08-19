@@ -6,6 +6,11 @@ on:
       - database/preactivation-schema-baseline-clean-20260819
     paths:
       - scripts/database/generate-preactivation-baseline.trigger
+      - .github/workflows/generate-preactivation-baseline.yml
+  pull_request:
+    paths:
+      - scripts/database/generate-preactivation-baseline.trigger
+      - .github/workflows/generate-preactivation-baseline.yml
   workflow_dispatch:
 
 permissions:
@@ -13,14 +18,14 @@ permissions:
 
 concurrency:
   group: preactivation-baseline-generation-clean-20260819
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   generate-and-validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      SOURCE_HEAD: ${{ github.sha }}
+      SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       SOURCE_MAIN: 4bc8cd28205915d313286136b7335d5aeb7f3c49
       TARGET_BRANCH: database/preactivation-schema-baseline-clean-20260819
       PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
