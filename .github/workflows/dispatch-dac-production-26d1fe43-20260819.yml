@@ -1,0 +1,67 @@
+name: Dispatch exact DAC production release 26d1fe43
+
+on:
+  push:
+    branches:
+      - ops/dispatch-dac-production-26d1fe43-20260819
+    paths:
+      - ".github/workflows/dispatch-dac-production-26d1fe43-20260819.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: dispatch-dac-production-26d1fe43-20260819
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  CONTROLLER_PATH: .github/workflows/dispatch-dac-production-26d1fe43-20260819.yml
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact one-use dispatcher
+        uses: actions/checkout@v4
+        with:
+          ref: ops/dispatch-dac-production-26d1fe43-20260819
+          fetch-depth: 0
+
+      - name: Guard exact main parent and one-file controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_REF_NAME" = "ops/dispatch-dac-production-26d1fe43-20260819"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git diff --name-only HEAD^ HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only HEAD^ HEAD)" = "$CONTROLLER_PATH"
+          git diff --check HEAD^ HEAD
+
+      - name: Dispatch permanent gated Vercel production workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+            --input - <<JSON
+          {
+            "ref": "main",
+            "inputs": {
+              "target": "production",
+              "ref": "main",
+              "expected_sha": "$EXPECTED_MAIN_SHA",
+              "synthetic_auth_fixture_url": ""
+            }
+          }
+          JSON
+          echo "Dispatched gated production release for $EXPECTED_MAIN_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+# One-use dispatcher only. Never merge.
