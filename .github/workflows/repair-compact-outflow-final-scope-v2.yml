@@ -1,11 +1,6 @@
-name: Repair Compact outflow final scope v4
+name: Repair Compact outflow final scope v5
 
 on:
-  pull_request:
-    branches:
-      - agent/mpgf-public-goods-compacts
-    paths:
-      - .github/workflows/repair-compact-outflow-final-scope-v2.yml
   push:
     branches:
       - feature/compact-authoritative-outflow-ledger-v1-20260816
@@ -17,13 +12,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: repair-compact-outflow-final-scope-v4-${{ github.event.pull_request.number || github.ref_name }}
+  group: repair-compact-outflow-final-scope-v5-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
-  EXPECTED_CONTROLLER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-  EXPECTED_PARENT_SHA: e13a88e263d9dfd72677ccdedd061d5a28140677
+  EXPECTED_CONTROLLER_SHA: ${{ github.sha }}
+  EXPECTED_PARENT_SHA: 39be4152432b2d900ea1ca371e9cd364f95350d0
   STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
 
 jobs:
   repair:
@@ -110,6 +106,7 @@ jobs:
           union all select 'payment_refs|' || count(*) from public.mpgf_public_goods_dormant_authorization_snapshots where provider_reference_hash is not null
           order by 1;
           SQL
+          test "$(wc -l < db-evidence/no-money.txt)" -eq 3
           grep -qx 'activation|0' db-evidence/no-money.txt
           grep -qx 'electorate|0' db-evidence/no-money.txt
           grep -qx 'payment_refs|0' db-evidence/no-money.txt
@@ -200,6 +197,7 @@ on conflict (id) do update set
           grep -Fq 'on conflict (id) do update set' scripts/test-compact-authoritative-outflow-concurrency.sh
           grep -Fq 'provider_reference_hash is not null' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
           test "$(grep -Fc 'provider_reference_hash is not null' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 2
+          test "$(grep -Fc 'set -euo pipefail' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -ge 1
           test "$(grep -Fc 'COMPACT_OUTFLOW_TEST_DB_URL="$DB_URL" bash scripts/test-compact-authoritative-outflow-concurrency.sh 2>&1 | tee db-evidence/concurrency.log' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 1
           git diff --check
 
@@ -207,4 +205,4 @@ on conflict (id) do update set
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/compact-authoritative-outflow-ledger-qa.yml scripts/test-compact-authoritative-outflow-concurrency.sh
           git commit -m "ci: close Compact outflow validation gaps"
-          git push origin "HEAD:${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          git push origin "HEAD:$TARGET_BRANCH"
