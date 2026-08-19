@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 180
     env:
       SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      SOURCE_MAIN: 4bc8cd28205915d313286136b7335d5aeb7f3c49
+      SOURCE_MAIN: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
       TARGET_BRANCH: database/preactivation-schema-baseline-clean-20260819
       PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
       PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
