@@ -57,12 +57,12 @@ function OptionalConnectorPanel({ baseProps }: { baseProps: BaseProps }) {
         <div className={styles.eyebrow}>Optional connector</div>
         <h2 id="optional-donation-connector-heading">Replace donation screenshots with provider verification.</h2>
         <p>
-          Add a fixed one-time donation leg before either participant confirms. Moral Trade will
-          send the payer to Every.org with the recipient and amount frozen, then wait for the
-          completed-donation webhook before the reciprocal action starts.
+          Add a fixed one-time donation leg before either participant confirms. At $10 or more,
+          the named payer donates directly through Every.org. Below $10, Moral Trade may use the
+          separately gated pooled-settlement flow rather than opening an invalid provider checkout.
         </p>
         <div className={styles.disclosureRow}>
-          <span>Moral Trade does not hold the donated funds.</span>
+          <span>Direct Every.org checkout is non-custodial; pooled settlement has separate custody and donor-of-record disclosures.</span>
           <span>Source labels are provenance, not endorsements or partnerships.</span>
         </div>
         <Link className={styles.textLink} href="/connectors">
