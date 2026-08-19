@@ -1,0 +1,414 @@
+name: Validate completed DAC production database cutover
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/dac-production-postcutover-validation-20260819.yml"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: moraltrade-dac-production-postcutover-validation
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: 4bc8cd28205915d313286136b7335d5aeb7f3c49
+  EXPECTED_MAIN_TREE: 3c75122bffe5fb3d98bea6da97a04d9cbc87282d
+  EXPECTED_PROJECT_REF: jnpoxvalyjtdghnperyu
+  EXPECTED_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+  EXPECTED_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+  BACKUP_RUN_ID: "32147479359"
+  BACKUP_RUN_HEAD: 97b7f19f3feb5c9227bfcf7b49c9eaae15164ab0
+  BACKUP_ARTIFACT_ID: "9328374066"
+  BACKUP_ARTIFACT_DIGEST: sha256:d096c8bad473e9babea3f3fb55747cc78bcf02493ff9378a08e5cbffa7aff54b
+  POSTGRES_IMAGE: postgres:17
+  EVIDENCE_DIR: dac-production-postcutover-evidence
+
+jobs:
+  validate:
+    name: Read-only exact registry, schema, RLS, privacy, grants, and zero-data proof
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out exact released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 0
+
+      - name: Guard exact source and unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_MAIN_TREE"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          {
+            printf 'main_sha=%s\n' "$EXPECTED_MAIN_SHA"
+            printf 'main_tree=%s\n' "$EXPECTED_MAIN_TREE"
+            printf 'remote_main=%s\n' "$remote_main"
+            printf 'checked_at=%s\n' "$(date -u +%FT%TZ)"
+          } | tee "$EVIDENCE_DIR/source-identity.txt"
+
+      - name: Re-prove durable encrypted backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$RUNNER_TEMP/backup-run.json"
+          artifact_json="$RUNNER_TEMP/backup-artifact.json"
+          curl -fsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID" \
+            > "$run_json"
+          curl -fsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$BACKUP_ARTIFACT_ID" \
+            > "$artifact_json"
+          jq -e --arg head "$BACKUP_RUN_HEAD" '
+            .status == "completed" and .conclusion == "success" and .head_sha == $head
+          ' "$run_json" >/dev/null
+          jq -e \
+            --argjson id "$BACKUP_ARTIFACT_ID" \
+            --arg digest "$BACKUP_ARTIFACT_DIGEST" \
+            --arg original "f1cd364bf058b28b3b29501aa6528c48f8f39bb7" '
+            .id == $id and .expired == false and .digest == $digest and (.name | contains($original))
+          ' "$artifact_json" >/dev/null
+          jq -n \
+            --arg runId "$BACKUP_RUN_ID" \
+            --arg head "$BACKUP_RUN_HEAD" \
+            --arg artifactId "$BACKUP_ARTIFACT_ID" \
+            --arg digest "$BACKUP_ARTIFACT_DIGEST" \
+            --arg verifiedAt "$(date -u +%FT%TZ)" \
+            '{runId:$runId,head:$head,artifactId:$artifactId,digest:$digest,completedSuccessfully:true,expired:false,verifiedAt:$verifiedAt}' \
+            > "$EVIDENCE_DIR/backup-proof.json"
+
+      - name: Validate and mask exact TLS-only production target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          URL_TO_CHECK="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid =
+            ["postgres:", "postgresql:"].includes(url.protocol) &&
+            decodeURIComponent(url.username) === process.env.EXPECTED_POOLER_USER &&
+            url.hostname === process.env.EXPECTED_POOLER_HOST &&
+            url.port === "5432" &&
+            url.pathname === "/postgres" &&
+            url.searchParams.get("sslmode") === "require" &&
+            Boolean(url.password) &&
+            !url.href.includes("hvmxfjjbdcgjjudmthdz");
+          if (!valid) throw new Error("Refusing a database URL outside the exact production target.");
+          NODE
+
+      - name: Pull PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$POSTGRES_IMAGE"
+          docker image inspect "$POSTGRES_IMAGE" --format '{{index .RepoDigests 0}}' \
+            | tee "$EVIDENCE_DIR/postgres-image.txt"
+
+      - name: Execute read-only terminal database acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/postcutover.sql" <<'SQL'
+          \set ON_ERROR_STOP on
+          set statement_timeout = '60s';
+          begin transaction read only;
+
+          do $verify$
+          declare
+            v_expected jsonb := '[
+              {"version":"20260806110000","name":"mpgf_pool_review_freeze","sha256":"0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c"},
+              {"version":"20260818173000","name":"mpgf_dac_public_goods_foundation_reconciliation","sha256":"e89a199cbdbb767d88a03585764bce774f533449519b67d04c082683f0638aa0"},
+              {"version":"20260806143000","name":"mpgf_pool_publication_materialization","sha256":"ee8ab4a2c52893ff9f2d8dfcbf7dc25370768af80e5401978f7c4b09e8cab9e8"},
+              {"version":"20260806173000","name":"mpgf_dac_pledge_intent_ledger","sha256":"36f558549361a1c0747dab5ecd545c74efbd42be14f6d634cb28e8b01f7c1e9c"},
+              {"version":"20260807050000","name":"mpgf_dac_success_lapse","sha256":"83d9432f90fb808302249b5b572029d68bfc9aa2be32afbaba710f8e341d0948"},
+              {"version":"20260807100000","name":"mpgf_dac_public_terms_api","sha256":"356d220c009dd6213b761712a30ce0124d95f075d5fdab5c44da3398a6265a0f"},
+              {"version":"20260812073000","name":"mpgf_dac_terminal_event_constraint_reconciliation","sha256":"a19653e57a20dff8d01e1dd54b4b77304fe0712fe3356820953945e7b9999cd2"},
+              {"version":"20260812074500","name":"mpgf_dac_terminal_schema_reconciliation","sha256":"d8dc2a55840425357c8859b87d26fba0415bb1a50c8e739518a88b9686142cbb"},
+              {"version":"20260815010000","name":"mpgf_pool_lifecycle_event_ordering","sha256":"1d60c1abc73c8842cdcd9694c77d0e29dac4fe1de98a496714c0f2f2f5619766"},
+              {"version":"20260815011000","name":"mpgf_dac_terminal_guard_reconciliation","sha256":"c64d521c6adb7a865d9ec5e2f25e70adb09f08f91e0f1bc0ec0610977aafd108"},
+              {"version":"20260818174000","name":"mpgf_dac_public_aggregate_column_privacy","sha256":"0c3e7596f5f6b0d69d9438347f82ad79b6d0663511d3aec7cf333681fef9f581"}
+            ]'::jsonb;
+            v_item jsonb;
+            v_observed_name text;
+            v_observed_hash text;
+            v_table_name text;
+            v_role_name text;
+            v_column_name text;
+            v_row_count bigint;
+            v_safe_campaign_columns constant text[] := array[
+              'id','round_id','slug','title','destination_type','destination_ref','cause_tags','public_summary',
+              'threshold_amount_cents','threshold_supporters','deadline_at','verification_method','baseline_rule',
+              'exit_rule','review_status','pool_proposal_id','threshold_visibility','progress_visibility',
+              'published_terms_version','published_terms_sha256','published_at','created_at'
+            ];
+            v_private_campaign_columns constant text[] := array[
+              'pool_alternative_id','challenge_window_ends_at','first_accepted_pledge_at','published_by'
+            ];
+            v_safe_outcome_columns constant text[] := array[
+              'id','campaign_id','pool_proposal_id','terms_version','terms_sha256','outcome_status',
+              'eligible_amount_cents','eligible_supporter_count','threshold_amount_cents','threshold_supporters',
+              'deadline_at','evaluated_at','outcome_sha256','created_at'
+            ];
+            v_private_outcome_columns constant text[] := array['finalized_by','reason','outcome_json'];
+          begin
+            for v_item in select value from jsonb_array_elements(v_expected)
+            loop
+              select m.name,
+                     case when m.statements is null or array_length(m.statements,1) is null then null
+                          else encode(extensions.digest(convert_to(m.statements[1], 'UTF8'), 'sha256'),'hex') end
+                into v_observed_name, v_observed_hash
+              from supabase_migrations.schema_migrations m
+              where m.version = v_item->>'version';
+              if not found
+                 or v_observed_name is distinct from v_item->>'name'
+                 or v_observed_hash is distinct from v_item->>'sha256' then
+                raise exception 'Migration registry mismatch for %: %/%', v_item->>'version', v_observed_name, v_observed_hash;
+              end if;
+            end loop;
+
+            if (
+              select count(*)
+              from supabase_migrations.schema_migrations m
+              where m.version in (
+                select value->>'version' from jsonb_array_elements(v_expected)
+              )
+            ) <> 11 then
+              raise exception 'Expected eleven exact DAC migration registry rows.';
+            end if;
+
+            foreach v_table_name in array array[
+              'mpgf_pool_proposals','mpgf_pool_reviewers','mpgf_pool_proposal_versions','mpgf_pool_lifecycle_events',
+              'mpgf_public_goods_match_pools','mpgf_public_goods_rounds','mpgf_public_goods_campaigns','mpgf_public_goods_pledges',
+              'mpgf_dac_pledge_intents','mpgf_dac_pledge_events','mpgf_dac_campaign_outcomes'
+            ]
+            loop
+              if to_regclass('public.' || v_table_name) is null then
+                raise exception 'Required terminal DAC table is missing: %', v_table_name;
+              end if;
+              if not exists (
+                select 1
+                from pg_class c
+                join pg_namespace n on n.oid = c.relnamespace
+                where n.nspname='public' and c.relname=v_table_name and c.relrowsecurity
+              ) then
+                raise exception 'RLS is disabled on required table: %', v_table_name;
+              end if;
+              execute format('select count(*) from public.%I', v_table_name) into v_row_count;
+              if v_row_count <> 0 then
+                raise exception 'Unexpected production rows in %: %', v_table_name, v_row_count;
+              end if;
+            end loop;
+
+            if to_regprocedure('public.mpgf_begin_pool_proposal_review(uuid,uuid,text)') is null
+               or to_regprocedure('public.mpgf_approve_and_freeze_pool_proposal(uuid,uuid,text)') is null
+               or to_regprocedure('public.mpgf_publish_pool_proposal(uuid,text,text,uuid,text)') is null
+               or to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') is null
+               or to_regprocedure('public.mpgf_review_dac_pledge_eligibility(uuid,uuid,text,integer,text)') is null
+               or to_regprocedure('public.mpgf_finalize_dac_campaign(text,uuid,text)') is null
+               or to_regprocedure('public.mpgf_public_dac_campaign_terms(text)') is null then
+              raise exception 'A required terminal DAC function is missing.';
+            end if;
+
+            if exists (
+              select 1
+              from pg_proc p
+              join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname='public'
+                and p.proname in (
+                  'mpgf_begin_pool_proposal_review','mpgf_approve_and_freeze_pool_proposal',
+                  'mpgf_publish_pool_proposal','mpgf_create_dac_pledge',
+                  'mpgf_review_dac_pledge_eligibility','mpgf_finalize_dac_campaign'
+                )
+                and (not p.prosecdef or not coalesce(p.proconfig,array[]::text[]) @> array['search_path=pg_catalog, public'])
+            ) then
+              raise exception 'A privileged lifecycle function lacks SECURITY DEFINER or fixed search_path.';
+            end if;
+
+            if has_table_privilege('anon','public.mpgf_public_goods_campaigns','SELECT')
+               or has_table_privilege('authenticated','public.mpgf_public_goods_campaigns','SELECT')
+               or has_table_privilege('anon','public.mpgf_dac_campaign_outcomes','SELECT')
+               or has_table_privilege('authenticated','public.mpgf_dac_campaign_outcomes','SELECT') then
+              raise exception 'A public DAC aggregate table retains table-level SELECT.';
+            end if;
+
+            foreach v_role_name in array array['anon','authenticated']
+            loop
+              foreach v_column_name in array v_safe_campaign_columns loop
+                if not has_column_privilege(v_role_name,'public.mpgf_public_goods_campaigns',v_column_name,'SELECT') then
+                  raise exception '% cannot select reviewed campaign column %', v_role_name, v_column_name;
+                end if;
+              end loop;
+              foreach v_column_name in array v_private_campaign_columns loop
+                if has_column_privilege(v_role_name,'public.mpgf_public_goods_campaigns',v_column_name,'SELECT') then
+                  raise exception '% can select private campaign column %', v_role_name, v_column_name;
+                end if;
+              end loop;
+              foreach v_column_name in array v_safe_outcome_columns loop
+                if not has_column_privilege(v_role_name,'public.mpgf_dac_campaign_outcomes',v_column_name,'SELECT') then
+                  raise exception '% cannot select reviewed outcome column %', v_role_name, v_column_name;
+                end if;
+              end loop;
+              foreach v_column_name in array v_private_outcome_columns loop
+                if has_column_privilege(v_role_name,'public.mpgf_dac_campaign_outcomes',v_column_name,'SELECT') then
+                  raise exception '% can select private outcome column %', v_role_name, v_column_name;
+                end if;
+              end loop;
+            end loop;
+
+            if has_table_privilege('anon','public.mpgf_public_goods_pledges','INSERT')
+               or has_table_privilege('anon','public.mpgf_public_goods_pledges','UPDATE')
+               or has_table_privilege('anon','public.mpgf_public_goods_pledges','DELETE')
+               or has_table_privilege('authenticated','public.mpgf_dac_pledge_intents','INSERT')
+               or has_table_privilege('authenticated','public.mpgf_dac_pledge_intents','UPDATE')
+               or has_table_privilege('authenticated','public.mpgf_dac_pledge_intents','DELETE')
+               or has_table_privilege('authenticated','public.mpgf_dac_pledge_events','INSERT')
+               or has_table_privilege('authenticated','public.mpgf_dac_pledge_events','UPDATE')
+               or has_table_privilege('authenticated','public.mpgf_dac_pledge_events','DELETE')
+               or has_table_privilege('authenticated','public.mpgf_dac_campaign_outcomes','INSERT')
+               or has_table_privilege('authenticated','public.mpgf_dac_campaign_outcomes','UPDATE')
+               or has_table_privilege('authenticated','public.mpgf_dac_campaign_outcomes','DELETE') then
+              raise exception 'Unexpected direct public/authenticated DAC mutation privilege exists.';
+            end if;
+
+            if not has_function_privilege('anon','public.mpgf_public_dac_campaign_terms(text)','EXECUTE')
+               or not has_function_privilege('authenticated','public.mpgf_create_dac_pledge(text,bigint,text,text,text)','EXECUTE') then
+              raise exception 'A required DAC RPC grant is missing.';
+            end if;
+
+            select count(*) into v_row_count
+            from public.mpgf_public_goods_pledges p
+            where p.payment_intent_ref is not null;
+            if v_row_count <> 0 then
+              raise exception 'Unexpected production payment references: %', v_row_count;
+            end if;
+          end;
+          $verify$;
+
+          select jsonb_build_object(
+            'projectRef','jnpoxvalyjtdghnperyu',
+            'releaseMainSha','4bc8cd28205915d313286136b7335d5aeb7f3c49',
+            'releaseMainTree','3c75122bffe5fb3d98bea6da97a04d9cbc87282d',
+            'registeredExactMigrations',11,
+            'requiredTables',11,
+            'requiredFunctionsPresent',true,
+            'securityDefinerSearchPathVerified',true,
+            'rlsVerified',true,
+            'columnPrivacyVerified',true,
+            'leastPrivilegeVerified',true,
+            'dacAndPublicGoodsRows',0,
+            'paymentReferences',0,
+            'verifiedAt',clock_timestamp()
+          )::text;
+          rollback;
+          SQL
+
+          docker run --rm -v "$RUNNER_TEMP:/work:ro" "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
+              --file /work/postcutover.sql \
+            | tr -d '\r' | awk 'NF {line=$0} END {print line}' \
+            > "$EVIDENCE_DIR/postcutover-state.json"
+
+          jq -e '
+            .registeredExactMigrations == 11
+            and .requiredTables == 11
+            and .requiredFunctionsPresent == true
+            and .securityDefinerSearchPathVerified == true
+            and .rlsVerified == true
+            and .columnPrivacyVerified == true
+            and .leastPrivilegeVerified == true
+            and .dacAndPublicGoodsRows == 0
+            and .paymentReferences == 0
+          ' "$EVIDENCE_DIR/postcutover-state.json" >/dev/null
+
+      - name: Exercise public safe-column reads and private-column denial
+        shell: bash
+        run: |
+          set -euo pipefail
+          for role in anon authenticated; do
+            docker run --rm "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
+                --command "begin read only; set local role $role; select id,slug,title,threshold_amount_cents,published_terms_version,published_terms_sha256 from public.mpgf_public_goods_campaigns limit 0; select id,campaign_id,outcome_status,outcome_sha256 from public.mpgf_dac_campaign_outcomes limit 0; rollback;"
+
+            set +e
+            docker run --rm "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
+                --command "begin read only; set local role $role; select published_by from public.mpgf_public_goods_campaigns limit 0; rollback;" \
+              > "$RUNNER_TEMP/${role}-private-campaign.log" 2>&1
+            campaign_status=$?
+            docker run --rm "$POSTGRES_IMAGE" \
+              psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
+                --command "begin read only; set local role $role; select finalized_by from public.mpgf_dac_campaign_outcomes limit 0; rollback;" \
+              > "$RUNNER_TEMP/${role}-private-outcome.log" 2>&1
+            outcome_status=$?
+            set -e
+            test "$campaign_status" -ne 0
+            test "$outcome_status" -ne 0
+            grep -Eq 'permission denied|column .* does not exist' "$RUNNER_TEMP/${role}-private-campaign.log"
+            grep -Eq 'permission denied|column .* does not exist' "$RUNNER_TEMP/${role}-private-outcome.log"
+          done
+          cat > "$EVIDENCE_DIR/direct-data-plane.json" <<JSON
+          {"anonSafeReads":true,"authenticatedSafeReads":true,"anonPrivateColumnsDenied":true,"authenticatedPrivateColumnsDenied":true,"checkedAt":"$(date -u +%FT%TZ)"}
+          JSON
+
+      - name: Recheck main and scan retained evidence for credentials
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          if grep -RIlE '(postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sk_(live|test)_|whsec_|Bearer [A-Za-z0-9._-]+)' "$EVIDENCE_DIR"; then
+            echo 'Credential-like material found in retained validation evidence.' >&2
+            exit 1
+          fi
+
+      - name: Upload immutable post-cutover evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moraltrade-dac-production-postcutover-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record post-cutover acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### DAC production database post-cutover acceptance passed'
+            echo
+            echo "- Exact main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Main tree: \`$EXPECTED_MAIN_TREE\`"
+            echo "- Production project: \`$EXPECTED_PROJECT_REF\`"
+            echo '- Exact migration registry rows: 11/11'
+            echo '- Required tables/functions, SECURITY DEFINER search paths, and RLS: verified'
+            echo '- Public safe-column reads and private-column denial: verified'
+            echo '- Direct public/authenticated mutation: denied'
+            echo '- DAC/public-goods rows: 0'
+            echo '- Payment references: 0'
+            echo '- This validation was read-only and changed no application deployment or alias'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+# One-use post-cutover validation only. Never merge; close after retained success evidence.
