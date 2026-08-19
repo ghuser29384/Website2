@@ -6,6 +6,7 @@ import { isAgreementPaymentCapturePermitted } from "@/lib/agreement-payment-auth
 import { handleMpgfStripeWebhookEvent, hashStripeWebhookBody } from "@/lib/mpgf/real-money";
 import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
 import { handleConditionalStripeWebhookEvent } from "@/lib/payments/conditional-webhook";
+import { handleTradeDonationPoolStripeWebhookEvent } from "@/lib/payments/trade-donation-pool-webhook";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeWebhookSecret, hasStripeEnv } from "@/lib/stripe";
 
@@ -181,6 +182,19 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid Stripe webhook.";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  const pooledSettlementResult = await handleTradeDonationPoolStripeWebhookEvent({
+    event,
+    rawBodyHash,
+    signatureVerified: true,
+  });
+  if (pooledSettlementResult.handled) {
+    return NextResponse.json({
+      received: true,
+      pooledSettlement: pooledSettlementResult.status,
+      duplicate: pooledSettlementResult.duplicate,
+    });
   }
 
   const conditionalResult = await handleConditionalStripeWebhookEvent({
