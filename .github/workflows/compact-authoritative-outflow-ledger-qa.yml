@@ -41,6 +41,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Force IPv4 for APT
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 > /dev/null
       - name: Guard exact scope and fail-closed boundary
         shell: bash
         run: |
@@ -71,6 +76,8 @@ jobs:
           diff -u /tmp/expected.txt /tmp/actual.txt
           test "$(wc -l < /tmp/actual.txt)" -eq 16
           test "$(find supabase/migrations -maxdepth 1 -name '2026081614150*_compact_authoritative_outflow_*.sql' | wc -l)" -eq 4
+          test "$(grep -Fc -- '- name: Force IPv4 for APT' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 3
+          test "$(grep -Fc -- 'Acquire::ForceIPv4 "true";' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 3
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v2.yml
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v3.yml
           for controller in .github/workflows/repair-compact-outflow-*.yml; do
@@ -156,6 +163,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Force IPv4 for APT
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 > /dev/null
       - run: |
           npm ci
           sudo apt-get update -qq
@@ -283,6 +295,7 @@ jobs:
           union all select 'payment_refs|' || count(*) from public.mpgf_public_goods_dormant_authorization_snapshots where provider_reference_hash is not null
           order by 1;
           SQL
+          test "$(wc -l < db-evidence/no-money.txt)" -eq 3
           grep -qx 'activation|0' db-evidence/no-money.txt
           grep -qx 'electorate|0' db-evidence/no-money.txt
           grep -qx 'payment_refs|0' db-evidence/no-money.txt
@@ -311,6 +324,11 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ env.EXPECTED_HEAD_SHA }}
+      - name: Force IPv4 for APT
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 > /dev/null
       - run: |
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
