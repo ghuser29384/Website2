@@ -17,7 +17,6 @@
   },
   "files": [
     ".github/workflows/commitments-pro-sprint-specification-gates.yml",
-    "docs/commitments/pro-sprint-materialization-smoke.txt",
     "docs/commitments/pro-sprint-source-of-truth-v1.md",
     "docs/commitments/pro-sprint-artifact-precedence-v1.md",
     "docs/commitments/pro-sprint-orchestration-v1.md",
@@ -33,6 +32,7 @@
   "source_bindings": {
     "merged_pr_733": "c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3",
     "materialization_source_pr_747": "7e993158363710e5fe2c3eaa1cbccdb5cd56c235",
+    "merged_separate_dac_pr_758": "f1cd364bf058b28b3b29501aa6528c48f8f39bb7",
     "preserved_pr_722": "1a52f46d5d877e155dba697300296be32ed87d43",
     "stale_pr_718": "e7359a046d67391a37c92505f4c50694d5b24e1e",
     "trust_source_issue": 715,
