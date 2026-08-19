@@ -4,17 +4,20 @@ on:
   push:
     branches:
       - ops/every-org-dedicated-bypass-verify-v3-20260819
+  pull_request:
+    branches:
+      - ops/pr547-every-org-provider-staging-708-bypass-rotation-v2-0207a584-20260816
 
 permissions:
   contents: read
 
 concurrency:
-  group: every-org-dedicated-bypass-verify-v3-20260819
+  group: every-org-dedicated-bypass-verify-v3-20260819-${{ github.event_name }}
   cancel-in-progress: false
 
 env:
   EXPECTED_REPOSITORY: ghuser29384/Website2
-  EXPECTED_BRANCH: ops/every-org-dedicated-bypass-verify-v3-20260819
+  EXPECTED_HEAD_BRANCH: ops/every-org-dedicated-bypass-verify-v3-20260819
   PREVIEW_ORIGIN: https://moraltrade-pr547-every-org-phase1-rotated-v2-0207a584.vercel.app
   PREVIEW_PATH: /connectors
 
@@ -28,7 +31,7 @@ jobs:
       - name: Check out exact verifier revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
 
       - name: Verify repository, branch, and secret presence
@@ -36,7 +39,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
-          test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
+          actual_head="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          test "$actual_head" = "$EXPECTED_HEAD_BRANCH"
           test -n "${EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET:-}"
           if [[ "$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" == *$'\n'* || "$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" == *$'\r'* ]]; then
             echo 'The dedicated bypass contains a line break.' >&2
@@ -51,32 +55,9 @@ jobs:
           mkdir -p evidence
           target="${PREVIEW_ORIGIN}${PREVIEW_PATH}"
 
-          unauthenticated_status="$(
-            curl --silent --show-error \
-              --output /dev/null \
-              --write-out '%{http_code}' \
-              --max-redirs 0 \
-              "$target"
-          )"
-
-          header_status="$(
-            curl --silent --show-error \
-              --output /dev/null \
-              --write-out '%{http_code}' \
-              --max-redirs 0 \
-              --header "x-vercel-protection-bypass: $EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" \
-              "$target"
-          )"
-
-          query_status="$(
-            curl --silent --show-error \
-              --output /dev/null \
-              --write-out '%{http_code}' \
-              --max-redirs 0 \
-              --get \
-              --data-urlencode "x-vercel-protection-bypass=$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" \
-              "$target"
-          )"
+          unauthenticated_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-redirs 0 "$target")"
+          header_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-redirs 0 --header "x-vercel-protection-bypass: $EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" "$target")"
+          query_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-redirs 0 --get --data-urlencode "x-vercel-protection-bypass=$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" "$target")"
 
           export unauthenticated_status header_status query_status
           python3 - <<'PY'
@@ -88,7 +69,7 @@ jobs:
               "schemaVersion": "moral-trade-every-org-dedicated-bypass-verification-v1",
               "repository": os.environ["GITHUB_REPOSITORY"],
               "workflowRunId": os.environ["GITHUB_RUN_ID"],
-              "verifierCommit": os.environ["GITHUB_SHA"],
+              "verifierCommit": os.environ.get("GITHUB_SHA"),
               "previewOrigin": os.environ["PREVIEW_ORIGIN"],
               "previewPath": os.environ["PREVIEW_PATH"],
               "unauthenticatedStatus": int(os.environ["unauthenticated_status"]),
@@ -102,9 +83,7 @@ jobs:
               "databaseMutationAttempted": False,
               "productionChangeAttempted": False,
           }
-          Path("evidence/result.json").write_text(
-              json.dumps(payload, indent=2, sort_keys=True) + "\n"
-          )
+          Path("evidence/result.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
           print(json.dumps(payload, sort_keys=True))
           PY
 
@@ -117,7 +96,6 @@ jobs:
           test "$unauthenticated_status" = 302
           test "$header_status" = 200
           test "$query_status" = 200
-
           unset EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET
 
       - name: Upload sanitized verification evidence
