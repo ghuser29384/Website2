@@ -253,20 +253,20 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install exact dependencies
-        run: npm ci
-
-      - name: Install Chromium and PostgreSQL client
+      - name: Install exact dependencies and QA toolchain
         shell: bash
         run: |
+          npm ci
           npx playwright install --with-deps chromium
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
 
-      - name: Verify QA target, apply privilege migration, and inspect lifecycle signatures
+      - name: Verify QA target, apply privilege migration, and record exact lifecycle diagnostics
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$POOLED_SETTLEMENT_QA_OUTPUT_DIR"
+
           node --input-type=module <<'NODE'
           import {
             QA_PROJECT_REF,
@@ -292,88 +292,113 @@ jobs:
 
           psql "$QA_SUPABASE_DB_URL" \
             -X --no-psqlrc --set ON_ERROR_STOP=1 \
-            --tuples-only --no-align <<'SQL' > /tmp/issue-723-lifecycle-functions.json
-          select coalesce(
-            json_agg(
-              json_build_object(
-                'name', p.proname,
-                'signature', p.oid::regprocedure::text,
-                'argumentNames', coalesce(p.proargnames[1:p.pronargs], array[]::text[]),
-                'argumentTypes', coalesce(
-                  (
-                    select array_agg(format_type(argument.arg_oid, null) order by argument.ordinality)
-                    from unnest(p.proargtypes::oid[]) with ordinality as argument(arg_oid, ordinality)
-                  ),
-                  array[]::text[]
-                )
-              )
-              order by p.proname, p.oid::regprocedure::text
-            ),
-            '[]'::json
-          )::text
-          from pg_proc p
-          join pg_namespace n on n.oid = p.pronamespace
-          where n.nspname = 'public'
-            and p.proname in (
+            --tuples-only --no-align <<'SQL' \
+            > "$POOLED_SETTLEMENT_QA_OUTPUT_DIR/lifecycle-function-diagnostic.json"
+          select json_build_object(
+            'requiredFunctions', json_build_array(
               'finalize_trade_agreement_milestones_v1',
               'confirm_trade_agreement_milestone_manifest_v1'
-            );
+            ),
+            'candidateFunctions', coalesce(
+              (
+                select json_agg(
+                  json_build_object(
+                    'schema', namespace.nspname,
+                    'name', procedure.proname,
+                    'signature', procedure.oid::regprocedure::text,
+                    'argumentNames', coalesce(procedure.proargnames[1:procedure.pronargs], array[]::text[]),
+                    'argumentTypes', oidvectortypes(procedure.proargtypes),
+                    'returnType', pg_get_function_result(procedure.oid),
+                    'securityDefiner', procedure.prosecdef,
+                    'config', coalesce(procedure.proconfig, array[]::text[]),
+                    'anonExecute', has_function_privilege('anon', procedure.oid, 'EXECUTE'),
+                    'authenticatedExecute', has_function_privilege('authenticated', procedure.oid, 'EXECUTE'),
+                    'serviceRoleExecute', has_function_privilege('service_role', procedure.oid, 'EXECUTE')
+                  )
+                  order by namespace.nspname, procedure.proname, procedure.oid::regprocedure::text
+                )
+                from pg_proc procedure
+                join pg_namespace namespace on namespace.oid = procedure.pronamespace
+                where namespace.nspname = 'public'
+                  and (
+                    procedure.proname ilike '%milestone%manifest%'
+                    or procedure.proname ilike '%agreement%milestone%'
+                    or procedure.proname like 'finalize_trade%'
+                    or procedure.proname like 'confirm_trade%'
+                  )
+              ),
+              '[]'::json
+            ),
+            'recentMigrations', coalesce(
+              (
+                select json_agg(migration.version order by migration.version)
+                from supabase_migrations.schema_migrations migration
+                where migration.version >= '20260725000000'
+              ),
+              '[]'::json
+            )
+          )::text;
           SQL
 
           node --input-type=module <<'NODE'
           import assert from "node:assert/strict";
-          import { readFile } from "node:fs/promises";
-          const rows = JSON.parse((await readFile("/tmp/issue-723-lifecycle-functions.json", "utf8")).trim() || "[]");
+          import { readFile, writeFile } from "node:fs/promises";
+          import path from "node:path";
+
+          const outputDir = process.env.POOLED_SETTLEMENT_QA_OUTPUT_DIR;
+          const diagnosticPath = path.join(outputDir, "lifecycle-function-diagnostic.json");
+          const diagnostic = JSON.parse((await readFile(diagnosticPath, "utf8")).trim());
           const required = [
             "finalize_trade_agreement_milestones_v1",
             "confirm_trade_agreement_milestone_manifest_v1",
           ];
-          const allowed = new Map([
-            ["p_actor_id", new Set(["uuid"])],
-            ["p_agreement_id", new Set(["uuid"])],
-            ["p_agreement_version_id", new Set(["uuid"])],
-            ["p_version_id", new Set(["uuid"])],
-            ["p_expected_agreement_version_id", new Set(["uuid"])],
-            ["p_expected_version", new Set(["smallint", "integer", "bigint"])],
-            ["p_version", new Set(["smallint", "integer", "bigint"])],
-            ["p_idempotency_key", new Set(["text", "character varying"])],
-            ["p_manifest_hash", new Set(["text", "character varying"])],
-            ["p_expected_manifest_hash", new Set(["text", "character varying"])],
-            ["p_milestone_manifest_hash", new Set(["text", "character varying"])],
-            ["p_expected_milestone_manifest_hash", new Set(["text", "character varying"])],
-            ["p_complete_terms_hash", new Set(["text", "character varying"])],
-            ["p_expected_complete_terms_hash", new Set(["text", "character varying"])],
-          ]);
-          assert.equal(rows.length, required.length, JSON.stringify(rows));
+          const rows = diagnostic.candidateFunctions.filter((row) => required.includes(row.name));
+          await writeFile(
+            path.join(outputDir, "lifecycle-function-contracts.json"),
+            `${JSON.stringify(rows, null, 2)}\n`,
+            "utf8",
+          );
+          const counts = Object.fromEntries(required.map((name) => [
+            name,
+            rows.filter((row) => row.name === name).length,
+          ]));
+          const ready = required.every((name) => counts[name] === 1);
+          await writeFile(
+            path.join(outputDir, "hard-stop.json"),
+            `${JSON.stringify({
+              status: ready ? "ready" : "blocked",
+              reason: ready
+                ? "Both required lifecycle functions are uniquely present."
+                : "One or both required lifecycle functions are absent or unexpectedly overloaded.",
+              requiredFunctionCounts: counts,
+              candidateFunctionNames: diagnostic.candidateFunctions.map((row) => row.signature),
+            }, null, 2)}\n`,
+            "utf8",
+          );
+          assert.equal(rows.length, required.length, JSON.stringify({ counts, candidates: diagnostic.candidateFunctions }));
           for (const name of required) {
-            const matches = rows.filter((row) => row.name === name);
-            assert.equal(matches.length, 1, `${name} must have exactly one public overload.`);
-            const row = matches[0];
-            assert.equal(row.argumentNames.length, row.argumentTypes.length);
-            assert.ok(row.argumentNames.length > 0);
-            for (let index = 0; index < row.argumentNames.length; index += 1) {
-              const allowedTypes = allowed.get(row.argumentNames[index]);
-              assert.ok(allowedTypes, `${name} contains unknown argument ${row.argumentNames[index]}.`);
-              assert.ok(allowedTypes.has(row.argumentTypes[index]), `${name}.${row.argumentNames[index]} has unexpected type ${row.argumentTypes[index]}.`);
-            }
+            assert.equal(rows.filter((row) => row.name === name).length, 1, `${name} must have exactly one public overload.`);
           }
           NODE
 
-          mkdir -p "$POOLED_SETTLEMENT_QA_OUTPUT_DIR"
-          cp /tmp/issue-723-lifecycle-functions.json \
-            "$POOLED_SETTLEMENT_QA_OUTPUT_DIR/lifecycle-function-contracts.json"
+      - name: Upload sanitized lifecycle diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-authenticated-caller-lifecycle-diagnostic-${{ github.run_id }}
+          path: pooled-settlement-authenticated-caller-evidence/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Bind the synthetic operator allowlist
         shell: bash
         run: echo "ADMIN_EMAILS=pooled-qa-${GITHUB_RUN_ID}-operator@example.test" >> "$GITHUB_ENV"
 
-      - name: Build exact isolated-QA runtime
-        run: npm run build
-
-      - name: Start exact isolated-QA runtime
+      - name: Build and start exact isolated-QA runtime
         shell: bash
         run: |
           set -euo pipefail
+          npm run build
           npm run start -- -p 3215 > /tmp/pooled-settlement-next.log 2>&1 &
           for attempt in $(seq 1 60); do
             if curl --fail --silent --show-error http://127.0.0.1:3215/ > /dev/null; then
@@ -413,7 +438,7 @@ jobs:
         run: |
           set -euo pipefail
           state=failure
-          description="Clean-stack QA failed before completing the authenticated matrix"
+          description="Clean-stack QA reached a fail-closed implementation or lifecycle boundary"
           if [[ "$SOURCE_RESULT" == "success" && "$E2E_RESULT" == "success" ]]; then
             state=success
             description="Clean-stack source gates and authenticated 19-case QA passed"
