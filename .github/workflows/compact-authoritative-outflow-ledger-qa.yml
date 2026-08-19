@@ -5,6 +5,7 @@ on:
     branches: [agent/mpgf-public-goods-compacts]
     paths:
       - .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+      - .github/workflows/mpgf-public-goods-compacts-qa.yml
       - docs/mpgf/compact-authoritative-outflow-ledger-v1.md
       - scripts/test-compact-authoritative-outflow-concurrency.sh
       - src/components/mpgf/mpgf-public-goods-compacts.tsx
@@ -48,6 +49,7 @@ jobs:
           test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
           cat > /tmp/expected.txt <<'EOF'
           .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          .github/workflows/mpgf-public-goods-compacts-qa.yml
           docs/mpgf/compact-authoritative-outflow-ledger-v1.md
           scripts/test-compact-authoritative-outflow-concurrency.sh
           src/components/mpgf/mpgf-public-goods-compacts.tsx
@@ -67,7 +69,7 @@ jobs:
           sort -o /tmp/expected.txt /tmp/expected.txt
           git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/actual.txt
           diff -u /tmp/expected.txt /tmp/actual.txt
-          test "$(wc -l < /tmp/actual.txt)" -eq 15
+          test "$(wc -l < /tmp/actual.txt)" -eq 16
           test "$(find supabase/migrations -maxdepth 1 -name '2026081614150*_compact_authoritative_outflow_*.sql' | wc -l)" -eq 4
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v2.yml
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v3.yml
