@@ -8,7 +8,9 @@ SOURCE_CATALOG="$BASELINE_DIR/source_catalog.tsv"
 CATALOG_SQL="$ROOT/scripts/database/preactivation-catalog.sql"
 OUTPUT_DIR="${1:-$ROOT/artifacts/preactivation-baseline-clean-room}"
 SUPABASE_VERSION="2.110.0"
-LOCAL_CONFIG="$ROOT/supabase/config.toml"
+CLEAN_ROOM_ROOT="$(mktemp -d "${RUNNER_TEMP:-/tmp}/website2-preactivation-clean-room.XXXXXX")"
+LOCAL_CONFIG="$CLEAN_ROOM_ROOT/supabase/config.toml"
+PROJECT_ID="website2_preactivation_baseline_clean_room_${GITHUB_RUN_ID:-$$}"
 LOCAL_DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 TARGET_CATALOG="$OUTPUT_DIR/target-catalog.tsv"
 TARGET_CATALOG_NORMALIZED="$OUTPUT_DIR/target-catalog.normalized.tsv"
@@ -16,33 +18,31 @@ START_LOG="$OUTPUT_DIR/supabase-start.log"
 STOP_LOG="$OUTPUT_DIR/supabase-stop.log"
 STATUS_LOG="$OUTPUT_DIR/supabase-status.log"
 
-mkdir -p "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR" "$CLEAN_ROOM_ROOT/supabase"
 
 if [[ ! -s "$BASELINE_SQL" || ! -s "$SOURCE_CATALOG" ]]; then
   echo "The generated baseline and source catalog are required." >&2
   exit 1
 fi
-if [[ -e "$LOCAL_CONFIG" ]]; then
-  echo "Refusing to overwrite an existing supabase/config.toml." >&2
-  exit 1
-fi
 
 cleanup() {
   set +e
-  npx --yes "supabase@$SUPABASE_VERSION" stop --no-backup \
-    > "$STOP_LOG" 2>&1
-  rm -f "$LOCAL_CONFIG"
+  (
+    cd "$CLEAN_ROOM_ROOT"
+    npx --yes "supabase@$SUPABASE_VERSION" stop --no-backup
+  ) > "$STOP_LOG" 2>&1
   local leftovers
-  leftovers="$(docker ps -a --format '{{.Names}}' | grep '^supabase_.*_Website2$' || true)"
+  leftovers="$(docker ps -a --format '{{.Names}}' | grep "^supabase_.*_${PROJECT_ID}$" || true)"
   printf '%s\n' "$leftovers" > "$OUTPUT_DIR/docker-residue.txt"
   if [[ -n "$leftovers" ]]; then
     docker rm -f $leftovers >> "$STOP_LOG" 2>&1 || true
   fi
+  rm -rf "$CLEAN_ROOM_ROOT"
 }
 trap cleanup EXIT
 
-cat > "$LOCAL_CONFIG" <<'TOML'
-project_id = "website2_preactivation_baseline_clean_room"
+cat > "$LOCAL_CONFIG" <<TOML
+project_id = "$PROJECT_ID"
 
 [api]
 enabled = true
@@ -82,9 +82,12 @@ enabled = false
 enabled = false
 TOML
 
-npx --yes "supabase@$SUPABASE_VERSION" start --exclude studio,imgproxy,inbucket,storage-api,realtime,edge-runtime,logflare,vector,supavisor \
-  > "$START_LOG" 2>&1
-npx --yes "supabase@$SUPABASE_VERSION" status > "$STATUS_LOG" 2>&1
+(
+  cd "$CLEAN_ROOM_ROOT"
+  npx --yes "supabase@$SUPABASE_VERSION" start --exclude studio,imgproxy,mailpit,storage-api,realtime,edge-runtime,logflare,vector,supavisor \
+    > "$START_LOG" 2>&1
+  npx --yes "supabase@$SUPABASE_VERSION" status > "$STATUS_LOG" 2>&1
+)
 
 for attempt in $(seq 1 60); do
   if pg_isready -d "$LOCAL_DB_URL" >/dev/null 2>&1; then
