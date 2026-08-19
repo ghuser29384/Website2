@@ -1,0 +1,130 @@
+name: Verify rotated Every.org dedicated Vercel bypass v3
+
+on:
+  push:
+    branches:
+      - ops/every-org-dedicated-bypass-verify-v3-20260819
+
+permissions:
+  contents: read
+
+concurrency:
+  group: every-org-dedicated-bypass-verify-v3-20260819
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_BRANCH: ops/every-org-dedicated-bypass-verify-v3-20260819
+  PREVIEW_ORIGIN: https://moraltrade-pr547-every-org-phase1-rotated-v2-0207a584.vercel.app
+  PREVIEW_PATH: /connectors
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+    steps:
+      - name: Check out exact verifier revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify repository, branch, and secret presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
+          test -n "${EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET:-}"
+          if [[ "$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" == *$'\n'* || "$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" == *$'\r'* ]]; then
+            echo 'The dedicated bypass contains a line break.' >&2
+            exit 1
+          fi
+          echo "::add-mask::$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET"
+
+      - name: Verify dedicated bypass through header and encoded query parameter
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          target="${PREVIEW_ORIGIN}${PREVIEW_PATH}"
+
+          unauthenticated_status="$(
+            curl --silent --show-error \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              --max-redirs 0 \
+              "$target"
+          )"
+
+          header_status="$(
+            curl --silent --show-error \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              --max-redirs 0 \
+              --header "x-vercel-protection-bypass: $EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" \
+              "$target"
+          )"
+
+          query_status="$(
+            curl --silent --show-error \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              --max-redirs 0 \
+              --get \
+              --data-urlencode "x-vercel-protection-bypass=$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" \
+              "$target"
+          )"
+
+          export unauthenticated_status header_status query_status
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "schemaVersion": "moral-trade-every-org-dedicated-bypass-verification-v1",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "workflowRunId": os.environ["GITHUB_RUN_ID"],
+              "verifierCommit": os.environ["GITHUB_SHA"],
+              "previewOrigin": os.environ["PREVIEW_ORIGIN"],
+              "previewPath": os.environ["PREVIEW_PATH"],
+              "unauthenticatedStatus": int(os.environ["unauthenticated_status"]),
+              "headerBypassStatus": int(os.environ["header_status"]),
+              "queryBypassStatus": int(os.environ["query_status"]),
+              "headerBypassAccepted": os.environ["header_status"] == "200",
+              "queryBypassAccepted": os.environ["query_status"] == "200",
+              "deploymentAttempted": False,
+              "providerWebhookRegistrationAttempted": False,
+              "providerTransactionAttempted": False,
+              "databaseMutationAttempted": False,
+              "productionChangeAttempted": False,
+          }
+          Path("evidence/result.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n"
+          )
+          print(json.dumps(payload, sort_keys=True))
+          PY
+
+          if grep -R -F -- "$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" evidence; then
+            echo 'Secret material entered retained evidence.' >&2
+            rm -rf evidence
+            exit 1
+          fi
+
+          test "$unauthenticated_status" = 302
+          test "$header_status" = 200
+          test "$query_status" = 200
+
+          unset EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET
+
+      - name: Upload sanitized verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: every-org-dedicated-bypass-verify-v3-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
