@@ -1,0 +1,161 @@
+name: Rearm PR 689 isolated-QA UAT after mobile-title repair v2
+
+on:
+  push:
+    branches:
+      - ops/pr689-isolated-qa-preview-uat-20260814
+    paths:
+      - ".github/workflows/rearm-pr689-isolated-qa-uat-after-mobile-title-v2-20260816.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rearm-pr689-isolated-qa-uat-after-mobile-title-v2-20260816
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PARENT_SHA: 21216475af29b2b8abb2f4baaeb59c30c0728525
+  NEW_CANDIDATE_HEAD_SHA: 1456027e1ebaf9e99ea2d03f5e223de4ef510e23
+  NEW_CANDIDATE_TREE_SHA: 40a5e2c40a80c65d47a7af510c882988c86bed3f
+  PRIOR_CANDIDATE_HEAD_SHA: 04cf9466be288f92c7569f8c871c711269e40ded
+  TARGET_BRANCH: ops/pr689-isolated-qa-preview-uat-20260814
+
+jobs:
+  rearm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Verify controller and candidate identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$CONTROLLER_PARENT_SHA"
+          git fetch origin integration/mpgf-dac-lifecycle-current-main-20260814
+          test "$(git rev-parse origin/integration/mpgf-dac-lifecycle-current-main-20260814)" = "$NEW_CANDIDATE_HEAD_SHA"
+          test "$(git rev-parse "$NEW_CANDIDATE_HEAD_SHA^{tree}")" = "$NEW_CANDIDATE_TREE_SHA"
+          test "$(git rev-parse "$NEW_CANDIDATE_HEAD_SHA^")" = "$PRIOR_CANDIDATE_HEAD_SHA"
+
+      - name: Pin final candidate and make title-fit observable in owner UAT
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow_path = Path(".github/workflows/pr689-isolated-qa-preview-uat-20260814.yml")
+          workflow = workflow_path.read_text(encoding="utf-8")
+
+          env_old = (
+              "  CANDIDATE_ORDERING_REPAIR_SHA: b9598f3d5c812df6648fd86ff81d74858ba0bfc1\n"
+              "  CANDIDATE_HEAD_SHA: 04cf9466be288f92c7569f8c871c711269e40ded\n"
+              "  CANDIDATE_TREE_SHA: 5652f3777a19b0188f26b62a606afa718eccfe47"
+          )
+          env_new = (
+              "  CANDIDATE_ORDERING_REPAIR_SHA: b9598f3d5c812df6648fd86ff81d74858ba0bfc1\n"
+              "  CANDIDATE_TERMINAL_GUARD_REPAIR_SHA: 04cf9466be288f92c7569f8c871c711269e40ded\n"
+              "  CANDIDATE_HEAD_SHA: 1456027e1ebaf9e99ea2d03f5e223de4ef510e23\n"
+              "  CANDIDATE_TREE_SHA: 40a5e2c40a80c65d47a7af510c882988c86bed3f"
+          )
+          if workflow.count(env_old) != 1:
+              raise SystemExit(f"Expected one candidate pin block, found {workflow.count(env_old)}")
+          workflow = workflow.replace(env_old, env_new, 1)
+
+          ancestry_old = (
+              '          test "$(git -C app rev-parse HEAD^1)" = "$CANDIDATE_ORDERING_REPAIR_SHA"\n'
+              '          test "$(git -C app rev-parse HEAD~2)" = "$CANDIDATE_PRE_REPAIR_SHA"\n'
+              '          test "$(git -C app rev-parse HEAD~3)" = "$CANDIDATE_BASE_SHA"'
+          )
+          ancestry_new = (
+              '          test "$(git -C app rev-parse HEAD^1)" = "$CANDIDATE_TERMINAL_GUARD_REPAIR_SHA"\n'
+              '          test "$(git -C app rev-parse HEAD~2)" = "$CANDIDATE_ORDERING_REPAIR_SHA"\n'
+              '          test "$(git -C app rev-parse HEAD~3)" = "$CANDIDATE_PRE_REPAIR_SHA"\n'
+              '          test "$(git -C app rev-parse HEAD~4)" = "$CANDIDATE_BASE_SHA"'
+          )
+          if workflow.count(ancestry_old) != 1:
+              raise SystemExit(f"Expected one ancestry guard block, found {workflow.count(ancestry_old)}")
+          workflow = workflow.replace(ancestry_old, ancestry_new, 1)
+
+          lines = workflow.splitlines()
+          slash = chr(92)
+          ordering_arg = '            --arg orderingRepair "$CANDIDATE_ORDERING_REPAIR_SHA" ' + slash
+          terminal_arg = '            --arg terminalGuardRepair "$CANDIDATE_TERMINAL_GUARD_REPAIR_SHA" ' + slash
+          if lines.count(ordering_arg) != 1 or terminal_arg in lines:
+              raise SystemExit("Expected exactly one ordering-repair jq argument and no terminal-repair argument.")
+          index = lines.index(ordering_arg)
+          lines.insert(index + 1, terminal_arg)
+          workflow = "\n".join(lines) + "\n"
+
+          json_old = "orderingRepair:$orderingRepair},repository:"
+          json_new = "orderingRepair:$orderingRepair,terminalGuardRepair:$terminalGuardRepair,compactMobileRepair:$head},repository:"
+          if workflow.count(json_old) != 1:
+              raise SystemExit(f"Expected one exact-state JSON fragment, found {workflow.count(json_old)}")
+          workflow_path.write_text(workflow.replace(json_old, json_new, 1), encoding="utf-8")
+
+          owner_path = Path("ops/pr689-uat702/owner-uat.spec.ts")
+          owner = owner_path.read_text(encoding="utf-8")
+          heading_old = (
+              '    const footer = document.querySelector("footer")?.getBoundingClientRect();\n'
+              '    const nav = document.querySelector(\'nav[aria-label="Primary"]\')?.getBoundingClientRect();\n'
+              '    return {\n'
+              '      width: window.innerWidth,\n'
+              '      height: window.innerHeight,\n'
+              '      h1Count: document.querySelectorAll("h1").length,'
+          )
+          heading_new = (
+              '    const footer = document.querySelector("footer")?.getBoundingClientRect();\n'
+              '    const nav = document.querySelector(\'nav[aria-label="Primary"]\')?.getBoundingClientRect();\n'
+              '    const heading = document.querySelector<HTMLElement>("h1");\n'
+              '    return {\n'
+              '      width: window.innerWidth,\n'
+              '      height: window.innerHeight,\n'
+              '      h1Count: document.querySelectorAll("h1").length,\n'
+              '      h1: heading ? { clientWidth: heading.clientWidth, scrollWidth: heading.scrollWidth } : null,'
+          )
+          if owner.count(heading_old) != 1:
+              raise SystemExit(f"Expected one viewport heading block, found {owner.count(heading_old)}")
+          owner = owner.replace(heading_old, heading_new, 1)
+
+          assertion_old = (
+              '  viewportDiagnostics.push({ route, viewport, ...result });\n'
+              '  expect(result.h1Count).toBe(1);\n'
+              '  await page.keyboard.press("Tab");'
+          )
+          assertion_new = (
+              '  viewportDiagnostics.push({ route, viewport, ...result });\n'
+              '  expect(result.h1Count).toBe(1);\n'
+              '  expect(result.h1).not.toBeNull();\n'
+              '  expect(\n'
+              '    result.h1?.scrollWidth ?? Number.POSITIVE_INFINITY,\n'
+              '    `H1 text must not clip on ${route} at ${viewport}`,\n'
+              '  ).toBeLessThanOrEqual(result.h1?.clientWidth ?? 0);\n'
+              '  await page.keyboard.press("Tab");'
+          )
+          if owner.count(assertion_old) != 1:
+              raise SystemExit(f"Expected one viewport assertion block, found {owner.count(assertion_old)}")
+          owner_path.write_text(owner.replace(assertion_old, assertion_new, 1), encoding="utf-8")
+          PY
+
+          git diff --check
+          test "$(git diff --name-only | sort)" = $'.github/workflows/pr689-isolated-qa-preview-uat-20260814.yml\nops/pr689-uat702/owner-uat.spec.ts'
+          git diff -- .github/workflows/pr689-isolated-qa-preview-uat-20260814.yml ops/pr689-uat702/owner-uat.spec.ts
+
+      - name: Commit and trigger the exact-head UAT controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/pr689-isolated-qa-preview-uat-20260814.yml ops/pr689-uat702/owner-uat.spec.ts
+          git commit -m "qa(mpgf): rerun owner UAT after compact-mobile title repair"
+          git push origin "HEAD:${TARGET_BRANCH}"

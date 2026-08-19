@@ -1,0 +1,55 @@
+name: Bootstrap PR 740 current-main DAC integration UAT
+
+on:
+  push:
+    branches:
+      - ops/pr740-dac-current-main-integration-uat-20260816
+    paths:
+      - ".github/workflows/bootstrap-pr740-dac-current-main-integration-uat-20260816.yml"
+      - "ops/pr740-bootstrap-controller.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-pr740-dac-current-main-integration-uat-20260816
+  cancel-in-progress: false
+
+jobs:
+  materialize-controller:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr740-dac-current-main-integration-uat-20260816
+          fetch-depth: 0
+
+      - name: Materialize and validate the audited exact-head controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The inherited controller proves target/alias state from live Vercel metadata.
+          # Remove only two over-specific source-string assertions from the materializer.
+          sed -i "/'target=null',/d; /'alias=\[\]',/d" ops/pr740-bootstrap-controller.py
+          python3 ops/pr740-bootstrap-controller.py
+
+      - name: Publish generated workflow as an ordinary blob for trusted promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_path=.github/workflows/pr740-dac-current-main-integration-uat-20260816.yml
+          staged_path=ops/pr740-generated-workflow.yml.txt
+          test -f "$source_path"
+          grep -Fq 'CANDIDATE_HEAD_SHA: 434e68d2ecdc034696a850448da2270237100328' "$source_path"
+          grep -Fq 'group: mpgf-dac-product-lifecycle-shared-qa' "$source_path"
+          grep -Fq '{ name: "1024x768", width: 1024, height: 768 }' ops/pr689-uat702/owner-uat.spec.ts
+          mv "$source_path" "$staged_path"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$staged_path" ops/pr689-uat702/owner-uat.spec.ts
+          git commit -m "ops: stage PR 740 integration controller blob"
+          git push origin HEAD:ops/pr740-dac-current-main-integration-uat-20260816
