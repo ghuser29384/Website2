@@ -21,7 +21,16 @@ insert into public.profiles (
 ) values (
   '6d000000-0000-4000-8000-000000000001','ledger-concurrency@example.test',
   'Ledger Concurrency','','','ledger-concurrency','individual',true,true
-);
+)
+on conflict (id) do update set
+  email = excluded.email,
+  display_name = excluded.display_name,
+  bio = excluded.bio,
+  affiliation = excluded.affiliation,
+  username = excluded.username,
+  account_kind = excluded.account_kind,
+  accepts_group_invitations = excluded.accepts_group_invitations,
+  public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled;
 set role service_role;
 select pg_catalog.set_config('request.jwt.claims','{"role":"service_role"}',false);
 with batch as (
