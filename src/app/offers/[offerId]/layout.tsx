@@ -19,7 +19,7 @@ export default async function OfferRecordLayout({
   return (
     <>
       <OfferCredibilityLink offerId={offerId} />
-      {children}
+      <div className="offer-record-route">{children}</div>
     </>
   );
 }
