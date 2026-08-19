@@ -75,37 +75,43 @@ if not valid:
     raise SystemExit("Refusing an unexpected production database target.")
 PY
 
-READONLY_DB_URL="$(python3 - <<'PY_URL'
-import os
-from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
-
-parsed = urlsplit(os.environ["PROD_SUPABASE_DB_URL"])
-query = [
-    (key, value)
-    for key, value in parse_qsl(parsed.query, keep_blank_values=True)
-    if key != "options"
-]
-query.append((
-    "options",
-    "-c default_transaction_read_only=on -c statement_timeout=180000 -c lock_timeout=5000",
-))
-print(urlunsplit(parsed._replace(query=urlencode(query, quote_via=quote))))
-PY_URL
-)"
 echo "::add-mask::$PROD_SUPABASE_DB_URL"
-echo "::add-mask::$READONLY_DB_URL"
 export PGCONNECT_TIMEOUT=15
 export PGSSLMODE=require
 unset PGOPTIONS || true
 
-psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c \
-  "select current_setting('default_transaction_read_only'), current_setting('transaction_read_only'), current_database()" \
-  > "$EVIDENCE_ROOT/manifests/source-session.txt"
-if ! grep -qx $'on\ton\tpostgres' "$EVIDENCE_ROOT/manifests/source-session.txt"; then
-  fail "The source session is not the expected read-only production database."
+readonly_query() {
+  local output="$1"
+  local sql="$2"
+  shift 2
+  printf 'begin read only;\n%s\n' "$sql" \
+    | psql "$PROD_SUPABASE_DB_URL" -X -q -v ON_ERROR_STOP=1 "$@" \
+    > "$output"
+}
+
+readonly_file() {
+  local input="$1"
+  local output="$2"
+  local wrapper
+  wrapper="$(mktemp "$WORK_DIR/read-only.XXXXXX.sql")"
+  {
+    printf 'begin read only;\n'
+    cat "$input"
+  } > "$wrapper"
+  psql "$PROD_SUPABASE_DB_URL" -X -q -v ON_ERROR_STOP=1 -f "$wrapper" \
+    > "$output"
+  rm -f "$wrapper"
+}
+
+readonly_query \
+  "$EVIDENCE_ROOT/manifests/source-session.txt" \
+  "select current_setting('transaction_read_only'), current_database();" \
+  -AtF $'\t'
+if ! grep -qx $'on\tpostgres' "$EVIDENCE_ROOT/manifests/source-session.txt"; then
+  fail "The source transaction is not the expected read-only production database transaction."
 fi
 
-psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+readonly_query "$EVIDENCE_ROOT/manifests/source-counts.json" "$(cat <<'SQL'
 select json_build_object(
   'auth_users', (select count(*) from auth.users),
   'profiles', case when to_regclass('public.profiles') is null then null else (select count(*) from public.profiles) end,
@@ -128,21 +134,21 @@ select json_build_object(
       and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')
   )
 )::text;
-" > "$EVIDENCE_ROOT/manifests/source-counts.json"
+SQL
+)" -At
 
 if jq -e '.activation_stage_present == true or .activation_transition_functions_present == true' \
   "$EVIDENCE_ROOT/manifests/source-counts.json" >/dev/null; then
   fail "Production is no longer a pre-activation source."
 fi
 
-psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \
-  > "$SOURCE_CATALOG_BEFORE"
+readonly_file "$CATALOG_SQL" "$SOURCE_CATALOG_BEFORE"
 LC_ALL=C sort -u "$SOURCE_CATALOG_BEFORE" > "$SOURCE_CATALOG"
 if [[ ! -s "$SOURCE_CATALOG" ]]; then
   fail "The production application catalog is empty."
 fi
 
-psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c "
+readonly_query "$MIGRATION_HISTORY" "$(cat <<'SQL'
 select
   to_jsonb(m) ->> 'version' as migration_version,
   coalesce(to_jsonb(m) ->> 'name', '') as migration_name,
@@ -162,20 +168,22 @@ select
   md5(coalesce((to_jsonb(m) -> 'statements')::text, '')) as statements_md5
 from supabase_migrations.schema_migrations m
 order by 1, 2;
-" > "$MIGRATION_HISTORY"
+SQL
+)" -AtF $'\t'
 if [[ ! -s "$MIGRATION_HISTORY" ]]; then
   fail "The production migration history is empty."
 fi
 
-psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c "
+readonly_query "$EXTENSIONS_TSV" "$(cat <<'SQL'
 select e.extname, n.nspname, e.extversion
 from pg_extension e
 join pg_namespace n on n.oid = e.extnamespace
 where e.extname <> 'plpgsql'
 order by e.extname;
-" > "$EXTENSIONS_TSV"
+SQL
+)" -AtF $'\t'
 
-psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+readonly_query "$EXTENSIONS_SQL" "$(cat <<'SQL'
 select format(
   'create schema if not exists %I; create extension if not exists %I with schema %I;',
   n.nspname,
@@ -186,9 +194,10 @@ from pg_extension e
 join pg_namespace n on n.oid = e.extnamespace
 where e.extname <> 'plpgsql'
 order by e.extname;
-" > "$EXTENSIONS_SQL"
+SQL
+)" -At
 
-psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+readonly_query "$AUTH_TRIGGERS" "$(cat <<'SQL'
 select format(
   'drop trigger if exists %I on auth.users;%s%s;',
   t.tgname,
@@ -205,16 +214,26 @@ where not t.tgisinternal
   and c.relname = 'users'
   and pn.nspname in ('public', 'moral_trade_private')
 order by t.tgname;
-" > "$AUTH_TRIGGERS"
+SQL
+)" -At
 if [[ ! -s "$AUTH_TRIGGERS" ]]; then
   fail "The production auth-to-profile trigger boundary is empty."
 fi
 
-npx --yes supabase@2.110.0 db dump \
-  --db-url "$READONLY_DB_URL" \
-  --schema public,moral_trade_private \
-  --file "$DUMP_RAW" \
-  > "$EVIDENCE_ROOT/logs/supabase-db-dump.log" 2>&1
+# This is the only source read outside an explicit SQL READ ONLY transaction.
+# pg_dump --schema-only performs catalog reads and does not mutate the source.
+docker pull postgres:17.6-alpine > "$EVIDENCE_ROOT/logs/postgres-image-pull.log"
+docker image inspect postgres:17.6-alpine \
+  --format '{{.Id}} {{index .RepoDigests 0}}' \
+  > "$EVIDENCE_ROOT/manifests/postgres-image.txt"
+docker run --rm \
+  -e "DATABASE_URL=$PROD_SUPABASE_DB_URL" \
+  -e PGCONNECT_TIMEOUT \
+  -e PGSSLMODE \
+  -v "$WORK_DIR:/out" \
+  postgres:17.6-alpine \
+  sh -eu -c 'pg_dump "$DATABASE_URL" --schema-only --no-owner --no-comments --no-security-labels --no-publications --no-subscriptions --schema=public --schema=moral_trade_private --file=/out/production-schema.raw.sql' \
+  > "$EVIDENCE_ROOT/logs/pg-dump.log" 2>&1
 test -s "$DUMP_RAW"
 
 python3 - "$DUMP_RAW" "$DUMP_NORMALIZED" <<'PY'
@@ -266,8 +285,7 @@ for pattern, label in (
 Path(sys.argv[2]).write_text(normalized)
 PY
 
-psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \
-  > "$SOURCE_CATALOG_AFTER"
+readonly_file "$CATALOG_SQL" "$SOURCE_CATALOG_AFTER"
 LC_ALL=C sort -u "$SOURCE_CATALOG_AFTER" > "$WORK_DIR/source-catalog-after.sorted.tsv"
 if ! cmp "$SOURCE_CATALOG" "$WORK_DIR/source-catalog-after.sorted.tsv"; then
   fail "The production catalog drifted during baseline capture."
@@ -276,10 +294,10 @@ fi
 cat > "$BASELINE_TMP" <<'SQL'
 -- Moral Trade authoritative pre-activation Supabase application-schema baseline.
 --
--- Generated from the production application catalog under an enforced read-only
--- session. This file is data-free and valid only for an empty Supabase database.
--- The exact post-boundary activation migration is bound in manifest.json.
--- Do not edit by hand; regenerate through generate-preactivation-baseline.yml.
+-- Generated from the production application catalog through explicit READ ONLY
+-- catalog transactions and schema-only pg_dump. This file is data-free and valid
+-- only for an empty Supabase database. The exact post-boundary activation migration
+-- is bound in manifest.json. Do not edit by hand.
 
 begin;
 
@@ -292,37 +310,32 @@ DECLARE
   application_function_count integer;
   application_auth_trigger_count integer;
 BEGIN
-  SELECT count(*)
-    INTO application_relation_count
+  SELECT count(*) INTO application_relation_count
   FROM pg_class c
   JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname IN ('public', 'moral_trade_private')
     AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
     AND NOT EXISTS (
-      SELECT 1
-      FROM pg_depend d
+      SELECT 1 FROM pg_depend d
       WHERE d.deptype = 'e'
         AND d.classid = 'pg_class'::regclass
         AND d.objid = c.oid
         AND d.objsubid = 0
     );
 
-  SELECT count(*)
-    INTO application_function_count
+  SELECT count(*) INTO application_function_count
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname IN ('public', 'moral_trade_private')
     AND NOT EXISTS (
-      SELECT 1
-      FROM pg_depend d
+      SELECT 1 FROM pg_depend d
       WHERE d.deptype = 'e'
         AND d.classid = 'pg_proc'::regclass
         AND d.objid = p.oid
         AND d.objsubid = 0
     );
 
-  SELECT count(*)
-    INTO application_auth_trigger_count
+  SELECT count(*) INTO application_auth_trigger_count
   FROM pg_trigger t
   JOIN pg_class c ON c.oid = t.tgrelid
   JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -336,15 +349,14 @@ BEGIN
   IF application_relation_count <> 0
      OR application_function_count <> 0
      OR application_auth_trigger_count <> 0 THEN
-    RAISE EXCEPTION
-      USING
-        ERRCODE = 'object_not_in_prerequisite_state',
-        MESSAGE = format(
-          'Pre-activation baseline requires an empty application schema; found %s relations, %s functions, and %s auth triggers.',
-          application_relation_count,
-          application_function_count,
-          application_auth_trigger_count
-        );
+    RAISE EXCEPTION USING
+      ERRCODE = 'object_not_in_prerequisite_state',
+      MESSAGE = format(
+        'Pre-activation baseline requires an empty application schema; found %s relations, %s functions, and %s auth triggers.',
+        application_relation_count,
+        application_function_count,
+        application_auth_trigger_count
+      );
   END IF;
 END;
 $baseline_guard$;
@@ -403,7 +415,7 @@ catalog_lines = [line for line in Path(catalog_path).read_text().splitlines() if
 extension_lines = [line for line in Path(extensions_path).read_text().splitlines() if line]
 manifest = {
     "format_version": 1,
-    "baseline_id": "moraltrade-pre-activation-production-2026-08-18",
+    "baseline_id": "moraltrade-pre-activation-production-2026-08-19",
     "boundary": "pre_activation",
     "source": {
         "repository": "ghuser29384/Website2",
@@ -411,7 +423,7 @@ manifest = {
         "source_main": source_main,
         "captured_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "production_project_ref": "jnpoxvalyjtdghnperyu",
-        "production_access": "schema-only; enforced read-only transaction",
+        "production_access": "explicit READ ONLY catalog transactions; schema-only pg_dump",
     },
     "scope": {
         "schemas": ["public", "moral_trade_private"],
