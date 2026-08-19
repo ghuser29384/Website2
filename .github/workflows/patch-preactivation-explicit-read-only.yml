@@ -1,0 +1,168 @@
+name: Patch pre-activation capture to explicit read-only transactions
+
+on:
+  push:
+    branches:
+      - database/preactivation-schema-baseline-clean-20260819
+    paths:
+      - .github/workflows/patch-preactivation-explicit-read-only.yml
+
+permissions:
+  contents: write
+
+env:
+  TARGET_BRANCH: database/preactivation-schema-baseline-clean-20260819
+  EXPECTED_PARENT: 72ef1bbf74f424771e6b8725290b406b396ff7e4
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: database/preactivation-schema-baseline-clean-20260819
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Replace unsupported pooler startup options with explicit read-only transactions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/database/generate-preactivation-baseline.sh")
+          source = path.read_text()
+
+          start = source.index('READONLY_DB_URL="$(python3 - <<\'PY_URL\'')
+          end_marker = 'if ! grep -qx $\'on\\ton\\tpostgres\' "$EVIDENCE_ROOT/manifests/source-session.txt"; then\n  fail "The source session is not the expected read-only production database."\nfi\n'
+          end = source.index(end_marker, start) + len(end_marker)
+
+          replacement = '''echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          export PGCONNECT_TIMEOUT=15
+          export PGSSLMODE=require
+          unset PGOPTIONS || true
+
+          readonly_query() {
+            local output="$1"
+            local psql_flags="$2"
+            local sql="$3"
+            printf 'begin read only;\\n%s\\n' "$sql" \\
+              | psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -q $psql_flags \\
+              > "$output"
+          }
+
+          readonly_file() {
+            local input="$1"
+            local output="$2"
+            local wrapper
+            wrapper="$(mktemp "$WORK_DIR/read-only.XXXXXX.sql")"
+            {
+              printf 'begin read only;\\n'
+              cat "$input"
+            } > "$wrapper"
+            psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -q -f "$wrapper" \\
+              > "$output"
+            rm -f "$wrapper"
+          }
+
+          readonly_query \\
+            "$EVIDENCE_ROOT/manifests/source-session.txt" \\
+            "-AtF $'\\\\t'" \\
+            "select current_setting('transaction_read_only'), current_database();"
+          if ! grep -qx $'on\\tpostgres' "$EVIDENCE_ROOT/manifests/source-session.txt"; then
+            fail "The source transaction is not the expected read-only production database transaction."
+          fi
+          '''.replace("          ", "")
+          source = source[:start] + replacement + source[end:]
+
+          def replace_query(old_prefix: str, output: str, flags: str, sql_start: str, sql_end: str) -> None:
+            nonlocal_source[0]
+
+          # Counts query.
+          old = '''psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+          select json_build_object('''.replace("          ", "")
+          if source.count(old) != 1:
+            raise SystemExit("Could not locate the source-count query.")
+          source = source.replace(old, '''readonly_query "$EVIDENCE_ROOT/manifests/source-counts.json" "-At" "
+          select json_build_object('''.replace("          ", ""), 1)
+          source = source.replace('''::text;
+          " > "$EVIDENCE_ROOT/manifests/source-counts.json"'''.replace("          ", ""), '''::text;
+          "'''.replace("          ", ""), 1)
+
+          # Catalog reads use a wrapper file so psql meta-commands remain intact.
+          catalog_block = '''psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \\
+            > "$SOURCE_CATALOG_BEFORE"'''
+          if source.count(catalog_block) != 1:
+            raise SystemExit("Could not locate the first catalog read.")
+          source = source.replace(catalog_block, 'readonly_file "$CATALOG_SQL" "$SOURCE_CATALOG_BEFORE"', 1)
+          catalog_after = '''psql "$READONLY_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \\
+            > "$SOURCE_CATALOG_AFTER"'''
+          if source.count(catalog_after) != 1:
+            raise SystemExit("Could not locate the second catalog read.")
+          source = source.replace(catalog_after, 'readonly_file "$CATALOG_SQL" "$SOURCE_CATALOG_AFTER"', 1)
+
+          # Remaining psql -c reads: convert the connection and begin each explicit transaction.
+          source = source.replace('psql "$READONLY_DB_URL"', 'psql "$PROD_SUPABASE_DB_URL"')
+          source = source.replace('-AtF $\'\\t\' -c "\\nselect', '-AtqF $\'\\t\' -c "\\nbegin read only;\\nselect')
+          source = source.replace('-Atqc "\\nselect', '-Atqc "\\nbegin read only;\\nselect')
+          source = source.replace('--db-url "$READONLY_DB_URL"', '--db-url "$PROD_SUPABASE_DB_URL"')
+
+          if 'READONLY_DB_URL' in source:
+            raise SystemExit("Unsupported startup-option URL remains.")
+          if source.count('begin read only;') < 7:
+            raise SystemExit("Too few explicit read-only transaction guards.")
+
+          source = source.replace(
+              'Generated from the production application catalog under an enforced read-only\n-- session.',
+              'Generated from the production application catalog through explicit READ ONLY\n-- catalog transactions and schema-only pg_dump.',
+          )
+          source = source.replace(
+              '"production_access": "schema-only; enforced read-only transaction",',
+              '"production_access": "explicit READ ONLY catalog transactions; schema-only pg_dump",',
+          )
+          path.write_text(source)
+
+          doc = Path("docs/database/preactivation-schema-baseline.md")
+          text = doc.read_text()
+          text = text.replace(
+              'under an enforced\nread-only transaction, committed with an immutable manifest, and reconstructed',
+              'using explicit `BEGIN READ ONLY` catalog transactions plus a schema-only\n`pg_dump`, committed with an immutable manifest, and reconstructed',
+          )
+          text = text.replace(
+              '- enforced read-only production access;',
+              '- explicit read-only catalog transactions and schema-only dump access;',
+          )
+          text = text.replace(
+              '- `default_transaction_read_only=on` is forced and read back before extraction;',
+              '- each `psql` catalog read begins an explicit `READ ONLY` transaction and verifies it;\n- the only separate source read is `pg_dump --schema-only`, which does not mutate the source;',
+          )
+          doc.write_text(text)
+
+          trigger = Path("scripts/database/generate-preactivation-baseline.trigger")
+          trigger.write_text(
+              "issue-714 authoritative pre-activation baseline generation\n"
+              "source-main=26d1fe436dbf9a4440bfafd501ddf8db944a1127\n"
+              "requested-at=2026-08-19T07:45:00Z\n"
+              "purpose=explicit-read-only-clean-room-boundary\n"
+          )
+          PY
+
+          rm .github/workflows/patch-preactivation-explicit-read-only.yml
+          bash -n scripts/database/generate-preactivation-baseline.sh
+          git diff --check
+          grep -F 'begin read only;' scripts/database/generate-preactivation-baseline.sh
+          grep -F 'schema-only pg_dump' scripts/database/generate-preactivation-baseline.sh
+          ! grep -F 'READONLY_DB_URL' scripts/database/generate-preactivation-baseline.sh
+
+      - name: Commit and push normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Enforce explicit read-only baseline capture"
+          git push origin "HEAD:$TARGET_BRANCH"
