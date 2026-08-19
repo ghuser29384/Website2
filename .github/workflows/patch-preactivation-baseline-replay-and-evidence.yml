@@ -6,6 +6,7 @@ on:
       - database/preactivation-schema-baseline-clean-20260819
     paths:
       - .github/workflows/patch-preactivation-baseline-replay-and-evidence.yml
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,7 +17,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: database/preactivation-schema-baseline-clean-20260819
-  EXPECTED_PARENT: 1fa86a17acf4d9c4c3a00372315149f555d9a88e
+  EXPECTED_PARENT: cf6fceda5fdc8444b1049d60b2d87bc8e4e497a8
 
 jobs:
   patch:
@@ -41,68 +42,60 @@ jobs:
           generator = Path("scripts/database/generate-preactivation-baseline.sh")
           source = generator.read_text()
 
-          old_settings = """set local lock_timeout = '5s';
-          set local statement_timeout = '10min';
+          settings_marker = "set local statement_timeout = '10min';\n"
+          if source.count(settings_marker) != 1:
+              raise SystemExit("Expected the baseline statement timeout exactly once.")
+          source = source.replace(
+              settings_marker,
+              settings_marker + "set local check_function_bodies = false;\n",
+          )
 
-          DO $baseline_guard$
-          """.replace("          ", "")
-          new_settings = """set local lock_timeout = '5s';
-          set local statement_timeout = '10min';
-          set local check_function_bodies = false;
-
-          DO $baseline_guard$
-          """.replace("          ", "")
-          if source.count(old_settings) != 1:
-              raise SystemExit("Expected the baseline transaction settings exactly once.")
-          source = source.replace(old_settings, new_settings)
-
-          old_assertion = """  assert.match(sql, /Pre-activation baseline requires an empty application schema/);
-            assert.deepEqual(findTopLevelApplicationDataStatements(sql), []);
-          """.replace("            ", "")
-          new_assertion = """  assert.match(sql, /Pre-activation baseline requires an empty application schema/);
-            assert.match(sql, /set local check_function_bodies = false;/);
-            assert.deepEqual(findTopLevelApplicationDataStatements(sql), []);
-          """.replace("            ", "")
-          if source.count(old_assertion) != 1:
+          assertion_marker = "  assert.match(sql, /Pre-activation baseline requires an empty application schema/);\n"
+          if source.count(assertion_marker) != 1:
               raise SystemExit("Expected the generated baseline guard assertion exactly once.")
-          source = source.replace(old_assertion, new_assertion)
+          source = source.replace(
+              assertion_marker,
+              assertion_marker + "  assert.match(sql, /set local check_function_bodies = false;/);\n",
+          )
           generator.write_text(source)
 
           workflow = Path(".github/workflows/generate-preactivation-baseline.yml")
           workflow_source = workflow.read_text()
-          old_scan = r'''          if grep -RIl \
-              'postgresql\?://\|eyJ[A-Za-z0-9_-]\{20,\}' \
-              evidence 2>/dev/null > evidence/credential-scan-matches.txt; then
-            test ! -s evidence/credential-scan-matches.txt
-          fi
-          '''
-          new_scan = r'''          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          ansi_escape = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-          replacements = (
-              (re.compile(r"postgres(?:ql)?://[^\s\x1b]+", re.IGNORECASE), "[redacted-local-database-url]"),
-              (re.compile(r"\bsb_(?:publishable|secret)_[A-Za-z0-9_-]+\b"), "[redacted-local-api-key]"),
-              (re.compile(r"\beyJ[A-Za-z0-9_-]{20,}(?:\.[A-Za-z0-9_-]+){1,2}\b"), "[redacted-jwt]"),
-          )
-          clean_room = Path("evidence/clean-room")
-          if clean_room.is_dir():
-              for path in clean_room.glob("*.log"):
-                  text = ansi_escape.sub("", path.read_text(errors="replace"))
-                  for pattern, replacement in replacements:
-                      text = pattern.sub(replacement, text)
-                  path.write_text(text)
-          PY
-          if grep -REIl \
-              'postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sb_(publishable|secret)_[A-Za-z0-9_-]+' \
-              evidence 2>/dev/null > evidence/credential-scan-matches.txt; then
-            test ! -s evidence/credential-scan-matches.txt
-          fi
-          '''
-          if workflow_source.count(old_scan) != 1:
+          scan_marker = "          if grep -RIl \\\n"
+          if workflow_source.count(scan_marker) != 1:
               raise SystemExit("Expected the evidence credential scan exactly once.")
-          workflow.write_text(workflow_source.replace(old_scan, new_scan))
+
+          redactor = "\n".join([
+              "          python3 - <<'PY'",
+              "          from pathlib import Path",
+              "          import re",
+              "",
+              "          ansi_escape = re.compile(r\"\\x1b(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])\")",
+              "          replacements = (",
+              "              (re.compile(r\"postgres(?:ql)?://[^\\s\\x1b]+\", re.IGNORECASE), \"[redacted-local-database-url]\"),",
+              "              (re.compile(r\"\\bsb_(?:publishable|secret)_[A-Za-z0-9_-]+\\b\"), \"[redacted-local-api-key]\"),",
+              "              (re.compile(r\"\\beyJ[A-Za-z0-9_-]{20,}(?:\\.[A-Za-z0-9_-]+){1,2}\\b\"), \"[redacted-jwt]\"),",
+              "          )",
+              "          clean_room = Path(\"evidence/clean-room\")",
+              "          if clean_room.is_dir():",
+              "              for path in clean_room.glob(\"*.log\"):",
+              "                  text = ansi_escape.sub(\"\", path.read_text(errors=\"replace\"))",
+              "                  for pattern, replacement in replacements:",
+              "                      text = pattern.sub(replacement, text)",
+              "                  path.write_text(text)",
+              "          PY",
+              "",
+          ])
+          workflow_source = workflow_source.replace(
+              scan_marker,
+              redactor + "          if grep -REIl \\\n",
+          )
+
+          old_pattern = "              'postgresql\\?://\\|eyJ[A-Za-z0-9_-]\\{20,\\}' \\\n"
+          new_pattern = "              'postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sb_(publishable|secret)_[A-Za-z0-9_-]+' \\\n"
+          if workflow_source.count(old_pattern) != 1:
+              raise SystemExit("Expected the old credential signature pattern exactly once.")
+          workflow.write_text(workflow_source.replace(old_pattern, new_pattern))
 
           trigger = Path("scripts/database/generate-preactivation-baseline.trigger")
           requested_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
