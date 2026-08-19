@@ -6,7 +6,7 @@ on:
       - database/preactivation-schema-baseline-clean-20260819
     paths:
       - .github/workflows/patch-preactivation-baseline-replay-and-evidence.yml
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -17,7 +17,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: database/preactivation-schema-baseline-clean-20260819
-  EXPECTED_PARENT: cf6fceda5fdc8444b1049d60b2d87bc8e4e497a8
+  EXPECTED_PARENT: 4320822b4734d932b66ecf99b109f92e85cd8ba7
 
 jobs:
   patch:
@@ -61,7 +61,9 @@ jobs:
 
           workflow = Path(".github/workflows/generate-preactivation-baseline.yml")
           workflow_source = workflow.read_text()
-          scan_marker = "          if grep -RIl \\\n"
+          line_break = "\n"
+          shell_continuation = "\\"
+          scan_marker = "          if grep -RIl " + shell_continuation + line_break
           if workflow_source.count(scan_marker) != 1:
               raise SystemExit("Expected the evidence credential scan exactly once.")
 
@@ -88,11 +90,19 @@ jobs:
           ])
           workflow_source = workflow_source.replace(
               scan_marker,
-              redactor + "          if grep -REIl \\\n",
+              redactor + "          if grep -REIl " + shell_continuation + line_break,
           )
 
-          old_pattern = "              'postgresql\\?://\\|eyJ[A-Za-z0-9_-]\\{20,\\}' \\\n"
-          new_pattern = "              'postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sb_(publishable|secret)_[A-Za-z0-9_-]+' \\\n"
+          old_pattern = (
+              "              'postgresql\\?://\\|eyJ[A-Za-z0-9_-]\\{20,\\}' "
+              + shell_continuation
+              + line_break
+          )
+          new_pattern = (
+              "              'postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sb_(publishable|secret)_[A-Za-z0-9_-]+' "
+              + shell_continuation
+              + line_break
+          )
           if workflow_source.count(old_pattern) != 1:
               raise SystemExit("Expected the old credential signature pattern exactly once.")
           workflow.write_text(workflow_source.replace(old_pattern, new_pattern))
