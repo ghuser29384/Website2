@@ -1,0 +1,85 @@
+name: PR 737 exact-head ledger watchdog r2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/pr737-ledger-watchdog-r2.yml
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr737-ledger-watchdog-r2
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  EXPECTED_HEAD: 0395b110b4cdca4196a4cecbb287f48522ffb81e
+  EXPECTED_TREE: ce2694045980e4dc34ea0a845cd5302d85d7920e
+  STALLED_RUN_ID: "32229491050"
+  LEDGER_WORKFLOW_ID: "335613052"
+
+jobs:
+  cancel-and-retry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Verify immutable candidate and objectively stalled run
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')" = "$EXPECTED_HEAD"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_HEAD" --jq '.tree.sha')" = "$EXPECTED_TREE"
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STALLED_RUN_ID")"
+          test "$(jq -r '.head_sha' <<<"$run")" = "$EXPECTED_HEAD"
+          test "$(jq -r '.workflow_id' <<<"$run")" = "$LEDGER_WORKFLOW_ID"
+          test "$(jq -r '.status' <<<"$run")" = in_progress
+          started_epoch="$(date -u -d "$(jq -r '.run_started_at' <<<"$run")" +%s)"
+          now_epoch="$(date -u +%s)"
+          test "$((now_epoch - started_epoch))" -ge 1200
+
+      - name: Cancel only the stalled exact-head run
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$STALLED_RUN_ID/cancel" >/dev/null
+          for attempt in $(seq 1 90); do
+            status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STALLED_RUN_ID" --jq '.status')"
+            [[ "$status" == completed ]] && break
+            sleep 4
+          done
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STALLED_RUN_ID" --jq '.status')" = completed
+
+      - name: Dispatch fresh run on identical SHA
+        id: retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n --arg ref "$TARGET_BRANCH" '{ref:$ref}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/$LEDGER_WORKFLOW_ID/dispatches" --input - >/dev/null
+          run_id=""
+          for attempt in $(seq 1 90); do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$LEDGER_WORKFLOW_ID/runs?event=workflow_dispatch&per_page=20")"
+            run_id="$(jq -r --arg head "$EXPECTED_HEAD" --arg started "$started" '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $started)] | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$runs")"
+            [[ -n "$run_id" ]] && break
+            sleep 4
+          done
+          test -n "$run_id"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.head_sha')" = "$EXPECTED_HEAD"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Record bounded retry
+        env:
+          NEW_RUN_ID: ${{ steps.retry.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="Exact-head run \`$STALLED_RUN_ID\` was cancelled after exceeding 20 minutes while all three jobs remained in dependency-installation steps. Fresh run \`$NEW_RUN_ID\` was dispatched on unchanged candidate \`$EXPECTED_HEAD\` and tree \`$EXPECTED_TREE\`. No candidate file, deployment, database, provider, Compact, electorate, or payment state changed."
+          gh pr comment 737 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 734 --repo "$GITHUB_REPOSITORY" --body "$body"
