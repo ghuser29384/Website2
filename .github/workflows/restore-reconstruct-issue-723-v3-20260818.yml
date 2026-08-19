@@ -1,0 +1,74 @@
+name: Restore corrected issue 723 reconstruction v3
+
+on:
+  push:
+    branches:
+      - fix/723-donation-confirmation-authenticated-caller
+    paths:
+      - .github/workflows/restore-reconstruct-issue-723-v3-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: restore-clean-issue-723-reconstruction
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BRANCH: fix/723-donation-confirmation-authenticated-caller
+      SELF: .github/workflows/restore-reconstruct-issue-723-v3-20260818.yml
+      OLD: .github/workflows/reconstruct-issue-723-clean-stacked-candidate-v2-20260818.yml
+      NEW: .github/workflows/reconstruct-issue-723-clean-stacked-candidate-v3-20260818.yml
+    steps:
+      - name: Check out product history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 20
+
+      - name: Restore controller and remove the main-only import
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_commit="$(git log -n 1 --format=%H -- "$OLD")"
+          test -n "$source_commit"
+          git show "$source_commit:$OLD" > "$NEW"
+          python - <<'PY'
+          from pathlib import Path
+          old_path = ".github/workflows/reconstruct-issue-723-clean-stacked-candidate-v2-20260818.yml"
+          new_path = ".github/workflows/reconstruct-issue-723-clean-stacked-candidate-v3-20260818.yml"
+          path = Path(new_path)
+          text = path.read_text().replace(old_path, new_path)
+          old = '''          node --input-type=module <<'NODE'
+          import { databaseUrlTargetsProject } from "./.github/scripts/pooled-settlement-qa-contract.mjs";
+          if (!databaseUrlTargetsProject(process.env.QA_SUPABASE_DB_URL, "hvmxfjjbdcgjjudmthdz")) {
+            throw new Error("Wrong QA database target.");
+          }
+          NODE'''
+          new = '''          node --input-type=module <<'NODE'
+          const databaseUrl = String(process.env.QA_SUPABASE_DB_URL || "");
+          if (!databaseUrl.includes("hvmxfjjbdcgjjudmthdz")) {
+            throw new Error("Wrong QA database target.");
+          }
+          NODE'''
+          if text.count(old) != 1:
+              raise SystemExit("Expected one main-only QA contract import.")
+          path.write_text(text.replace(old, new))
+          PY
+          rm "$SELF"
+          git diff --check
+          test "$(git diff --name-only HEAD | LC_ALL=C sort | tr '\n' ' ')" = "$NEW "
+
+      - name: Publish corrected reconstruction controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Restore clean issue 723 reconstruction without main-only QA import"
+          git push origin "HEAD:$BRANCH"

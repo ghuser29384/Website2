@@ -1,0 +1,134 @@
+name: Diagnose issue 723 clean candidate
+
+on:
+  push:
+    branches:
+      - fix/723-donation-confirmation-authenticated-caller
+    paths:
+      - .github/workflows/diagnose-issue-723-clean-candidate-20260818.yml
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: diagnose-issue-723-clean-candidate
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PRODUCT_BRANCH: fix/723-donation-confirmation-authenticated-caller
+      SELF: .github/workflows/diagnose-issue-723-clean-candidate-20260818.yml
+    steps:
+      - name: Check out product history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 100
+
+      - name: Find the latest clean-candidate or reconstruction failure
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100")"
+          clean_pr="$(jq -r '[.[] | select(.draft==true and (.title | startswith("Clean issue 723 authenticated pooled-settlement QA candidate")))] | sort_by(.created_at) | last | .number // empty' <<<"$prs")"
+          run_id=""
+          subject=""
+          if test -n "$clean_pr"; then
+            pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${clean_pr}")"
+            sha="$(jq -r .head.sha <<<"$pr")"
+            branch="$(jq -r .head.ref <<<"$pr")"
+            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${branch}&per_page=100")"
+            run_id="$(jq -r --arg sha "$sha" '[.workflow_runs[] | select(.head_sha==$sha and .status=="completed" and .conclusion!="success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            subject="clean PR #${clean_pr}"
+          fi
+          if test -z "$run_id"; then
+            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${PRODUCT_BRANCH}&per_page=100")"
+            run_id="$(jq -r '[.workflow_runs[] | select(.status=="completed" and .conclusion!="success" and (.name | test("Reconstruct clean issue 723 stacked candidate")))] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            subject="latest reconstruction controller"
+          fi
+          test -n "$run_id"
+          echo "id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "subject=$subject" >> "$GITHUB_OUTPUT"
+
+      - name: Capture and classify sanitized failed logs
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.run.outputs.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run view "$RUN_ID" --log-failed > /tmp/issue-723-failed.log 2>&1 || true
+          sed -E \
+            -e 's/(sk|pk|rk)_(live|test)_[A-Za-z0-9_]+/[REDACTED_STRIPE_KEY]/g' \
+            -e 's/whsec_[A-Za-z0-9_]+/[REDACTED_WEBHOOK_SECRET]/g' \
+            -e 's#postgres(ql)?://[^[:space:]]+#[REDACTED_DATABASE_URL]#g' \
+            -e 's/eyJ[A-Za-z0-9._-]+/[REDACTED_JWT]/g' \
+            /tmp/issue-723-failed.log > /tmp/issue-723-failed-redacted.log
+          tail -120 /tmp/issue-723-failed-redacted.log > /tmp/issue-723-failure-excerpt.txt
+          category=other
+          if grep -Fq 'Finalize and review the milestone manifest' /tmp/issue-723-failed-redacted.log; then category=manifest_not_ready; fi
+          if grep -Fq 'milestone_manifest_hash' /tmp/issue-723-failed-redacted.log; then category=manifest_hash; fi
+          if grep -Eq 'finalize_trade_agreement_milestones_v1|confirm_trade_agreement_milestone_manifest_v1' /tmp/issue-723-failed-redacted.log; then category=milestone_rpc; fi
+          if grep -Fq 'main-only QA contract import' /tmp/issue-723-failed-redacted.log; then category=controller_import; fi
+          if grep -Fq 'Cannot find module' /tmp/issue-723-failed-redacted.log; then category=module_resolution; fi
+          if grep -Fq 'Expected values to be strictly deep-equal' /tmp/issue-723-failed-redacted.log; then category=contract_assertion; fi
+          if grep -Fq 'duplicate key value violates unique constraint' /tmp/issue-723-failed-redacted.log; then category=fixture_collision; fi
+          echo "category=$category" >> "$GITHUB_OUTPUT"
+
+      - name: Record exact failure evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.run.outputs.id }}
+          SUBJECT: ${{ steps.run.outputs.subject }}
+          CATEGORY: ${{ steps.classify.outputs.category }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          excerpt="$(cat /tmp/issue-723-failure-excerpt.txt)"
+          body=$(cat <<EOF
+          ## Issue #723 automated failure diagnosis
+
+          - subject: ${SUBJECT}
+          - workflow run: ${RUN_ID}
+          - category: \\`${CATEGORY}\`
+
+          Sanitized tail of the failed job:
+
+          \`\u0060\u0060text
+          ${excerpt}
+          \`\u0060\u0060
+
+          No production or real-money action was authorized by this diagnostic.
+          EOF
+          )
+          gh api "repos/${GITHUB_REPOSITORY}/issues/723/comments" -f body="$body"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/750/comments" -f body="$body"
+
+      - name: Upload sanitized diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-723-failure-diagnostic-${{ steps.run.outputs.id }}
+          path: /tmp/issue-723-failure-excerpt.txt
+          retention-days: 14
+
+      - name: Remove diagnostic workflow from product branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "$SELF" .github/workflows/finalize-clean-issue-723-candidate-20260818.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Record issue 723 clean-candidate diagnostic"
+          git push origin "HEAD:$PRODUCT_BRANCH"
