@@ -1,0 +1,110 @@
+name: PR 737 adjacent Compact phase-order repair exporter
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr737-phase-order-repair-controller.yml
+      - .github/scripts/pr737_phase_order_repair.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr737-phase-order-repair-exporter
+  cancel-in-progress: true
+
+env:
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  EXPECTED_TARGET_HEAD: 460336e9b8a0934d06a346f8451837001198c977
+  STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
+  TARGET_CONTROLLER_PATH: .github/workflows/repair-pr737-adjacent-compact-phase-order.yml
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exporter source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: controller
+
+      - name: Check out exact target candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_TARGET_HEAD }}
+          path: target
+
+      - name: Verify exact bounded target
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_HEAD"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_TARGET_HEAD"
+          test "$(git merge-base "$STACK_BASE_SHA" HEAD)" = "$STACK_BASE_SHA"
+          test -f "$TARGET_CONTROLLER_PATH"
+          test "$(git rev-parse HEAD^)" = "35bc063fdee4ea151a62e8cee17ab529b3273b14"
+          test "$(git diff --name-only HEAD^...HEAD)" = "$TARGET_CONTROLLER_PATH"
+
+      - name: Transform and verify candidate files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 controller/.github/scripts/pr737_phase_order_repair.py target
+          cd target
+          git rm "$TARGET_CONTROLLER_PATH"
+
+          cat > /tmp/expected.txt <<'EOF'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          .github/workflows/mpgf-public-goods-compacts-qa.yml
+          docs/mpgf/compact-authoritative-outflow-ledger-v1.md
+          scripts/test-compact-authoritative-outflow-concurrency.sh
+          src/components/mpgf/mpgf-public-goods-compacts.tsx
+          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.ts
+          supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          tests/mpgf-public-goods-compacts.spec.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected.txt
+          sort -o /tmp/expected.txt /tmp/expected.txt
+          git diff --name-only "$STACK_BASE_SHA" | sort > /tmp/actual.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          test "$(wc -l < /tmp/actual.txt)" -eq 16
+          grep -Fq 'Apply the four authoritative-ledger migrations after legacy Compact validation' .github/workflows/mpgf-public-goods-compacts-qa.yml
+          grep -Fq '.github/workflows/mpgf-public-goods-compacts-qa.yml' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'test "$(wc -l < /tmp/actual.txt)" -eq 16' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'adjacent Compact QA runs legacy regressions before ledger authority hardening' src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          git diff --check
+
+          mkdir -p "$GITHUB_WORKSPACE/export/.github/workflows" "$GITHUB_WORKSPACE/export/src/lib/mpgf"
+          cp .github/workflows/compact-authoritative-outflow-ledger-qa.yml "$GITHUB_WORKSPACE/export/.github/workflows/"
+          cp .github/workflows/mpgf-public-goods-compacts-qa.yml "$GITHUB_WORKSPACE/export/.github/workflows/"
+          cp src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts "$GITHUB_WORKSPACE/export/src/lib/mpgf/"
+          cp /tmp/actual.txt "$GITHUB_WORKSPACE/export/durable-scope.txt"
+          printf '%s\n' "$EXPECTED_TARGET_HEAD" > "$GITHUB_WORKSPACE/export/parent-sha.txt"
+          sha256sum \
+            "$GITHUB_WORKSPACE/export/.github/workflows/compact-authoritative-outflow-ledger-qa.yml" \
+            "$GITHUB_WORKSPACE/export/.github/workflows/mpgf-public-goods-compacts-qa.yml" \
+            "$GITHUB_WORKSPACE/export/src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts" \
+            > "$GITHUB_WORKSPACE/export/sha256.txt"
+
+      - name: Upload verified transformed files
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr737-phase-order-repair-${{ github.run_id }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 7
+          path: export
