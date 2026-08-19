@@ -134,8 +134,26 @@ jobs:
           if [[ -d artifacts/preactivation-baseline-clean-room ]]; then
             cp -R artifacts/preactivation-baseline-clean-room/. evidence/clean-room/
           fi
-          if grep -RIl \
-              'postgresql\?://\|eyJ[A-Za-z0-9_-]\{20,\}' \
+          python3 - <<'PY_REDACT'
+          from pathlib import Path
+          import re
+
+          ansi_escape = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+          replacements = (
+              (re.compile(r"postgres(?:ql)?://[^\s\x1b]+", re.IGNORECASE), "[redacted-local-database-url]"),
+              (re.compile(r"\bsb_(?:publishable|secret)_[A-Za-z0-9_-]+\b"), "[redacted-local-api-key]"),
+              (re.compile(r"\beyJ[A-Za-z0-9_-]{20,}(?:\.[A-Za-z0-9_-]+){1,2}\b"), "[redacted-jwt]"),
+          )
+          clean_room = Path("evidence/clean-room")
+          if clean_room.is_dir():
+              for path in clean_room.glob("*.log"):
+                  text = ansi_escape.sub("", path.read_text(errors="replace"))
+                  for pattern, replacement in replacements:
+                      text = pattern.sub(replacement, text)
+                  path.write_text(text)
+          PY_REDACT
+          if grep -REIl \
+              'postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sb_(publishable|secret)_[A-Za-z0-9_-]+' \
               evidence 2>/dev/null > evidence/credential-scan-matches.txt; then
             test ! -s evidence/credential-scan-matches.txt
           fi
