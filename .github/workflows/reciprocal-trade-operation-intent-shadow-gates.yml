@@ -1,0 +1,131 @@
+name: Reciprocal Trade operation-intent shadow gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/reciprocal-trade-operation-intent-shadow-gates.yml"
+      - "docs/moral-trade/reciprocal-trade-operation-intent-v1/**"
+      - "scripts/reciprocal-trade-shadow/**"
+      - "docs/commitments/impact-identification/**"
+      - "scripts/commitments-trade-study/**"
+      - "docs/release-policy.md"
+      - "src/**"
+      - "supabase/**"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/reciprocal-trade-operation-intent-shadow-gates.yml"
+      - "docs/moral-trade/reciprocal-trade-operation-intent-v1/**"
+      - "scripts/reciprocal-trade-shadow/**"
+      - "docs/commitments/impact-identification/**"
+      - "scripts/commitments-trade-study/**"
+      - "docs/release-policy.md"
+      - "src/**"
+      - "supabase/**"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reciprocal-trade-operation-intent-shadow-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate design-and-shadow-only authority package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Run pure evaluator and adversarial fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/reciprocal-trade-shadow/operation-intent-evaluator.test.mjs \
+            2>&1 | tee operation-intent-focused-tests.log
+
+      - name: Validate ontology, schemas, source map, hashes, and trigger coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/reciprocal-trade-shadow/validate-operation-intent-package.mjs \
+            2>&1 | tee operation-intent-package-validation.log
+
+      - name: Install locked test and lint dependencies
+        run: npm ci
+
+      - name: Run current Feed, invitation, lifecycle, and structured-gate contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/feed-create-phase1-wiring.test.ts \
+            src/feed-unified-marketplace-wiring.test.ts \
+            src/lib/feed-create/phase1.test.ts \
+            src/lib/live-now-hybrid-feed.test.ts \
+            src/lib/live-now-recommendations.test.ts \
+            src/lib/moral-trade/baseline-integrity.test.ts \
+            src/lib/moral-trade/noncompensable-blockers.test.ts \
+            src/lib/moral-trade/offer-validity.test.ts \
+            src/lib/moral-trade/participant-eligibility.test.ts \
+            src/lib/moral-trade/privacy-governance.test.ts \
+            src/lib/moral-trade/user-safety-content-moderation.test.ts \
+            src/lib/pareto-recommendation-model.test.ts \
+            src/lib/trade-invitations.test.ts \
+            src/live-now-data.test.ts \
+            src/live-now-hybrid-feed-wiring.test.ts \
+            src/live-now-priority-route.test.ts \
+            src/pareto-recommendation-wiring.test.ts \
+            2>&1 | tee operation-intent-existing-contracts.log
+
+      - name: Lint repository-only evaluator scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eslint \
+            scripts/reciprocal-trade-shadow/operation-intent-evaluator.mjs \
+            scripts/reciprocal-trade-shadow/operation-intent-evaluator.test.mjs \
+            scripts/reciprocal-trade-shadow/validate-operation-intent-package.mjs \
+            2>&1 | tee operation-intent-eslint.log
+
+      - name: Enforce exact base, changed-file scope, and release classification
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          test "$base" = "75fd512e6cf82e2c51df53e211b854c0263109c3"
+          node scripts/reciprocal-trade-shadow/validate-operation-intent-package.mjs \
+            --base "$base" --head "$GITHUB_SHA" \
+            2>&1 | tee operation-intent-exact-scope.log
+
+      - name: Upload exact-head validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reciprocal-trade-operation-intent-shadow-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            operation-intent-focused-tests.log
+            operation-intent-package-validation.log
+            operation-intent-existing-contracts.log
+            operation-intent-eslint.log
+            operation-intent-exact-scope.log

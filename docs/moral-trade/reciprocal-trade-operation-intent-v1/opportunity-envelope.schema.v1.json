@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/unified-opportunity-envelope.v1.json",
+  "title": "Moral Trade unified opportunity envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "opportunityId",
+    "mechanismFamily",
+    "outerContractFamily",
+    "authority",
+    "terms",
+    "delivery",
+    "ranking"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "moral-trade-opportunity-envelope-v1.0.0"
+    },
+    "opportunityId": {
+      "type": "string",
+      "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+    },
+    "mechanismFamily": {
+      "type": "string",
+      "enum": [
+        "reciprocal_trade",
+        "donation_redirect",
+        "donation_upgrade",
+        "spending_consumption_upgrade",
+        "co_fund",
+        "co_act",
+        "threshold_funding_assurance_dac",
+        "threshold_sign_on"
+      ]
+    },
+    "outerContractFamily": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "reciprocal_pledge_swap",
+            "paid_action"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorityId",
+        "decisionId",
+        "eligible",
+        "snapshotId",
+        "effectiveAt",
+        "reasonCodes"
+      ],
+      "properties": {
+        "authorityId": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "decisionId": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "eligible": {
+          "const": true
+        },
+        "snapshotId": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "effectiveAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{3})?Z$"
+        },
+        "reasonCodes": {
+          "type": "array",
+          "maxItems": 0,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "terms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "hash",
+        "sourceRevision"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "sourceRevision": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceChannel",
+        "privacyClass",
+        "cta"
+      ],
+      "properties": {
+        "sourceChannel": {
+          "type": "string",
+          "enum": [
+            "public_mechanism",
+            "private_source_bound",
+            "research_only"
+          ]
+        },
+        "privacyClass": {
+          "type": "string",
+          "enum": [
+            "public_safe",
+            "account_bound_private",
+            "research_only"
+          ]
+        },
+        "cta": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ranking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligible",
+        "authorityMayBeOverridden",
+        "featureClass"
+      ],
+      "properties": {
+        "eligible": {
+          "const": true
+        },
+        "authorityMayBeOverridden": {
+          "const": false
+        },
+        "featureClass": {
+          "const": "non_authoritative_ordering_only"
+        }
+      }
+    }
+  }
+}

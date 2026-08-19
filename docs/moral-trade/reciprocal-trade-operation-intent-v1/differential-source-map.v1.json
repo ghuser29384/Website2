@@ -1,0 +1,463 @@
+{
+  "artifactKind": "moral_trade_operation_intent_differential_source_map",
+  "mapVersion": "1.0.0",
+  "boundBaseCommit": "75fd512e6cf82e2c51df53e211b854c0263109c3",
+  "upstreamAcceptedReview": {
+    "pullRequest": 691,
+    "head": "14a22614ae33dfa0f4c72989d5dccd5c80fbb5c4",
+    "reviewId": 4938337996,
+    "use": "read_only_source_conflict_input"
+  },
+  "coverageRule": "Every tracked current source or call site is covered by the pure shadow contract, intentionally deferred with an explicit blocker, or explicitly prohibited. No row is activated by this PR.",
+  "rows": [
+    {
+      "callSiteId": "cross-feed-base-inventory-and-ranking",
+      "operationIntents": [
+        "cross_mechanism_feed_ingestion_and_ranking"
+      ],
+      "paths": [
+        "src/app/api/live-now/route.ts",
+        "src/lib/live-now-recommendations.ts",
+        "src/lib/live-now-hybrid-feed.ts"
+      ],
+      "symbols": [
+        "loadPublishedOfferCandidates",
+        "buildHybridLiveNowFeed",
+        "rankLiveNowOffers"
+      ],
+      "currentBehavior": "Builds and ranks public offer, donation redirect or pool, and synthesized candidate shapes without a versioned mechanism-authority envelope.",
+      "differential": "The frozen design requires each independent mechanism authority to emit the same closed envelope before common ranking.",
+      "shadowCoverage": "Envelope schema, authority non-override rules, independent mechanism IDs, and cross-mechanism fixtures.",
+      "activationDisposition": "intentionally_deferred",
+      "blockingReasons": [
+        "No live mechanism-authority adapters or complete envelope migration exist.",
+        "Changing the current Feed would be runtime activation outside this tranche."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "cross-feed-a1-additional-mechanisms",
+      "operationIntents": [
+        "cross_mechanism_feed_ingestion_and_ranking"
+      ],
+      "paths": [
+        "src/app/api/live-now-a1/route.ts",
+        "src/lib/live-now-additional-mechanisms.ts"
+      ],
+      "symbols": [
+        "augmentWithAdditionalMechanisms",
+        "loadAdditionalPublicMechanisms"
+      ],
+      "currentBehavior": "Adds Donation Upgrade-like conditional redirects and public-goods pools to the shared recommendation list, then sorts them with the base feed.",
+      "differential": "Current type names are not the complete frozen ontology and the loader does not consume a mechanism-authority envelope.",
+      "shadowCoverage": "Donation Upgrade and Co-Act remain distinct from reciprocal_trade in envelope tests.",
+      "activationDisposition": "intentionally_deferred",
+      "blockingReasons": [
+        "Mechanism-specific live authorities are not implemented here.",
+        "No runtime type widening is authorized."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "cross-feed-pareto-ordering",
+      "operationIntents": [
+        "cross_mechanism_feed_ingestion_and_ranking"
+      ],
+      "paths": [
+        "src/lib/pareto-feed-runtime.ts",
+        "src/lib/recommendation-learning.ts"
+      ],
+      "symbols": [
+        "applyParetoLearningToLiveNowPayload",
+        "RECOMMENDATION_OPPORTUNITY_TYPES"
+      ],
+      "currentBehavior": "Uses opportunity type keys and model or heuristic features to order candidates and write exposure receipts.",
+      "differential": "Ranking must consume only authority-eligible envelopes and must never use recommendation_graph_edges as matchability authority.",
+      "shadowCoverage": "Non-authoritative ranking boundary and prohibited graph substitution reason codes.",
+      "activationDisposition": "intentionally_deferred",
+      "blockingReasons": [
+        "Live envelope ingestion is absent.",
+        "This PR generates no assignment entropy or exposure."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "reciprocal-suggestion-query",
+      "operationIntents": [
+        "reciprocal_trade_match_suggestion_list"
+      ],
+      "paths": [
+        "src/lib/core-trade-base.ts"
+      ],
+      "symbols": [
+        "listReciprocalMatches"
+      ],
+      "currentBehavior": "Filters published and open offers by equal legacy mode, distinct owner and offer, and two PostgreSQL ILIKE predicates.",
+      "differential": "Does not apply the complete structured, block, restriction, engagement, nested, consent, or Paid Action authority; accepts any equal legacy mode.",
+      "shadowCoverage": "Both frozen outer contract families, database-bound compatibility kinds, complete common gates, and collation boundary fixtures.",
+      "activationDisposition": "blocked_runtime_wiring",
+      "blockingReasons": [
+        "A database-centered authority and source backfill are not part of this repository-only tranche.",
+        "Deployed collation identity is not frozen."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "reciprocal-suggestion-ui",
+      "operationIntents": [
+        "reciprocal_trade_match_suggestion_list",
+        "start_suggested_match"
+      ],
+      "paths": [
+        "src/app/trades/[offerId]/manage/page.tsx"
+      ],
+      "symbols": [
+        "listReciprocalMatches invocation",
+        "startSuggestedMatchAction form"
+      ],
+      "currentBehavior": "Lists query results and exposes Start private thread for every returned result.",
+      "differential": "The UI assumes listing implies actionability, while the mutation does not share one authority.",
+      "shadowCoverage": "Suggestion/start equivalence and same-state tests.",
+      "activationDisposition": "blocked_runtime_wiring",
+      "blockingReasons": [
+        "No user-visible behavior change is authorized.",
+        "The live mutation remains outside this PR."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "start-suggested-match-mutation",
+      "operationIntents": [
+        "start_suggested_match"
+      ],
+      "paths": [
+        "src/app/core-trade-actions-base.ts"
+      ],
+      "symbols": [
+        "startSuggestedMatchAction"
+      ],
+      "currentBehavior": "Loads two offers separately, reuses any non-closed thread, inserts a proposal, notification, and event without a common atomic decision.",
+      "differential": "Missing reciprocal compatibility, open and same-family checks, all structured gates, current engagements, and same-transaction authority; may reuse blocked threads.",
+      "shadowCoverage": "TOCTOU, concurrency, snapshot revision, blocked thread, active engagement, and nested-authority fixtures.",
+      "activationDisposition": "blocked_runtime_wiring",
+      "blockingReasons": [
+        "Requires a PostgreSQL mutation RPC that is not included.",
+        "Existing records may lack required structured states."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "invitation-ui-and-server-action",
+      "operationIntents": [
+        "create_invitation"
+      ],
+      "paths": [
+        "src/app/trades/[offerId]/invite/page.tsx",
+        "src/app/core-trade-actions-base.ts"
+      ],
+      "symbols": [
+        "createTradeInvitationAction",
+        "create_trade_invitation_v2 call"
+      ],
+      "currentBehavior": "Permits an email-bound or first-claim invitation for a published/open source and delegates enforcement to the invitation RPC.",
+      "differential": "The server adapter is not typed to the complete two-family ontology and cannot share the proposed common authority.",
+      "shadowCoverage": "Invitation-delivery permission, pending acceptance separation, block, duplicate, and same-transaction contract.",
+      "activationDisposition": "blocked_runtime_wiring",
+      "blockingReasons": [
+        "Paid Action live destinations and recipient policy are deferred.",
+        "No invitation behavior changes are authorized."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "invitation-database-authority-chain",
+      "operationIntents": [
+        "create_invitation",
+        "start_suggested_match"
+      ],
+      "paths": [
+        "supabase/migrations/20260722223000_harden_trade_invitations.sql",
+        "supabase/migrations/20260729165525_evidence_weighted_milestones_additive.sql"
+      ],
+      "symbols": [
+        "offer_is_invitable",
+        "pair_is_blocked",
+        "lock_pair",
+        "create_trade_invitation_v2"
+      ],
+      "currentBehavior": "Uses pair locks and block checks but offer_is_invitable is limited to published, open, nonfinancial pledge offers; later wrappers bind authenticated actor identity.",
+      "differential": "Conflicts with the broader suggestion query and does not bind the complete structured or nested ontology.",
+      "shadowCoverage": "Explicit intent matrix retains both outer contract families while all live Paid Action enablement is false.",
+      "activationDisposition": "blocked_database_candidate",
+      "blockingReasons": [
+        "No SQL authority candidate is included to avoid an accidental production migration surface.",
+        "Backfill and live allowlist decisions remain future activation gates."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "ordinary-review-router-and-mutation",
+      "operationIntents": [
+        "ordinary_publish_or_review"
+      ],
+      "paths": [
+        "src/app/admin/trade-review/page.tsx",
+        "src/app/core-trade-actions.ts",
+        "src/app/core-trade-actions-base.ts"
+      ],
+      "symbols": [
+        "reviewCoreOfferAction form",
+        "reviewFeedCreateAwareCoreOfferAction as reviewCoreOfferAction",
+        "reviewCoreOfferAction"
+      ],
+      "currentBehavior": "An operator can publish by changing workflow and status and clearing moderation_reason; Feed-derived approval is routed separately.",
+      "differential": "Ordinary approval does not bind the structured moderation, harm, validity, baseline, legality, participant-policy, consent, or nested gates.",
+      "shadowCoverage": "Pending-review lifecycle, reviewer authorization, structured source gates, and mutation snapshot tests.",
+      "activationDisposition": "blocked_runtime_wiring",
+      "blockingReasons": [
+        "Historical offers may lack complete structured records.",
+        "Runtime publication changes are outside this tranche."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "feed-private-delivery-router-and-rpc",
+      "operationIntents": [
+        "feed_private_delivery"
+      ],
+      "paths": [
+        "src/app/feed-create-review-actions.ts",
+        "supabase/migrations/20260808110500_feed_create_private_delivery_v1.sql"
+      ],
+      "symbols": [
+        "reviewFeedCreateAwareCoreOfferAction",
+        "moral_trade_feed_create_deliver_service"
+      ],
+      "currentBehavior": "Atomically revalidates the exact source terms version, current pledge state, pair block, and private source relation before inserting a counterproposal and closing the derived draft.",
+      "differential": "Correctly stays private and source-bound, but lacks the complete structured, restriction, nested, and two-family authority.",
+      "shadowCoverage": "Exact source ID/version/hash/revision, private-channel, no-publication, pair, and TOCTOU fixtures.",
+      "activationDisposition": "blocked_runtime_wiring",
+      "blockingReasons": [
+        "No SQL change is authorized.",
+        "Paid Action and additional structured records require later database design and review."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "downstream-invitation-response-counterproposal-and-confirmation",
+      "operationIntents": [
+        "create_invitation",
+        "start_suggested_match"
+      ],
+      "paths": [
+        "src/app/core-trade-actions-base.ts",
+        "supabase/migrations/20260722223000_harden_trade_invitations.sql",
+        "supabase/migrations/20260729165525_evidence_weighted_milestones_additive.sql",
+        "supabase/migrations/20260729170000_marketplace_atomic_acceptance_current_core.sql"
+      ],
+      "symbols": [
+        "respondToTradeInvitationAction",
+        "decideCounterproposalAction",
+        "confirmAgreementVersionAction",
+        "respond_trade_invitation_v2",
+        "decide_counterproposal_v2",
+        "confirm_agreement_version_v2"
+      ],
+      "currentBehavior": "Later mutations recheck selected invitation, block, frozen-version, and agreement conditions with account-bound wrappers and atomic acceptance hardening.",
+      "differential": "These transitions do not yet call one complete operation-intent authority and retain pledge-only invitation compatibility.",
+      "shadowCoverage": "Documented as downstream mutations that must revalidate the same authority before future activation.",
+      "activationDisposition": "intentionally_deferred_downstream",
+      "blockingReasons": [
+        "The requested shadow tranche does not modify downstream lifecycle RPCs.",
+        "Acceptance, settlement, dispute, and payment policies remain live-activation work."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "structured-gate-candidates",
+      "operationIntents": [
+        "reciprocal_trade_match_suggestion_list",
+        "start_suggested_match",
+        "create_invitation",
+        "ordinary_publish_or_review",
+        "feed_private_delivery",
+        "research_edge_projection"
+      ],
+      "paths": [
+        "src/lib/moral-trade/user-safety-content-moderation.ts",
+        "src/lib/moral-trade/noncompensable-blockers.ts",
+        "src/lib/moral-trade/offer-validity.ts",
+        "src/lib/moral-trade/baseline-integrity.ts",
+        "src/lib/moral-trade/participant-eligibility.ts",
+        "src/lib/moral-trade/privacy-governance.ts"
+      ],
+      "symbols": [
+        "evaluateMoralTradeUserSafetyContentModeration",
+        "evaluateMoralTradeNoncompensableBlocker",
+        "evaluateMoralTradeOfferValidity",
+        "evaluateMoralTradeBaselineIntegrity",
+        "evaluateMoralTradeParticipantEligibility",
+        "evaluateMoralTradePrivacyGovernance"
+      ],
+      "currentBehavior": "Defines structured fail-closed contracts but is not atomically bound into the current reciprocal matcher or review mutations.",
+      "differential": "The shadow input requires explicit current states and never treats free text as clearance.",
+      "shadowCoverage": "Source and target gate status schema plus adversarial missing, blocked, stale, and contradictory semantics.",
+      "activationDisposition": "blocked_source_binding",
+      "blockingReasons": [
+        "No authoritative database projection binds all records under one snapshot.",
+        "Historical data completeness is unknown without prohibited row access."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "block-restriction-and-history-sources",
+      "operationIntents": [
+        "reciprocal_trade_match_suggestion_list",
+        "start_suggested_match",
+        "create_invitation",
+        "feed_private_delivery",
+        "research_edge_projection"
+      ],
+      "paths": [
+        "supabase/migrations/20260716080505_core_trade_loop.sql",
+        "supabase/migrations/20260714132939_contextual_credibility.sql",
+        "supabase/migrations/20260721153100_publish_moral_trade_offer_bank.sql",
+        "supabase/migrations/20260729170000_marketplace_atomic_acceptance_current_core.sql"
+      ],
+      "symbols": [
+        "trade_blocks",
+        "credibility_restrictions",
+        "trade_threads",
+        "agreements",
+        "interests"
+      ],
+      "currentBehavior": "Stores pair blocks, time-scoped restrictions, threads, agreements, interests, and current uniqueness under different contracts.",
+      "differential": "No single atomic projection distinguishes current blockers from retained terminal history for every operation.",
+      "shadowCoverage": "Typed block, restriction, active engagement, duplicate pair, and historical-interference fields.",
+      "activationDisposition": "blocked_source_binding",
+      "blockingReasons": [
+        "Requires an approved transaction-consistent database projection.",
+        "No protected or QA rows may be read in this tranche."
+      ],
+      "runtimeModified": false
+    },
+    {
+      "callSiteId": "research-projection-and-recommendation-graph-boundary",
+      "operationIntents": [
+        "research_edge_projection"
+      ],
+      "paths": [
+        "scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs",
+        "src/lib/recommendation-training.ts"
+      ],
+      "symbols": [
+        "listReciprocalMatches source contract",
+        "recommendation_graph_edges writer"
+      ],
+      "currentBehavior": "Repository research checks describe the live matcher while recommendation training writes learning edges for ranking.",
+      "differential": "Learning edges are explicitly prohibited as product matchability or research-eligibility authority; research adds separate consent, purpose, privacy, and ethics gates.",
+      "shadowCoverage": "Synthetic research projection, graph-prohibition, consent, history, and participant-causal-output tests.",
+      "activationDisposition": "prohibited_or_deferred",
+      "blockingReasons": [
+        "No protected projection, study registration, graph construction, assignment, or causal output is authorized.",
+        "PR #534 methodology remains inactive."
+      ],
+      "runtimeModified": false
+    }
+  ],
+  "trackedSymbolCoverage": [
+    {
+      "pattern": "listReciprocalMatches",
+      "scanRoot": "src",
+      "excludeSuffixes": [
+        ".test.ts"
+      ],
+      "coveredByRows": [
+        "reciprocal-suggestion-query",
+        "reciprocal-suggestion-ui"
+      ]
+    },
+    {
+      "pattern": "startSuggestedMatchAction",
+      "scanRoot": "src",
+      "excludeSuffixes": [
+        ".test.ts"
+      ],
+      "coveredByRows": [
+        "reciprocal-suggestion-ui",
+        "start-suggested-match-mutation"
+      ]
+    },
+    {
+      "pattern": "createTradeInvitationAction",
+      "scanRoot": "src",
+      "excludeSuffixes": [
+        ".test.ts"
+      ],
+      "coveredByRows": [
+        "invitation-ui-and-server-action"
+      ]
+    },
+    {
+      "pattern": "create_trade_invitation_v2",
+      "scanRoot": "src",
+      "excludeSuffixes": [
+        ".test.ts"
+      ],
+      "coveredByRows": [
+        "invitation-ui-and-server-action"
+      ]
+    },
+    {
+      "pattern": "reviewCoreOfferAction",
+      "scanRoot": "src",
+      "excludeSuffixes": [
+        ".test.ts"
+      ],
+      "coveredByRows": [
+        "ordinary-review-router-and-mutation",
+        "feed-private-delivery-router-and-rpc"
+      ]
+    },
+    {
+      "pattern": "moral_trade_feed_create_deliver_service",
+      "scanRoot": "src",
+      "excludeSuffixes": [
+        ".test.ts"
+      ],
+      "coveredByRows": [
+        "feed-private-delivery-router-and-rpc"
+      ]
+    },
+    {
+      "pattern": "applyParetoLearningToLiveNowPayload",
+      "scanRoot": "src",
+      "excludeSuffixes": [
+        ".test.ts"
+      ],
+      "coveredByRows": [
+        "cross-feed-pareto-ordering",
+        "cross-feed-a1-additional-mechanisms"
+      ]
+    },
+    {
+      "pattern": "buildHybridLiveNowFeed",
+      "scanRoot": "src",
+      "excludeSuffixes": [
+        ".test.ts"
+      ],
+      "coveredByRows": [
+        "cross-feed-base-inventory-and-ranking",
+        "cross-feed-a1-additional-mechanisms"
+      ]
+    }
+  ],
+  "releaseBoundary": {
+    "runtimeFilesModified": false,
+    "databaseFilesModified": false,
+    "callSitesWired": false,
+    "sqlCandidateIncluded": false,
+    "classification": "repository_only_design_and_shadow",
+    "disposition": "do_not_merge_or_deploy"
+  }
+}

@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/operation-intent-authority-decision.v1.json",
+  "title": "Moral Trade operation-intent synthetic shadow decision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evaluatorVersion",
+    "inputDigest",
+    "decisionDigest",
+    "intent",
+    "mechanismFamily",
+    "outerContractFamily",
+    "candidatePolicySatisfied",
+    "shadowDecision",
+    "liveEligible",
+    "executionDecision",
+    "candidateReasonCodes",
+    "globalBlockerReasonCodes",
+    "observationCodes",
+    "transactionRevalidationRequired",
+    "opportunityEnvelopeAccepted",
+    "syntheticOnly",
+    "effectiveAt",
+    "snapshotId",
+    "releaseClassification"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "moral-trade-operation-intent-decision-v1.0.0"
+    },
+    "evaluatorVersion": {
+      "const": "moral-trade-operation-intent-shadow-v1.0.0"
+    },
+    "inputDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "decisionDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "intent": {
+      "type": "string",
+      "enum": [
+        "cross_mechanism_feed_ingestion_and_ranking",
+        "reciprocal_trade_match_suggestion_list",
+        "start_suggested_match",
+        "create_invitation",
+        "ordinary_publish_or_review",
+        "feed_private_delivery",
+        "research_edge_projection"
+      ]
+    },
+    "mechanismFamily": {
+      "type": "string",
+      "enum": [
+        "reciprocal_trade",
+        "donation_redirect",
+        "donation_upgrade",
+        "spending_consumption_upgrade",
+        "co_fund",
+        "co_act",
+        "threshold_funding_assurance_dac",
+        "threshold_sign_on"
+      ]
+    },
+    "outerContractFamily": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "reciprocal_pledge_swap",
+            "paid_action"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "candidatePolicySatisfied": {
+      "type": "boolean"
+    },
+    "shadowDecision": {
+      "type": "string",
+      "enum": [
+        "include",
+        "exclude"
+      ]
+    },
+    "liveEligible": {
+      "const": false
+    },
+    "executionDecision": {
+      "const": "no_live_activation"
+    },
+    "candidateReasonCodes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "ACTOR_NOT_AUTHORIZED",
+          "MECHANISM_AUTHORITY_NOT_ELIGIBLE",
+          "OPPORTUNITY_ENVELOPE_INVALID",
+          "FEED_RANKING_AUTHORITY_OVERRIDE_PROHIBITED",
+          "SOURCE_MECHANISM_NOT_ALLOWED",
+          "TARGET_MECHANISM_NOT_ALLOWED",
+          "SOURCE_OUTER_CONTRACT_FAMILY_NOT_ALLOWED",
+          "TARGET_OUTER_CONTRACT_FAMILY_MISMATCH",
+          "TARGET_OFFER_REQUIRED",
+          "TARGET_OFFER_NOT_ALLOWED",
+          "SOURCE_OFFER_NOT_CURRENT",
+          "TARGET_OFFER_NOT_CURRENT",
+          "SOURCE_TERMS_STALE",
+          "TARGET_TERMS_STALE",
+          "SOURCE_REVISION_STALE",
+          "TARGET_REVISION_STALE",
+          "SELF_REFERENCE",
+          "SAME_OWNER",
+          "COUNTERPARTY_BINDING_REQUIRED",
+          "DATABASE_COMPATIBILITY_REQUIRED",
+          "DATABASE_COMPATIBILITY_KIND_MISMATCH",
+          "DATABASE_COMPATIBILITY_NO_MATCH",
+          "DATABASE_COLLATION_IDENTITY_REQUIRED",
+          "PAIR_BLOCKED",
+          "BLOCK_STATUS_UNKNOWN",
+          "ACTIVE_RESTRICTION",
+          "RESTRICTION_STATUS_UNKNOWN",
+          "ACTIVE_INTEREST_CONFLICT",
+          "ACTIVE_INVITATION_CONFLICT",
+          "ACTIVE_THREAD_CONFLICT",
+          "ACTIVE_AGREEMENT_CONFLICT",
+          "DUPLICATE_CURRENT_PAIR_CONFLICT",
+          "HISTORICAL_STATE_NOT_CAPTURED",
+          "SOURCE_MODERATION_NOT_CLEARED",
+          "TARGET_MODERATION_NOT_CLEARED",
+          "SOURCE_NONCOMPENSABLE_HARM_NOT_CLEARED",
+          "TARGET_NONCOMPENSABLE_HARM_NOT_CLEARED",
+          "SOURCE_VALIDITY_NOT_CLEARED",
+          "TARGET_VALIDITY_NOT_CLEARED",
+          "SOURCE_BASELINE_NOT_CLEARED",
+          "TARGET_BASELINE_NOT_CLEARED",
+          "SOURCE_LEGALITY_NOT_CLEARED",
+          "TARGET_LEGALITY_NOT_CLEARED",
+          "SOURCE_PARTICIPANT_POLICY_NOT_CLEARED",
+          "TARGET_PARTICIPANT_POLICY_NOT_CLEARED",
+          "SOURCE_PRODUCT_DISCOVERY_CONSENT_REQUIRED",
+          "TARGET_PRODUCT_DISCOVERY_CONSENT_REQUIRED",
+          "INVITATION_DELIVERY_PERMISSION_REQUIRED",
+          "INVITATION_ACCEPTANCE_STATE_INVALID",
+          "RESEARCH_CONSENT_OR_WAIVER_REQUIRED",
+          "PRIVACY_SCOPE_INCOMPATIBLE",
+          "SAME_TRANSACTION_REVALIDATION_REQUIRED",
+          "SNAPSHOT_REVISION_MISMATCH",
+          "CONCURRENT_MUTATION_DETECTED",
+          "PRIVATE_DELIVERY_SOURCE_BINDING_REQUIRED",
+          "PRIVATE_DELIVERY_PUBLIC_MARKET_FORBIDDEN",
+          "PRIVATE_DELIVERY_CHANNEL_REQUIRED",
+          "PRIVATE_DELIVERY_CONTRACT_FORBIDDEN",
+          "PAID_ACTION_CONTRACT_REQUIRED",
+          "PAID_ACTION_CONTRACT_FORBIDDEN",
+          "PAID_ACTION_DESTINATION_NOT_ALLOWED",
+          "PAID_ACTION_AMOUNT_INVALID",
+          "PAID_ACTION_ALLOCATION_REQUIRED",
+          "DUPLICATE_ALLOCATION_ID",
+          "EXACT_CENT_SPLIT_MISMATCH",
+          "SUBSTANTIVE_DESTINATION_CONTAINS_SYSTEM_LEG",
+          "EXPENSE_REIMBURSEMENT_PREAPPROVAL_REQUIRED",
+          "THIRD_PARTY_BENEFICIARY_REVIEW_REQUIRED",
+          "PARTIAL_SETTLEMENT_POLICY_UNRESOLVED",
+          "SETTLEMENT_FAILED",
+          "NESTED_OPPORTUNITY_REQUIRED",
+          "NESTED_DESTINATION_TYPE_MISMATCH",
+          "NESTED_DUPLICATE_ID",
+          "NESTED_PARENT_MISMATCH",
+          "NESTING_DEPTH_EXCEEDED",
+          "NESTED_SELF_REFERENCE",
+          "NESTED_CYCLE",
+          "NESTED_TERMS_NOT_FROZEN",
+          "NESTED_SOURCE_REVISION_STALE",
+          "NESTED_AUTHORITY_NOT_ELIGIBLE",
+          "NESTED_SNAPSHOT_MISMATCH",
+          "CO_ACT_CONTRACT_REQUIRED",
+          "CO_ACT_PRESENTATION_MISMATCH",
+          "CO_ACT_OBLIGATION_STATE_MISMATCH",
+          "CO_ACT_DIRECT_CTA_INVALID",
+          "CO_ACT_AUTHORITY_NOT_ELIGIBLE",
+          "CO_ACT_ACTIVATION_OR_CAPACITY_BLOCKED",
+          "CO_ACT_FROZEN_ROLE_TERMS_REQUIRED",
+          "CO_ACT_PROMISED_STATE_NOT_SATISFIED",
+          "RESEARCH_OVERLAY_INTENT_MISMATCH",
+          "RESEARCH_PURPOSE_NOT_BOUND",
+          "RECOMMENDATION_GRAPH_AUTHORITY_PROHIBITED",
+          "PARTICIPANT_CAUSAL_OUTPUT_PROHIBITED"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "globalBlockerReasonCodes": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "string",
+        "enum": [
+          "DESIGN_SHADOW_ONLY",
+          "LIVE_ACTIVATION_NOT_AUTHORIZED",
+          "PRODUCTION_MIGRATION_NOT_AUTHORIZED",
+          "PAYMENT_DESTINATION_LIVE_ENABLEMENT_DEFERRED",
+          "RESEARCH_EXECUTION_NOT_AUTHORIZED"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "observationCodes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "TERMINAL_HISTORY_RETAINED",
+          "INVITATION_ACCEPTANCE_PENDING",
+          "SYSTEM_MONEY_LEGS_SEPARATE",
+          "PAID_ACTION_ONTOLOGY_ONLY",
+          "CROSS_MECHANISM_RANKING_NON_AUTHORITATIVE"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "transactionRevalidationRequired": {
+      "type": "boolean"
+    },
+    "opportunityEnvelopeAccepted": {
+      "type": "boolean"
+    },
+    "syntheticOnly": {
+      "const": true
+    },
+    "effectiveAt": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{3})?Z$"
+    },
+    "snapshotId": {
+      "type": "string",
+      "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+    },
+    "releaseClassification": {
+      "const": "repository_only_design_and_shadow"
+    }
+  }
+}

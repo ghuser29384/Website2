@@ -1,0 +1,245 @@
+{
+  "artifactKind": "moral_trade_operation_intent_ontology",
+  "ontologyVersion": "1.0.0",
+  "boundBaseCommit": "75fd512e6cf82e2c51df53e211b854c0263109c3",
+  "ownerDecisionSource": {
+    "issue": 701,
+    "commentId": 5300603136,
+    "status": "frozen_for_design_and_shadow"
+  },
+  "layerModel": [
+    {
+      "layer": "mechanism_authority",
+      "responsibility": "Decide eligibility and terms for one mechanism family under one transaction snapshot."
+    },
+    {
+      "layer": "unified_opportunity_envelope",
+      "responsibility": "Carry a closed, typed, source-bound result from a mechanism authority without widening it."
+    },
+    {
+      "layer": "cross_mechanism_feed",
+      "responsibility": "Ingest eligible envelopes and rank across mechanism families; ranking never substitutes for authority."
+    }
+  ],
+  "mechanismFamilies": [
+    {
+      "id": "reciprocal_trade",
+      "independentAuthorityRequired": true,
+      "outerContractFamilies": ["reciprocal_pledge_swap", "paid_action"],
+      "directFeedEligible": true,
+      "nestedOpportunityEligible": false,
+      "legacyAliases": []
+    },
+    {
+      "id": "donation_redirect",
+      "independentAuthorityRequired": true,
+      "outerContractFamilies": [],
+      "directFeedEligible": true,
+      "nestedOpportunityEligible": true,
+      "legacyAliases": ["donation_offset"]
+    },
+    {
+      "id": "donation_upgrade",
+      "independentAuthorityRequired": true,
+      "outerContractFamilies": [],
+      "directFeedEligible": true,
+      "nestedOpportunityEligible": true,
+      "legacyAliases": []
+    },
+    {
+      "id": "spending_consumption_upgrade",
+      "independentAuthorityRequired": true,
+      "outerContractFamilies": [],
+      "directFeedEligible": true,
+      "nestedOpportunityEligible": true,
+      "legacyAliases": []
+    },
+    {
+      "id": "co_fund",
+      "independentAuthorityRequired": true,
+      "outerContractFamilies": [],
+      "directFeedEligible": true,
+      "nestedOpportunityEligible": true,
+      "legacyAliases": []
+    },
+    {
+      "id": "co_act",
+      "independentAuthorityRequired": true,
+      "outerContractFamilies": [],
+      "directFeedEligible": true,
+      "nestedOpportunityEligible": true,
+      "legacyAliases": []
+    },
+    {
+      "id": "threshold_funding_assurance_dac",
+      "independentAuthorityRequired": true,
+      "outerContractFamilies": [],
+      "directFeedEligible": true,
+      "nestedOpportunityEligible": true,
+      "legacyAliases": ["threshold_funding", "assurance_contract", "dominant_assurance_contract"]
+    },
+    {
+      "id": "threshold_sign_on",
+      "independentAuthorityRequired": true,
+      "outerContractFamilies": [],
+      "directFeedEligible": true,
+      "nestedOpportunityEligible": true,
+      "legacyAliases": []
+    }
+  ],
+  "outerContractFamilies": [
+    {
+      "id": "reciprocal_pledge_swap",
+      "mechanismFamily": "reciprocal_trade",
+      "substantiveExchange": "One frozen, verifiable obligation in exchange for another frozen, verifiable obligation."
+    },
+    {
+      "id": "paid_action",
+      "mechanismFamily": "reciprocal_trade",
+      "substantiveExchange": "Frozen monetary consideration in exchange for a frozen, verifiable action or milestone."
+    }
+  ],
+  "obligationTypes": [
+    { "id": "reciprocal_action_pledge", "mechanismFamily": "reciprocal_trade" },
+    { "id": "paid_verifiable_action", "mechanismFamily": "reciprocal_trade" },
+    { "id": "paid_verifiable_milestone", "mechanismFamily": "reciprocal_trade" },
+    { "id": "donation_redirect_commitment", "mechanismFamily": "donation_redirect" },
+    { "id": "donation_upgrade_commitment", "mechanismFamily": "donation_upgrade" },
+    { "id": "spending_consumption_upgrade_commitment", "mechanismFamily": "spending_consumption_upgrade" },
+    { "id": "co_fund_contribution", "mechanismFamily": "co_fund" },
+    { "id": "co_act_join", "mechanismFamily": "co_act" },
+    { "id": "co_act_accept_role", "mechanismFamily": "co_act" },
+    { "id": "co_act_reach_milestone", "mechanismFamily": "co_act" },
+    { "id": "co_act_complete_role", "mechanismFamily": "co_act" },
+    { "id": "threshold_pool_contribution", "mechanismFamily": "threshold_funding_assurance_dac" },
+    { "id": "threshold_sign_on_commitment", "mechanismFamily": "threshold_sign_on" }
+  ],
+  "considerationTypes": [
+    {
+      "id": "reciprocal_obligation",
+      "allowedOuterContractFamilies": ["reciprocal_pledge_swap"]
+    },
+    {
+      "id": "monetary_substantive_consideration",
+      "allowedOuterContractFamilies": ["paid_action"]
+    },
+    {
+      "id": "typed_nested_mechanism_obligation",
+      "allowedOuterContractFamilies": ["reciprocal_pledge_swap", "paid_action"]
+    }
+  ],
+  "substantiveDestinationIds": [
+    "actor_compensation",
+    "approved_charity_or_project",
+    "threshold_pool_contribution",
+    "upgrade_payment",
+    "approved_moral_trade_opportunity",
+    "merchant_vendor_payment",
+    "verified_expense_reimbursement",
+    "designated_third_party_beneficiary",
+    "exact_cent_split_allocation"
+  ],
+  "systemMoneyLegTypes": [
+    "performance_bond",
+    "security_deposit",
+    "collateral",
+    "escrow_or_mandate_authorization",
+    "refund",
+    "reversal",
+    "chargeback",
+    "failed_settlement_return",
+    "tax_withholding",
+    "required_reporting_amount",
+    "platform_fee",
+    "provider_fee",
+    "dac_success_surcharge",
+    "reserve_allocation",
+    "dac_failure_bonus"
+  ],
+  "triggerTypes": [
+    "mechanism_authority_evaluation",
+    "cross_mechanism_feed_ingestion",
+    "cross_mechanism_feed_ranking",
+    "reciprocal_match_suggestion",
+    "start_suggested_match",
+    "create_invitation",
+    "deliver_invitation",
+    "accept_invitation",
+    "decline_invitation",
+    "revoke_invitation",
+    "expire_invitation",
+    "submit_counterproposal",
+    "decide_counterproposal",
+    "confirm_agreement_version",
+    "ordinary_publish_or_review",
+    "feed_private_delivery",
+    "research_edge_projection",
+    "outer_contract_lock",
+    "nested_obligation_lock",
+    "payment_leg_authorization",
+    "partial_settlement",
+    "failed_settlement",
+    "refund_or_reversal",
+    "co_act_state_transition"
+  ],
+  "nestedOpportunityContract": {
+    "requiredFields": [
+      "nestedOpportunityType",
+      "nestedOpportunityId",
+      "nestedTermsVersion",
+      "nestedTermsHash",
+      "nestedSourceRevision",
+      "depth",
+      "parentOpportunityId",
+      "ancestryOpportunityIds",
+      "authorityEligible",
+      "authoritySnapshotId",
+      "sourceRevisionCurrent",
+      "termsFrozen"
+    ],
+    "maximumDepth": 1,
+    "selfReferenceAllowed": false,
+    "cyclesAllowed": false,
+    "duplicateOpportunityIdsAllowed": false,
+    "depthOneParent": "evaluated_root_opportunity",
+    "ancestryRule": "Any ancestry edge among nested opportunity IDs must remain acyclic.",
+    "sameSnapshotAuthorityRequired": true,
+    "sourceRevisionMustBeCurrent": true
+  },
+  "coActDirectFeedContract": {
+    "mechanismFamily": "co_act",
+    "cta": "join_or_review_co_act",
+    "authorityRequired": "co_act",
+    "notEquivalentToNestedObligation": true
+  },
+  "coActNestedStateContract": {
+    "join": "joined",
+    "accept_role": "role_accepted",
+    "reach_milestone": "milestone_completed",
+    "complete_role": "role_completed"
+  },
+  "liveActivationDeferredDecisions": [
+    "initial_payment_destination_allowlist",
+    "custody_or_external_conditional_authorization",
+    "provider_selection_and_capability",
+    "kyc_aml_sanctions",
+    "actor_payment_labor_tax_identity",
+    "partial_completion_payment_policy",
+    "dispute_refund_chargeback_policy",
+    "third_party_beneficiary_enablement",
+    "split_allocation_reversal_order",
+    "production_migration_and_feature_flag_rollout"
+  ],
+  "authorization": {
+    "designAndShadowOnly": true,
+    "liveActivationAuthorized": false,
+    "runtimeWiringAuthorized": false,
+    "productionMigrationAuthorized": false,
+    "realOrQaRowAccessAuthorized": false,
+    "moneyMovementAuthorized": false,
+    "studyRegistrationOrExecutionAuthorized": false,
+    "assignmentEntropyAuthorized": false,
+    "participantContactAuthorized": false,
+    "pr534MethodologyAuthorized": false
+  }
+}

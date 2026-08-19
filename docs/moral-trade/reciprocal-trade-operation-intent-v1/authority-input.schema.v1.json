@@ -1,0 +1,1348 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/operation-intent-authority-input.v1.json",
+  "title": "Moral Trade operation-intent synthetic shadow input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evaluatorVersion",
+    "subjectMode",
+    "intent",
+    "effectiveAt",
+    "snapshot",
+    "actor",
+    "counterparty",
+    "sourceOffer",
+    "targetOffer",
+    "pair",
+    "structuredGates",
+    "consent",
+    "paidAction",
+    "nestedOpportunities",
+    "systemMoneyLegs",
+    "coAct",
+    "feed",
+    "privateDelivery",
+    "research"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "moral-trade-operation-intent-input-v1.0.0"
+    },
+    "evaluatorVersion": {
+      "const": "moral-trade-operation-intent-shadow-v1.0.0"
+    },
+    "subjectMode": {
+      "const": "synthetic_shadow"
+    },
+    "intent": {
+      "type": "string",
+      "enum": [
+        "cross_mechanism_feed_ingestion_and_ranking",
+        "reciprocal_trade_match_suggestion_list",
+        "start_suggested_match",
+        "create_invitation",
+        "ordinary_publish_or_review",
+        "feed_private_delivery",
+        "research_edge_projection"
+      ]
+    },
+    "effectiveAt": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{3})?Z$"
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshotId",
+        "transactionId",
+        "decisionRevision",
+        "mutationRevision",
+        "sameTransaction",
+        "revalidatedImmediatelyBeforeMutation",
+        "concurrentMutationDetected"
+      ],
+      "properties": {
+        "snapshotId": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "transactionId": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "decisionRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mutationRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sameTransaction": {
+          "type": "boolean"
+        },
+        "revalidatedImmediatelyBeforeMutation": {
+          "type": "boolean"
+        },
+        "concurrentMutationDetected": {
+          "type": "boolean"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorId",
+        "authorized",
+        "role"
+      ],
+      "properties": {
+        "actorId": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "authorized": {
+          "type": "boolean"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "source_owner",
+            "reviewer",
+            "feed_ranker",
+            "research_projector"
+          ]
+        }
+      }
+    },
+    "counterparty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "distinctFromActor",
+        "accountBindingStatus"
+      ],
+      "properties": {
+        "profileId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "distinctFromActor": {
+          "type": "boolean"
+        },
+        "accountBindingStatus": {
+          "type": "string",
+          "enum": [
+            "bound",
+            "first_claim_pending",
+            "not_applicable",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "sourceOffer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offerId",
+        "ownerId",
+        "mechanismFamily",
+        "outerContractFamily",
+        "workflowStatus",
+        "operationalStatus",
+        "operative",
+        "termsVersion",
+        "termsHash",
+        "termsCurrent",
+        "sourceRevision",
+        "sourceRevisionCurrent",
+        "privacyScopeCompatible"
+      ],
+      "properties": {
+        "offerId": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "mechanismFamily": {
+          "type": "string",
+          "enum": [
+            "reciprocal_trade",
+            "donation_redirect",
+            "donation_upgrade",
+            "spending_consumption_upgrade",
+            "co_fund",
+            "co_act",
+            "threshold_funding_assurance_dac",
+            "threshold_sign_on"
+          ]
+        },
+        "outerContractFamily": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "reciprocal_pledge_swap",
+                "paid_action"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workflowStatus": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "pending_review",
+            "published",
+            "changes_requested",
+            "rejected",
+            "paused",
+            "closed",
+            "deleted"
+          ]
+        },
+        "operationalStatus": {
+          "type": "string",
+          "enum": [
+            "open",
+            "paused",
+            "matched",
+            "closed"
+          ]
+        },
+        "operative": {
+          "type": "boolean"
+        },
+        "termsVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "termsHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "termsCurrent": {
+          "type": "boolean"
+        },
+        "sourceRevision": {
+          "type": "string",
+          "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+        },
+        "sourceRevisionCurrent": {
+          "type": "boolean"
+        },
+        "privacyScopeCompatible": {
+          "type": "boolean"
+        }
+      }
+    },
+    "targetOffer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "offerId",
+            "ownerId",
+            "mechanismFamily",
+            "outerContractFamily",
+            "workflowStatus",
+            "operationalStatus",
+            "operative",
+            "termsVersion",
+            "termsHash",
+            "termsCurrent",
+            "sourceRevision",
+            "sourceRevisionCurrent",
+            "privacyScopeCompatible"
+          ],
+          "properties": {
+            "offerId": {
+              "type": "string",
+              "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+            },
+            "ownerId": {
+              "type": "string",
+              "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+            },
+            "mechanismFamily": {
+              "type": "string",
+              "enum": [
+                "reciprocal_trade",
+                "donation_redirect",
+                "donation_upgrade",
+                "spending_consumption_upgrade",
+                "co_fund",
+                "co_act",
+                "threshold_funding_assurance_dac",
+                "threshold_sign_on"
+              ]
+            },
+            "outerContractFamily": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "reciprocal_pledge_swap",
+                    "paid_action"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workflowStatus": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "pending_review",
+                "published",
+                "changes_requested",
+                "rejected",
+                "paused",
+                "closed",
+                "deleted"
+              ]
+            },
+            "operationalStatus": {
+              "type": "string",
+              "enum": [
+                "open",
+                "paused",
+                "matched",
+                "closed"
+              ]
+            },
+            "operative": {
+              "type": "boolean"
+            },
+            "termsVersion": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "termsHash": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "termsCurrent": {
+              "type": "boolean"
+            },
+            "sourceRevision": {
+              "type": "string",
+              "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+            },
+            "sourceRevisionCurrent": {
+              "type": "boolean"
+            },
+            "privacyScopeCompatible": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blockStatus",
+        "restrictions",
+        "engagements",
+        "compatibility"
+      ],
+      "properties": {
+        "blockStatus": {
+          "type": "string",
+          "enum": [
+            "clear",
+            "blocked",
+            "unknown"
+          ]
+        },
+        "restrictions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope",
+              "status",
+              "startsAt",
+              "expiresAt",
+              "revokedAt"
+            ],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "account",
+                  "role",
+                  "mechanism",
+                  "pair"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "inactive",
+                  "active",
+                  "reviewing",
+                  "expired",
+                  "revoked",
+                  "unknown",
+                  "contradictory"
+                ]
+              },
+              "startsAt": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{3})?Z$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "expiresAt": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{3})?Z$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "revokedAt": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{3})?Z$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "engagements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "activeInterest",
+            "activeInvitation",
+            "activeThread",
+            "activeAgreement",
+            "duplicateCurrentPair",
+            "terminalHistoricalRecordsCaptured",
+            "terminalHistoricalCount"
+          ],
+          "properties": {
+            "activeInterest": {
+              "type": "boolean"
+            },
+            "activeInvitation": {
+              "type": "boolean"
+            },
+            "activeThread": {
+              "type": "boolean"
+            },
+            "activeAgreement": {
+              "type": "boolean"
+            },
+            "duplicateCurrentPair": {
+              "type": "boolean"
+            },
+            "terminalHistoricalRecordsCaptured": {
+              "type": "boolean"
+            },
+            "terminalHistoricalCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "compatibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authority",
+            "kind",
+            "status",
+            "patternClass",
+            "databaseResultBound",
+            "collationIdentity"
+          ],
+          "properties": {
+            "authority": {
+              "const": "postgres_database"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "reciprocal_cause_pair",
+                "paid_action_terms",
+                "not_applicable"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "match",
+                "no_match",
+                "unavailable"
+              ]
+            },
+            "patternClass": {
+              "type": "string",
+              "enum": [
+                "exact_ascii",
+                "percent_pattern",
+                "underscore_pattern",
+                "escape_pattern",
+                "non_ascii",
+                "not_applicable"
+              ]
+            },
+            "databaseResultBound": {
+              "type": "boolean"
+            },
+            "collationIdentity": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "structuredGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "target"
+      ],
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "moderation",
+            "noncompensableHarmThreat",
+            "validity",
+            "baseline",
+            "legality",
+            "participantPolicy"
+          ],
+          "properties": {
+            "moderation": {
+              "type": "string",
+              "enum": [
+                "cleared",
+                "blocked",
+                "missing",
+                "stale",
+                "contradictory",
+                "review_required"
+              ]
+            },
+            "noncompensableHarmThreat": {
+              "type": "string",
+              "enum": [
+                "cleared",
+                "blocked",
+                "missing",
+                "stale",
+                "contradictory",
+                "review_required"
+              ]
+            },
+            "validity": {
+              "type": "string",
+              "enum": [
+                "cleared",
+                "blocked",
+                "missing",
+                "stale",
+                "contradictory",
+                "review_required"
+              ]
+            },
+            "baseline": {
+              "type": "string",
+              "enum": [
+                "cleared",
+                "blocked",
+                "missing",
+                "stale",
+                "contradictory",
+                "review_required"
+              ]
+            },
+            "legality": {
+              "type": "string",
+              "enum": [
+                "cleared",
+                "blocked",
+                "missing",
+                "stale",
+                "contradictory",
+                "review_required"
+              ]
+            },
+            "participantPolicy": {
+              "type": "string",
+              "enum": [
+                "cleared",
+                "blocked",
+                "missing",
+                "stale",
+                "contradictory",
+                "review_required"
+              ]
+            }
+          }
+        },
+        "target": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "moderation",
+                "noncompensableHarmThreat",
+                "validity",
+                "baseline",
+                "legality",
+                "participantPolicy"
+              ],
+              "properties": {
+                "moderation": {
+                  "type": "string",
+                  "enum": [
+                    "cleared",
+                    "blocked",
+                    "missing",
+                    "stale",
+                    "contradictory",
+                    "review_required"
+                  ]
+                },
+                "noncompensableHarmThreat": {
+                  "type": "string",
+                  "enum": [
+                    "cleared",
+                    "blocked",
+                    "missing",
+                    "stale",
+                    "contradictory",
+                    "review_required"
+                  ]
+                },
+                "validity": {
+                  "type": "string",
+                  "enum": [
+                    "cleared",
+                    "blocked",
+                    "missing",
+                    "stale",
+                    "contradictory",
+                    "review_required"
+                  ]
+                },
+                "baseline": {
+                  "type": "string",
+                  "enum": [
+                    "cleared",
+                    "blocked",
+                    "missing",
+                    "stale",
+                    "contradictory",
+                    "review_required"
+                  ]
+                },
+                "legality": {
+                  "type": "string",
+                  "enum": [
+                    "cleared",
+                    "blocked",
+                    "missing",
+                    "stale",
+                    "contradictory",
+                    "review_required"
+                  ]
+                },
+                "participantPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "cleared",
+                    "blocked",
+                    "missing",
+                    "stale",
+                    "contradictory",
+                    "review_required"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceProductDiscovery",
+        "targetProductDiscovery",
+        "invitationDeliveryPermission",
+        "invitationAcceptance",
+        "sourceResearch",
+        "targetResearch",
+        "privacyScopeCompatible"
+      ],
+      "properties": {
+        "sourceProductDiscovery": {
+          "type": "string",
+          "enum": [
+            "granted",
+            "not_required",
+            "missing",
+            "denied"
+          ]
+        },
+        "targetProductDiscovery": {
+          "type": "string",
+          "enum": [
+            "granted",
+            "not_required",
+            "missing",
+            "denied"
+          ]
+        },
+        "invitationDeliveryPermission": {
+          "type": "string",
+          "enum": [
+            "granted",
+            "not_required",
+            "missing",
+            "denied"
+          ]
+        },
+        "invitationAcceptance": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "declined",
+            "not_applicable"
+          ]
+        },
+        "sourceResearch": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "not_required",
+            "missing",
+            "denied"
+          ]
+        },
+        "targetResearch": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "not_required",
+            "missing",
+            "denied"
+          ]
+        },
+        "privacyScopeCompatible": {
+          "type": "boolean"
+        }
+      }
+    },
+    "paidAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "destinationClass",
+            "totalAmountMinor",
+            "currency",
+            "allocations",
+            "expensePreApproved",
+            "thirdPartyReviewStatus",
+            "settlementStatus",
+            "partialCompletionPolicyStatus",
+            "substantiveDestinationIncludesSystemLeg"
+          ],
+          "properties": {
+            "destinationClass": {
+              "type": "string",
+              "enum": [
+                "actor_compensation",
+                "approved_charity_or_project",
+                "threshold_pool_contribution",
+                "upgrade_payment",
+                "approved_moral_trade_opportunity",
+                "merchant_vendor_payment",
+                "verified_expense_reimbursement",
+                "designated_third_party_beneficiary",
+                "exact_cent_split_allocation"
+              ]
+            },
+            "totalAmountMinor": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "allocations": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "allocationId",
+                  "destinationClass",
+                  "amountMinor",
+                  "nestedOpportunityId"
+                ],
+                "properties": {
+                  "allocationId": {
+                    "type": "string",
+                    "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+                  },
+                  "destinationClass": {
+                    "type": "string",
+                    "enum": [
+                      "actor_compensation",
+                      "approved_charity_or_project",
+                      "threshold_pool_contribution",
+                      "upgrade_payment",
+                      "approved_moral_trade_opportunity",
+                      "merchant_vendor_payment",
+                      "verified_expense_reimbursement",
+                      "designated_third_party_beneficiary"
+                    ]
+                  },
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "nestedOpportunityId": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "expensePreApproved": {
+              "type": "boolean"
+            },
+            "thirdPartyReviewStatus": {
+              "type": "string",
+              "enum": [
+                "not_applicable",
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            },
+            "settlementStatus": {
+              "type": "string",
+              "enum": [
+                "not_started",
+                "authorized",
+                "partially_settled",
+                "settled",
+                "failed",
+                "reversed",
+                "charged_back"
+              ]
+            },
+            "partialCompletionPolicyStatus": {
+              "type": "string",
+              "enum": [
+                "not_applicable",
+                "resolved",
+                "unresolved"
+              ]
+            },
+            "substantiveDestinationIncludesSystemLeg": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nestedOpportunities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nestedOpportunityType",
+          "nestedOpportunityId",
+          "nestedTermsVersion",
+          "nestedTermsHash",
+          "nestedSourceRevision",
+          "depth",
+          "parentOpportunityId",
+          "ancestryOpportunityIds",
+          "authorityEligible",
+          "authoritySnapshotId",
+          "sourceRevisionCurrent",
+          "termsFrozen"
+        ],
+        "properties": {
+          "nestedOpportunityType": {
+            "type": "string",
+            "enum": [
+              "donation_redirect",
+              "donation_upgrade",
+              "spending_consumption_upgrade",
+              "co_fund",
+              "co_act",
+              "threshold_funding_assurance_dac",
+              "threshold_sign_on"
+            ]
+          },
+          "nestedOpportunityId": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+          },
+          "nestedTermsVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "nestedTermsHash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "nestedSourceRevision": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "parentOpportunityId": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+          },
+          "ancestryOpportunityIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+            },
+            "uniqueItems": true
+          },
+          "authorityEligible": {
+            "type": "boolean"
+          },
+          "authoritySnapshotId": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+          },
+          "sourceRevisionCurrent": {
+            "type": "boolean"
+          },
+          "termsFrozen": {
+            "type": "boolean"
+          }
+        }
+      },
+      "uniqueItems": true
+    },
+    "systemMoneyLegs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "legId",
+          "legType",
+          "amountMinor",
+          "status"
+        ],
+        "properties": {
+          "legId": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+          },
+          "legType": {
+            "type": "string",
+            "enum": [
+              "performance_bond",
+              "security_deposit",
+              "collateral",
+              "escrow_or_mandate_authorization",
+              "refund",
+              "reversal",
+              "chargeback",
+              "failed_settlement_return",
+              "tax_withholding",
+              "required_reporting_amount",
+              "platform_fee",
+              "provider_fee",
+              "dac_success_surcharge",
+              "reserve_allocation",
+              "dac_failure_bonus"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "authorized",
+              "settled",
+              "failed",
+              "reversed"
+            ]
+          }
+        }
+      }
+    },
+    "coAct": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "presentation",
+            "nestedOpportunityId",
+            "roleId",
+            "obligationLevel",
+            "promisedState",
+            "observedState",
+            "activationState",
+            "capacityState",
+            "timingBound",
+            "evidenceBound",
+            "withdrawalTermsBound",
+            "identityPrivacyBound",
+            "participantEligibilityCleared",
+            "authorityEligible",
+            "promisedStateSatisfied"
+          ],
+          "properties": {
+            "presentation": {
+              "type": "string",
+              "enum": [
+                "direct_feed",
+                "nested_obligation"
+              ]
+            },
+            "nestedOpportunityId": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "roleId": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "obligationLevel": {
+              "type": "string",
+              "enum": [
+                "not_applicable",
+                "join",
+                "accept_role",
+                "reach_milestone",
+                "complete_role"
+              ]
+            },
+            "promisedState": {
+              "type": "string",
+              "enum": [
+                "not_applicable",
+                "joined",
+                "role_accepted",
+                "milestone_completed",
+                "role_completed"
+              ]
+            },
+            "observedState": {
+              "type": "string",
+              "enum": [
+                "invited",
+                "signed",
+                "joined",
+                "role_accepted",
+                "activated",
+                "milestone_completed",
+                "role_completed",
+                "withdrawn"
+              ]
+            },
+            "activationState": {
+              "type": "string",
+              "enum": [
+                "active",
+                "inactive",
+                "closed",
+                "unknown"
+              ]
+            },
+            "capacityState": {
+              "type": "string",
+              "enum": [
+                "available",
+                "full",
+                "unknown"
+              ]
+            },
+            "timingBound": {
+              "type": "boolean"
+            },
+            "evidenceBound": {
+              "type": "boolean"
+            },
+            "withdrawalTermsBound": {
+              "type": "boolean"
+            },
+            "identityPrivacyBound": {
+              "type": "boolean"
+            },
+            "participantEligibilityCleared": {
+              "type": "boolean"
+            },
+            "authorityEligible": {
+              "type": "boolean"
+            },
+            "promisedStateSatisfied": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "feed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceChannel",
+        "mechanismAuthorityEligible",
+        "rankingAttemptedToOverrideAuthority",
+        "cta",
+        "opportunityEnvelope"
+      ],
+      "properties": {
+        "sourceChannel": {
+          "type": "string",
+          "enum": [
+            "public_mechanism",
+            "private_source_bound",
+            "research_only"
+          ]
+        },
+        "mechanismAuthorityEligible": {
+          "type": "boolean"
+        },
+        "rankingAttemptedToOverrideAuthority": {
+          "type": "boolean"
+        },
+        "cta": {
+          "type": "string"
+        },
+        "opportunityEnvelope": {
+          "oneOf": [
+            {
+              "$ref": "opportunity-envelope.schema.v1.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "privateDelivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applies",
+        "boundSourceOfferId",
+        "boundTermsVersion",
+        "boundTermsHash",
+        "boundSourceRevision",
+        "exactSourceOfferIdBound",
+        "exactTermsVersionBound",
+        "exactTermsHashBound",
+        "exactSourceRevisionBound",
+        "publicMarketPublicationRequested"
+      ],
+      "properties": {
+        "applies": {
+          "type": "boolean"
+        },
+        "boundSourceOfferId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "boundTermsVersion": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "boundTermsHash": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "boundSourceRevision": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^synthetic:[A-Za-z0-9._:-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exactSourceOfferIdBound": {
+          "type": "boolean"
+        },
+        "exactTermsVersionBound": {
+          "type": "boolean"
+        },
+        "exactTermsHashBound": {
+          "type": "boolean"
+        },
+        "exactSourceRevisionBound": {
+          "type": "boolean"
+        },
+        "publicMarketPublicationRequested": {
+          "type": "boolean"
+        }
+      }
+    },
+    "research": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applies",
+        "purposeBound",
+        "studySpecificConsentOrWaiverApproved",
+        "recommendationGraphUsedAsAuthority",
+        "participantCausalOutputRequested",
+        "historicalInterferenceCaptured"
+      ],
+      "properties": {
+        "applies": {
+          "type": "boolean"
+        },
+        "purposeBound": {
+          "type": "boolean"
+        },
+        "studySpecificConsentOrWaiverApproved": {
+          "type": "boolean"
+        },
+        "recommendationGraphUsedAsAuthority": {
+          "type": "boolean"
+        },
+        "participantCausalOutputRequested": {
+          "type": "boolean"
+        },
+        "historicalInterferenceCaptured": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
