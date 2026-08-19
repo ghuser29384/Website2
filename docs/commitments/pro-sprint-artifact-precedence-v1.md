@@ -13,6 +13,7 @@
 
 - PR #733: merged; authoritative run-owned QA and cleanup boundary.
 - PR #747: learned-ranking readiness source; activation remains false regardless of later `main` drift.
+- PR #758: merged strictly non-payment DAC lifecycle at `f1cd364bf058b28b3b29501aa6528c48f8f39bb7`; it remains a separate mechanism stream and does not establish bilateral-pilot readiness, adoption, additionality, impact, or a general solution to free-riding.
 - PR #722: preserved split-before-merge source; do not extend or merge as one.
 - PR #718: stale and substantively unaccepted; not the founding-pilot critical path.
 - PR #635: evidence-decision semantic source; do not merge wholesale.
@@ -31,6 +32,7 @@ Omit and do not treat as governing:
 - sprint handoff deltas;
 - dated current-state/global-audit documents once this package is accepted;
 - local validation logs and archive metadata;
+- non-normative smoke or transport files;
 - claims that PR #718 awaits first review;
 - claims that PR #722 should merge as one candidate;
 - claims that synthetic UAT is adoption, safety, impact, or causal evidence;
