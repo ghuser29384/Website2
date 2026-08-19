@@ -75,20 +75,11 @@ jobs:
           release_run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" '[.[] | select(.headSha == $sha and .event == "workflow_dispatch")] | sort_by(.createdAt) | last | .databaseId // empty' <<<"$runs_json")"
 
           if test -z "$release_run_id"; then
+            payload="$(jq -n --arg sha "$EXPECTED_MAIN_SHA" '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$sha,synthetic_auth_fixture_url:""}}')"
             gh api --method POST \
               -H 'Accept: application/vnd.github+json' \
               "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
-              --input - <<JSON
-            {
-              "ref": "main",
-              "inputs": {
-                "target": "production",
-                "ref": "main",
-                "expected_sha": "$EXPECTED_MAIN_SHA",
-                "synthetic_auth_fixture_url": ""
-              }
-            }
-            JSON
+              --input - <<<"$payload"
             for attempt in $(seq 1 60); do
               sleep 2
               runs_json="$(list_runs)"
