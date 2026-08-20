@@ -72,10 +72,14 @@ for route_name in [
 auth_test = Path("src/lib/every-org-partner-webhook-auth.test.ts")
 replace_exact(
     auth_test,
-    "  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,\n",
+    "  authenticateEveryOrgPartnerWebhookRequest,\n"
+    "  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,\n"
+    "  getEveryOrgCredentialConfiguration,\n",
+    "  authenticateEveryOrgPartnerWebhookRequest,\n"
     "  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,\n"
     "  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER,\n"
-    "  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_VALUE_PREFIX,\n",
+    "  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_VALUE_PREFIX,\n"
+    "  getEveryOrgCredentialConfiguration,\n",
     label="auth constants import",
 )
 replace_exact(
