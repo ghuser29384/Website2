@@ -1,4 +1,10 @@
-horizationContract: "unconfirmed",',
+'''
+replace_exact(direct_test, old_live_test, new_live_test, label="live readiness test")
+
+trade_test = Path("src/lib/trade-donation.test.ts")
+replace_exact(
+    trade_test,
+    '  partnerWebhookAuthorizationContract: "unconfirmed",',
     '  partnerWebhookAuthorizationContract: "authorization_bearer_v1",',
     label="pledge fixture contract status",
 )
@@ -145,5 +151,4 @@ replace_exact(
     "The public Donate Link token and private Partner Webhook authorization token must be configured independently and must differ. `EVERY_ORG_WEBHOOK_TOKEN` is unsupported and is never treated as an alias for either value. The webhook route ID must be 32-128 URL-safe characters and is not a credential; the metadata secret must contain at least 32 characters.",
     label="direct credential boundary",
 )
-old_direct_contract = "Phase A intentionally keeps the Partner Webhook authorization contract in the `unconfirmed` state because Every.org has not yet supplied the literal header name and complete value format. In that state, search fixtures may remain available outside production, but publication and checkout stay fail-closed and every inbound Every.org webhook returns a generic `401` before body parsing or database access. A correct URL path is defense in depth and cannot bypass this gate."
-new_direct_contract = "The confirmed Partner Webhook contract is exactly one `Authorization` header whose value is `Bearer <Auth Token>`, with the literal scheme, one ASCII space, and the p
+old_direct_contract = "Phase A intentionally keeps the Partner Webhook authorization contract in the `unconfirmed` state because Every.org has not yet supplied the literal header name and complete value format. In that state, search fixtures may remain available outside production, but publication and checkout stay fail-closed and every inbound Every.org webhook returns a generic `401` before body parsing or database access. A correct URL path is defense in depth and cannot bypass thi
