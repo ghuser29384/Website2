@@ -1,4 +1,5 @@
-rivate Auth Token. Missing, duplicated/coalesced, malformed, or incorrect authorization returns a generic `401` before body parsing or database access. A correct route ID remains defense in depth and cannot bypass this gate."
+s gate."
+new_direct_contract = "The confirmed Partner Webhook contract is exactly one `Authorization` header whose value is `Bearer <Auth Token>`, with the literal scheme, one ASCII space, and the private Auth Token. Missing, duplicated/coalesced, malformed, or incorrect authorization returns a generic `401` before body parsing or database access. A correct route ID remains defense in depth and cannot bypass this gate."
 replace_exact(
     direct_doc,
     old_direct_contract,
