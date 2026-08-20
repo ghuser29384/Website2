@@ -3,18 +3,19 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { POST as sharedConnectorPost } from "@/app/api/connectors/every-org/[secret]/route";
+import { POST as sharedConnectorPost } from "@/app/api/connectors/every-org/[routeId]/route";
 import { POST as mpgfConnectorPost } from "@/app/api/mpgf/every-org/webhook/route";
 import {
   authenticateEveryOrgPartnerWebhookRequest,
   EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,
   getEveryOrgCredentialConfiguration,
+  isValidEveryOrgWebhookRouteId,
   resolveEveryOrgSharedConnector,
 } from "@/lib/every-org-partner-webhook-auth";
 
 const publicToken = "phase-a-public-donate-link-token";
 const privateToken = "phase-a-private-partner-authorization-token";
-const pathSecret = "phase-a-webhook-path-secret-that-is-long-enough";
+const routeId = "phase-a-webhook-route-id-000000000001";
 
 const distinctCredentialEnvironment = {
   EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: publicToken,
@@ -86,54 +87,71 @@ test("the provider authenticator is explicitly unconfirmed and accepts no guesse
   });
 });
 
-test("the shared connector accepts its defense-in-depth path only for one compatible ready configuration", () => {
+test("webhook route IDs are opaque non-secret routing values with a closed URL-safe grammar", () => {
+  assert.equal(isValidEveryOrgWebhookRouteId(routeId), true);
+  assert.equal(
+    isValidEveryOrgWebhookRouteId("another-phase-a-webhook-route-id-000001"),
+    true,
+  );
+  assert.equal(isValidEveryOrgWebhookRouteId("too-short"), false);
+  assert.equal(
+    isValidEveryOrgWebhookRouteId("route-id-with-a-slash/0000000000000000"),
+    false,
+  );
+  assert.equal(
+    isValidEveryOrgWebhookRouteId("route id with spaces 000000000000000000"),
+    false,
+  );
+});
+
+test("the shared connector accepts its defense-in-depth route ID only for one compatible ready configuration", () => {
   const direct = {
     mechanism: "direct_donation_upgrade" as const,
     enabled: true,
     ready: true,
     environment: "staging" as const,
-    webhookPathSecret: pathSecret,
+    webhookRouteId: routeId,
   };
   const pledge = {
     mechanism: "pledge_donation" as const,
     enabled: true,
     ready: true,
     environment: "staging" as const,
-    webhookPathSecret: pathSecret,
+    webhookRouteId: routeId,
   };
 
   assert.equal(
-    resolveEveryOrgSharedConnector(pathSecret, [direct]).accepted,
+    resolveEveryOrgSharedConnector(routeId, [direct]).accepted,
     true,
   );
   assert.equal(
-    resolveEveryOrgSharedConnector(pathSecret, [direct, pledge]).accepted,
+    resolveEveryOrgSharedConnector(routeId, [direct, pledge]).accepted,
     true,
   );
   assert.equal(
     resolveEveryOrgSharedConnector("wrong-path", [direct]).status,
-    "path_mismatch",
+    "route_id_mismatch",
   );
   assert.equal(
-    resolveEveryOrgSharedConnector(pathSecret, [
+    resolveEveryOrgSharedConnector(routeId, [
       direct,
       { ...pledge, environment: "live" },
     ]).status,
     "environment_ambiguous",
   );
   assert.equal(
-    resolveEveryOrgSharedConnector(pathSecret, [
+    resolveEveryOrgSharedConnector(routeId, [
       direct,
       {
         ...pledge,
-        webhookPathSecret:
-          "another-phase-a-webhook-path-secret-that-is-long-enough",
+        webhookRouteId:
+          "another-phase-a-webhook-route-id-000000000001",
       },
     ]).status,
-    "path_ambiguous",
+    "route_id_ambiguous",
   );
   assert.equal(
-    resolveEveryOrgSharedConnector(pathSecret, [
+    resolveEveryOrgSharedConnector(routeId, [
       { ...direct, ready: false },
     ]).status,
     "mechanism_not_ready",
@@ -151,7 +169,7 @@ test("shared connector rejects before body parsing, direct dispatch, Supabase cr
   } as unknown as Request;
   const response = await sharedConnectorPost(
     request,
-    { params: Promise.resolve({ secret: pathSecret }) },
+    { params: Promise.resolve({ routeId }) },
   );
 
   assert.equal(response.status, 401);
@@ -196,7 +214,7 @@ test("client components and Donate Link builders never reference the private cre
   }
 
   const inboundSources = [
-    "src/app/api/connectors/every-org/[secret]/route.ts",
+    "src/app/api/connectors/every-org/[routeId]/route.ts",
     "src/app/api/mpgf/every-org/webhook/route.ts",
   ].map((path) => readFileSync(path, "utf8"));
   for (const source of inboundSources) {

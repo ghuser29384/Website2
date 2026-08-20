@@ -16,7 +16,7 @@ const detailPage = readFileSync(
   "src/app/donation-upgrades/[offerId]/page.tsx",
   "utf8",
 );
-const webhookRoute = readFileSync("src/app/api/connectors/every-org/[secret]/route.ts", "utf8");
+const webhookRoute = readFileSync("src/app/api/connectors/every-org/[routeId]/route.ts", "utf8");
 const everyOrgAuthorization = readFileSync(
   "src/lib/every-org-partner-webhook-auth.ts",
   "utf8",

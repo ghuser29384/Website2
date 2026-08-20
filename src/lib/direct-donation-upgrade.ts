@@ -8,6 +8,7 @@ import {
 import {
   EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,
   getEveryOrgCredentialConfiguration,
+  isValidEveryOrgWebhookRouteId,
 } from "@/lib/every-org-partner-webhook-auth";
 
 export const DIRECT_DONATION_UPGRADE_PROVIDER = "every_org" as const;
@@ -51,7 +52,7 @@ export interface DirectDonationUpgradeConfig {
   partnerWebhookAuthorizationTokenConfigured: boolean;
   partnerWebhookAuthorizationContract:
     typeof EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS;
-  webhookPathSecret: string;
+  webhookRouteId: string;
   metadataSecret: string;
   qaFixturesEnabled: boolean;
   readyForSearch: boolean;
@@ -320,9 +321,9 @@ export function getDirectDonationUpgradeConfig(
   const credentialConfiguration = getEveryOrgCredentialConfiguration(
     runtimeEnvironment,
   );
-  const webhookPathSecret = envText(
+  const webhookRouteId = envText(
     runtimeEnvironment,
-    "EVERY_ORG_WEBHOOK_PATH_SECRET",
+    "EVERY_ORG_WEBHOOK_ROUTE_ID",
   );
   const metadataSecret = envText(
     runtimeEnvironment,
@@ -373,8 +374,10 @@ export function getDirectDonationUpgradeConfig(
     blockers.push("EVERY_ORG_PUBLIC_API_KEY is missing.");
   }
   blockers.push(...credentialConfiguration.blockers);
-  if (webhookPathSecret.length < 32) {
-    blockers.push("EVERY_ORG_WEBHOOK_PATH_SECRET must be at least 32 characters.");
+  if (!isValidEveryOrgWebhookRouteId(webhookRouteId)) {
+    blockers.push(
+      "EVERY_ORG_WEBHOOK_ROUTE_ID must be 32-128 URL-safe characters.",
+    );
   }
   if (metadataSecret.length < 32) {
     blockers.push("EVERY_ORG_PARTNER_METADATA_SECRET must be at least 32 characters.");
@@ -394,7 +397,7 @@ export function getDirectDonationUpgradeConfig(
     credentialConfiguration.donateLinkWebhookTokenConfigured &&
     credentialConfiguration.unsupportedCredentialEnvironmentNames.length === 0 &&
     !credentialConfiguration.publicAndPrivateTokensEqual &&
-    webhookPathSecret.length >= 32 &&
+    isValidEveryOrgWebhookRouteId(webhookRouteId) &&
     metadataSecret.length >= 32;
   const readyForCommitments =
     providerIndependentConnectorReady &&
@@ -415,7 +418,7 @@ export function getDirectDonationUpgradeConfig(
       credentialConfiguration.partnerWebhookAuthorizationTokenConfigured,
     partnerWebhookAuthorizationContract:
       credentialConfiguration.partnerWebhookAuthorizationContract,
-    webhookPathSecret,
+    webhookRouteId,
     metadataSecret,
     qaFixturesEnabled,
     readyForSearch,

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,
   getEveryOrgCredentialConfiguration,
+  isValidEveryOrgWebhookRouteId,
   type EveryOrgRuntimeEnvironment,
 } from "@/lib/every-org-partner-webhook-auth";
 
@@ -76,7 +77,7 @@ export interface TradeDonationProviderConfig {
   partnerWebhookAuthorizationTokenConfigured: boolean;
   partnerWebhookAuthorizationContract:
     typeof EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS;
-  webhookPathSecret: string;
+  webhookRouteId: string;
   metadataSecret: string;
   blockers: string[];
 }
@@ -198,9 +199,9 @@ export function getTradeDonationProviderConfig(
   const credentialConfiguration = getEveryOrgCredentialConfiguration(
     runtimeEnvironment,
   );
-  const webhookPathSecret = envText(
+  const webhookRouteId = envText(
     runtimeEnvironment,
-    "EVERY_ORG_WEBHOOK_PATH_SECRET",
+    "EVERY_ORG_WEBHOOK_ROUTE_ID",
   );
   const metadataSecret = envText(
     runtimeEnvironment,
@@ -228,7 +229,11 @@ export function getTradeDonationProviderConfig(
     blockers.push("Live Every.org donations are restricted to the canonical production site.");
   }
   blockers.push(...credentialConfiguration.blockers);
-  if (webhookPathSecret.length < 32) blockers.push("Every.org webhook path secret must be at least 32 characters.");
+  if (!isValidEveryOrgWebhookRouteId(webhookRouteId)) {
+    blockers.push(
+      "Every.org webhook route ID must be 32-128 URL-safe characters.",
+    );
+  }
   if (metadataSecret.length < 32) blockers.push("Every.org metadata signing secret must be at least 32 characters.");
 
   return {
@@ -241,7 +246,7 @@ export function getTradeDonationProviderConfig(
       credentialConfiguration.partnerWebhookAuthorizationTokenConfigured,
     partnerWebhookAuthorizationContract:
       credentialConfiguration.partnerWebhookAuthorizationContract,
-    webhookPathSecret,
+    webhookRouteId,
     metadataSecret,
     blockers,
   };
