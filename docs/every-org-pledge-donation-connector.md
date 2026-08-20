@@ -26,7 +26,7 @@ EVERY_ORG_PLEDGE_DONATIONS_ENABLED=true
 EVERY_ORG_ENVIRONMENT=staging # live is accepted only on the canonical production deployment
 EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN=<public token included in Donate Links>
 EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN=<private inbound authorization token>
-EVERY_ORG_WEBHOOK_PATH_SECRET=<at least 32 random characters>
+EVERY_ORG_WEBHOOK_ROUTE_ID=<at least 32 random characters>
 EVERY_ORG_PARTNER_METADATA_SECRET=<at least 32 random characters>
 ```
 
@@ -47,7 +47,7 @@ The two tokens are directional and must be different. The Donate Link token is p
 Register this Partner Webhook URL in the matching Every.org environment:
 
 ```text
-https://<moral-trade-host>/api/connectors/every-org/<EVERY_ORG_WEBHOOK_PATH_SECRET>
+https://<moral-trade-host>/api/connectors/every-org/<EVERY_ORG_WEBHOOK_ROUTE_ID>
 ```
 
 The Donate Link includes only `EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN`, causing completed donations from that link to notify the registered Partner Webhook. Every.org's separate private Partner Webhook authorization token is the primary sender-authentication credential. The URL path secret is defense in depth only; a correct path never substitutes for a valid provider-authentication header. The random partner donation ID, HMAC-signed partner metadata, exact frozen-field checks, and unique charge hash remain later validation layers.
@@ -78,3 +78,7 @@ Keep `EVERY_ORG_PLEDGE_DONATIONS_ENABLED=false` in production until all of the f
 - The public connector registry accurately describes the relationship and does not imply endorsement.
 - Support has an operating procedure for `needs_review`, completed-after-cancellation, and donor questions.
 - A controlled live donation confirms that the intended nonprofit receives the gift and the Moral Trade evidence record activates exactly once.
+
+### Webhook route identifier
+
+`EVERY_ORG_WEBHOOK_ROUTE_ID` is an opaque, URL-safe routing identifier, not a credential. Provider and hosting infrastructure may retain the request pathname. The route ID may narrow dispatch as defense in depth, but it is never sufficient sender authentication. Only the separately configured, private Partner Webhook authorization token may authenticate an inbound delivery after Every.org supplies the exact written header contract.

@@ -40,7 +40,7 @@ export interface EveryOrgSharedConnectorMechanism {
   enabled: boolean;
   ready: boolean;
   environment: "staging" | "live" | null;
-  webhookPathSecret: string;
+  webhookRouteId: string;
 }
 
 export interface EveryOrgSharedConnectorResolution {
@@ -50,8 +50,8 @@ export interface EveryOrgSharedConnectorResolution {
     | "environment_ambiguous"
     | "mechanism_not_ready"
     | "no_enabled_mechanism"
-    | "path_ambiguous"
-    | "path_mismatch";
+    | "route_id_ambiguous"
+    | "route_id_mismatch";
   mechanisms: Array<EveryOrgSharedConnectorMechanism["mechanism"]>;
   environment: "staging" | "live" | null;
 }
@@ -69,6 +69,10 @@ function constantTimeTextEqual(left: string, right: string) {
     leftBuffer.length > 0 &&
     timingSafeEqual(leftBuffer, rightBuffer)
   );
+}
+
+export function isValidEveryOrgWebhookRouteId(value: string) {
+  return /^[A-Za-z0-9_-]{32,128}$/.test(value);
 }
 
 export function getEveryOrgCredentialConfiguration(
@@ -166,7 +170,7 @@ export function authenticateEveryOrgPartnerWebhookRequest(
 }
 
 export function resolveEveryOrgSharedConnector(
-  candidatePathSecret: string,
+  candidateRouteId: string,
   mechanisms: EveryOrgSharedConnectorMechanism[],
 ): EveryOrgSharedConnectorResolution {
   const enabled = mechanisms.filter((mechanism) => mechanism.enabled);
@@ -200,30 +204,30 @@ export function resolveEveryOrgSharedConnector(
     };
   }
 
-  const canonicalPathSecret = enabled[0]?.webhookPathSecret ?? "";
+  const canonicalRouteId = enabled[0]?.webhookRouteId ?? "";
   if (
-    canonicalPathSecret.length < 32 ||
+    !isValidEveryOrgWebhookRouteId(canonicalRouteId) ||
     enabled.some(
       (mechanism) =>
-        mechanism.webhookPathSecret.length < 32 ||
-        !constantTimeTextEqual(
-          mechanism.webhookPathSecret,
-          canonicalPathSecret,
-        ),
+        !isValidEveryOrgWebhookRouteId(mechanism.webhookRouteId) ||
+        mechanism.webhookRouteId !== canonicalRouteId,
     )
   ) {
     return {
       accepted: false,
-      status: "path_ambiguous",
+      status: "route_id_ambiguous",
       mechanisms: mechanismNames,
       environment: null,
     };
   }
 
-  if (!constantTimeTextEqual(candidatePathSecret, canonicalPathSecret)) {
+  if (
+    !isValidEveryOrgWebhookRouteId(candidateRouteId) ||
+    candidateRouteId !== canonicalRouteId
+  ) {
     return {
       accepted: false,
-      status: "path_mismatch",
+      status: "route_id_mismatch",
       mechanisms: mechanismNames,
       environment: null,
     };

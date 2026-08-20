@@ -91,7 +91,7 @@ async function notifyActivated(input: {
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ secret: string }> },
+  context: { params: Promise<{ routeId: string }> },
 ) {
   const authorization = authenticateEveryOrgPartnerWebhookRequest();
 
@@ -101,22 +101,22 @@ export async function POST(
 
   const directConfig = getDirectDonationUpgradeConfig();
   const pledgeConfig = getTradeDonationProviderConfig();
-  const { secret } = await context.params;
-  const connector = resolveEveryOrgSharedConnector(secret, [
+  const { routeId } = await context.params;
+  const connector = resolveEveryOrgSharedConnector(routeId, [
     {
       mechanism: "direct_donation_upgrade",
       enabled:
         directConfig.requestedEnabled && directConfig.mode !== "disabled",
       ready: directConfig.readyForCheckout,
       environment: directConfig.environment,
-      webhookPathSecret: directConfig.webhookPathSecret,
+      webhookRouteId: directConfig.webhookRouteId,
     },
     {
       mechanism: "pledge_donation",
       enabled: pledgeConfig.requestedEnabled,
       ready: pledgeConfig.ready,
       environment: pledgeConfig.environment,
-      webhookPathSecret: pledgeConfig.webhookPathSecret,
+      webhookRouteId: pledgeConfig.webhookRouteId,
     },
   ]);
 

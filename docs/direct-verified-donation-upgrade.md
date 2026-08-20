@@ -23,7 +23,7 @@ DIRECT_DONATION_UPGRADE_QA_FIXTURES=false
 EVERY_ORG_PUBLIC_API_KEY=
 EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN=
 EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN=
-EVERY_ORG_WEBHOOK_PATH_SECRET=
+EVERY_ORG_WEBHOOK_ROUTE_ID=
 EVERY_ORG_PARTNER_METADATA_SECRET=
 ```
 
@@ -211,3 +211,7 @@ Before staging or production activation:
 8. the rendered browser gate blocks and records every mutation request, Stripe or Every.org provider request, payment endpoint, Donation Upgrade webhook, and lifecycle-job request;
 9. the always-run residue proof shows zero synthetic offers, proposals, candidates, obligations, credits, notifications, restrictions, credibility events, audit events, mandates, payment attempts, and pooled obligations before cleanup; cleanup then proves the synthetic identity and all listed records are absent;
 10. a real Every.org staging checkout and authenticated partner-webhook verification pass before live mode. Internal fixtures and no-charge rendered QA do not satisfy this provider gate.
+
+### Webhook route identifier
+
+`EVERY_ORG_WEBHOOK_ROUTE_ID` is an opaque, URL-safe routing identifier, not a credential. Provider and hosting infrastructure may retain the request pathname. The route ID may narrow dispatch as defense in depth, but it is never sufficient sender authentication. Only the separately configured, private Partner Webhook authorization token may authenticate an inbound delivery after Every.org supplies the exact written header contract.

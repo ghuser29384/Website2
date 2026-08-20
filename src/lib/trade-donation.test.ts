@@ -77,7 +77,7 @@ const config: TradeDonationProviderConfig = {
   donateLinkWebhookToken,
   partnerWebhookAuthorizationTokenConfigured: true,
   partnerWebhookAuthorizationContract: "unconfirmed",
-  webhookPathSecret: "webhook-path-secret-that-is-long-enough",
+  webhookRouteId: "webhook-route-id-that-is-long-enough",
   metadataSecret: secret,
   blockers: [],
 };
@@ -221,8 +221,8 @@ test("connector environments and unconfirmed provider authentication fail closed
     EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: donateLinkWebhookToken,
     EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN:
       partnerWebhookAuthorizationToken,
-    EVERY_ORG_WEBHOOK_PATH_SECRET:
-      "path-secret-that-is-at-least-thirty-two-characters",
+    EVERY_ORG_WEBHOOK_ROUTE_ID:
+      "route-id-that-is-at-least-thirty-two-characters",
     EVERY_ORG_PARTNER_METADATA_SECRET: secret,
   };
 

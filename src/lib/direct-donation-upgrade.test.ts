@@ -24,7 +24,7 @@ const metadataSecret = "m".repeat(48);
 const donateLinkWebhookToken = "public-donate-link-token-" + "w".repeat(32);
 const partnerWebhookAuthorizationToken =
   "private-partner-authorization-token-" + "a".repeat(32);
-const webhookPathSecret = "p".repeat(48);
+const webhookRouteId = "p".repeat(48);
 
 function configuredRuntime(
   overrides: DirectDonationUpgradeRuntimeEnvironment = {},
@@ -37,7 +37,7 @@ function configuredRuntime(
     EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: donateLinkWebhookToken,
     EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN:
       partnerWebhookAuthorizationToken,
-    EVERY_ORG_WEBHOOK_PATH_SECRET: webhookPathSecret,
+    EVERY_ORG_WEBHOOK_ROUTE_ID: webhookRouteId,
     EVERY_ORG_PARTNER_METADATA_SECRET: metadataSecret,
     VERCEL: "1",
     VERCEL_PROJECT_ID: DIRECT_DONATION_UPGRADE_CANONICAL_VERCEL_PROJECT_ID,
@@ -88,7 +88,7 @@ const config: DirectDonationUpgradeConfig = {
   donateLinkWebhookToken,
   partnerWebhookAuthorizationTokenConfigured: true,
   partnerWebhookAuthorizationContract: "unconfirmed",
-  webhookPathSecret,
+  webhookRouteId,
   metadataSecret,
   qaFixturesEnabled: true,
   readyForSearch: true,

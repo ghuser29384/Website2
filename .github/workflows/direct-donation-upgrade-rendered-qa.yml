@@ -65,7 +65,7 @@ jobs:
       DIRECT_DONATION_UPGRADE_MODE: staging
       DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
       EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: direct-upgrade-rendered-qa-public-token
-      EVERY_ORG_WEBHOOK_PATH_SECRET: direct-upgrade-rendered-path-secret-20260801
+      EVERY_ORG_WEBHOOK_ROUTE_ID: direct-upgrade-rendered-route-id-20260801
       EVERY_ORG_PARTNER_METADATA_SECRET: direct-upgrade-rendered-metadata-secret-20260801
       CONDITIONAL_PAYMENTS_MODE: disabled
       TRADE_DONATION_POOL_ENABLED: "false"
