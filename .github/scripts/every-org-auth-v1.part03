@@ -21,6 +21,39 @@ replace_exact(
     label="environment credential comment",
 )
 
+# Once the exact provider contract is known, configured staging environments with
+# distinct directional credentials are ready for checkout. Preserve the bounded
+# rendered-QA path as a commitments-only fallback when the private credential is absent.
+replace_exact(
+    direct_test,
+    'test("staging search remains available while commitments require the bounded rendered-QA inspection mode", () => {',
+    'test("staging exact auth enables checkout while bounded rendered-QA mode permits commitments without private auth", () => {',
+    label="staging readiness test name",
+)
+replace_exact(
+    direct_test,
+    '''  assert.equal(local.readyForSearch, true);
+  assert.equal(preview.readyForSearch, true);
+  assert.equal(local.readyForCommitments, false);
+  assert.equal(preview.readyForCommitments, false);''',
+    '''  assert.equal(local.readyForSearch, true);
+  assert.equal(preview.readyForSearch, true);
+  assert.equal(local.readyForCommitments, true);
+  assert.equal(preview.readyForCommitments, true);
+  assert.equal(local.readyForCheckout, true);
+  assert.equal(preview.readyForCheckout, true);''',
+    label="authenticated staging readiness assertions",
+)
+replace_exact(
+    direct_test,
+    '''      ...stagingBase,
+      DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true",''',
+    '''      ...stagingBase,
+      EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: "",
+      DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true",''',
+    label="rendered-QA missing private credential",
+)
+
 # Keep the route-ID source contract aligned with the now-confirmed sender-authentication
 # API. The route ID remains defense in depth; request headers authenticate the sender.
 route_id_source_contract = Path(
