@@ -21,6 +21,18 @@ replace_exact(
     label="environment credential comment",
 )
 
+# Keep the route-ID source contract aligned with the now-confirmed sender-authentication
+# API. The route ID remains defense in depth; request headers authenticate the sender.
+route_id_source_contract = Path(
+    "src/lib/every-org-webhook-route-id-source-contract.test.ts",
+)
+replace_exact(
+    route_id_source_contract,
+    '  const auth = route.indexOf("authenticateEveryOrgPartnerWebhookRequest()");',
+    '  const auth = route.indexOf("authenticateEveryOrgPartnerWebhookRequest(request.headers)");',
+    label="route-ID source-contract authentication call",
+)
+
 # Closed-scope assertions.
 expected_changed = {
     ".env.example",
@@ -32,6 +44,7 @@ expected_changed = {
     "src/lib/direct-donation-upgrade.test.ts",
     "src/lib/every-org-partner-webhook-auth.test.ts",
     "src/lib/every-org-partner-webhook-auth.ts",
+    "src/lib/every-org-webhook-route-id-source-contract.test.ts",
     "src/lib/trade-donation.test.ts",
 }
 changed = {
@@ -65,6 +78,7 @@ remaining_unconfirmed = subprocess.run(
         "src/lib/direct-donation-upgrade.test.ts",
         "src/lib/every-org-partner-webhook-auth.test.ts",
         "src/lib/every-org-partner-webhook-auth.ts",
+        "src/lib/every-org-webhook-route-id-source-contract.test.ts",
         "src/lib/trade-donation.test.ts",
     ],
     check=False,
