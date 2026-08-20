@@ -1,0 +1,344 @@
+name: Run exact Every.org Partner Webhook authorization v6
+
+on:
+  push:
+    branches:
+      - fix/every-org-partner-webhook-authorization-708-20260820
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: every-org-partner-webhook-auth-v6-20260820
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_BRANCH: fix/every-org-partner-webhook-authorization-708-20260820
+  EXPECTED_PREPARE_PARENT: e35586e4f161b9b7099881709544a8c3f60b5577
+  EXPECTED_BASE: e0041c9d99456cdfef8196d0ab0b982c52379581
+  V1_WORKFLOW: .github/workflows/run-every-org-partner-webhook-auth-v1-20260820.yml
+  V2_WORKFLOW: .github/workflows/run-every-org-partner-webhook-auth-v2-20260820.yml
+  V3_WORKFLOW: .github/workflows/run-every-org-partner-webhook-auth-v3-20260820.yml
+  V4_WORKFLOW: .github/workflows/run-every-org-partner-webhook-auth-v4-20260820.yml
+  V5_WORKFLOW: .github/workflows/run-every-org-partner-webhook-auth-v5-20260820.yml
+  V6_WORKFLOW: .github/workflows/run-every-org-partner-webhook-auth-v6-20260820.yml
+  V6_TRIGGER: .github/run-every-org-partner-webhook-auth-v6.trigger
+
+jobs:
+  implement-and-validate:
+    if: github.event.head_commit.message == 'Run exact Every.org Partner Webhook authorization v6'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Check out exact trigger commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Guard topology and reconstruct exact patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+          test "$(git rev-parse HEAD^^)" = "$EXPECTED_PREPARE_PARENT"
+          test "$(git diff --name-only "$EXPECTED_PREPARE_PARENT" HEAD^)" = "$V6_WORKFLOW"
+          test "$(git diff --name-only HEAD^ HEAD)" = "$V6_TRIGGER"
+          test "$(cat "$V6_TRIGGER")" = 'RUN_EXACT_EVERY_ORG_PARTNER_WEBHOOK_AUTH_V6'
+          git merge-base --is-ancestor "$EXPECTED_BASE" HEAD
+          test -z "$(git status --porcelain)"
+          test "$(git hash-object .github/scripts/every-org-auth-v1.part00)" = 047f57186b836f7997b56f30a50129e63db4cf35
+          test "$(git hash-object .github/scripts/every-org-auth-v1.part01)" = 6f3c2d2fb5dfa9295479dd7ff58b259fb9606981
+          test "$(git hash-object .github/scripts/every-org-auth-v1.part02)" = 81e9e34d8a809c127e3e74c994c41aca02f96f3c
+          test "$(git hash-object .github/scripts/every-org-auth-v1.part03)" = ce09a2d1822a190bd080ffa79d943b0944ec10f5
+          cat .github/scripts/every-org-auth-v1.part{00,01,02,03} > "$RUNNER_TEMP/apply-every-org-auth-v6.py"
+          PYTHONDONTWRITEBYTECODE=1 python3 -B - "$RUNNER_TEMP/apply-every-org-auth-v6.py" <<'PY'
+          import pathlib
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          compile(path.read_text(), str(path), "exec")
+          PY
+          mkdir -p "$RUNNER_TEMP/evidence"
+          patch_sha256="$(sha256sum "$RUNNER_TEMP/apply-every-org-auth-v6.py" | cut -d' ' -f1)"
+          {
+            echo "trigger_actor=$GITHUB_ACTOR"
+            echo "trigger_sha=$GITHUB_SHA"
+            echo "stacked_base=$EXPECTED_BASE"
+            echo "patch_sha256=$patch_sha256"
+            echo "provider_contract=authorization_bearer_v1"
+          } > "$RUNNER_TEMP/evidence/trigger.txt"
+
+      - name: Record static credential boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'live_credentials_read=false'
+            echo 'live_credentials_required_for_static_implementation=false'
+            echo 'repository_secret_presence_claimed=false'
+            echo 'repository_secret_distinctness_claimed=false'
+            echo 'provider_staging_validation_performed=false'
+          } > "$RUNNER_TEMP/evidence/credential-boundary.txt"
+
+      - name: Apply exact written provider contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3 -B "$RUNNER_TEMP/apply-every-org-auth-v6.py" 2>&1 | tee "$RUNNER_TEMP/evidence/patch.log"
+          git diff --check
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee "$RUNNER_TEMP/evidence/npm-ci.log"
+
+      - name: Validate focused and complete contracts
+        shell: bash
+        env:
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/every-org-webhook-route-id-source-contract.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/trade-donation.test.ts \
+            src/lib/mpgf.test.ts \
+            2>&1 | tee "$RUNNER_TEMP/evidence/focused-tests.log"
+          npm test 2>&1 | tee "$RUNNER_TEMP/evidence/repository-tests.log"
+          npx tsc --noEmit --pretty false 2>&1 | tee "$RUNNER_TEMP/evidence/typescript.log"
+          npx eslint \
+            'src/app/api/connectors/every-org/[routeId]/route.ts' \
+            src/app/api/mpgf/every-org/webhook/route.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/every-org-partner-webhook-auth.ts \
+            src/lib/every-org-webhook-route-id-source-contract.test.ts \
+            src/lib/trade-donation.test.ts \
+            2>&1 | tee "$RUNNER_TEMP/evidence/scoped-eslint.log"
+          npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/evidence/repository-eslint.log"
+
+      - name: Build with all money rails disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee "$RUNNER_TEMP/evidence/build.log"
+
+      - name: Remove temporary patch material and verify exact scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f -- \
+            .github/scripts/every-org-auth-v1.part00 \
+            .github/scripts/every-org-auth-v1.part01 \
+            .github/scripts/every-org-auth-v1.part02 \
+            .github/scripts/every-org-auth-v1.part03 \
+            .github/run-every-org-partner-webhook-auth-v1.trigger \
+            .github/run-every-org-partner-webhook-auth-v2.trigger \
+            .github/run-every-org-partner-webhook-auth-v3.trigger \
+            .github/run-every-org-partner-webhook-auth-v4.trigger \
+            .github/run-every-org-partner-webhook-auth-v5.trigger \
+            "$V6_TRIGGER"
+          find . -path ./.git -prune -o -type d -name __pycache__ -exec rm -rf {} +
+          find . -path ./.git -prune -o -type f -name '*.pyc' -exec rm -f {} +
+          git add -A
+          git diff --cached --check
+
+          cat > "$RUNNER_TEMP/evidence/expected-with-controllers.txt" <<'EOF'
+          .env.example
+          .github/workflows/run-every-org-partner-webhook-auth-v1-20260820.yml
+          .github/workflows/run-every-org-partner-webhook-auth-v2-20260820.yml
+          .github/workflows/run-every-org-partner-webhook-auth-v3-20260820.yml
+          .github/workflows/run-every-org-partner-webhook-auth-v4-20260820.yml
+          .github/workflows/run-every-org-partner-webhook-auth-v5-20260820.yml
+          .github/workflows/run-every-org-partner-webhook-auth-v6-20260820.yml
+          docs/direct-verified-donation-upgrade.md
+          docs/every-org-pledge-donation-connector.md
+          src/app/api/connectors/every-org/[routeId]/route.ts
+          src/app/api/mpgf/every-org/webhook/route.ts
+          src/lib/direct-donation-upgrade-source-contract.test.ts
+          src/lib/direct-donation-upgrade.test.ts
+          src/lib/every-org-partner-webhook-auth.test.ts
+          src/lib/every-org-partner-webhook-auth.ts
+          src/lib/every-org-webhook-route-id-source-contract.test.ts
+          src/lib/trade-donation.test.ts
+          EOF
+          LC_ALL=C sort -o "$RUNNER_TEMP/evidence/expected-with-controllers.txt" "$RUNNER_TEMP/evidence/expected-with-controllers.txt"
+          LC_ALL=C git diff --cached --name-only --no-renames "$EXPECTED_BASE" | sort > "$RUNNER_TEMP/evidence/actual-with-controllers.txt"
+          diff -u "$RUNNER_TEMP/evidence/expected-with-controllers.txt" "$RUNNER_TEMP/evidence/actual-with-controllers.txt"
+
+          git diff --cached --name-status -M "$EXPECTED_BASE" | tee "$RUNNER_TEMP/evidence/name-status-with-controllers.txt"
+          git diff --cached --stat "$EXPECTED_BASE" | tee "$RUNNER_TEMP/evidence/diff-stat-with-controllers.txt"
+          git diff --cached "$EXPECTED_BASE" > "$RUNNER_TEMP/evidence/final-with-controllers.diff"
+          validated_tree="$(git write-tree)"
+
+          mkdir -p "$RUNNER_TEMP/evidence/controllers"
+          cp "$V1_WORKFLOW" "$RUNNER_TEMP/evidence/controllers/controller-v1.yml"
+          cp "$V2_WORKFLOW" "$RUNNER_TEMP/evidence/controllers/controller-v2.yml"
+          cp "$V3_WORKFLOW" "$RUNNER_TEMP/evidence/controllers/controller-v3.yml"
+          cp "$V4_WORKFLOW" "$RUNNER_TEMP/evidence/controllers/controller-v4.yml"
+          cp "$V5_WORKFLOW" "$RUNNER_TEMP/evidence/controllers/controller-v5.yml"
+          cp "$V6_WORKFLOW" "$RUNNER_TEMP/evidence/controllers/controller-v6.yml"
+          git rm --cached -- "$V1_WORKFLOW" "$V2_WORKFLOW" "$V3_WORKFLOW" "$V4_WORKFLOW" "$V5_WORKFLOW" "$V6_WORKFLOW"
+          target_tree="$(git write-tree)"
+          git restore --source=HEAD --staged --worktree -- "$V1_WORKFLOW" "$V2_WORKFLOW" "$V3_WORKFLOW" "$V4_WORKFLOW" "$V5_WORKFLOW" "$V6_WORKFLOW"
+          test "$(git write-tree)" = "$validated_tree"
+
+          cat > "$RUNNER_TEMP/evidence/expected-product-paths.txt" <<'EOF'
+          .env.example
+          docs/direct-verified-donation-upgrade.md
+          docs/every-org-pledge-donation-connector.md
+          src/app/api/connectors/every-org/[routeId]/route.ts
+          src/app/api/mpgf/every-org/webhook/route.ts
+          src/lib/direct-donation-upgrade-source-contract.test.ts
+          src/lib/direct-donation-upgrade.test.ts
+          src/lib/every-org-partner-webhook-auth.test.ts
+          src/lib/every-org-partner-webhook-auth.ts
+          src/lib/every-org-webhook-route-id-source-contract.test.ts
+          src/lib/trade-donation.test.ts
+          EOF
+          LC_ALL=C sort -o "$RUNNER_TEMP/evidence/expected-product-paths.txt" "$RUNNER_TEMP/evidence/expected-product-paths.txt"
+
+          grep -Fq '"Authorization" as const' src/lib/every-org-partner-webhook-auth.ts
+          grep -Fq '"Bearer " as const' src/lib/every-org-partner-webhook-auth.ts
+          grep -Fq 'authenticateEveryOrgPartnerWebhookRequest(request.headers)' 'src/app/api/connectors/every-org/[routeId]/route.ts'
+          grep -Fq 'authenticateEveryOrgPartnerWebhookRequest(request.headers)' src/app/api/mpgf/every-org/webhook/route.ts
+          grep -Fq 'authenticateEveryOrgPartnerWebhookRequest(request.headers)' src/lib/every-org-webhook-route-id-source-contract.test.ts
+          ! git grep -n -F 'authenticateEveryOrgPartnerWebhookRequest()' -- src
+          ! git grep -n -F '"unconfirmed"' -- \
+            .env.example docs/direct-verified-donation-upgrade.md docs/every-org-pledge-donation-connector.md \
+            'src/app/api/connectors/every-org/[routeId]/route.ts' src/app/api/mpgf/every-org/webhook/route.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts src/lib/direct-donation-upgrade.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts src/lib/every-org-partner-webhook-auth.ts \
+            src/lib/every-org-webhook-route-id-source-contract.test.ts src/lib/trade-donation.test.ts
+          test -z "$(find . -path ./.git -prune -o -type f \( -name '*.pyc' -o -path '*/__pycache__/*' \) -print -quit)"
+
+          {
+            echo "validated_tree_with_controllers=$validated_tree"
+            echo "target_tree_without_controllers=$target_tree"
+          } | tee "$RUNNER_TEMP/evidence/target-trees.txt"
+          echo "validated_tree=$validated_tree" >> "$GITHUB_OUTPUT"
+          echo "target_tree=$target_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record sanitized evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -E '^ℹ (tests|pass|fail|skipped|duration_ms) ' "$RUNNER_TEMP/evidence/focused-tests.log" > "$RUNNER_TEMP/evidence/focused-test-summary.txt" || true
+          grep -E '^ℹ (tests|pass|fail|skipped|duration_ms) ' "$RUNNER_TEMP/evidence/repository-tests.log" > "$RUNNER_TEMP/evidence/repository-test-summary.txt" || true
+          {
+            echo 'focused tests: PASS'
+            echo 'complete repository tests: PASS'
+            echo 'strict TypeScript: PASS'
+            echo 'scoped ESLint: PASS'
+            echo 'repository ESLint: PASS'
+            echo 'disabled-rail build: PASS'
+            echo 'exact scope and source scans: PASS'
+          } > "$RUNNER_TEMP/evidence/validation-summary.txt"
+          {
+            echo 'live_credentials_read=false'
+            echo 'provider_staging_validation_performed=false'
+            echo 'provider_webhook_invoked=false'
+            echo 'checkout_or_donation_attempted=false'
+            echo 'payment_or_refund_attempted=false'
+            echo 'database_operation_attempted=false'
+            echo 'deployment_or_alias_change=false'
+            echo 'feature_flag_or_secret_mutation=false'
+            echo 'merge_close_or_ready_transition=false'
+          } > "$RUNNER_TEMP/evidence/non-actions.txt"
+          ! grep -R -n -E 'sb_secret_|vcp_|gh[pousr]_|postgres(ql)?://[^[:space:]]+:[^[:space:]]+@|eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.' "$RUNNER_TEMP/evidence"
+
+      - name: Commit and push validated product slice
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git commit -m 'Implement exact Every.org Partner Webhook authorization'
+          final_sha="$(git rev-parse HEAD)"
+          final_tree="$(git show -s --format=%T HEAD)"
+          test "$final_tree" = "${{ steps.scope.outputs.validated_tree }}"
+          test -z "$(git status --porcelain)"
+          git push origin "HEAD:$EXPECTED_BRANCH"
+          {
+            echo "pushed_slice_sha=$final_sha"
+            echo "pushed_slice_tree=$final_tree"
+            echo "target_tree_without_controllers=${{ steps.scope.outputs.target_tree }}"
+          } | tee "$RUNNER_TEMP/evidence/pushed-slice-identity.txt"
+          echo "final_sha=$final_sha" >> "$GITHUB_OUTPUT"
+          echo "final_tree=$final_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Verify pushed branch and draft PR boundaries
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$EXPECTED_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "${{ steps.commit.outputs.final_sha }}"
+          test "$(git show -s --format=%T FETCH_HEAD)" = "${{ steps.commit.outputs.final_tree }}"
+          LC_ALL=C git diff --name-only --no-renames "$EXPECTED_BASE" FETCH_HEAD | sort > "$RUNNER_TEMP/evidence/pushed-with-controllers.txt"
+          diff -u "$RUNNER_TEMP/evidence/expected-with-controllers.txt" "$RUNNER_TEMP/evidence/pushed-with-controllers.txt"
+
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/795")"
+          test "$(jq -r '.state' <<<"$pr_json")" = open
+          test "$(jq -r '.draft' <<<"$pr_json")" = true
+          test "$(jq -r '.head.sha' <<<"$pr_json")" = "${{ steps.commit.outputs.final_sha }}"
+          test "$(jq -r '.base.sha' <<<"$pr_json")" = "$EXPECTED_BASE"
+
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh pr comment 795 --repo "$GITHUB_REPOSITORY" --body "Authorization-Bearer implementation run [$GITHUB_RUN_ID]($run_url) passed focused and complete tests, strict TypeScript, scoped and repository ESLint, disabled-rail build, exact-scope checks, and pushed-head verification. Validated slice: \`${{ steps.commit.outputs.final_sha }}\`; tree with one-use controllers: \`${{ steps.commit.outputs.final_tree }}\`; controller-free target tree: \`${{ steps.scope.outputs.target_tree }}\`. Live credentials were not read or claimed present; provider staging remains a separate owner-controlled step. No deployment, provider invocation, checkout, donation, payment, refund, database mutation, feature-flag or secret mutation, merge, close, or ready transition occurred."
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: every-org-partner-webhook-auth-v6-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Comment failure
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh pr comment 795 --repo "$GITHUB_REPOSITORY" --body "Authorization-Bearer implementation run [$GITHUB_RUN_ID]($run_url) failed before completion. Inspect the failed step and sanitized artifact; no successful product or validation claim is made."
