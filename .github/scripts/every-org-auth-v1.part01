@@ -226,10 +226,4 @@ new_live_test = '''test("live mode reaches connector readiness only on the exact
     live.partnerWebhookAuthorizationContract,
     "authorization_bearer_v1",
   );
-});'''
-replace_exact(direct_test, old_live_test, new_live_test, label="live readiness test")
-
-trade_test = Path("src/lib/trade-donation.test.ts")
-replace_exact(
-    trade_test,
-    '  partnerWebhookAut
+});
