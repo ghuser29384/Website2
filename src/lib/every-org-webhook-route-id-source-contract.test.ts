@@ -11,7 +11,7 @@ test("Every.org webhook routing is explicitly non-secret and sender authenticati
 
   const route = readFileSync(routePath, "utf8");
   const environment = readFileSync(".env.example", "utf8");
-  const auth = route.indexOf("authenticateEveryOrgPartnerWebhookRequest()");
+  const auth = route.indexOf("authenticateEveryOrgPartnerWebhookRequest(request.headers)");
   const params = route.indexOf("await context.params");
   const body = route.indexOf("await request.text()");
   const database = route.indexOf("createServiceClient()");

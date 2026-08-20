@@ -93,7 +93,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ routeId: string }> },
 ) {
-  const authorization = authenticateEveryOrgPartnerWebhookRequest();
+  const authorization = authenticateEveryOrgPartnerWebhookRequest(request.headers);
 
   if (!authorization.authorized) {
     return Response.json({ ok: false }, { status: 401 });

@@ -206,18 +206,32 @@ test("only the public token can reach any Donate Link builder", () => {
   );
 });
 
-test("all Every.org inbound routes fail closed before body or database work while the header contract is unconfirmed", () => {
+test("all Every.org inbound routes authenticate the exact Authorization Bearer contract before body or database work", () => {
   assert.match(
     everyOrgAuthorization,
-    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS =[\s\S]*"unconfirmed"/,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS =[\s\S]*"authorization_bearer_v1"/,
   );
   assert.match(
     everyOrgAuthorization,
-    /authenticateEveryOrgPartnerWebhookRequest[\s\S]*authorized: false/,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER =[\s\S]*"Authorization"/,
+  );
+  assert.match(
+    everyOrgAuthorization,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_VALUE_PREFIX =[\s\S]*"Bearer "/,
+  );
+  assert.match(
+    everyOrgAuthorization,
+    /headers\.get\([\s\S]*EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER/,
+  );
+  assert.match(everyOrgAuthorization, /createHash\("sha256"\)/);
+  assert.match(everyOrgAuthorization, /timingSafeEqual/);
+  assert.match(
+    everyOrgAuthorization,
+    /partnerWebhookAuthorizationReady: credentialConfigurationValid/,
   );
 
   const sharedAuthorization = webhookRoute.indexOf(
-    "authenticateEveryOrgPartnerWebhookRequest()",
+    "authenticateEveryOrgPartnerWebhookRequest(request.headers)",
   );
   const sharedConfigResolution = webhookRoute.indexOf(
     "getDirectDonationUpgradeConfig()",
@@ -240,7 +254,7 @@ test("all Every.org inbound routes fail closed before body or database work whil
   );
 
   const mpgfAuthorization = mpgfWebhook.indexOf(
-    "authenticateEveryOrgPartnerWebhookRequest()",
+    "authenticateEveryOrgPartnerWebhookRequest(request.headers)",
   );
   const mpgfBody = mpgfWebhook.indexOf("await request.json()");
   const mpgfPersistence = mpgfWebhook.indexOf(
@@ -255,9 +269,10 @@ test("all Every.org inbound routes fail closed before body or database work whil
   );
 
   for (const source of [webhookRoute, mpgfWebhook]) {
+    assert.doesNotMatch(source, /headers\.get\(|Bearer\s/);
     assert.doesNotMatch(
       source,
-      /headers\.get\(|Bearer\s|x-mpgf-every-org-webhook-secret|mpgf-every-org-webhook-secret/i,
+      /x-mpgf-every-org-webhook-secret|mpgf-every-org-webhook-secret/i,
     );
   }
 });

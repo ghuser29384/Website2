@@ -8,6 +8,8 @@ import { POST as mpgfConnectorPost } from "@/app/api/mpgf/every-org/webhook/rout
 import {
   authenticateEveryOrgPartnerWebhookRequest,
   EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,
+  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER,
+  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_VALUE_PREFIX,
   getEveryOrgCredentialConfiguration,
   isValidEveryOrgWebhookRouteId,
   resolveEveryOrgSharedConnector,
@@ -43,7 +45,7 @@ test("credential directions are explicit and the private value never leaves the 
     EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,
   );
   assert.equal(configuration.credentialConfigurationValid, true);
-  assert.equal(configuration.partnerWebhookAuthorizationReady, false);
+  assert.equal(configuration.partnerWebhookAuthorizationReady, true);
   assert.equal(serialized.includes(publicToken), true);
   assert.equal(serialized.includes(privateToken), false);
 });
@@ -71,20 +73,57 @@ test("missing, equal, and legacy credentials all fail closed without aliasing", 
   ]);
 });
 
-test("the provider authenticator is explicitly unconfirmed and accepts no guessed header", () => {
-  const unconfirmed = authenticateEveryOrgPartnerWebhookRequest(
+test("the provider authenticator accepts only the exact Authorization Bearer contract", () => {
+  const expectedValue =
+    EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_VALUE_PREFIX + privateToken;
+  const exact = authenticateEveryOrgPartnerWebhookRequest(
+    new Headers({
+      [EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER]: expectedValue,
+    }),
     distinctCredentialEnvironment,
   );
-  const invalid = authenticateEveryOrgPartnerWebhookRequest({});
+  const lowercaseHeaderName = authenticateEveryOrgPartnerWebhookRequest(
+    new Headers({ authorization: expectedValue }),
+    distinctCredentialEnvironment,
+  );
+  const duplicateHeaders = new Headers();
+  duplicateHeaders.append(
+    EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER,
+    expectedValue,
+  );
+  duplicateHeaders.append(
+    EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER,
+    expectedValue,
+  );
 
-  assert.deepEqual(unconfirmed, {
-    authorized: false,
-    status: "unconfirmed",
+  assert.deepEqual(exact, { authorized: true, status: "authorized" });
+  assert.deepEqual(lowercaseHeaderName, {
+    authorized: true,
+    status: "authorized",
   });
-  assert.deepEqual(invalid, {
-    authorized: false,
-    status: "configuration_invalid",
-  });
+
+  for (const [label, headers] of [
+    ["missing", new Headers()],
+    ["raw token", new Headers({ Authorization: privateToken })],
+    ["wrong scheme case", new Headers({ Authorization: `bearer ${privateToken}` })],
+    ["no space", new Headers({ Authorization: `Bearer${privateToken}` })],
+    ["two spaces", new Headers({ Authorization: `Bearer  ${privateToken}` })],
+    ["wrong token", new Headers({ Authorization: "Bearer wrong-token" })],
+    ["duplicate", duplicateHeaders],
+  ] as const) {
+    const result = authenticateEveryOrgPartnerWebhookRequest(
+      headers,
+      distinctCredentialEnvironment,
+    );
+    assert.equal(result.authorized, false, label);
+    assert.notEqual(result.status, "authorized", label);
+    assert.equal(JSON.stringify(result).includes(privateToken), false, label);
+  }
+
+  assert.deepEqual(
+    authenticateEveryOrgPartnerWebhookRequest(new Headers(), {}),
+    { authorized: false, status: "configuration_invalid" },
+  );
 });
 
 test("webhook route IDs are opaque non-secret routing values with a closed URL-safe grammar", () => {
@@ -162,6 +201,7 @@ test("shared connector rejects before body parsing, direct dispatch, Supabase cr
   let textCalls = 0;
   const consoleError = t.mock.method(console, "error");
   const request = {
+    headers: new Headers(),
     async text() {
       textCalls += 1;
       throw new Error("body must not be read");
@@ -182,6 +222,7 @@ test("MPGF connector rejects before JSON parsing, event normalization, persisten
   let jsonCalls = 0;
   const consoleError = t.mock.method(console, "error");
   const request = {
+    headers: new Headers(),
     async json() {
       jsonCalls += 1;
       throw new Error("body must not be parsed");
@@ -218,6 +259,10 @@ test("client components and Donate Link builders never reference the private cre
     "src/app/api/mpgf/every-org/webhook/route.ts",
   ].map((path) => readFileSync(path, "utf8"));
   for (const source of inboundSources) {
+    assert.match(
+      source,
+      /authenticateEveryOrgPartnerWebhookRequest\(request\.headers\)/,
+    );
     assert.doesNotMatch(
       source,
       /headers\.get\(|Bearer\s|x-mpgf-every-org-webhook-secret|mpgf-every-org-webhook-secret/i,
