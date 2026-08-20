@@ -1,0 +1,149 @@
+horizationContract: "unconfirmed",',
+    '  partnerWebhookAuthorizationContract: "authorization_bearer_v1",',
+    label="pledge fixture contract status",
+)
+replace_exact(
+    trade_test,
+    'test("connector environments and unconfirmed provider authentication fail closed", () => {',
+    'test("connector environments and exact provider authentication boundaries fail closed", () => {',
+    label="pledge boundary test name",
+)
+replace_exact(
+    trade_test,
+    '''  assert.equal(staging.ready, false);
+  assert.match(staging.blockers.join(" "), /header contract is unconfirmed/);''',
+    '''  assert.equal(staging.ready, true);
+  assert.equal(staging.blockers.length, 0);
+  assert.equal(
+    staging.partnerWebhookAuthorizationContract,
+    "authorization_bearer_v1",
+  );''',
+    label="staging ready assertion",
+)
+
+source_contract = Path("src/lib/direct-donation-upgrade-source-contract.test.ts")
+new_source_contract_test = '''test("all Every.org inbound routes authenticate the exact Authorization Bearer contract before body or database work", () => {
+  assert.match(
+    everyOrgAuthorization,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS =[\\s\\S]*"authorization_bearer_v1"/,
+  );
+  assert.match(
+    everyOrgAuthorization,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER =[\\s\\S]*"Authorization"/,
+  );
+  assert.match(
+    everyOrgAuthorization,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_VALUE_PREFIX =[\\s\\S]*"Bearer "/,
+  );
+  assert.match(
+    everyOrgAuthorization,
+    /headers\\.get\\([\\s\\S]*EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER/,
+  );
+  assert.match(everyOrgAuthorization, /createHash\\("sha256"\\)/);
+  assert.match(everyOrgAuthorization, /timingSafeEqual/);
+  assert.match(
+    everyOrgAuthorization,
+    /partnerWebhookAuthorizationReady: credentialConfigurationValid/,
+  );
+
+  const sharedAuthorization = webhookRoute.indexOf(
+    "authenticateEveryOrgPartnerWebhookRequest(request.headers)",
+  );
+  const sharedConfigResolution = webhookRoute.indexOf(
+    "getDirectDonationUpgradeConfig()",
+  );
+  const sharedBody = webhookRoute.indexOf("await request.text()");
+  const sharedDirectDispatch = webhookRoute.indexOf(
+    "handleDirectDonationUpgradeEveryOrgWebhook(",
+  );
+  const sharedDatabase = webhookRoute.indexOf(
+    "createServiceClient()",
+  );
+  assert.ok(sharedAuthorization >= 0);
+  assert.ok(sharedConfigResolution > sharedAuthorization);
+  assert.ok(sharedBody > sharedAuthorization);
+  assert.ok(sharedDirectDispatch > sharedBody);
+  assert.ok(sharedDatabase > sharedBody);
+  assert.match(
+    webhookRoute.slice(sharedAuthorization, sharedBody),
+    /Response\\.json\\(\\{ ok: false \\}, \\{ status: 401 \\}\\)/,
+  );
+
+  const mpgfAuthorization = mpgfWebhook.indexOf(
+    "authenticateEveryOrgPartnerWebhookRequest(request.headers)",
+  );
+  const mpgfBody = mpgfWebhook.indexOf("await request.json()");
+  const mpgfPersistence = mpgfWebhook.indexOf(
+    "await persistPartnerWebhookEvent(partnerWebhookEvent)",
+  );
+  assert.ok(mpgfAuthorization >= 0);
+  assert.ok(mpgfBody > mpgfAuthorization);
+  assert.ok(mpgfPersistence > mpgfBody);
+  assert.match(
+    mpgfWebhook.slice(mpgfAuthorization, mpgfBody),
+    /\\{ ok: false \\}[\\s\\S]*status: 401/,
+  );
+
+  for (const source of [webhookRoute, mpgfWebhook]) {
+    assert.doesNotMatch(source, /headers\\.get\\(|Bearer\\s/);
+    assert.doesNotMatch(
+      source,
+      /x-mpgf-every-org-webhook-secret|mpgf-every-org-webhook-secret/i,
+    );
+  }
+});
+
+'''
+replace_section(
+    source_contract,
+    'test("all Every.org inbound routes fail closed before body or database work while the header contract is unconfirmed", () => {',
+    'test("stacked Phase A gates pin the unchanged PR 547 feature base instead of accepting arbitrary stale main", () => {',
+    new_source_contract_test,
+    label="inbound authorization source contract",
+)
+
+# Operator documentation: preserve the directional-token boundary and replace only the
+# formerly unconfirmed provider detail with the exact written contract.
+pledge_doc = Path("docs/every-org-pledge-donation-connector.md")
+replace_exact(
+    pledge_doc,
+    "EVERY_ORG_WEBHOOK_ROUTE_ID=<at least 32 random characters>",
+    "EVERY_ORG_WEBHOOK_ROUTE_ID=<32-128 URL-safe opaque identifier>",
+    label="pledge route-ID example",
+)
+replace_exact(
+    pledge_doc,
+    "Generate the path and metadata secrets independently.",
+    "Generate the opaque route ID and metadata secret independently.",
+    label="pledge route-ID guidance",
+)
+replace_exact(
+    pledge_doc,
+    "The URL path secret is defense in depth only; a correct path never substitutes for a valid provider-authentication header.",
+    "The URL route ID is defense in depth only; a correct route never substitutes for a valid provider-authentication header.",
+    label="pledge route boundary",
+)
+old_pledge_contract = "Every.org has confirmed that the private token is sent in a request header, but its literal header name and complete value format are not yet documented. Until Every.org supplies that exact contract, the provider authenticator is explicitly `unconfirmed`: every inbound request receives the same generic `401` before body parsing, Supabase client creation, database lookup, RPC, or sensitive logging. No `Authorization` scheme, raw-token header, placeholder, or path-only fallback is accepted."
+new_pledge_contract = "Every.org's written Partner Webhook contract is exactly one `Authorization` header with the value `Bearer <Auth Token>`: the literal scheme is `Bearer`, followed by one ASCII space and the private Auth Token. Moral Trade compares the complete field value at a fixed digest width and returns the same generic `401` for missing, duplicated/coalesced, malformed, or incorrect authorization before body parsing, Supabase client creation, database lookup, RPC, or sensitive logging. The public Webhook Token, route ID, metadata secret, API key, and Vercel bypass credential are never accepted as substitutes."
+replace_exact(
+    pledge_doc,
+    old_pledge_contract,
+    new_pledge_contract,
+    label="pledge provider contract",
+)
+replace_exact(
+    pledge_doc,
+    "Only the separately configured, private Partner Webhook authorization token may authenticate an inbound delivery after Every.org supplies the exact written header contract.",
+    "Only the separately configured private Auth Token, presented through the exact `Authorization: Bearer <Auth Token>` contract, may authenticate an inbound delivery.",
+    label="pledge final route note",
+)
+
+direct_doc = Path("docs/direct-verified-donation-upgrade.md")
+replace_exact(
+    direct_doc,
+    "The public Donate Link token and private Partner Webhook authorization token must be configured independently and must differ. `EVERY_ORG_WEBHOOK_TOKEN` is unsupported and is never treated as an alias for either value. The webhook path and metadata secrets must each contain at least 32 characters.",
+    "The public Donate Link token and private Partner Webhook authorization token must be configured independently and must differ. `EVERY_ORG_WEBHOOK_TOKEN` is unsupported and is never treated as an alias for either value. The webhook route ID must be 32-128 URL-safe characters and is not a credential; the metadata secret must contain at least 32 characters.",
+    label="direct credential boundary",
+)
+old_direct_contract = "Phase A intentionally keeps the Partner Webhook authorization contract in the `unconfirmed` state because Every.org has not yet supplied the literal header name and complete value format. In that state, search fixtures may remain available outside production, but publication and checkout stay fail-closed and every inbound Every.org webhook returns a generic `401` before body parsing or database access. A correct URL path is defense in depth and cannot bypass this gate."
+new_direct_contract = "The confirmed Partner Webhook contract is exactly one `Authorization` header whose value is `Bearer <Auth Token>`, with the literal scheme, one ASCII space, and the p
