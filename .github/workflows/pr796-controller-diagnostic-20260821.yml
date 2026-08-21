@@ -1,0 +1,81 @@
+name: PR796 refund controller diagnostic
+
+on:
+  push:
+    branches:
+      - feature/direct-donation-upgrade-refund-safety-709-20260821
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr796-refund-controller-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact diagnostic revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Capture exact controller sources and source-contract failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic/source
+          set +e
+          node --test scripts/pr796-refund-source-contract.test.mjs \
+            > diagnostic/source-contract.log 2>&1
+          status=$?
+          set -e
+          printf 'source_contract_exit=%s\n' "$status" \
+            | tee diagnostic/status.txt
+
+          for source in \
+            .github/pr796-refund-foundation.manifest.json \
+            .github/pr796-refund-foundation-candidate.patch \
+            .github/pr796-refund-foundation-finalization.patch \
+            .github/workflows/pr796-refund-foundation-controller-20260821.yml \
+            scripts/materialize-pr796-refund-foundation.mjs \
+            scripts/pr796-refund-source-contract.test.mjs; do
+            test -f "$source"
+            mkdir -p "diagnostic/source/$(dirname "$source")"
+            cp "$source" "diagnostic/source/$source"
+          done
+
+          {
+            printf 'repository=%s\n' "$GITHUB_REPOSITORY"
+            printf 'ref=%s\n' "$GITHUB_REF"
+            printf 'sha=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } | tee diagnostic/identity.txt
+
+          find diagnostic/source -type f -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            | tee diagnostic/source-sha256.txt
+
+          if grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' diagnostic; then
+            echo 'Refusing to retain suspected credential material.' >&2
+            rm -rf diagnostic
+            exit 1
+          fi
+
+      - name: Upload bounded diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr796-refund-controller-diagnostic-${{ github.run_id }}
+          path: diagnostic/
+          if-no-files-found: error
+          retention-days: 7
