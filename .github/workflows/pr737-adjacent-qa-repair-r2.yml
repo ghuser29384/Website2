@@ -51,9 +51,9 @@ jobs:
           test "$(git diff --name-only)" = "$TARGET_PATH"
           test "$(grep -Fc -- 'Run genuinely concurrent readiness freeze test before ledger authority hardening' "$TARGET_PATH")" -eq 1
           test "$(grep -Fc -- 'Run genuinely concurrent readiness freeze before ledger authority hardening' "$TARGET_PATH")" -eq 0
-          mkdir -p repair-payload/.github/workflows
-          cp "$TARGET_PATH" repair-payload/$TARGET_PATH
-          sha256sum repair-payload/$TARGET_PATH > repair-payload/sha256.txt
+          mkdir -p repair-payload
+          cp "$TARGET_PATH" repair-payload/mpgf-public-goods-compacts-qa.yml
+          sha256sum repair-payload/mpgf-public-goods-compacts-qa.yml > repair-payload/sha256.txt
           printf '%s\n' "$EXPECTED_HEAD" > repair-payload/parent-sha.txt
 
       - name: Upload exact repair payload
