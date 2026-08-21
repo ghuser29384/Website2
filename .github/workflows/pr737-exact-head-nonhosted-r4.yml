@@ -52,9 +52,18 @@ jobs:
           test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state --jq 'select(.isDraft == true and .state == "OPEN") | .headRefOid')" = "$EXPECTED_HEAD"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_HEAD" --jq '.tree.sha')" = "$EXPECTED_TREE"
 
-          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename' | LC_ALL=C sort > /tmp/actual.txt
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" > /tmp/files.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          items = json.loads(Path('/tmp/files.json').read_text())
+          names = sorted(item['filename'] for item in items)
+          if len(names) != 16:
+              raise SystemExit(f'expected 16 files, found {len(names)}')
+          Path('/tmp/actual.txt').write_text('\n'.join(names) + '\n', newline='\n')
+          PY
           cat /tmp/actual.txt
-          test "$(wc -l < /tmp/actual.txt)" -eq 16
           test "$(sha256sum /tmp/actual.txt | cut -d ' ' -f 1)" = "$EXPECTED_SCOPE_SHA256"
 
       - name: Validate release classification against trusted policy
