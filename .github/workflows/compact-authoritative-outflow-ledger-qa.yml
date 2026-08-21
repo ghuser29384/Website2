@@ -11,7 +11,7 @@ on:
       - src/components/mpgf/mpgf-public-goods-compacts.tsx
       - src/lib/mpgf/compact-authoritative-outflow*.ts
       - supabase/migrations/2026081614150*_compact_authoritative_outflow_*.sql
-      - supabase/tests/compact-authoritative-outflow_ledger_*.sql
+      - supabase/tests/compact_authoritative_outflow_ledger_*.sql
       - tests/mpgf-public-goods-compacts.spec.ts
   push:
     branches: [feature/compact-authoritative-outflow-ledger-v1-20260816]
@@ -71,9 +71,10 @@ jobs:
           diff -u /tmp/expected.txt /tmp/actual.txt
           test "$(wc -l < /tmp/actual.txt)" -eq 16
           test "$(find supabase/migrations -maxdepth 1 -name '2026081614150*_compact_authoritative_outflow_*.sql' | wc -l)" -eq 4
-          test "$(grep -Ec '^[[:space:]]{10}npx playwright install chromium$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 1
+          test "$(grep -Ec '^[[:space:]]{6}- supabase/tests/compact_authoritative_outflow_ledger_\*\.sql$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 1
+          test "$(grep -Ec '^[[:space:]]{8}run: npx playwright install chromium$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 1
           test "$(grep -Ec '^[[:space:]]{10}command -v psql$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 2
-          if grep -Eq '^[[:space:]]{10}(sudo[[:space:]]+)?apt-get([[:space:]]|$)|^[[:space:]]{10}npx playwright install --with-deps([[:space:]]|$)|^[[:space:]]{10}echo .*Acquire::ForceIPv4' .github/workflows/compact-authoritative-outflow-ledger-qa.yml; then exit 1; fi
+          if grep -Eq '^[[:space:]]{10}(sudo[[:space:]]+)?apt-get([[:space:]]|$)|^[[:space:]]{10}npx playwright install --with-deps([[:space:]]|$)|^[[:space:]]{8}run: npx playwright install --with-deps([[:space:]]|$)|^[[:space:]]{10}echo .*Acquire::ForceIPv4' .github/workflows/compact-authoritative-outflow-ledger-qa.yml; then exit 1; fi
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v2.yml
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v3.yml
           for controller in .github/workflows/repair-compact-outflow-*.yml; do
