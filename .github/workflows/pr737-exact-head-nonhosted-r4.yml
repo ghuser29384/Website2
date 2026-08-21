@@ -66,8 +66,8 @@ jobs:
           supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
           supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
           supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
-          supabase/tests/compact-authoritative_outflow_ledger_authorization.sql
-          supabase/tests/compact-authoritative_outflow_ledger_core.sql
+          supabase/tests/compact-authoritative-outflow_ledger_authorization.sql
+          supabase/tests/compact-authoritative-outflow_ledger_core.sql
           tests/mpgf-public-goods-compacts.spec.ts
           EOF
           sed -i 's/^          //' /tmp/expected.txt
