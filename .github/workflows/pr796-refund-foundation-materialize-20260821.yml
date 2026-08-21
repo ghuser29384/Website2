@@ -60,12 +60,12 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s  %s\n' \
-            847ea16499fa7e5cf9cbfc52d6d2e991d91b7a2c3b3d87727da0de89ca4439d1 "$SCRIPT_DIR/part-00" \
-            e65b9fdb50a74a442b09d5c8f123ac47893ada2e6bf6dbdf4c87489a79712503 "$SCRIPT_DIR/part-01" \
+            3331e2730ae4c4da8d68b162c00b78b77d1216ca34c9d31c34c38e638d9adfdf "$SCRIPT_DIR/part-00" \
+            5f2da2cdf5e7465a4601b5bf867a3004367466bea205100daa5d1da7fd895c00 "$SCRIPT_DIR/part-01" \
             | sha256sum --check
           cat "$SCRIPT_DIR"/part-* > pr796-materialize.b64
           printf '%s  %s\n' \
-            c3014236dd3b6b949977192136803328b348a2385e8fa193494a49a8c8da8497 \
+            87ee4ea70ffcd1f35475abc2e0bb4d7c52bbb0917ff4b7e5fae11b109b7a0fa2 \
             pr796-materialize.b64 | sha256sum --check
           base64 --decode pr796-materialize.b64 | gzip --decompress \
             > pr796-materialize.sh
