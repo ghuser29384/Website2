@@ -1,4 +1,4 @@
-name: PR 737 step-name contract repair
+name: PR 737 bounded adjacent-QA repair
 
 on:
   pull_request:
@@ -12,17 +12,18 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr737-step-name-contract-repair
+  group: pr737-bounded-adjacent-qa-repair
   cancel-in-progress: true
 
 env:
   TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
   TARGET_PATH: .github/workflows/mpgf-public-goods-compacts-qa.yml
-  EXPECTED_HEAD: a409141dcb57dd67fdef472509d180765267c407
-  EXPECTED_BLOB: 29a819544957ecd698f5474977b2d0fd80a26752
+  TARGET_CONTROLLER_PATH: .github/workflows/pr737-adjacent-qa-repair-once.yml
+  EXPECTED_PARENT: a409141dcb57dd67fdef472509d180765267c407
+  EXPECTED_HEAD: 32c4d35346eb5588424c9ce5d09ceca22d3a519e
+  EXPECTED_TARGET_BLOB: 29a819544957ecd698f5474977b2d0fd80a26752
+  EXPECTED_CONTROLLER_BLOB: e1f8e9d6e5593efbf2d3f2ab3d25606c0b2c09f0
   PR_NUMBER: "737"
-  OLD_TEXT: "Run genuinely concurrent readiness freeze before ledger authority hardening"
-  NEW_TEXT: "Run genuinely concurrent readiness freeze test before ledger authority hardening"
   GH_TOKEN: ${{ github.token }}
 
 jobs:
@@ -31,62 +32,114 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Verify frozen candidate and perform one-line repair
+      - name: Check out trusted controller source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact bounded repair atomically
         shell: bash
         run: |
           set -euo pipefail
 
-          current_head="$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')"
-          test "$current_head" = "$EXPECTED_HEAD"
+          git fetch origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_HEAD"
           test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state --jq 'select(.isDraft == true and .state == "OPEN") | .headRefOid')" = "$EXPECTED_HEAD"
 
-          gh api "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH?ref=$TARGET_BRANCH" > /tmp/source.json
-          test "$(jq -r '.sha' /tmp/source.json)" = "$EXPECTED_BLOB"
-          jq -r '.content' /tmp/source.json | base64 --decode > /tmp/before.yml
+          git checkout --detach "$EXPECTED_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse "HEAD:$TARGET_PATH")" = "$EXPECTED_TARGET_BLOB"
+          test "$(git rev-parse "HEAD:$TARGET_CONTROLLER_PATH")" = "$EXPECTED_CONTROLLER_BLOB"
 
-          OLD_TEXT="$OLD_TEXT" NEW_TEXT="$NEW_TEXT" python3 - <<'PY'
+          python3 - <<'PY'
           import os
           from pathlib import Path
 
-          before = Path('/tmp/before.yml').read_text()
-          old = os.environ['OLD_TEXT']
-          new = os.environ['NEW_TEXT']
-          if before.count(old) != 1:
-              raise SystemExit(f'expected exactly one old step name, found {before.count(old)}')
-          if new in before:
-              raise SystemExit('new step name already present before repair')
-          after = before.replace(old, new)
-          Path('/tmp/after.yml').write_text(after)
+          path = Path(os.environ['TARGET_PATH'])
+          text = path.read_text()
+
+          old_name = "      - name: Run genuinely concurrent readiness freeze before ledger authority hardening\n"
+          new_name = "      - name: Run genuinely concurrent readiness freeze test before ledger authority hardening\n"
+          if text.count(old_name) != 1:
+              raise SystemExit(f'expected one stale step name, found {text.count(old_name)}')
+          if new_name in text:
+              raise SystemExit('repaired step name already present before repair')
+          text = text.replace(old_name, new_name, 1)
+
+          old_cleanup = """      - name: Prove rollback left no compact schema or fixtures
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=\"$(psql \"$QA_SUPABASE_DB_URL\" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
+"""
+          new_cleanup = """      - name: Prove rollback left no compact schema or fixtures
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mpgf-compacts-qa
+          count=\"$(psql \"$QA_SUPABASE_DB_URL\" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
+"""
+          if text.count(old_cleanup) != 1:
+              raise SystemExit(f'expected one cleanup prelude, found {text.count(old_cleanup)}')
+          text = text.replace(old_cleanup, new_cleanup, 1)
+
+          old_baseline = """          prerequisite_count_before=\"$(sed -n 's/^eligibility_prerequisite_relations_before=//p' mpgf-compacts-qa/schema-absence-before.txt)\"
+          test \"$prerequisite_count\" = \"$prerequisite_count_before\"
+"""
+          new_baseline = """          if [[ -f mpgf-compacts-qa/schema-absence-before.txt ]]; then
+            prerequisite_count_before=\"$(sed -n 's/^eligibility_prerequisite_relations_before=//p' mpgf-compacts-qa/schema-absence-before.txt)\"
+            test -n \"$prerequisite_count_before\"
+          else
+            test ! -e mpgf-compacts-qa/rollback-lifecycle.log
+            prerequisite_count_before=\"$prerequisite_count\"
+            {
+              printf 'relations_before=%s\\n' \"$count\"
+              printf 'eligibility_prerequisite_relations_before=%s\\n' \"$prerequisite_count_before\"
+            } > mpgf-compacts-qa/schema-absence-before.txt
+          fi
+          test \"$prerequisite_count\" = \"$prerequisite_count_before\"
+"""
+          if text.count(old_baseline) != 1:
+              raise SystemExit(f'expected one brittle baseline read, found {text.count(old_baseline)}')
+          text = text.replace(old_baseline, new_baseline, 1)
+
+          if text.count('genuinely concurrent readiness freeze test') != 1:
+              raise SystemExit('source-contract marker absent or duplicated after repair')
+          if text.count('mkdir -p mpgf-compacts-qa') < 2:
+              raise SystemExit('cleanup directory guard absent after repair')
+          if text.count('test ! -e mpgf-compacts-qa/rollback-lifecycle.log') != 1:
+              raise SystemExit('early-failure cleanup guard absent after repair')
+          path.write_text(text)
           PY
 
-          diff -u /tmp/before.yml /tmp/after.yml | tee /tmp/repair.diff || true
-          test "$(grep -c '^-' /tmp/repair.diff)" -eq 2
-          test "$(grep -c '^+' /tmp/repair.diff)" -eq 2
-          grep -Fq -- "-$OLD_TEXT" /tmp/repair.diff
-          grep -Fq -- "+$NEW_TEXT" /tmp/repair.diff
+          rm "$TARGET_CONTROLLER_PATH"
+          git diff --check
+          printf '%s\n' "$TARGET_PATH" "$TARGET_CONTROLLER_PATH" | sort > /tmp/expected-working.txt
+          git diff --name-only | sort > /tmp/actual-working.txt
+          diff -u /tmp/expected-working.txt /tmp/actual-working.txt
+          test "$(git diff --name-only "$EXPECTED_PARENT" | sort)" = "$TARGET_PATH"
 
-          jq -n \
-            --arg message 'ci: satisfy concurrent readiness phase-order contract' \
-            --arg content "$(base64 -w0 /tmp/after.yml)" \
-            --arg sha "$EXPECTED_BLOB" \
-            --arg branch "$TARGET_BRANCH" \
-            '{message:$message,content:$content,sha:$sha,branch:$branch}' \
-            > /tmp/update.json
-          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH" --input /tmp/update.json > /tmp/result.json
-
-          new_head="$(jq -r '.commit.sha' /tmp/result.json)"
-          test -n "$new_head"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$TARGET_PATH" "$TARGET_CONTROLLER_PATH"
+          git commit -m "ci: repair adjacent Compact rollback gate"
+          new_head="$(git rev-parse HEAD)"
           test "$new_head" != "$EXPECTED_HEAD"
+          test "$(git ls-remote --heads origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_HEAD" origin "HEAD:refs/heads/$TARGET_BRANCH"
+
           test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')" = "$new_head"
-          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state --jq 'select(.isDraft == true and .state == "OPEN") | .headRefOid')" = "$new_head"
-          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json changedFiles --jq '.changedFiles')" = "16"
+          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state,changedFiles --jq 'select(.isDraft == true and .state == "OPEN" and .changedFiles == 16) | .headRefOid')" = "$new_head"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH?ref=$new_head" --jq '.content' | base64 --decode | grep -Fc -- 'genuinely concurrent readiness freeze test')" -eq 1
+          if gh api "repos/$GITHUB_REPOSITORY/contents/$TARGET_CONTROLLER_PATH?ref=$new_head" >/dev/null 2>&1; then
+            echo 'One-use target controller remains in candidate tree.' >&2
+            exit 1
+          fi
 
-          gh api "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH?ref=$new_head" --jq '.content' \
-            | base64 --decode > /tmp/readback.yml
-          test "$(grep -Fc -- "$NEW_TEXT" /tmp/readback.yml)" -eq 1
-          test "$(grep -Fc -- "$OLD_TEXT" /tmp/readback.yml)" -eq 0
-
-          printf 'new_head=%s\n' "$new_head" | tee /tmp/result.txt
+          new_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$new_head" --jq '.tree.sha')"
+          printf 'new_head=%s\nnew_tree=%s\n' "$new_head" "$new_tree" | tee /tmp/result.txt
 
       - name: Record bounded repair
         if: always()
@@ -95,5 +148,6 @@ jobs:
           set -euo pipefail
           if [[ -s /tmp/result.txt ]]; then
             new_head="$(sed -n 's/^new_head=//p' /tmp/result.txt)"
-            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Bounded phase-order contract repair applied: the adjacent Compact QA step now explicitly names the genuinely concurrent readiness freeze **test**. New candidate: \`$new_head\`. No merge, deployment, persistent migration, provider operation, activation, electorate opening, or money movement was performed."
+            new_tree="$(sed -n 's/^new_tree=//p' /tmp/result.txt)"
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Bounded adjacent-Compact QA repair applied. The source-contract step name now includes **test**, early-failure cleanup creates and reconstructs its evidence baseline safely, and the one-use target controller was removed. Candidate: \`$new_head\`; tree: \`$new_tree\`; durable differential: exactly 16 files. No merge, deployment, persistent migration, provider operation, activation, electorate opening, or money movement was performed."
           fi
