@@ -1,0 +1,99 @@
+name: PR 737 trusted adjacent QA repair r2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/pr737-adjacent-qa-repair-r2.yml
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr737-adjacent-qa-repair-r2
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  EXPECTED_HEAD: 32c4d35346eb5588424c9ce5d09ceca22d3a519e
+  TARGET_PATH: .github/workflows/mpgf-public-goods-compacts-qa.yml
+  FEATURE_CONTROLLER_PATH: .github/workflows/pr737-adjacent-qa-repair-once.yml
+  PR_NUMBER: "737"
+  ISSUE_NUMBER: "734"
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.ref == 'ops/pr737-adjacent-qa-repair-r2-20260821'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Verify frozen candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')" = "$EXPECTED_HEAD"
+          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state --jq 'select(.isDraft == true and .state == "OPEN") | .headRefOid')" = "$EXPECTED_HEAD"
+
+      - name: Patch governed workflow through the contents API
+        id: patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$(gh api "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH?ref=$TARGET_BRANCH")"
+          blob_sha="$(jq -r '.sha' <<<"$metadata")"
+          jq -r '.content' <<<"$metadata" | tr -d '\n' | base64 --decode > /tmp/workflow.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/workflow.yml')
+          text = p.read_text()
+          old = '      - name: Run genuinely concurrent readiness freeze before ledger authority hardening\n'
+          new = '      - name: Run genuinely concurrent readiness freeze test before ledger authority hardening\n'
+          if text.count(old) != 1 or text.count(new) != 0:
+              raise SystemExit(f'unexpected marker counts: old={text.count(old)}, new={text.count(new)}')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          encoded="$(base64 -w0 /tmp/workflow.yml)"
+          response="$(jq -n --arg message 'ci: align concurrent readiness source contract' --arg content "$encoded" --arg sha "$blob_sha" --arg branch "$TARGET_BRANCH" '{message:$message,content:$content,sha:$sha,branch:$branch}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH" --input -)"
+          patch_head="$(jq -r '.commit.sha' <<<"$response")"
+          test -n "$patch_head"
+          echo "patch_head=$patch_head" >> "$GITHUB_OUTPUT"
+
+      - name: Remove temporary feature controller
+        id: cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$FEATURE_CONTROLLER_PATH?ref=$TARGET_BRANCH" --jq '.sha')"
+          response="$(jq -n --arg message 'ops: remove one-use adjacent QA repair controller' --arg sha "$sha" --arg branch "$TARGET_BRANCH" '{message:$message,sha:$sha,branch:$branch}' | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$FEATURE_CONTROLLER_PATH" --input -)"
+          final_head="$(jq -r '.commit.sha' <<<"$response")"
+          test -n "$final_head"
+          echo "final_head=$final_head" >> "$GITHUB_OUTPUT"
+
+      - name: Verify final candidate
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          final_head='${{ steps.cleanup.outputs.final_head }}'
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')" = "$final_head"
+          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state,changedFiles --jq 'select(.isDraft == true and .state == "OPEN" and .changedFiles == 16) | .headRefOid')" = "$final_head"
+          if gh api "repos/$GITHUB_REPOSITORY/contents/$FEATURE_CONTROLLER_PATH?ref=$final_head" >/dev/null 2>&1; then exit 1; fi
+          metadata="$(gh api "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH?ref=$final_head")"
+          jq -r '.content' <<<"$metadata" | tr -d '\n' | base64 --decode > /tmp/final.yml
+          test "$(grep -Fc -- 'Run genuinely concurrent readiness freeze test before ledger authority hardening' /tmp/final.yml)" -eq 1
+          test "$(grep -Fc -- 'Run genuinely concurrent readiness freeze before ledger authority hardening' /tmp/final.yml)" -eq 0
+          tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$final_head" --jq '.tree.sha')"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+
+      - name: Report result
+        env:
+          FINAL_HEAD: ${{ steps.cleanup.outputs.final_head }}
+          FINAL_TREE: ${{ steps.verify.outputs.tree }}
+        shell: bash
+        run: |
+          body="Applied the bounded adjacent Compact QA source-contract repair. Candidate: \`$FINAL_HEAD\`; tree: \`$FINAL_TREE\`; durable differential: 16 files. PR #737 remains draft and unmerged. Same-SHA gates must rerun before hosted UAT. No deployment, persistent migration, provider operation, Compact activation, electorate opening, or money movement was performed."
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
