@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pull-requests: read
 
 concurrency:
@@ -40,6 +41,14 @@ jobs:
       SCRIPT_DIR: .github/pr796-refund-materializer
 
     steps:
+      - name: Report bounded run start
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/issues/796/comments" \
+            --method POST \
+            -f body="PR #796 refund-foundation materializer run $GITHUB_RUN_ID started on controller head $GITHUB_SHA. No product or validation claim is made until the run completes."
+
       - name: Check out exact materializer head
         uses: actions/checkout@v4
         with:
@@ -128,6 +137,18 @@ jobs:
             pr796-source-bundle-sha256.txt
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Report bounded run outcome
+        if: always()
+        env:
+          MATERIALIZE_OUTCOME: ${{ steps.materialize.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_head="$(git rev-parse HEAD 2>/dev/null || printf unknown)"
+          gh api "repos/$GITHUB_REPOSITORY/issues/796/comments" \
+            --method POST \
+            -f body="PR #796 refund-foundation materializer run $GITHUB_RUN_ID completed with materialize outcome $MATERIALIZE_OUTCOME and local head $local_head. Inspect the run and sanitized artifact before making any product claim. No deployment, provider request, checkout, donation, remote database, or production action was attempted."
 
       - name: Require successful controller-free materialization
         if: always()
