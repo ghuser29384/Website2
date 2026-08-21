@@ -27,6 +27,7 @@ env:
   PR_NUMBER: "737"
   ISSUE_NUMBER: "734"
   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+  EXPECTED_SCOPE_SHA256: e08fb5a84d23ac740662529aa0e623d2919a305f05760a89e2a43bdf45911254
 
 jobs:
   validate-dispatch-observe:
@@ -52,27 +53,9 @@ jobs:
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_HEAD" --jq '.tree.sha')" = "$EXPECTED_TREE"
 
           gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename' | LC_ALL=C sort > /tmp/actual.txt
-          cat > /tmp/expected.txt <<'EOF'
-          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
-          .github/workflows/mpgf-public-goods-compacts-qa.yml
-          docs/mpgf/compact-authoritative-outflow-ledger-v1.md
-          scripts/test-compact-authoritative-outflow-concurrency.sh
-          src/components/mpgf/mpgf-public-goods-compacts.tsx
-          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
-          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
-          src/lib/mpgf/compact-authoritative-outflow.test.ts
-          src/lib/mpgf/compact-authoritative-outflow.ts
-          supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
-          supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
-          supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
-          supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
-          supabase/tests/compact-authoritative_outflow_ledger_authorization.sql
-          supabase/tests/compact-authoritative_outflow_ledger_core.sql
-          tests/mpgf-public-goods-compacts.spec.ts
-          EOF
-          sed -i 's/^          //' /tmp/expected.txt
-          diff -u /tmp/expected.txt /tmp/actual.txt
+          cat /tmp/actual.txt
           test "$(wc -l < /tmp/actual.txt)" -eq 16
+          test "$(sha256sum /tmp/actual.txt | cut -d ' ' -f 1)" = "$EXPECTED_SCOPE_SHA256"
 
       - name: Validate release classification against trusted policy
         id: release
@@ -214,7 +197,7 @@ jobs:
 
           - Candidate SHA: \`$EXPECTED_HEAD\`
           - Candidate tree: \`$EXPECTED_TREE\`
-          - Durable differential: exactly 16 files
+          - Durable differential: exactly 16 files (scope SHA-256 \`$EXPECTED_SCOPE_SHA256\`)
           - Authoritative-ledger QA: **${LEDGER:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${LEDGER_ID:-0}
           - Existing Compact QA: **${COMPACT:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${COMPACT_ID:-0}
           - Evidence/payment-release QA: **${PAYMENT:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${PAYMENT_ID:-0}
