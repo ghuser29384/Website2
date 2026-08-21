@@ -159,7 +159,7 @@ jobs:
           rollback;
           SQL
 
-      - name: Run genuinely concurrent readiness freeze before ledger authority hardening
+      - name: Run genuinely concurrent readiness freeze test before ledger authority hardening
         shell: bash
         run: |
           set -euo pipefail
