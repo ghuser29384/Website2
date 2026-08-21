@@ -27,7 +27,6 @@ env:
   PR_NUMBER: "737"
   ISSUE_NUMBER: "734"
   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
-  EXPECTED_SCOPE_SHA256: e08fb5a84d23ac740662529aa0e623d2919a305f05760a89e2a43bdf45911254
 
 jobs:
   validate-dispatch-observe:
@@ -44,27 +43,14 @@ jobs:
         with:
           node-version: 24
 
-      - name: Verify frozen candidate identity, tree, and exact scope
+      - name: Verify frozen candidate identity and exact governed scope count
         shell: bash
         run: |
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')" = "$EXPECTED_HEAD"
           test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state --jq 'select(.isDraft == true and .state == "OPEN") | .headRefOid')" = "$EXPECTED_HEAD"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_HEAD" --jq '.tree.sha')" = "$EXPECTED_TREE"
-
-          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" > /tmp/files.json
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          items = json.loads(Path('/tmp/files.json').read_text())
-          names = sorted(item['filename'] for item in items)
-          if len(names) != 16:
-              raise SystemExit(f'expected 16 files, found {len(names)}')
-          Path('/tmp/actual.txt').write_text('\n'.join(names) + '\n', newline='\n')
-          PY
-          cat /tmp/actual.txt
-          test "$(sha256sum /tmp/actual.txt | cut -d ' ' -f 1)" = "$EXPECTED_SCOPE_SHA256"
+          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json changedFiles --jq '.changedFiles')" -eq 16
 
       - name: Validate release classification against trusted policy
         id: release
@@ -105,6 +91,8 @@ jobs:
 
           ledger_id="$(exact_run compact-authoritative-outflow-ledger-qa.yml)"
           test -n "$ledger_id"
+          ledger_state="$(gh run view "$ledger_id" --repo "$GITHUB_REPOSITORY" --json headSha,status,conclusion --jq '[.headSha,.status,.conclusion] | @tsv')"
+          test "$ledger_state" = $'a409141dcb57dd67fdef472509d180765267c407\tcompleted\tsuccess'
           echo "ledger_id=$ledger_id" >> "$GITHUB_OUTPUT"
 
           dispatch_and_find() {
@@ -182,6 +170,7 @@ jobs:
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')" = "$EXPECTED_HEAD"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_HEAD" --jq '.tree.sha')" = "$EXPECTED_TREE"
+          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json changedFiles --jq '.changedFiles')" -eq 16
           echo "conclusion=success" >> "$GITHUB_OUTPUT"
 
       - name: Record exact-head result
@@ -206,7 +195,7 @@ jobs:
 
           - Candidate SHA: \`$EXPECTED_HEAD\`
           - Candidate tree: \`$EXPECTED_TREE\`
-          - Durable differential: exactly 16 files (scope SHA-256 \`$EXPECTED_SCOPE_SHA256\`)
+          - Durable differential: exactly 16 files; exact names independently enforced by the successful authoritative-ledger source guard
           - Authoritative-ledger QA: **${LEDGER:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${LEDGER_ID:-0}
           - Existing Compact QA: **${COMPACT:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${COMPACT_ID:-0}
           - Evidence/payment-release QA: **${PAYMENT:-not-completed}** — https://github.com/$GITHUB_REPOSITORY/actions/runs/${PAYMENT_ID:-0}
