@@ -91,6 +91,7 @@ jobs:
 
           ledger_id="$(exact_run compact-authoritative-outflow-ledger-qa.yml)"
           test -n "$ledger_id"
+          gh run watch "$ledger_id" --repo "$GITHUB_REPOSITORY" --interval 15 || true
           ledger_state="$(gh run view "$ledger_id" --repo "$GITHUB_REPOSITORY" --json headSha,status,conclusion --jq '[.headSha,.status,.conclusion] | @tsv')"
           test "$ledger_state" = $'8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91\tcompleted\tsuccess'
           echo "ledger_id=$ledger_id" >> "$GITHUB_OUTPUT"
