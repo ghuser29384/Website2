@@ -1,9 +1,9 @@
 name: PR 796 refund foundation one-use materializer
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/direct-donation-upgrade-refund-safety-709-20260821
+      - integration/direct-donation-upgrade-current-main-20260807
     paths:
       - ".github/workflows/pr796-refund-foundation-materialize-20260821.yml"
   workflow_dispatch:
@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   validate-and-materialize:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 110
     services:
@@ -53,7 +54,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Use Node 24
         uses: actions/setup-node@v4
