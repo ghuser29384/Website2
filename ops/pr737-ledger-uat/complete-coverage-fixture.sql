@@ -1,11 +1,10 @@
 \set ON_ERROR_STOP on
 
 begin;
-
-select pg_catalog.set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
 select pg_catalog.set_config(
-  'request.jwt.claim.sub',
-  '712a0000-0000-4000-8000-000000000001',
+  'request.jwt.claims',
+  '{"sub":"712a0000-0000-4000-8000-000000000001","role":"service_role"}',
   true
 );
 
