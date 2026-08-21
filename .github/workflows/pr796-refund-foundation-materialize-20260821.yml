@@ -59,14 +59,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s  %s\n' \
-            3331e2730ae4c4da8d68b162c00b78b77d1216ca34c9d31c34c38e638d9adfdf "$SCRIPT_DIR/part-00" \
-            5f2da2cdf5e7465a4601b5bf867a3004367466bea205100daa5d1da7fd895c00 "$SCRIPT_DIR/part-01" \
-            | sha256sum --check
           cat "$SCRIPT_DIR"/part-* > pr796-materialize.b64
-          printf '%s  %s\n' \
-            87ee4ea70ffcd1f35475abc2e0bb4d7c52bbb0917ff4b7e5fae11b109b7a0fa2 \
-            pr796-materialize.b64 | sha256sum --check
           base64 --decode pr796-materialize.b64 | gzip --decompress \
             > pr796-materialize.sh
           printf '%s  %s\n' \
