@@ -11,7 +11,7 @@ on:
       - src/components/mpgf/mpgf-public-goods-compacts.tsx
       - src/lib/mpgf/compact-authoritative-outflow*.ts
       - supabase/migrations/2026081614150*_compact_authoritative_outflow_*.sql
-      - supabase/tests/compact_authoritative_outflow_ledger_*.sql
+      - supabase/tests/compact-authoritative-outflow_ledger_*.sql
       - tests/mpgf-public-goods-compacts.spec.ts
   push:
     branches: [feature/compact-authoritative-outflow-ledger-v1-20260816]
@@ -41,11 +41,6 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Force IPv4 for APT
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 > /dev/null
       - name: Guard exact scope and fail-closed boundary
         shell: bash
         run: |
@@ -76,8 +71,9 @@ jobs:
           diff -u /tmp/expected.txt /tmp/actual.txt
           test "$(wc -l < /tmp/actual.txt)" -eq 16
           test "$(find supabase/migrations -maxdepth 1 -name '2026081614150*_compact_authoritative_outflow_*.sql' | wc -l)" -eq 4
-          test "$(grep -Ec '^[[:space:]]{6}- name: Force IPv4 for APT$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 3
-          test "$(grep -Ec '^[[:space:]]{10}echo .*Acquire::ForceIPv4.*sudo tee /etc/apt/apt\.conf\.d/99force-ipv4 > /dev/null$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 3
+          test "$(grep -Ec '^[[:space:]]{10}npx playwright install chromium$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 1
+          test "$(grep -Ec '^[[:space:]]{10}command -v psql$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 2
+          if grep -Eq '^[[:space:]]{10}(sudo[[:space:]]+)?apt-get([[:space:]]|$)|^[[:space:]]{10}npx playwright install --with-deps([[:space:]]|$)|^[[:space:]]{10}echo .*Acquire::ForceIPv4' .github/workflows/compact-authoritative-outflow-ledger-qa.yml; then exit 1; fi
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v2.yml
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v3.yml
           for controller in .github/workflows/repair-compact-outflow-*.yml; do
@@ -115,7 +111,7 @@ jobs:
       - name: Production build
         run: npm run build 2>&1 | tee build.log
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Four-viewpoint browser contract
         run: npx playwright test tests/mpgf-public-goods-compacts.spec.ts --workers=1 --reporter=line 2>&1 | tee playwright.log
       - name: Preserve exact source evidence
@@ -163,15 +159,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Force IPv4 for APT
+      - name: Install Node dependencies and verify PostgreSQL client
         shell: bash
         run: |
           set -euo pipefail
-          echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 > /dev/null
-      - run: |
           npm ci
-          sudo apt-get update -qq
-          sudo apt-get install --yes postgresql-client > /dev/null
+          command -v psql
+          psql --version
       - uses: supabase/setup-cli@v1
         with:
           version: 2.114.0
@@ -324,14 +318,12 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ env.EXPECTED_HEAD_SHA }}
-      - name: Force IPv4 for APT
+      - name: Verify preinstalled PostgreSQL client
         shell: bash
         run: |
           set -euo pipefail
-          echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4 > /dev/null
-      - run: |
-          sudo apt-get update -qq
-          sudo apt-get install --yes postgresql-client > /dev/null
+          command -v psql
+          psql --version
       - name: Verify exact isolated QA target
         shell: bash
         run: |
@@ -399,7 +391,7 @@ jobs:
         run: |
           set -euo pipefail
           psql "$QA_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' > rollback-evidence/after.txt
-          select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.nspname where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
+          select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
           union all select 'private_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
           union all select 'fixture_users|' || count(*) from auth.users where email like 'ledger-%@example.test'
           order by 1;
