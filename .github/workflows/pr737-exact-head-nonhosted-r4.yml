@@ -21,8 +21,8 @@ concurrency:
 env:
   GH_TOKEN: ${{ github.token }}
   TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
-  EXPECTED_HEAD: a409141dcb57dd67fdef472509d180765267c407
-  EXPECTED_TREE: f776e1aea15f83e0ab15eb2e3c836f065bcf3fc7
+  EXPECTED_HEAD: 8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91
+  EXPECTED_TREE: f7e33eb064bf3b18ee3b6de831244919afb4f9de
   STACK_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
   PR_NUMBER: "737"
   ISSUE_NUMBER: "734"
@@ -92,7 +92,7 @@ jobs:
           ledger_id="$(exact_run compact-authoritative-outflow-ledger-qa.yml)"
           test -n "$ledger_id"
           ledger_state="$(gh run view "$ledger_id" --repo "$GITHUB_REPOSITORY" --json headSha,status,conclusion --jq '[.headSha,.status,.conclusion] | @tsv')"
-          test "$ledger_state" = $'a409141dcb57dd67fdef472509d180765267c407\tcompleted\tsuccess'
+          test "$ledger_state" = $'8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91\tcompleted\tsuccess'
           echo "ledger_id=$ledger_id" >> "$GITHUB_OUTPUT"
 
           dispatch_and_find() {
