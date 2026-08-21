@@ -1,0 +1,62 @@
+name: PR 737 one-line rollback join repair
+
+on:
+  push:
+    branches: [ops/pr737-fix-rollback-join-20260821]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr737-fix-rollback-join-once
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  EXPECTED_HEAD: 627766b4096461c455c7e924d83b99068570f8be
+  TARGET_PATH: .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.TARGET_BRANCH }}
+      - name: Apply the exact one-line repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_HEAD"
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["TARGET_PATH"])
+          text = path.read_text()
+          bad = "select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.nspname where n.nspname='public' and c.relname like 'mpgf_public_goods_%'"
+          good = "select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'mpgf_public_goods_%'"
+          if text.count(bad) != 1:
+              raise SystemExit(f"expected exactly one bad join, found {text.count(bad)}")
+          repaired = text.replace(bad, good, 1)
+          if repaired.count(bad) != 0:
+              raise SystemExit("bad join remains after repair")
+          if repaired.count(good) != 2:
+              raise SystemExit(f"expected exactly two canonical joins, found {repaired.count(good)}")
+          path.write_text(repaired)
+          PY
+
+          git diff --check
+          test "$(git diff --numstat -- "$TARGET_PATH")" = $'1\t1\t.github/workflows/compact-authoritative-outflow-ledger-qa.yml'
+          test "$(git diff --name-only)" = "$TARGET_PATH"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$TARGET_PATH"
+          git commit -m "ci: restore rollback namespace join"
+          git push origin "HEAD:$TARGET_BRANCH"
