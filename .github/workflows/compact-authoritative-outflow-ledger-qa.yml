@@ -11,7 +11,7 @@ on:
       - src/components/mpgf/mpgf-public-goods-compacts.tsx
       - src/lib/mpgf/compact-authoritative-outflow*.ts
       - supabase/migrations/2026081614150*_compact_authoritative_outflow_*.sql
-      - supabase/tests/compact-authoritative-outflow_ledger_*.sql
+      - supabase/tests/compact_authoritative_outflow_ledger_*.sql
       - tests/mpgf-public-goods-compacts.spec.ts
   push:
     branches: [feature/compact-authoritative-outflow-ledger-v1-20260816]
@@ -67,7 +67,7 @@ jobs:
           supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
           supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
           supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
-          supabase/tests/compact-authoritative_outflow_ledger_core.sql
+          supabase/tests/compact_authoritative_outflow_ledger_core.sql
           tests/mpgf-public-goods-compacts.spec.ts
           EOF
           sed -i 's/^          //' /tmp/expected.txt
@@ -389,8 +389,8 @@ jobs:
           \i rollback-evidence/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
           \i rollback-evidence/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
           \i rollback-evidence/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
-          \i supabase/tests/compact-authoritative_outflow_ledger_core.sql
-          \i supabase/tests/compact-authoritative_outflow_ledger_authorization.sql
+          \i supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          \i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
           rollback;
           SQL
       - name: Prove rollback and zero residue
@@ -399,7 +399,7 @@ jobs:
         run: |
           set -euo pipefail
           psql "$QA_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' > rollback-evidence/after.txt
-          select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
+          select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.nspname where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
           union all select 'private_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
           union all select 'fixture_users|' || count(*) from auth.users where email like 'ledger-%@example.test'
           order by 1;
