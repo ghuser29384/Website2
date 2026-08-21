@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: write
-  issues: write
   pull-requests: read
 
 concurrency:
@@ -42,14 +41,6 @@ jobs:
       SCRIPT_DIR: .github/pr796-refund-materializer
 
     steps:
-      - name: Report bounded run start
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/issues/796/comments" \
-            --method POST \
-            -f body="PR #796 refund-foundation materializer run $GITHUB_RUN_ID started on controller head $GITHUB_SHA. No product or validation claim is made until the run completes."
-
       - name: Check out exact materializer head
         uses: actions/checkout@v4
         with:
@@ -69,17 +60,17 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s  %s\n' \
-            200e64438018ad6e2c62e1a1389f6e1878b5fc28ff7f7230bcf86d638f8cb84a "$SCRIPT_DIR/part-00" \
-            ad09d61b79a8d29f0af7911c18dc676f0b7608e02f31d811487c740c75bd0055 "$SCRIPT_DIR/part-01" \
+            847ea16499fa7e5cf9cbfc52d6d2e991d91b7a2c3b3d87727da0de89ca4439d1 "$SCRIPT_DIR/part-00" \
+            e65b9fdb50a74a442b09d5c8f123ac47893ada2e6bf6dbdf4c87489a79712503 "$SCRIPT_DIR/part-01" \
             | sha256sum --check
           cat "$SCRIPT_DIR"/part-* > pr796-materialize.b64
           printf '%s  %s\n' \
-            01c9f37e8fef593d94a71e63f1e004d5d47e8e386d7820f7ff989d2dad2d4909 \
+            c3014236dd3b6b949977192136803328b348a2385e8fa193494a49a8c8da8497 \
             pr796-materialize.b64 | sha256sum --check
           base64 --decode pr796-materialize.b64 | gzip --decompress \
             > pr796-materialize.sh
           printf '%s  %s\n' \
-            b54e631da5e628480426228f0119f880af0ca8a5574239b2db2880823bc4b120 \
+            b8390efacbcd57565d8822dd1ff653f2b56742f0647cf8ae045edd08383eced1 \
             pr796-materialize.sh | sha256sum --check
           bash -n pr796-materialize.sh
           bash pr796-materialize.sh
@@ -138,18 +129,6 @@ jobs:
             pr796-source-bundle-sha256.txt
           if-no-files-found: warn
           retention-days: 30
-
-      - name: Report bounded run outcome
-        if: always()
-        env:
-          MATERIALIZE_OUTCOME: ${{ steps.materialize.outcome }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          local_head="$(git rev-parse HEAD 2>/dev/null || printf unknown)"
-          gh api "repos/$GITHUB_REPOSITORY/issues/796/comments" \
-            --method POST \
-            -f body="PR #796 refund-foundation materializer run $GITHUB_RUN_ID completed with materialize outcome $MATERIALIZE_OUTCOME and local head $local_head. Inspect the run and sanitized artifact before making any product claim. No deployment, provider request, checkout, donation, remote database, or production action was attempted."
 
       - name: Require successful controller-free materialization
         if: always()
