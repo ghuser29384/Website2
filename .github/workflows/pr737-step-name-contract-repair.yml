@@ -1,0 +1,99 @@
+name: PR 737 step-name contract repair
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/pr737-step-name-contract-repair.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr737-step-name-contract-repair
+  cancel-in-progress: true
+
+env:
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  TARGET_PATH: .github/workflows/mpgf-public-goods-compacts-qa.yml
+  EXPECTED_HEAD: a409141dcb57dd67fdef472509d180765267c407
+  EXPECTED_BLOB: 29a819544957ecd698f5474977b2d0fd80a26752
+  PR_NUMBER: "737"
+  OLD_TEXT: "Run genuinely concurrent readiness freeze before ledger authority hardening"
+  NEW_TEXT: "Run genuinely concurrent readiness freeze test before ledger authority hardening"
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify frozen candidate and perform one-line repair
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_head="$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')"
+          test "$current_head" = "$EXPECTED_HEAD"
+          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state --jq 'select(.isDraft == true and .state == "OPEN") | .headRefOid')" = "$EXPECTED_HEAD"
+
+          gh api "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH?ref=$TARGET_BRANCH" > /tmp/source.json
+          test "$(jq -r '.sha' /tmp/source.json)" = "$EXPECTED_BLOB"
+          jq -r '.content' /tmp/source.json | base64 --decode > /tmp/before.yml
+
+          OLD_TEXT="$OLD_TEXT" NEW_TEXT="$NEW_TEXT" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          before = Path('/tmp/before.yml').read_text()
+          old = os.environ['OLD_TEXT']
+          new = os.environ['NEW_TEXT']
+          if before.count(old) != 1:
+              raise SystemExit(f'expected exactly one old step name, found {before.count(old)}')
+          if new in before:
+              raise SystemExit('new step name already present before repair')
+          after = before.replace(old, new)
+          Path('/tmp/after.yml').write_text(after)
+          PY
+
+          diff -u /tmp/before.yml /tmp/after.yml | tee /tmp/repair.diff || true
+          test "$(grep -c '^-' /tmp/repair.diff)" -eq 2
+          test "$(grep -c '^+' /tmp/repair.diff)" -eq 2
+          grep -Fq -- "-$OLD_TEXT" /tmp/repair.diff
+          grep -Fq -- "+$NEW_TEXT" /tmp/repair.diff
+
+          jq -n \
+            --arg message 'ci: satisfy concurrent readiness phase-order contract' \
+            --arg content "$(base64 -w0 /tmp/after.yml)" \
+            --arg sha "$EXPECTED_BLOB" \
+            --arg branch "$TARGET_BRANCH" \
+            '{message:$message,content:$content,sha:$sha,branch:$branch}' \
+            > /tmp/update.json
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH" --input /tmp/update.json > /tmp/result.json
+
+          new_head="$(jq -r '.commit.sha' /tmp/result.json)"
+          test -n "$new_head"
+          test "$new_head" != "$EXPECTED_HEAD"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH" --jq '.commit.sha')" = "$new_head"
+          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isDraft,state --jq 'select(.isDraft == true and .state == "OPEN") | .headRefOid')" = "$new_head"
+          test "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json changedFiles --jq '.changedFiles')" = "16"
+
+          gh api "repos/$GITHUB_REPOSITORY/contents/$TARGET_PATH?ref=$new_head" --jq '.content' \
+            | base64 --decode > /tmp/readback.yml
+          test "$(grep -Fc -- "$NEW_TEXT" /tmp/readback.yml)" -eq 1
+          test "$(grep -Fc -- "$OLD_TEXT" /tmp/readback.yml)" -eq 0
+
+          printf 'new_head=%s\n' "$new_head" | tee /tmp/result.txt
+
+      - name: Record bounded repair
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -s /tmp/result.txt ]]; then
+            new_head="$(sed -n 's/^new_head=//p' /tmp/result.txt)"
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Bounded phase-order contract repair applied: the adjacent Compact QA step now explicitly names the genuinely concurrent readiness freeze **test**. New candidate: \`$new_head\`. No merge, deployment, persistent migration, provider operation, activation, electorate opening, or money movement was performed."
+          fi
