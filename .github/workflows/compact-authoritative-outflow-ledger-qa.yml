@@ -11,7 +11,7 @@ on:
       - src/components/mpgf/mpgf-public-goods-compacts.tsx
       - src/lib/mpgf/compact-authoritative-outflow*.ts
       - supabase/migrations/2026081614150*_compact_authoritative_outflow_*.sql
-      - supabase/tests/compact_authoritative_outflow_ledger_*.sql
+      - supabase/tests/compact-authoritative-outflow_ledger_*.sql
       - tests/mpgf-public-goods-compacts.spec.ts
   push:
     branches: [feature/compact-authoritative-outflow-ledger-v1-20260816]
@@ -67,7 +67,7 @@ jobs:
           supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
           supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
           supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
-          supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          supabase/tests/compact-authoritative_outflow_ledger_core.sql
           tests/mpgf-public-goods-compacts.spec.ts
           EOF
           sed -i 's/^          //' /tmp/expected.txt
@@ -76,8 +76,8 @@ jobs:
           diff -u /tmp/expected.txt /tmp/actual.txt
           test "$(wc -l < /tmp/actual.txt)" -eq 16
           test "$(find supabase/migrations -maxdepth 1 -name '2026081614150*_compact_authoritative_outflow_*.sql' | wc -l)" -eq 4
-          test "$(grep -Fc -- '- name: Force IPv4 for APT' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 3
-          test "$(grep -Fc -- 'Acquire::ForceIPv4 "true";' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 3
+          test "$(grep -Ec '^[[:space:]]{6}- name: Force IPv4 for APT$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 3
+          test "$(grep -Ec '^[[:space:]]{10}echo .*Acquire::ForceIPv4.*sudo tee /etc/apt/apt\.conf\.d/99force-ipv4 > /dev/null$' .github/workflows/compact-authoritative-outflow-ledger-qa.yml)" -eq 3
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v2.yml
           test ! -e .github/workflows/materialize-compact-outflow-durable-repair-v3.yml
           for controller in .github/workflows/repair-compact-outflow-*.yml; do
@@ -389,8 +389,8 @@ jobs:
           \i rollback-evidence/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
           \i rollback-evidence/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
           \i rollback-evidence/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
-          \i supabase/tests/compact_authoritative_outflow_ledger_core.sql
-          \i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          \i supabase/tests/compact-authoritative_outflow_ledger_core.sql
+          \i supabase/tests/compact-authoritative_outflow_ledger_authorization.sql
           rollback;
           SQL
       - name: Prove rollback and zero residue
