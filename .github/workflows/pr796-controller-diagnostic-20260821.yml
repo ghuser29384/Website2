@@ -1,59 +1,37 @@
-name: PR796 refund controller diagnostic
+name: PR796 refund bundle diagnostic
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/direct-donation-upgrade-refund-safety-709-20260821
+      - integration/direct-donation-upgrade-current-main-20260807
+    paths:
+      - ".github/workflows/pr796-controller-diagnostic-20260821.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr796-refund-controller-diagnostic
+  group: pr796-refund-bundle-diagnostic
   cancel-in-progress: true
 
 jobs:
   diagnose:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out exact diagnostic revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
 
-      - name: Use Node 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Capture exact controller sources and source-contract failure
+      - name: Inspect and unpack both embedded bundles
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p diagnostic/source
-          set +e
-          node --test scripts/pr796-refund-source-contract.test.mjs \
-            > diagnostic/source-contract.log 2>&1
-          status=$?
-          set -e
-          printf 'source_contract_exit=%s\n' "$status" \
-            | tee diagnostic/status.txt
-
-          for source in \
-            .github/pr796-refund-foundation.manifest.json \
-            .github/pr796-refund-foundation-candidate.patch \
-            .github/pr796-refund-foundation-finalization.patch \
-            .github/workflows/pr796-refund-foundation-controller-20260821.yml \
-            scripts/materialize-pr796-refund-foundation.mjs \
-            scripts/pr796-refund-source-contract.test.mjs; do
-            test -f "$source"
-            mkdir -p "diagnostic/source/$(dirname "$source")"
-            cp "$source" "diagnostic/source/$source"
-          done
-
+          mkdir -p diagnostic
           {
             printf 'repository=%s\n' "$GITHUB_REPOSITORY"
             printf 'ref=%s\n' "$GITHUB_REF"
@@ -61,10 +39,41 @@ jobs:
             printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
           } | tee diagnostic/identity.txt
 
-          find diagnostic/source -type f -print0 \
-            | sort -z \
-            | xargs -0 sha256sum \
-            | tee diagnostic/source-sha256.txt
+          inspect_bundle() {
+            local name="$1"
+            local source_dir="$2"
+            local joined="diagnostic/${name}.b64"
+            local gzip_file="diagnostic/${name}.gz"
+            local unpacked="diagnostic/${name}.unpacked"
+
+            find "$source_dir" -maxdepth 1 -type f -name 'part-*' -print0 \
+              | sort -z \
+              | xargs -0 sha256sum \
+              > "diagnostic/${name}-parts-sha256.txt"
+            cat "$source_dir"/part-* > "$joined"
+            sha256sum "$joined" > "diagnostic/${name}-joined-sha256.txt"
+            base64 --decode "$joined" > "$gzip_file"
+            sha256sum "$gzip_file" > "diagnostic/${name}-gzip-sha256.txt"
+            file "$gzip_file" > "diagnostic/${name}-gzip-type.txt"
+
+            set +e
+            gzip --test "$gzip_file" > "diagnostic/${name}-gzip-test.log" 2>&1
+            local gzip_status=$?
+            gzip --decompress --stdout "$gzip_file" > "$unpacked" 2> "diagnostic/${name}-unpack.log"
+            local unpack_status=$?
+            set -e
+
+            printf 'gzip_test_exit=%s\nunpack_exit=%s\n' "$gzip_status" "$unpack_status" \
+              > "diagnostic/${name}-status.txt"
+            if [[ -s "$unpacked" ]]; then
+              sha256sum "$unpacked" > "diagnostic/${name}-unpacked-sha256.txt"
+              file "$unpacked" > "diagnostic/${name}-unpacked-type.txt"
+              head -c 512 "$unpacked" > "diagnostic/${name}-unpacked-head.bin"
+            fi
+          }
+
+          inspect_bundle refund-bundle .github/pr796-refund-bundle
+          inspect_bundle refund-materializer .github/pr796-refund-materializer
 
           if grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' diagnostic; then
             echo 'Refusing to retain suspected credential material.' >&2
@@ -75,7 +84,7 @@ jobs:
       - name: Upload bounded diagnostic artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pr796-refund-controller-diagnostic-${{ github.run_id }}
+          name: pr796-refund-bundle-diagnostic-${{ github.run_id }}
           path: diagnostic/
           if-no-files-found: error
           retention-days: 7
