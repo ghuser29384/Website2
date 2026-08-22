@@ -81,7 +81,10 @@ function futureTimestamp(value: string | null | undefined, nowMs: number) {
 }
 
 export function directDonationUpgradeCounterofferWindowOpen(
-  offer: { status: string; match_deadline_at: string },
+  offer: Pick<
+    PartialDirectDonationUpgradeOfferRow,
+    "match_deadline_at"
+  > & { status: string },
   nowMs: number,
 ) {
   return (
@@ -90,11 +93,10 @@ export function directDonationUpgradeCounterofferWindowOpen(
 }
 
 export function directDonationUpgradeJoinWindowOpen(
-  offer: {
-    status: string;
-    match_deadline_at: string;
-    webhook_grace_ends_at: string | null;
-  },
+  offer: Pick<
+    PartialDirectDonationUpgradeOfferRow,
+    "match_deadline_at" | "webhook_grace_ends_at"
+  > & { status: string },
   nowMs: number,
 ) {
   if (offer.status === "open") {

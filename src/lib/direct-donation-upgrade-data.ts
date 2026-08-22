@@ -137,6 +137,11 @@ function renderedQaPublicOffer(
     verified_net_amount_cents: 0,
     incremental_net_amount_cents: 0,
     redirected_net_amount_cents: 0,
+    current_unreversed_gross_amount_cents: 0,
+    current_unreversed_net_amount_cents: 0,
+    current_incremental_net_amount_cents: 0,
+    current_redirected_net_amount_cents: 0,
+    provider_reversed_obligation_count: 0,
   };
 }
 
@@ -321,6 +326,11 @@ export interface PublicDirectDonationUpgradeRow {
   verified_net_amount_cents: number;
   incremental_net_amount_cents: number;
   redirected_net_amount_cents: number;
+  current_unreversed_gross_amount_cents: number;
+  current_unreversed_net_amount_cents: number;
+  current_incremental_net_amount_cents: number;
+  current_redirected_net_amount_cents: number;
+  provider_reversed_obligation_count: number;
 }
 
 export interface DirectDonationUpgradeViewerData {
