@@ -1,0 +1,104 @@
+name: PR800 v5 adjudication controller materializer
+
+on:
+  push:
+    branches:
+      - ops/pr800-v5-controller-materializer-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: pr800-v5-adjudication-controller-materializer
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 1672d069c47d80c03a89d07505bc677f5e6db0d4
+      SOURCE_PATH: .github/workflows/pr800-refund-foundation-qa-adjudication-v4-20260822.yml
+      SOURCE_BLOB: 3e73e3f64ca4f17d2a7aea42fdcda2c42f980a9a
+      TARGET_PATH: .github/workflows/pr800-refund-foundation-qa-adjudication-v5-20260822.yml
+      TARGET_BRANCH: ops/pr800-refund-foundation-qa-adjudication-v5-20260822
+      PRODUCT_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      PRODUCT_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      MIGRATION_BLOB: 086428ee842e0928e1e7d4cb5d45418207ea4941
+      CONTRACT_BLOB: f9cef221f9433be1f318a20ae504d0a82d174d55
+    steps:
+      - name: Check out exact v4 controller
+        uses: actions/checkout@v4
+        with:
+          ref: 1672d069c47d80c03a89d07505bc677f5e6db0d4
+          fetch-depth: 0
+
+      - name: Materialize exact v5 controller
+        id: materialize
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git hash-object "$SOURCE_PATH")" = "$SOURCE_BLOB"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          source = Path(os.environ["SOURCE_PATH"])
+          target = Path(os.environ["TARGET_PATH"])
+          text = source.read_text()
+          replacements = [
+              ("PR800 refund foundation rollback-only QA adjudication v4", "PR800 refund foundation rollback-only QA adjudication v5"),
+              ("ops/pr800-refund-foundation-qa-adjudication-v4-20260822", "ops/pr800-refund-foundation-qa-adjudication-v5-20260822"),
+              ("2c36c7e2c47120ad08ac05a23bd2992bce498edb", os.environ["PRODUCT_SHA"]),
+              ("035c85f86e6e96bba3632200170a6e0193a251db", os.environ["PRODUCT_TREE"]),
+              ("test \"$(git rev-list --count \"$BASE_SHA..$PRODUCT_SHA\")\" = 2", "test \"$(git rev-list --count \"$BASE_SHA..$PRODUCT_SHA\")\" = 3"),
+              ("6409ff82f04ad599d34fbe20b30eb0f7eea47018", os.environ["MIGRATION_BLOB"]),
+              ("d0d3a3d20e4154c7a7dc7ca91228c25ece59a8ef", os.environ["CONTRACT_BLOB"]),
+              ("pr800-refund-foundation-qa-adjudication-v4", "pr800-refund-foundation-qa-adjudication-v5"),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count < 1:
+                  raise SystemExit(f"missing v5 replacement anchor: {old}")
+              text = text.replace(old, new)
+          target.write_text(text)
+          source.unlink()
+          PY
+
+          test -f "$TARGET_PATH"
+          test ! -e "$SOURCE_PATH"
+          grep -Fq "PRODUCT_SHA: $PRODUCT_SHA" "$TARGET_PATH"
+          grep -Fq "PRODUCT_TREE: $PRODUCT_TREE" "$TARGET_PATH"
+          grep -Fq "$MIGRATION_BLOB" "$TARGET_PATH"
+          grep -Fq "$CONTRACT_BLOB" "$TARGET_PATH"
+          grep -Fq 'rev-list --count "$BASE_SHA..$PRODUCT_SHA")" = 3' "$TARGET_PATH"
+          ! grep -Fq 'qa-adjudication-v4' "$TARGET_PATH"
+          git diff --check
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A "$SOURCE_PATH" "$TARGET_PATH"
+          git commit -m 'Materialize exact-head PR800 rollback-only QA adjudication v5'
+          controller_sha="$(git rev-parse HEAD)"
+          controller_tree="$(git rev-parse HEAD^{tree})"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'controller_sha=%s\ncontroller_tree=%s\nproduct_sha=%s\nproduct_tree=%s\n' \
+            "$controller_sha" "$controller_tree" "$PRODUCT_SHA" "$PRODUCT_TREE" \
+            | tee v5-controller-identity.txt
+          echo "controller_sha=$controller_sha" >> "$GITHUB_OUTPUT"
+          echo "controller_tree=$controller_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record v5 controller publication
+        shell: bash
+        env:
+          CONTROLLER_SHA: ${{ steps.materialize.outputs.controller_sha }}
+          CONTROLLER_TREE: ${{ steps.materialize.outputs.controller_tree }}
+        run: |
+          set -euo pipefail
+          body="<!-- pr800-v5-adjudication-controller -->
+          PR #800 exact-head rollback-only QA adjudication v5 controller published: \`$CONTROLLER_SHA\` / tree \`$CONTROLLER_TREE\`, bound to product \`$PRODUCT_SHA\` / tree \`$PRODUCT_TREE\`. No database or production action occurred in this controller-materialization step."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
