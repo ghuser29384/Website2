@@ -51,12 +51,12 @@ def main() -> None:
     replace_once(
         negotiation,
         'export function directDonationUpgradeCounterofferWindowOpen(\n  offer: { status: string; match_deadline_at: string },',
-        'export function directDonationUpgradeCounterofferWindowOpen(\n  offer: Pick<\n    PartialDirectDonationUpgradeOfferRow,\n    "status" | "match_deadline_at"\n  >,',
+        'export function directDonationUpgradeCounterofferWindowOpen(\n  offer: Pick<\n    PartialDirectDonationUpgradeOfferRow,\n    "match_deadline_at"\n  > & { status: string },',
     )
     replace_once(
         negotiation,
         'export function directDonationUpgradeJoinWindowOpen(\n  offer: {\n    status: string;\n    match_deadline_at: string;\n    webhook_grace_ends_at: string | null;\n  },',
-        'export function directDonationUpgradeJoinWindowOpen(\n  offer: Pick<\n    PartialDirectDonationUpgradeOfferRow,\n    "status" | "match_deadline_at" | "webhook_grace_ends_at"\n  >,',
+        'export function directDonationUpgradeJoinWindowOpen(\n  offer: Pick<\n    PartialDirectDonationUpgradeOfferRow,\n    "match_deadline_at" | "webhook_grace_ends_at"\n  > & { status: string },',
     )
 
     public_totals = (
