@@ -5,6 +5,31 @@
 
 begin;
 
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, confirmation_token, recovery_token,
+  email_change_token_new, email_change_token_current, reauthentication_token,
+  is_sso_user, is_anonymous, created_at, updated_at
+)
+select
+  fixture.id,
+  '00000000-0000-0000-0000-000000000000'::uuid,
+  'authenticated',
+  'authenticated',
+  fixture.email,
+  '',
+  timezone('utc', now()),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  jsonb_build_object('display_name', fixture.display_name, 'qa_fixture', true),
+  '', '', '', '', '', false, false,
+  timezone('utc', now()),
+  timezone('utc', now())
+from (values
+  ('dc210000-0000-4000-8000-000000000001'::uuid, 'refund-operator@example.test', 'Refund QA Operator'),
+  ('dc210000-0000-4000-8000-000000000002'::uuid, 'refund-creator@example.test', 'Refund QA Creator'),
+  ('dc210000-0000-4000-8000-000000000003'::uuid, 'refund-matcher@example.test', 'Refund QA Matcher')
+) as fixture(id, email, display_name);
+
 insert into public.profiles (id, email, display_name, bio)
 select id, email, display_name, ''
 from (values
@@ -217,7 +242,7 @@ begin
     '',
     '',
     repeat('c', 64),
-    repeat('g', 64),
+    repeat('0', 64),
     1200,
     1140,
     'USD',
@@ -233,7 +258,7 @@ begin
     '',
     '',
     repeat('d', 64),
-    repeat('h', 64),
+    repeat('3', 64),
     600,
     570,
     'USD',

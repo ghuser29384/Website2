@@ -212,6 +212,12 @@ test("refund evidence is service-only, append-only, and data-minimized", () => {
 test("rollback-only regression covers exact success, mismatch matrix, replay, and privileges", () => {
   assert.match(regression, /^begin;/m);
   assert.match(regression, /^rollback;$/m);
+
+  const authFixtureInsert = regression.indexOf("insert into auth.users (");
+  const profileFixtureInsert = regression.indexOf("insert into public.profiles (");
+  assert.ok(authFixtureInsert >= 0);
+  assert.ok(profileFixtureInsert > authFixtureInsert);
+  assert.doesNotMatch(regression, /repeat\('[g-z]', 64\)/i);
   for (const marker of [
     "provider_reversal_amount_mismatch",
     "provider_reversal_recipient_mismatch",
