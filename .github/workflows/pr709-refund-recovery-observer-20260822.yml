@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           latest=''
           for attempt in $(seq 1 90); do
-            response="$(gh api \
+            response="$(gh api --method GET \
               "repos/$GITHUB_REPOSITORY/actions/workflows/$RECOVERY_WORKFLOW/runs" \
               -f branch="$RECOVERY_BRANCH" \
               -f per_page=20)"
