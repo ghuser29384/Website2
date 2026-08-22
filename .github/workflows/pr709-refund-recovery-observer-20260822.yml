@@ -1,0 +1,71 @@
+name: PR709 refund recovery observer
+
+on:
+  push:
+    branches:
+      - ops/pr709-refund-recovery-observer-20260822
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: pr709-refund-recovery-observer
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RECOVERY_WORKFLOW: pr709-refund-foundation-recovery-v4-20260822.yml
+      RECOVERY_BRANCH: ops/pr709-refund-foundation-recovery-v4-20260822
+    steps:
+      - name: Observe latest recovery run to completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=''
+          for attempt in $(seq 1 90); do
+            response="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$RECOVERY_WORKFLOW/runs" \
+              -f branch="$RECOVERY_BRANCH" \
+              -f per_page=20)"
+            latest="$(jq -c '.workflow_runs | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+            if [[ -n "$latest" ]]; then
+              status="$(jq -r '.status' <<<"$latest")"
+              if [[ "$status" = completed ]]; then
+                break
+              fi
+            fi
+            sleep 20
+          done
+
+          if [[ -z "$latest" ]]; then
+            body='<!-- pr709-refund-recovery-v4-observer -->
+          ## Recovery observer result
+
+          No recovery workflow run was found for the isolated v4 branch.'
+            gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+            exit 1
+          fi
+
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          head_sha="$(jq -r '.head_sha' <<<"$latest")"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr709-refund-recovery-v4-observer -->
+          ## Recovery observer result
+
+          - recovery run: \`$run_id\`
+          - status: \`$status\`
+          - conclusion: \`$conclusion\`
+          - controller head: \`$head_sha\`
+          - run: $html_url"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$status" = completed
+          test "$conclusion" = success
