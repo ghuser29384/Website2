@@ -1,0 +1,245 @@
+name: PR800 refund public-view column-order repair
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-view-order-repair-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr800-refund-public-view-column-order-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      EXPECTED_PRODUCT_SHA: 2c36c7e2c47120ad08ac05a23bd2992bce498edb
+      BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+      MIGRATION_PATH: supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
+      CONTRACT_PATH: src/lib/provider-refund-contract.test.ts
+      EXPECTED_MIGRATION_BLOB: 6409ff82f04ad599d34fbe20b30eb0f7eea47018
+      EXPECTED_CONTRACT_BLOB: d0d3a3d20e4154c7a7dc7ca91228c25ece59a8ef
+    steps:
+      - name: Check out exact repaired product head
+        uses: actions/checkout@v4
+        with:
+          ref: 2c36c7e2c47120ad08ac05a23bd2992bce498edb
+          fetch-depth: 0
+
+      - name: Verify immutable pre-repair identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair-evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_PRODUCT_SHA"
+          test "$(git merge-base "$BASE_SHA" "$EXPECTED_PRODUCT_SHA")" = "$BASE_SHA"
+          test "$(git hash-object "$MIGRATION_PATH")" = "$EXPECTED_MIGRATION_BLOB"
+          test "$(git hash-object "$CONTRACT_PATH")" = "$EXPECTED_CONTRACT_BLOB"
+          printf 'base_sha=%s\nprior_product_sha=%s\nprior_migration_blob=%s\nprior_contract_blob=%s\n' \
+            "$BASE_SHA" "$EXPECTED_PRODUCT_SHA" "$EXPECTED_MIGRATION_BLOB" "$EXPECTED_CONTRACT_BLOB" \
+            > repair-evidence/pre-repair-identity.txt
+
+      - name: Apply exact two-path view-order repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path("supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql")
+          text = migration_path.read_text()
+          view_start_marker = "create or replace view public.direct_donation_upgrade_public_offers\n"
+          view_end_marker = "from public.direct_donation_upgrade_offers offer\n"
+          if text.count(view_start_marker) != 1:
+              raise SystemExit(f"expected one public-view start, found {text.count(view_start_marker)}")
+          view_start = text.index(view_start_marker)
+          view_end = text.index(view_end_marker, view_start)
+          view = text[view_start:view_end]
+
+          refund_block_start_marker = (
+              "  coalesce((\n"
+              "    select sum(\n"
+              "      credit.verified_gross_amount_cents -\n"
+          )
+          existing_tail_marker = "  offer.redirect_basis_points,\n"
+          if view.count(refund_block_start_marker) != 1 or view.count(existing_tail_marker) != 1:
+              raise SystemExit("refund-view column anchors are not unique")
+          block_start = view.index(refund_block_start_marker)
+          block_end = view.index(existing_tail_marker, block_start)
+          refund_block = view[block_start:block_end]
+          if not refund_block.rstrip().endswith("as provider_reversed_obligation_count,"):
+              raise SystemExit("refund-view block does not end at the expected new column")
+
+          view_without_block = view[:block_start] + view[block_end:]
+          proposal_marker = "  ) as proposal_count\n"
+          if view_without_block.count(proposal_marker) != 1:
+              raise SystemExit("proposal_count anchor is not unique")
+          appendable_block = refund_block.rstrip("\n")
+          if not appendable_block.endswith(","):
+              raise SystemExit("refund-view block is not comma-terminated")
+          appendable_block = appendable_block[:-1] + "\n"
+          repaired_view = view_without_block.replace(
+              proposal_marker,
+              "  ) as proposal_count,\n" + appendable_block,
+              1,
+          )
+          repaired_text = text[:view_start] + repaired_view + text[view_end:]
+          if repaired_text == text:
+              raise SystemExit("migration repair produced no change")
+          migration_path.write_text(repaired_text)
+
+          contract_path = Path("src/lib/provider-refund-contract.test.ts")
+          contract = contract_path.read_text()
+          anchor = '''test("refund evidence is service-only, append-only, and data-minimized", () => {\n'''
+          addition = '''test("refund columns append after the predecessor public-view contract", () => {\n  const viewStart = migration.indexOf(\n    "create or replace view public.direct_donation_upgrade_public_offers",\n  );\n  const viewEnd = migration.indexOf(\n    "from public.direct_donation_upgrade_offers offer",\n    viewStart,\n  );\n  assert.ok(viewStart >= 0);\n  assert.ok(viewEnd > viewStart);\n  const publicView = migration.slice(viewStart, viewEnd);\n  const predecessorTail = [\n    "offer.redirect_basis_points",\n    "offer.redirected_amount_cents",\n    "offer.retained_amount_cents",\n    "offer.supersedes_offer_id",\n    "offer.superseded_by_offer_id",\n    ") as proposal_count",\n  ];\n  const appendedRefundColumns = [\n    ") as current_unreversed_gross_amount_cents",\n    ") as current_unreversed_net_amount_cents",\n    ") as current_incremental_net_amount_cents",\n    ") as current_redirected_net_amount_cents",\n    ") as provider_reversed_obligation_count",\n  ];\n  let priorPosition = -1;\n  for (const marker of [...predecessorTail, ...appendedRefundColumns]) {\n    const position = publicView.indexOf(marker);\n    assert.ok(position > priorPosition, `${marker} must preserve append-only view order`);\n    priorPosition = position;\n  }\n});\n\n'''
+          if contract.count(anchor) != 1:
+              raise SystemExit(f"expected one contract insertion anchor, found {contract.count(anchor)}")
+          contract_path.write_text(contract.replace(anchor, addition + anchor, 1))
+          PY
+
+          printf '%s\n' "$CONTRACT_PATH" "$MIGRATION_PATH" | sort \
+            > repair-evidence/expected-paths.txt
+          git diff --name-only | sort > repair-evidence/actual-paths.txt
+          diff -u repair-evidence/expected-paths.txt repair-evidence/actual-paths.txt
+          git diff --check
+          git diff -- "$MIGRATION_PATH" "$CONTRACT_PATH" \
+            > repair-evidence/product-repair.diff
+          sha256sum "$MIGRATION_PATH" "$CONTRACT_PATH" \
+            > repair-evidence/post-repair-sha256.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci > repair-evidence/npm-ci.log 2>&1
+
+      - name: Run focused refund and inherited boundary tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > repair-evidence/focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > repair-evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit > repair-evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > repair-evidence/lint.log 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > repair-evidence/build.log 2>&1
+
+      - name: Publish bounded product repair under expected-head guard
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_PRODUCT_SHA"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$MIGRATION_PATH" "$CONTRACT_PATH"
+          git diff --cached --name-only | sort > repair-evidence/staged-paths.txt
+          diff -u repair-evidence/expected-paths.txt repair-evidence/staged-paths.txt
+          git commit -m 'Preserve append-only refund public-view column order'
+          product_sha="$(git rev-parse HEAD)"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          migration_blob="$(git hash-object "$MIGRATION_PATH")"
+          contract_blob="$(git hash-object "$CONTRACT_PATH")"
+          test "$(git rev-list --count "$BASE_SHA..$product_sha")" = 3
+          test "$(git diff --name-only "$BASE_SHA..$product_sha" | wc -l | tr -d ' ')" = 7
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'product_sha=%s\nproduct_tree=%s\nmigration_blob=%s\ncontract_blob=%s\n' \
+            "$product_sha" "$product_tree" "$migration_blob" "$contract_blob" \
+            | tee repair-evidence/product-identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+          echo "migration_blob=$migration_blob" >> "$GITHUB_OUTPUT"
+          echo "contract_blob=$contract_blob" >> "$GITHUB_OUTPUT"
+
+      - name: Record bounded repair on Issue 709 and PR 800
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.publish.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
+          MIGRATION_BLOB: ${{ steps.publish.outputs.migration_blob }}
+          CONTRACT_BLOB: ${{ steps.publish.outputs.contract_blob }}
+        run: |
+          set -euo pipefail
+          body="<!-- pr800-refund-view-order-repair -->
+          ## Refund public-view migration order repaired
+
+          - prior product head: \`$EXPECTED_PRODUCT_SHA\`
+          - repaired product head: \`$PRODUCT_SHA\`
+          - repaired product tree: \`$PRODUCT_TREE\`
+          - refund migration blob: \`$MIGRATION_BLOB\`
+          - source-contract blob: \`$CONTRACT_BLOB\`
+          - product scope remains exactly seven paths
+          - changed in this repair: \`$MIGRATION_PATH\` and \`$CONTRACT_PATH\` only
+          - focused tests, complete repository tests, TypeScript, ESLint, disabled-rail build, scope and diff-integrity gates: passed
+          - repair run: \`$GITHUB_RUN_ID\`
+
+          PostgreSQL \`CREATE OR REPLACE VIEW\` requires predecessor columns to retain their names and positions. The five new current-unreversed/refund columns now append after the predecessor \`proposal_count\` column rather than being inserted before \`redirect_basis_points\`. Exact rollback-only database adjudication remains required before acceptance.
+
+          No persistent database migration, provider request, webhook registration or invocation, checkout, donation, payment, actual refund, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment 800 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Write explicit non-action record
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p repair-evidence
+          printf '%s\n' \
+            'databaseMigrationAttempted=false' \
+            'providerRequestAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'actualRefundAttempted=false' \
+            'deploymentAttempted=false' \
+            'productionChanged=false' \
+            > repair-evidence/non-actions.txt
+
+      - name: Upload sanitized repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-view-order-repair-${{ github.run_id }}
+          path: repair-evidence/
+          if-no-files-found: error
+          retention-days: 30
