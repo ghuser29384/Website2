@@ -1,0 +1,43 @@
+name: PR800 adjudication status snapshot
+
+on:
+  push:
+    branches:
+      - ops/pr800-adjudication-observer-20260822
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr800-refund-foundation-adjudication-20260822.yml
+      TARGET_BRANCH: ops/pr800-refund-foundation-adjudication-20260822
+      TARGET_CONTROLLER_SHA: 46cd7ee1fff9f8543044842c84e05da1f2d7b43e
+    steps:
+      - name: Record exact adjudication run state
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+            -f branch="$TARGET_BRANCH" \
+            -f per_page=30)"
+          latest="$(jq -c \
+            --arg sha "$TARGET_CONTROLLER_SHA" \
+            '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | reverse | .[0] // empty' \
+            <<<"$response")"
+          test -n "$latest"
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr800-adjudication-snapshot -->
+          PR #800 adjudication snapshot: run \`$run_id\`, status \`$status\`, conclusion \`$conclusion\`: $html_url"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
