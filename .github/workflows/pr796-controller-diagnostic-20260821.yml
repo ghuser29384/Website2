@@ -27,7 +27,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
 
-      - name: Inspect and unpack both embedded bundles
+      - name: Inspect bundles and package exact source
         shell: bash
         run: |
           set -euo pipefail
@@ -75,7 +75,12 @@ jobs:
           inspect_bundle refund-bundle .github/pr796-refund-bundle
           inspect_bundle refund-materializer .github/pr796-refund-materializer
 
-          if grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' diagnostic; then
+          git archive --format=tar.gz \
+            --output=diagnostic/pr796-exact-source.tar.gz HEAD
+          sha256sum diagnostic/pr796-exact-source.tar.gz \
+            > diagnostic/pr796-exact-source-sha256.txt
+
+          if grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' diagnostic --exclude='pr796-exact-source.tar.gz'; then
             echo 'Refusing to retain suspected credential material.' >&2
             rm -rf diagnostic
             exit 1
