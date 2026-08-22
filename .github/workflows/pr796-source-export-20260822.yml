@@ -1,6 +1,9 @@
 name: PR796 exact-head source export
 
 on:
+  pull_request:
+    branches:
+      - integration/direct-donation-upgrade-current-main-20260807
   push:
     branches:
       - feature/direct-donation-upgrade-refund-safety-709-20260821
@@ -10,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr796-exact-head-source-export
+  group: pr796-exact-head-source-export-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -18,10 +21,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Check out exact pushed revision
+      - name: Check out exact candidate revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
 
       - name: Package exact source
