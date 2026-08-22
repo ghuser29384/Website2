@@ -1,0 +1,174 @@
+name: PR796 refund foundation post-finalization verifier
+
+on:
+  push:
+    branches:
+      - feature/direct-donation-upgrade-refund-safety-709-20260821
+    paths:
+      - ".github/workflows/pr796-refund-foundation-post-finalization-verify-20260822.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr796-refund-foundation-post-finalization-verifier
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - name: Check out exact verifier revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Select and verify the controller-free parent product
+        id: identity
+        shell: bash
+        env:
+          BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+        run: |
+          set -euo pipefail
+          verifier_sha="$(git rev-parse HEAD)"
+          product_sha="$(git rev-parse HEAD^)"
+          git checkout --detach "$product_sha"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+
+          cat > /tmp/pr796-expected-paths.txt <<'EOF'
+          docs/provider-review/every-org-donation-upgrade-review-packet.md
+          src/lib/direct-donation-upgrade-data.ts
+          src/lib/direct-donation-upgrade-negotiation.ts
+          src/lib/direct-donation-upgrade.ts
+          src/lib/provider-refund-contract.test.ts
+          supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
+          supabase/tests/direct_donation_upgrade_provider_refunds.sql
+          EOF
+          sed -i 's/^          //' /tmp/pr796-expected-paths.txt
+          git diff --name-only "$BASE_SHA"...HEAD | sort > /tmp/pr796-actual-paths.txt
+          diff -u /tmp/pr796-expected-paths.txt /tmp/pr796-actual-paths.txt
+          git diff --check "$BASE_SHA"...HEAD
+
+          while IFS= read -r path; do
+            test -s "$path"
+          done < /tmp/pr796-expected-paths.txt
+          test -z "$(git ls-tree -r --name-only HEAD | grep -E '(^|/)(pr796-|.*pr796.*(controller|bundle|materializer|diagnostic|trigger|repair-note))' || true)"
+
+          {
+            printf 'base_sha=%s\n' "$BASE_SHA"
+            printf 'product_sha=%s\n' "$product_sha"
+            printf 'product_tree=%s\n' "$product_tree"
+            printf 'verifier_sha=%s\n' "$verifier_sha"
+          } | tee /tmp/pr796-post-finalization-identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+          echo "verifier_sha=$verifier_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Install exact dependencies
+        run: npm ci > /tmp/pr796-verify-npm-ci.log 2>&1
+
+      - name: Run focused refund and inherited rail tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-split.test.ts \
+            src/lib/direct-donation-upgrade-environment-contract.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > /tmp/pr796-verify-focused.log 2>&1
+
+      - name: Run complete repository tests
+        run: npm test > /tmp/pr796-verify-repository.log 2>&1
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit > /tmp/pr796-verify-typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        run: npm run lint -- --quiet > /tmp/pr796-verify-lint.log 2>&1
+
+      - name: Build with all money rails disabled
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > /tmp/pr796-verify-build.log 2>&1
+
+      - name: Package sanitized exact-head evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr796-post-finalization-evidence
+          cp /tmp/pr796-post-finalization-identity.txt /tmp/pr796-post-finalization-evidence/
+          cp /tmp/pr796-actual-paths.txt /tmp/pr796-post-finalization-evidence/
+          cp /tmp/pr796-verify-npm-ci.log /tmp/pr796-post-finalization-evidence/
+          cp /tmp/pr796-verify-focused.log /tmp/pr796-post-finalization-evidence/
+          cp /tmp/pr796-verify-repository.log /tmp/pr796-post-finalization-evidence/
+          cp /tmp/pr796-verify-typecheck.log /tmp/pr796-post-finalization-evidence/
+          cp /tmp/pr796-verify-lint.log /tmp/pr796-post-finalization-evidence/
+          cp /tmp/pr796-verify-build.log /tmp/pr796-post-finalization-evidence/
+          {
+            printf 'deploymentAttempted=false\n'
+            printf 'providerRequestAttempted=false\n'
+            printf 'checkoutAttempted=false\n'
+            printf 'donationAttempted=false\n'
+            printf 'refundExecuted=false\n'
+            printf 'remoteDatabaseAddressed=false\n'
+            printf 'credentialMutationAttempted=false\n'
+            printf 'productionChanged=false\n'
+          } > /tmp/pr796-post-finalization-evidence/non-actions.txt
+          ! grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            /tmp/pr796-post-finalization-evidence
+
+      - name: Upload sanitized exact-head evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr796-refund-foundation-post-finalization-${{ github.run_id }}
+          path: /tmp/pr796-post-finalization-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Restore the branch to the verified product commit
+        shell: bash
+        env:
+          BRANCH: feature/direct-donation-upgrade-refund-safety-709-20260821
+          VERIFIER_SHA: ${{ steps.identity.outputs.verifier_sha }}
+          PRODUCT_SHA: ${{ steps.identity.outputs.product_sha }}
+        run: |
+          set -euo pipefail
+          git push \
+            --force-with-lease="refs/heads/${BRANCH}:${VERIFIER_SHA}" \
+            origin "${PRODUCT_SHA}:refs/heads/${BRANCH}"
+
+      - name: Record the authoritative exact-head verification
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_SHA: ${{ steps.identity.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.identity.outputs.product_tree }}
+        run: |
+          set -euo pipefail
+          body="## Refund-foundation exact-head verification passed\n\n- exact base: \`566bb18db56848b40a3a1ab58979a6be88ba45a8\`\n- product SHA: \`${PRODUCT_SHA}\`\n- product tree: \`${PRODUCT_TREE}\`\n- verification run: \`${GITHUB_RUN_ID}\`\n- durable scope: exactly seven product paths\n\nFocused refund and inherited rail tests, complete repository tests, strict TypeScript, repository ESLint, disabled-money-rail production build, exact-path verification, controller absence, and diff integrity all passed on the controller-free product commit.\n\nNo provider request, webhook operation, checkout, donation, refund execution, remote database operation, credential mutation, deployment, alias movement, feature activation, merge, or production change occurred."
+          gh pr comment 796 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
