@@ -1,0 +1,49 @@
+name: PR796 exact-head source export
+
+on:
+  push:
+    branches:
+      - feature/direct-donation-upgrade-refund-safety-709-20260821
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr796-exact-head-source-export
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact pushed revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Package exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          tree="$(git rev-parse HEAD^{tree})"
+          git archive --format=zip --output="pr796-source-${head}.zip" HEAD
+          {
+            printf 'head=%s\n' "$head"
+            printf 'tree=%s\n' "$tree"
+          } > pr796-source-identity.txt
+          sha256sum "pr796-source-${head}.zip" > pr796-source-sha256.txt
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr796-source-${{ github.run_id }}
+          path: |
+            pr796-source-*.zip
+            pr796-source-identity.txt
+            pr796-source-sha256.txt
+          if-no-files-found: error
+          retention-days: 7
