@@ -1,0 +1,3 @@
+schema=pr800-adjudication-observer-v1
+controller_sha=46cd7ee1fff9f8543044842c84e05da1f2d7b43e
+requested=2026-08-22
