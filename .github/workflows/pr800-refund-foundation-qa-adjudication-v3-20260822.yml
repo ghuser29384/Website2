@@ -1,0 +1,550 @@
+name: PR800 refund foundation rollback-only QA adjudication v3
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-foundation-qa-adjudication-v3-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: direct-donation-upgrade-stateful-isolated-qa
+  cancel-in-progress: false
+
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+      PRODUCT_SHA: 2c36c7e2c47120ad08ac05a23bd2992bce498edb
+      PRODUCT_TREE: 035c85f86e6e96bba3632200170a6e0193a251db
+      EXPECTED_QA_DATABASE: postgres
+      EXPECTED_QA_DATABASE_USER: postgres
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      PGSSLMODE: require
+      BASE_MIGRATION: supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
+      SPLIT_MIGRATION: supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
+      LIFECYCLE_MIGRATION: supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
+      HARDENING_MIGRATION: supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql
+      REFUND_MIGRATION: supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
+      REFUND_REGRESSION: supabase/tests/direct_donation_upgrade_provider_refunds.sql
+      REFUND_CONTRACT: src/lib/provider-refund-contract.test.ts
+    steps:
+      - name: Check out exact repaired product head
+        uses: actions/checkout@v4
+        with:
+          ref: 2c36c7e2c47120ad08ac05a23bd2992bce498edb
+          fetch-depth: 0
+
+      - name: Verify immutable product identity and seven-path scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p adjudication-evidence
+          printf '%s\n' \
+            docs/provider-review/every-org-donation-upgrade-review-packet.md \
+            src/lib/direct-donation-upgrade-data.ts \
+            src/lib/direct-donation-upgrade-negotiation.ts \
+            src/lib/direct-donation-upgrade.ts \
+            src/lib/provider-refund-contract.test.ts \
+            supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql \
+            supabase/tests/direct_donation_upgrade_provider_refunds.sql \
+            > adjudication-evidence/expected-paths.txt
+
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$PRODUCT_TREE"
+          git fetch --no-tags origin \
+            "+refs/heads/$PRODUCT_BRANCH:refs/remotes/origin/$PRODUCT_BRANCH"
+          test "$(git rev-parse refs/remotes/origin/$PRODUCT_BRANCH)" = "$PRODUCT_SHA"
+          test "$(git merge-base "$BASE_SHA" "$PRODUCT_SHA")" = "$BASE_SHA"
+          test "$(git rev-list --count "$BASE_SHA..$PRODUCT_SHA")" = 2
+          git diff --name-only "$BASE_SHA..$PRODUCT_SHA" | sort \
+            > adjudication-evidence/actual-paths.txt
+          diff -u adjudication-evidence/expected-paths.txt adjudication-evidence/actual-paths.txt
+          git diff --check "$BASE_SHA..$PRODUCT_SHA"
+          git status --porcelain | tee adjudication-evidence/checkout-status.txt
+          test ! -s adjudication-evidence/checkout-status.txt
+
+          test "$(git hash-object "$BASE_MIGRATION")" = c84922b52de89a130320c38e021b61c54824f104
+          test "$(git hash-object "$SPLIT_MIGRATION")" = 54510c975aab192805c803f793f3d15eb739c4f1
+          test "$(git hash-object "$LIFECYCLE_MIGRATION")" = 04ebba5f8d759ead0633898a6664fc6a189ab442
+          test "$(git hash-object "$HARDENING_MIGRATION")" = a0c954e33e5762d967857891369216aafb9e8333
+          test "$(git hash-object "$REFUND_MIGRATION")" = 6409ff82f04ad599d34fbe20b30eb0f7eea47018
+          test "$(git hash-object "$REFUND_REGRESSION")" = d8254d60d099249531eadd43061a5eb977a23cf8
+          test "$(git hash-object "$REFUND_CONTRACT")" = d0d3a3d20e4154c7a7dc7ca91228c25ece59a8ef
+
+          while IFS= read -r path; do
+            test -f "$path"
+            test ! -L "$path"
+            sha256sum "$path"
+          done < adjudication-evidence/expected-paths.txt \
+            > adjudication-evidence/product-source-sha256.txt
+          {
+            printf 'base_sha=%s\n' "$BASE_SHA"
+            printf 'product_sha=%s\n' "$PRODUCT_SHA"
+            printf 'product_tree=%s\n' "$PRODUCT_TREE"
+            printf 'changed_files=7\n'
+          } > adjudication-evidence/product-identity.txt
+
+      - name: Scan durable product scope for credential material
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t paths < adjudication-evidence/expected-paths.txt
+          if grep -nH -E \
+            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            "${paths[@]}"; then
+            echo 'Refusing candidate containing suspected credential material.' >&2
+            exit 1
+          fi
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci > adjudication-evidence/npm-ci.log 2>&1
+
+      - name: Run focused refund and inherited boundary tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > adjudication-evidence/focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > adjudication-evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit > adjudication-evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > adjudication-evidence/lint.log 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > adjudication-evidence/build.log 2>&1
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq > adjudication-evidence/apt-update.log 2>&1
+          sudo apt-get install --yes postgresql-client \
+            > adjudication-evidence/apt-install.log 2>&1
+          psql --version | tee adjudication-evidence/psql-version.txt
+
+      - name: Validate exact TLS-only isolated QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected_ref = os.environ["EXPECTED_QA_REF"]
+          ssl_modes = parse_qs(parsed.query).get("sslmode")
+          tls_required = (
+              ssl_modes == ["require"]
+              or (not ssl_modes and os.environ.get("PGSSLMODE") == "require")
+          )
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and parsed.username == f"postgres.{expected_ref}"
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and tls_required
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          print("validated exact TLS-only MoralTrade QA target")
+          PY
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --command '\conninfo' \
+            | tee adjudication-evidence/qa-conninfo.txt
+          grep -Fq 'SSL connection' adjudication-evidence/qa-conninfo.txt
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' > adjudication-evidence/qa-session.json
+          select jsonb_build_object(
+            'database', current_database(),
+            'user', current_user,
+            'serverVersion', current_setting('server_version')
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          rows = [line.strip() for line in Path("adjudication-evidence/qa-session.json").read_text().splitlines() if line.strip()]
+          if len(rows) != 1:
+              raise SystemExit(f"Expected one QA session row, received {len(rows)}.")
+          session = json.loads(rows[0])
+          expected = {
+              "database": os.environ["EXPECTED_QA_DATABASE"],
+              "user": os.environ["EXPECTED_QA_DATABASE_USER"],
+          }
+          actual = {key: session.get(key) for key in expected}
+          if actual != expected:
+              raise SystemExit(f"Refusing unexpected QA session: {actual!r}")
+          print(json.dumps(session, sort_keys=True))
+          PY
+
+      - name: Verify exact predecessor history and absent refund tranche
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_blob="$(git hash-object "$BASE_MIGRATION")"
+          split_blob="$(git hash-object "$SPLIT_MIGRATION")"
+          lifecycle_blob="$(git hash-object "$LIFECYCLE_MIGRATION")"
+          hardening_blob="$(git hash-object "$HARDENING_MIGRATION")"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<SQL > adjudication-evidence/migration-history.json
+          select jsonb_build_object(
+            'base', (
+              select jsonb_build_object('count', count(*), 'source', coalesce(max(statements[1]), ''), 'name', coalesce(max(name), ''))
+              from supabase_migrations.schema_migrations where version = '20260801050000'
+            ),
+            'negotiation', (
+              select jsonb_build_object('count', count(*), 'source', coalesce(max(statements[1]), ''), 'name', coalesce(max(name), ''))
+              from supabase_migrations.schema_migrations where version = '20260813150000'
+            ),
+            'lifecycle', (
+              select jsonb_build_object('count', count(*), 'source', coalesce(max(statements[1]), ''), 'name', coalesce(max(name), ''))
+              from supabase_migrations.schema_migrations where version = '20260813151000'
+            ),
+            'hardening', (
+              select jsonb_build_object('count', count(*), 'source', coalesce(max(statements[1]), ''), 'name', coalesce(max(name), ''))
+              from supabase_migrations.schema_migrations where version = '20260813152000'
+            ),
+            'refund', (
+              select jsonb_build_object('count', count(*), 'source', coalesce(max(statements[1]), ''), 'name', coalesce(max(name), ''))
+              from supabase_migrations.schema_migrations where version = '20260821140000'
+            )
+          );
+          SQL
+          python3 - <<PY
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("adjudication-evidence/migration-history.json").read_text())
+          expected = {
+              "base": {"count": 1, "source": "source-git-blob:${base_blob}", "name": "direct_verified_donation_upgrades"},
+              "negotiation": {"count": 1, "source": "source-git-blob:${split_blob}", "name": "direct_donation_upgrade_partial_redirect_negotiation"},
+              "lifecycle": {"count": 1, "source": "source-git-blob:${lifecycle_blob}", "name": "direct_donation_upgrade_partial_redirect_lifecycle"},
+              "hardening": {"count": 1, "source": "source-git-blob:${hardening_blob}", "name": "direct_donation_upgrade_partial_redirect_hardening"},
+              "refund": {"count": 0, "source": "", "name": ""},
+          }
+          if data != expected:
+              raise SystemExit(f"Refusing unexpected QA migration history: {data!r}")
+          print(json.dumps(data, sort_keys=True))
+          PY
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' > adjudication-evidence/precondition-state.json
+          select jsonb_build_object(
+            'refundTableAbsent', to_regclass('public.direct_donation_upgrade_provider_reversals') is null,
+            'refundRpcAbsent', to_regprocedure('public.record_direct_donation_upgrade_provider_reversal(uuid,uuid,text,text,text,text,integer,text,timestamptz,text,text)') is null,
+            'refundColumnAbsent', not exists (
+              select 1 from information_schema.columns
+              where table_schema='public'
+                and table_name='direct_donation_upgrade_obligations'
+                and column_name='provider_reversed_at'
+            ),
+            'fixtureProfiles', (
+              select count(*) from public.profiles where id in (
+                'dc210000-0000-4000-8000-000000000001'::uuid,
+                'dc210000-0000-4000-8000-000000000002'::uuid,
+                'dc210000-0000-4000-8000-000000000003'::uuid
+              )
+            ),
+            'fixtureAuthUsers', (
+              select count(*) from auth.users where id in (
+                'dc210000-0000-4000-8000-000000000001'::uuid,
+                'dc210000-0000-4000-8000-000000000002'::uuid,
+                'dc210000-0000-4000-8000-000000000003'::uuid
+              )
+            )
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("adjudication-evidence/precondition-state.json").read_text())
+          expected = {
+              "refundTableAbsent": True,
+              "refundRpcAbsent": True,
+              "refundColumnAbsent": True,
+              "fixtureProfiles": 0,
+              "fixtureAuthUsers": 0,
+          }
+          if data != expected:
+              raise SystemExit(f"Refusing non-clean refund QA precondition: {data!r}")
+          PY
+
+      - name: Prepare regression without nested transaction wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr800-refund-qa"
+          cp "$REFUND_MIGRATION" "$RUNNER_TEMP/pr800-refund-qa/candidate.sql"
+          cp "$REFUND_REGRESSION" "$RUNNER_TEMP/pr800-refund-qa/regression.sql"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          source = Path(os.environ["RUNNER_TEMP"]) / "pr800-refund-qa/regression.sql"
+          lines = source.read_text().splitlines()
+          begins = [index for index, line in enumerate(lines) if line.strip().lower() == "begin;"]
+          rollbacks = [index for index, line in enumerate(lines) if line.strip().lower() == "rollback;"]
+          if begins != [5]:
+              raise SystemExit(f"Unexpected top-level BEGIN locations: {begins}")
+          if len(rollbacks) != 1 or rollbacks[0] != len(lines) - 1:
+              raise SystemExit(f"Unexpected top-level ROLLBACK locations: {rollbacks}")
+          del lines[rollbacks[0]]
+          del lines[begins[0]]
+          output = source.with_name("regression-inner.sql")
+          output.write_text("\n".join(lines) + "\n")
+          PY
+          sha256sum \
+            "$RUNNER_TEMP/pr800-refund-qa/candidate.sql" \
+            "$RUNNER_TEMP/pr800-refund-qa/regression-inner.sql" \
+            > adjudication-evidence/executed-db-source-sha256.txt
+
+      - name: Capture exact relevant pre-transaction state
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' > adjudication-evidence/pre-transaction-state.json
+          select jsonb_build_object(
+            'offers', (select count(*) from public.direct_donation_upgrade_offers),
+            'candidates', (select count(*) from public.direct_donation_upgrade_candidates),
+            'obligations', (select count(*) from public.direct_donation_upgrade_obligations),
+            'credits', (select count(*) from public.direct_donation_upgrade_impact_credits),
+            'profiles', (select count(*) from public.profiles),
+            'authUsers', (select count(*) from auth.users),
+            'migrationHistoryRows', (select count(*) from supabase_migrations.schema_migrations)
+          );
+          SQL
+
+      - name: Run candidate migration and complete refund regression under one rollback-only lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/pr800-refund-qa"
+          pre_offers="$(jq -r '.offers' adjudication-evidence/pre-transaction-state.json)"
+          pre_candidates="$(jq -r '.candidates' adjudication-evidence/pre-transaction-state.json)"
+          pre_obligations="$(jq -r '.obligations' adjudication-evidence/pre-transaction-state.json)"
+          pre_credits="$(jq -r '.credits' adjudication-evidence/pre-transaction-state.json)"
+          pre_profiles="$(jq -r '.profiles' adjudication-evidence/pre-transaction-state.json)"
+          pre_auth_users="$(jq -r '.authUsers' adjudication-evidence/pre-transaction-state.json)"
+          pre_history="$(jq -r '.migrationHistoryRows' adjudication-evidence/pre-transaction-state.json)"
+
+          cat > "$work/transaction.sql" <<SQL
+          \set ON_ERROR_STOP on
+          select pg_advisory_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          begin;
+          \i $work/candidate.sql
+          \i $work/regression-inner.sql
+          rollback;
+          do \$verify_rollback\$
+          begin
+            if to_regclass('public.direct_donation_upgrade_provider_reversals') is not null then
+              raise exception 'Provider-reversal table remained after rollback.';
+            end if;
+            if to_regprocedure('public.record_direct_donation_upgrade_provider_reversal(uuid,uuid,text,text,text,text,integer,text,timestamptz,text,text)') is not null then
+              raise exception 'Provider-reversal RPC remained after rollback.';
+            end if;
+            if exists (
+              select 1 from information_schema.columns
+              where table_schema='public'
+                and table_name='direct_donation_upgrade_obligations'
+                and column_name='provider_reversed_at'
+            ) then
+              raise exception 'Provider-reversal column remained after rollback.';
+            end if;
+            if (select count(*) from public.direct_donation_upgrade_offers) <> $pre_offers then
+              raise exception 'Offer cardinality changed across rollback.';
+            end if;
+            if (select count(*) from public.direct_donation_upgrade_candidates) <> $pre_candidates then
+              raise exception 'Candidate cardinality changed across rollback.';
+            end if;
+            if (select count(*) from public.direct_donation_upgrade_obligations) <> $pre_obligations then
+              raise exception 'Obligation cardinality changed across rollback.';
+            end if;
+            if (select count(*) from public.direct_donation_upgrade_impact_credits) <> $pre_credits then
+              raise exception 'Impact-credit cardinality changed across rollback.';
+            end if;
+            if (select count(*) from public.profiles) <> $pre_profiles then
+              raise exception 'Profile cardinality changed across rollback.';
+            end if;
+            if (select count(*) from auth.users) <> $pre_auth_users then
+              raise exception 'Auth-user cardinality changed across rollback.';
+            end if;
+            if (select count(*) from supabase_migrations.schema_migrations) <> $pre_history then
+              raise exception 'Migration history changed across rollback.';
+            end if;
+            if exists (
+              select 1 from public.profiles where id in (
+                'dc210000-0000-4000-8000-000000000001'::uuid,
+                'dc210000-0000-4000-8000-000000000002'::uuid,
+                'dc210000-0000-4000-8000-000000000003'::uuid
+              )
+            ) then
+              raise exception 'Synthetic refund profile residue remained after rollback.';
+            end if;
+            if exists (
+              select 1 from auth.users where id in (
+                'dc210000-0000-4000-8000-000000000001'::uuid,
+                'dc210000-0000-4000-8000-000000000002'::uuid,
+                'dc210000-0000-4000-8000-000000000003'::uuid
+              )
+            ) then
+              raise exception 'Synthetic refund auth residue remained after rollback.';
+            end if;
+          end;
+          \$verify_rollback\$;
+          select pg_advisory_unlock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          SQL
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc \
+            --file "$work/transaction.sql" \
+            > adjudication-evidence/refund-rollback-regression.log 2>&1
+          grep -Fq 'ROLLBACK' adjudication-evidence/refund-rollback-regression.log
+
+      - name: Independently verify exact post-rollback state
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' > adjudication-evidence/post-transaction-state.json
+          select jsonb_build_object(
+            'offers', (select count(*) from public.direct_donation_upgrade_offers),
+            'candidates', (select count(*) from public.direct_donation_upgrade_candidates),
+            'obligations', (select count(*) from public.direct_donation_upgrade_obligations),
+            'credits', (select count(*) from public.direct_donation_upgrade_impact_credits),
+            'profiles', (select count(*) from public.profiles),
+            'authUsers', (select count(*) from auth.users),
+            'migrationHistoryRows', (select count(*) from supabase_migrations.schema_migrations),
+            'refundTableAbsent', to_regclass('public.direct_donation_upgrade_provider_reversals') is null,
+            'refundRpcAbsent', to_regprocedure('public.record_direct_donation_upgrade_provider_reversal(uuid,uuid,text,text,text,text,integer,text,timestamptz,text,text)') is null,
+            'refundColumnAbsent', not exists (
+              select 1 from information_schema.columns
+              where table_schema='public'
+                and table_name='direct_donation_upgrade_obligations'
+                and column_name='provider_reversed_at'
+            ),
+            'fixtureProfiles', (
+              select count(*) from public.profiles where id in (
+                'dc210000-0000-4000-8000-000000000001'::uuid,
+                'dc210000-0000-4000-8000-000000000002'::uuid,
+                'dc210000-0000-4000-8000-000000000003'::uuid
+              )
+            ),
+            'fixtureAuthUsers', (
+              select count(*) from auth.users where id in (
+                'dc210000-0000-4000-8000-000000000001'::uuid,
+                'dc210000-0000-4000-8000-000000000002'::uuid,
+                'dc210000-0000-4000-8000-000000000003'::uuid
+              )
+            )
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          before = json.loads(Path("adjudication-evidence/pre-transaction-state.json").read_text())
+          after = json.loads(Path("adjudication-evidence/post-transaction-state.json").read_text())
+          for key in ("offers", "candidates", "obligations", "credits", "profiles", "authUsers", "migrationHistoryRows"):
+              if before[key] != after[key]:
+                  raise SystemExit(f"Rollback residue for {key}: {before[key]} -> {after[key]}")
+          for key in ("refundTableAbsent", "refundRpcAbsent", "refundColumnAbsent"):
+              if after[key] is not True:
+                  raise SystemExit(f"Candidate schema residue remains: {key}={after[key]}")
+          if after["fixtureProfiles"] != 0 or after["fixtureAuthUsers"] != 0:
+              raise SystemExit(f"Synthetic fixture residue remains: {after!r}")
+          print(json.dumps(after, sort_keys=True))
+          PY
+
+      - name: Record successful exact-head adjudication
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="<!-- pr800-refund-foundation-qa-adjudication-v3 -->
+          ## PR #800 refund foundation exact-head adjudication passed
+
+          - exact base: \`$BASE_SHA\`
+          - exact repaired head: \`$PRODUCT_SHA\`
+          - exact tree: \`$PRODUCT_TREE\`
+          - durable scope: exactly seven product paths
+          - adjudication run: \`$GITHUB_RUN_ID\`
+          - focused tests, complete repository tests, TypeScript, ESLint, and disabled-rail build: passed
+          - exact immutable predecessor migration history on isolated MoralTrade QA: verified
+          - candidate migration and complete refund regression under one session-level lock and one rollback-only transaction: passed
+          - post-rollback schema, migration-history, cardinality, auth-fixture, and profile-fixture residue checks: passed
+
+          No production database was addressed. No persistent QA migration or fixture remained. No Every.org request, webhook registration or invocation, checkout, donation, payment, actual refund, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment 800 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Write explicit non-action record
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p adjudication-evidence
+          printf '%s\n' \
+            'productionDatabaseAddressed=false' \
+            'qaPersistentMigrationAttempted=false' \
+            'providerRequestAttempted=false' \
+            'webhookMutationAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'actualRefundAttempted=false' \
+            'deploymentAttempted=false' \
+            'credentialMutationAttempted=false' \
+            'productionChanged=false' \
+            > adjudication-evidence/non-actions.txt
+
+      - name: Upload sanitized adjudication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-foundation-qa-adjudication-v3-${{ github.run_id }}
+          path: adjudication-evidence/
+          if-no-files-found: error
+          retention-days: 30
