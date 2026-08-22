@@ -1,0 +1,230 @@
+name: PR800 refund regression bounded repair
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-regression-repair-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr800-refund-regression-bounded-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_PRODUCT_SHA: d33fa085ea093e7bd41c7f4f32441b94d782aaf2
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      REGRESSION_PATH: supabase/tests/direct_donation_upgrade_provider_refunds.sql
+      CONTRACT_PATH: src/lib/provider-refund-contract.test.ts
+      REGRESSION_BEFORE_SHA256: aa9fba0fcefe6cc3dba15104c4e6fb6ffa77673fffa1b583037d7889ffd9015b
+      CONTRACT_BEFORE_SHA256: 2384b17c077f3578f8e63d0c65c50fb647f9978b34658a1db26955181ff20f3e
+      REGRESSION_AFTER_SHA256: 69389deb053bbea2f2a0ca0314c6fde9b083993017ac03f7c56535dcd8edaf64
+      CONTRACT_AFTER_SHA256: 892d75218dbc1b8f445009c958723cf0afe04c48f6b29d10b37887249f228df1
+    steps:
+      - name: Check out exact clean product head
+        uses: actions/checkout@v4
+        with:
+          ref: d33fa085ea093e7bd41c7f4f32441b94d782aaf2
+          fetch-depth: 0
+
+      - name: Verify expected branch head and source hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair-evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$EXPECTED_PRODUCT_SHA"
+          test "$(sha256sum "$REGRESSION_PATH" | cut -d ' ' -f 1)" = "$REGRESSION_BEFORE_SHA256"
+          test "$(sha256sum "$CONTRACT_PATH" | cut -d ' ' -f 1)" = "$CONTRACT_BEFORE_SHA256"
+          printf 'expected_product_sha=%s\nremote_product_sha=%s\n' \
+            "$EXPECTED_PRODUCT_SHA" "$remote_sha" > repair-evidence/pre-repair-identity.txt
+
+      - name: Apply exact two-path regression repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          regression = Path("supabase/tests/direct_donation_upgrade_provider_refunds.sql")
+          source = regression.read_text()
+          anchor = "begin;\n\ninsert into public.profiles (id, email, display_name, bio)\n"
+          replacement = """begin;
+
+          insert into auth.users (
+            id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+            raw_app_meta_data, raw_user_meta_data, confirmation_token, recovery_token,
+            email_change_token_new, email_change_token_current, reauthentication_token,
+            is_sso_user, is_anonymous, created_at, updated_at
+          )
+          select
+            fixture.id,
+            '00000000-0000-0000-8000-000000000000'::uuid,
+            'authenticated',
+            'authenticated',
+            fixture.email,
+            '',
+            timezone('utc', now()),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('display_name', fixture.display_name, 'qa_fixture', true),
+            '', '', '', '', '', false, false,
+            timezone('utc', now()),
+            timezone('utc', now())
+          from (values
+            ('dc210000-0000-4000-8000-000000000001'::uuid, 'refund-operator@example.test', 'Refund QA Operator'),
+            ('dc210000-0000-4000-8000-000000000002'::uuid, 'refund-creator@example.test', 'Refund QA Creator'),
+            ('dc210000-0000-4000-8000-000000000003'::uuid, 'refund-matcher@example.test', 'Refund QA Matcher')
+          ) as fixture(id, email, display_name);
+
+          insert into public.profiles (id, email, display_name, bio)
+          """
+          replacement = "\n".join(line[10:] if line.startswith("          ") else line for line in replacement.splitlines()) + "\n"
+          if source.count(anchor) != 1:
+              raise SystemExit(f"expected one regression fixture anchor, found {source.count(anchor)}")
+          source = source.replace(anchor, replacement, 1)
+          if source.count("repeat('g', 64)") != 1 or source.count("repeat('h', 64)") != 1:
+              raise SystemExit("unexpected invalid-hash fixture count")
+          source = source.replace("repeat('g', 64)", "repeat('0', 64)")
+          source = source.replace("repeat('h', 64)", "repeat('3', 64)")
+          regression.write_text(source)
+
+          contract = Path("src/lib/provider-refund-contract.test.ts")
+          contract_source = contract.read_text()
+          contract_anchor = '''test("rollback-only regression covers exact success, mismatch matrix, replay, and privileges", () => {\n  assert.match(regression, /^begin;/m);\n  assert.match(regression, /^rollback;$/m);\n'''
+          contract_replacement = '''test("rollback-only regression covers exact success, mismatch matrix, replay, and privileges", () => {\n  assert.match(regression, /^begin;/m);\n  assert.match(regression, /^rollback;$/m);\n\n  const authFixtureInsert = regression.indexOf("insert into auth.users (");\n  const profileFixtureInsert = regression.indexOf("insert into public.profiles (");\n  assert.ok(authFixtureInsert >= 0);\n  assert.ok(profileFixtureInsert > authFixtureInsert);\n  assert.doesNotMatch(regression, /repeat\\('[g-z]', 64\\)/i);\n'''
+          if contract_source.count(contract_anchor) != 1:
+              raise SystemExit("expected one source-contract anchor")
+          contract.write_text(contract_source.replace(contract_anchor, contract_replacement, 1))
+          PY
+
+          test "$(sha256sum "$REGRESSION_PATH" | cut -d ' ' -f 1)" = "$REGRESSION_AFTER_SHA256"
+          test "$(sha256sum "$CONTRACT_PATH" | cut -d ' ' -f 1)" = "$CONTRACT_AFTER_SHA256"
+          git diff --name-only | sort > repair-evidence/changed-paths.txt
+          printf '%s\n' "$CONTRACT_PATH" "$REGRESSION_PATH" | sort > repair-evidence/expected-paths.txt
+          diff -u repair-evidence/expected-paths.txt repair-evidence/changed-paths.txt
+          git diff --check
+          sha256sum "$CONTRACT_PATH" "$REGRESSION_PATH" > repair-evidence/post-repair-sha256.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci > repair-evidence/npm-ci.log 2>&1
+
+      - name: Run focused refund and inherited contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > repair-evidence/focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > repair-evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit > repair-evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > repair-evidence/lint.log 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > repair-evidence/build.log 2>&1
+
+      - name: Commit and publish bounded repair
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_PRODUCT_SHA"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$CONTRACT_PATH" "$REGRESSION_PATH"
+          test "$(git diff --cached --name-only | wc -l | tr -d ' ')" = 2
+          git commit -m 'Repair refund regression fixture validity'
+          product_sha="$(git rev-parse HEAD)"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'product_sha=%s\nproduct_tree=%s\n' "$product_sha" "$product_tree" \
+            | tee repair-evidence/product-identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record bounded repair
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.publish.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
+        run: |
+          set -euo pipefail
+          body="<!-- pr800-refund-regression-repair -->
+          ## Refund regression fixture repaired
+
+          - prior clean head: \`$EXPECTED_PRODUCT_SHA\`
+          - repaired head: \`$PRODUCT_SHA\`
+          - repaired tree: \`$PRODUCT_TREE\`
+          - changed product paths: exactly \`$CONTRACT_PATH\` and \`$REGRESSION_PATH\`
+          - focused tests, complete repository tests, TypeScript, ESLint, and disabled-rail build: passed
+          - repair run: \`$GITHUB_RUN_ID\`
+
+          The rollback regression now creates the matching synthetic auth identities before profile rows and uses only valid lowercase hexadecimal provider hashes. Exact database adjudication remains required before this candidate is accepted.
+
+          No remote database, provider request, webhook registration or invocation, checkout, donation, payment, refund execution, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment 800 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Record explicit non-actions
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p repair-evidence
+          printf '%s\n' \
+            'remoteDatabaseAddressed=false' \
+            'providerRequestAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'refundExecutionAttempted=false' \
+            'deploymentAttempted=false' \
+            'productionChanged=false' \
+            > repair-evidence/non-actions.txt
+
+      - name: Upload repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-regression-repair-${{ github.run_id }}
+          path: repair-evidence/
+          if-no-files-found: error
+          retention-days: 30
