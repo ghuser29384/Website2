@@ -1,4 +1,4 @@
-name: PR 796 refund foundation one-use materializer
+name: PR 796 exact-head source export
 
 on:
   pull_request:
@@ -9,122 +9,45 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 concurrency:
-  group: pr796-refund-foundation-materializer
+  group: pr796-exact-head-source-export
   cancel-in-progress: true
 
 jobs:
-  validate-and-materialize:
+  export:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 110
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_DB: refund_qa
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d refund_qa"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
-    env:
-      GH_TOKEN: ${{ github.token }}
-      SCRIPT_DIR: .github/pr796-refund-materializer
-
+    timeout-minutes: 10
     steps:
-      - name: Check out exact materializer head
+      - name: Check out exact candidate revision
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
 
-      - name: Use Node 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Reconstruct and execute pinned materializer
-        id: materialize
-        continue-on-error: true
+      - name: Package exact source
         shell: bash
         run: |
           set -euo pipefail
-          cat "$SCRIPT_DIR"/part-* > pr796-materialize.b64
-          base64 --decode pr796-materialize.b64 | gzip --decompress \
-            > pr796-materialize.sh
-          printf '%s  %s\n' \
-            b8390efacbcd57565d8822dd1ff653f2b56742f0647cf8ae045edd08383eced1 \
-            pr796-materialize.sh | sha256sum --check
-          bash -n pr796-materialize.sh
-          bash pr796-materialize.sh
-
-      - name: Package sanitized evidence
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          tree="$(git rev-parse HEAD^{tree})"
+          git archive --format=zip --output="pr796-source-${head}.zip" HEAD
           {
-            printf 'deploymentAttempted=false\n'
-            printf 'providerRequestAttempted=false\n'
-            printf 'checkoutAttempted=false\n'
-            printf 'donationAttempted=false\n'
-            printf 'remoteDatabaseAddressed=false\n'
-            printf 'productionChanged=false\n'
-          } > pr796-non-actions.txt
-          if [[ -f supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql \
-             && -f supabase/tests/direct_donation_upgrade_provider_refunds.sql ]]; then
-            zip -q pr796-refund-foundation-source.zip \
-              supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql \
-              supabase/tests/direct_donation_upgrade_provider_refunds.sql \
-              src/lib/provider-refund-contract.test.ts \
-              docs/provider-review/every-org-donation-upgrade-review-packet.md
-            sha256sum pr796-refund-foundation-source.zip \
-              > pr796-source-bundle-sha256.txt
-          fi
+            printf 'head=%s\n' "$head"
+            printf 'tree=%s\n' "$tree"
+          } > pr796-source-identity.txt
+          sha256sum "pr796-source-${head}.zip" > pr796-source-sha256.txt
 
-      - name: Upload sanitized evidence
-        if: always()
+      - name: Upload exact source
         uses: actions/upload-artifact@v4
         with:
-          name: pr796-refund-foundation-${{ github.run_id }}
+          name: pr796-source-${{ github.run_id }}
           path: |
-            pr796-npm-ci.log
-            pr796-focused-tests.log
-            pr796-repository-tests.log
-            pr796-typecheck.log
-            pr796-lint.log
-            pr796-build.log
-            pr796-bootstrap.log
-            pr796-migration-chain.log
-            pr796-refund-regression.log
-            pr796-post-regression-residue.json
-            pr796-gate-summary.txt
-            materializer-trigger-paths.txt
-            materializer-expected-trigger-paths.txt
-            pr796-exact-source.txt
+            pr796-source-*.zip
+            pr796-source-identity.txt
             pr796-source-sha256.txt
-            pr796-final-expected-paths.txt
-            pr796-final-actual-paths.txt
-            pr796-final-identity.txt
-            pr796-remote-paths.txt
-            pr796-non-actions.txt
-            pr796-refund-foundation-source.zip
-            pr796-source-bundle-sha256.txt
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: Require successful controller-free materialization
-        if: always()
-        env:
-          MATERIALIZE_OUTCOME: ${{ steps.materialize.outcome }}
-        run: test "$MATERIALIZE_OUTCOME" = success
+          if-no-files-found: error
+          retention-days: 7
