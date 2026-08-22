@@ -1,0 +1,95 @@
+name: PR800 QA adjudication v3 harness repair
+
+on:
+  push:
+    branches:
+      - ops/pr800-qa-adjudication-v3-harness-repair-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: pr800-qa-adjudication-v3-harness-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: ops/pr800-refund-foundation-qa-adjudication-v3-20260822
+      EXPECTED_TARGET_SHA: 3c971ae8e8916308e2ba5b7c72906c9314f536b2
+      WORKFLOW_PATH: .github/workflows/pr800-refund-foundation-qa-adjudication-v3-20260822.yml
+      EXPECTED_WORKFLOW_BLOB: 16b4c73a5e87b85273f64591ff05e89130c6b3e3
+    steps:
+      - name: Check out exact target controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr800-refund-foundation-qa-adjudication-v3-20260822
+          fetch-depth: 0
+
+      - name: Apply exact tracked-status harness repair
+        id: repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$EXPECTED_TARGET_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+          test "$(git hash-object "$WORKFLOW_PATH")" = "$EXPECTED_WORKFLOW_BLOB"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/workflows/pr800-refund-foundation-qa-adjudication-v3-20260822.yml")
+          text = path.read_text()
+          old = '''          git status --porcelain | tee adjudication-evidence/checkout-status.txt
+          test ! -s adjudication-evidence/checkout-status.txt
+'''
+          new = '''          tracked_status="$(git status --porcelain --untracked-files=no)"
+          printf '%s' "$tracked_status" > adjudication-evidence/checkout-status.txt
+          test -z "$tracked_status"
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one harness anchor, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+          test "$(git diff --name-only | wc -l | tr -d ' ')" = 1
+          test "$(git diff --name-only)" = "$WORKFLOW_PATH"
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$WORKFLOW_PATH"
+          git commit -m 'Ignore generated evidence in PR800 QA cleanliness check'
+          repaired_sha="$(git rev-parse HEAD)"
+          repaired_tree="$(git rev-parse HEAD^{tree})"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'prior_sha=%s\nrepaired_sha=%s\nrepaired_tree=%s\n' \
+            "$EXPECTED_TARGET_SHA" "$repaired_sha" "$repaired_tree" \
+            | tee harness-repair-identity.txt
+          echo "repaired_sha=$repaired_sha" >> "$GITHUB_OUTPUT"
+          echo "repaired_tree=$repaired_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record harness-only repair
+        shell: bash
+        env:
+          REPAIRED_SHA: ${{ steps.repair.outputs.repaired_sha }}
+          REPAIRED_TREE: ${{ steps.repair.outputs.repaired_tree }}
+        run: |
+          set -euo pipefail
+          body="<!-- pr800-qa-adjudication-v3-harness-repair -->
+          ## PR #800 QA adjudication harness repaired
+
+          - prior controller: \`$EXPECTED_TARGET_SHA\`
+          - repaired controller: \`$REPAIRED_SHA\`
+          - repaired controller tree: \`$REPAIRED_TREE\`
+          - changed path: \`$WORKFLOW_PATH\` only
+
+          The failed run generated \`adjudication-evidence/\` before checking repository cleanliness and then rejected that intentional untracked directory. The repaired check evaluates tracked-file residue only. Product head \`2c36c7e2c47120ad08ac05a23bd2992bce498edb\` is unchanged.
+
+          No database, provider, payment, refund, deployment, credential, feature, or production action occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
