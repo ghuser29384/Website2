@@ -46,13 +46,15 @@ jobs:
 
           path = Path(".github/workflows/pr800-refund-foundation-qa-adjudication-v3-20260822.yml")
           text = path.read_text()
-          old = '''          git status --porcelain | tee adjudication-evidence/checkout-status.txt
-          test ! -s adjudication-evidence/checkout-status.txt
-'''
-          new = '''          tracked_status="$(git status --porcelain --untracked-files=no)"
-          printf '%s' "$tracked_status" > adjudication-evidence/checkout-status.txt
-          test -z "$tracked_status"
-'''
+          old = (
+              "          git status --porcelain | tee adjudication-evidence/checkout-status.txt\n"
+              "          test ! -s adjudication-evidence/checkout-status.txt\n"
+          )
+          new = (
+              "          tracked_status=\"$(git status --porcelain --untracked-files=no)\"\n"
+              "          printf '%s' \"$tracked_status\" > adjudication-evidence/checkout-status.txt\n"
+              "          test -z \"$tracked_status\"\n"
+          )
           if text.count(old) != 1:
               raise SystemExit(f"expected one harness anchor, found {text.count(old)}")
           path.write_text(text.replace(old, new, 1))
