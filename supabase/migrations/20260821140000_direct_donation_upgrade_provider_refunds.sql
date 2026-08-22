@@ -1485,6 +1485,16 @@ select
     from public.direct_donation_upgrade_impact_credits credit
     where credit.offer_id = offer.id
   ), 0) as redirected_net_amount_cents,
+  offer.redirect_basis_points,
+  offer.redirected_amount_cents,
+  offer.retained_amount_cents,
+  offer.supersedes_offer_id,
+  offer.superseded_by_offer_id,
+  (
+    select count(*)::integer
+    from public.direct_donation_upgrade_proposals proposal
+    where proposal.offer_id = offer.id
+  ) as proposal_count,
   coalesce((
     select sum(
       credit.verified_gross_amount_cents -
@@ -1529,17 +1539,7 @@ select
     select count(*)::integer
     from public.direct_donation_upgrade_provider_reversals reversal
     where reversal.offer_id = offer.id
-  ) as provider_reversed_obligation_count,
-  offer.redirect_basis_points,
-  offer.redirected_amount_cents,
-  offer.retained_amount_cents,
-  offer.supersedes_offer_id,
-  offer.superseded_by_offer_id,
-  (
-    select count(*)::integer
-    from public.direct_donation_upgrade_proposals proposal
-    where proposal.offer_id = offer.id
-  ) as proposal_count
+  ) as provider_reversed_obligation_count
 from public.direct_donation_upgrade_offers offer
 join public.profiles creator on creator.id = offer.creator_profile_id
 left join public.direct_donation_upgrade_candidates winner

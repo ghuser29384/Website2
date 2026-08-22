@@ -172,6 +172,40 @@ test("public accounting separates historical confirmation from current unreverse
   );
 });
 
+test("refund columns append after the predecessor public-view contract", () => {
+  const viewStart = migration.indexOf(
+    "create or replace view public.direct_donation_upgrade_public_offers",
+  );
+  const viewEnd = migration.indexOf(
+    "from public.direct_donation_upgrade_offers offer",
+    viewStart,
+  );
+  assert.ok(viewStart >= 0);
+  assert.ok(viewEnd > viewStart);
+  const publicView = migration.slice(viewStart, viewEnd);
+  const predecessorTail = [
+    "offer.redirect_basis_points",
+    "offer.redirected_amount_cents",
+    "offer.retained_amount_cents",
+    "offer.supersedes_offer_id",
+    "offer.superseded_by_offer_id",
+    ") as proposal_count",
+  ];
+  const appendedRefundColumns = [
+    ") as current_unreversed_gross_amount_cents",
+    ") as current_unreversed_net_amount_cents",
+    ") as current_incremental_net_amount_cents",
+    ") as current_redirected_net_amount_cents",
+    ") as provider_reversed_obligation_count",
+  ];
+  let priorPosition = -1;
+  for (const marker of [...predecessorTail, ...appendedRefundColumns]) {
+    const position = publicView.indexOf(marker);
+    assert.ok(position > priorPosition, `${marker} must preserve append-only view order`);
+    priorPosition = position;
+  }
+});
+
 test("refund evidence is service-only, append-only, and data-minimized", () => {
   assert.match(
     migration,
