@@ -23,7 +23,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: pr800-qa-adjudication-v3-harness-repair-20260822.yml
       TARGET_BRANCH: ops/pr800-qa-adjudication-v3-harness-repair-20260822
-      TARGET_HEAD: 125f1bf52caa41e123b22c91d1e780373e81461a
+      TARGET_HEAD: 867fc74be282c34f887e6845248a84f619f8de3e
     steps:
       - name: Observe exact harness repair run
         shell: bash
@@ -49,8 +49,8 @@ jobs:
           done
 
           if [[ -z "$latest" ]]; then
-            gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body '<!-- pr800-qa-adjudication-v3-harness-repair-observer -->
-          No exact harness-repair run was found for the expected controller head.'
+            gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body '<!-- pr800-qa-adjudication-v3-harness-repair-observer-v2 -->
+          No exact harness-repair run was found for the repaired controller head.'
             exit 1
           fi
 
@@ -58,7 +58,7 @@ jobs:
           status="$(jq -r '.status' <<<"$latest")"
           conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
           html_url="$(jq -r '.html_url' <<<"$latest")"
-          body="<!-- pr800-qa-adjudication-v3-harness-repair-observer -->
+          body="<!-- pr800-qa-adjudication-v3-harness-repair-observer-v2 -->
           ## PR #800 QA adjudication harness-repair observer
 
           - run: \`$run_id\`
