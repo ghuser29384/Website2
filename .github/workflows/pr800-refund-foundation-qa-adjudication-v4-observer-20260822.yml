@@ -1,0 +1,71 @@
+name: PR800 rollback-only QA adjudication v4 observer
+
+on:
+  push:
+    branches:
+      - ops/pr800-adjudication-observer-20260822
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: pr800-refund-foundation-qa-adjudication-v4-observer
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr800-refund-foundation-qa-adjudication-v4-20260822.yml
+      TARGET_BRANCH: ops/pr800-refund-foundation-qa-adjudication-v4-20260822
+      TARGET_HEAD: 1672d069c47d80c03a89d07505bc677f5e6db0d4
+    steps:
+      - name: Observe exact adjudication run
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=''
+          for attempt in $(seq 1 220); do
+            response="$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+              -f branch="$TARGET_BRANCH" \
+              -f per_page=30)"
+            latest="$(jq -c \
+              --arg sha "$TARGET_HEAD" \
+              '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | reverse | .[0] // empty' \
+              <<<"$response")"
+            if [[ -n "$latest" ]]; then
+              status="$(jq -r '.status' <<<"$latest")"
+              if [[ "$status" = completed ]]; then
+                break
+              fi
+            fi
+            sleep 30
+          done
+
+          if [[ -z "$latest" ]]; then
+            gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body '<!-- pr800-refund-foundation-qa-adjudication-v4-observer -->
+          No exact v4 adjudication run was found.'
+            exit 1
+          fi
+
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr800-refund-foundation-qa-adjudication-v4-observer -->
+          ## PR #800 rollback-only QA adjudication v4 observer
+
+          - run: \`$run_id\`
+          - status: \`$status\`
+          - conclusion: \`$conclusion\`
+          - controller head: \`$TARGET_HEAD\`
+          - run page: $html_url"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$status" = completed
+          test "$conclusion" = success
