@@ -1,0 +1,40 @@
+name: PR709 refund recovery status snapshot
+
+on:
+  push:
+    branches:
+      - ops/pr709-refund-recovery-observer-20260822
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RECOVERY_WORKFLOW: pr709-refund-foundation-recovery-v4-20260822.yml
+      RECOVERY_BRANCH: ops/pr709-refund-foundation-recovery-v4-20260822
+    steps:
+      - name: Record latest recovery run state
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$RECOVERY_WORKFLOW/runs" \
+            -f branch="$RECOVERY_BRANCH" \
+            -f per_page=20)"
+          latest="$(jq -c '.workflow_runs | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+          test -n "$latest"
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          head_sha="$(jq -r '.head_sha' <<<"$latest")"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr709-refund-recovery-v4-snapshot -->
+          Recovery v4 snapshot: run \`$run_id\`, status \`$status\`, conclusion \`$conclusion\`, controller head \`$head_sha\`: $html_url"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
