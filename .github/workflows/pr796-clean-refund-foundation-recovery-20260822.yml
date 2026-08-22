@@ -1,0 +1,301 @@
+name: PR796 clean refund foundation recovery
+
+on:
+  push:
+    branches:
+      - ops/pr796-recover-refund-foundation-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr796-clean-refund-foundation-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      PRODUCT_BUNDLE_DIR: .github/pr796-refund-bundle
+    steps:
+      - name: Check out exact recovery source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Reconstruct clean candidate from pinned base
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          source_tree="$(git rev-parse HEAD^{tree})"
+          work_root="$RUNNER_TEMP/pr796-recovery"
+          payload="$work_root/product.payload"
+          archive="$work_root/product.gz"
+          source_doc="$work_root/every-org-donation-upgrade-review-packet.md"
+          mkdir -p "$work_root"
+
+          test "$BASE_SHA" = "566bb18db56848b40a3a1ab58979a6be88ba45a8"
+          git cat-file -e "$BASE_SHA^{commit}"
+          test -d "$PRODUCT_BUNDLE_DIR"
+          test -f docs/provider-review/every-org-donation-upgrade-review-packet.md
+          cp docs/provider-review/every-org-donation-upgrade-review-packet.md "$source_doc"
+
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+
+          source = Path('.github/pr796-refund-bundle')
+          parts = sorted(source.glob('part-*'))
+          if len(parts) != 4:
+              raise SystemExit(f'expected exactly four product bundle parts, found {len(parts)}')
+          encoded = b''.join(part.read_bytes().strip() for part in parts)
+          try:
+              decoded = base64.b64decode(encoded, validate=True)
+          except Exception as exc:
+              raise SystemExit(f'invalid product bundle base64: {type(exc).__name__}') from exc
+          Path(__import__('os').environ['RUNNER_TEMP'], 'pr796-recovery', 'product.gz').write_bytes(decoded)
+          PY
+
+          gzip --test "$archive"
+          gzip --decompress --stdout "$archive" > "$payload"
+          test -s "$payload"
+          sha256sum "$archive" "$payload" | tee "$work_root/payload-sha256.txt"
+          file "$payload" | tee "$work_root/payload-type.txt"
+
+          git switch --detach "$BASE_SHA"
+          git reset --hard "$BASE_SHA"
+          git clean -ffd
+
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import shutil
+          import tarfile
+          import zipfile
+          from pathlib import Path, PurePosixPath
+
+          root = Path.cwd()
+          work_root = Path(os.environ['RUNNER_TEMP']) / 'pr796-recovery'
+          payload = work_root / 'product.payload'
+          source_doc = work_root / 'every-org-donation-upgrade-review-packet.md'
+          allowed = {
+              'docs/provider-review/every-org-donation-upgrade-review-packet.md',
+              'src/lib/direct-donation-upgrade-data.ts',
+              'src/lib/direct-donation-upgrade-negotiation.ts',
+              'src/lib/direct-donation-upgrade.ts',
+              'src/lib/provider-refund-contract.test.ts',
+              'supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql',
+              'supabase/tests/direct_donation_upgrade_provider_refunds.sql',
+          }
+
+          def normalize_member(name: str) -> str:
+              path = PurePosixPath(name)
+              if path.is_absolute() or '..' in path.parts:
+                  raise SystemExit(f'unsafe bundle path: {name!r}')
+              candidates = [str(path)]
+              for index in range(1, len(path.parts)):
+                  candidates.append(str(PurePosixPath(*path.parts[index:])))
+              matches = [candidate for candidate in candidates if candidate in allowed]
+              if len(matches) != 1:
+                  raise SystemExit(f'unapproved or ambiguous bundle path: {name!r}')
+              return matches[0]
+
+          extracted: dict[str, bytes] = {}
+          if tarfile.is_tarfile(payload):
+              with tarfile.open(payload, 'r:*') as archive:
+                  for member in archive.getmembers():
+                      if member.isdir():
+                          continue
+                      if not member.isfile() or member.issym() or member.islnk():
+                          raise SystemExit(f'unsupported tar member type: {member.name!r}')
+                      path = normalize_member(member.name)
+                      if path in extracted:
+                          raise SystemExit(f'duplicate bundle path: {path}')
+                      stream = archive.extractfile(member)
+                      if stream is None:
+                          raise SystemExit(f'could not read tar member: {member.name!r}')
+                      extracted[path] = stream.read()
+          elif zipfile.is_zipfile(payload):
+              with zipfile.ZipFile(payload) as archive:
+                  for info in archive.infolist():
+                      if info.is_dir():
+                          continue
+                      path = normalize_member(info.filename)
+                      if path in extracted:
+                          raise SystemExit(f'duplicate bundle path: {path}')
+                      extracted[path] = archive.read(info)
+          else:
+              raw = payload.read_bytes()
+              try:
+                  decoded = raw.decode('utf-8')
+              except UnicodeDecodeError as exc:
+                  raise SystemExit('product payload is neither a safe archive nor UTF-8 text') from exc
+              try:
+                  document = json.loads(decoded)
+              except json.JSONDecodeError:
+                  document = None
+              if isinstance(document, dict) and isinstance(document.get('files'), dict):
+                  for name, value in document['files'].items():
+                      path = normalize_member(str(name))
+                      if path in extracted:
+                          raise SystemExit(f'duplicate bundle path: {path}')
+                      if not isinstance(value, str):
+                          raise SystemExit(f'non-text JSON bundle value for {path}')
+                      extracted[path] = value.encode()
+              else:
+                  (work_root / 'product.patch').write_text(decoded)
+
+          if extracted:
+              for path, data in extracted.items():
+                  destination = root / path
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  destination.write_bytes(data)
+              (work_root / 'extracted-paths.txt').write_text(
+                  '\n'.join(sorted(extracted)) + '\n'
+              )
+          else:
+              (work_root / 'extracted-paths.txt').write_text('unified-patch\n')
+          PY
+
+          if [[ -f "$work_root/product.patch" ]]; then
+            grep -Eq '^(diff --git |From [0-9a-f]{40} )' "$work_root/product.patch"
+            git apply --check "$work_root/product.patch"
+            git apply "$work_root/product.patch"
+          fi
+
+          if [[ ! -f docs/provider-review/every-org-donation-upgrade-review-packet.md ]]; then
+            mkdir -p docs/provider-review
+            cp "$source_doc" docs/provider-review/every-org-donation-upgrade-review-packet.md
+          fi
+
+          cat > "$work_root/expected-paths.txt" <<'EOF'
+          docs/provider-review/every-org-donation-upgrade-review-packet.md
+          src/lib/direct-donation-upgrade-data.ts
+          src/lib/direct-donation-upgrade-negotiation.ts
+          src/lib/direct-donation-upgrade.ts
+          src/lib/provider-refund-contract.test.ts
+          supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
+          supabase/tests/direct_donation_upgrade_provider_refunds.sql
+          EOF
+          git diff --name-only "$BASE_SHA"...HEAD >/dev/null
+          git status --short
+          git diff --name-only "$BASE_SHA" | sort > "$work_root/actual-paths.txt"
+          diff -u "$work_root/expected-paths.txt" "$work_root/actual-paths.txt"
+
+          while IFS= read -r path; do
+            test -f "$path"
+            test ! -L "$path"
+          done < "$work_root/expected-paths.txt"
+
+          git diff --check "$BASE_SHA"
+          ! grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            $(cat "$work_root/expected-paths.txt")
+
+          {
+            printf 'source_sha=%s\n' "$source_sha"
+            printf 'source_tree=%s\n' "$source_tree"
+            printf 'base_sha=%s\n' "$BASE_SHA"
+          } | tee "$work_root/recovery-identity.txt"
+
+      - name: Install exact dependencies
+        shell: bash
+        run: npm ci > "$RUNNER_TEMP/pr796-recovery/npm-ci.log" 2>&1
+
+      - name: Run focused refund and authorization tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > "$RUNNER_TEMP/pr796-recovery/focused-tests.log" 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > "$RUNNER_TEMP/pr796-recovery/repository-tests.log" 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit > "$RUNNER_TEMP/pr796-recovery/typecheck.log" 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > "$RUNNER_TEMP/pr796-recovery/lint.log" 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > "$RUNNER_TEMP/pr796-recovery/build.log" 2>&1
+
+      - name: Commit and publish clean product branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          work_root="$RUNNER_TEMP/pr796-recovery"
+          if git ls-remote --exit-code --heads origin "$TARGET_BRANCH" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing target branch $TARGET_BRANCH" >&2
+            exit 1
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -- $(cat "$work_root/expected-paths.txt")
+          git diff --cached --name-only | sort > "$work_root/staged-paths.txt"
+          diff -u "$work_root/expected-paths.txt" "$work_root/staged-paths.txt"
+          git commit -m "Implement refund-safe Donation Upgrade accounting foundation"
+          product_sha="$(git rev-parse HEAD)"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          {
+            printf 'target_branch=%s\n' "$TARGET_BRANCH"
+            printf 'product_sha=%s\n' "$product_sha"
+            printf 'product_tree=%s\n' "$product_tree"
+          } | tee "$work_root/product-identity.txt"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Upload sanitized recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr796-clean-refund-recovery-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/pr796-recovery/payload-sha256.txt
+            ${{ runner.temp }}/pr796-recovery/payload-type.txt
+            ${{ runner.temp }}/pr796-recovery/extracted-paths.txt
+            ${{ runner.temp }}/pr796-recovery/expected-paths.txt
+            ${{ runner.temp }}/pr796-recovery/actual-paths.txt
+            ${{ runner.temp }}/pr796-recovery/staged-paths.txt
+            ${{ runner.temp }}/pr796-recovery/recovery-identity.txt
+            ${{ runner.temp }}/pr796-recovery/product-identity.txt
+            ${{ runner.temp }}/pr796-recovery/npm-ci.log
+            ${{ runner.temp }}/pr796-recovery/focused-tests.log
+            ${{ runner.temp }}/pr796-recovery/repository-tests.log
+            ${{ runner.temp }}/pr796-recovery/typecheck.log
+            ${{ runner.temp }}/pr796-recovery/lint.log
+            ${{ runner.temp }}/pr796-recovery/build.log
+          if-no-files-found: warn
+          retention-days: 30
