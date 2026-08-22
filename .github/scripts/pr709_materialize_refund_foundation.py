@@ -23,6 +23,14 @@ def main() -> None:
     direct = root / "src/lib/direct-donation-upgrade.ts"
     data = root / "src/lib/direct-donation-upgrade-data.ts"
     negotiation = root / "src/lib/direct-donation-upgrade-negotiation.ts"
+    review_packet = (
+        root / "docs/provider-review/every-org-donation-upgrade-review-packet.md"
+    )
+
+    review_packet.write_text(
+        "\n".join(line.rstrip() for line in review_packet.read_text().splitlines())
+        + "\n"
+    )
 
     replace_once(
         direct,
@@ -76,7 +84,7 @@ def main() -> None:
         '}',
     )
 
-    print("materialized deterministic TypeScript refund-state changes")
+    print("materialized deterministic refund-state changes")
 
 
 if __name__ == "__main__":
