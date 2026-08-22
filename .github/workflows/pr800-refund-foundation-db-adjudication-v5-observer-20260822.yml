@@ -1,0 +1,71 @@
+name: PR800 refund database adjudication v5 observer
+
+on:
+  push:
+    branches:
+      - ops/pr800-adjudication-observer-20260822
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: pr800-refund-foundation-db-adjudication-v5-observer
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr800-refund-foundation-db-adjudication-v5-20260822.yml
+      TARGET_BRANCH: ops/pr800-refund-foundation-db-adjudication-v5-20260822
+      TARGET_HEAD: c2bbbdb07a7ff14fc0be0be13d85b44878fd5e24
+    steps:
+      - name: Observe exact database adjudication run
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=''
+          for attempt in $(seq 1 180); do
+            response="$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+              -f branch="$TARGET_BRANCH" \
+              -f per_page=30)"
+            latest="$(jq -c \
+              --arg sha "$TARGET_HEAD" \
+              '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | reverse | .[0] // empty' \
+              <<<"$response")"
+            if [[ -n "$latest" ]]; then
+              status="$(jq -r '.status' <<<"$latest")"
+              if [[ "$status" = completed ]]; then
+                break
+              fi
+            fi
+            sleep 30
+          done
+
+          if [[ -z "$latest" ]]; then
+            gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body '<!-- pr800-refund-foundation-db-adjudication-v5-observer -->
+          No exact v5 database-adjudication run was found.'
+            exit 1
+          fi
+
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr800-refund-foundation-db-adjudication-v5-observer -->
+          ## PR #800 refund database adjudication v5 observer
+
+          - run: \`$run_id\`
+          - status: \`$status\`
+          - conclusion: \`$conclusion\`
+          - controller head: \`$TARGET_HEAD\`
+          - run page: $html_url"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$status" = completed
+          test "$conclusion" = success
