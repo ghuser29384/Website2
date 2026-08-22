@@ -1,0 +1,410 @@
+name: PR796 clean refund foundation recovery supervisor
+
+on:
+  push:
+    branches:
+      - ops/pr796-recover-refund-foundation-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr796-clean-refund-foundation-recovery-supervisor
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+      BASE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+      SOURCE_BRANCH: feature/direct-donation-upgrade-refund-safety-709-20260821
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+    steps:
+      - name: Check out supervisor source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Recover candidate or verify existing target
+        id: recover
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP/pr796-supervisor"
+          mkdir -p "$temp"
+          cat > "$temp/expected-paths.txt" <<'EOF'
+          docs/provider-review/every-org-donation-upgrade-review-packet.md
+          src/lib/direct-donation-upgrade-data.ts
+          src/lib/direct-donation-upgrade-negotiation.ts
+          src/lib/direct-donation-upgrade.ts
+          src/lib/provider-refund-contract.test.ts
+          supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
+          supabase/tests/direct_donation_upgrade_provider_refunds.sql
+          EOF
+
+          git fetch --no-tags origin "$BASE_BRANCH" "$SOURCE_BRANCH" || true
+          git fetch --no-tags origin "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH" || true
+          test "$(git rev-parse "origin/$BASE_BRANCH")" = "$BASE_SHA"
+
+          exact_paths() {
+            git diff --name-only "$BASE_SHA"...HEAD | sort > "$temp/actual-paths.txt"
+            diff -u "$temp/expected-paths.txt" "$temp/actual-paths.txt"
+          }
+
+          if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+            git switch --detach "origin/$TARGET_BRANCH"
+            exact_paths
+            printf 'mode=existing-target\n' > "$temp/mode.txt"
+          else
+            source_ref="origin/$SOURCE_BRANCH"
+            git merge-base --is-ancestor "$BASE_SHA" "$source_ref"
+            git show "$source_ref:docs/provider-review/every-org-donation-upgrade-review-packet.md" > "$temp/review-packet.md"
+            : > "$temp/product.b64"
+            for index in 00 01 02 03; do
+              git show "$source_ref:.github/pr796-refund-bundle/part-$index" >> "$temp/product.b64"
+            done
+
+            python - <<'PY'
+            from __future__ import annotations
+            import base64, gzip, io, json, os, tarfile, zipfile
+            from pathlib import Path, PurePosixPath
+
+            temp = Path(os.environ['RUNNER_TEMP']) / 'pr796-supervisor'
+            allowed = set((temp / 'expected-paths.txt').read_text().splitlines())
+            encoded = b''.join((temp / 'product.b64').read_bytes().split())
+            initial = base64.b64decode(encoded, validate=True)
+            (temp / 'outer-gzip.sha256-input').write_bytes(initial)
+            data = gzip.decompress(initial)
+            (temp / 'decoded-payload.bin').write_bytes(data)
+            extracted_root = temp / 'extracted'
+            extracted_root.mkdir()
+            patches: list[bytes] = []
+            copied: dict[str, bytes] = {}
+            seen_payloads: set[bytes] = set()
+
+            def safe_name(name: str) -> PurePosixPath:
+                path = PurePosixPath(name)
+                if path.is_absolute() or '..' in path.parts:
+                    raise SystemExit(f'unsafe archive path: {name}')
+                return path
+
+            def allowed_suffix(path: PurePosixPath) -> str | None:
+                for index in range(len(path.parts)):
+                    candidate = str(PurePosixPath(*path.parts[index:]))
+                    if candidate in allowed:
+                        return candidate
+                return None
+
+            def consume(blob: bytes, label: str, depth: int = 0) -> None:
+                if depth > 4:
+                    return
+                digest_key = blob[:128] + len(blob).to_bytes(8, 'big')
+                if digest_key in seen_payloads:
+                    return
+                seen_payloads.add(digest_key)
+                if blob.startswith(b'\x1f\x8b'):
+                    consume(gzip.decompress(blob), label + '.gunzip', depth + 1)
+                    return
+                stream = io.BytesIO(blob)
+                try:
+                    with tarfile.open(fileobj=stream, mode='r:*') as archive:
+                        members = archive.getmembers()
+                        if members:
+                            for member in members:
+                                if member.isdir():
+                                    continue
+                                if not member.isfile() or member.issym() or member.islnk():
+                                    raise SystemExit(f'unsupported tar member: {member.name}')
+                                path = safe_name(member.name)
+                                handle = archive.extractfile(member)
+                                if handle is None:
+                                    raise SystemExit(f'unreadable tar member: {member.name}')
+                                child = handle.read()
+                                match = allowed_suffix(path)
+                                if match is not None:
+                                    if match in copied and copied[match] != child:
+                                        raise SystemExit(f'conflicting bundle content for {match}')
+                                    copied[match] = child
+                                else:
+                                    consume(child, label + ':' + str(path), depth + 1)
+                            return
+                except tarfile.ReadError:
+                    pass
+                stream.seek(0)
+                if zipfile.is_zipfile(stream):
+                    with zipfile.ZipFile(stream) as archive:
+                        for info in archive.infolist():
+                            if info.is_dir():
+                                continue
+                            path = safe_name(info.filename)
+                            child = archive.read(info)
+                            match = allowed_suffix(path)
+                            if match is not None:
+                                if match in copied and copied[match] != child:
+                                    raise SystemExit(f'conflicting bundle content for {match}')
+                                copied[match] = child
+                            else:
+                                consume(child, label + ':' + str(path), depth + 1)
+                    return
+                try:
+                    text = blob.decode('utf-8')
+                except UnicodeDecodeError:
+                    return
+                stripped = text.lstrip()
+                if stripped.startswith('diff --git ') or stripped.startswith('From '):
+                    patches.append(blob)
+                    return
+                try:
+                    document = json.loads(text)
+                except json.JSONDecodeError:
+                    document = None
+                if isinstance(document, dict) and isinstance(document.get('files'), dict):
+                    for name, value in document['files'].items():
+                        path = safe_name(str(name))
+                        match = allowed_suffix(path)
+                        if match is None or not isinstance(value, str):
+                            continue
+                        child = value.encode()
+                        if match in copied and copied[match] != child:
+                            raise SystemExit(f'conflicting JSON content for {match}')
+                        copied[match] = child
+                    return
+                compact = b''.join(blob.split())
+                if len(compact) >= 32 and len(compact) % 4 == 0:
+                    try:
+                        nested = base64.b64decode(compact, validate=True)
+                    except Exception:
+                        return
+                    if nested != blob:
+                        consume(nested, label + '.base64', depth + 1)
+
+            consume(data, 'payload')
+            for path, content in copied.items():
+                destination = extracted_root / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(content)
+            for index, content in enumerate(patches):
+                (temp / f'candidate-{index:02d}.patch').write_bytes(content)
+            (temp / 'recovered-paths.txt').write_text('\n'.join(sorted(copied)) + '\n')
+            (temp / 'patch-count.txt').write_text(str(len(patches)) + '\n')
+            PY
+
+            sha256sum "$temp/outer-gzip.sha256-input" "$temp/decoded-payload.bin" > "$temp/payload-sha256.txt"
+            file "$temp/decoded-payload.bin" > "$temp/payload-type.txt"
+            git switch --detach "$BASE_SHA"
+            git reset --hard "$BASE_SHA"
+            git clean -ffd
+
+            recovered=0
+            if [[ -d "$temp/extracted" ]]; then
+              while IFS= read -r path; do
+                if [[ -f "$temp/extracted/$path" ]]; then
+                  mkdir -p "$(dirname "$path")"
+                  cp "$temp/extracted/$path" "$path"
+                fi
+              done < "$temp/expected-paths.txt"
+              if [[ -n "$(git status --short)" ]]; then
+                git diff --name-only "$BASE_SHA" | sort > "$temp/direct-file-paths.txt"
+                if diff -u "$temp/expected-paths.txt" "$temp/direct-file-paths.txt"; then
+                  recovered=1
+                  printf 'mode=reconstructed-files\n' > "$temp/mode.txt"
+                fi
+              fi
+            fi
+
+            if [[ "$recovered" != 1 ]]; then
+              for patch in "$temp"/candidate-*.patch; do
+                [[ -f "$patch" ]] || continue
+                git reset --hard "$BASE_SHA"
+                git clean -ffd
+                if git apply --check "$patch" && git apply "$patch"; then
+                  if [[ ! -f docs/provider-review/every-org-donation-upgrade-review-packet.md ]]; then
+                    mkdir -p docs/provider-review
+                    cp "$temp/review-packet.md" docs/provider-review/every-org-donation-upgrade-review-packet.md
+                  fi
+                  git diff --name-only "$BASE_SHA" | sort > "$temp/patch-paths.txt"
+                  if diff -u "$temp/expected-paths.txt" "$temp/patch-paths.txt"; then
+                    recovered=1
+                    printf 'mode=reconstructed-patch\npatch=%s\n' "$(basename "$patch")" > "$temp/mode.txt"
+                    break
+                  fi
+                fi
+              done
+            fi
+
+            if [[ "$recovered" != 1 ]]; then
+              echo 'The product bundle did not yield the exact seven approved paths.' >&2
+              exit 1
+            fi
+            git diff --name-only "$BASE_SHA" | sort > "$temp/actual-paths.txt"
+            diff -u "$temp/expected-paths.txt" "$temp/actual-paths.txt"
+          fi
+
+          while IFS= read -r path; do
+            test -f "$path"
+            test ! -L "$path"
+          done < "$temp/expected-paths.txt"
+          git diff --check "$BASE_SHA"
+          ! grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            $(cat "$temp/expected-paths.txt")
+
+      - name: Install dependencies
+        run: npm ci > "$RUNNER_TEMP/pr796-supervisor/npm-ci.log" 2>&1
+
+      - name: Run focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > "$RUNNER_TEMP/pr796-supervisor/focused-tests.log" 2>&1
+
+      - name: Run repository tests
+        run: npm test > "$RUNNER_TEMP/pr796-supervisor/repository-tests.log" 2>&1
+
+      - name: Run TypeScript
+        run: npx tsc --noEmit > "$RUNNER_TEMP/pr796-supervisor/typecheck.log" 2>&1
+
+      - name: Run ESLint
+        run: npm run lint -- --quiet > "$RUNNER_TEMP/pr796-supervisor/lint.log" 2>&1
+
+      - name: Build with money rails disabled
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > "$RUNNER_TEMP/pr796-supervisor/build.log" 2>&1
+
+      - name: Publish exact clean branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP/pr796-supervisor"
+          if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+            product_sha="$(git rev-parse HEAD)"
+            product_tree="$(git rev-parse HEAD^{tree})"
+          else
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add -- $(cat "$temp/expected-paths.txt")
+            git diff --cached --name-only | sort > "$temp/staged-paths.txt"
+            diff -u "$temp/expected-paths.txt" "$temp/staged-paths.txt"
+            git commit -m 'Implement refund-safe Donation Upgrade accounting foundation'
+            product_sha="$(git rev-parse HEAD)"
+            product_tree="$(git rev-parse HEAD^{tree})"
+            git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          fi
+          printf 'base_sha=%s\nproduct_sha=%s\nproduct_tree=%s\ntarget_branch=%s\n' \
+            "$BASE_SHA" "$product_sha" "$product_tree" "$TARGET_BRANCH" \
+            | tee "$temp/product-identity.txt"
+
+      - name: Create draft PR and durable records
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP/pr796-supervisor"
+          product_sha="$(sed -n 's/^product_sha=//p' "$temp/product-identity.txt")"
+          product_tree="$(sed -n 's/^product_tree=//p' "$temp/product-identity.txt")"
+          pr_url="$(gh pr list --state open --head "$TARGET_BRANCH" --base "$BASE_BRANCH" --json url --jq '.[0].url // empty')"
+          if [[ -z "$pr_url" ]]; then
+            cat > "$temp/pr-body.md" <<EOF
+          ## Purpose
+
+          Controller-free recovery of the first bounded Issue #709 tranche: auditable, idempotent provider-refund accounting for direct Donation Upgrades.
+
+          ## Exact identity
+
+          - base: \`$BASE_SHA\`
+          - head: \`$product_sha\`
+          - tree: \`$product_tree\`
+          - durable scope: exactly seven paths
+
+          ## Executed validation
+
+          Focused refund/authentication tests, the complete repository tests, strict TypeScript, repository ESLint, a production build with all money rails disabled, exact-path validation, diff-integrity checks, and credential-pattern scanning passed before the branch was published.
+
+          ## Boundary
+
+          Draft, stacked, unmerged, and undeployed. No Every.org request, webhook registration or invocation, checkout, donation, payment, refund execution, remote migration, credential mutation, feature activation, custody, transfer, payout, email, brand submission, alias movement, or production change occurred.
+          EOF
+            pr_url="$(gh pr create --draft --base "$BASE_BRANCH" --head "$TARGET_BRANCH" --title 'Recover clean refund-safe Donation Upgrade accounting foundation' --body-file "$temp/pr-body.md")"
+          fi
+          printf 'replacement_pr=%s\n' "$pr_url" > "$temp/replacement-pr.txt"
+          cat > "$temp/issue-comment.md" <<EOF
+          <!-- pr796-clean-refund-foundation-recovery -->
+          ## Clean refund-accounting foundation recovered
+
+          A clean, controller-free candidate was reconstructed from exact base \`$BASE_SHA\`, restricted to the seven approved durable paths, and validated before publication.
+
+          - replacement draft PR: $pr_url
+          - exact head: \`$product_sha\`
+          - exact tree: \`$product_tree\`
+          - focused and complete repository tests: passed
+          - TypeScript, ESLint, disabled-money-rail build, exact-path, diff-integrity, and credential-pattern checks: passed
+
+          The earlier failed materializer runs are retained only as recovery history and are not acceptance evidence. No provider request, webhook registration or invocation, checkout, donation, payment, refund execution, remote migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, or production change occurred.
+          EOF
+          existing_id="$(gh api "repos/$GITHUB_REPOSITORY/issues/709/comments?per_page=100" --jq '.[] | select(.body | contains("<!-- pr796-clean-refund-foundation-recovery -->")) | .id' | tail -1)"
+          if [[ -n "$existing_id" ]]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing_id" -f body="$(cat "$temp/issue-comment.md")" >/dev/null
+          else
+            gh issue comment 709 --body-file "$temp/issue-comment.md" >/dev/null
+          fi
+          gh pr comment 796 --body "Superseded for product review by the clean, controller-free candidate at $pr_url. PR #796 remains draft and unmerged as recovery history; temporary bundle, diagnostic, and controller files are not product evidence." >/dev/null
+
+      - name: Record bounded failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh issue comment 709 --body "<!-- pr796-clean-refund-foundation-recovery-failure -->\nThe bounded clean-recovery supervisor failed in run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. It made no provider request, checkout, donation, refund execution, remote migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, or production change. No failed run is being represented as product evidence." >/dev/null || true
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr796-clean-refund-supervisor-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/pr796-supervisor/mode.txt
+            ${{ runner.temp }}/pr796-supervisor/payload-sha256.txt
+            ${{ runner.temp }}/pr796-supervisor/payload-type.txt
+            ${{ runner.temp }}/pr796-supervisor/recovered-paths.txt
+            ${{ runner.temp }}/pr796-supervisor/patch-count.txt
+            ${{ runner.temp }}/pr796-supervisor/expected-paths.txt
+            ${{ runner.temp }}/pr796-supervisor/actual-paths.txt
+            ${{ runner.temp }}/pr796-supervisor/direct-file-paths.txt
+            ${{ runner.temp }}/pr796-supervisor/patch-paths.txt
+            ${{ runner.temp }}/pr796-supervisor/staged-paths.txt
+            ${{ runner.temp }}/pr796-supervisor/product-identity.txt
+            ${{ runner.temp }}/pr796-supervisor/replacement-pr.txt
+            ${{ runner.temp }}/pr796-supervisor/npm-ci.log
+            ${{ runner.temp }}/pr796-supervisor/focused-tests.log
+            ${{ runner.temp }}/pr796-supervisor/repository-tests.log
+            ${{ runner.temp }}/pr796-supervisor/typecheck.log
+            ${{ runner.temp }}/pr796-supervisor/lint.log
+            ${{ runner.temp }}/pr796-supervisor/build.log
+          if-no-files-found: warn
+          retention-days: 30
