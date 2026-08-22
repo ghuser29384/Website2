@@ -19,7 +19,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: pr800-refund-foundation-adjudication-20260822.yml
       TARGET_BRANCH: ops/pr800-refund-foundation-adjudication-20260822
-      TARGET_CONTROLLER_SHA: 46cd7ee1fff9f8543044842c84e05da1f2d7b43e
+      TARGET_CONTROLLER_SHA: 61109f6ae3398ec8574b2e7fd16dfcc2414b961e
     steps:
       - name: Record exact adjudication run state
         shell: bash
@@ -38,6 +38,6 @@ jobs:
           status="$(jq -r '.status' <<<"$latest")"
           conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
           html_url="$(jq -r '.html_url' <<<"$latest")"
-          body="<!-- pr800-adjudication-snapshot -->
-          PR #800 adjudication snapshot: run \`$run_id\`, status \`$status\`, conclusion \`$conclusion\`: $html_url"
+          body="<!-- pr800-adjudication-snapshot-v2 -->
+          PR #800 repaired adjudication snapshot: run \`$run_id\`, status \`$status\`, conclusion \`$conclusion\`: $html_url"
           gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
