@@ -18,19 +18,19 @@ concurrency:
 jobs:
   observe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: pr800-refund-foundation-adjudication-20260822.yml
       TARGET_BRANCH: ops/pr800-refund-foundation-adjudication-20260822
-      TARGET_CONTROLLER_SHA: 46cd7ee1fff9f8543044842c84e05da1f2d7b43e
+      TARGET_CONTROLLER_SHA: 61109f6ae3398ec8574b2e7fd16dfcc2414b961e
     steps:
       - name: Observe exact adjudication run to completion
         shell: bash
         run: |
           set -euo pipefail
           latest=''
-          for attempt in $(seq 1 150); do
+          for attempt in $(seq 1 180); do
             response="$(gh api --method GET \
               "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
               -f branch="$TARGET_BRANCH" \
@@ -49,10 +49,10 @@ jobs:
           done
 
           if [[ -z "$latest" ]]; then
-            body='<!-- pr800-adjudication-observer -->
+            body='<!-- pr800-adjudication-observer-v2 -->
           ## PR #800 adjudication observer
 
-          No adjudication workflow run was found for the exact isolated controller head.'
+          No adjudication workflow run was found for the exact repaired controller head.'
             gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
             exit 1
           fi
@@ -62,7 +62,7 @@ jobs:
           conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
           head_sha="$(jq -r '.head_sha' <<<"$latest")"
           html_url="$(jq -r '.html_url' <<<"$latest")"
-          body="<!-- pr800-adjudication-observer -->
+          body="<!-- pr800-adjudication-observer-v2 -->
           ## PR #800 adjudication observer
 
           - adjudication run: \`$run_id\`
