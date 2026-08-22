@@ -1,0 +1,232 @@
+name: Issue 709 refund foundation exact-head adjudicator
+
+on:
+  push:
+    branches:
+      - ops/pr796-recover-refund-foundation-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: issue-709-refund-foundation-adjudicator
+  cancel-in-progress: false
+
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+      BASE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+    steps:
+      - name: Resolve exactly one clean replacement PR
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr709-adjudication"
+          gh pr list --state open --head "$TARGET_BRANCH" --base "$BASE_BRANCH" \
+            --json number,url,isDraft,headRefOid,baseRefOid,title \
+            > "$RUNNER_TEMP/pr709-adjudication/prs.json"
+          count="$(jq 'length' "$RUNNER_TEMP/pr709-adjudication/prs.json")"
+          test "$count" = 1
+          jq -e '.[0].isDraft == true' "$RUNNER_TEMP/pr709-adjudication/prs.json" >/dev/null
+          pr_number="$(jq -r '.[0].number' "$RUNNER_TEMP/pr709-adjudication/prs.json")"
+          pr_url="$(jq -r '.[0].url' "$RUNNER_TEMP/pr709-adjudication/prs.json")"
+          head_sha="$(jq -r '.[0].headRefOid' "$RUNNER_TEMP/pr709-adjudication/prs.json")"
+          base_sha="$(jq -r '.[0].baseRefOid' "$RUNNER_TEMP/pr709-adjudication/prs.json")"
+          test "$base_sha" = "$BASE_SHA"
+          printf 'pr_number=%s\npr_url=%s\nhead_sha=%s\nbase_sha=%s\n' \
+            "$pr_number" "$pr_url" "$head_sha" "$base_sha" \
+            | tee "$RUNNER_TEMP/pr709-adjudication/identity.txt"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact clean head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.resolve.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact durable scope and refund contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP/pr709-adjudication"
+          cat > "$temp/expected-paths.txt" <<'EOF'
+          docs/provider-review/every-org-donation-upgrade-review-packet.md
+          src/lib/direct-donation-upgrade-data.ts
+          src/lib/direct-donation-upgrade-negotiation.ts
+          src/lib/direct-donation-upgrade.ts
+          src/lib/provider-refund-contract.test.ts
+          supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
+          supabase/tests/direct_donation_upgrade_provider_refunds.sql
+          EOF
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          test "$(git merge-base "$BASE_SHA" HEAD)" = "$BASE_SHA"
+          git diff --name-only "$BASE_SHA"...HEAD | sort > "$temp/actual-paths.txt"
+          diff -u "$temp/expected-paths.txt" "$temp/actual-paths.txt"
+          git diff --check "$BASE_SHA"...HEAD
+          ! git diff --name-only "$BASE_SHA"...HEAD | grep -E '(^|/)(\.github|scripts)/|materializer|bundle|diagnostic|trigger|\.tmp$'
+
+          migration=supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
+          regression=supabase/tests/direct_donation_upgrade_provider_refunds.sql
+          contract=src/lib/provider-refund-contract.test.ts
+          packet=docs/provider-review/every-org-donation-upgrade-review-packet.md
+          for source in "$migration" "$regression" "$contract" "$packet"; do test -s "$source"; done
+
+          grep -Fq 'provider_reversed' "$migration"
+          grep -Fq 'post_completion_exception' "$migration"
+          grep -Fq 'record_direct_donation_upgrade_provider_refund' "$migration"
+          grep -Fq 'already_recorded' "$migration"
+          grep -Fq 'needs_review' "$migration"
+          grep -Fq 'service_role' "$migration"
+          grep -Fq 'anon' "$migration"
+          grep -Fq 'authenticated' "$migration"
+          grep -Fq 'verified_gross_amount_cents' "$migration"
+          grep -Fq 'current_verified_net_amount_cents' "$migration"
+          grep -Fq 'provider_reversed' "$regression"
+          grep -Fq 'post_completion_exception' "$regression"
+          grep -Fq 'already_recorded' "$regression"
+          grep -Fq 'altered' "$regression"
+          grep -Fq 'cross' "$regression"
+          grep -Fq 'replay' "$regression"
+          grep -Fq 'Confirmed by Every.org' "$packet"
+          grep -Fq 'Moral Trade does not process or refund this payment.' "$packet"
+          ! grep -Eiq 'partnered with|in partnership with|sponsored by|endorsed by|co-branded with Every\.org' "$packet"
+          ! grep -R -E '(donor[_ -]?(name|email)|card[_ -]?number|bank[_ -]?account|raw[_ -]?webhook[_ -]?body)' \
+            "$migration" src/lib/direct-donation-upgrade-data.ts src/lib/direct-donation-upgrade.ts
+          ! grep -R -E '@\/lib\/stripe|stripe\.checkout|payment_intent|setup_intent|escrow|payout|transfer' \
+            "$migration" "$regression" src/lib/provider-refund-contract.test.ts
+          ! grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            $(cat "$temp/expected-paths.txt")
+          sha256sum $(cat "$temp/expected-paths.txt") > "$temp/source-sha256.txt"
+          git hash-object $(cat "$temp/expected-paths.txt") > "$temp/source-blobs.txt"
+          printf 'head=%s\ntree=%s\nbase=%s\n' \
+            "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" "$BASE_SHA" \
+            | tee "$temp/exact-source.txt"
+
+      - name: Install exact dependencies
+        run: npm ci > "$RUNNER_TEMP/pr709-adjudication/npm-ci.log" 2>&1
+
+      - name: Focused refund, replay, and authentication tests
+        run: >-
+          node --import tsx --test
+          src/lib/provider-refund-contract.test.ts
+          src/lib/direct-donation-upgrade.test.ts
+          src/lib/direct-donation-upgrade-source-contract.test.ts
+          src/lib/every-org-partner-webhook-auth.test.ts
+          src/lib/trade-donation.test.ts
+          > "$RUNNER_TEMP/pr709-adjudication/focused-tests.log" 2>&1
+
+      - name: Complete repository tests
+        run: npm test > "$RUNNER_TEMP/pr709-adjudication/repository-tests.log" 2>&1
+
+      - name: Strict TypeScript
+        run: npx tsc --noEmit > "$RUNNER_TEMP/pr709-adjudication/typecheck.log" 2>&1
+
+      - name: Repository ESLint
+        run: npm run lint -- --quiet > "$RUNNER_TEMP/pr709-adjudication/lint.log" 2>&1
+
+      - name: Disabled-money-rail production build
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > "$RUNNER_TEMP/pr709-adjudication/build.log" 2>&1
+
+      - name: Record exact-head acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP/pr709-adjudication"
+          pr_number="${{ steps.resolve.outputs.pr_number }}"
+          head_sha="$(git rev-parse HEAD)"
+          tree="$(git rev-parse HEAD^{tree})"
+          focused_count="$(grep -Eo '# tests [0-9]+' "$temp/focused-tests.log" | tail -1 | awk '{print $3}' || true)"
+          repository_count="$(grep -Eo '# tests [0-9]+' "$temp/repository-tests.log" | tail -1 | awk '{print $3}' || true)"
+          cat > "$temp/review.md" <<EOF
+          Exact-head adjudication accepted the clean refund-accounting foundation at \`$head_sha\` / tree \`$tree\` against exact base \`$BASE_SHA\`.
+
+          Reviewed the exact seven-path diff, additive provider-reversal state, immutable original confirmation evidence, service-only exact-match RPC, idempotent identical reports, fail-closed altered/cross-environment/cross-obligation handling, append-only impact adjustment, completion-replay resistance, gross-versus-current projections, data minimization, and neutral Every.org review wording.
+
+          Executed gates: focused refund/authentication tests ${focused_count:-passed}; complete repository tests ${repository_count:-passed}; strict TypeScript, repository ESLint, disabled-money-rail production build, exact-scope/source-contract checks, credential scan, and diff integrity passed.
+
+          Disposition: accepted as the bounded database/accounting foundation only. This does not accept or authorize the still-unimplemented AAL2 operator action, participant/admin rendering, screenshots, remote database QA, provider staging UAT, brand submission, merge, deployment, activation, or production release.
+          EOF
+          gh pr review "$pr_number" --comment --body-file "$temp/review.md"
+          cat > "$temp/issue-comment.md" <<EOF
+          <!-- pr709-refund-foundation-adjudication -->
+          ## Refund-accounting foundation exact-head accepted
+
+          - draft PR: #$pr_number
+          - exact head: \`$head_sha\`
+          - exact tree: \`$tree\`
+          - exact base: \`$BASE_SHA\`
+          - durable scope: seven product paths; no controller or temporary material
+          - focused and complete repository tests: passed
+          - TypeScript, ESLint, disabled-money-rail build, source contracts, credential scan, and diff integrity: passed
+
+          Acceptance is bounded to the database/accounting foundation. The next implementation tranche is the AAL2-gated operator action plus truthful participant/admin rendering and exact desktop/mobile screenshot inventory. No Every.org request, webhook registration or invocation, checkout, donation, payment, refund execution, remote migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, or production change occurred.
+          EOF
+          existing_id="$(gh api "repos/$GITHUB_REPOSITORY/issues/709/comments?per_page=100" --jq '.[] | select(.body | contains("<!-- pr709-refund-foundation-adjudication -->")) | .id' | tail -1)"
+          if [[ -n "$existing_id" ]]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing_id" -f body="$(cat "$temp/issue-comment.md")" >/dev/null
+          else
+            gh issue comment 709 --body-file "$temp/issue-comment.md" >/dev/null
+          fi
+
+      - name: Record bounded adjudication failure
+        if: failure()
+        run: >-
+          gh issue comment 709 --body
+          "<!-- pr709-refund-foundation-adjudication-failure -->
+          The exact-head refund-foundation adjudication failed in
+          $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID.
+          No failed gate is represented as acceptance, and no provider request,
+          checkout, donation, refund execution, remote migration, deployment,
+          alias change, credential mutation, feature activation, custody,
+          transfer, payout, email, brand submission, or production change occurred."
+          || true
+
+      - name: Upload adjudication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr709-refund-foundation-adjudication-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/pr709-adjudication/prs.json
+            ${{ runner.temp }}/pr709-adjudication/identity.txt
+            ${{ runner.temp }}/pr709-adjudication/expected-paths.txt
+            ${{ runner.temp }}/pr709-adjudication/actual-paths.txt
+            ${{ runner.temp }}/pr709-adjudication/exact-source.txt
+            ${{ runner.temp }}/pr709-adjudication/source-sha256.txt
+            ${{ runner.temp }}/pr709-adjudication/source-blobs.txt
+            ${{ runner.temp }}/pr709-adjudication/npm-ci.log
+            ${{ runner.temp }}/pr709-adjudication/focused-tests.log
+            ${{ runner.temp }}/pr709-adjudication/repository-tests.log
+            ${{ runner.temp }}/pr709-adjudication/typecheck.log
+            ${{ runner.temp }}/pr709-adjudication/lint.log
+            ${{ runner.temp }}/pr709-adjudication/build.log
+            ${{ runner.temp }}/pr709-adjudication/review.md
+            ${{ runner.temp }}/pr709-adjudication/issue-comment.md
+          if-no-files-found: warn
+          retention-days: 30
