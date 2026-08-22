@@ -1,0 +1,3 @@
+schema=pr800-refund-foundation-adjudication-v1
+product_sha=d33fa085ea093e7bd41c7f4f32441b94d782aaf2
+requested=2026-08-22
