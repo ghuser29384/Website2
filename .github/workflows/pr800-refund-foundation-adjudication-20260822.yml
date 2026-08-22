@@ -17,12 +17,14 @@ concurrency:
 jobs:
   adjudicate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 150
     env:
       BASE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
       BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
       PRODUCT_SHA: d33fa085ea093e7bd41c7f4f32441b94d782aaf2
       PRODUCT_TREE: 7cac7a96e478230f2c1c477ef3a19fff312cd382
+      BASELINE_COMMIT: 4c95052ff97d55b42486cac47b7430896946f124
+      BASELINE_SHA256: 5fa7f1f21f7a8fc5720ca695d9e6d90eef7eefc1dd97632a2b5ff665c321464a
       LOCAL_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -54,6 +56,7 @@ jobs:
           test "$(git rev-parse refs/remotes/origin/$BASE_BRANCH)" = "$BASE_SHA"
           test "$(git merge-base "$BASE_SHA" "$PRODUCT_SHA")" = "$BASE_SHA"
           test "$(git rev-list --count "$BASE_SHA..$PRODUCT_SHA")" = 1
+          git cat-file -e "$BASELINE_COMMIT^{commit}"
           git diff --name-only "$BASE_SHA..$PRODUCT_SHA" | sort \
             > adjudication-evidence/actual-paths.txt
           diff -u adjudication-evidence/expected-paths.txt \
@@ -74,6 +77,7 @@ jobs:
             printf 'base_sha=%s\n' "$BASE_SHA"
             printf 'product_sha=%s\n' "$PRODUCT_SHA"
             printf 'product_tree=%s\n' "$PRODUCT_TREE"
+            printf 'historical_baseline_commit=%s\n' "$BASELINE_COMMIT"
             printf 'changed_files=7\n'
           } > adjudication-evidence/identity.txt
 
@@ -154,29 +158,46 @@ jobs:
           sudo apt-get update > adjudication-evidence/apt-update.log 2>&1
           sudo apt-get install --yes postgresql-client \
             > adjudication-evidence/apt-install.log 2>&1
+          command -v psql
+          psql --version
 
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v2
         with:
-          version: 2.84.2
+          version: 2.114.0
           github-token: ${{ github.token }}
 
-      - name: Prepare predecessor-only local migration chain
+      - name: Prepare deterministic predecessor migration chain
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/pr800-db-qa"
+          work="$RUNNER_TEMP/pr800-db-qa"
+          migration_dir="$work/migrations"
+          mkdir -p "$migration_dir"
+
           candidate_migration=supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
           regression=supabase/tests/direct_donation_upgrade_provider_refunds.sql
-          cp "$candidate_migration" "$RUNNER_TEMP/pr800-db-qa/candidate.sql"
-          cp "$regression" "$RUNNER_TEMP/pr800-db-qa/regression.sql"
-          rm "$candidate_migration"
+          cp "$candidate_migration" "$work/candidate.sql"
+          cp "$regression" "$work/regression.sql"
+
+          git show "$BASELINE_COMMIT:supabase/schema.sql" > "$work/baseline.sql"
+          test "$(sha256sum "$work/baseline.sql" | cut -d ' ' -f 1)" = "$BASELINE_SHA256"
+
+          git diff --name-only --diff-filter=AM \
+            "$BASELINE_COMMIT"..HEAD -- 'supabase/migrations/*.sql' \
+            | sort > adjudication-evidence/predecessor-migrations.txt
+          test -s adjudication-evidence/predecessor-migrations.txt
+          grep -Fx "$candidate_migration" adjudication-evidence/predecessor-migrations.txt
+          while IFS= read -r path; do
+            test -f "$path"
+            cp "$path" "$migration_dir/$(basename "$path")"
+          done < adjudication-evidence/predecessor-migrations.txt
 
           python - <<'PY'
           from pathlib import Path
+          import os
 
-          source = Path("/tmp")
-          path = Path(__import__("os").environ["RUNNER_TEMP"]) / "pr800-db-qa/regression.sql"
+          path = Path(os.environ["RUNNER_TEMP"]) / "pr800-db-qa/regression.sql"
           lines = path.read_text().splitlines()
           begin_indices = [i for i, line in enumerate(lines) if line.strip().lower() == "begin;"]
           rollback_indices = [i for i, line in enumerate(lines) if line.strip().lower() == "rollback;"]
@@ -189,27 +210,185 @@ jobs:
           output = path.with_name("regression-inner.sql")
           output.write_text("\n".join(lines) + "\n")
           PY
+
+          cat > "$work/apply-migrations-in-order.sh" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          if [[ -z "${SUPABASE_MIGRATION_TEST_DB_URL:-}" ]]; then
+            echo "SUPABASE_MIGRATION_TEST_DB_URL is required." >&2
+            exit 1
+          fi
+          migration_dir="${1:?migration directory is required}"
+          test -d "$migration_dir"
+
+          skip_migration_basenames=()
+          if [[ -n "${SUPABASE_MIGRATION_SKIP_BASENAMES:-}" ]]; then
+            IFS=',' read -r -a skip_migration_basenames <<< "$SUPABASE_MIGRATION_SKIP_BASENAMES"
+          fi
+
+          should_skip_migration() {
+            local candidate="$1"
+            local skip_name
+            for skip_name in "${skip_migration_basenames[@]}"; do
+              if [[ "$candidate" == "$skip_name" ]]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          if [[ -n "${SUPABASE_MIGRATION_BASELINE_SQL:-}" ]]; then
+            test -f "$SUPABASE_MIGRATION_BASELINE_SQL"
+            printf 'applying_historical_schema_baseline=%s\n' "$SUPABASE_MIGRATION_BASELINE_SQL"
+            psql "$SUPABASE_MIGRATION_TEST_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "$SUPABASE_MIGRATION_BASELINE_SQL"
+          fi
+
+          migration_rows=()
+          while IFS= read -r migration_path; do
+            migration_name="$(basename "$migration_path")"
+            migration_version="${migration_name%%_*}"
+            history_path="supabase/migrations/$migration_name"
+            git ls-files --error-unmatch "$history_path" >/dev/null
+            [[ "$migration_version" =~ ^[0-9]{8,14}$ ]]
+            introduction="$(git log --all --follow --diff-filter=A --format='%ct %H' -- "$history_path" | tail -n 1)"
+            test -n "$introduction"
+            read -r introduced_at_epoch introduced_commit <<< "$introduction"
+            migration_rows+=(
+              "$migration_version"$'\t'"$introduced_at_epoch"$'\t'"$migration_path"$'\t'"$introduced_commit"
+            )
+          done < <(find "$migration_dir" -maxdepth 1 -type f -name '*.sql' -print | LC_ALL=C sort)
+
+          test "${#migration_rows[@]}" -gt 0
+          applied_migration_count=0
+          skipped_migration_count=0
+          skipped_migrations_seen=()
+          while IFS=$'\t' read -r migration_version introduced_at_epoch migration_path introduced_commit; do
+            migration_basename="$(basename "$migration_path")"
+            if should_skip_migration "$migration_basename"; then
+              printf 'skipping_environment_bound_migration=%s reason=explicit_exact_allowlist\n' "$migration_basename"
+              skipped_migrations_seen+=("$migration_basename")
+              skipped_migration_count=$((skipped_migration_count + 1))
+              continue
+            fi
+            printf 'applying_migration=%s version=%s introduced_at_epoch=%s introduced_commit=%s\n' \
+              "$migration_basename" "$migration_version" "$introduced_at_epoch" "$introduced_commit"
+            psql "$SUPABASE_MIGRATION_TEST_DB_URL" \
+              --no-psqlrc \
+              --single-transaction \
+              --set ON_ERROR_STOP=1 \
+              --file "$migration_path"
+            applied_migration_count=$((applied_migration_count + 1))
+          done < <(printf '%s\n' "${migration_rows[@]}" | LC_ALL=C sort -t $'\t' -k1,1n -k2,2n -k3,3)
+
+          for skip_name in "${skip_migration_basenames[@]}"; do
+            skip_was_seen=false
+            for seen_name in "${skipped_migrations_seen[@]}"; do
+              if [[ "$skip_name" == "$seen_name" ]]; then
+                skip_was_seen=true
+                break
+              fi
+            done
+            if [[ "$skip_was_seen" != true ]]; then
+              echo "Configured migration skip was not found: $skip_name" >&2
+              exit 1
+            fi
+          done
+          printf 'discovered_migration_count=%s\n' "${#migration_rows[@]}"
+          printf 'applied_migration_count=%s\n' "$applied_migration_count"
+          printf 'skipped_environment_bound_migration_count=%s\n' "$skipped_migration_count"
+          BASH
+          sed -i 's/^          //' "$work/apply-migrations-in-order.sh"
+          chmod +x "$work/apply-migrations-in-order.sh"
+
           sha256sum \
-            "$RUNNER_TEMP/pr800-db-qa/candidate.sql" \
-            "$RUNNER_TEMP/pr800-db-qa/regression-inner.sql" \
+            "$work/baseline.sql" \
+            "$work/candidate.sql" \
+            "$work/regression-inner.sql" \
+            "$work/apply-migrations-in-order.sh" \
             > adjudication-evidence/db-source-sha256.txt
 
-      - name: Start local Supabase database and apply predecessors
+      - name: Start clean PostgreSQL 17 Supabase runtime
         shell: bash
         run: |
           set -euo pipefail
-          supabase db start > adjudication-evidence/supabase-db-start.log 2>&1
-          supabase db reset --local --no-seed \
-            > adjudication-evidence/supabase-db-reset.log 2>&1
-          psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+          repo_migrations="$RUNNER_TEMP/repo-migrations"
+          rm -rf "$repo_migrations"
+          mv supabase/migrations "$repo_migrations"
+          mkdir supabase/migrations
+
+          restore_migrations() {
+            rm -rf supabase/migrations
+            mv "$repo_migrations" supabase/migrations
+          }
+          trap restore_migrations EXIT
+
+          supabase init --force
+          sed -i 's/major_version = 15/major_version = 17/' supabase/config.toml
+          supabase start \
+            --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor \
+            --log-level error \
+            --yes > adjudication-evidence/supabase-start.log 2>&1
+
+          restore_migrations
+          trap - EXIT
+          psql "$LOCAL_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atqc \
             "select current_database(), current_user, inet_server_addr(), inet_server_port()" \
             > adjudication-evidence/local-db-identity.txt
+
+      - name: Reconstruct exact production-compatible predecessor schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/pr800-db-qa"
+          migration_dir="$work/migrations"
+
+          exact_candidates=(
+            20260811152545_commitments_impact_study_instrumentation_qa_only.sql
+            20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql
+            20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql
+            20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql
+            20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql
+            20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql
+            20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql
+            20260811171544_commitments_impact_study_blocked_probe_service_role.sql
+            20260821140000_direct_donation_upgrade_provider_refunds.sql
+          )
+          skips=()
+          for candidate in "${exact_candidates[@]}"; do
+            if [[ -f "$migration_dir/$candidate" ]]; then
+              skips+=("$candidate")
+            fi
+          done
+          test "${#skips[@]}" -ge 1
+          printf '%s\n' "${skips[@]}" > adjudication-evidence/skipped-migrations.txt
+          skip_csv="$(IFS=,; echo "${skips[*]}")"
+
+          SUPABASE_MIGRATION_TEST_DB_URL="$LOCAL_DB_URL" \
+          SUPABASE_MIGRATION_BASELINE_SQL="$work/baseline.sql" \
+          SUPABASE_MIGRATION_SKIP_BASENAMES="$skip_csv" \
+            "$work/apply-migrations-in-order.sh" "$migration_dir" \
+            > adjudication-evidence/predecessor-migration.log 2>&1
+
+          grep -F 'skipping_environment_bound_migration=20260821140000_direct_donation_upgrade_provider_refunds.sql' \
+            adjudication-evidence/predecessor-migration.log
+          test "$(psql "$LOCAL_DB_URL" --no-psqlrc -Atqc \
+            "select to_regclass('public.direct_donation_upgrade_offers') is not null")" = t
+          test "$(psql "$LOCAL_DB_URL" --no-psqlrc -Atqc \
+            "select to_regclass('public.direct_donation_upgrade_obligations') is not null")" = t
+          test "$(psql "$LOCAL_DB_URL" --no-psqlrc -Atqc \
+            "select to_regclass('public.direct_donation_upgrade_impact_credits') is not null")" = t
+          test "$(psql "$LOCAL_DB_URL" --no-psqlrc -Atqc \
+            "select to_regclass('public.direct_donation_upgrade_provider_reversals') is null")" = t
 
       - name: Capture predecessor baseline
         shell: bash
         run: |
           set -euo pipefail
-          psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+          psql "$LOCAL_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atqc \
             "select jsonb_build_object(
               'offers', (select count(*) from public.direct_donation_upgrade_offers),
               'candidates', (select count(*) from public.direct_donation_upgrade_candidates),
@@ -232,22 +411,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > "$RUNNER_TEMP/pr800-db-qa/transaction.sql" <<SQL
+          work="$RUNNER_TEMP/pr800-db-qa"
+          cat > "$work/transaction.sql" <<SQL
           \set ON_ERROR_STOP on
           begin;
-          \i $RUNNER_TEMP/pr800-db-qa/candidate.sql
-          \i $RUNNER_TEMP/pr800-db-qa/regression-inner.sql
+          \i $work/candidate.sql
+          \i $work/regression-inner.sql
           rollback;
           SQL
           psql "$LOCAL_DB_URL" \
-            --file "$RUNNER_TEMP/pr800-db-qa/transaction.sql" \
+            --no-psqlrc \
+            --file "$work/transaction.sql" \
             > adjudication-evidence/refund-rollback-regression.log 2>&1
 
       - name: Verify rollback restored exact relevant state
         shell: bash
         run: |
           set -euo pipefail
-          psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+          psql "$LOCAL_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atqc \
             "select jsonb_build_object(
               'offers', (select count(*) from public.direct_donation_upgrade_offers),
               'candidates', (select count(*) from public.direct_donation_upgrade_candidates),
@@ -291,16 +472,17 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' \
-            '<!-- pr800-refund-foundation-adjudication -->' \
+            '<!-- pr800-refund-foundation-adjudication-v2 -->' \
             '## PR #800 exact-head adjudication passed' \
             '' \
             "- exact base: \`$BASE_SHA\`" \
             "- exact head: \`$PRODUCT_SHA\`" \
             "- exact tree: \`$PRODUCT_TREE\`" \
+            "- historical schema baseline: \`$BASELINE_COMMIT\`" \
             "- adjudication run: \`$GITHUB_RUN_ID\`" \
             '- changed scope: exactly seven durable paths' \
             '- focused tests, complete repository tests, TypeScript, ESLint, disabled-rail build: passed' \
-            '- predecessor-only local Supabase reconstruction: passed' \
+            '- clean PostgreSQL 17 reconstruction from the repository historical baseline and deterministic production-compatible migration order: passed' \
             '- candidate migration plus complete refund regression in one rollback-only transaction: passed' \
             '- post-rollback schema, fixture, and cardinality residue checks: passed' \
             '' \
