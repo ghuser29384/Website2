@@ -1,0 +1,322 @@
+name: PR709 clean refund foundation recovery v4
+
+on:
+  push:
+    branches:
+      - ops/pr709-refund-foundation-recovery-v4-20260822
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr709-clean-refund-foundation-recovery-v4
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+      BASE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+      SOURCE_BRANCH: feature/direct-donation-upgrade-refund-safety-709-20260821
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+    steps:
+      - name: Check out isolated recovery controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Materialize exact seven-path candidate
+        id: materialize
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP/pr709-refund-recovery-v4"
+          candidate="$temp/candidate"
+          mkdir -p "$temp"
+          printf '%s\n' \
+            docs/provider-review/every-org-donation-upgrade-review-packet.md \
+            src/lib/direct-donation-upgrade-data.ts \
+            src/lib/direct-donation-upgrade-negotiation.ts \
+            src/lib/direct-donation-upgrade.ts \
+            src/lib/provider-refund-contract.test.ts \
+            supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql \
+            supabase/tests/direct_donation_upgrade_provider_refunds.sql \
+            > "$temp/expected-paths.txt"
+          printf '%s\n' \
+            src/lib/provider-refund-contract.test.ts \
+            supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql \
+            supabase/tests/direct_donation_upgrade_provider_refunds.sql \
+            > "$temp/expected-bundle-paths.txt"
+
+          git fetch --no-tags origin \
+            "+refs/heads/$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH" \
+            "+refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"
+          test "$(git rev-parse "refs/remotes/origin/$BASE_BRANCH")" = "$BASE_SHA"
+          git merge-base --is-ancestor "$BASE_SHA" "refs/remotes/origin/$SOURCE_BRANCH"
+
+          rm -rf "$candidate"
+          git worktree add --detach "$candidate" "$BASE_SHA"
+          source_ref="refs/remotes/origin/$SOURCE_BRANCH"
+          : > "$temp/product.b64"
+          for index in 00 01 02 03; do
+            git show "$source_ref:.github/pr796-refund-bundle/part-$index" >> "$temp/product.b64"
+          done
+          base64 --decode "$temp/product.b64" > "$temp/product.tar.gz"
+          gzip --test "$temp/product.tar.gz"
+          gzip --decompress --stdout "$temp/product.tar.gz" \
+            | tar --list --file=- \
+            | sort > "$temp/bundle-paths.txt"
+          diff -u "$temp/expected-bundle-paths.txt" "$temp/bundle-paths.txt"
+          gzip --decompress --stdout "$temp/product.tar.gz" \
+            | tar --extract --file=- --directory="$candidate" --no-same-owner
+
+          mkdir -p "$candidate/docs/provider-review"
+          git show "$source_ref:docs/provider-review/every-org-donation-upgrade-review-packet.md" \
+            > "$candidate/docs/provider-review/every-org-donation-upgrade-review-packet.md"
+          python .github/scripts/pr709_materialize_refund_foundation.py "$candidate"
+
+          git -C "$candidate" add --pathspec-from-file="$temp/expected-paths.txt"
+          git -C "$candidate" diff --cached --name-only | sort \
+            > "$temp/actual-paths.txt"
+          diff -u "$temp/expected-paths.txt" "$temp/actual-paths.txt"
+          git -C "$candidate" status --porcelain \
+            | cut -c4- \
+            | sort > "$temp/status-paths.txt"
+          diff -u "$temp/expected-paths.txt" "$temp/status-paths.txt"
+          git -C "$candidate" diff --cached --check
+          while IFS= read -r path; do
+            test -f "$candidate/$path"
+            test ! -L "$candidate/$path"
+          done < "$temp/expected-paths.txt"
+          if grep -R -E \
+            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            $(sed "s#^#$candidate/#" "$temp/expected-paths.txt"); then
+            echo 'Refusing to retain suspected credential material.' >&2
+            exit 1
+          fi
+          while IFS= read -r path; do
+            sha256sum "$candidate/$path"
+          done < "$temp/expected-paths.txt" > "$temp/source-sha256.txt"
+          printf 'base_sha=%s\nsource_branch=%s\ncontroller_sha=%s\n' \
+            "$BASE_SHA" "$SOURCE_BRANCH" "$(git rev-parse HEAD)" \
+            > "$temp/materialization-identity.txt"
+          echo "CANDIDATE_DIR=$candidate" >> "$GITHUB_ENV"
+          echo "EVIDENCE_DIR=$temp" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npm ci > "$EVIDENCE_DIR/npm-ci.log" 2>&1
+
+      - name: Run focused refund and inherited boundary tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          node --import tsx --test \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > "$EVIDENCE_DIR/focused-tests.log" 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npm test > "$EVIDENCE_DIR/repository-tests.log" 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npx tsc --noEmit > "$EVIDENCE_DIR/typecheck.log" 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npm run lint -- --quiet > "$EVIDENCE_DIR/lint.log" 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npm run build > "$EVIDENCE_DIR/build.log" 2>&1
+
+      - name: Recheck exact scope after all gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C "$CANDIDATE_DIR" diff --cached --name-only | sort \
+            > "$EVIDENCE_DIR/post-gate-paths.txt"
+          diff -u "$EVIDENCE_DIR/expected-paths.txt" "$EVIDENCE_DIR/post-gate-paths.txt"
+          git -C "$CANDIDATE_DIR" diff --name-only \
+            > "$EVIDENCE_DIR/unstaged-paths.txt"
+          test ! -s "$EVIDENCE_DIR/unstaged-paths.txt"
+          git -C "$CANDIDATE_DIR" diff --cached --check
+
+      - name: Publish exact clean branch
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          candidate_tree="$(git write-tree)"
+          if git ls-remote --exit-code --heads origin "refs/heads/$TARGET_BRANCH" \
+            > "$EVIDENCE_DIR/existing-target.txt" 2>/dev/null; then
+            existing_sha="$(awk '{print $1}' "$EVIDENCE_DIR/existing-target.txt")"
+            git fetch --no-tags origin "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+            test "$(git rev-parse "$existing_sha^{tree}")" = "$candidate_tree"
+            product_sha="$existing_sha"
+            mode=verified_existing
+          else
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git commit -m 'Implement refund-safe Donation Upgrade accounting foundation'
+            product_sha="$(git rev-parse HEAD)"
+            test "$(git rev-parse HEAD^{tree})" = "$candidate_tree"
+            git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+            mode=published_new
+          fi
+          product_tree="$(git rev-parse "$product_sha^{tree}")"
+          printf 'mode=%s\nbase_sha=%s\nproduct_sha=%s\nproduct_tree=%s\ntarget_branch=%s\n' \
+            "$mode" "$BASE_SHA" "$product_sha" "$product_tree" "$TARGET_BRANCH" \
+            | tee "$EVIDENCE_DIR/product-identity.txt"
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Create replacement draft PR and durable records
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.publish.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
+        run: |
+          set -euo pipefail
+          pr_url="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --head "$TARGET_BRANCH" --base "$BASE_BRANCH" \
+            --json url --jq '.[0].url // empty')"
+          if [[ -z "$pr_url" ]]; then
+            printf '%s\n' \
+              '## Purpose' \
+              '' \
+              'Controller-free recovery of the first bounded Issue #709 tranche: auditable, idempotent provider-refund accounting for direct Donation Upgrades.' \
+              '' \
+              '## Exact identity' \
+              '' \
+              "- base: \`$BASE_SHA\`" \
+              "- head: \`$PRODUCT_SHA\`" \
+              "- tree: \`$PRODUCT_TREE\`" \
+              '- durable scope: exactly seven paths' \
+              '' \
+              '## Executed validation' \
+              '' \
+              'Focused refund/authentication tests, the complete repository tests, strict TypeScript, repository ESLint, a production build with all money rails disabled, exact-path validation, diff-integrity checks, and credential-pattern scanning passed before publication.' \
+              '' \
+              '## Boundary' \
+              '' \
+              'Draft, stacked, unmerged, and undeployed. No Every.org request, webhook registration or invocation, checkout, donation, payment, refund execution, remote migration, credential mutation, feature activation, custody, transfer, payout, email, brand submission, alias movement, or production change occurred.' \
+              > "$EVIDENCE_DIR/pr-body.md"
+            pr_url="$(gh pr create --repo "$GITHUB_REPOSITORY" --draft \
+              --base "$BASE_BRANCH" --head "$TARGET_BRANCH" \
+              --title 'Recover clean refund-safe Donation Upgrade accounting foundation' \
+              --body-file "$EVIDENCE_DIR/pr-body.md")"
+          fi
+          printf 'replacement_pr=%s\n' "$pr_url" > "$EVIDENCE_DIR/replacement-pr.txt"
+          printf '%s\n' \
+            '<!-- pr709-clean-refund-foundation-recovery-v4 -->' \
+            '## Clean refund-accounting foundation recovered' \
+            '' \
+            "A controller-free candidate was reconstructed from exact base \`$BASE_SHA\`, restricted to the seven approved durable paths, and validated before publication." \
+            '' \
+            "- replacement draft PR: $pr_url" \
+            "- exact head: \`$PRODUCT_SHA\`" \
+            "- exact tree: \`$PRODUCT_TREE\`" \
+            "- recovery run: \`$GITHUB_RUN_ID\`" \
+            '- focused tests, complete repository tests, TypeScript, ESLint, disabled-rail build, exact scope, diff integrity, and credential scanning: passed' \
+            '' \
+            'No provider request, webhook registration or invocation, checkout, donation, payment, refund execution, remote migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, or production change occurred.' \
+            > "$EVIDENCE_DIR/issue-comment.md"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" \
+            --body-file "$EVIDENCE_DIR/issue-comment.md"
+          printf '%s\n' \
+            '<!-- pr796-superseded-by-clean-recovery-v4 -->' \
+            'The temporary bundle/controller history in this PR is not product evidence and is superseded by the clean replacement recorded on Issue #709.' \
+            "Replacement: $pr_url at \`$PRODUCT_SHA\`." \
+            > "$EVIDENCE_DIR/pr796-comment.md"
+          gh pr comment 796 --repo "$GITHUB_REPOSITORY" \
+            --body-file "$EVIDENCE_DIR/pr796-comment.md"
+
+      - name: Package sanitized recovery evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr709-refund-recovery-v4"
+          printf '%s\n' \
+            'providerRequestAttempted=false' \
+            'webhookMutationAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'refundExecutionAttempted=false' \
+            'remoteMigrationAttempted=false' \
+            'deploymentAttempted=false' \
+            'productionChanged=false' \
+            > "$RUNNER_TEMP/pr709-refund-recovery-v4/non-actions.txt"
+
+      - name: Upload sanitized recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr709-clean-refund-foundation-recovery-v4-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/pr709-refund-recovery-v4/expected-paths.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/expected-bundle-paths.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/bundle-paths.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/actual-paths.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/status-paths.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/post-gate-paths.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/unstaged-paths.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/source-sha256.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/materialization-identity.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/product-identity.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/replacement-pr.txt
+            ${{ runner.temp }}/pr709-refund-recovery-v4/npm-ci.log
+            ${{ runner.temp }}/pr709-refund-recovery-v4/focused-tests.log
+            ${{ runner.temp }}/pr709-refund-recovery-v4/repository-tests.log
+            ${{ runner.temp }}/pr709-refund-recovery-v4/typecheck.log
+            ${{ runner.temp }}/pr709-refund-recovery-v4/lint.log
+            ${{ runner.temp }}/pr709-refund-recovery-v4/build.log
+            ${{ runner.temp }}/pr709-refund-recovery-v4/non-actions.txt
+          if-no-files-found: warn
+          retention-days: 30
