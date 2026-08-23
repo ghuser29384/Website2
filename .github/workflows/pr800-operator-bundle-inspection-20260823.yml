@@ -1,0 +1,133 @@
+name: PR800 operator bundle inspection
+
+on:
+  push:
+    branches:
+      - ops/pr800-operator-bundle-inspection-20260823
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 31c6318bf2ef1e0bd86cf2d249ef853f7f3af1e7
+    steps:
+      - name: Check out superseded transport source exactly
+        uses: actions/checkout@v4
+        with:
+          ref: 31c6318bf2ef1e0bd86cf2d249ef853f7f3af1e7
+          fetch-depth: 0
+
+      - name: Decode and inventory operator transports
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          mkdir -p inspection
+          python3 - <<'PY'
+          import base64
+          import gzip
+          import hashlib
+          import io
+          import json
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          roots = [
+              Path('.github/pr796-refund-operator-bundle'),
+              Path('.github/pr796-refund-operator-patch'),
+          ]
+          result = []
+          for root in roots:
+              parts = sorted(root.glob('part-*'))
+              if not parts:
+                  raise SystemExit(f'missing transport parts under {root}')
+              encoded = ''.join(part.read_text() for part in parts)
+              encoded = ''.join(encoded.split())
+              data = base64.b64decode(encoded, validate=True)
+              layers = []
+              while data.startswith(b'\x1f\x8b'):
+                  data = gzip.decompress(data)
+                  layers.append('gzip')
+              entries = []
+              kind = 'raw'
+              if zipfile.is_zipfile(io.BytesIO(data)):
+                  kind = 'zip'
+                  with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                      for info in archive.infolist():
+                          payload = b'' if info.is_dir() else archive.read(info.filename)
+                          entries.append({
+                              'name': info.filename,
+                              'size': len(payload),
+                              'sha256': hashlib.sha256(payload).hexdigest(),
+                          })
+              else:
+                  try:
+                      with tarfile.open(fileobj=io.BytesIO(data), mode='r:*') as archive:
+                          kind = 'tar'
+                          for member in archive.getmembers():
+                              payload = b''
+                              if member.isfile():
+                                  extracted = archive.extractfile(member)
+                                  payload = extracted.read() if extracted else b''
+                              entries.append({
+                                  'name': member.name,
+                                  'size': len(payload),
+                                  'sha256': hashlib.sha256(payload).hexdigest(),
+                              })
+                  except tarfile.TarError:
+                      preview = data[:4000].decode('utf-8', errors='replace')
+                      entries.append({
+                          'name': '<raw-text>',
+                          'size': len(data),
+                          'sha256': hashlib.sha256(data).hexdigest(),
+                          'preview': preview,
+                      })
+              result.append({
+                  'root': str(root),
+                  'partCount': len(parts),
+                  'encodedSha256': hashlib.sha256(encoded.encode()).hexdigest(),
+                  'decodedSha256': hashlib.sha256(data).hexdigest(),
+                  'layers': layers,
+                  'kind': kind,
+                  'entries': entries,
+              })
+          Path('inspection/operator-transports.json').write_text(json.dumps(result, indent=2) + '\n')
+          lines = ['<!-- pr800-operator-bundle-inspection -->', '## Refund operator transport inventory']
+          for item in result:
+              lines.append('')
+              lines.append(f"- source: `{item['root']}`")
+              lines.append(f"- parts: `{item['partCount']}`")
+              lines.append(f"- format: `{'+'.join(item['layers'] + [item['kind']])}`")
+              lines.append('- entries:')
+              for entry in item['entries']:
+                  lines.append(f"  - `{entry['name']}` — {entry['size']} bytes — `{entry['sha256']}`")
+              raw = next((entry.get('preview') for entry in item['entries'] if entry.get('preview')), None)
+              if raw:
+                  safe = raw.replace('`', "'")[:1200]
+                  lines.extend(['', 'Raw preview:', '```text', safe, '```'])
+          lines.extend([
+              '',
+              'This inventories superseded transport material only. It is not accepted product evidence and made no product, provider, database, deployment, credential, or production change.',
+          ])
+          Path('inspection/issue-comment.md').write_text('\n'.join(lines) + '\n')
+          PY
+
+      - name: Publish sanitized inventory
+        shell: bash
+        run: gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body-file inspection/issue-comment.md
+
+      - name: Upload inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-operator-bundle-inspection-${{ github.run_id }}
+          path: inspection/
+          if-no-files-found: error
+          retention-days: 7
