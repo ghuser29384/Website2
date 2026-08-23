@@ -1,0 +1,256 @@
+name: PR800 refund operator tranche finalizer
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-finalizer-20260823
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr800-refund-operator-tranche-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 170
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FOUNDATION_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      FOUNDATION_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      FOUNDATION_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-709-20260823
+      QA_WORKFLOW: pr800-refund-operator-exact-qa-v2-20260823.yml
+      QA_BRANCH: ops/pr800-refund-operator-exact-qa-v2-20260823
+    steps:
+      - name: Check out foundation history
+        uses: actions/checkout@v4
+        with:
+          ref: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+          fetch-depth: 0
+
+      - name: Wait for successful exact-head rendered QA
+        id: qa
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p finalization-evidence
+          latest=''
+          for attempt in $(seq 1 320); do
+            response="$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$QA_WORKFLOW/runs" \
+              -f branch="$QA_BRANCH" \
+              -f per_page=20)"
+            latest="$(jq -c '[.workflow_runs[] | select(.status == "completed")] | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+            if [[ -n "$latest" ]]; then
+              break
+            fi
+            sleep 30
+          done
+          test -n "$latest"
+          qa_run_id="$(jq -r '.id' <<<"$latest")"
+          qa_conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          qa_head_sha="$(jq -r '.head_sha' <<<"$latest")"
+          qa_url="$(jq -r '.html_url' <<<"$latest")"
+          test "$qa_conclusion" = success
+          printf 'qa_run_id=%s\nqa_conclusion=%s\nqa_controller_sha=%s\nqa_url=%s\n' \
+            "$qa_run_id" "$qa_conclusion" "$qa_head_sha" "$qa_url" \
+            | tee finalization-evidence/qa-run.txt
+          echo "qa_run_id=$qa_run_id" >> "$GITHUB_OUTPUT"
+          echo "qa_url=$qa_url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify exact product identity and immutable stack relationship
+        id: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          test -n "$product_sha"
+          test "$product_sha" != "$FOUNDATION_SHA"
+          git fetch --no-tags origin "+refs/heads/$PRODUCT_BRANCH:refs/remotes/origin/$PRODUCT_BRANCH"
+          test "$(git rev-parse refs/remotes/origin/$PRODUCT_BRANCH)" = "$product_sha"
+          test "$(git merge-base "$FOUNDATION_SHA" "$product_sha")" = "$FOUNDATION_SHA"
+          test "$(git rev-list --count "$FOUNDATION_SHA..$product_sha")" = 1
+          product_tree="$(git rev-parse "$product_sha^{tree}")"
+          git diff --name-only "$FOUNDATION_SHA..$product_sha" | LC_ALL=C sort \
+            > finalization-evidence/changed-paths.txt
+          count="$(wc -l < finalization-evidence/changed-paths.txt | tr -d ' ')"
+          test "$count" -ge 3
+          test "$count" -le 30
+          if grep -E '(^|/)(\.github|supabase/migrations|package(-lock)?\.json|\.env)' finalization-evidence/changed-paths.txt; then
+            exit 1
+          fi
+          printf 'foundation_sha=%s\nfoundation_tree=%s\nproduct_sha=%s\nproduct_tree=%s\nchanged_files=%s\n' \
+            "$FOUNDATION_SHA" "$FOUNDATION_TREE" "$product_sha" "$product_tree" "$count" \
+            | tee finalization-evidence/product-identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+          echo "changed_files=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve exact draft pull request
+        id: pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          response="$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+            -f state=open \
+            -f head="$owner:$PRODUCT_BRANCH" \
+            -f base="$FOUNDATION_BRANCH" \
+            -f per_page=20)"
+          count="$(jq 'length' <<<"$response")"
+          test "$count" = 1
+          pr_number="$(jq -r '.[0].number' <<<"$response")"
+          pr_url="$(jq -r '.[0].html_url' <<<"$response")"
+          is_draft="$(jq -r '.[0].draft' <<<"$response")"
+          head_sha="$(jq -r '.[0].head.sha' <<<"$response")"
+          base_ref="$(jq -r '.[0].base.ref' <<<"$response")"
+          test "$is_draft" = true
+          test "$head_sha" = "${{ steps.product.outputs.product_sha }}"
+          test "$base_ref" = "$FOUNDATION_BRANCH"
+          printf 'pr_number=%s\npr_url=%s\ndraft=%s\nhead_sha=%s\nbase_ref=%s\n' \
+            "$pr_number" "$pr_url" "$is_draft" "$head_sha" "$base_ref" \
+            | tee finalization-evidence/pr-identity.txt
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve exact QA artifact identity
+        id: artifact
+        shell: bash
+        env:
+          QA_RUN_ID: ${{ steps.qa.outputs.qa_run_id }}
+        run: |
+          set -euo pipefail
+          artifacts="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs/$QA_RUN_ID/artifacts")"
+          artifact="$(jq -c '[.artifacts[] | select(.name | startswith("pr800-refund-operator-exact-qa-v2-"))] | .[0] // empty' <<<"$artifacts")"
+          test -n "$artifact"
+          artifact_id="$(jq -r '.id' <<<"$artifact")"
+          artifact_name="$(jq -r '.name' <<<"$artifact")"
+          artifact_digest="$(jq -r '.digest // "unavailable"' <<<"$artifact")"
+          test "$(jq -r '.expired' <<<"$artifact")" = false
+          printf 'artifact_id=%s\nartifact_name=%s\nartifact_digest=%s\n' \
+            "$artifact_id" "$artifact_name" "$artifact_digest" \
+            | tee finalization-evidence/qa-artifact.txt
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "artifact_digest=$artifact_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Update draft PR with exact decision-ready evidence
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          PRODUCT_SHA: ${{ steps.product.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.product.outputs.product_tree }}
+          CHANGED_FILES: ${{ steps.product.outputs.changed_files }}
+          QA_RUN_ID: ${{ steps.qa.outputs.qa_run_id }}
+          QA_URL: ${{ steps.qa.outputs.qa_url }}
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact_id }}
+          ARTIFACT_NAME: ${{ steps.artifact.outputs.artifact_name }}
+          ARTIFACT_DIGEST: ${{ steps.artifact.outputs.artifact_digest }}
+        run: |
+          set -euo pipefail
+          paths="$(sed 's/^/- `/' finalization-evidence/changed-paths.txt | sed 's/$/`/')"
+          cat > finalization-evidence/pr-body.md <<EOF
+          ## Purpose
+
+          Implement the separately bounded Issue #709 administrator, participant-rendering, notification, and submission-disabled rendered-QA tranche on top of the exact refund foundation in PR #800.
+
+          ## Exact stack identity
+
+          - base branch: \`$FOUNDATION_BRANCH\`
+          - exact foundation head: \`$FOUNDATION_SHA\`
+          - exact foundation tree: \`$FOUNDATION_TREE\`
+          - head branch: \`$PRODUCT_BRANCH\`
+          - exact product head: \`$PRODUCT_SHA\`
+          - exact product tree: \`$PRODUCT_TREE\`
+          - relationship: exactly one commit ahead of the foundation
+          - changed files: \`$CHANGED_FILES\`
+
+          ## Durable product scope
+
+          $paths
+
+          The diff contains no workflow, controller, transport, migration, package-lock, dependency, environment, or credential file.
+
+          ## Implemented boundaries
+
+          - Existing administrator authorization and an active AAL2/MFA session gate the refund-recording action.
+          - Only the server-side service-role boundary invokes the service-role-only \`record_direct_donation_upgrade_provider_reversal\` RPC.
+          - Environment, obligation, provider charge hash, partner donation identity, recipient hash, amount, currency, refund time, authoritative evidence source, evidence-reference hash, and idempotent report identity remain exact and fail closed.
+          - Donor name, donor email, payment credentials, card or bank information, raw webhook bodies, and full provider payloads are not newly persisted or exposed.
+          - Participant and administrator surfaces distinguish historical provider confirmation from current unreversed gross/net, incremental, and redirected impact.
+          - Provider-reversed obligations and post-completion exceptions are explicit rather than silently rewriting historical completion.
+          - QA fixtures are rendered with submission disabled; no provider key or webhook credential is present.
+
+          ## Exact-head validation
+
+          Exact-head QA run \`$QA_RUN_ID\` passed:
+
+          - one-commit ancestry and exact controller-free scope;
+          - AAL2/MFA, administrator allowlist, service-role authority, RPC, idempotency, evidence minimization, current-versus-historical rendering, and submission-disable source contracts;
+          - focused operator and inherited refund tests;
+          - the complete repository test suite;
+          - strict TypeScript;
+          - repository ESLint;
+          - an optimized build with all money rails disabled;
+          - submission-disabled desktop and mobile rendered QA;
+          - screenshot inventory and viewport-dimension verification.
+
+          Run: $QA_URL
+
+          Sanitized evidence artifact:
+
+          - artifact ID: \`$ARTIFACT_ID\`
+          - artifact name: \`$ARTIFACT_NAME\`
+          - digest: \`$ARTIFACT_DIGEST\`
+
+          ## Disposition
+
+          This PR remains draft, stacked, unmerged, and undeployed. It is not authorization to contact Every.org, register or invoke a webhook, process a checkout or donation, record an actual refund, apply a persistent migration, deploy, move an alias, mutate a credential, activate a feature, handle custody/transfer/payout, send an email or brand submission, merge, or change production.
+          EOF
+          sed -i 's/^          //' finalization-evidence/pr-body.md
+          gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --title 'Add AAL2-gated Donation Upgrade refund operations' \
+            --body-file finalization-evidence/pr-body.md
+
+      - name: Record completed bounded sequence on Issue 709
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          PR_URL: ${{ steps.pr.outputs.pr_url }}
+          PRODUCT_SHA: ${{ steps.product.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.product.outputs.product_tree }}
+          QA_RUN_ID: ${{ steps.qa.outputs.qa_run_id }}
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact_id }}
+          ARTIFACT_DIGEST: ${{ steps.artifact.outputs.artifact_digest }}
+        run: |
+          set -euo pipefail
+          body="<!-- pr800-refund-operator-finalized -->
+          ## Issue #709 refund operator tranche finalized
+
+          - stacked draft PR: #$PR_NUMBER — $PR_URL
+          - exact foundation: \`$FOUNDATION_SHA\`
+          - exact product head: \`$PRODUCT_SHA\`
+          - exact product tree: \`$PRODUCT_TREE\`
+          - exact-head source, test, build, authorization, and submission-disabled desktop/mobile rendered QA: passed in run \`$QA_RUN_ID\`
+          - sanitized artifact: \`$ARTIFACT_ID\` / \`$ARTIFACT_DIGEST\`
+          - PR remains draft, unmerged, and undeployed
+
+          No Every.org request, webhook registration or invocation, checkout, donation, payment, actual refund, persistent database write or migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, merge, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Upload finalization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-operator-finalization-${{ github.run_id }}
+          path: finalization-evidence/
+          if-no-files-found: warn
+          retention-days: 30
