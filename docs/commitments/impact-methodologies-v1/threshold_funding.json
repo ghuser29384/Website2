@@ -1,0 +1,227 @@
+{
+  "mechanismFamily": "threshold_funding",
+  "modelKey": "commitments-threshold-funding-v2",
+  "version": 2,
+  "lifecycleStatus": "under_review",
+  "methodologyHash": "sha256:e21419076cc2beca7b1e6cfb31bec2376098da117d5cffea0fb1bd4d71c7c066",
+  "materialChangeFromMethodologyHash": "sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c",
+  "approvedAt": null,
+  "activatedAt": null,
+  "approvalBlockers": [
+    "founder_exact_hash_approval_not_recorded",
+    "founder_approver_account_not_yet_configured",
+    "causal_identification_design_not_validated",
+    "empirical_calibration_evidence_not_registered",
+    "provisional_confidence_thresholds_not_validated",
+    "model_health_not_passing"
+  ],
+  "methodology": {
+    "schemaVersion": "moral-trade-impact-model-methodology-v1",
+    "mechanismFamily": "threshold_funding",
+    "modelKey": "commitments-threshold-funding-v2",
+    "displayName": "Threshold funding and dominant-assurance causal methodology v2",
+    "estimands": [
+      "success_case_additional",
+      "expected_additional",
+      "direct_causal_attribution",
+      "verified_outcome",
+      "cooperative_allocation",
+      "platform_funded_bonus"
+    ],
+    "estimandDefinitions": {
+      "success_case_additional": "Other eligible participant funding activated on success, excluding the focal pledge, unconditional baseline funding, refunds, duplicates, and platform-funded bonuses.",
+      "expected_additional": "The validated with-pledge versus without-pledge change in threshold-success probability multiplied by other eligible funding. It is withheld without an interference-aware causal design.",
+      "direct_causal_attribution": "The focal pledge's marginal effect under the validated pledge-arrival design, capped at other eligible funding and defaulting to non-additive across participants.",
+      "verified_outcome": "Eligible funding captured or externally verified after resolution, net of refunds and duplicates. This verifies funding occurrence, not the focal pledge's causal effect.",
+      "cooperative_allocation": "A non-additive Shapley allocation of coalition-created eligible funding under the frozen threshold ledger.",
+      "platform_funded_bonus": "A failure bonus or subsidy paid by Moral Trade or a sponsor, labeled separately and excluded from participant-caused totals."
+    },
+    "baselineDefinition": "Immediately before pledge exposure, freeze threshold, deadline, eligibility, supporter rule, ledger, funded amount, pledge, payment state, refund rules, failure-bonus design, and off-platform funding.",
+    "causalIdentificationPolicy": {
+      "estimand": "The causal estimand is the difference in threshold success and other eligible funding captured under the focal pledge's presence versus absence at the same pre-exposure pool state.",
+      "designStatus": "specified_not_validated",
+      "admissibleDesigns": [
+        "randomized pledge invitation or reminder with noncompliance and spillover analysis",
+        "pre-specified discontinuity or randomized bonus-design arm with interference-aware analysis"
+      ],
+      "interferencePolicy": "Represent how the focal pledge changes later pledge arrivals, withdrawals, and payment behavior. Use an exposure mapping or cluster design; do not assume independent pledges.",
+      "overlapAndPositivityPolicy": "Estimate causal effects only in states with empirical support for both the with-participant and without-participant conditions. Fail closed when overlap or positivity is materially violated.",
+      "sensitivityAnalysisPolicy": "Report pre-specified sensitivity analyses for unmeasured confounding, baseline misclassification, and interference. Withhold causal components when conclusions are not robust to the approved bounds.",
+      "noDefensibleDesignAction": "withhold_causal_components"
+    },
+    "evidenceSemanticsPolicy": {
+      "outcomeEvidenceLabel": "verified_outcome",
+      "additionalityLabel": "assessed_additionality",
+      "receiptAloneEstablishesAdditionality": false,
+      "publicCopyRule": "Evidence may establish that an outcome occurred and its quantity. It must not be described as verified impact or verified additionality; causal additionality remains an assessed model output."
+    },
+    "strategicBehaviorPolicy": {
+      "baselineAntecedenceRule": "A baseline can support additionality only when its material evidence predates the participant-facing offer or commitment and survives post-resolution consistency checks.",
+      "strategicTimingRule": "Freeze the ledger before exposure and detect pledge splitting, strategic delay, coordinated timing, and post-deadline edits.",
+      "interferenceRule": "Represent how the focal pledge changes later pledge arrivals, withdrawals, and payment behavior. Use an exposure mapping or cluster design; do not assume independent pledges.",
+      "perverseIncentiveRule": "Reject designs that reward manufactured shortfalls or threats; keep failure bonuses outside participant-caused accounting.",
+      "manipulationChecks": [
+        "identity and pledge deduplication",
+        "off-platform funding reconciliation",
+        "bonus-arm balance check",
+        "strategic timing diagnostic"
+      ]
+    },
+    "algorithmDescription": "Compute deterministic other eligible funding. Predict threshold success and payment capture separately. Estimate with-pledge versus without-pledge effects only through a pre-specified interference-aware pledge-arrival design. Treat failure-bonus design as a treatment feature whose sign and magnitude require identification; never assume a beneficial response. Record captured funding and platform bonuses as separate outcomes.",
+    "referenceClassPolicy": {
+      "strategy": "hierarchical",
+      "narrowFields": [
+        "threshold band",
+        "progress band",
+        "deadline band",
+        "supporter-count band",
+        "pledge-size distribution",
+        "cause area",
+        "bonus-design arm"
+      ],
+      "broadeningOrder": [
+        "cause area",
+        "pledge-size distribution",
+        "supporter-count band",
+        "threshold band",
+        "mechanism family"
+      ],
+      "minimumSampleSize": 60,
+      "noDefensibleClassAction": "withhold",
+      "uncertaintyExpansionRule": "Reference classes support outcome prediction, not causal identification. Expand the 80% predictive interval at every approved broadening step and withhold when no defensible class remains."
+    },
+    "uncertaintyPolicy": {
+      "intervalLevelBps": 8000,
+      "method": "Use a pre-specified hierarchical predictive model and propagate parameter, outcome, baseline, interference, and measurement uncertainty by posterior or repeated-sampling simulation.",
+      "confidencePolicy": "The initial sample-size and calibration cutoffs are provisional governance floors. Low or moderate confidence may be shown only after a current health pass. High confidence is forbidden until temporal or otherwise independent holdout validation and uncertainty-aware calibration criteria are approved.",
+      "drivers": [
+        "causal-design validity",
+        "reference-class fit",
+        "baseline credibility",
+        "interference and strategic response",
+        "outcome measurement",
+        "state freshness"
+      ]
+    },
+    "validationPolicy": {
+      "thresholdStatus": "provisional",
+      "highConfidenceAllowed": false,
+      "requiredBeforeHighConfidence": [
+        "pre-registered temporal or otherwise independent holdout evaluation",
+        "uncertainty intervals for calibration intercept, slope, and interval coverage",
+        "out-of-sample sample-size and reference-class justification",
+        "documented robustness to approved confounding and interference sensitivity analyses"
+      ]
+    },
+    "freshnessPolicy": {
+      "maxAgeSeconds": 900,
+      "requireStateHash": true,
+      "requiredStateFields": [
+        "threshold terms",
+        "deadline",
+        "eligible pledge ledger",
+        "funded amount",
+        "supporter count",
+        "focal pledge",
+        "payment and refund state",
+        "bonus design",
+        "pool lifecycle"
+      ],
+      "invalidateOnLifecycleStates": [
+        "succeeded",
+        "lapsed",
+        "cancelled",
+        "settled",
+        "refunded",
+        "superseded"
+      ]
+    },
+    "healthPolicy": {
+      "requiredCalibrationMetrics": [
+        "eligible resolved-observation count",
+        "out-of-sample 80% interval coverage with uncertainty",
+        "out-of-sample probability calibration intercept and slope with uncertainty",
+        "out-of-sample Brier or proper scoring-rule result",
+        "causal-design status and sensitivity-analysis result",
+        "overlap or positivity diagnostics",
+        "out-of-domain input rate",
+        "required-state-field missingness rate"
+      ],
+      "blockedConditions": [
+        "no current exact-hash methodology approval",
+        "no current passing model-health snapshot",
+        "causal identification design is not validated",
+        "empirical calibration evidence is absent or ineligible",
+        "required state is missing or does not match the immutable state hash",
+        "input is outside the approved domain",
+        "unresolved evidence-integrity, duplication, or overlap failure",
+        "available modeled component would be published under blocked, warning, or stale health"
+      ],
+      "warningConditions": [
+        "reference class broadened beyond the narrowest approved class",
+        "provisional confidence thresholds remain unvalidated",
+        "material reliance on participant attestation rather than independent outcome evidence",
+        "calibration drift remains within a non-blocking warning band"
+      ]
+    },
+    "sourceDataRequirements": [
+      "immutable threshold, deadline, eligibility, refund, and bonus rules",
+      "participant-scoped pledge and payment ledger with deduplication keys",
+      "off-platform and unconditional funding baseline",
+      "resolution, capture, refund, and external receipt evidence",
+      "separate platform or sponsor subsidy ledger",
+      "audited resolved threshold and dominant-assurance outcomes"
+    ],
+    "conceptualBasisRefs": [
+      "source:toby-ord-moral-trade-2015",
+      "source:forethought-convergence-and-compromise-2025",
+      "source:forethought-moral-public-goods-2026"
+    ],
+    "calibrationEvidenceRefs": [],
+    "knownFailureModes": [
+      "predictive pledge-arrival model is treated as causal pivotality",
+      "strategic timing or pledge splitting changes other arrivals",
+      "duplicate or ineligible supporters inflate the ledger",
+      "off-platform funding is omitted",
+      "bonus response is assumed positive without identification",
+      "platform bonus is mislabeled as participant impact"
+    ],
+    "outOfDomainConditions": [
+      "mutable threshold, deadline, or eligibility terms",
+      "private pool whose ledger cannot be audited",
+      "non-monetary threshold without a separate native-unit model",
+      "threat, coercion, or perverse-incentive design",
+      "no interference-aware pledge-arrival identification design"
+    ],
+    "materialChangeTriggers": [
+      "threshold or bonus semantics change",
+      "pledge-arrival design changes",
+      "coalition characteristic function changes",
+      "causal-identification design or sensitivity-analysis policy changes",
+      "evidence semantics or public outcome-label changes",
+      "strategic-behavior or interference policy changes",
+      "provisional validation thresholds or high-confidence rule changes"
+    ],
+    "aggregationPolicy": {
+      "directAndCooperativeNeverSummed": true,
+      "heterogeneousNativeUnitsRemainSeparate": true,
+      "directMarginalEffectsDefaultNonAdditive": true,
+      "additiveClaimRequirement": "A causal component may enter an additive caused-total only when every underlying resource or action has a stable unique claim reference and no claim reference appears in another additive component.",
+      "overlapHandling": "Outcome quantities may appear in explanatory views but verified outcomes are not caused totals. Direct marginal effects default to non-additive. Cooperative allocation is an alternative lens. Any additive causal aggregate requires unique claim references and must reject overlap."
+    },
+    "shapleyPolicy": {
+      "enabled": true,
+      "characteristicFunctionDefinition": "For each eligible participant subset, coalition value is other eligible funding activated under the frozen threshold, deadline, payment, refund, and bonus rules, excluding unconditional funding and platform subsidies.",
+      "maximumExactPlayers": 10,
+      "approximationMethod": "Above 10 participants, use deterministic seeded permutations and withhold when Monte Carlo error or coalition monotonicity diagnostics fail."
+    },
+    "parameters": {
+      "minimumEligibleResolvedObservations": 60,
+      "minimumSampleStatus": "provisional_governance_floor",
+      "publicationRule": "render deterministic terms and verified outcomes when valid; withhold every modeled causal component unless the exact active model has a current passing health snapshot",
+      "successCaseExcludesParticipantOwnPledge": true,
+      "successCaseExcludesPlatformFundedBonus": true,
+      "bonusEffectSignAssumed": false
+    }
+  }
+}
