@@ -1,0 +1,396 @@
+name: PR800 refund operator tranche materializer v2
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-materialize-v2-20260823
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr800-refund-operator-tranche-materializer-v2
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FOUNDATION_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      FOUNDATION_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      INITIAL_FOUNDATION_SHA: d33fa085ea093e7bd41c7f4f32441b94d782aaf2
+      TRANSPORT_SHA: 31c6318bf2ef1e0bd86cf2d249ef853f7f3af1e7
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-operator-709-20260823
+    steps:
+      - name: Check out exact accepted refund foundation
+        uses: actions/checkout@v4
+        with:
+          ref: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+          fetch-depth: 0
+
+      - name: Resolve existing candidate or exact reconstruction requirement
+        id: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$FOUNDATION_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$FOUNDATION_TREE"
+          remote_target="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test -n "$remote_target"
+          if [[ "$remote_target" = "$FOUNDATION_SHA" ]]; then
+            echo 'mode=reconstruct' >> "$GITHUB_OUTPUT"
+          else
+            git fetch --no-tags origin "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+            test "$(git merge-base "$FOUNDATION_SHA" "$remote_target")" = "$FOUNDATION_SHA"
+            test "$(git rev-list --count "$FOUNDATION_SHA..$remote_target")" = 1
+            git checkout --detach "$remote_target"
+            echo 'mode=validate_existing' >> "$GITHUB_OUTPUT"
+          fi
+          printf 'foundation_sha=%s\nresolved_target_sha=%s\n' "$FOUNDATION_SHA" "$remote_target" \
+            > evidence/pre-state.txt
+
+      - name: Decode and reconstruct only when target is still the foundation
+        if: steps.state.outputs.mode == 'reconstruct'
+        id: reconstruct
+        shell: bash
+        run: |
+          set -euo pipefail
+          transport="$RUNNER_TEMP/pr800-operator-v2"
+          rm -rf "$transport"
+          mkdir -p "$transport"
+          python3 - <<'PY'
+          import base64, gzip, io, os, subprocess, tarfile, zipfile
+          from pathlib import Path
+
+          out = Path(os.environ['RUNNER_TEMP']) / 'pr800-operator-v2'
+          sha = os.environ['TRANSPORT_SHA']
+          for index, root in enumerate((
+              '.github/pr796-refund-operator-patch',
+              '.github/pr796-refund-operator-bundle',
+          )):
+              names = subprocess.check_output(
+                  ['git','ls-tree','-r','--name-only',sha,'--',root], text=True
+              ).splitlines()
+              parts = sorted(name for name in names if Path(name).name.startswith('part-'))
+              if not parts:
+                  raise SystemExit(f'missing {root}')
+              encoded = ''.join(
+                  subprocess.check_output(['git','show',f'{sha}:{name}'], text=True)
+                  for name in parts
+              )
+              data = base64.b64decode(''.join(encoded.split()), validate=True)
+              while data.startswith(b'\x1f\x8b'):
+                  data = gzip.decompress(data)
+              target = out / f'transport-{index}'
+              target.mkdir()
+              if zipfile.is_zipfile(io.BytesIO(data)):
+                  with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                      archive.extractall(target)
+              else:
+                  try:
+                      with tarfile.open(fileobj=io.BytesIO(data), mode='r:*') as archive:
+                          archive.extractall(target, filter='data')
+                  except tarfile.TarError:
+                      (target / 'transport.raw').write_bytes(data)
+              for candidate in target.rglob('*'):
+                  if candidate.is_file():
+                      payload = candidate.read_bytes()
+                      if payload.startswith(b'diff --git ') or b'\ndiff --git ' in payload[:12000]:
+                          patches = out / 'patches'
+                          patches.mkdir(exist_ok=True)
+                          (patches / f'{index}-{candidate.name}.patch').write_bytes(payload)
+          PY
+
+          is_allowed_path() {
+            case "$1" in
+              docs/provider-review/*|\
+              src/app/admin/donation-upgrades/*|\
+              src/app/donation-upgrades/*|\
+              src/components/donation-upgrades/*|\
+              src/lib/direct-donation-upgrade*|\
+              src/lib/provider-refund*|\
+              tests/direct-donation-upgrade*|\
+              src/app/admin/page.tsx|\
+              src/app/direct-donation-upgrade-actions.ts|\
+              playwright.direct-donation-upgrade.config.ts)
+                return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          method=''
+          if compgen -G "$transport/patches/*.patch" > /dev/null; then
+            while IFS= read -r patch; do
+              mapfile -t patch_paths < <(
+                sed -nE 's#^diff --git a/(.+) b/(.+)$#\2#p' "$patch" | LC_ALL=C sort -u
+              )
+              test "${#patch_paths[@]}" -gt 0 || continue
+              safe=true
+              for path in "${patch_paths[@]}"; do
+                if ! is_allowed_path "$path"; then safe=false; break; fi
+              done
+              [[ "$safe" = true ]] || continue
+              git reset --hard "$FOUNDATION_SHA" >/dev/null
+              git clean -fdx >/dev/null
+              mkdir -p evidence
+              if git apply --check "$patch"; then
+                git apply "$patch"
+                method="exact_patch:$(basename "$patch")"
+                break
+              fi
+              if git apply --3way --index "$patch"; then
+                git reset
+                method="three_way_patch:$(basename "$patch")"
+                break
+              fi
+            done < <(find "$transport/patches" -type f -name '*.patch' -print | LC_ALL=C sort)
+          fi
+
+          if [[ -z "$method" ]]; then
+            git reset --hard "$FOUNDATION_SHA" >/dev/null
+            git clean -fdx >/dev/null
+            mkdir -p evidence
+            python3 - <<'PY'
+            import os, subprocess, tempfile
+            from pathlib import Path
+
+            transport = Path(os.environ['RUNNER_TEMP']) / 'pr800-operator-v2'
+            base = os.environ['INITIAL_FOUNDATION_SHA']
+            allowed_prefixes = (
+                'docs/provider-review/',
+                'src/app/admin/donation-upgrades/',
+                'src/app/donation-upgrades/',
+                'src/components/donation-upgrades/',
+                'src/lib/direct-donation-upgrade',
+                'src/lib/provider-refund',
+                'tests/direct-donation-upgrade',
+            )
+            allowed_exact = {
+                'src/app/admin/page.tsx',
+                'src/app/direct-donation-upgrade-actions.ts',
+                'playwright.direct-donation-upgrade.config.ts',
+            }
+            roots = []
+            for decoded in transport.glob('transport-*'):
+                package_roots = [p.parent for p in decoded.rglob('package.json') if (p.parent/'src').is_dir()]
+                roots.extend(package_roots or [decoded])
+            def eligible(rel):
+                return rel in allowed_exact or rel.startswith(allowed_prefixes)
+            def score(root):
+                return sum(1 for p in root.rglob('*') if p.is_file() and eligible(p.relative_to(root).as_posix()))
+            root = max(roots, key=score)
+            if score(root) == 0:
+                raise SystemExit('no eligible operator files in decoded bundle')
+            changed = []
+            for theirs in sorted(p for p in root.rglob('*') if p.is_file()):
+                rel = theirs.relative_to(root).as_posix()
+                if not eligible(rel):
+                    continue
+                theirs_bytes = theirs.read_bytes()
+                try:
+                    base_bytes = subprocess.check_output(['git','show',f'{base}:{rel}'])
+                    base_exists = True
+                except subprocess.CalledProcessError:
+                    base_bytes = b''
+                    base_exists = False
+                if base_exists and theirs_bytes == base_bytes:
+                    continue
+                ours = Path(rel)
+                ours_bytes = ours.read_bytes() if ours.exists() else b''
+                if not base_exists:
+                    if ours.exists() and ours_bytes != theirs_bytes:
+                        raise SystemExit(f'conflicting newly transported path: {rel}')
+                    ours.parent.mkdir(parents=True, exist_ok=True)
+                    ours.write_bytes(theirs_bytes)
+                    changed.append(rel)
+                    continue
+                if ours_bytes == base_bytes:
+                    ours.parent.mkdir(parents=True, exist_ok=True)
+                    ours.write_bytes(theirs_bytes)
+                    changed.append(rel)
+                    continue
+                if ours_bytes == theirs_bytes:
+                    continue
+                with tempfile.TemporaryDirectory() as temp:
+                    temp = Path(temp)
+                    of, bf, tf = temp/'ours', temp/'base', temp/'theirs'
+                    of.write_bytes(ours_bytes); bf.write_bytes(base_bytes); tf.write_bytes(theirs_bytes)
+                    result = subprocess.run(
+                        ['git','merge-file','-p',str(of),str(bf),str(tf)],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    )
+                    if result.returncode != 0 or b'<<<<<<<' in result.stdout:
+                        raise SystemExit(f'three-way conflict for {rel}')
+                    ours.parent.mkdir(parents=True, exist_ok=True)
+                    ours.write_bytes(result.stdout)
+                    changed.append(rel)
+            if not changed:
+                raise SystemExit('decoded bundle produced no operator delta')
+            Path('evidence/bundle-paths.txt').write_text('\n'.join(sorted(set(changed)))+'\n')
+            PY
+            method='three_way_bundle'
+          fi
+          printf '%s\n' "$method" | tee evidence/reconstruction-method.txt
+          echo "method=$method" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce exact bounded product scope and operator invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git diff --name-only "$FOUNDATION_SHA" | LC_ALL=C sort > evidence/changed-paths.txt
+          count="$(wc -l < evidence/changed-paths.txt | tr -d ' ')"
+          test "$count" -ge 3
+          test "$count" -le 20
+          if grep -Ev \
+            '^(docs/provider-review/|src/app/admin/donation-upgrades/|src/app/donation-upgrades/|src/components/donation-upgrades/|src/lib/direct-donation-upgrade|src/lib/provider-refund|tests/direct-donation-upgrade|src/app/admin/page\.tsx$|src/app/direct-donation-upgrade-actions\.ts$|playwright\.direct-donation-upgrade\.config\.ts$)' \
+            evidence/changed-paths.txt; then
+            exit 1
+          fi
+          if grep -E '(^|/)(\.github|supabase/migrations|package(-lock)?\.json|\.env)' evidence/changed-paths.txt; then
+            exit 1
+          fi
+          git diff --check "$FOUNDATION_SHA"
+          ! git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- . ':!package-lock.json'
+          mapfile -t changed < evidence/changed-paths.txt
+          grep -nH -E 'record_direct_donation_upgrade_provider_reversal|provider_reversed|post_completion_exception' \
+            "${changed[@]}" > evidence/refund-markers.txt
+          grep -nH -Ei 'aal2|assurance_level|mfa' "${changed[@]}" > evidence/aal2-markers.txt
+          grep -nH -Ei 'admin|operator' "${changed[@]}" > evidence/admin-markers.txt
+          mapfile -t code_paths < <(grep -E '^(src|tests)/' evidence/changed-paths.txt)
+          if [[ "${#code_paths[@]}" -gt 0 ]]; then
+            if grep -nH -Ei \
+              '(donor[_ -]?(name|email)|card[_ -]?number|bank[_ -]?account|payment[_ -]?credential|raw[_ -]?(payload|webhook))' \
+              "${code_paths[@]}"; then
+              exit 1
+            fi
+            if grep -nH -E \
+              '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+              "${code_paths[@]}"; then
+              exit 1
+            fi
+          fi
+          git diff "$FOUNDATION_SHA" -- "${changed[@]}" > evidence/operator.diff
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci > evidence/npm-ci.log 2>&1
+
+      - name: Run focused operator and inherited refund tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed_tests < <(grep -E '\.(test|spec)\.tsx?$' evidence/changed-paths.txt || true)
+          tests=(
+            src/lib/provider-refund-contract.test.ts
+            src/lib/direct-donation-upgrade.test.ts
+            src/lib/direct-donation-upgrade-source-contract.test.ts
+            src/lib/every-org-partner-webhook-auth.test.ts
+            src/lib/trade-donation.test.ts
+            "${changed_tests[@]}"
+          )
+          mapfile -t unique < <(printf '%s\n' "${tests[@]}" | awk 'NF' | LC_ALL=C sort -u)
+          node --import tsx --test "${unique[@]}" > evidence/focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit > evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > evidence/lint.log 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > evidence/build.log 2>&1
+
+      - name: Publish only if reconstruction was required
+        if: steps.state.outputs.mode == 'reconstruct'
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$FOUNDATION_SHA"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          mapfile -t paths < evidence/changed-paths.txt
+          git add -- "${paths[@]}"
+          git commit -m 'Add AAL2-gated Donation Upgrade refund operations'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "product_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve final exact product identity
+        id: final
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_sha="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          git fetch --no-tags origin "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+          product_tree="$(git rev-parse "$product_sha^{tree}")"
+          test "$(git merge-base "$FOUNDATION_SHA" "$product_sha")" = "$FOUNDATION_SHA"
+          test "$(git rev-list --count "$FOUNDATION_SHA..$product_sha")" = 1
+          printf 'product_sha=%s\nproduct_tree=%s\n' "$product_sha" "$product_tree" | tee evidence/product-identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record exact successful materialization or validation
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.final.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.final.outputs.product_tree }}
+          MODE: ${{ steps.state.outputs.mode }}
+          METHOD: ${{ steps.reconstruct.outputs.method }}
+        run: |
+          set -euo pipefail
+          paths="$(sed 's/^/- `/' evidence/changed-paths.txt | sed 's/$/`/')"
+          body="<!-- pr800-refund-operator-materialization-v2 -->
+          ## Donation Upgrade refund operator tranche exact-head gates passed
+
+          - exact stacked foundation: \`$FOUNDATION_SHA\`
+          - product head: \`$PRODUCT_SHA\`
+          - product tree: \`$PRODUCT_TREE\`
+          - mode: \`$MODE\`
+          - reconstruction method: \`${METHOD:-existing_candidate}\`
+          - changed paths:
+          $paths
+          - focused tests, complete repository tests, strict TypeScript, ESLint, disabled-rail build, scope, AAL2/admin/refund markers, data-minimization, credential, conflict-marker, and diff-integrity gates: passed
+          - run: \`$GITHUB_RUN_ID\`
+
+          This is a controller-free stacked product branch. It remains draft, unmerged, undeployed, and pending independent authorization/database and rendered QA. No provider request, webhook mutation, checkout, donation, payment, actual refund, database migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, merge, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-operator-materialization-v2-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
