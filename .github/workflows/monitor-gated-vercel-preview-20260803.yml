@@ -1,0 +1,71 @@
+name: Temporary gated Vercel release monitor
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/monitor-gated-vercel-preview-20260803.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GATED_RUN_ID: "30778634962"
+      OUTPUT_DIR: gated-vercel-release-monitor
+
+    steps:
+      - name: Capture failed gated release diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR/artifacts"
+
+          gh run view "$GATED_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,status,conclusion,createdAt,updatedAt,headBranch,headSha,url,jobs \
+            > "$OUTPUT_DIR/run.json"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GATED_RUN_ID}/artifacts?per_page=100" \
+            > "$OUTPUT_DIR/artifacts.json"
+
+          set +e
+          gh run view "$GATED_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --log-failed \
+            > "$OUTPUT_DIR/failed.log" 2>&1
+          log_status=$?
+
+          gh run download "$GATED_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir "$OUTPUT_DIR/artifacts" \
+            > "$OUTPUT_DIR/artifact-download.log" 2>&1
+          download_status=$?
+          set -e
+
+          printf 'log_status=%s\ndownload_status=%s\n' "$log_status" "$download_status" \
+            > "$OUTPUT_DIR/collection-status.txt"
+
+          tail -n 1600 "$OUTPUT_DIR/failed.log" > "$OUTPUT_DIR/failed-tail.log" || true
+          grep -n -E 'Error|ERROR|error|FAILED|failed|Failure|Timeout|timed out|expect\(|Assertion|assert|[0-9]+ failed|›' \
+            "$OUTPUT_DIR/failed.log" > "$OUTPUT_DIR/failure-index.txt" || true
+
+          find "$OUTPUT_DIR" -maxdepth 5 -type f -printf '%p\t%s bytes\n' \
+            | sort > "$OUTPUT_DIR/inventory.txt"
+
+          test -s "$OUTPUT_DIR/run.json"
+          test -s "$OUTPUT_DIR/failed.log"
+
+      - name: Upload monitor output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-vercel-release-failure-diagnostics-20260803
+          path: gated-vercel-release-monitor
+          if-no-files-found: ignore
+          retention-days: 3
