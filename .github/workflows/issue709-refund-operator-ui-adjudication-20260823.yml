@@ -1,0 +1,370 @@
+name: Issue709 exact-head refund operator and rendering adjudication
+
+on:
+  push:
+    branches:
+      - ops/issue709-refund-operator-ui-adjudication-20260823
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: issue709-refund-operator-ui-exact-head-adjudication
+  cancel-in-progress: false
+
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      BASE_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      BASE_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-ui-709-20260823
+      MATERIALIZER_WORKFLOW: pr800-refund-operator-ui-materializer-20260823.yml
+      MATERIALIZER_BRANCH: ops/pr800-refund-operator-ui-materializer-20260823
+    steps:
+      - name: Resolve immutable product and materializer identities
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p adjudication-evidence
+          product_sha="$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          test -n "$product_sha"
+          commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$product_sha")"
+          product_tree="$(jq -r '.tree.sha' <<<"$commit")"
+          parent_sha="$(jq -r '.parents[0].sha // ""' <<<"$commit")"
+          test "$parent_sha" = "$BASE_SHA"
+
+          runs="$(gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$MATERIALIZER_WORKFLOW/runs" \
+            -f branch="$MATERIALIZER_BRANCH" \
+            -f per_page=20)"
+          materializer="$(jq -c '[.workflow_runs[]] | sort_by(.created_at) | reverse | .[0] // empty' <<<"$runs")"
+          test -n "$materializer"
+          materializer_run="$(jq -r '.id' <<<"$materializer")"
+          test "$(jq -r '.status' <<<"$materializer")" = completed
+          test "$(jq -r '.conclusion' <<<"$materializer")" = success
+          artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$materializer_run/artifacts")"
+          artifact="$(jq -c '[.artifacts[] | select(.name | startswith("issue709-refund-operator-ui-materialization-"))] | .[0] // empty' <<<"$artifacts")"
+          test -n "$artifact"
+          materializer_artifact_id="$(jq -r '.id' <<<"$artifact")"
+          materializer_artifact_digest="$(jq -r '.digest' <<<"$artifact")"
+
+          printf '%s\n' \
+            "base_sha=$BASE_SHA" \
+            "base_tree=$BASE_TREE" \
+            "product_sha=$product_sha" \
+            "product_tree=$product_tree" \
+            "product_parent=$parent_sha" \
+            "materializer_run=$materializer_run" \
+            "materializer_artifact_id=$materializer_artifact_id" \
+            "materializer_artifact_digest=$materializer_artifact_digest" \
+            | tee adjudication-evidence/identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+          echo "materializer_run=$materializer_run" >> "$GITHUB_OUTPUT"
+          echo "materializer_artifact_id=$materializer_artifact_id" >> "$GITHUB_OUTPUT"
+          echo "materializer_artifact_digest=$materializer_artifact_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact immutable product head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.identity.outputs.product_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact ancestry and thirteen-path product scope
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.identity.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.identity.outputs.product_tree }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$PRODUCT_TREE"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test "$(git rev-parse "$BASE_SHA^{tree}")" = "$BASE_TREE"
+          test "$(git rev-list --count "$BASE_SHA..$PRODUCT_SHA")" = 1
+          test "$(git merge-base "$BASE_SHA" "$PRODUCT_SHA")" = "$BASE_SHA"
+
+          git diff --name-only "$BASE_SHA..$PRODUCT_SHA" | sort \
+            > adjudication-evidence/actual-paths.txt
+          python3 - <<'PY'
+          from pathlib import Path
+
+          fixed = {
+              "docs/provider-review/every-org-donation-upgrade-review-packet.md",
+              "docs/provider-review/refund-screenshots/admin-and-participant-desktop.png",
+              "docs/provider-review/refund-screenshots/admin-and-participant-mobile.png",
+              "scripts/capture-direct-donation-upgrade-refund-review.mjs",
+              "src/app/admin/donation-upgrade-refunds/actions.ts",
+              "src/app/admin/donation-upgrade-refunds/page.tsx",
+              "src/app/qa/direct-donation-upgrade-refunds/page.tsx",
+              "src/components/direct-donation-upgrade-refund-status.tsx",
+              "src/lib/direct-donation-upgrade-refund-input.test.ts",
+              "src/lib/direct-donation-upgrade-refund-input.ts",
+              "src/lib/direct-donation-upgrade-refund-operator-contract.test.ts",
+              "src/lib/direct-donation-upgrade-refund-server.ts",
+          }
+          actual = set(Path("adjudication-evidence/actual-paths.txt").read_text().splitlines())
+          dynamic = {
+              path
+              for path in actual
+              if path.startswith("src/app/donation-upgrades/")
+              and path.endswith("/layout.tsx")
+          }
+          if len(dynamic) != 1:
+              raise SystemExit(f"expected one dynamic Donation Upgrade layout, found {sorted(dynamic)}")
+          expected = fixed | dynamic
+          if len(expected) != 13 or actual != expected:
+              raise SystemExit(
+                  "unexpected exact-head product scope\nexpected="
+                  + "\n".join(sorted(expected))
+                  + "\nactual="
+                  + "\n".join(sorted(actual))
+              )
+          Path("adjudication-evidence/expected-paths.txt").write_text(
+              "\n".join(sorted(expected)) + "\n"
+          )
+          PY
+          diff -u adjudication-evidence/expected-paths.txt adjudication-evidence/actual-paths.txt
+          git diff --check "$BASE_SHA..$PRODUCT_SHA"
+          test -z "$(git diff --name-only "$BASE_SHA..$PRODUCT_SHA" | grep -E '(^|/)(\.github|package\.json|package-lock\.json)(/|$)' || true)"
+          test -z "$(git status --porcelain)"
+
+      - name: Independently scan product for credential, PII, and execution-boundary violations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t paths < adjudication-evidence/actual-paths.txt
+          if grep -nH -E \
+            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            "${paths[@]}"; then
+            echo 'Refusing candidate containing suspected credential material.' >&2
+            exit 1
+          fi
+          if grep -nH -E \
+            '(donor_email|donor_name|card_number|bank_account|raw_payload|payment_credential)' \
+            src/lib/direct-donation-upgrade-refund-server.ts \
+            src/app/admin/donation-upgrade-refunds/actions.ts; then
+            echo 'Refusing operator code containing forbidden persisted PII fields.' >&2
+            exit 1
+          fi
+          test -z "$(grep -nE 'console\.(log|info|warn|error)' \
+            src/lib/direct-donation-upgrade-refund-server.ts \
+            src/app/admin/donation-upgrade-refunds/actions.ts || true)"
+          grep -Fq 'import "server-only"' src/lib/direct-donation-upgrade-refund-server.ts
+          grep -Fq 'assurance.currentLevel !== "aal2"' src/lib/direct-donation-upgrade-refund-server.ts
+          grep -Fq 'SUPABASE_SERVICE_ROLE_KEY' src/lib/direct-donation-upgrade-refund-server.ts
+          grep -Fq 'record_direct_donation_upgrade_provider_reversal' src/lib/direct-donation-upgrade-refund-server.ts
+          grep -Fq 'DIRECT_DONATION_UPGRADE_QA_FIXTURES !== "true"' src/app/qa/direct-donation-upgrade-refunds/page.tsx
+          grep -Fq 'VERCEL_ENV === "production"' src/app/qa/direct-donation-upgrade-refunds/page.tsx
+          grep -Fq 'Submission disabled in review fixture' src/app/qa/direct-donation-upgrade-refunds/page.tsx
+          sha256sum "${paths[@]}" > adjudication-evidence/product-source-sha256.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci > adjudication-evidence/npm-ci.log 2>&1
+
+      - name: Run focused security, refund, rendering, and inherited contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/direct-donation-upgrade-refund-input.test.ts \
+            src/lib/direct-donation-upgrade-refund-operator-contract.test.ts \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > adjudication-evidence/focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > adjudication-evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit > adjudication-evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > adjudication-evidence/lint.log 2>&1
+
+      - name: Build with every money rail and QA fixture disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > adjudication-evidence/build.log 2>&1
+
+      - name: Verify committed screenshot inventory and fail-closed production fixture source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in \
+            docs/provider-review/refund-screenshots/admin-and-participant-desktop.png \
+            docs/provider-review/refund-screenshots/admin-and-participant-mobile.png; do
+            test -s "$image"
+            file "$image"
+          done > adjudication-evidence/screenshot-file-types.txt
+          sha256sum docs/provider-review/refund-screenshots/*.png \
+            > adjudication-evidence/screenshot-sha256.txt
+          desktop_bytes="$(wc -c < docs/provider-review/refund-screenshots/admin-and-participant-desktop.png)"
+          mobile_bytes="$(wc -c < docs/provider-review/refund-screenshots/admin-and-participant-mobile.png)"
+          test "$desktop_bytes" -gt 50000
+          test "$mobile_bytes" -gt 30000
+          grep -Fq 'robots: { index: false, follow: false }' \
+            src/app/qa/direct-donation-upgrade-refunds/page.tsx
+          grep -Fq 'These images are generated from a fail-closed, non-production fixture' \
+            docs/provider-review/every-org-donation-upgrade-review-packet.md
+
+      - name: Verify one exact stacked draft PR
+        id: pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          prs="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --head "$PRODUCT_BRANCH" \
+            --state open \
+            --json number,isDraft,headRefName,baseRefName,url)"
+          test "$(jq 'length' <<<"$prs")" = 1
+          pr_number="$(jq -r '.[0].number' <<<"$prs")"
+          test "$(jq -r '.[0].isDraft' <<<"$prs")" = true
+          test "$(jq -r '.[0].headRefName' <<<"$prs")" = "$PRODUCT_BRANCH"
+          test "$(jq -r '.[0].baseRefName' <<<"$prs")" = "$BASE_BRANCH"
+          jq . <<<"$prs" > adjudication-evidence/pr-identity.json
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Write explicit non-action record
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p adjudication-evidence
+          printf '%s\n' \
+            'providerRequestAttempted=false' \
+            'webhookMutationAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'paymentAttempted=false' \
+            'actualRefundAttempted=false' \
+            'databaseMigrationAttempted=false' \
+            'deploymentAttempted=false' \
+            'credentialMutationAttempted=false' \
+            'emailSent=false' \
+            'brandSubmissionSent=false' \
+            'mergeAttempted=false' \
+            'productionChanged=false' \
+            > adjudication-evidence/non-actions.txt
+
+      - name: Upload sanitized adjudication evidence
+        id: evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue709-refund-operator-ui-adjudication-${{ github.run_id }}
+          path: adjudication-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish exact-head adjudication and refresh the draft PR
+        if: success()
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.identity.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.identity.outputs.product_tree }}
+          MATERIALIZER_RUN: ${{ steps.identity.outputs.materializer_run }}
+          MATERIALIZER_ARTIFACT_ID: ${{ steps.identity.outputs.materializer_artifact_id }}
+          MATERIALIZER_ARTIFACT_DIGEST: ${{ steps.identity.outputs.materializer_artifact_digest }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          ADJUDICATION_ARTIFACT_ID: ${{ steps.evidence.outputs.artifact-id }}
+          ADJUDICATION_ARTIFACT_DIGEST: ${{ steps.evidence.outputs.artifact-digest }}
+        run: |
+          set -euo pipefail
+          cat > adjudication-evidence/pr-body.md <<EOF
+          ## Purpose
+
+          Stack the next bounded Issue #709 tranche on the exact, database-adjudicated PR #800 refund-accounting foundation.
+
+          ## Exact identity
+
+          - base branch: \`$BASE_BRANCH\`
+          - exact base: \`$BASE_SHA\`
+          - exact base tree: \`$BASE_TREE\`
+          - head branch: \`$PRODUCT_BRANCH\`
+          - exact head: \`$PRODUCT_SHA\`
+          - exact tree: \`$PRODUCT_TREE\`
+          - relationship: exactly one commit ahead and zero behind
+          - product scope: exactly 13 paths; no workflow, package, dependency-lock, controller, trigger, or credential file
+
+          ## Implemented boundaries
+
+          - allowlisted administrator identity is derived from the authenticated Supabase session;
+          - an active \`aal2\` MFA assurance level is rechecked immediately before any mutation;
+          - raw Every.org charge IDs are SHA-256 compared against immutable confirmation evidence in server memory;
+          - raw dashboard/support references are SHA-256 transformed in server memory and are not newly persisted;
+          - environment, partner donation ID, recipient hash, amount, currency, donation time, evidence source, and explicit operator attestations fail closed;
+          - the already-adjudicated service-role-only reversal RPC remains the only mutation boundary;
+          - the action cannot issue, request, or initiate a provider refund;
+          - participant rendering separates historical confirmation from current unreversed gross, net, incremental, and redirected credit;
+          - post-completion exceptions and provider-reversed obligations are rendered explicitly without deleting history;
+          - the authoritative RPC's affected-participant notifications remain idempotent;
+          - the synthetic review route is no-index, unavailable unless the explicit QA flag is true, unavailable whenever \`VERCEL_ENV=production\`, and contains no submission-capable action;
+          - desktop and mobile review screenshots contain synthetic data only.
+
+          ## Validation
+
+          Materialization run \`$MATERIALIZER_RUN\` passed focused and complete tests, strict TypeScript, ESLint, a build with every money rail and QA fixture disabled, exact scope and ancestry checks, credential/PII scans, and desktop/mobile Playwright capture.
+
+          - materialization artifact: \`$MATERIALIZER_ARTIFACT_ID\`
+          - materialization digest: \`$MATERIALIZER_ARTIFACT_DIGEST\`
+
+          Independent exact-head adjudication run \`$GITHUB_RUN_ID\` repeated the source, security, focused, complete-test, TypeScript, ESLint, disabled-rail build, screenshot, ancestry, scope, draft-PR, and non-action gates against \`$PRODUCT_SHA\`.
+
+          - adjudication artifact: \`$ADJUDICATION_ARTIFACT_ID\`
+          - adjudication digest: \`$ADJUDICATION_ARTIFACT_DIGEST\`
+
+          ## Disposition
+
+          This PR remains draft, stacked, unmerged, and undeployed. The rendered packet remains unsent. No provider request, webhook registration or invocation, checkout, donation, payment, actual refund, persistent database migration, deployment, alias movement, credential mutation, feature activation, custody, transfer, payout, email, brand submission, merge, or production change occurred.
+          EOF
+          sed -i 's/^          //' adjudication-evidence/pr-body.md
+          gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --body-file adjudication-evidence/pr-body.md
+
+          body="<!-- issue709-refund-operator-ui-adjudication -->
+          ## Issue #709 refund-operator tranche exact-head adjudication passed
+
+          - stacked draft PR: #$PR_NUMBER
+          - exact base: \`$BASE_SHA\`
+          - exact head: \`$PRODUCT_SHA\`
+          - exact tree: \`$PRODUCT_TREE\`
+          - exact product scope: 13 paths
+          - materialization run: \`$MATERIALIZER_RUN\`
+          - independent adjudication run: \`$GITHUB_RUN_ID\`
+          - adjudication artifact: \`$ADJUDICATION_ARTIFACT_ID\`
+          - adjudication digest: \`$ADJUDICATION_ARTIFACT_DIGEST\`
+
+          All source, security, focused, complete-test, TypeScript, ESLint, disabled-rail build, screenshot, exact ancestry, exact scope, draft-PR, and non-action gates passed. The candidate remains draft, unmerged, undeployed, and unsent."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
