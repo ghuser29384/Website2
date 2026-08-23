@@ -1,0 +1,387 @@
+name: Release Apple sign-in removal 7b52271d
+
+on:
+  push:
+    branches:
+      - release/remove-apple-sign-in-7b52271d
+    paths:
+      - .github/workflows/release-remove-apple-sign-in-7b52271d.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release-remove-apple-sign-in-7b52271d
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: "1"
+      SOURCE_SHA: 7b52271d54e11f4335741c679336da4ae7b50292
+      TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      PROJECT_NAME: moraltrade-site
+      REPO_ID: "1204006559"
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check out the exact merged product commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify immutable source and Apple-removal policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          grep -F 'PRODUCT_DISABLED_OAUTH_PROVIDERS = new Set<OAuthProvider>(["apple"])' \
+            src/lib/auth-provider-settings.ts
+          grep -F 'assert.equal(await isOAuthProviderEnabled("apple"), false);' \
+            src/lib/auth-provider-settings.test.ts
+          mkdir -p artifacts/release-remove-apple
+          printf '%s\n' "$SOURCE_SHA" > artifacts/release-remove-apple/source-sha.txt
+
+      - name: Verify canonical project access and record previous production deployment
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${VERCEL_TOKEN:-}" ]]; then
+            echo "VERCEL_TOKEN is missing" >&2
+            exit 1
+          fi
+
+          project_status=$(curl --silent --show-error \
+            --output artifacts/release-remove-apple/project.json \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$TEAM_ID")
+          if [[ "$project_status" -lt 200 || "$project_status" -ge 300 ]]; then
+            cat artifacts/release-remove-apple/project.json >&2
+            exit 1
+          fi
+          jq -e --arg id "$PROJECT_ID" --arg name "$PROJECT_NAME" \
+            '.id == $id and .name == $name' \
+            artifacts/release-remove-apple/project.json >/dev/null
+
+          deployments_status=$(curl --silent --show-error \
+            --output artifacts/release-remove-apple/previous-production.json \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$PROJECT_ID&target=production&state=READY&limit=1&teamId=$TEAM_ID")
+          if [[ "$deployments_status" -lt 200 || "$deployments_status" -ge 300 ]]; then
+            cat artifacts/release-remove-apple/previous-production.json >&2
+            exit 1
+          fi
+          previous_deployment_id=$(jq -r '.deployments[0].uid // .deployments[0].id // empty' \
+            artifacts/release-remove-apple/previous-production.json)
+          echo "previous_deployment_id=$previous_deployment_id" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$previous_deployment_id" \
+            > artifacts/release-remove-apple/previous-deployment-id.txt
+
+      - name: Create exact production deployment from GitHub source
+        id: create
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg name "$PROJECT_NAME" \
+            --arg project "$PROJECT_ID" \
+            --arg sha "$SOURCE_SHA" \
+            --arg repoId "$REPO_ID" \
+            '{
+              name: $name,
+              project: $project,
+              target: "production",
+              gitSource: {
+                type: "github",
+                repoId: $repoId,
+                ref: "main",
+                sha: $sha
+              },
+              meta: {
+                githubCommitSha: $sha,
+                githubCommitRef: "main",
+                githubCommitRepo: "Website2",
+                githubCommitOrg: "ghuser29384",
+                releaseReason: "remove-apple-sign-in-20260804"
+              }
+            }' > artifacts/release-remove-apple/create-request.json
+
+          create_status=$(curl --silent --show-error \
+            --request POST \
+            --output artifacts/release-remove-apple/create-response.json \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data-binary @artifacts/release-remove-apple/create-request.json \
+            "https://api.vercel.com/v13/deployments?teamId=$TEAM_ID&forceNew=1&skipAutoDetectionConfirmation=1")
+          if [[ "$create_status" -lt 200 || "$create_status" -ge 300 ]]; then
+            cat artifacts/release-remove-apple/create-response.json >&2
+            exit 1
+          fi
+
+          deployment_id=$(jq -r '.id // .uid // empty' \
+            artifacts/release-remove-apple/create-response.json)
+          deployment_url=$(jq -r '.url // empty' \
+            artifacts/release-remove-apple/create-response.json)
+          if [[ -z "$deployment_id" || -z "$deployment_url" ]]; then
+            cat artifacts/release-remove-apple/create-response.json >&2
+            exit 1
+          fi
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$deployment_id" > artifacts/release-remove-apple/deployment-id.txt
+          printf '%s\n' "$deployment_url" > artifacts/release-remove-apple/deployment-url.txt
+
+      - name: Wait for exact production deployment to become ready
+        id: wait
+        shell: bash
+        env:
+          DEPLOYMENT_ID: ${{ steps.create.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 180); do
+            detail_status=$(curl --silent --show-error \
+              --output artifacts/release-remove-apple/deployment-detail.json \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$TEAM_ID")
+            if [[ "$detail_status" -lt 200 || "$detail_status" -ge 300 ]]; then
+              cat artifacts/release-remove-apple/deployment-detail.json >&2
+              exit 1
+            fi
+            state=$(jq -r '.readyState // .status // .state // empty' \
+              artifacts/release-remove-apple/deployment-detail.json)
+            echo "attempt=$attempt state=$state"
+            case "$state" in
+              READY)
+                ready=1
+                break
+                ;;
+              ERROR|CANCELED|CANCELLED)
+                cat artifacts/release-remove-apple/deployment-detail.json >&2
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          if [[ "$ready" != "1" ]]; then
+            echo "Deployment did not become READY within 30 minutes" >&2
+            exit 1
+          fi
+
+          jq -e --arg id "$DEPLOYMENT_ID" --arg sha "$SOURCE_SHA" '
+            (.id == $id or .uid == $id)
+            and .target == "production"
+            and ((.meta.githubCommitSha // $sha) == $sha)
+          ' artifacts/release-remove-apple/deployment-detail.json >/dev/null
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked browser-test dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Create canonical production smoke test
+        shell: bash
+        run: |
+          mkdir -p .tmp artifacts/release-remove-apple/screenshots
+          cat > .tmp/remove-apple-production-smoke.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import { writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const expectedDeploymentId = process.env.EXPECTED_DEPLOYMENT_ID;
+          assert.ok(expectedDeploymentId, "EXPECTED_DEPLOYMENT_ID is required");
+
+          const origins = ["https://www.moraltrade.org", "https://moraltrade.org"];
+          const routes = ["/login", "/signup"];
+          const variants = [
+            { name: "desktop", viewport: { width: 1440, height: 1000 } },
+            { name: "mobile", viewport: { width: 390, height: 844 } },
+          ];
+          const report = [];
+
+          const browser = await chromium.launch();
+          try {
+            const propagationContext = await browser.newContext({
+              viewport: variants[0].viewport,
+            });
+            const propagationPage = await propagationContext.newPage();
+            let observedDeploymentId = null;
+            for (let attempt = 1; attempt <= 60; attempt += 1) {
+              const response = await propagationPage.goto(
+                `${origins[0]}/login?release_probe=${Date.now()}`,
+                { waitUntil: "domcontentloaded" },
+              );
+              if (response?.status() === 200) {
+                observedDeploymentId = await propagationPage.evaluate(() =>
+                  document.documentElement.getAttribute("data-dpl-id"),
+                );
+                if (observedDeploymentId === expectedDeploymentId) {
+                  break;
+                }
+              }
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+            assert.equal(
+              observedDeploymentId,
+              expectedDeploymentId,
+              "Canonical production alias did not reach the exact deployment",
+            );
+            await propagationContext.close();
+
+            for (const origin of origins) {
+              for (const route of routes) {
+                for (const variant of variants) {
+                  const context = await browser.newContext({ viewport: variant.viewport });
+                  const page = await context.newPage();
+                  page.setDefaultTimeout(20_000);
+                  const consoleErrors = [];
+                  const pageErrors = [];
+
+                  page.on("console", (message) => {
+                    if (message.type() === "error") {
+                      consoleErrors.push(message.text());
+                    }
+                  });
+                  page.on("pageerror", (error) => {
+                    pageErrors.push(error.message);
+                  });
+
+                  const response = await page.goto(
+                    `${origin}${route}?release_probe=${Date.now()}`,
+                    { waitUntil: "domcontentloaded" },
+                  );
+                  assert.ok(response, `${origin}${route} ${variant.name}: no response`);
+                  assert.equal(
+                    response.status(),
+                    200,
+                    `${origin}${route} ${variant.name}: non-200 response`,
+                  );
+                  await page.getByRole("link", { name: "Continue with email" }).waitFor({
+                    state: "visible",
+                  });
+
+                  const bodyText = await page.locator("body").innerText();
+                  assert.match(bodyText, /Moral Trade/);
+                  assert.doesNotMatch(bodyText, /Continue with Apple|Opening Apple/i);
+                  assert.equal(
+                    await page.getByRole("button", { name: /Apple/i }).count(),
+                    0,
+                    `${origin}${route} ${variant.name}: Apple button rendered`,
+                  );
+                  assert.equal(
+                    await page.locator('input[name="provider"][value="apple"]').count(),
+                    0,
+                    `${origin}${route} ${variant.name}: Apple provider input remained`,
+                  );
+                  assert.ok(
+                    (await page.locator('input[name="provider"]:not([value="apple"])').count()) >= 1,
+                    `${origin}${route} ${variant.name}: no non-Apple OAuth provider remained`,
+                  );
+                  assert.equal(
+                    await page.locator("nextjs-portal, [data-nextjs-dialog-overlay]").count(),
+                    0,
+                    `${origin}${route} ${variant.name}: framework error overlay rendered`,
+                  );
+                  const deploymentId = await page.evaluate(() =>
+                    document.documentElement.getAttribute("data-dpl-id"),
+                  );
+                  assert.equal(
+                    deploymentId,
+                    expectedDeploymentId,
+                    `${origin}${route} ${variant.name}: wrong production deployment`,
+                  );
+                  assert.deepEqual(pageErrors, [], `${origin}${route} ${variant.name}: page errors`);
+                  assert.deepEqual(
+                    consoleErrors,
+                    [],
+                    `${origin}${route} ${variant.name}: console errors`,
+                  );
+
+                  const host = new URL(origin).hostname.replaceAll(".", "-");
+                  const screenshot =
+                    `artifacts/release-remove-apple/screenshots/${host}-${route.slice(1)}-${variant.name}.png`;
+                  await page.screenshot({ path: screenshot, fullPage: false });
+                  report.push({
+                    origin,
+                    route,
+                    variant: variant.name,
+                    status: response.status(),
+                    finalUrl: page.url(),
+                    title: await page.title(),
+                    deploymentId,
+                    appleButtons: 0,
+                    appleProviderInputs: 0,
+                    nonAppleProviderInputs:
+                      await page.locator('input[name="provider"]:not([value="apple"])').count(),
+                    consoleErrors,
+                    pageErrors,
+                    screenshot,
+                  });
+                  await context.close();
+                }
+              }
+            }
+          } finally {
+            await browser.close();
+          }
+
+          await writeFile(
+            "artifacts/release-remove-apple/canonical-smoke-report.json",
+            `${JSON.stringify(report, null, 2)}\n`,
+          );
+          EOF
+
+      - name: Smoke-test canonical production aliases on desktop and mobile
+        id: smoke
+        continue-on-error: true
+        env:
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.create.outputs.deployment_id }}
+        run: node .tmp/remove-apple-production-smoke.mjs
+
+      - name: Roll back production if the canonical smoke test fails
+        if: steps.smoke.outcome == 'failure' && steps.preflight.outputs.previous_deployment_id != ''
+        shell: bash
+        env:
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.preflight.outputs.previous_deployment_id }}
+        run: |
+          set -euo pipefail
+          rollback_status=$(curl --silent --show-error \
+            --request POST \
+            --output artifacts/release-remove-apple/rollback-response.json \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data '{"description":"Automatic rollback after Apple-removal production smoke failure"}' \
+            "https://api.vercel.com/v1/projects/$PROJECT_ID/rollback/$PREVIOUS_DEPLOYMENT_ID?teamId=$TEAM_ID")
+          if [[ "$rollback_status" -lt 200 || "$rollback_status" -ge 300 ]]; then
+            cat artifacts/release-remove-apple/rollback-response.json >&2
+            exit 1
+          fi
+
+      - name: Upload production release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-remove-apple-sign-in-7b52271d
+          path: artifacts/release-remove-apple
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail after evidence and rollback when smoke testing failed
+        if: steps.smoke.outcome == 'failure'
+        run: exit 1

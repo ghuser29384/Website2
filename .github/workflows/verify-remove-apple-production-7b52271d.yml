@@ -1,0 +1,235 @@
+name: Verify Apple-removal production 7b52271d
+
+on:
+  push:
+    branches:
+      - release/remove-apple-sign-in-7b52271d
+    paths:
+      - .github/workflows/verify-remove-apple-production-7b52271d.yml
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: verify-remove-apple-production-7b52271d
+  cancel-in-progress: false
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      SOURCE_SHA: 7b52271d54e11f4335741c679336da4ae7b50292
+      EXPECTED_DEPLOYMENT_ID: dpl_2L22DhWktStkXA7e3Eiqu4cYMRxF
+      STATUS_CONTEXT: production-smoke/remove-apple-sign-in
+    steps:
+      - name: Publish pending production-smoke status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg state pending \
+            --arg context "$STATUS_CONTEXT" \
+            --arg description "Running canonical desktop/mobile Apple-removal smoke tests" \
+            --arg target_url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{state:$state,context:$context,description:$description,target_url:$target_url}' \
+            > /tmp/pending-status.json
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --data-binary @/tmp/pending-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
+
+      - name: Check out the exact merged product source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          grep -F 'PRODUCT_DISABLED_OAUTH_PROVIDERS = new Set<OAuthProvider>(["apple"])' \
+            src/lib/auth-provider-settings.ts
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run canonical desktop and mobile production matrix
+        shell: bash
+        run: |
+          mkdir -p artifacts/verify-remove-apple-production/screenshots .tmp
+          cat > .tmp/verify-remove-apple-production.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import { writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const expectedDeploymentId = process.env.EXPECTED_DEPLOYMENT_ID;
+          assert.ok(expectedDeploymentId);
+
+          const origins = ["https://www.moraltrade.org", "https://moraltrade.org"];
+          const routes = ["/login", "/signup"];
+          const variants = [
+            { name: "desktop", viewport: { width: 1440, height: 1000 } },
+            { name: "mobile", viewport: { width: 390, height: 844 } },
+          ];
+          const report = [];
+          const browser = await chromium.launch();
+
+          function readDeploymentId(html) {
+            const match = html.match(
+              /\bdata-dpl-id=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i,
+            );
+            return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
+          }
+
+          try {
+            for (const origin of origins) {
+              for (const route of routes) {
+                for (const variant of variants) {
+                  const context = await browser.newContext({ viewport: variant.viewport });
+                  const page = await context.newPage();
+                  page.setDefaultTimeout(20_000);
+                  const consoleErrors = [];
+                  const pageErrors = [];
+                  page.on("console", (message) => {
+                    if (message.type() === "error") consoleErrors.push(message.text());
+                  });
+                  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+                  const response = await page.goto(
+                    `${origin}${route}?release_probe=${Date.now()}`,
+                    { waitUntil: "domcontentloaded" },
+                  );
+                  assert.ok(response, `${origin}${route} ${variant.name}: no response`);
+                  assert.equal(response.status(), 200);
+                  const responseHtml = await response.text();
+                  const deploymentId = readDeploymentId(responseHtml);
+                  assert.equal(
+                    deploymentId,
+                    expectedDeploymentId,
+                    `${origin}${route} ${variant.name}: wrong production deployment`,
+                  );
+
+                  await page.getByRole("link", { name: "Continue with email" }).waitFor({
+                    state: "visible",
+                  });
+
+                  const bodyText = await page.locator("body").innerText();
+                  assert.doesNotMatch(bodyText, /Continue with Apple|Opening Apple/i);
+                  assert.equal(await page.getByRole("button", { name: /Apple/i }).count(), 0);
+                  assert.equal(
+                    await page.locator('input[name="provider"][value="apple"]').count(),
+                    0,
+                  );
+                  const nonAppleProviderInputs =
+                    await page.locator('input[name="provider"]:not([value="apple"])').count();
+                  assert.ok(nonAppleProviderInputs >= 1);
+                  assert.equal(
+                    await page.locator("nextjs-portal, [data-nextjs-dialog-overlay]").count(),
+                    0,
+                  );
+                  assert.deepEqual(consoleErrors, []);
+                  assert.deepEqual(pageErrors, []);
+
+                  const host = new URL(origin).hostname.replaceAll(".", "-");
+                  const screenshot =
+                    `artifacts/verify-remove-apple-production/screenshots/${host}-${route.slice(1)}-${variant.name}.png`;
+                  await page.screenshot({ path: screenshot, fullPage: false });
+                  report.push({
+                    origin,
+                    route,
+                    variant: variant.name,
+                    status: response.status(),
+                    finalUrl: page.url(),
+                    title: await page.title(),
+                    deploymentId,
+                    appleButtons: 0,
+                    appleProviderInputs: 0,
+                    nonAppleProviderInputs,
+                    consoleErrors,
+                    pageErrors,
+                    screenshot,
+                  });
+                  await writeFile(
+                    "artifacts/verify-remove-apple-production/report.json",
+                    `${JSON.stringify(report, null, 2)}\n`,
+                  );
+                  await context.close();
+                }
+              }
+            }
+          } finally {
+            await browser.close();
+          }
+          EOF
+          node .tmp/verify-remove-apple-production.mjs
+
+      - name: Upload canonical production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-remove-apple-production-7b52271d
+          path: artifacts/verify-remove-apple-production
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish successful production-smoke status
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg state success \
+            --arg context "$STATUS_CONTEXT" \
+            --arg description "Canonical Apple-removal desktop/mobile smoke tests passed" \
+            --arg target_url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{state:$state,context:$context,description:$description,target_url:$target_url}' \
+            > /tmp/final-status.json
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --data-binary @/tmp/final-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
+
+      - name: Publish failed production-smoke status
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -n \
+            --arg state failure \
+            --arg context "$STATUS_CONTEXT" \
+            --arg description "Canonical Apple-removal production smoke tests failed" \
+            --arg target_url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{state:$state,context:$context,description:$description,target_url:$target_url}' \
+            > /tmp/final-status.json
+          curl --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --data-binary @/tmp/final-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null || true
