@@ -1,0 +1,78 @@
+name: Issue709 refund operator adjudication observer
+
+on:
+  push:
+    branches:
+      - ops/issue709-refund-operator-ui-observer-20260823
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue709-refund-operator-ui-adjudication-observer
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 155
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: issue709-refund-operator-ui-adjudication-20260823.yml
+      TARGET_BRANCH: ops/issue709-refund-operator-ui-adjudication-20260823
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-ui-709-20260823
+      BASE_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+    steps:
+      - name: Observe exact adjudication conclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=''
+          for attempt in $(seq 1 300); do
+            response="$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+              -f branch="$TARGET_BRANCH" \
+              -f per_page=20)"
+            latest="$(jq -c '[.workflow_runs[]] | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+            if [[ -n "$latest" ]]; then
+              status="$(jq -r '.status' <<<"$latest")"
+              if [[ "$status" = completed ]]; then
+                break
+              fi
+            fi
+            sleep 30
+          done
+
+          test -n "$latest"
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          run_url="$(jq -r '.html_url' <<<"$latest")"
+          product_sha="$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          parent_sha=''
+          product_tree=''
+          if [[ -n "$product_sha" ]]; then
+            commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$product_sha")"
+            parent_sha="$(jq -r '.parents[0].sha // ""' <<<"$commit")"
+            product_tree="$(jq -r '.tree.sha' <<<"$commit")"
+          fi
+
+          body="<!-- issue709-refund-operator-ui-adjudication-observer -->
+          ## Issue #709 exact-head adjudication observer
+
+          - adjudication run: \`$run_id\`
+          - status: \`$status\`
+          - conclusion: \`$conclusion\`
+          - run: $run_url
+          - product head: \`${product_sha:-absent}\`
+          - product tree: \`${product_tree:-absent}\`
+          - product parent: \`${parent_sha:-absent}\`"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+          test "$status" = completed
+          test "$conclusion" = success
+          test -n "$product_sha"
+          test "$parent_sha" = "$BASE_SHA"
