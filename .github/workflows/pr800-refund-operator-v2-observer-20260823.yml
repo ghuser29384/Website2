@@ -1,0 +1,68 @@
+name: PR800 refund operator v2 observer
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-v2-observer-20260823
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 125
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr800-refund-operator-materialize-v2-20260823.yml
+      TARGET_BRANCH: ops/pr800-refund-operator-materialize-v2-20260823
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-709-20260823
+    steps:
+      - name: Observe exact latest v2 run
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=''
+          for attempt in $(seq 1 240); do
+            response="$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+              -f branch="$TARGET_BRANCH" \
+              -f per_page=10)"
+            latest="$(jq -c '.workflow_runs | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+            if [[ -n "$latest" ]] && [[ "$(jq -r '.status' <<<"$latest")" = completed ]]; then
+              break
+            fi
+            sleep 30
+          done
+          test -n "$latest"
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          product_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr800-refund-operator-v2-observer -->
+          ## PR #800 stacked refund-operator v2 observer
+
+          - run: \`$run_id\`
+          - status: \`$status\`
+          - conclusion: \`$conclusion\`
+          - product head: \`$product_sha\`
+          - run page: $html_url"
+          if [[ "$status" = completed && "$conclusion" != success ]]; then
+            failed_tail="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed 2>/dev/null \
+              | tail -n 100 \
+              | sed -E 's/(gh[pousr]_[A-Za-z0-9_]{8})[A-Za-z0-9_]+/\1…/g; s/(Bearer )[A-Za-z0-9._~-]+/\1[redacted]/g' \
+              | head -c 7000 || true)"
+            body="$body
+
+          Sanitized failed-log tail:
+          \`\`\`text
+          $failed_tail
+          \`\`\`"
+          fi
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$status" = completed
+          test "$conclusion" = success
