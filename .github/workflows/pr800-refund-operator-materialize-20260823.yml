@@ -1,0 +1,473 @@
+name: PR800 refund operator tranche materializer
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-materialize-20260823
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr800-refund-operator-tranche-materializer
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FOUNDATION_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      FOUNDATION_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      INITIAL_FOUNDATION_SHA: d33fa085ea093e7bd41c7f4f32441b94d782aaf2
+      TRANSPORT_SHA: 31c6318bf2ef1e0bd86cf2d249ef853f7f3af1e7
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-operator-709-20260823
+    steps:
+      - name: Check out exact accepted refund foundation
+        uses: actions/checkout@v4
+        with:
+          ref: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+          fetch-depth: 0
+
+      - name: Verify exact foundation and target guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p materialization-evidence
+          test "$(git rev-parse HEAD)" = "$FOUNDATION_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$FOUNDATION_TREE"
+          git cat-file -e "$INITIAL_FOUNDATION_SHA^{commit}"
+          git cat-file -e "$TRANSPORT_SHA^{commit}"
+          remote_target="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_target" = "$FOUNDATION_SHA"
+          printf 'foundation_sha=%s\nfoundation_tree=%s\ntransport_sha=%s\ntarget_before=%s\n' \
+            "$FOUNDATION_SHA" "$FOUNDATION_TREE" "$TRANSPORT_SHA" "$remote_target" \
+            > materialization-evidence/pre-materialization-identity.txt
+
+      - name: Decode superseded operator transports without trusting them
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/pr800-operator-transport"
+          mkdir -p "$RUNNER_TEMP/pr800-operator-transport"
+          python3 - <<'PY'
+          import base64
+          import gzip
+          import hashlib
+          import io
+          import json
+          import os
+          import tarfile
+          import zipfile
+          from pathlib import Path
+          import subprocess
+
+          repo = Path.cwd()
+          out = Path(os.environ['RUNNER_TEMP']) / 'pr800-operator-transport'
+          transport_sha = os.environ['TRANSPORT_SHA']
+          roots = [
+              '.github/pr796-refund-operator-patch',
+              '.github/pr796-refund-operator-bundle',
+          ]
+
+          inventory = []
+          for index, root in enumerate(roots):
+              names = subprocess.check_output(
+                  ['git', 'ls-tree', '-r', '--name-only', transport_sha, '--', root],
+                  text=True,
+              ).splitlines()
+              parts = sorted(name for name in names if Path(name).name.startswith('part-'))
+              if not parts:
+                  raise SystemExit(f'missing transport parts under {root}')
+              encoded = ''.join(
+                  subprocess.check_output(['git', 'show', f'{transport_sha}:{name}'], text=True)
+                  for name in parts
+              )
+              encoded = ''.join(encoded.split())
+              data = base64.b64decode(encoded, validate=True)
+              layers = []
+              while data.startswith(b'\x1f\x8b'):
+                  data = gzip.decompress(data)
+                  layers.append('gzip')
+
+              target = out / f'transport-{index}'
+              target.mkdir(parents=True)
+              kind = 'raw'
+              entries = []
+              if zipfile.is_zipfile(io.BytesIO(data)):
+                  kind = 'zip'
+                  with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                      archive.extractall(target)
+                      entries = archive.namelist()
+              else:
+                  try:
+                      with tarfile.open(fileobj=io.BytesIO(data), mode='r:*') as archive:
+                          kind = 'tar'
+                          archive.extractall(target, filter='data')
+                          entries = [member.name for member in archive.getmembers()]
+                  except tarfile.TarError:
+                      raw = target / 'transport.raw'
+                      raw.write_bytes(data)
+                      entries = [raw.name]
+
+              # Collect any unified diff transported directly or inside an archive.
+              for candidate in target.rglob('*'):
+                  if not candidate.is_file():
+                      continue
+                  payload = candidate.read_bytes()
+                  if payload.startswith(b'diff --git ') or b'\ndiff --git ' in payload[:10000]:
+                      patch_dir = out / 'patches'
+                      patch_dir.mkdir(exist_ok=True)
+                      patch_name = patch_dir / f'{index}-{candidate.name}.patch'
+                      patch_name.write_bytes(payload)
+
+              inventory.append({
+                  'root': root,
+                  'parts': parts,
+                  'encodedSha256': hashlib.sha256(encoded.encode()).hexdigest(),
+                  'decodedSha256': hashlib.sha256(data).hexdigest(),
+                  'layers': layers,
+                  'kind': kind,
+                  'entryCount': len(entries),
+                  'entries': entries,
+              })
+
+          (out / 'inventory.json').write_text(json.dumps(inventory, indent=2) + '\n')
+          PY
+          cp "$RUNNER_TEMP/pr800-operator-transport/inventory.json" \
+            materialization-evidence/operator-transport-inventory.json
+
+      - name: Reconstruct operator-only delta on the exact foundation
+        id: reconstruct
+        shell: bash
+        run: |
+          set -euo pipefail
+          transport="$RUNNER_TEMP/pr800-operator-transport"
+          method=''
+
+          # First prefer an explicit unified diff. Try an ordinary exact apply,
+          # then Git's blob-aware three-way apply. Never accept conflict markers.
+          if compgen -G "$transport/patches/*.patch" > /dev/null; then
+            while IFS= read -r patch; do
+              git reset --hard "$FOUNDATION_SHA" >/dev/null
+              git clean -fdx >/dev/null
+              mkdir -p materialization-evidence
+              if git apply --check "$patch"; then
+                git apply "$patch"
+                method="exact_patch:$(basename "$patch")"
+                break
+              fi
+              if git apply --3way --index "$patch"; then
+                git reset
+                method="three_way_patch:$(basename "$patch")"
+                break
+              fi
+            done < <(find "$transport/patches" -maxdepth 1 -type f -name '*.patch' -print | LC_ALL=C sort)
+          fi
+
+          # If no transported patch applied, treat the decoded bundle as quoted
+          # candidate bytes and derive only its delta from the original clean
+          # foundation. Three-way merge every overlapping file against d33fa085.
+          if [[ -z "$method" ]]; then
+            git reset --hard "$FOUNDATION_SHA" >/dev/null
+            git clean -fdx >/dev/null
+            mkdir -p materialization-evidence
+            python3 - <<'PY'
+            import os
+            import shutil
+            import subprocess
+            import tempfile
+            from pathlib import Path
+
+            transport = Path(os.environ['RUNNER_TEMP']) / 'pr800-operator-transport'
+            foundation = os.environ['FOUNDATION_SHA']
+            base = os.environ['INITIAL_FOUNDATION_SHA']
+
+            allowed_prefixes = (
+                'docs/provider-review/',
+                'src/app/admin/donation-upgrades/',
+                'src/app/donation-upgrades/',
+                'src/components/donation-upgrades/',
+                'src/lib/direct-donation-upgrade',
+                'src/lib/provider-refund',
+                'tests/direct-donation-upgrade',
+            )
+            allowed_exact = {
+                'src/app/admin/page.tsx',
+                'src/app/direct-donation-upgrade-actions.ts',
+                'playwright.direct-donation-upgrade.config.ts',
+            }
+
+            roots = []
+            for decoded in sorted(transport.glob('transport-*')):
+                for package in decoded.rglob('package.json'):
+                    if (package.parent / 'src').is_dir():
+                        roots.append(package.parent)
+                if not roots:
+                    roots.append(decoded)
+            # Prefer the root with the largest number of eligible source files.
+            def score(root: Path) -> int:
+                total = 0
+                for path in root.rglob('*'):
+                    if not path.is_file():
+                        continue
+                    rel = path.relative_to(root).as_posix()
+                    if rel in allowed_exact or rel.startswith(allowed_prefixes):
+                        total += 1
+                return total
+            root = max(roots, key=score)
+            if score(root) == 0:
+                raise SystemExit('decoded operator bundle contains no eligible product paths')
+
+            changed = []
+            for theirs in sorted(path for path in root.rglob('*') if path.is_file()):
+                rel = theirs.relative_to(root).as_posix()
+                if not (rel in allowed_exact or rel.startswith(allowed_prefixes)):
+                    continue
+                theirs_bytes = theirs.read_bytes()
+                try:
+                    base_bytes = subprocess.check_output(['git', 'show', f'{base}:{rel}'])
+                    base_exists = True
+                except subprocess.CalledProcessError:
+                    base_bytes = b''
+                    base_exists = False
+                if base_exists and theirs_bytes == base_bytes:
+                    continue
+
+                ours_path = Path(rel)
+                ours_exists = ours_path.exists()
+                ours_bytes = ours_path.read_bytes() if ours_exists else b''
+                if not base_exists:
+                    if ours_exists and ours_bytes != theirs_bytes:
+                        raise SystemExit(f'new transported path conflicts with current foundation: {rel}')
+                    ours_path.parent.mkdir(parents=True, exist_ok=True)
+                    ours_path.write_bytes(theirs_bytes)
+                    changed.append(rel)
+                    continue
+                if ours_bytes == base_bytes:
+                    ours_path.parent.mkdir(parents=True, exist_ok=True)
+                    ours_path.write_bytes(theirs_bytes)
+                    changed.append(rel)
+                    continue
+                if ours_bytes == theirs_bytes:
+                    continue
+
+                # Blob-level three-way merge; binary or conflicted merges fail.
+                with tempfile.TemporaryDirectory() as temp:
+                    temp_path = Path(temp)
+                    ours_file = temp_path / 'ours'
+                    base_file = temp_path / 'base'
+                    theirs_file = temp_path / 'theirs'
+                    ours_file.write_bytes(ours_bytes)
+                    base_file.write_bytes(base_bytes)
+                    theirs_file.write_bytes(theirs_bytes)
+                    result = subprocess.run(
+                        ['git', 'merge-file', '-p', str(ours_file), str(base_file), str(theirs_file)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                    if result.returncode != 0 or b'<<<<<<<' in result.stdout:
+                        raise SystemExit(
+                            f'three-way conflict for {rel}: {result.stderr.decode(errors="replace")}'
+                        )
+                    ours_path.parent.mkdir(parents=True, exist_ok=True)
+                    ours_path.write_bytes(result.stdout)
+                    changed.append(rel)
+
+            if not changed:
+                raise SystemExit('operator bundle produced no delta from the exact foundation')
+            Path('materialization-evidence/bundle-derived-paths.txt').write_text(
+                '\n'.join(sorted(set(changed))) + '\n'
+            )
+            PY
+            method='three_way_bundle'
+          fi
+
+          if git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- . ':!package-lock.json'; then
+            echo 'Conflict marker remained after reconstruction.' >&2
+            exit 1
+          fi
+
+          printf '%s\n' "$method" | tee materialization-evidence/reconstruction-method.txt
+          echo "method=$method" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce bounded operator-tranche scope and safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only "$FOUNDATION_SHA" | LC_ALL=C sort \
+            > materialization-evidence/changed-paths.txt
+          changed_count="$(wc -l < materialization-evidence/changed-paths.txt | tr -d ' ')"
+          test "$changed_count" -ge 3
+          test "$changed_count" -le 20
+
+          if grep -Ev \
+            '^(docs/provider-review/|src/app/admin/donation-upgrades/|src/app/donation-upgrades/|src/components/donation-upgrades/|src/lib/direct-donation-upgrade|src/lib/provider-refund|tests/direct-donation-upgrade|src/app/admin/page\.tsx$|src/app/direct-donation-upgrade-actions\.ts$|playwright\.direct-donation-upgrade\.config\.ts$)' \
+            materialization-evidence/changed-paths.txt; then
+            echo 'Transport attempted a path outside the bounded operator tranche.' >&2
+            exit 1
+          fi
+          if grep -E '(^|/)(\.github|supabase/migrations|package(-lock)?\.json|\.env)' \
+            materialization-evidence/changed-paths.txt; then
+            echo 'Operator tranche attempted workflow, migration, dependency, or environment mutation.' >&2
+            exit 1
+          fi
+
+          git diff --check "$FOUNDATION_SHA"
+          mapfile -t changed < materialization-evidence/changed-paths.txt
+          grep -nH -E 'record_direct_donation_upgrade_provider_reversal|provider_reversed|post_completion_exception' \
+            "${changed[@]}" > materialization-evidence/refund-markers.txt
+          grep -nH -Ei 'aal2|assurance_level|mfa' "${changed[@]}" \
+            > materialization-evidence/aal2-markers.txt
+          grep -nH -Ei 'admin|operator' "${changed[@]}" \
+            > materialization-evidence/admin-markers.txt
+
+          if grep -nH -Ei \
+            '(donor_name|donor_email|card_number|bank_account|payment_credential|raw_payload|raw webhook body)' \
+            "${changed[@]}"; then
+            echo 'Data-minimization boundary violated.' >&2
+            exit 1
+          fi
+          if grep -nH -E \
+            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            "${changed[@]}"; then
+            echo 'Suspected credential material in operator tranche.' >&2
+            exit 1
+          fi
+          git diff "$FOUNDATION_SHA" -- "${changed[@]}" \
+            > materialization-evidence/operator-tranche.diff
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci > materialization-evidence/npm-ci.log 2>&1
+
+      - name: Run changed and inherited refund contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed_tests < <(
+            grep -E '\.(test|spec)\.tsx?$' materialization-evidence/changed-paths.txt || true
+          )
+          inherited=(
+            src/lib/provider-refund-contract.test.ts
+            src/lib/direct-donation-upgrade.test.ts
+            src/lib/direct-donation-upgrade-source-contract.test.ts
+            src/lib/every-org-partner-webhook-auth.test.ts
+            src/lib/trade-donation.test.ts
+          )
+          tests=("${inherited[@]}" "${changed_tests[@]}")
+          mapfile -t unique_tests < <(printf '%s\n' "${tests[@]}" | awk 'NF' | LC_ALL=C sort -u)
+          node --import tsx --test "${unique_tests[@]}" \
+            > materialization-evidence/focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > materialization-evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit > materialization-evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > materialization-evidence/lint.log 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > materialization-evidence/build.log 2>&1
+
+      - name: Publish controller-free stacked product candidate
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$FOUNDATION_SHA"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          mapfile -t paths < materialization-evidence/changed-paths.txt
+          git add -- "${paths[@]}"
+          git diff --cached --name-only | LC_ALL=C sort \
+            > materialization-evidence/staged-paths.txt
+          diff -u materialization-evidence/changed-paths.txt materialization-evidence/staged-paths.txt
+          git commit -m 'Add AAL2-gated Donation Upgrade refund operations'
+          product_sha="$(git rev-parse HEAD)"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          test "$(git rev-list --count "$FOUNDATION_SHA..$product_sha")" = 1
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'foundation_sha=%s\nproduct_sha=%s\nproduct_tree=%s\n' \
+            "$FOUNDATION_SHA" "$product_sha" "$product_tree" \
+            | tee materialization-evidence/product-identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record bounded tranche publication
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.publish.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
+          METHOD: ${{ steps.reconstruct.outputs.method }}
+        run: |
+          set -euo pipefail
+          paths="$(sed 's/^/- `/' materialization-evidence/changed-paths.txt | sed 's/$/`/')"
+          body="<!-- pr800-refund-operator-materialization -->
+          ## Donation Upgrade refund operator tranche materialized
+
+          - exact stacked foundation: \`$FOUNDATION_SHA\`
+          - product head: \`$PRODUCT_SHA\`
+          - product tree: \`$PRODUCT_TREE\`
+          - reconstruction method: \`$METHOD\`
+          - changed paths:
+          $paths
+          - focused and complete repository tests, strict TypeScript, ESLint, disabled-rail build, scope, conflict-marker, data-minimization, credential, and diff-integrity gates: passed
+          - materialization run: \`$GITHUB_RUN_ID\`
+
+          The superseded transport was treated only as quoted candidate bytes. The published branch contains no workflow, transport, controller, migration, dependency, environment, or secret file. It remains a separate unmerged and undeployed stacked tranche pending exact-head database/authorization and rendered QA.
+
+          No Every.org request, webhook registration or invocation, checkout, donation, payment, actual refund, database migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, merge, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Write explicit non-actions
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p materialization-evidence
+          printf '%s\n' \
+            'providerRequestAttempted=false' \
+            'webhookMutationAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'actualRefundAttempted=false' \
+            'databaseMigrationAttempted=false' \
+            'deploymentAttempted=false' \
+            'credentialMutationAttempted=false' \
+            'productionChanged=false' \
+            > materialization-evidence/non-actions.txt
+
+      - name: Upload sanitized materialization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-operator-materialization-${{ github.run_id }}
+          path: materialization-evidence/
+          if-no-files-found: error
+          retention-days: 14
