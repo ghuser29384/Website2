@@ -1,0 +1,114 @@
+name: Resolve and validate Threshold Sign-On release candidate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/scripts/repair-current-main-typescript.py"
+      - ".github/scripts/threshold-sign-on-release-integration.sh"
+      - ".github/workflows/threshold-sign-on-integration-v2.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: threshold-sign-on-registered-final-gate-20260730
+  cancel-in-progress: false
+
+jobs:
+  integrate-validate-publish:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/threshold-sign-on-release-v4-20260730'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      EXPECTED_FEATURE: e33c7040d643b5af6e337c02ff3b986f7cf9b235
+      FEATURE_BRANCH: feature/collective-commitments-in-create-20260729
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      COLLECTIVE_COMMITMENTS_ENABLED: "true"
+      COLLECTIVE_COMMITMENT_MIN_DEADLINE_MINUTES: "1"
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_VERCEL_ENV: preview
+      ARTIFACT_DIR: ${{ github.workspace }}/threshold-sign-on-registered-final-gate
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Validate exact execution boundary and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "ops/threshold-sign-on-release-v4-20260730"
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_SUPABASE_DB_URL; do
+            test -n "${!name:-}" || { echo "Missing required secret: $name" >&2; exit 1; }
+          done
+
+      - name: Check out exact operations head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Run guarded current-main integration and all release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/repair-current-main-typescript.py "$RUNNER_TEMP/repair-current-main-typescript.py"
+          cp .github/scripts/threshold-sign-on-release-integration.sh "$RUNNER_TEMP/threshold-sign-on-release-integration.sh"
+          python3 - "$RUNNER_TEMP/threshold-sign-on-release-integration.sh" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          parser_old = 'totals = [int(v) for v in re.findall(r"^# tests\\s+(\\d+)\\s*$", text, re.M)]'
+          parser_new = 'totals = [int(v) for v in re.findall(r"^(?:#|ℹ) tests\\s+(\\d+)\\s*$", text, re.M)]'
+          if text.count(parser_old) != 1:
+              raise SystemExit(f"Expected one Node test-summary parser; found {text.count(parser_old)}")
+          text = text.replace(parser_old, parser_new)
+
+          insertion_old = '''test -z "$(git diff --name-only --diff-filter=U)"
+
+python3 - <<'PY'
+from pathlib import Path
+'''
+          insertion_new = '''test -z "$(git diff --name-only --diff-filter=U)"
+
+python3 "$RUNNER_TEMP/repair-current-main-typescript.py"
+
+python3 - <<'PY'
+from pathlib import Path
+'''
+          if text.count(insertion_old) != 1:
+              raise SystemExit(f"Expected one post-merge repair insertion point; found {text.count(insertion_old)}")
+          path.write_text(text.replace(insertion_old, insertion_new))
+          PY
+          chmod +x "$RUNNER_TEMP/threshold-sign-on-release-integration.sh"
+          "$RUNNER_TEMP/threshold-sign-on-release-integration.sh"
+
+      - name: Upload complete integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: threshold-sign-on-registered-final-gate-${{ github.run_id }}
+          path: threshold-sign-on-registered-final-gate
+          if-no-files-found: warn
+          retention-days: 14
