@@ -39,6 +39,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (searchParams.get("provider") === "apple-js") {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (!error && user) {
+      await ensureAccountRowsForUser(user, supabase);
+      return NextResponse.redirect(new URL(next, origin));
+    }
+
+    const loginUrl = new URL(authPath, origin);
+    loginUrl.searchParams.set(
+      "error",
+      "We could not complete Apple sign-in. Try again or use email.",
+    );
+    return NextResponse.redirect(loginUrl);
+  }
+
   if (code) {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
