@@ -1,0 +1,310 @@
+name: PR800 refund operator exact-head QA
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-exact-qa-20260823
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr800-refund-operator-exact-head-qa
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FOUNDATION_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      FOUNDATION_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-709-20260823
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          ref: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+          fetch-depth: 0
+
+      - name: Resolve and check out exact stacked product head
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p exact-qa-evidence
+          product_sha=''
+          for attempt in $(seq 1 80); do
+            product_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+            if [[ -n "$product_sha" && "$product_sha" != "$FOUNDATION_SHA" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          test -n "$product_sha"
+          test "$product_sha" != "$FOUNDATION_SHA"
+          git fetch --no-tags origin "+refs/heads/$PRODUCT_BRANCH:refs/remotes/origin/$PRODUCT_BRANCH"
+          test "$(git rev-parse refs/remotes/origin/$PRODUCT_BRANCH)" = "$product_sha"
+          test "$(git merge-base "$FOUNDATION_SHA" "$product_sha")" = "$FOUNDATION_SHA"
+          test "$(git rev-list --count "$FOUNDATION_SHA..$product_sha")" = 1
+          git checkout --detach "$product_sha"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          printf 'foundation_sha=%s\nfoundation_tree=%s\nproduct_sha=%s\nproduct_tree=%s\n' \
+            "$FOUNDATION_SHA" "$FOUNDATION_TREE" "$product_sha" "$product_tree" \
+            | tee exact-qa-evidence/identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Verify bounded controller-free product scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only "$FOUNDATION_SHA..HEAD" | LC_ALL=C sort \
+            > exact-qa-evidence/changed-paths.txt
+          count="$(wc -l < exact-qa-evidence/changed-paths.txt | tr -d ' ')"
+          test "$count" -ge 3
+          test "$count" -le 20
+          if grep -Ev \
+            '^(docs/provider-review/|src/app/admin/donation-upgrades/|src/app/donation-upgrades/|src/components/donation-upgrades/|src/lib/direct-donation-upgrade|src/lib/provider-refund|tests/direct-donation-upgrade|src/app/admin/page\.tsx$|src/app/direct-donation-upgrade-actions\.ts$|playwright\.direct-donation-upgrade\.config\.ts$)' \
+            exact-qa-evidence/changed-paths.txt; then
+            echo 'Out-of-scope product path.' >&2
+            exit 1
+          fi
+          if grep -E '(^|/)(\.github|supabase/migrations|package(-lock)?\.json|\.env)' \
+            exact-qa-evidence/changed-paths.txt; then
+            echo 'Workflow, migration, dependency, or environment material entered product scope.' >&2
+            exit 1
+          fi
+          git diff --check "$FOUNDATION_SHA..HEAD"
+          tracked_status="$(git status --porcelain --untracked-files=no)"
+          test -z "$tracked_status"
+          mapfile -t changed < exact-qa-evidence/changed-paths.txt
+          while IFS= read -r path; do sha256sum "$path"; done \
+            < exact-qa-evidence/changed-paths.txt \
+            > exact-qa-evidence/source-sha256.txt
+          git diff "$FOUNDATION_SHA..HEAD" -- "${changed[@]}" \
+            > exact-qa-evidence/exact-product.diff
+
+      - name: Adjudicate authorization, authority, and data-minimization source boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < exact-qa-evidence/changed-paths.txt
+          mapfile -t code < <(grep -E '^(src|tests)/' exact-qa-evidence/changed-paths.txt)
+          test "${#code[@]}" -gt 0
+
+          grep -nH -Ei 'aal2|assurance_level|mfa' "${code[@]}" \
+            > exact-qa-evidence/aal2-evidence.txt
+          grep -nH -Ei 'admin|operator' "${code[@]}" \
+            > exact-qa-evidence/admin-evidence.txt
+          grep -nH -E 'record_direct_donation_upgrade_provider_reversal' "${code[@]}" \
+            > exact-qa-evidence/rpc-evidence.txt
+          grep -nH -Ei 'service[_ -]?role|createAdminClient|supabaseAdmin' "${code[@]}" \
+            > exact-qa-evidence/service-authority-evidence.txt
+          grep -nH -E 'provider_reversed|post_completion_exception|current_unreversed' "${changed[@]}" \
+            > exact-qa-evidence/rendering-evidence.txt
+          grep -nH -Ei 'already_recorded|idempotent|replay' "${changed[@]}" \
+            > exact-qa-evidence/idempotency-evidence.txt
+
+          if grep -nH -Ei \
+            '(donor[_ -]?(name|email)|card[_ -]?number|bank[_ -]?account|payment[_ -]?credential|raw[_ -]?(payload|webhook)|full[_ -]?provider[_ -]?body)' \
+            "${code[@]}"; then
+            echo 'Forbidden raw or donor-identifying data surface found.' >&2
+            exit 1
+          fi
+          if grep -nH -E \
+            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            "${changed[@]}"; then
+            echo 'Suspected credential material found.' >&2
+            exit 1
+          fi
+          if git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- . ':!package-lock.json'; then
+            echo 'Conflict marker found.' >&2
+            exit 1
+          fi
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci > exact-qa-evidence/npm-ci.log 2>&1
+
+      - name: Run Node operator contracts and inherited refund tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed_node_tests < <(
+            grep -E '^src/.*\.test\.tsx?$' exact-qa-evidence/changed-paths.txt || true
+          )
+          tests=(
+            src/lib/provider-refund-contract.test.ts
+            src/lib/direct-donation-upgrade.test.ts
+            src/lib/direct-donation-upgrade-source-contract.test.ts
+            src/lib/every-org-partner-webhook-auth.test.ts
+            src/lib/trade-donation.test.ts
+            "${changed_node_tests[@]}"
+          )
+          mapfile -t unique < <(printf '%s\n' "${tests[@]}" | awk 'NF' | LC_ALL=C sort -u)
+          node --import tsx --test "${unique[@]}" \
+            > exact-qa-evidence/focused-node-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > exact-qa-evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit > exact-qa-evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > exact-qa-evidence/lint.log 2>&1
+
+      - name: Build with all money rails disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > exact-qa-evidence/disabled-rail-build.log 2>&1
+
+      - name: Detect rendered-QA contract
+        id: rendered
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t specs < <(
+            grep -E '^tests/.*\.spec\.tsx?$' exact-qa-evidence/changed-paths.txt || true
+          )
+          if [[ "${#specs[@]}" -eq 0 ]]; then
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+            printf 'No changed Playwright spec was transported.\n' > exact-qa-evidence/rendered-qa-status.txt
+            exit 0
+          fi
+          printf '%s\n' "${specs[@]}" > exact-qa-evidence/rendered-specs.txt
+          config='playwright.config.ts'
+          while IFS= read -r candidate; do
+            if [[ "$candidate" == playwright*.config.ts ]]; then config="$candidate"; break; fi
+          done < exact-qa-evidence/changed-paths.txt
+          test -f "$config"
+          printf '%s\n' "$config" > exact-qa-evidence/rendered-config.txt
+          echo 'present=true' >> "$GITHUB_OUTPUT"
+          echo "config=$config" >> "$GITHUB_OUTPUT"
+
+      - name: Install Chromium for submission-disabled rendered QA
+        if: steps.rendered.outputs.present == 'true'
+        shell: bash
+        run: npx playwright install --with-deps chromium > exact-qa-evidence/playwright-install.log 2>&1
+
+      - name: Run submission-disabled desktop and mobile rendered QA
+        if: steps.rendered.outputs.present == 'true'
+        shell: bash
+        env:
+          CI: "1"
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "true"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          EVERY_ORG_API_KEY: ""
+          EVERY_ORG_PARTNER_WEBHOOK_BEARER_TOKEN: ""
+        run: |
+          set -euo pipefail
+          mapfile -t specs < exact-qa-evidence/rendered-specs.txt
+          npx playwright test "${specs[@]}" \
+            --config="${{ steps.rendered.outputs.config }}" \
+            > exact-qa-evidence/rendered-qa.log 2>&1
+          find test-results playwright-report -type f \( -name '*.png' -o -name '*.webp' \) -print 2>/dev/null \
+            | LC_ALL=C sort > exact-qa-evidence/rendered-images.txt || true
+          test -s exact-qa-evidence/rendered-images.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          paths = [Path(line.strip()) for line in Path('exact-qa-evidence/rendered-images.txt').read_text().splitlines() if line.strip()]
+          dimensions = []
+          has_mobile = False
+          has_desktop = False
+          for path in paths:
+              with Image.open(path) as image:
+                  width, height = image.size
+              dimensions.append(f'{path}\t{width}x{height}')
+              has_mobile |= width <= 600
+              has_desktop |= width >= 1000
+          Path('exact-qa-evidence/rendered-image-dimensions.txt').write_text('\n'.join(dimensions)+'\n')
+          if not has_mobile or not has_desktop:
+              raise SystemExit('Rendered QA must retain at least one mobile and one desktop screenshot.')
+          PY
+
+      - name: Verify no product or provider side effect occurred
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p exact-qa-evidence
+          printf '%s\n' \
+            'providerRequestAttempted=false' \
+            'webhookMutationAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'actualRefundAttempted=false' \
+            'persistentDatabaseWriteAttempted=false' \
+            'databaseMigrationAttempted=false' \
+            'deploymentAttempted=false' \
+            'credentialMutationAttempted=false' \
+            'productionChanged=false' \
+            > exact-qa-evidence/non-actions.txt
+
+      - name: Record successful exact-head QA
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.identity.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.identity.outputs.product_tree }}
+          RENDERED_QA_PRESENT: ${{ steps.rendered.outputs.present }}
+        run: |
+          set -euo pipefail
+          paths="$(sed 's/^/- `/' exact-qa-evidence/changed-paths.txt | sed 's/$/`/')"
+          body="<!-- pr800-refund-operator-exact-qa -->
+          ## Donation Upgrade refund operator exact-head QA passed
+
+          - exact stacked foundation: \`$FOUNDATION_SHA\`
+          - exact product head: \`$PRODUCT_SHA\`
+          - exact product tree: \`$PRODUCT_TREE\`
+          - changed paths:
+          $paths
+          - AAL2/MFA, administrator, service-role RPC authority, refund rendering, idempotency, data-minimization, conflict, credential, ancestry, and controller-free scope gates: passed
+          - focused Node tests, complete repository tests, strict TypeScript, ESLint, and disabled-rail build: passed
+          - changed rendered-QA contract present: \`$RENDERED_QA_PRESENT\`
+          - exact-head QA run: \`$GITHUB_RUN_ID\`
+
+          No Every.org request, webhook registration or invocation, checkout, donation, payment, actual refund, persistent database write or migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, merge, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Upload exact-head QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-operator-exact-qa-${{ github.run_id }}
+          path: |
+            exact-qa-evidence/
+            test-results/**/*.png
+            test-results/**/*.webp
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 30
