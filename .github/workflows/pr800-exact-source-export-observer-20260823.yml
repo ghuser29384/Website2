@@ -1,0 +1,52 @@
+name: PR800 exact source export observer 20260823
+
+on:
+  push:
+    branches:
+      - ops/pr800-exact-source-export-observer-20260823
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr800-exact-source-export-20260823.yml
+      TARGET_BRANCH: ops/pr800-exact-source-export-20260823
+      TARGET_HEAD: 7668d9f19cb1456745921709afb5dd0bd709a229
+    steps:
+      - name: Observe exact export run
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=''
+          for attempt in $(seq 1 60); do
+            response="$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+              -f branch="$TARGET_BRANCH" \
+              -f per_page=20)"
+            latest="$(jq -c \
+              --arg sha "$TARGET_HEAD" \
+              '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | reverse | .[0] // empty' \
+              <<<"$response")"
+            if [[ -n "$latest" ]] && [[ "$(jq -r '.status' <<<"$latest")" = completed ]]; then
+              break
+            fi
+            sleep 10
+          done
+          test -n "$latest"
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr800-exact-source-export-observer-20260823 -->
+          PR #800 exact source export: run \`$run_id\`, status \`$status\`, conclusion \`$conclusion\`: $html_url"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$status" = completed
+          test "$conclusion" = success
