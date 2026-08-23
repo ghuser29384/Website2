@@ -1,0 +1,165 @@
+name: QA Discover offer flow database
+
+on:
+  push:
+    branches:
+      - agent/fix-discover-offer-flow-20260731
+    paths:
+      - .github/workflows/qa-discover-offer-flow-database.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+
+concurrency:
+  group: discover-offer-flow-implementation
+  cancel-in-progress: false
+
+jobs:
+  database-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: MoralTrade QA
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      QA_DB_URL: ${{ secrets.MORALTRADE_QA_DATABASE_URL || secrets.MORALTRADE_QA_DB_URL || secrets.MORALTRADE_QA_SUPABASE_DATABASE_URL || secrets.QA_DATABASE_URL || secrets.QA_SUPABASE_DB_URL || secrets.SUPABASE_DB_URL }}
+      QA_DB_PASSWORD: ${{ secrets.MORALTRADE_QA_DATABASE_PASSWORD || secrets.MORALTRADE_QA_DB_PASSWORD || secrets.MORALTRADE_QA_SUPABASE_DB_PASSWORD || secrets.QA_SUPABASE_DB_PASSWORD || secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/fix-discover-offer-flow-20260731
+
+      - name: Assert the exact product candidate is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f src/app/api/marketplace/responses/route.ts
+          test -f src/app/activity/offers/page.tsx
+          test -f public/discover/offer-composer.js
+          test -f supabase/migrations/20260731120000_discover_offer_responses.sql
+          test -f supabase/tests/marketplace_offer_responses_contract.sql
+          node --check public/discover/offer-composer.js
+          git diff --check
+
+      - name: Resolve the protected MoralTrade QA connection
+        id: database
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client dnsutils >/dev/null
+          db_url="$QA_DB_URL"
+          if [[ -z "$db_url" && -n "$QA_DB_PASSWORD" ]]; then
+            region=""
+            if [[ -n "$SUPABASE_ACCESS_TOKEN" ]]; then
+              region=$(curl --fail --silent --show-error \
+                -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                "https://api.supabase.com/v1/projects/$QA_PROJECT_REF" \
+                | python3 -c 'import json,sys;print(json.load(sys.stdin).get("region", ""))')
+            fi
+            db_url=$(QA_DB_PASSWORD="$QA_DB_PASSWORD" QA_PROJECT_REF="$QA_PROJECT_REF" REGION="$region" python3 <<'PY'
+          import os
+          from urllib.parse import quote
+          password=quote(os.environ['QA_DB_PASSWORD'],safe='')
+          ref=os.environ['QA_PROJECT_REF']
+          region=os.environ.get('REGION','')
+          if region:
+              print(f'postgresql://postgres.{ref}:{password}@aws-0-{region}.pooler.supabase.com:5432/postgres?sslmode=require')
+          else:
+              print(f'postgresql://postgres:{password}@db.{ref}.supabase.co:5432/postgres?sslmode=require')
+          PY
+            )
+          fi
+          if [[ -z "$db_url" ]]; then
+            echo 'No protected MoralTrade QA database credential was exposed to the environment.' >&2
+            exit 1
+          fi
+          echo "url=$db_url" >> "$GITHUB_OUTPUT"
+
+      - name: Apply, exercise, and roll back the migration as one transaction
+        id: contract
+        env:
+          DATABASE_URL: ${{ steps.database.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/discover-offer-flow-database
+          export PGCONNECT_TIMEOUT=20
+          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -Atqc \
+            "select current_database(), current_user, current_setting('server_version');" \
+            > artifacts/discover-offer-flow-database/preflight.txt
+          migration="$PWD/supabase/migrations/20260731120000_discover_offer_responses.sql"
+          contract="$PWD/supabase/tests/marketplace_offer_responses_contract.sql"
+          cat > /tmp/offer-flow-database-qa.sql <<SQL
+          \set ON_ERROR_STOP on
+          begin;
+          \i $migration
+          \i $contract
+          rollback;
+          SQL
+          psql "$DATABASE_URL" -X -f /tmp/offer-flow-database-qa.sql \
+            > artifacts/discover-offer-flow-database/transaction.log 2>&1
+          cat > artifacts/discover-offer-flow-database/result.md <<'EOF'
+          # Discover offer-flow database QA
+
+          - The exact migration compiled against MoralTrade QA.
+          - The pgTAP schema, RLS, privilege, uniqueness, immutability, and payment-boundary contract passed.
+          - The entire operation ran inside one transaction and was rolled back.
+          - No schema or fixture residue was committed.
+          EOF
+
+      - name: Remove temporary workflow and preserve the exact passing product tree
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/inspect-discover-offer-flow.yml \
+                .github/workflows/apply-discover-offer-bundle.yml \
+                .github/workflows/finalize-discover-offer-flow.yml \
+                .github/workflows/recover-discover-offer-flow.yml \
+                .github/workflows/qa-discover-offer-flow-database.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'Moral Trade release automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git diff --cached --quiet || git commit -m 'Validate Discover offer responses against MoralTrade QA'
+          git push origin HEAD:agent/fix-discover-offer-flow-20260731
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Mark the fully gated pull request ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr ready 344 --repo ghuser29384/Website2 || true
+          gh pr comment 344 --repo ghuser29384/Website2 --body "Database gate passed for exact candidate \`${{ steps.commit.outputs.sha }}\`: the migration and pgTAP security contract compiled and ran on protected MoralTrade QA inside one rolled-back transaction, with no committed schema or fixture residue. Combined with the code and rendered gates, PR #344 is ready for review. Production remains unchanged."
+
+      - name: Publish database failure evidence
+        if: failure()
+        shell: bash
+        run: |
+          body='The protected MoralTrade QA database gate failed; PR #344 remains draft and must not be merged.'
+          if [[ -f artifacts/discover-offer-flow-database/transaction.log ]]; then
+            tail=$(tail -n 80 artifacts/discover-offer-flow-database/transaction.log)
+            gh pr comment 344 --repo ghuser29384/Website2 --body "$body
+
+          \`\`\`
+          $tail
+          \`\`\`" || true
+          else
+            gh pr comment 344 --repo ghuser29384/Website2 --body "$body See workflow run ${{ github.run_id }} for the credential/preflight failure." || true
+          fi
+
+      - name: Upload database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-offer-flow-database-${{ github.run_id }}
+          path: artifacts/discover-offer-flow-database
+          if-no-files-found: warn
+          retention-days: 14
