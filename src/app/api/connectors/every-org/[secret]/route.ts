@@ -1,4 +1,8 @@
 import {
+  evaluateEveryOrgTradeDonationPoolWebhook,
+  type TradeDonationPoolBundleRow,
+} from "@/lib/trade-donation-pool";
+import {
   evaluateEveryOrgTradeDonationWebhook,
   getTradeDonationProviderConfig,
   secureWebhookPathMatches,
@@ -109,6 +113,77 @@ export async function POST(
   }
 
   const supabase = createServiceClient() as any;
+
+  const { data: bundleData, error: bundleError } = await supabase
+    .from("trade_donation_pool_bundles")
+    .select("*")
+    .eq("provider", "every_org")
+    .eq("partner_donation_id", partnerDonationId)
+    .maybeSingle();
+  if (bundleError) {
+    console.error("[every-org-webhook] pooled bundle lookup failed", {
+      message: bundleError.message,
+    });
+    return Response.json({ ok: false, error: "temporary_failure" }, { status: 503 });
+  }
+  if (bundleData) {
+    const bundle = bundleData as TradeDonationPoolBundleRow;
+    const expectedBundleEnvironment = config.environment === "live" ? "live" : "test";
+    if (bundle.environment !== expectedBundleEnvironment) {
+      console.error("[every-org-webhook] pooled bundle environment mismatch", {
+        bundleId: bundle.id,
+        bundleEnvironment: bundle.environment,
+        providerEnvironment: config.environment,
+      });
+      return Response.json({ ok: false, error: "environment_mismatch" }, { status: 409 });
+    }
+    const evaluated = evaluateEveryOrgTradeDonationPoolWebhook({
+      payload,
+      rawBody,
+      bundle,
+      metadataSecret: config.metadataSecret,
+    });
+    const { data: completionData, error: completionError } = await supabase.rpc(
+      "complete_every_org_trade_donation_pool_bundle",
+      {
+        p_bundle_id: bundle.id,
+        p_manifest_hash: evaluated.manifestHash,
+        p_provider_charge_id_hash: evaluated.chargeIdHash,
+        p_provider_payload_hash: evaluated.payloadHash,
+        p_provider_amount_cents: evaluated.amountCents,
+        p_provider_currency: evaluated.currency,
+        p_provider_nonprofit_slug: evaluated.nonprofitSlug,
+        p_provider_nonprofit_ein: evaluated.nonprofitEin,
+        p_provider_donation_date: evaluated.donationDate,
+        p_provider_payment_method: evaluated.paymentMethod,
+        p_is_valid: evaluated.valid,
+        p_failure_code: evaluated.failureCode,
+        p_failure_message: evaluated.failureMessage,
+      },
+    );
+    if (completionError) {
+      console.error("[every-org-webhook] pooled completion transaction failed", {
+        message: completionError.message,
+        bundleId: bundle.id,
+      });
+      return Response.json({ ok: false, error: "temporary_failure" }, { status: 503 });
+    }
+    const completion = firstRow<Record<string, unknown>>(completionData);
+    const outcome = String(completion?.outcome ?? "processed");
+    if (bundle.environment === "test" && ["activated", "already_completed"].includes(outcome)) {
+      await supabase
+        .from("trade_donation_pool_gate_status")
+        .update({
+          status: "passed",
+          notes: "An exact Every.org staging bundle webhook was processed by the pooled-settlement handler.",
+          approved_at: new Date().toISOString(),
+        })
+        .eq("environment", "test")
+        .eq("gate_key", "every_org_staging_webhook");
+    }
+    return Response.json({ ok: true, outcome, pooledSettlement: true });
+  }
+
   const { data: intentData, error: intentError } = await supabase
     .from("trade_donation_intents")
     .select("*")
