@@ -1,0 +1,48 @@
+name: PR800 exact source export 20260823
+
+on:
+  push:
+    branches:
+      - ops/pr800-exact-source-export-20260823
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PRODUCT_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      PRODUCT_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+    steps:
+      - name: Check out exact product head
+        uses: actions/checkout@v4
+        with:
+          ref: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+          fetch-depth: 0
+
+      - name: Verify exact identity and create sanitized archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$PRODUCT_TREE"
+          mkdir -p source-export
+          {
+            printf 'product_sha=%s\n' "$PRODUCT_SHA"
+            printf 'product_tree=%s\n' "$PRODUCT_TREE"
+          } > source-export/identity.txt
+          git ls-files -z \
+            | tar --null -T - -czf source-export/pr800-exact-source.tar.gz
+          sha256sum source-export/pr800-exact-source.tar.gz \
+            > source-export/archive-sha256.txt
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-exact-source-${{ github.run_id }}
+          path: source-export/
+          if-no-files-found: error
+          retention-days: 7
