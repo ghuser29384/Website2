@@ -1,0 +1,61 @@
+name: PR800 refund operator materialization status
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-status-20260823
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  status:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr800-refund-operator-materialize-20260823.yml
+      TARGET_BRANCH: ops/pr800-refund-operator-materialize-20260823
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-709-20260823
+      FOUNDATION_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+    steps:
+      - name: Record exact current state and failure tail if applicable
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+            -f branch="$TARGET_BRANCH" \
+            -f per_page=10)"
+          latest="$(jq -c '.workflow_runs | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+          test -n "$latest"
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          run_url="$(jq -r '.html_url' <<<"$latest")"
+          product_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          body="<!-- pr800-refund-operator-status -->
+          ## PR #800 refund-operator materialization status
+
+          - run: \`$run_id\`
+          - status: \`$status\`
+          - conclusion: \`$conclusion\`
+          - product branch head: \`$product_sha\`
+          - foundation head: \`$FOUNDATION_SHA\`
+          - run page: $run_url"
+          if [[ "$status" = completed && "$conclusion" != success ]]; then
+            failed_tail="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed 2>/dev/null \
+              | tail -n 80 \
+              | sed -E 's/(gh[pousr]_[A-Za-z0-9_]{8})[A-Za-z0-9_]+/\1…/g; s/(Bearer )[A-Za-z0-9._~-]+/\1[redacted]/g' \
+              | head -c 6000 || true)"
+            body="$body
+
+          Sanitized failed-log tail:
+          \`\`\`text
+          $failed_tail
+          \`\`\`"
+          fi
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
