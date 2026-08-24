@@ -200,7 +200,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      EVIDENCE_DIR: ${{ runner.temp }}/every-org-phase2-evidence
+      EVIDENCE_DIR: /tmp/every-org-phase2-evidence
     steps:
       - name: Check out exact accepted product candidate
         uses: actions/checkout@v4
@@ -613,7 +613,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: every-org-exact-phase2-${{ github.run_id }}
-          path: ${{ runner.temp }}/every-org-phase2-evidence
+          path: /tmp/every-org-phase2-evidence
           if-no-files-found: warn
           retention-days: 30
 
