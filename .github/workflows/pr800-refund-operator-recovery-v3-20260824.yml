@@ -1,0 +1,225 @@
+name: PR800 refund operator and rendering recovery v3
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-recovery-v3-20260824
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: pr800-refund-operator-rendering-recovery-v3
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FOUNDATION_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      FOUNDATION_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      SOURCE_BRANCH: feature/direct-donation-upgrade-refund-safety-709-20260821
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-operator-rendering-709-20260824
+    steps:
+      - name: Check out isolated controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Reconstruct safe product candidate
+        id: reconstruct
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/pr800-refund-operator-v3"
+          candidate="$work/candidate"
+          mkdir -p "$work" operator-evidence
+          git fetch --no-tags origin \
+            "+refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH" \
+            "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+          test "$(git rev-parse refs/remotes/origin/$TARGET_BRANCH)" = "$FOUNDATION_SHA"
+          test "$(git rev-parse "$FOUNDATION_SHA^{tree}")" = "$FOUNDATION_TREE"
+          source_ref="refs/remotes/origin/$SOURCE_BRANCH"
+
+          git ls-tree -r --name-only "$source_ref" -- .github/pr796-refund-operator-bundle/ \
+            | grep -E '^\.github/pr796-refund-operator-bundle/part-[0-9]{2}$' \
+            | sort > "$work/bundle-parts.txt"
+          test -s "$work/bundle-parts.txt"
+          : > "$work/operator.b64"
+          while IFS= read -r part; do
+            git show "$source_ref:$part" >> "$work/operator.b64"
+          done < "$work/bundle-parts.txt"
+          base64 --decode "$work/operator.b64" > "$work/operator.tar.gz"
+          gzip --test "$work/operator.tar.gz"
+
+          python3 - "$work/operator.tar.gz" "$work/bundle-paths.txt" <<'PY'
+          import sys, tarfile
+          from pathlib import PurePosixPath
+          archive, output = sys.argv[1:]
+          names=[]; total=0
+          with tarfile.open(archive, 'r:gz') as tar:
+              for m in tar.getmembers():
+                  if not m.isfile(): raise SystemExit(f'non-file member: {m.name}')
+                  p=PurePosixPath(m.name)
+                  if p.is_absolute() or '..' in p.parts: raise SystemExit(f'unsafe path: {m.name}')
+                  if not (m.name.startswith('src/') or m.name == 'docs/provider-review/every-org-donation-upgrade-review-packet.md'):
+                      raise SystemExit(f'non-product path: {m.name}')
+                  if m.name.startswith(('src/generated/','src/.')): raise SystemExit(f'forbidden path: {m.name}')
+                  if m.size > 1_500_000: raise SystemExit(f'oversized member: {m.name}')
+                  names.append(m.name); total += m.size
+          if not 3 <= len(names) <= 60: raise SystemExit(f'path count {len(names)}')
+          if len(names) != len(set(names)): raise SystemExit('duplicate path')
+          if total > 8_000_000: raise SystemExit('archive too large')
+          open(output,'w').write('\n'.join(sorted(names))+'\n')
+          PY
+
+          git worktree add --detach "$candidate" "$FOUNDATION_SHA"
+          tar -xzf "$work/operator.tar.gz" -C "$candidate" --no-same-owner
+          git -C "$candidate" status --porcelain | cut -c4- | sort > "$work/actual-paths.txt"
+          test -s "$work/actual-paths.txt"
+          comm -23 "$work/actual-paths.txt" "$work/bundle-paths.txt" > "$work/unexpected.txt"
+          test ! -s "$work/unexpected.txt"
+          count="$(wc -l < "$work/actual-paths.txt" | tr -d ' ')"
+          test "$count" -ge 3
+          test "$count" -le 60
+          git -C "$candidate" diff --check
+
+          python3 - "$candidate" "$work/actual-paths.txt" <<'PY'
+          import re, sys
+          from pathlib import Path
+          root=Path(sys.argv[1]); paths=[x for x in Path(sys.argv[2]).read_text().splitlines() if x]
+          src='\n'.join((root/p).read_text() for p in paths)
+          for label,pat in [
+            ('AAL2',r'\baal2\b|assurance_level|mfa'),
+            ('admin',r'admin(?:istrator)?|allowlist'),
+            ('server action',r'["\']use server["\']'),
+            ('refund RPC',r'record_direct_donation_upgrade_provider_reversal'),
+            ('provider reversal rendering',r'provider_reversed|Provider refund recorded'),
+            ('post completion rendering',r'post_completion_exception|post-completion exception'),
+            ('current accounting',r'current_unreversed|currently unreversed'),
+          ]:
+              if not re.search(pat,src,re.I): raise SystemExit(f'missing {label}')
+          for label,pat in [
+            ('provider network',r'https?://(?:staging\.)?every\.org|api\.every\.org'),
+            ('managed payment',r'PaymentIntent|CheckoutSession|stripe\.checkout'),
+            ('raw donor/payment persistence',r'donor_email|donor_name|card_number|bank_account|raw_provider_payload'),
+          ]:
+              if re.search(pat,src,re.I): raise SystemExit(f'forbidden {label}')
+          if not any(p.endswith(('.test.ts','.test.tsx')) for p in paths): raise SystemExit('missing durable test')
+          PY
+
+          while IFS= read -r path; do sha256sum "$candidate/$path"; done < "$work/actual-paths.txt" > operator-evidence/source-sha256.txt
+          cp "$work/bundle-parts.txt" "$work/bundle-paths.txt" "$work/actual-paths.txt" operator-evidence/
+          printf 'foundation_sha=%s\nsource_sha=%s\ncontroller_sha=%s\n' \
+            "$FOUNDATION_SHA" "$(git rev-parse "$source_ref")" "$(git rev-parse HEAD)" > operator-evidence/identity.txt
+          echo "CANDIDATE_DIR=$candidate" >> "$GITHUB_ENV"
+          echo "WORK_DIR=$work" >> "$GITHUB_ENV"
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        shell: bash
+        run: cd "$CANDIDATE_DIR" && npm ci > "$GITHUB_WORKSPACE/operator-evidence/npm-ci.log" 2>&1
+
+      - name: Run recovered and inherited focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          mapfile -t recovered < <(grep -E '\.test\.tsx?$' "$WORK_DIR/actual-paths.txt" || true)
+          tests=(src/lib/provider-refund-contract.test.ts src/lib/every-org-partner-webhook-auth.test.ts src/lib/direct-donation-upgrade.test.ts src/lib/direct-donation-upgrade-source-contract.test.ts)
+          tests+=("${recovered[@]}")
+          printf '%s\n' "${tests[@]}" | awk '!seen[$0]++' > "$WORK_DIR/focused.txt"
+          mapfile -t unique < "$WORK_DIR/focused.txt"
+          node --import tsx --test "${unique[@]}" > "$GITHUB_WORKSPACE/operator-evidence/focused-tests.log" 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: cd "$CANDIDATE_DIR" && npm test > "$GITHUB_WORKSPACE/operator-evidence/repository-tests.log" 2>&1
+
+      - name: Run TypeScript
+        shell: bash
+        run: cd "$CANDIDATE_DIR" && npx tsc --noEmit > "$GITHUB_WORKSPACE/operator-evidence/typecheck.log" 2>&1
+
+      - name: Run ESLint
+        shell: bash
+        run: cd "$CANDIDATE_DIR" && npm run lint -- --quiet > "$GITHUB_WORKSPACE/operator-evidence/lint.log" 2>&1
+
+      - name: Build with money rails disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: cd "$CANDIDATE_DIR" && npm run build > "$GITHUB_WORKSPACE/operator-evidence/build.log" 2>&1
+
+      - name: Publish guarded product commit
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$FOUNDATION_SHA"
+          git status --porcelain | cut -c4- | sort > "$WORK_DIR/final-paths.txt"
+          diff -u "$WORK_DIR/actual-paths.txt" "$WORK_DIR/final-paths.txt"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add --pathspec-from-file="$WORK_DIR/actual-paths.txt"
+          git commit -m 'Add AAL2-gated refund operator and truthful rendering'
+          product_sha="$(git rev-parse HEAD)"; product_tree="$(git rev-parse HEAD^{tree})"
+          test "$(git rev-list --count "$FOUNDATION_SHA..$product_sha")" = 1
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'foundation_sha=%s\nproduct_sha=%s\nproduct_tree=%s\nchanged_files=%s\n' \
+            "$FOUNDATION_SHA" "$product_sha" "$product_tree" "$(wc -l < "$WORK_DIR/actual-paths.txt" | tr -d ' ')" \
+            | tee "$GITHUB_WORKSPACE/operator-evidence/product-identity.txt"
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"; echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record success
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.publish.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
+        run: |
+          set -euo pipefail
+          body="<!-- pr800-refund-operator-recovery-v3-20260824 -->
+          ## AAL2 refund-operator and truthful-rendering tranche recovered
+
+          - exact foundation: \`$FOUNDATION_SHA\`
+          - exact product head: \`$PRODUCT_SHA\`
+          - exact product tree: \`$PRODUCT_TREE\`
+          - changed paths: \`$(wc -l < "$WORK_DIR/actual-paths.txt" | tr -d ' ')\`
+          - recovery run: \`$GITHUB_RUN_ID\`
+          - recovered focused tests, complete tests, TypeScript, ESLint, disabled-rail build, scope and safety scans: passed
+
+          No provider request, webhook mutation, checkout, donation, payment, actual refund, database migration, deployment, credential mutation, brand submission, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Preserve non-action evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p operator-evidence
+          printf '%s\n' providerRequestAttempted=false webhookMutationAttempted=false checkoutAttempted=false donationAttempted=false actualRefundAttempted=false databaseMigrationAttempted=false deploymentAttempted=false credentialMutationAttempted=false productionChanged=false > operator-evidence/non-actions.txt
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-operator-recovery-v3-${{ github.run_id }}
+          path: operator-evidence/
+          if-no-files-found: error
+          retention-days: 30
