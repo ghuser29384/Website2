@@ -32,18 +32,25 @@ join pg_catalog.pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'moral_trade_private'
   and (
     p.proname like 'compact_outflow_%'
+    or p.proname like 'assign_compact_outflow_%'
     or p.proname like 'reject_compact_outflow_%'
     or p.proname like 'require_compact_outflow_%'
   );
 
 select 'fixture_users=' || count(*)
 from auth.users
-where email like 'compact-uat712-%@qa.invalid';
+where id in (
+  '712a0000-0000-4000-8000-000000000001'::uuid,
+  '712b0000-0000-4000-8000-000000000002'::uuid,
+  '712c0000-0000-4000-8000-000000000003'::uuid
+)
+  or email like 'compact-uat712-%@qa.invalid';
 
 select 'fixture_profiles=' || count(*)
 from public.profiles
 where id in (
   '712a0000-0000-4000-8000-000000000001'::uuid,
-  '712a0000-0000-4000-8000-000000000002'::uuid,
-  '712a0000-0000-4000-8000-000000000003'::uuid
-);
+  '712b0000-0000-4000-8000-000000000002'::uuid,
+  '712c0000-0000-4000-8000-000000000003'::uuid
+)
+  or email like 'compact-uat712-%@qa.invalid';
