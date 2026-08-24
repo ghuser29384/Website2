@@ -78,20 +78,27 @@ test("frozen participant generation fails closed if the stale source contract dr
   );
 });
 
-test("browser MFA waits for the refreshed AAL2 state before proving cookie persistence", () => {
+test("browser MFA awaits the server action, captures its state, and proves cookie persistence", () => {
   const generated = buildAuthenticatedHarnessSource(original);
-  assert.match(generated, /\.getByText\("aal2", \{ exact: true \}\)/);
+  assert.match(generated, /page\.waitForResponse\(/);
+  assert.match(generated, /response\.request\(\)\.headers\(\)\["next-action"\]/);
+  assert.match(generated, /operator-mfa-step-up\.png/);
+  assert.match(generated, /Browser MFA verification failed closed/);
   assert.doesNotMatch(
     generated,
     /page\.waitForLoadState\("domcontentloaded"\)[\s\S]*?Verify session/,
   );
-  const click = generated.indexOf('form.getByRole("button", { name: "Verify session" }).click()');
-  const aal2Refresh = generated.indexOf('.getByText("aal2", { exact: true })');
-  const reload = generated.indexOf("await page.reload()", aal2Refresh);
+  const response = generated.indexOf("const verificationResponsePromise = page.waitForResponse(");
+  const click = generated.indexOf('form.getByRole("button", { name: "Verify session" }).click()', response);
+  const screenshot = generated.indexOf('await screenshot(page, "operator-mfa-step-up.png")', click);
+  const error = generated.indexOf("Browser MFA verification failed closed", screenshot);
+  const reload = generated.indexOf("await page.reload()", error);
   const aal2 = generated.indexOf("/Session level\\s*aal2|AAL:\\s*aal2/i", reload);
+  assert.ok(response >= 0, "The browser MFA server-action response boundary is missing.");
   assert.ok(click >= 0, "The browser MFA submission is missing.");
-  assert.ok(aal2Refresh > click, "The refreshed AAL2 state must follow submission.");
-  assert.ok(reload > aal2Refresh, "The browser must reload only after AAL2 is visible.");
+  assert.ok(screenshot > click, "The browser MFA evidence must follow submission.");
+  assert.ok(error > screenshot, "The browser MFA error boundary must follow evidence capture.");
+  assert.ok(reload > error, "The browser must reload only after action diagnostics pass.");
   assert.ok(aal2 > reload, "The AAL2 assertion must follow the reloaded session.");
 });
 
