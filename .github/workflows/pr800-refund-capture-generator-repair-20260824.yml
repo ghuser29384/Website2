@@ -1,0 +1,89 @@
+name: PR800 refund capture generator repair
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-ui-materializer-20260823
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: pr800-refund-capture-generator-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GENERATOR_PATH: .github/ops/pr800_refund_operator_ui_materialize.py
+      EXPECTED_GENERATOR_BLOB: 2d06e7e630e57301259df4981a23d66e3f914e1f
+    steps:
+      - name: Check out exact controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr800-refund-operator-ui-materializer-20260823
+          fetch-depth: 0
+
+      - name: Make screenshot filenames explicit in generated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_blob="$(git hash-object "$GENERATOR_PATH")"
+          if [[ "$current_blob" != "$EXPECTED_GENERATOR_BLOB" ]]; then
+            if grep -Fq 'fileName: \"admin-and-participant-desktop.png\"' "$GENERATOR_PATH" \
+              && grep -Fq 'path: path.join(outputDirectory, fixture.fileName)' "$GENERATOR_PATH"; then
+              echo 'Generator already repaired.'
+              exit 0
+            fi
+            echo "Unexpected generator blob: $current_blob" >&2
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/ops/pr800_refund_operator_ui_materialize.py")
+          text = path.read_text()
+          old_fixtures = '''    {{ name: \"admin-and-participant-desktop\", viewport: {{ width: 1440, height: 1000 }} }},
+              {{ name: \"admin-and-participant-mobile\", viewport: {{ width: 390, height: 844 }} }},'''
+          new_fixtures = '''    {{ fileName: \"admin-and-participant-desktop.png\", viewport: {{ width: 1440, height: 1000 }} }},
+              {{ fileName: \"admin-and-participant-mobile.png\", viewport: {{ width: 390, height: 844 }} }},'''
+          old_path = 'path: path.join(outputDirectory, `${{fixture.name}}.png`),'
+          new_path = 'path: path.join(outputDirectory, fixture.fileName),'
+
+          fixture_count = text.count(old_fixtures)
+          path_count = text.count(old_path)
+          if fixture_count < 1 or fixture_count != path_count:
+              raise SystemExit(
+                  f"unexpected capture generator anchors: fixtures={fixture_count}, paths={path_count}"
+              )
+          text = text.replace(old_fixtures, new_fixtures)
+          text = text.replace(old_path, new_path)
+          path.write_text(text)
+          PY
+
+          git diff --check
+          test "$(git diff --name-only | wc -l | tr -d ' ')" = 1
+          test "$(git diff --name-only)" = "$GENERATOR_PATH"
+          grep -Fq 'fileName: \"admin-and-participant-desktop.png\"' "$GENERATOR_PATH"
+          grep -Fq 'fileName: \"admin-and-participant-mobile.png\"' "$GENERATOR_PATH"
+          grep -Fq 'path: path.join(outputDirectory, fixture.fileName)' "$GENERATOR_PATH"
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$GENERATOR_PATH"
+          git commit -m 'Make refund review screenshot filenames explicit'
+          git push origin HEAD:refs/heads/ops/pr800-refund-operator-ui-materializer-20260823
+
+      - name: Record bounded generator repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          body='<!-- issue709-refund-capture-generator-repair -->
+          The refund review capture generator now emits literal desktop/mobile PNG filenames, matching the source contract. This controller-only repair made no provider, payment, database, deployment, credential, feature, email, brand-submission, or production change.'
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
