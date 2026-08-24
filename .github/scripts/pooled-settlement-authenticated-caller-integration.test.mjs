@@ -78,20 +78,20 @@ test("frozen participant generation fails closed if the stale source contract dr
   );
 });
 
-test("browser MFA waits for the React server action before reloading the session", () => {
+test("browser MFA waits for the refreshed AAL2 state before proving cookie persistence", () => {
   const generated = buildAuthenticatedHarnessSource(original);
-  assert.match(generated, /MFA verified for this session\./);
+  assert.match(generated, /\.getByText\("aal2", \{ exact: true \}\)/);
   assert.doesNotMatch(
     generated,
     /page\.waitForLoadState\("domcontentloaded"\)[\s\S]*?Verify session/,
   );
   const click = generated.indexOf('form.getByRole("button", { name: "Verify session" }).click()');
-  const success = generated.indexOf('.getByText("MFA verified for this session.", { exact: true })');
-  const reload = generated.indexOf("await page.reload()", success);
+  const aal2Refresh = generated.indexOf('.getByText("aal2", { exact: true })');
+  const reload = generated.indexOf("await page.reload()", aal2Refresh);
   const aal2 = generated.indexOf("/Session level\\s*aal2|AAL:\\s*aal2/i", reload);
   assert.ok(click >= 0, "The browser MFA submission is missing.");
-  assert.ok(success > click, "The action success message must follow submission.");
-  assert.ok(reload > success, "The browser must reload only after the action succeeds.");
+  assert.ok(aal2Refresh > click, "The refreshed AAL2 state must follow submission.");
+  assert.ok(reload > aal2Refresh, "The browser must reload only after AAL2 is visible.");
   assert.ok(aal2 > reload, "The AAL2 assertion must follow the reloaded session.");
 });
 

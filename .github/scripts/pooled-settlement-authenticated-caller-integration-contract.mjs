@@ -146,7 +146,8 @@ export function buildAuthenticatedHarnessSource(input) {
     [
       '  await form.getByRole("button", { name: "Verify session" }).click();',
       "  await panel",
-      '    .getByText("MFA verified for this session.", { exact: true })',
+      '    .getByText("aal2", { exact: true })',
+      "    .first()",
       '    .waitFor({ state: "visible", timeout: 30_000 });',
       "  await page.reload();",
       '  await expectText(page.locator("article#account-security"), /Session level\\s*aal2|AAL:\\s*aal2/i);',
