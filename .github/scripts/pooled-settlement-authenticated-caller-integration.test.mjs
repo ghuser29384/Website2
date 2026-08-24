@@ -13,6 +13,7 @@ import {
   PRODUCT_REPAIR_HEAD,
   QA_PROJECT_REF,
   REQUIRED_MILESTONE_LIFECYCLE_FUNCTIONS,
+  STRIPE_GATE_REPAIR_HEAD,
   buildAuthenticatedHarnessSource,
 } from "./pooled-settlement-authenticated-caller-integration-contract.mjs";
 
@@ -28,11 +29,12 @@ test("the stacked QA candidate is pinned to the clean stack and all product repa
   assert.equal(CLEAN_STACK_HEAD, "a67878590380f45af704ddd3e643ef1a135015f7");
   assert.equal(CONTEXT_READ_REPAIR_HEAD, "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d");
   assert.equal(OPERATOR_UI_REPAIR_HEAD, "a1f774eef872464528249d9e64a1d7d4466e7f2e");
+  assert.equal(STRIPE_GATE_REPAIR_HEAD, "b3558dd5422f16ca42389c5fe5ccde292b58c3e6");
   assert.equal(QA_PROJECT_REF, "hvmxfjjbdcgjjudmthdz");
   assert.deepEqual(REQUIRED_MILESTONE_LIFECYCLE_FUNCTIONS, [
     "finalize_trade_milestone_manifest_v1",
   ]);
-  assert.equal(INTEGRATION_PATHS.length, 11);
+  assert.equal(INTEGRATION_PATHS.length, 13);
   assert.ok(INTEGRATION_PATHS.includes(AUTHENTICATED_CONFIRMATION_MIGRATION));
 });
 
@@ -146,6 +148,19 @@ test("participant UI generation fails closed if the pooled assertion block drift
     () => buildAuthenticatedHarnessSource(drifted),
     /pooled participant funding controls and sanitized readiness evidence: expected source contract was not found/,
   );
+});
+
+test("the generated harness proves the signed Stripe webhook gate before operator handoff", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
+  assert.match(generated, /signed-stripe-webhook-gate\.json/);
+  assert.match(generated, /stripe_signed_webhook/);
+  assert.match(generated, /handlerResults: primaryFunding\.map/);
+  assert.match(generated, /Signed Stripe test funding did not persist its provider-checkout gate/);
+  const funding = generated.indexOf("const primaryFunding = await Promise.all(");
+  const gate = generated.indexOf('const signedWebhookGate = unwrap(', funding);
+  const handoff = generated.indexOf("await openEveryOrgThroughOperatorUi", gate);
+  assert.ok(gate > funding, "The signed-webhook gate proof must follow valid funding events.");
+  assert.ok(handoff > gate, "The operator handoff must follow the signed-webhook gate proof.");
 });
 
 test("the workflow resolves the Stripe platform from the QA test key without recording its identity", () => {
@@ -276,12 +291,13 @@ test("source transformation fails closed if the old service-role confirmation bl
   );
 });
 
-test("the stacked workflow is QA-only, exact-eleven-file-scoped, and applies the forward migration", () => {
+test("the stacked workflow is QA-only, exact-thirteen-file-scoped, and applies the forward migration", () => {
   assert.match(workflow, new RegExp(PR700_HEAD));
   assert.match(workflow, new RegExp(PRODUCT_REPAIR_HEAD));
   assert.match(workflow, new RegExp(CLEAN_STACK_HEAD));
   assert.match(workflow, new RegExp(CONTEXT_READ_REPAIR_HEAD));
   assert.match(workflow, new RegExp(OPERATOR_UI_REPAIR_HEAD));
+  assert.match(workflow, new RegExp(STRIPE_GATE_REPAIR_HEAD));
   assert.match(workflow, new RegExp(QA_PROJECT_REF));
   assert.match(workflow, /qa\/723-authenticated-confirmation-clean-stack-20260818-v1/);
   assert.match(workflow, /qa\/723-participant-context-integration-20260824/);

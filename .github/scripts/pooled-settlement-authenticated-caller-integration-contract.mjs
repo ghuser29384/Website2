@@ -5,6 +5,7 @@ export const PRODUCT_REPAIR_HEAD = "495f714b6dd4753ad78cf3d41945cffc84923876";
 export const CLEAN_STACK_HEAD = "a67878590380f45af704ddd3e643ef1a135015f7";
 export const CONTEXT_READ_REPAIR_HEAD = "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d";
 export const OPERATOR_UI_REPAIR_HEAD = "a1f774eef872464528249d9e64a1d7d4466e7f2e";
+export const STRIPE_GATE_REPAIR_HEAD = "b3558dd5422f16ca42389c5fe5ccde292b58c3e6";
 export const QA_PROJECT_REF = "hvmxfjjbdcgjjudmthdz";
 export const AUTHENTICATED_CONFIRMATION_MIGRATION =
   "supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql";
@@ -23,6 +24,8 @@ export const INTEGRATION_PATHS = [
   "src/app/trade-donation-actions-base.ts",
   "src/lib/moral-trade/trade-donation-context-read-boundary.test.ts",
   "src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts",
+  "src/lib/payments/trade-donation-pool-webhook-gate-source-contract.test.ts",
+  "src/lib/payments/trade-donation-pool-webhook.ts",
   "src/lib/trade-donation-pool-operator-ui-source-contract.test.ts",
   "src/lib/trade-donation.ts",
   AUTHENTICATED_CONFIRMATION_MIGRATION,
@@ -213,6 +216,44 @@ export function buildAuthenticatedHarnessSource(input) {
       "  await disclosure.waitFor({ state: \"visible\", timeout: 30_000 });",
     ].join("\n"),
     "pooled participant funding controls and sanitized readiness evidence",
+  );
+
+  const primaryFundingBoundary = [
+    "  const primaryFunding = await Promise.all(",
+    "    primaryObligations.map((obligation, index) =>",
+    "      fundWithActualStripeTestObject(primaryFixtures[index], obligation, {",
+    '        eventId: `evt_qa_primary_${runId.replaceAll("-", "")}_${index + 1}`,',
+    "      }),",
+    "    ),",
+    "  );",
+  ].join("\n");
+  source = replaceExactly(
+    source,
+    primaryFundingBoundary,
+    [
+      primaryFundingBoundary,
+      "  const signedWebhookGate = unwrap(",
+      "    await admin",
+      '      .from("trade_donation_pool_gate_status")',
+      '      .select("environment,gate_key,status,updated_at")',
+      '      .eq("environment", "test")',
+      '      .eq("gate_key", "stripe_signed_webhook")',
+      "      .single(),",
+      '    "load signed Stripe test webhook gate",',
+      "  );",
+      '  await writeJson("signed-stripe-webhook-gate.json", {',
+      '    schemaVersion: "moral-trade-pooled-settlement-signed-webhook-gate-v1",',
+      "    runId,",
+      "    commitSha,",
+      "    gate: signedWebhookGate,",
+      "    handlerResults: primaryFunding.map(({ response }) => ({",
+      "      pooledSettlement: response.pooledSettlement,",
+      "      duplicate: response.duplicate,",
+      "    })),",
+      "  });",
+      '  assert.equal(signedWebhookGate.status, "passed", "Signed Stripe test funding did not persist its provider-checkout gate.");',
+    ].join("\n"),
+    "signed Stripe webhook gate persistence evidence",
   );
 
   source = replaceExactly(
