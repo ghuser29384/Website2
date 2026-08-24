@@ -45,15 +45,25 @@ async function obligationIdFromPaymentIntent(paymentIntentId: string, livemode: 
 
 async function passSignedWebhookGate(livemode: boolean) {
   const supabase = createServiceClient() as any;
-  await supabase
+  const environment = livemode ? "live" : "test";
+  const { data, error } = await supabase
     .from("trade_donation_pool_gate_status")
     .update({
       status: "passed",
       notes: `A signed ${livemode ? "live" : "test"} Stripe webhook was processed by the pooled-settlement handler.`,
       approved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
-    .eq("environment", livemode ? "live" : "test")
-    .eq("gate_key", "stripe_signed_webhook");
+    .eq("environment", environment)
+    .eq("gate_key", "stripe_signed_webhook")
+    .select("environment,gate_key,status")
+    .maybeSingle();
+  if (error) {
+    throw new Error(`The signed Stripe ${environment} webhook gate could not be persisted: ${error.message}`);
+  }
+  if (!data || data.status !== "passed") {
+    throw new Error(`The signed Stripe ${environment} webhook gate row was unavailable.`);
+  }
 }
 
 function paymentIntentIdFromSession(session: Stripe.Checkout.Session) {
