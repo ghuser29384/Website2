@@ -25,17 +25,20 @@ export default async function DonationUpgradeOfferLayout({
 
   if (!config.environment) return children;
 
-  const detail = await loadDirectDonationUpgradePrivateDetail({
-    offerId,
-    viewerId: viewer?.authUser.id ?? null,
-    environment: config.environment,
-  });
   const renderedQaOffer =
     offerId === PROVIDER_REFUND_RENDERED_QA_OFFER_ID
       ? providerRefundRenderedQaPublicOffer(config.environment)
       : null;
-  const publicOffer = (renderedQaOffer ?? detail.publicOffer) as
-    | NonNullable<typeof detail.publicOffer>
+  const detail = renderedQaOffer
+    ? null
+    : await loadDirectDonationUpgradePrivateDetail({
+        offerId,
+        viewerId: viewer?.authUser.id ?? null,
+        environment: config.environment,
+      });
+  const publicOffer = (renderedQaOffer ?? detail?.publicOffer ?? null) as
+    | NonNullable<NonNullable<typeof detail>["publicOffer"]>
+    | NonNullable<typeof renderedQaOffer>
     | null;
   if (!publicOffer) return children;
 
