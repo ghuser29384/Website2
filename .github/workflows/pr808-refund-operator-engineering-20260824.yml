@@ -1,0 +1,283 @@
+name: PR808 refund operator exact-head engineering QA
+
+on:
+  push:
+    branches:
+      - ops/pr808-refund-operator-engineering-20260824
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: pr808-refund-operator-engineering-20260824
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_BASE_SHA: 358adf99f338f25011b6de4204d72bce4475b12f
+  EXPECTED_PRODUCT_SHA: a32ac22c9fabe329418efc9cdba05863064e9158
+  EXPECTED_PRODUCT_TREE: 6f9e161b94ea853911dbded11daf0d48673a1df2
+  EXPECTED_PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-ui-709-20260824-v2
+  EXPECTED_PR547_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+  EXPECTED_PR711_SHA: cfd611218b29d1095fe40ed1e1db863ca34dee68
+  EXPECTED_CONTROLLER_BRANCH: ops/pr808-refund-operator-engineering-20260824
+  CONTROLLER_WORKFLOW: .github/workflows/pr808-refund-operator-engineering-20260824.yml
+  AUTHORIZATION_FILE: .github/pr808-refund-operator-engineering.authorize
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BEFORE_SHA: ${{ github.event.before }}
+    steps:
+      - name: Check out exact controller revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact branches, PR states, ancestry, scope, and one-use authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_CONTROLLER_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+          test -f "$CONTROLLER_WORKFLOW"
+
+          git fetch --no-tags origin "$EXPECTED_PRODUCT_BRANCH"
+          product_sha="$(git rev-parse FETCH_HEAD)"
+          test "$product_sha" = "$EXPECTED_PRODUCT_SHA"
+          test "$(git show -s --format=%T "$product_sha")" = "$EXPECTED_PRODUCT_TREE"
+          test "$(git merge-base "$EXPECTED_BASE_SHA" "$product_sha")" = "$EXPECTED_BASE_SHA"
+          test "$(git rev-list --count "$EXPECTED_BASE_SHA..$product_sha")" = 11
+
+          pr808="$(mktemp)"
+          pr547="$(mktemp)"
+          pr711="$(mktemp)"
+          trap 'rm -f "$pr808" "$pr547" "$pr711"' EXIT
+          gh api "repos/$EXPECTED_REPOSITORY/pulls/808" > "$pr808"
+          gh api "repos/$EXPECTED_REPOSITORY/pulls/547" > "$pr547"
+          gh api "repos/$EXPECTED_REPOSITORY/pulls/711" > "$pr711"
+          jq -e --arg sha "$EXPECTED_PRODUCT_SHA" --arg base "$EXPECTED_BASE_SHA" '
+            .state == "open" and .draft == true and .merged == false
+            and .head.sha == $sha and .base.sha == $base
+          ' "$pr808" >/dev/null
+          jq -e --arg sha "$EXPECTED_PR547_SHA" '
+            .state == "open" and .draft == true and .merged == false and .head.sha == $sha
+          ' "$pr547" >/dev/null
+          jq -e --arg sha "$EXPECTED_PR711_SHA" '
+            .state == "open" and .draft == true and .merged == false and .head.sha == $sha
+          ' "$pr711" >/dev/null
+
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            git diff-tree --no-commit-id --name-only -r HEAD > evidence/controller-changed-paths.txt
+          else
+            git diff --name-only "$BEFORE_SHA" HEAD > evidence/controller-changed-paths.txt
+          fi
+          sort -u -o evidence/controller-changed-paths.txt evidence/controller-changed-paths.txt
+          test "$(wc -l < evidence/controller-changed-paths.txt | tr -d ' ')" = 1
+          grep -Fxq "$AUTHORIZATION_FILE" evidence/controller-changed-paths.txt
+          expected_authorization="$(cat <<EOF_AUTH
+          schema=moral-trade-pr808-refund-operator-engineering-v1
+          base=$EXPECTED_BASE_SHA
+          product=$EXPECTED_PRODUCT_SHA
+          tree=$EXPECTED_PRODUCT_TREE
+          controller_branch=$EXPECTED_CONTROLLER_BRANCH
+          controller_parent=$BEFORE_SHA
+          authorization=AUTHORIZE_PR808_REFUND_OPERATOR_ENGINEERING_A32AC22
+          EOF_AUTH
+          )"
+          test -f "$AUTHORIZATION_FILE"
+          test "$(cat "$AUTHORIZATION_FILE")" = "$expected_authorization"
+
+          git checkout --detach "$EXPECTED_PRODUCT_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_PRODUCT_TREE"
+          git diff --check "$EXPECTED_BASE_SHA...$EXPECTED_PRODUCT_SHA"
+          git diff --name-only "$EXPECTED_BASE_SHA...$EXPECTED_PRODUCT_SHA" | LC_ALL=C sort > evidence/product-changed-paths.txt
+          cat > evidence/expected-product-changed-paths.txt <<'EOF_PATHS'
+          src/app/admin/donation-upgrades/actions.ts
+          src/app/admin/donation-upgrades/page.tsx
+          src/app/donation-upgrades/[offerId]/layout.tsx
+          src/app/donation-upgrades/[offerId]/provider-status/page.tsx
+          src/lib/provider-refund-operator-source-contract.test.ts
+          src/lib/provider-refund-rendered-qa-source-contract.test.ts
+          src/lib/provider-refund-rendered-qa.ts
+          EOF_PATHS
+          sed -i 's/^          //' evidence/expected-product-changed-paths.txt
+          diff -u evidence/expected-product-changed-paths.txt evidence/product-changed-paths.txt
+          if grep -E '(^|/)(\.github|supabase/migrations|supabase/tests|package(-lock)?\.json|\.env)' evidence/product-changed-paths.txt; then
+            echo 'Unexpected workflow, database, dependency, or environment path in product tranche.' >&2
+            exit 1
+          fi
+          git diff --stat "$EXPECTED_BASE_SHA...$EXPECTED_PRODUCT_SHA" > evidence/product-diff-stat.txt
+          git diff "$EXPECTED_BASE_SHA...$EXPECTED_PRODUCT_SHA" > evidence/exact-product.diff
+          while IFS= read -r path; do sha256sum "$path"; done < evidence/product-changed-paths.txt > evidence/source-sha256.txt
+          {
+            echo "base=$EXPECTED_BASE_SHA"
+            echo "merge_base=$(git merge-base "$EXPECTED_BASE_SHA" HEAD)"
+            echo "head=$EXPECTED_PRODUCT_SHA"
+            echo "tree=$EXPECTED_PRODUCT_TREE"
+            echo "commit_count=$(git rev-list --count "$EXPECTED_BASE_SHA..HEAD")"
+            echo "pr547_head=$EXPECTED_PR547_SHA"
+            echo "pr711_head=$EXPECTED_PR711_SHA"
+          } > evidence/identity.txt
+
+      - name: Verify bounded security, privacy, truthfulness, and no-money-movement source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t paths < evidence/product-changed-paths.txt
+          grep -nH -E 'evaluateAdminOperatorAccess|isAdminEmail|loadBackgroundAccountSecuritySummary' "${paths[@]}" > evidence/aal2-admin-boundary.txt
+          grep -nH -E 'record_direct_donation_upgrade_provider_reversal|provider_reversed|post_completion_exception' "${paths[@]}" > evidence/reversal-boundary.txt
+          grep -nH -E 'Historical provider-confirmed|Current unreversed|counterfactual additionality|does not retroactively' "${paths[@]}" > evidence/truthfulness-boundary.txt
+          grep -nH -E 'sha256|evidence_reference_hash|every_org_dashboard|every_org_support' "${paths[@]}" > evidence/evidence-minimization.txt
+          if grep -nH -E '(refunds\.create|paymentIntents\.create|transfers\.create|payouts\.create|createCheckoutSession|stripe\.checkout|EVERY_ORG_REFUND_API)' "${paths[@]}"; then
+            echo 'Money-moving primitive entered refund operator tranche.' >&2
+            exit 1
+          fi
+          if grep -nH -E 'name="(donor_name|donor_email|card_number|bank_account|raw_webhook_body)"' "${paths[@]}"; then
+            echo 'Forbidden donor-PII or raw-provider-body form field entered product.' >&2
+            exit 1
+          fi
+          if grep -nH -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' "${paths[@]}"; then
+            echo 'Credential-like material entered product tranche.' >&2
+            exit 1
+          fi
+          ! grep -R -n -E '(partnered with Every\.org|in partnership with Every\.org|sponsored by Every\.org|endorsed by Every\.org|co-branded with Every\.org)' "${paths[@]}"
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: npm ci > evidence/npm-ci.log 2>&1
+
+      - name: Run refund operator, foundation, and Every.org authentication tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/provider-refund-operator-source-contract.test.ts \
+            src/lib/provider-refund-rendered-qa-source-contract.test.ts \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/every-org-webhook-route-id-source-contract.test.ts \
+            src/lib/every-org-api-environment.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-split.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/direct-donation-upgrade-environment-contract.test.ts \
+            src/lib/trade-donation.test.ts \
+            src/lib/mpgf.test.ts \
+            > evidence/focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: npm test > evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: npx tsc --noEmit --pretty false > evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: npm run lint -- --quiet > evidence/lint.log 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          DIRECT_DONATION_UPGRADE_PROVIDER_REFUND_RENDERED_QA: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          MPGF_REAL_MONEY_ENABLED: "false"
+          MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+          MPGF_TEST_PAYMENT_ENABLED: "false"
+        run: npm run build > evidence/disabled-build.log 2>&1
+
+      - name: Build deterministic staging rendering fixture with payment rails disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "true"
+          DIRECT_DONATION_UPGRADE_MODE: staging
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
+          DIRECT_DONATION_UPGRADE_PROVIDER_REFUND_RENDERED_QA: "true"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          MPGF_REAL_MONEY_ENABLED: "false"
+          MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+          MPGF_TEST_PAYMENT_ENABLED: "false"
+        run: npm run build > evidence/staging-fixture-build.log 2>&1
+
+      - name: Write exact results and durable locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -E '^(# tests|# pass|# fail|ℹ tests|ℹ pass|ℹ fail)' evidence/focused-tests.log > evidence/focused-test-summary.txt || true
+          grep -E '^(# tests|# pass|# fail|ℹ tests|ℹ pass|ℹ fail)' evidence/repository-tests.log > evidence/repository-test-summary.txt || true
+          printf '%s\n' \
+            'refund_execution_attempted=false' \
+            'provider_request_attempted=false' \
+            'webhook_mutation_attempted=false' \
+            'checkout_attempted=false' \
+            'donation_attempted=false' \
+            'payment_object_attempted=false' \
+            'persistent_database_write_attempted=false' \
+            'persistent_migration_attempted=false' \
+            'deployment_attempted=false' \
+            'production_alias_changed=false' \
+            'pr547_mutated=false' \
+            'pr711_mutated=false' \
+            'production_changed=false' \
+            > evidence/non-actions.txt
+          body="## PR #808 refund operator engineering QA run locator
+
+- run: $GITHUB_RUN_ID
+- exact base: \`$EXPECTED_BASE_SHA\`
+- exact head: \`$EXPECTED_PRODUCT_SHA\`
+- exact tree: \`$EXPECTED_PRODUCT_TREE\`
+- exact seven-file product manifest: verified
+- focused refund/authentication tests: passed
+- complete repository tests: passed
+- strict TypeScript: passed
+- ESLint: passed
+- disabled-rail build: passed
+- deterministic staging rendering-fixture build with all payment rails disabled: passed
+- artifact: \`pr808-refund-operator-engineering-$GITHUB_RUN_ID\`
+
+No refund execution, provider request, webhook mutation, checkout, donation, payment object, persistent database write or migration, deployment, production alias change, PR #547 mutation, PR #711 mutation, merge, feature activation, or production change occurred."
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/808/comments" -f body="$body" >/dev/null
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/709/comments" -f body="$body" >/dev/null
+
+      - name: Upload exact engineering evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr808-refund-operator-engineering-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
