@@ -31,6 +31,7 @@ OUTPUT_DIR="${1:-$ROOT/artifacts/preactivation-baseline-clean-room}"
 ''',
         '''CATALOG_SQL="$ROOT/scripts/database/preactivation-catalog.sql"
 POLICY_CATALOG_SQL="$ROOT/scripts/database/preactivation-policy-catalog.sql"
+POLICY_DEFINITIONS_SQL="$ROOT/scripts/database/preactivation-policy-definitions.sql"
 OUTPUT_DIR="${1:-$ROOT/artifacts/preactivation-baseline-clean-room}"
 ''',
         "policy catalog source variable",
@@ -44,6 +45,7 @@ START_LOG="$OUTPUT_DIR/supabase-start.log"
 ''',
         '''TARGET_CATALOG="$OUTPUT_DIR/target-catalog.tsv"
 TARGET_POLICY_CATALOG="$OUTPUT_DIR/target-policy-catalog.tsv"
+TARGET_POLICY_DEFINITIONS="$OUTPUT_DIR/target-policy-definitions.tsv"
 TARGET_CATALOG_BASE="$OUTPUT_DIR/target-catalog-without-policies.tsv"
 TARGET_CATALOG_NORMALIZED="$OUTPUT_DIR/target-catalog.normalized.tsv"
 START_LOG="$OUTPUT_DIR/supabase-start.log"
@@ -62,6 +64,8 @@ LC_ALL=C diff -u "$SOURCE_CATALOG" "$TARGET_CATALOG_NORMALIZED" \\
   > "$TARGET_CATALOG"
 psql "$LOCAL_DB_URL" -X -q -v ON_ERROR_STOP=1 -f "$POLICY_CATALOG_SQL" \\
   > "$TARGET_POLICY_CATALOG"
+psql "$LOCAL_DB_URL" -X -q -v ON_ERROR_STOP=1 -f "$POLICY_DEFINITIONS_SQL" \\
+  > "$TARGET_POLICY_DEFINITIONS"
 grep -v $'^POLICY\\t' "$TARGET_CATALOG" > "$TARGET_CATALOG_BASE" || true
 cat "$TARGET_POLICY_CATALOG" >> "$TARGET_CATALOG_BASE"
 LC_ALL=C sort -u "$TARGET_CATALOG_BASE" > "$TARGET_CATALOG_NORMALIZED"
