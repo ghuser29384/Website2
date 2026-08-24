@@ -60,12 +60,35 @@ jobs:
           psql --version
           pg_dump --version
 
+      - name: Prepare newline-safe generator source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/database/generate-preactivation-baseline.sh \
+            "$RUNNER_TEMP/generate-preactivation-baseline.sh"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(__import__("os").environ["RUNNER_TEMP"]) / "generate-preactivation-baseline.sh"
+          source = path.read_text()
+          bad = r"  E'\\n'," + "\n"
+          good = r"  E'\n'," + "\n"
+          if source.count(bad) == 1:
+              source = source.replace(bad, good)
+          elif source.count(good) != 1:
+              raise SystemExit("Expected auth-trigger newline serialization was not found exactly once.")
+          path.write_text(source)
+          PY
+          chmod +x "$RUNNER_TEMP/generate-preactivation-baseline.sh"
+
       - name: Generate the production-derived data-free baseline
         shell: bash
         run: |
           set -euo pipefail
           test -n "${PROD_SUPABASE_DB_URL:-}"
-          bash scripts/database/generate-preactivation-baseline.sh
+          bash "$RUNNER_TEMP/generate-preactivation-baseline.sh"
+          cp "$RUNNER_TEMP/generate-preactivation-baseline.sh" \
+            scripts/database/generate-preactivation-baseline.sh
 
       - name: Verify source contracts
         shell: bash
@@ -74,6 +97,10 @@ jobs:
           node --import tsx --test \
             src/lib/database-preactivation-baseline-contract.test.ts
           npx eslint src/lib/database-preactivation-baseline-contract.test.ts
+          if grep -Fq '\nCREATE TRIGGER' supabase/baseline/pre_activation/schema.sql; then
+            echo "The generated baseline contains a literal backslash-n trigger separator." >&2
+            exit 1
+          fi
           git diff --check
 
       - name: Reconstruct the pre-activation catalog in a clean local Supabase stack
@@ -101,6 +128,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
+            scripts/database/generate-preactivation-baseline.sh \
             supabase/baseline/pre_activation \
             src/lib/database-preactivation-baseline-contract.test.ts
           git commit -m "Capture authoritative pre-activation Supabase baseline"
