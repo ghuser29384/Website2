@@ -1,11 +1,11 @@
 name: PR 737 one-use fail-closed phase-order repair
 
 on:
-  push:
-    branches:
-      - feature/compact-authoritative-outflow-ledger-v1-20260816
+  pull_request:
+    branches: [agent/mpgf-public-goods-compacts]
     paths:
       - .github/workflows/pr737-fail-closed-phase-order-repair-once.yml
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EXPECTED_PARENT_SHA: 8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91
+  EXPECTED_CONTROLLER_PARENT_SHA: 91d71db8211e6501319bcaac82db6c8caa3b92cb
+  DURABLE_BASE_SHA: 8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91
   TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
   CONTROLLER_PATH: .github/workflows/pr737-fail-closed-phase-order-repair-once.yml
   LEDGER_WORKFLOW: .github/workflows/compact-authoritative-outflow-ledger-qa.yml
@@ -24,25 +25,25 @@ env:
 
 jobs:
   repair:
+    if: github.event.pull_request.number == 737 && github.event.pull_request.head.ref == 'feature/compact-authoritative-outflow-ledger-v1-20260816'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Check out exact one-use controller
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify bounded lineage and remote ownership
+      - name: Verify exact one-use lineage
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CONTROLLER_PARENT_SHA"
           test "$(git diff --name-only HEAD^...HEAD)" = "$CONTROLLER_PATH"
           remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
           test "$remote_head" = "$(git rev-parse HEAD)"
 
-      - name: Materialize exact permanent repair and remove controller
+      - name: Materialize permanent repair
         shell: bash
         run: |
           set -euo pipefail
@@ -50,24 +51,20 @@ jobs:
           import os
           from pathlib import Path
 
-          ledger_path = Path(os.environ["LEDGER_WORKFLOW"])
-          adjacent_path = Path(os.environ["ADJACENT_WORKFLOW"])
-          test_path = Path(os.environ["PHASE_TEST"])
+          ledger_path = Path(os.environ['LEDGER_WORKFLOW'])
+          adjacent_path = Path(os.environ['ADJACENT_WORKFLOW'])
+          test_path = Path(os.environ['PHASE_TEST'])
+          ledger = ledger_path.read_text(encoding='utf-8')
+          adjacent = adjacent_path.read_text(encoding='utf-8')
+          phase_test = test_path.read_text(encoding='utf-8')
 
-          ledger = ledger_path.read_text(encoding="utf-8")
-          adjacent = adjacent_path.read_text(encoding="utf-8")
-          phase_test = test_path.read_text(encoding="utf-8")
-
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
+          def one(text, old, new, label):
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f"{label}: expected one anchor, found {count}")
+                  raise SystemExit(f'{label}: expected one anchor, found {count}')
               return text.replace(old, new, 1)
 
-          # The source job previously piped every causal gate through tee without
-          # pipefail, allowing a failing test process to report success. Make each
-          # pipeline explicitly fail closed.
-          ledger = replace_once(
+          ledger = one(
               ledger,
               """      - name: Focused contracts
                 run: |
@@ -79,104 +76,56 @@ jobs:
                   set -euo pipefail
                   node --import tsx --test \\
 """,
-              "focused contracts pipefail",
+              'focused contracts pipefail',
           )
-
-          single_line_steps = [
-              (
-                  "Complete repository tests",
-                  "npm test 2>&1 | tee repository-tests.log",
-              ),
-              (
-                  "ESLint",
-                  "npm run lint -- --quiet 2>&1 | tee eslint.log",
-              ),
-              (
-                  "Strict TypeScript",
-                  "npx tsc --noEmit 2>&1 | tee typescript.log",
-              ),
-              (
-                  "Production build",
-                  "npm run build 2>&1 | tee build.log",
-              ),
-              (
-                  "Four-viewpoint browser contract",
-                  "npx playwright test tests/mpgf-public-goods-compacts.spec.ts --workers=1 --reporter=line 2>&1 | tee playwright.log",
-              ),
-          ]
-          for name, command in single_line_steps:
-              ledger = replace_once(
+          for name, command in [
+              ('Complete repository tests', 'npm test 2>&1 | tee repository-tests.log'),
+              ('ESLint', 'npm run lint -- --quiet 2>&1 | tee eslint.log'),
+              ('Strict TypeScript', 'npx tsc --noEmit 2>&1 | tee typescript.log'),
+              ('Production build', 'npm run build 2>&1 | tee build.log'),
+              ('Four-viewpoint browser contract', 'npx playwright test tests/mpgf-public-goods-compacts.spec.ts --workers=1 --reporter=line 2>&1 | tee playwright.log'),
+          ]:
+              ledger = one(
                   ledger,
-                  f"""      - name: {name}
-                run: {command}
-""",
-                  f"""      - name: {name}
-                shell: bash
-                run: |
-                  set -euo pipefail
-                  {command}
-""",
-                  f"{name} pipefail",
+                  f"      - name: {name}\n        run: {command}\n",
+                  f"      - name: {name}\n        shell: bash\n        run: |\n          set -euo pipefail\n          {command}\n",
+                  f'{name} pipefail',
               )
-
-          ledger = replace_once(
+          ledger = one(
               ledger,
               """      - name: Generate and compare public runtime types
                 run: |
-                  supabase gen types typescript --db-url \"$DB_URL\" --schema public > db-evidence/generated.types.ts
+                  supabase gen types typescript --db-url "$DB_URL" --schema public > db-evidence/generated.types.ts
 """,
               """      - name: Generate and compare public runtime types
                 shell: bash
                 run: |
                   set -euo pipefail
-                  supabase gen types typescript --db-url \"$DB_URL\" --schema public > db-evidence/generated.types.ts
+                  supabase gen types typescript --db-url "$DB_URL" --schema public > db-evidence/generated.types.ts
 """,
-              "generated types pipefail",
+              'generated types pipefail',
           )
 
-          # Align durable phase labels with the executable ordering contract.
-          label_replacements = [
-              (
-                  "      - name: Apply pre-ledger production-compatible migrations\n",
-                  "      - name: Apply baseline and every production-compatible pre-ledger migration\n",
-              ),
-              (
-                  "      - name: Validate original Compact lifecycle before ledger hardening\n",
-                  "      - name: Run legacy Compact regressions before ledger authority hardening\n",
-              ),
-              (
-                  "      - name: Apply authoritative ledger migrations\n",
-                  "      - name: Apply the four authoritative-ledger migrations in order\n",
-              ),
-              (
-                  "      - name: Lint final schema and execute authoritative ledger lifecycle\n",
-                  "      - name: Run final authoritative-ledger lifecycle and authorization suites\n",
-              ),
-              (
-                  "      - name: Prove rollback and zero residue\n",
-                  "      - name: Prove rollback and zero fixture residue\n",
-              ),
-          ]
-          for old, new in label_replacements:
-              ledger = replace_once(ledger, old, new, old.strip())
+          for old, new in [
+              ('      - name: Apply pre-ledger production-compatible migrations\n', '      - name: Apply baseline and every production-compatible pre-ledger migration\n'),
+              ('      - name: Validate original Compact lifecycle before ledger hardening\n', '      - name: Run legacy Compact regressions before ledger authority hardening\n'),
+              ('      - name: Apply authoritative ledger migrations\n', '      - name: Apply the four authoritative-ledger migrations in order\n'),
+              ('      - name: Lint final schema and execute authoritative ledger lifecycle\n', '      - name: Run final authoritative-ledger lifecycle and authorization suites\n'),
+              ('      - name: Prove rollback and zero residue\n', '      - name: Prove rollback and zero fixture residue\n'),
+          ]:
+              ledger = one(ledger, old, new, old.strip())
 
-          # Replace the rollback preparation with a deterministic normalizer. The
-          # current suites are workflow-owned and envelope-free; legacy suites with
-          # exactly one outer BEGIN/ROLLBACK remain accepted. Any COMMIT, partial
-          # envelope, or nested transaction control fails closed.
-          ledger = replace_once(
+          ledger = one(
               ledger,
-              "          mkdir -p rollback-evidence/migrations\n",
-              "          mkdir -p rollback-evidence/migrations compact-outflow-rollback/test-bodies\n",
-              "rollback directories",
+              '          mkdir -p rollback-evidence/migrations\n',
+              '          mkdir -p rollback-evidence/migrations compact-outflow-rollback/test-bodies\n',
+              'rollback directories',
           )
-          prep_start = ledger.index(
-              "          python3 - <<'PY'\n          from pathlib import Path\n          for name in [\n",
-              ledger.index("      - name: Record baseline\n"),
-          )
-          lifecycle_marker = "      - name: Execute rollback-only staged lifecycle\n"
+          record = ledger.index('      - name: Record baseline\n')
+          prep_start = ledger.index("          python3 - <<'PY'\n          from pathlib import Path\n          for name in [\n", record)
+          lifecycle_marker = '      - name: Execute rollback-only staged lifecycle\n'
           prep_end = ledger.index(lifecycle_marker, prep_start)
-          prep_replacement = r'''          python3 - <<'PY'
+          prep = r'''          python3 - <<'PY'
           import hashlib
           import json
           from pathlib import Path
@@ -196,8 +145,7 @@ jobs:
               if line.strip().lower() not in {'begin;', 'commit;'}
             ]
             (Path('rollback-evidence/migrations') / name).write_text(
-              '\n'.join(lines) + '\n',
-              encoding='utf-8',
+              '\n'.join(lines) + '\n', encoding='utf-8'
             )
 
           suite_names = [
@@ -210,8 +158,7 @@ jobs:
           for name in suite_names:
             source_path = Path('supabase/tests') / name
             source_bytes = source_path.read_bytes()
-            source_text = source_bytes.decode('utf-8')
-            source_lines = source_text.splitlines(keepends=True)
+            source_lines = source_bytes.decode('utf-8').splitlines(keepends=True)
             controls = [
               (index, line.strip().lower())
               for index, line in enumerate(source_lines)
@@ -220,7 +167,6 @@ jobs:
             begins = [index for index, control in controls if control == 'begin;']
             commits = [index for index, control in controls if control == 'commit;']
             rollbacks = [index for index, control in controls if control == 'rollback;']
-
             if commits:
               raise SystemExit(
                 f'{name}: expected one rollback-only transaction envelope or an '
@@ -240,7 +186,6 @@ jobs:
                 f'{name}: expected one rollback-only transaction envelope or an '
                 f'envelope-free workflow-owned suite; controls={controls}'
               )
-
             body_controls = [
               line.strip().lower()
               for line in body_lines
@@ -252,12 +197,11 @@ jobs:
               raise SystemExit(f'{name}: unexpected nested rollback')
             if 'commit;' in body_controls:
               raise SystemExit(f'{name}: unexpected nested commit')
-
             body_text = ''.join(body_lines)
             if not body_text.endswith('\n'):
               body_text += '\n'
-            target_path = Path('compact-outflow-rollback/test-bodies') / name
-            target_path.write_text(body_text, encoding='utf-8')
+            target = Path('compact-outflow-rollback/test-bodies') / name
+            target.write_text(body_text, encoding='utf-8')
             manifest.append({
               'name': name,
               'envelope': envelope,
@@ -265,19 +209,17 @@ jobs:
               'bodySha256': hashlib.sha256(body_text.encode('utf-8')).hexdigest(),
               'transactionControlsRemoved': len(controls),
             })
-
           Path('rollback-evidence/test-body-manifest.json').write_text(
-            json.dumps(manifest, sort_keys=True, indent=2) + '\n',
-            encoding='utf-8',
+            json.dumps(manifest, sort_keys=True, indent=2) + '\n', encoding='utf-8'
           )
           PY
 '''
-          ledger = ledger[:prep_start] + prep_replacement + ledger[prep_end:]
+          ledger = ledger[:prep_start] + prep + ledger[prep_end:]
 
           lifecycle_start = ledger.index(lifecycle_marker)
-          cleanup_marker = "      - name: Prove rollback and zero fixture residue\n"
+          cleanup_marker = '      - name: Prove rollback and zero fixture residue\n'
           lifecycle_end = ledger.index(cleanup_marker, lifecycle_start)
-          lifecycle_replacement = r'''      - name: Execute ordered rollback-only legacy and authoritative-ledger lifecycles
+          lifecycle = r'''      - name: Execute ordered rollback-only legacy and authoritative-ledger lifecycles
         shell: bash
         run: |
           set -euo pipefail
@@ -311,15 +253,13 @@ jobs:
           rollback;
           SQL
 '''
-          ledger = ledger[:lifecycle_start] + lifecycle_replacement + ledger[lifecycle_end:]
+          ledger = ledger[:lifecycle_start] + lifecycle + ledger[lifecycle_end:]
 
-          # Restore the durable adjacent source-contract marker. The prior head added
-          # the word "test", making the source disagree with its own contract.
-          adjacent = replace_once(
+          adjacent = one(
               adjacent,
-              "      - name: Run genuinely concurrent readiness freeze test before ledger authority hardening\n",
-              "      - name: Run genuinely concurrent readiness freeze before ledger authority hardening\n",
-              "adjacent concurrency marker",
+              '      - name: Run genuinely concurrent readiness freeze test before ledger authority hardening\n',
+              '      - name: Run genuinely concurrent readiness freeze before ledger authority hardening\n',
+              'adjacent concurrency marker',
           )
 
           regression = r'''
@@ -349,15 +289,14 @@ test("piped validation gates propagate failures through tee", () => {
           if 'test("piped validation gates propagate failures through tee"' in phase_test:
               raise SystemExit('pipefail regression test already exists unexpectedly')
           phase_test = phase_test.rstrip() + regression
-
-          ledger_path.write_text(ledger, encoding="utf-8")
-          adjacent_path.write_text(adjacent, encoding="utf-8")
-          test_path.write_text(phase_test, encoding="utf-8")
+          ledger_path.write_text(ledger, encoding='utf-8')
+          adjacent_path.write_text(adjacent, encoding='utf-8')
+          test_path.write_text(phase_test, encoding='utf-8')
           PY
 
           rm "$CONTROLLER_PATH"
           git diff --check
-          git diff --name-only "$EXPECTED_PARENT_SHA" | sort > /tmp/changed.txt
+          git diff --name-only "$DURABLE_BASE_SHA" | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'FILES'
           .github/workflows/compact-authoritative-outflow-ledger-qa.yml
           .github/workflows/mpgf-public-goods-compacts-qa.yml
