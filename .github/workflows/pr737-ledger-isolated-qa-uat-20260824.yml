@@ -1,4 +1,4 @@
-name: PR 737 authoritative-ledger protected isolated-QA UAT r2 20260824
+name: PR 737 authoritative-ledger protected isolated-QA UAT r3 20260824
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - "ops/pr737-ledger-uat/**"
 
 concurrency:
-  group: pr737-ledger-isolated-qa-uat-r2-20260824
+  group: pr737-ledger-isolated-qa-uat-r3-20260824
   cancel-in-progress: false
 
 permissions:
@@ -682,37 +682,105 @@ jobs:
           }, null, 2)}\n`);
           NODE
 
-          attestation="$(curl -fsS \
+          cookie_jar="$RUNNER_TEMP/pr737-vercel-bypass.cookies"
+          attestation_headers="$RUNNER_TEMP/pr737-attestation-headers"
+          attestation_body="$RUNNER_TEMP/pr737-attestation-body"
+          attestation_meta="$(curl -sS \
+            --location \
+            --max-redirs 5 \
+            --cookie-jar "$cookie_jar" \
+            --cookie "$cookie_jar" \
+            -D "$attestation_headers" \
+            -o "$attestation_body" \
+            -w '%{http_code}\n%{url_effective}\n%{content_type}' \
             -H "x-vercel-protection-bypass: $bypass" \
             -H "x-vercel-set-bypass-cookie: true" \
             "$COMPACT_UAT_BASE_URL/api/pr737/runtime-attestation")"
-          jq -e --arg ref "$EXPECTED_QA_REF" '
-            .ok == true
-            and .runtimeEnvironment == "preview"
-            and .qaProjectRef == $ref
-            and .qaPublicUrlExact == true
-            and .qaPublishableKeyConfigured == true
-            and .serviceRoleAbsent == true
-            and .qaApiRead == true
-            and .paymentModesDisabled == true
-            and .productionProjectPresent == false
-            and (.nonemptyProviderCredentialKeys | length) == 0
-            and .secretValuesReturned == false
-          ' <<< "$attestation" > /dev/null
-          jq '.' <<< "$attestation" > evidence/runtime-attestation.json
+          mapfile -t attestation_fields <<< "$attestation_meta"
+          attestation_status="${attestation_fields[0]:-}"
+          attestation_url="${attestation_fields[1]:-}"
+          attestation_type="${attestation_fields[2]:-}"
+
+          if [[ "$attestation_status" != "200" ]] \
+            || [[ "${attestation_type,,}" != application/json* ]] \
+            || ! jq -e --arg ref "$EXPECTED_QA_REF" '
+                 .schemaVersion == 1
+                 and .scope == "pr737-ledger-controller-only-protected-preview"
+                 and .ok == true
+                 and .runtimeEnvironment == "preview"
+                 and .qaProjectRef == $ref
+                 and .qaPublicUrlExact == true
+                 and .qaPublishableKeyConfigured == true
+                 and .serviceRoleAbsent == true
+                 and .qaApiRead == true
+                 and .paymentModesDisabled == true
+                 and .productionProjectPresent == false
+                 and (.nonemptyProviderCredentialKeys | length) == 0
+                 and .secretValuesReturned == false
+               ' "$attestation_body" > /dev/null; then
+            body_sha256="$(sha256sum "$attestation_body" | awk '{print $1}')"
+            body_bytes="$(wc -c < "$attestation_body" | tr -d ' ')"
+            safe_effective_url="$(python3 - "$attestation_url" <<'PYURL'
+          import sys
+          from urllib.parse import urlparse
+          value = urlparse(sys.argv[1])
+          print(f'{value.scheme}://{value.hostname or "unknown"}{value.path}')
+          PYURL
+          )"
+            jq -n \
+              --arg status "$attestation_status" \
+              --arg contentType "$attestation_type" \
+              --arg effectiveUrl "$safe_effective_url" \
+              --arg bodySha256 "$body_sha256" \
+              --argjson bodyBytes "$body_bytes" \
+              '{
+                ok:false,
+                status:$status,
+                contentType:$contentType,
+                effectiveUrl:$effectiveUrl,
+                bodySha256:$bodySha256,
+                bodyBytes:$bodyBytes,
+                bodyRetained:false,
+                secretsRetained:false
+              }' > evidence/runtime-attestation-failure.json
+            cat evidence/runtime-attestation-failure.json >&2
+            exit 1
+          fi
+          jq '.' "$attestation_body" > evidence/runtime-attestation.json
 
           headers_file="$RUNNER_TEMP/pr737-page-headers"
           body_file="$RUNNER_TEMP/pr737-page-body"
-          status="$(curl -sS \
+          page_meta="$(curl -sS \
+            --location \
+            --max-redirs 5 \
+            --cookie-jar "$cookie_jar" \
+            --cookie "$cookie_jar" \
             -D "$headers_file" \
             -o "$body_file" \
-            -w '%{http_code}' \
+            -w '%{http_code}\n%{url_effective}\n%{content_type}' \
             -H "x-vercel-protection-bypass: $bypass" \
             -H "x-vercel-set-bypass-cookie: true" \
             "$COMPACT_UAT_BASE_URL/mpgf/compacts")"
+          mapfile -t page_fields <<< "$page_meta"
+          status="${page_fields[0]:-}"
+          page_url="${page_fields[1]:-}"
+          page_type="${page_fields[2]:-}"
           test "$status" = "200"
+          test "$(python3 - "$COMPACT_UAT_BASE_URL" "$page_url" <<'PYURL'
+          import sys
+          from urllib.parse import urlparse
+          print(str(urlparse(sys.argv[1]).hostname == urlparse(sys.argv[2]).hostname).lower())
+          PYURL
+          )" = "true"
+          [[ "${page_type,,}" == text/html* ]]
+          grep -Fq 'Prior-month transaction coverage' "$body_file"
+          grep -Fq 'Shadow calculated 10% amount' "$body_file"
+          if grep -Fq "$FORBIDDEN_PROD_REF" "$body_file"; then
+            echo 'Protected page retained the forbidden production project reference.' >&2
+            exit 1
+          fi
           robots_header="$(awk 'BEGIN{IGNORECASE=1} /^x-robots-tag:/ {sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "$headers_file")"
-          if [[ "$robots_header" != *noindex* ]] \
+          if [[ "${robots_header,,}" != *noindex* ]] \
             && ! grep -Eiq '<meta[^>]+name=["'"']robots["'"'][^>]+content=["'"'][^"'"']*noindex' "$body_file"; then
             echo 'Preview noindex protection was not proved.' >&2
             exit 1
@@ -720,9 +788,21 @@ jobs:
           jq -n \
             --argjson unauth "$unauth_status" \
             --arg robots "${robots_header:-meta-robots-noindex}" \
-            '{protectedUnauthenticatedStatus:$unauth,noindex:true,noindexEvidence:$robots,rawHeadersRetained:false}' \
-            > evidence/protection-and-noindex.json
-          rm -f "$headers_file" "$body_file"
+            '{
+              protectedUnauthenticatedStatus:$unauth,
+              redirectsFollowed:true,
+              bypassCookiePersisted:true,
+              noindex:true,
+              noindexEvidence:$robots,
+              rawHeadersRetained:false,
+              rawBodiesRetained:false
+            }' > evidence/protection-and-noindex.json
+          rm -f \
+            "$cookie_jar" \
+            "$attestation_headers" \
+            "$attestation_body" \
+            "$headers_file" \
+            "$body_file"
 
       - name: Apply reviewed Compact and ledger migrations and create synthetic identities
         id: fixtures
