@@ -1,15 +1,15 @@
-name: PR 737 authoritative-ledger protected isolated-QA UAT 20260824
+name: PR 737 authoritative-ledger protected isolated-QA UAT r2 20260824
 
 on:
   push:
     branches:
-      - ops/pr737-ledger-isolated-qa-uat-20260821
+      - ops/pr737-ledger-isolated-qa-uat-r2-20260824
     paths:
       - ".github/workflows/pr737-ledger-isolated-qa-uat-20260824.yml"
       - "ops/pr737-ledger-uat/**"
 
 concurrency:
-  group: pr737-ledger-isolated-qa-uat-20260824
+  group: pr737-ledger-isolated-qa-uat-r2-20260824
   cancel-in-progress: false
 
 permissions:
@@ -27,18 +27,18 @@ jobs:
 
     env:
       GH_TOKEN: ${{ github.token }}
-      CONTROLLER_BRANCH: ops/pr737-ledger-isolated-qa-uat-20260821
+      CONTROLLER_BRANCH: ops/pr737-ledger-isolated-qa-uat-r2-20260824
       CANDIDATE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
       CANDIDATE_BASE_SHA: f46178aaad6d2fbd911cc365e2963bb7c73a0098
-      CANDIDATE_HEAD_SHA: 8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91
-      CANDIDATE_TREE_SHA: f7e33eb064bf3b18ee3b6de831244919afb4f9de
+      CANDIDATE_HEAD_SHA: 5a3d9fee0bbe0c092655aa88c1863b2a9cf8b5ea
+      CANDIDATE_TREE_SHA: a9382bf0f20cfb1789ca991466bd27604c839a98
       PR_NUMBER: "737"
       ISSUE_NUMBER: "734"
-      NONHOSTED_CONTROLLER_RUN_ID: "32442312318"
-      LEDGER_QA_RUN_ID: "32442010241"
-      COMPACT_QA_RUN_ID: "32442330003"
-      PAYMENT_QA_RUN_ID: "32442338337"
-      VISUAL_QA_RUN_ID: "32442347005"
+      NONHOSTED_CONTROLLER_RUN_ID: "32776988523"
+      LEDGER_QA_RUN_ID: "32747587559"
+      COMPACT_QA_RUN_ID: "32777007325"
+      PAYMENT_QA_RUN_ID: "32777017986"
+      VISUAL_QA_RUN_ID: "32777029097"
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
       FORBIDDEN_PROD_REF: jnpoxvalyjtdghnperyu
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
@@ -142,7 +142,7 @@ jobs:
 
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$NONHOSTED_CONTROLLER_RUN_ID" \
             | jq -e '
-                .name == "PR 737 exact-head non-hosted controller r4"
+                .name == "PR 737 exact-head non-hosted controller r5"
                 and .status == "completed"
                 and .conclusion == "success"
               ' > /dev/null
