@@ -1,4 +1,4 @@
-name: PR800 stacked refund operator and rendered review materializer
+name: PR800 stacked refund operator and rendered review materializer v3
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: pr800-stacked-refund-operator-ui-materializer
+  group: pr800-stacked-refund-operator-ui-materializer-v3
   cancel-in-progress: false
 
 jobs:
@@ -22,17 +22,17 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       BASE_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
-      BASE_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      BASE_SHA: 358adf99f338f25011b6de4204d72bce4475b12f
       BASE_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
-      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-ui-709-20260823
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-ui-709-20260824
       GENERATOR_PATH: .github/ops/pr800_refund_operator_ui_materialize.py
     steps:
-      - name: Check out controller branch
+      - name: Check out registered controller branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Freeze generator and verify exact base
+      - name: Freeze generator and verify exact clean foundation
         shell: bash
         run: |
           set -euo pipefail
@@ -40,7 +40,6 @@ jobs:
           test -f "$GENERATOR_PATH"
           cp "$GENERATOR_PATH" "$RUNNER_TEMP/refund-operator-controller/materialize.py"
           sha256sum "$GENERATOR_PATH" > materialization-evidence/controller-source-sha256.txt
-
           git fetch --no-tags origin \
             "+refs/heads/$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH"
           test "$(git rev-parse refs/remotes/origin/$BASE_BRANCH)" = "$BASE_SHA"
@@ -86,8 +85,6 @@ jobs:
             materialization-evidence/generated-manifest.json
           rm .refund-operator-generated-manifest.json
           git diff --check
-          git status --short > materialization-evidence/generated-status.txt
-          test -s materialization-evidence/generated-status.txt
 
       - name: Use Node 24
         uses: actions/setup-node@v4
@@ -97,11 +94,9 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: |
-          set -euo pipefail
-          npm ci > materialization-evidence/npm-ci.log 2>&1
+        run: npm ci > materialization-evidence/npm-ci.log 2>&1
 
-      - name: Run new refund operator and rendering contracts
+      - name: Run refund operator and rendering contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -117,23 +112,17 @@ jobs:
 
       - name: Run complete repository tests
         shell: bash
-        run: |
-          set -euo pipefail
-          npm test > materialization-evidence/repository-tests.log 2>&1
+        run: npm test > materialization-evidence/repository-tests.log 2>&1
 
       - name: Run strict TypeScript
         shell: bash
-        run: |
-          set -euo pipefail
-          npx tsc --noEmit > materialization-evidence/typecheck.log 2>&1
+        run: npx tsc --noEmit > materialization-evidence/typecheck.log 2>&1
 
       - name: Run repository ESLint
         shell: bash
-        run: |
-          set -euo pipefail
-          npm run lint -- --quiet > materialization-evidence/lint.log 2>&1
+        run: npm run lint -- --quiet > materialization-evidence/lint.log 2>&1
 
-      - name: Build with every money rail and QA fixture disabled
+      - name: Build with all money rails and QA fixtures disabled
         shell: bash
         env:
           NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
@@ -145,16 +134,11 @@ jobs:
           CONDITIONAL_PAYMENTS_MODE: disabled
           TRADE_DONATION_POOL_ENABLED: "false"
           TRADE_DONATION_POOL_MODE: disabled
-        run: |
-          set -euo pipefail
-          npm run build > materialization-evidence/build.log 2>&1
+        run: npm run build > materialization-evidence/build.log 2>&1
 
-      - name: Install Chromium for exact rendered review evidence
+      - name: Install Chromium for exact rendered evidence
         shell: bash
-        run: |
-          set -euo pipefail
-          npx playwright install --with-deps chromium \
-            > materialization-evidence/playwright-install.log 2>&1
+        run: npx playwright install --with-deps chromium > materialization-evidence/playwright-install.log 2>&1
 
       - name: Capture fail-closed desktop and mobile review inventory
         shell: bash
@@ -173,9 +157,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .next
-          ./node_modules/.bin/next dev \
-            --hostname 127.0.0.1 \
-            --port 3100 \
+          ./node_modules/.bin/next dev --hostname 127.0.0.1 --port 3100 \
             > materialization-evidence/qa-server.log 2>&1 &
           server_pid=$!
           cleanup() {
@@ -214,19 +196,31 @@ jobs:
           import subprocess
           from pathlib import Path
 
-          manifest = json.loads(
-              Path("materialization-evidence/generated-manifest.json").read_text()
-          )
+          evidence = Path("materialization-evidence")
+          manifest = json.loads((evidence / "generated-manifest.json").read_text())
           expected = set(manifest["created_paths"])
           expected.update({
               "docs/provider-review/refund-screenshots/admin-and-participant-desktop.png",
               "docs/provider-review/refund-screenshots/admin-and-participant-mobile.png",
           })
-          actual = set(
-              subprocess.check_output(
-                  ["git", "diff", "--name-only", "HEAD"], text=True
-              ).splitlines()
+          for path_text in expected:
+              path = Path(path_text)
+              if not path.is_file() or path.is_symlink():
+                  raise SystemExit(f"missing or unsafe expected product path: {path_text}")
+
+          raw = subprocess.check_output(
+              ["git", "status", "--porcelain=v1", "--untracked-files=all", "-z"]
           )
+          records = [record for record in raw.decode().split("\0") if record]
+          actual = set()
+          for record in records:
+              status = record[:2]
+              path_text = record[3:]
+              if "R" in status or "C" in status:
+                  raise SystemExit(f"unexpected rename/copy status: {record!r}")
+              if path_text == "materialization-evidence" or path_text.startswith("materialization-evidence/"):
+                  continue
+              actual.add(path_text)
           if actual != expected:
               raise SystemExit(
                   "unexpected product scope\nexpected="
@@ -234,22 +228,25 @@ jobs:
                   + "\nactual="
                   + "\n".join(sorted(actual))
               )
-          Path("materialization-evidence/expected-product-paths.txt").write_text(
+          (evidence / "expected-product-paths.txt").write_text(
               "\n".join(sorted(expected)) + "\n"
           )
-          Path("materialization-evidence/actual-product-paths.txt").write_text(
+          (evidence / "actual-product-paths.txt").write_text(
               "\n".join(sorted(actual)) + "\n"
           )
+          source_paths = sorted(path_text for path_text in expected if not path_text.endswith(".png"))
+          (evidence / "source-product-paths.txt").write_text("\n".join(source_paths) + "\n")
           PY
 
+          mapfile -t product_paths < materialization-evidence/actual-product-paths.txt
+          mapfile -t source_paths < materialization-evidence/source-product-paths.txt
+          git add --intent-to-add -- "${product_paths[@]}"
           git diff --check
-          test -z "$(git diff --name-only | grep -E '(^|/)(\.github|package-lock\.json|package\.json)$' || true)"
-          test -z "$(git status --porcelain | grep -E '^\?\?' || true)"
+          test -z "$(printf '%s\n' "${product_paths[@]}" | grep -E '(^|/)(\.github|package-lock\.json|package\.json)$' || true)"
 
-          mapfile -t paths < materialization-evidence/actual-product-paths.txt
           if grep -nH -E \
             '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
-            "${paths[@]}"; then
+            "${source_paths[@]}"; then
             echo 'Refusing product scope containing suspected credential material.' >&2
             exit 1
           fi
@@ -257,13 +254,13 @@ jobs:
             '(donor_email|donor_name|card_number|bank_account|raw_payload)' \
             src/lib/direct-donation-upgrade-refund-server.ts \
             src/app/admin/donation-upgrade-refunds/actions.ts; then
-            echo 'Refusing new operator code containing forbidden persisted PII fields.' >&2
+            echo 'Refusing operator code containing forbidden persisted PII fields.' >&2
             exit 1
           fi
 
           git diff --stat > materialization-evidence/product-diff-stat.txt
           git diff --numstat > materialization-evidence/product-diff-numstat.txt
-          sha256sum "${paths[@]}" > materialization-evidence/product-source-sha256.txt
+          sha256sum "${source_paths[@]}" > materialization-evidence/product-source-sha256.txt
 
       - name: Commit and publish exact stacked candidate
         id: publish
@@ -278,8 +275,7 @@ jobs:
           git add -- "${paths[@]}"
           git diff --cached --name-only | sort \
             > materialization-evidence/staged-product-paths.txt
-          diff -u \
-            materialization-evidence/expected-product-paths.txt \
+          diff -u materialization-evidence/expected-product-paths.txt \
             materialization-evidence/staged-product-paths.txt
           git commit -m 'Add AAL2 refund operator and truthful refund rendering'
           product_sha="$(git rev-parse HEAD)"
@@ -299,7 +295,7 @@ jobs:
           PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
         run: |
           set -euo pipefail
-          body="<!-- issue709-refund-operator-ui-materialized -->
+          body="<!-- issue709-refund-operator-ui-materialized-v3 -->
           ## Issue #709 AAL2 refund-operator and rendered-review tranche materialized
 
           - exact stacked base: \`$BASE_SHA\`
@@ -339,7 +335,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: issue709-refund-operator-ui-materialization-${{ github.run_id }}
+          name: issue709-refund-operator-ui-materialization-v3-${{ github.run_id }}
           path: materialization-evidence/
           if-no-files-found: error
           retention-days: 30
