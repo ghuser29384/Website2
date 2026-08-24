@@ -1,0 +1,8 @@
+schema=moral-trade-pr808-refund-rendered-qa-v1
+base=358adf99f338f25011b6de4204d72bce4475b12f
+product=bec312f4a3999d533a4738cfec3dd3cd47a08976
+tree=a4f480e0dfef22f3a2e800360947c47726471550
+controller_branch=ops/pr808-refund-rendered-qa-20260824
+controller_parent=19795273ce7858a9fdf94c43bc8727ab4732275b
+target=local-production-build
+authorization=AUTHORIZE_PR808_REFUND_RENDERED_QA_BEC312F
