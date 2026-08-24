@@ -4,7 +4,9 @@ import test from "node:test";
 
 import {
   AUTHENTICATED_CONFIRMATION_MIGRATION,
+  CLEAN_STACK_HEAD,
   CONFIRMATION_SIGNATURE,
+  CONTEXT_READ_REPAIR_HEAD,
   INTEGRATION_PATHS,
   PR700_HEAD,
   PRODUCT_REPAIR_HEAD,
@@ -12,7 +14,6 @@ import {
   REQUIRED_MILESTONE_LIFECYCLE_FUNCTIONS,
   buildAuthenticatedHarnessSource,
 } from "./pooled-settlement-authenticated-caller-integration-contract.mjs";
-import { alignParticipantUiTruthCopy } from "./pooled-settlement-authenticated-caller-integration.mjs";
 
 const original = readFileSync(".github/scripts/pooled-settlement-qa-e2e.mjs", "utf8");
 const workflow = readFileSync(
@@ -20,14 +21,16 @@ const workflow = readFileSync(
   "utf8",
 );
 
-test("the clean stack is pinned to exact PR #700 and corrected product-repair identities", () => {
+test("the stacked QA candidate is pinned to the clean stack and both product repairs", () => {
   assert.equal(PR700_HEAD, "813573f64eaa17d2ca240c50f76ead9a3b535f97");
   assert.equal(PRODUCT_REPAIR_HEAD, "495f714b6dd4753ad78cf3d41945cffc84923876");
+  assert.equal(CLEAN_STACK_HEAD, "a67878590380f45af704ddd3e643ef1a135015f7");
+  assert.equal(CONTEXT_READ_REPAIR_HEAD, "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d");
   assert.equal(QA_PROJECT_REF, "hvmxfjjbdcgjjudmthdz");
   assert.deepEqual(REQUIRED_MILESTONE_LIFECYCLE_FUNCTIONS, [
     "finalize_trade_milestone_manifest_v1",
   ]);
-  assert.equal(INTEGRATION_PATHS.length, 7);
+  assert.equal(INTEGRATION_PATHS.length, 9);
   assert.ok(INTEGRATION_PATHS.includes(AUTHENTICATED_CONFIRMATION_MIGRATION));
 });
 
@@ -40,31 +43,28 @@ test("the generated harness creates route-complete run-owned profiles and uses t
   assert.doesNotMatch(generated, /const stage = page\.locator\("main"\)/);
 });
 
-test("the generated participant UI check follows the current live-trade truth boundary", () => {
-  const generated = alignParticipantUiTruthCopy(
-    buildAuthenticatedHarnessSource(original),
-  );
-  assert.match(generated, /await expectText\(stage, \/Trade is live\\\.\/i\);/);
+test("the generated participant UI check requires the pooled funding boundary", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
   assert.match(
     generated,
-    /await expectText\(stage, \/Both participants confirmed the same immutable version\\\.\/i\);/,
+    /await expectText\(stage, \/The pooled donation is the activation gate\/i\);/,
   );
   assert.match(
     generated,
-    /await expectText\(stage, \/Moral Trade does not hold funds\\\.\/i\);/,
+    /await expectText\(stage, \/presumptive provider-facing donor of record\/i\);/,
   );
-  assert.doesNotMatch(generated, /The pooled donation is the activation gate/);
-  assert.doesNotMatch(generated, /presumptive provider-facing donor of record/);
+  assert.match(generated, /input\[name="pooled_disclosures"\][\s\S]*?waitFor/);
+  assert.doesNotMatch(generated, /await expectText\(stage, \/Trade is live/);
 });
 
-test("participant UI copy alignment fails closed if the obsolete assertion block drifts", () => {
-  const generated = buildAuthenticatedHarnessSource(original).replace(
+test("participant UI generation fails closed if the pooled assertion block drifts", () => {
+  const drifted = original.replace(
     "The pooled donation is the activation gate",
     "drifted pooled activation copy",
   );
   assert.throws(
-    () => alignParticipantUiTruthCopy(generated),
-    /participant UI truth-boundary copy: expected source contract was not found/,
+    () => buildAuthenticatedHarnessSource(drifted),
+    /pooled participant funding controls: expected source contract was not found/,
   );
 });
 
@@ -181,9 +181,11 @@ test("source transformation fails closed if the old service-role confirmation bl
   );
 });
 
-test("the clean-stack workflow is QA-only, exact-seven-file-scoped, and applies the forward migration", () => {
+test("the stacked workflow is QA-only, exact-nine-file-scoped, and applies the forward migration", () => {
   assert.match(workflow, new RegExp(PR700_HEAD));
   assert.match(workflow, new RegExp(PRODUCT_REPAIR_HEAD));
+  assert.match(workflow, new RegExp(CLEAN_STACK_HEAD));
+  assert.match(workflow, new RegExp(CONTEXT_READ_REPAIR_HEAD));
   assert.match(workflow, new RegExp(QA_PROJECT_REF));
   assert.match(workflow, /qa\/723-authenticated-confirmation-clean-stack-20260818-v1/);
   for (const path of INTEGRATION_PATHS) {

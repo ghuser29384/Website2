@@ -17,6 +17,8 @@ concurrency:
 env:
   PR700_HEAD: 813573f64eaa17d2ca240c50f76ead9a3b535f97
   PRODUCT_REPAIR_HEAD: 495f714b6dd4753ad78cf3d41945cffc84923876
+  CLEAN_STACK_HEAD: a67878590380f45af704ddd3e643ef1a135015f7
+  CONTEXT_READ_REPAIR_HEAD: ff2e94db6dffc0a2fe9e665733ad15e3fd26026d
   AUTH_MIGRATION_PATH: supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
   NEXT_TELEMETRY_DISABLED: "1"
 
@@ -35,13 +37,14 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Verify exact PR 700 ancestry, product bytes, and seven-file scope
+      - name: Verify exact clean-stack ancestry, product bytes, and nine-file scope
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD"
+          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD" "$CLEAN_STACK_HEAD" "$CONTEXT_READ_REPAIR_HEAD"
           git merge-base --is-ancestor "$PR700_HEAD" HEAD
+          git merge-base --is-ancestor "$CLEAN_STACK_HEAD" HEAD
 
           actual="$(git diff --name-only "$PR700_HEAD" HEAD | LC_ALL=C sort)"
           expected="$(printf '%s\n' \
@@ -50,7 +53,9 @@ jobs:
             '.github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs' \
             '.github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml' \
             'src/app/trade-donation-actions-base.ts' \
+            'src/lib/moral-trade/trade-donation-context-read-boundary.test.ts' \
             'src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts' \
+            'src/lib/trade-donation.ts' \
             'supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql' \
             | LC_ALL=C sort)"
           test "$actual" = "$expected"
@@ -68,12 +73,21 @@ jobs:
             test "$(git rev-parse "$PRODUCT_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
           done
 
+          for path in \
+            src/lib/moral-trade/trade-donation-context-read-boundary.test.ts \
+            src/lib/trade-donation.ts
+          do
+            test "$(git rev-parse "$CONTEXT_READ_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
+
           git diff --check "$PR700_HEAD" HEAD
           grep -F 'import { createClient, createServiceClient } from "@/lib/supabase/server";' src/app/trade-donation-actions-base.ts
           grep -F 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts
           test "$(grep -c 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts)" = "1"
           grep -F 'Submit and accept separate performance evidence before final completion.' src/app/trade-donation-actions-base.ts
           ! grep -F 'performance evidence befor final completion' src/app/trade-donation-actions-base.ts
+          grep -F 'const participantSupabase = (await createClient()) as any;' src/lib/trade-donation.ts
+          grep -F 'const privateSupabase = createServiceClient() as any;' src/lib/trade-donation.ts
 
           changed_files=(
             .github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs
@@ -81,7 +95,9 @@ jobs:
             .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs
             .github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml
             src/app/trade-donation-actions-base.ts
+            src/lib/moral-trade/trade-donation-context-read-boundary.test.ts
             src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts
+            src/lib/trade-donation.ts
             supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
           )
           production_project_ref="$(printf '%s%s' 'jnpoxval' 'yjtdghnperyu')"
@@ -114,9 +130,8 @@ jobs:
           node --input-type=module <<'NODE'
           import { readFile, writeFile } from "node:fs/promises";
           import { buildAuthenticatedHarnessSource } from "./.github/scripts/pooled-settlement-authenticated-caller-integration-contract.mjs";
-          import { alignParticipantUiTruthCopy } from "./.github/scripts/pooled-settlement-authenticated-caller-integration.mjs";
           const original = await readFile(".github/scripts/pooled-settlement-qa-e2e.mjs", "utf8");
-          const generated = alignParticipantUiTruthCopy(buildAuthenticatedHarnessSource(original));
+          const generated = buildAuthenticatedHarnessSource(original);
           await writeFile("/tmp/issue-723-generated-harness.mjs", generated, "utf8");
           NODE
           grep -Fq 'finalize_trade_milestone_manifest_v1' /tmp/issue-723-generated-harness.mjs
@@ -125,6 +140,7 @@ jobs:
           grep -Fq 'await prepareMilestoneManifestForAuthenticatedConfirmation' /tmp/issue-723-generated-harness.mjs
           grep -Fq 'await probeConfirmationAuthorizationBoundary' /tmp/issue-723-generated-harness.mjs
           grep -Fq 'await confirmAsAuthenticatedParticipant' /tmp/issue-723-generated-harness.mjs
+          grep -Fq 'input[name="pooled_disclosures"]' /tmp/issue-723-generated-harness.mjs
           ! grep -Eq 'set_config\([^)]*request\.jwt\.claims' /tmp/issue-723-generated-harness.mjs
           ! grep -Eq 'from\("trade_agreement_confirmations"\)\.insert' /tmp/issue-723-generated-harness.mjs
           ! grep -Eq 'delete from public\.trade_agreement_milestones[[:space:]]*;' /tmp/issue-723-generated-harness.mjs
@@ -139,6 +155,7 @@ jobs:
         run: |
           node --import tsx --test \
             src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
+            src/lib/moral-trade/trade-donation-context-read-boundary.test.ts \
             src/lib/trade-donation-pool.test.ts \
             src/lib/trade-donation-pool-source-contract.test.ts \
             src/lib/trade-donation-pool-environment-source-contract.test.ts \
@@ -231,14 +248,15 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Verify exact PR 700 ancestry, exact scope, and product bytes
+      - name: Verify exact clean-stack ancestry, exact scope, and product bytes
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD"
+          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD" "$CLEAN_STACK_HEAD" "$CONTEXT_READ_REPAIR_HEAD"
           git merge-base --is-ancestor "$PR700_HEAD" HEAD
-          test "$(git diff --name-only "$PR700_HEAD" HEAD | wc -l | tr -d ' ')" = "7"
+          git merge-base --is-ancestor "$CLEAN_STACK_HEAD" HEAD
+          test "$(git diff --name-only "$PR700_HEAD" HEAD | wc -l | tr -d ' ')" = "9"
           ! git ls-tree -r --name-only HEAD | grep -q '^\.github/workflows/bootstrap-issue-723-'
           for path in \
             src/app/trade-donation-actions-base.ts \
@@ -246,6 +264,12 @@ jobs:
             supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
           do
             test "$(git rev-parse "$PRODUCT_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
+          for path in \
+            src/lib/moral-trade/trade-donation-context-read-boundary.test.ts \
+            src/lib/trade-donation.ts
+          do
+            test "$(git rev-parse "$CONTEXT_READ_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
           done
 
       - name: Use Node.js 24
