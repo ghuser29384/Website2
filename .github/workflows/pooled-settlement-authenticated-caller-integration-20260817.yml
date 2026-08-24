@@ -21,7 +21,7 @@ env:
   CLEAN_STACK_HEAD: a67878590380f45af704ddd3e643ef1a135015f7
   CONTEXT_READ_REPAIR_HEAD: ff2e94db6dffc0a2fe9e665733ad15e3fd26026d
   OPERATOR_UI_REPAIR_HEAD: a1f774eef872464528249d9e64a1d7d4466e7f2e
-  STRIPE_GATE_REPAIR_HEAD: b3558dd5422f16ca42389c5fe5ccde292b58c3e6
+  STRIPE_GATE_REPAIR_HEAD: 17d7e32775d5a8c3dcafeb666fb84d06e8cb7752
   AUTH_MIGRATION_PATH: supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
   NEXT_TELEMETRY_DISABLED: "1"
 
@@ -460,6 +460,77 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Recover only the exact orphan from failed QA run 32782892669
+        shell: bash
+        run: |
+          set -euo pipefail
+          recovery_run_id=32782892669
+          bundle_before="$(psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align \
+            --command "select count(*) from public.trade_donation_pool_bundles where environment = 'test' and (position('32782892669' in nonprofit_slug) > 0 or position('32782892669' in target_id) > 0);")"
+          test "$bundle_before" = "0" || test "$bundle_before" = "1"
+
+          psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 --quiet \
+            <<'SQL'
+          begin;
+          set local session_replication_role = replica;
+          create temporary table recovered_bundle_ids(id uuid primary key) on commit drop;
+          insert into recovered_bundle_ids(id)
+          select id
+          from public.trade_donation_pool_bundles
+          where environment = 'test'
+            and (
+              position('32782892669' in nonprofit_slug) > 0
+              or position('32782892669' in target_id) > 0
+            );
+          delete from public.trade_donation_pool_ledger_lines where journal_id in (
+            select id from public.trade_donation_pool_ledger_journals
+            where bundle_id in (select id from recovered_bundle_ids)
+          );
+          delete from public.trade_donation_pool_ledger_journals
+            where bundle_id in (select id from recovered_bundle_ids);
+          delete from public.trade_donation_pool_audit_events
+            where object_id in (select id from recovered_bundle_ids);
+          delete from public.trade_donation_pool_bundle_items
+            where bundle_id in (select id from recovered_bundle_ids);
+          delete from public.trade_donation_pool_bundles
+            where id in (select id from recovered_bundle_ids);
+          commit;
+          SQL
+
+          pooled_counts="$(psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align --field-separator '|' \
+            --command "select (select count(*) from public.trade_donation_pool_obligations), (select count(*) from public.trade_donation_pool_bundles), (select count(*) from public.trade_donation_pool_bundle_items), (select count(*) from public.trade_donation_pool_ledger_journals), (select count(*) from public.trade_donation_pool_ledger_lines), (select count(*) from public.trade_donation_pool_stripe_events), (select count(*) from public.trade_donation_pool_audit_events);")"
+          test "$pooled_counts" = "0|0|0|0|0|0|1"
+          auth_users="$(psql "$QA_SUPABASE_DB_URL" \
+            -X --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align \
+            --command "select count(*) from auth.users where raw_user_meta_data->>'pooled_qa_run_id' = '32782892669';")"
+          test "$auth_users" = "0"
+          export RECOVERY_BUNDLE_BEFORE="$bundle_before"
+          export RECOVERY_POOLED_COUNTS="$pooled_counts"
+          node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
+          import path from "node:path";
+          const [obligations, bundles, items, journals, lines, stripeEvents, auditEvents] =
+            process.env.RECOVERY_POOLED_COUNTS.split("|").map(Number);
+          await writeFile(
+            path.join(process.env.POOLED_SETTLEMENT_QA_OUTPUT_DIR, "exact-run-recovery.json"),
+            `${JSON.stringify({
+              schemaVersion: "moral-trade-pooled-settlement-exact-run-recovery-v1",
+              recoveredRunId: "32782892669",
+              matchingBundlesBefore: Number(process.env.RECOVERY_BUNDLE_BEFORE),
+              authUsersAfter: 0,
+              countsAfter: { obligations, bundles, items, journals, lines, stripeEvents, auditEvents },
+              status: "passed",
+            }, null, 2)}\n`,
+            "utf8",
+          );
+          NODE
+
       - name: Bind the synthetic operator allowlist
         shell: bash
         run: echo "ADMIN_EMAILS=pooled-qa-${GITHUB_RUN_ID}-operator@example.test" >> "$GITHUB_ENV"
@@ -552,6 +623,50 @@ jobs:
 
       - name: Execute all 19 authenticated QA scenarios
         run: node .github/scripts/pooled-settlement-authenticated-caller-integration.mjs
+
+      - name: Sanitize isolated runtime diagnostics after scenario failure
+        if: failure()
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+          import path from "node:path";
+          let log = "";
+          try {
+            log = await readFile("/tmp/pooled-settlement-next.log", "utf8");
+          } catch {
+            log = "The isolated runtime log was unavailable.";
+          }
+          for (const name of [
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "QA_SUPABASE_DB_URL",
+            "QA_TEST_PASSWORD",
+            "QA_STRIPE_SECRET_KEY",
+            "QA_STRIPE_PUBLISHABLE_KEY",
+            "QA_STRIPE_WEBHOOK_SECRET",
+            "QA_EVERY_ORG_WEBHOOK_TOKEN",
+            "QA_EVERY_ORG_WEBHOOK_PATH_SECRET",
+            "QA_EVERY_ORG_PARTNER_METADATA_SECRET",
+          ]) {
+            const value = String(process.env[name] ?? "");
+            if (value) log = log.split(value).join(`[REDACTED:${name}]`);
+          }
+          log = log
+            .replace(/(?:sk|pk|rk)_(?:test|live)_[A-Za-z0-9_]+/g, "[REDACTED:STRIPE_KEY]")
+            .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, "[REDACTED:DATABASE_URL]");
+          const lines = log.split("\n").slice(-300);
+          await writeFile(
+            path.join(process.env.POOLED_SETTLEMENT_QA_OUTPUT_DIR, "runtime-failure-diagnostic.json"),
+            `${JSON.stringify({
+              schemaVersion: "moral-trade-pooled-settlement-runtime-failure-v1",
+              runId: process.env.GITHUB_RUN_ID,
+              commitSha: process.env.GITHUB_SHA,
+              sanitized: true,
+              lines,
+            }, null, 2)}\n`,
+            "utf8",
+          );
+          NODE
 
       - name: Upload sanitized authenticated evidence
         if: always()

@@ -5,7 +5,7 @@ export const PRODUCT_REPAIR_HEAD = "495f714b6dd4753ad78cf3d41945cffc84923876";
 export const CLEAN_STACK_HEAD = "a67878590380f45af704ddd3e643ef1a135015f7";
 export const CONTEXT_READ_REPAIR_HEAD = "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d";
 export const OPERATOR_UI_REPAIR_HEAD = "a1f774eef872464528249d9e64a1d7d4466e7f2e";
-export const STRIPE_GATE_REPAIR_HEAD = "b3558dd5422f16ca42389c5fe5ccde292b58c3e6";
+export const STRIPE_GATE_REPAIR_HEAD = "17d7e32775d5a8c3dcafeb666fb84d06e8cb7752";
 export const QA_PROJECT_REF = "hvmxfjjbdcgjjudmthdz";
 export const AUTHENTICATED_CONFIRMATION_MIGRATION =
   "supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql";
@@ -254,6 +254,76 @@ export function buildAuthenticatedHarnessSource(input) {
       '  assert.equal(signedWebhookGate.status, "passed", "Signed Stripe test funding did not persist its provider-checkout gate.");',
     ].join("\n"),
     "signed Stripe webhook gate persistence evidence",
+  );
+
+  source = replaceExactly(
+    source,
+    [
+      "function runCleanupSql() {",
+      "  const obligationIds = sqlUuidArray(createdObligationIds);",
+      "  const bundleIds = sqlUuidArray(createdBundleIds);",
+    ].join("\n"),
+    [
+      "function runCleanupSql() {",
+      "  const obligationIds = sqlUuidArray(createdObligationIds);",
+      "  const bundleIds = sqlUuidArray(createdBundleIds);",
+      "  const cleanupRunId = String(runId);",
+      '  assert.match(cleanupRunId, /^[0-9]+$/, "Cleanup requires a numeric GitHub run ID.");',
+      '  const cleanupRunIdLiteral = `\'${cleanupRunId}\'`;',
+    ].join("\n"),
+    "run-owned cleanup identifier",
+  );
+  source = replaceExactly(
+    source,
+    [
+      "begin;",
+      "set local session_replication_role = replica;",
+      "delete from public.trade_donation_pool_ledger_lines where journal_id in (",
+    ].join("\n"),
+    [
+      "begin;",
+      "set local session_replication_role = replica;",
+      "create temporary table pooled_qa_cleanup_bundle_ids(id uuid primary key) on commit drop;",
+      "insert into pooled_qa_cleanup_bundle_ids(id)",
+      "select unnest(${bundleIds}) on conflict do nothing;",
+      "insert into pooled_qa_cleanup_bundle_ids(id)",
+      "select distinct bundle_id from public.trade_donation_pool_obligations",
+      "where agreement_id = any(${agreementIds}) and bundle_id is not null",
+      "on conflict do nothing;",
+      "insert into pooled_qa_cleanup_bundle_ids(id)",
+      "select id from public.trade_donation_pool_bundles",
+      "where environment = 'test'",
+      "  and (position(${cleanupRunIdLiteral} in nonprofit_slug) > 0",
+      "       or position(${cleanupRunIdLiteral} in target_id) > 0)",
+      "on conflict do nothing;",
+      "delete from public.trade_donation_pool_ledger_lines where journal_id in (",
+    ].join("\n"),
+    "database-discovered run-owned bundle cleanup",
+  );
+  source = replaceCount(
+    source,
+    "  where obligation_id = any(${obligationIds}) or bundle_id = any(${bundleIds});",
+    "  where obligation_id = any(${obligationIds}) or bundle_id in (select id from pooled_qa_cleanup_bundle_ids);",
+    2,
+    "ledger cleanup uses discovered bundle IDs",
+  );
+  source = replaceExactly(
+    source,
+    "  where obligation_id = any(${obligationIds}) or bundle_id = any(${bundleIds})\n);",
+    "  where obligation_id = any(${obligationIds}) or bundle_id in (select id from pooled_qa_cleanup_bundle_ids)\n);",
+    "ledger-line cleanup uses discovered bundle IDs",
+  );
+  source = replaceExactly(
+    source,
+    "  where object_id = any(${obligationIds}) or object_id = any(${bundleIds});",
+    "  where object_id = any(${obligationIds}) or object_id in (select id from pooled_qa_cleanup_bundle_ids);",
+    "audit cleanup uses discovered bundle IDs",
+  );
+  source = replaceExactly(
+    source,
+    "delete from public.trade_donation_pool_bundles where id = any(${bundleIds});",
+    "delete from public.trade_donation_pool_bundles where id in (select id from pooled_qa_cleanup_bundle_ids);",
+    "bundle cleanup uses discovered bundle IDs",
   );
 
   source = replaceExactly(

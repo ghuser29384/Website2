@@ -29,7 +29,7 @@ test("the stacked QA candidate is pinned to the clean stack and all product repa
   assert.equal(CLEAN_STACK_HEAD, "a67878590380f45af704ddd3e643ef1a135015f7");
   assert.equal(CONTEXT_READ_REPAIR_HEAD, "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d");
   assert.equal(OPERATOR_UI_REPAIR_HEAD, "a1f774eef872464528249d9e64a1d7d4466e7f2e");
-  assert.equal(STRIPE_GATE_REPAIR_HEAD, "b3558dd5422f16ca42389c5fe5ccde292b58c3e6");
+  assert.equal(STRIPE_GATE_REPAIR_HEAD, "17d7e32775d5a8c3dcafeb666fb84d06e8cb7752");
   assert.equal(QA_PROJECT_REF, "hvmxfjjbdcgjjudmthdz");
   assert.deepEqual(REQUIRED_MILESTONE_LIFECYCLE_FUNCTIONS, [
     "finalize_trade_milestone_manifest_v1",
@@ -178,6 +178,18 @@ test("the workflow resolves the Stripe platform from the QA test key without rec
   assert.ok(bind > mask, "The Stripe account identity must be masked before it enters GITHUB_ENV.");
 });
 
+test("the workflow recovers only the exact failed run and sanitizes runtime failure evidence", () => {
+  assert.match(workflow, /Recover only the exact orphan from failed QA run 32782892669/);
+  assert.match(workflow, /position\('32782892669' in nonprofit_slug\) > 0/);
+  assert.match(workflow, /position\('32782892669' in target_id\) > 0/);
+  assert.match(workflow, /raw_user_meta_data->>'pooled_qa_run_id' = '32782892669'/);
+  assert.match(workflow, /test "\$pooled_counts" = "0\|0\|0\|0\|0\|0\|1"/);
+  assert.match(workflow, /exact-run-recovery\.json/);
+  assert.match(workflow, /Sanitize isolated runtime diagnostics after scenario failure/);
+  assert.match(workflow, /runtime-failure-diagnostic\.json/);
+  assert.match(workflow, /\[REDACTED:\$\{name\}\]/);
+});
+
 test("the generated harness uses the production milestone lifecycle before bilateral donation confirmation", () => {
   const generated = buildAuthenticatedHarnessSource(original);
   assert.match(generated, /create_trade_agreement_milestone_v1/);
@@ -236,6 +248,17 @@ test("the generated harness cleans run-owned milestone rows before versions and 
     generated,
     /delete from public\.trade_agreement_milestones\s*;/,
   );
+});
+
+test("the generated cleanup discovers run-owned bundles even if failure preceded in-memory capture", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
+  assert.match(generated, /create temporary table pooled_qa_cleanup_bundle_ids/);
+  assert.match(generated, /position\(\$\{cleanupRunIdLiteral\} in nonprofit_slug\) > 0/);
+  assert.match(generated, /position\(\$\{cleanupRunIdLiteral\} in target_id\) > 0/);
+  assert.match(generated, /bundle_id in \(select id from pooled_qa_cleanup_bundle_ids\)/);
+  assert.match(generated, /object_id in \(select id from pooled_qa_cleanup_bundle_ids\)/);
+  assert.match(generated, /delete from public\.trade_donation_pool_bundles where id in \(select id from pooled_qa_cleanup_bundle_ids\)/);
+  assert.doesNotMatch(generated, /delete from public\.trade_donation_pool_bundles where id = any\(\$\{bundleIds\}\)/);
 });
 
 test("the generated harness confirms through each participant's real authenticated session", () => {
