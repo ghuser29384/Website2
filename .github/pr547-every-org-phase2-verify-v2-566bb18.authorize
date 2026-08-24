@@ -1,0 +1,10 @@
+schema=moral-trade-pr547-every-org-staging-authorization-v6
+phase=exact_protected_phase2_verify_v2
+candidate=566bb18db56848b40a3a1ab58979a6be88ba45a8
+tree=86c70b442272f5cff4cf29e63d030c949b4323cb
+deployment_id=dpl_J9TC9zr5vgCtQxgFa9XyXVnSKB96
+deployment_host=moraltrade-site-qa4zost69-ellen-s.vercel.app
+controller_branch=ops/pr547-every-org-phase2-verify-v2-566bb18-20260824
+controller_parent=5c5b336bd44260742d3837b15cb5c965f64fe300
+target=preview
+authorization=AUTHORIZE_PR547_EVERY_ORG_PHASE2_VERIFY_V2_566BB18
