@@ -46,23 +46,37 @@ async function obligationIdFromPaymentIntent(paymentIntentId: string, livemode: 
 async function passSignedWebhookGate(livemode: boolean) {
   const supabase = createServiceClient() as any;
   const environment = livemode ? "live" : "test";
+  const gateKey = "stripe_signed_webhook";
+  const { data: existing, error: lookupError } = await supabase
+    .from("trade_donation_pool_gate_status")
+    .select("environment,gate_key")
+    .eq("environment", environment)
+    .eq("gate_key", gateKey)
+    .maybeSingle();
+  if (lookupError) {
+    throw new Error(`The signed Stripe ${environment} webhook gate could not be loaded: ${lookupError.message}`);
+  }
+  if (!existing) {
+    throw new Error(`The signed Stripe ${environment} webhook gate row was unavailable.`);
+  }
+  const timestamp = new Date().toISOString();
   const { data, error } = await supabase
     .from("trade_donation_pool_gate_status")
-    .update({
+    .upsert({
+      environment,
+      gate_key: gateKey,
       status: "passed",
       notes: `A signed ${livemode ? "live" : "test"} Stripe webhook was processed by the pooled-settlement handler.`,
-      approved_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("environment", environment)
-    .eq("gate_key", "stripe_signed_webhook")
+      approved_at: timestamp,
+      updated_at: timestamp,
+    }, { onConflict: "environment,gate_key" })
     .select("environment,gate_key,status")
     .maybeSingle();
   if (error) {
     throw new Error(`The signed Stripe ${environment} webhook gate could not be persisted: ${error.message}`);
   }
   if (!data || data.status !== "passed") {
-    throw new Error(`The signed Stripe ${environment} webhook gate row was unavailable.`);
+    throw new Error(`The signed Stripe ${environment} webhook gate did not persist its passed state.`);
   }
 }
 
