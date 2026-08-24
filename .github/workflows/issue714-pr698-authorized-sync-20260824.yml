@@ -1,0 +1,72 @@
+name: Issue 714 authorized current-main merge into PR 698
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-pr698-authorized-sync-20260824.yml
+
+permissions:
+  contents: write
+
+jobs:
+  merge-current-main:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
+      EXPECTED_PR_HEAD: 335f0ab7e4dc8f95e2f06a082db6b5360caf3f27
+      EXPECTED_MAIN: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+      EXPECTED_MERGE_BASE: f9ae5480ae7c20176f24c5f8b678088b5823fc39
+    steps:
+      - name: Check out the published PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/issue-675-activation-routing-canonical-walkthrough
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact authorized identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PR_HEAD"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_PR_HEAD"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git merge-base HEAD origin/main)" = "$EXPECTED_MERGE_BASE"
+          test -z "$(git status --porcelain)"
+
+      - name: Merge exact current main without rewriting history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-ff "$EXPECTED_MAIN" -m "Merge current main into Issue 675 activation candidate
+
+          Merge exact reviewed main $EXPECTED_MAIN after Issue #714 owner authorization. Preserve the backed activation lifecycle, private Walkthrough handoff, App root and Walkthrough ownership, Feed truth boundary, and every compatible mainline DAC and Commitments change. No production migration, deployment, alias movement, or PR merge is performed."
+          MERGED_HEAD="$(git rev-parse HEAD)"
+          MERGED_TREE="$(git rev-parse HEAD^{tree})"
+          mapfile -t PARENTS < <(git show -s --format='%P' HEAD | tr ' ' '\n')
+          test "${#PARENTS[@]}" = "2"
+          test "${PARENTS[0]}" = "$EXPECTED_PR_HEAD"
+          test "${PARENTS[1]}" = "$EXPECTED_MAIN"
+          test "$(git rev-list --count HEAD..origin/main)" = "0"
+          test -z "$(git status --porcelain)"
+          mkdir -p artifacts/issue714-sync
+          printf 'head=%s\ntree=%s\nparent_1=%s\nparent_2=%s\nmain=%s\nbehind=0\n' \
+            "$MERGED_HEAD" "$MERGED_TREE" "${PARENTS[0]}" "${PARENTS[1]}" "$EXPECTED_MAIN" \
+            > artifacts/issue714-sync/identity.txt
+          git diff --name-status "$EXPECTED_PR_HEAD"..HEAD > artifacts/issue714-sync/main-integration-name-status.txt
+          git diff --stat "$EXPECTED_PR_HEAD"..HEAD > artifacts/issue714-sync/main-integration-stat.txt
+          git push origin "HEAD:$TARGET_BRANCH"
+
+      - name: Upload synchronization evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-pr698-authorized-sync-${{ github.run_id }}
+          path: artifacts/issue714-sync
+          if-no-files-found: error
+          retention-days: 21
