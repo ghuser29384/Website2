@@ -61,21 +61,22 @@ test("refund and dispute lookups bind a PaymentIntent to the signed event enviro
   );
 });
 
-test("mismatched pooled Stripe outcomes cannot pass the signed-webhook readiness gate", () => {
+test("only accepted pooled Stripe outcomes can produce reviewable signed-webhook evidence", () => {
   assert.match(
     webhook,
-    /\["funded", "bundled", "already_funded"\]\.includes\(status\)[\s\S]*?passSignedWebhookGate/,
+    /\["funded", "bundled", "already_funded"\]\.includes\(status\)[\s\S]*?verifySignedWebhookEvidence/,
   );
   assert.match(
     webhook,
-    /\["checkout_abandoned", "payment_failed"\]\.includes\(status\)[\s\S]*?passSignedWebhookGate/,
+    /\["checkout_abandoned", "payment_failed"\]\.includes\(status\)[\s\S]*?verifySignedWebhookEvidence/,
   );
   assert.match(
     webhook,
-    /\["refunded", "disputed", "needs_review"\]\.includes\(status\)[\s\S]*?passSignedWebhookGate/,
+    /\["refunded", "disputed", "needs_review"\]\.includes\(status\)[\s\S]*?verifySignedWebhookEvidence/,
   );
   assert.equal(
-    webhook.match(/await passSignedWebhookGate\(input\.event\.livemode\);/g)?.length,
+    webhook.match(/await verifySignedWebhookEvidence\(input\);/g)?.length,
     3,
   );
+  assert.doesNotMatch(webhook, /trade_donation_pool_gate_status/);
 });
