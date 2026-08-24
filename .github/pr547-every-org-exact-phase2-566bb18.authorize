@@ -1,0 +1,8 @@
+schema=moral-trade-pr547-every-org-staging-authorization-v5
+phase=exact_protected_phase2
+candidate=566bb18db56848b40a3a1ab58979a6be88ba45a8
+tree=86c70b442272f5cff4cf29e63d030c949b4323cb
+controller_branch=ops/pr547-every-org-phase2-566bb18-20260824
+controller_parent=6de6c7356db76cd1ed28e47bc7f24c87451f5f21
+target=preview
+authorization=AUTHORIZE_PR547_EVERY_ORG_EXACT_PHASE2_566BB18
