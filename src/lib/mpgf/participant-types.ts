@@ -67,7 +67,22 @@ export interface MpgfPoolProposalRecord {
   publicGoodsQfEnabled?: boolean;
   publicGoodsQfCapMultiple?: number;
   publicGoodsPayoutMethod?: MpgfPublicGoodsCaptureMode;
-  status: "draft" | "submitted" | "under_review" | "approved_as_candidate" | "rejected" | "withdrawn";
+  status:
+    | "draft"
+    | "submitted"
+    | "under_review"
+    | "changes_requested"
+    | "approved_as_candidate"
+    | "rejected"
+    | "withdrawn"
+    | "succeeded"
+    | "lapsed";
+  termsVersion?: number;
+  approvedTermsVersion?: number;
+  operativeTermsSha256?: string;
+  termsLockedAt?: string;
+  reviewedAt?: string;
+  reviewReason?: string;
   candidateAlternativeId?: string;
   createdAt?: string;
 }
