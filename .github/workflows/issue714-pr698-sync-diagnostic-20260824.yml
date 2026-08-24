@@ -27,8 +27,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_PR_HEAD"
-          test "$(git diff --name-only HEAD^..HEAD)" = ".github/workflows/issue714-pr698-sync-diagnostic-20260824.yml"
+          test "$(git merge-base HEAD "$EXPECTED_PR_HEAD")" = "$EXPECTED_PR_HEAD"
+          test "$(git diff --name-only "$EXPECTED_PR_HEAD"..HEAD)" = ".github/workflows/issue714-pr698-sync-diagnostic-20260824.yml"
           git fetch --no-tags origin main agent/issue-675-activation-routing-canonical-walkthrough
           test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
           test "$(git rev-parse origin/agent/issue-675-activation-routing-canonical-walkthrough)" = "$EXPECTED_PR_HEAD"
@@ -68,7 +68,7 @@ jobs:
             printf 'merge_clean=false\n' >> artifacts/sync-diagnostic/result.txt
           fi
           git merge --abort || git reset --hard HEAD
-          test -z "$(git status --porcelain)"
+          test -z "$(git status --porcelain --untracked-files=no)"
 
       - name: Upload privacy-safe merge diagnostic
         uses: actions/upload-artifact@v4
