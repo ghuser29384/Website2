@@ -15,6 +15,8 @@ const ADMIN_PATH = "/admin/donation-upgrades";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const ISO_INSTANT_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const ALLOWED_EVIDENCE_SOURCES = new Set([
   "every_org_dashboard",
   "every_org_support",
@@ -133,7 +135,13 @@ export async function recordDirectDonationUpgradeProviderRefundAction(
       );
     }
 
-    const refundedAt = new Date(required(formData, "provider_refunded_at"));
+    const refundedAtInput = required(formData, "provider_refunded_at");
+    if (!ISO_INSTANT_PATTERN.test(refundedAtInput)) {
+      throw new PublicProviderRefundError(
+        "Enter the exact Every.org refund timestamp as ISO 8601 with Z or an explicit UTC offset.",
+      );
+    }
+    const refundedAt = new Date(refundedAtInput);
     if (Number.isNaN(refundedAt.valueOf())) {
       throw new PublicProviderRefundError(
         "Enter a valid provider refund timestamp.",
