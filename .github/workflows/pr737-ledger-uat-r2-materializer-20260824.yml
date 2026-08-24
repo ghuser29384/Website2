@@ -1,0 +1,170 @@
+name: PR 737 hosted UAT r2 materializer 20260824
+
+on:
+  push:
+    branches:
+      - ops/pr737-ledger-isolated-qa-uat-r2-20260824
+    paths:
+      - ".github/workflows/pr737-ledger-uat-r2-materializer-20260824.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr737-ledger-uat-r2-materializer-20260824
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: ops/pr737-ledger-isolated-qa-uat-r2-20260824
+  CANDIDATE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  UAT_WORKFLOW: .github/workflows/pr737-ledger-isolated-qa-uat-20260824.yml
+  EXPECTED_OLD_UAT_BLOB: 880e38af72d510e2e1ddbbab649de72409ad2059
+  OLD_CONTROLLER_BRANCH: ops/pr737-ledger-isolated-qa-uat-20260821
+  NEW_CONTROLLER_BRANCH: ops/pr737-ledger-isolated-qa-uat-r2-20260824
+  OLD_CANDIDATE_HEAD: 8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91
+  NEW_CANDIDATE_HEAD: 5a3d9fee0bbe0c092655aa88c1863b2a9cf8b5ea
+  OLD_CANDIDATE_TREE: f7e33eb064bf3b18ee3b6de831244919afb4f9de
+  NEW_CANDIDATE_TREE: a9382bf0f20cfb1789ca991466bd27604c839a98
+  OLD_NONHOSTED_RUN: "32442312318"
+  NEW_NONHOSTED_RUN: "32776988523"
+  OLD_LEDGER_RUN: "32442010241"
+  NEW_LEDGER_RUN: "32747587559"
+  OLD_COMPACT_RUN: "32442330003"
+  NEW_COMPACT_RUN: "32777007325"
+  OLD_PAYMENT_RUN: "32442338337"
+  NEW_PAYMENT_RUN: "32777017986"
+  OLD_VISUAL_RUN: "32442347005"
+  NEW_VISUAL_RUN: "32777029097"
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact controller branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: Verify immutable source and current candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "$TARGET_BRANCH"
+          test -z "$(git status --porcelain)"
+          test "$(git hash-object "$UAT_WORKFLOW")" = "$EXPECTED_OLD_UAT_BLOB"
+          remote_candidate="$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_candidate" = "$NEW_CANDIDATE_HEAD"
+
+      - name: Rebind the one-use hosted UAT to the repaired exact head
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["UAT_WORKFLOW"])
+          text = path.read_text(encoding="utf-8")
+
+          replacements = [
+              (
+                  "name: PR 737 authoritative-ledger protected isolated-QA UAT 20260824",
+                  "name: PR 737 authoritative-ledger protected isolated-QA UAT r2 20260824",
+                  1,
+                  "workflow name",
+              ),
+              (
+                  "group: pr737-ledger-isolated-qa-uat-20260824",
+                  "group: pr737-ledger-isolated-qa-uat-r2-20260824",
+                  1,
+                  "concurrency group",
+              ),
+              (
+                  os.environ["OLD_CONTROLLER_BRANCH"],
+                  os.environ["NEW_CONTROLLER_BRANCH"],
+                  2,
+                  "controller branch",
+              ),
+              (
+                  os.environ["OLD_CANDIDATE_HEAD"],
+                  os.environ["NEW_CANDIDATE_HEAD"],
+                  1,
+                  "candidate head",
+              ),
+              (
+                  os.environ["OLD_CANDIDATE_TREE"],
+                  os.environ["NEW_CANDIDATE_TREE"],
+                  1,
+                  "candidate tree",
+              ),
+              (
+                  os.environ["OLD_NONHOSTED_RUN"],
+                  os.environ["NEW_NONHOSTED_RUN"],
+                  1,
+                  "non-hosted controller run",
+              ),
+              (
+                  os.environ["OLD_LEDGER_RUN"],
+                  os.environ["NEW_LEDGER_RUN"],
+                  1,
+                  "ledger QA run",
+              ),
+              (
+                  os.environ["OLD_COMPACT_RUN"],
+                  os.environ["NEW_COMPACT_RUN"],
+                  1,
+                  "Compact QA run",
+              ),
+              (
+                  os.environ["OLD_PAYMENT_RUN"],
+                  os.environ["NEW_PAYMENT_RUN"],
+                  1,
+                  "payment QA run",
+              ),
+              (
+                  os.environ["OLD_VISUAL_RUN"],
+                  os.environ["NEW_VISUAL_RUN"],
+                  1,
+                  "visual QA run",
+              ),
+              (
+                  'PR 737 exact-head non-hosted controller r4',
+                  'PR 737 exact-head non-hosted controller r5',
+                  1,
+                  "controller workflow name",
+              ),
+          ]
+
+          for old, new, expected_count, label in replacements:
+              actual_count = text.count(old)
+              if actual_count != expected_count:
+                  raise SystemExit(
+                      f"{label}: expected {expected_count} source anchors, found {actual_count}"
+                  )
+              text = text.replace(old, new)
+
+          for old, _, _, label in replacements:
+              if old in text:
+                  raise SystemExit(f"{label}: stale source anchor remains")
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          git diff --check
+          test "$(git diff --name-only)" = "$UAT_WORKFLOW"
+          grep -Fq "CANDIDATE_HEAD_SHA: $NEW_CANDIDATE_HEAD" "$UAT_WORKFLOW"
+          grep -Fq "CANDIDATE_TREE_SHA: $NEW_CANDIDATE_TREE" "$UAT_WORKFLOW"
+          grep -Fq "CONTROLLER_BRANCH: $NEW_CONTROLLER_BRANCH" "$UAT_WORKFLOW"
+          grep -Fq 'PR 737 exact-head non-hosted controller r5' "$UAT_WORKFLOW"
+
+      - name: Commit the exact hosted-UAT rebinding
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$UAT_WORKFLOW"
+          git commit -m "ci: bind PR 737 hosted UAT to repaired exact head"
+          git push origin "HEAD:$TARGET_BRANCH"
