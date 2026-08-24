@@ -427,6 +427,76 @@ jobs:
         shell: bash
         run: echo "ADMIN_EMAILS=pooled-qa-${GITHUB_RUN_ID}-operator@example.test" >> "$GITHUB_ENV"
 
+      - name: Bind the exact QA Stripe test account without exposing its identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFile, writeFile } from "node:fs/promises";
+          import path from "node:path";
+          import Stripe from "stripe";
+
+          const evidencePath = path.join(
+            process.env.POOLED_SETTLEMENT_QA_OUTPUT_DIR,
+            "stripe-platform-binding.json",
+          );
+          const secretKey = String(process.env.STRIPE_SECRET_KEY ?? "");
+          if (!secretKey.startsWith("sk_test_")) {
+            await writeFile(
+              evidencePath,
+              `${JSON.stringify({
+                schemaVersion: "moral-trade-pooled-settlement-stripe-binding-v1",
+                status: "blocked",
+                reason: "qa_test_key_required",
+                accountIdentityRecorded: false,
+              }, null, 2)}\n`,
+              "utf8",
+            );
+            throw new Error("The isolated QA runtime requires a Stripe test secret key.");
+          }
+
+          try {
+            const stripe = new Stripe(secretKey, { maxNetworkRetries: 2 });
+            const account = await stripe.accounts.retrieveCurrent();
+            if (!/^acct_[A-Za-z0-9]+$/.test(String(account.id ?? ""))) {
+              throw new Error("Stripe did not return a valid account identity.");
+            }
+            const configuredAccount = String(process.env.STRIPE_PLATFORM_ACCOUNT_ID ?? "").trim()
+              || "acct_1TLqUmAf75xWktVp";
+            await appendFile(
+              process.env.GITHUB_ENV,
+              `STRIPE_PLATFORM_ACCOUNT_ID=${account.id}\n`,
+              "utf8",
+            );
+            await writeFile(
+              evidencePath,
+              `${JSON.stringify({
+                schemaVersion: "moral-trade-pooled-settlement-stripe-binding-v1",
+                status: "ready",
+                credentialMode: "test",
+                authenticatedAccountResolved: true,
+                configuredAccountSource: process.env.STRIPE_PLATFORM_ACCOUNT_ID ? "explicit" : "repository_default",
+                configuredAccountMatchedAuthenticatedAccount: configuredAccount === account.id,
+                runtimeBinding: "authenticated_qa_test_account",
+                accountIdentityRecorded: false,
+              }, null, 2)}\n`,
+              "utf8",
+            );
+          } catch {
+            await writeFile(
+              evidencePath,
+              `${JSON.stringify({
+                schemaVersion: "moral-trade-pooled-settlement-stripe-binding-v1",
+                status: "blocked",
+                reason: "qa_test_account_not_retrievable",
+                accountIdentityRecorded: false,
+              }, null, 2)}\n`,
+              "utf8",
+            );
+            throw new Error("The Stripe test account could not be resolved for the isolated QA runtime.");
+          }
+          NODE
+
       - name: Build and start exact isolated-QA runtime
         shell: bash
         run: |

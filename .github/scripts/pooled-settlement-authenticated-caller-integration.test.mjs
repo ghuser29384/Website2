@@ -54,6 +54,14 @@ test("the generated participant UI check requires the pooled funding boundary", 
     /await expectText\(stage, \/presumptive provider-facing donor of record\/i\);/,
   );
   assert.match(generated, /input\[name="pooled_disclosures"\][\s\S]*?waitFor/);
+  assert.match(generated, /participant-ui-readiness-\$\{suffix\}\.json/);
+  assert.match(generated, /payerDisclosureVisible/);
+  assert.match(generated, /failClosedStatusVisible/);
+  assert.match(generated, /The configured Stripe platform account could not be verified\./);
+  const screenshot = generated.indexOf("await screenshot(page, `participant-${suffix}.png`)");
+  const disclosureWait = generated.indexOf('await disclosure.waitFor({ state: "visible", timeout: 30_000 })');
+  assert.ok(screenshot >= 0, "The participant screenshot is missing.");
+  assert.ok(disclosureWait > screenshot, "Readiness evidence must be captured before the disclosure wait.");
   assert.doesNotMatch(generated, /await expectText\(stage, \/Trade is live/);
 });
 
@@ -64,8 +72,18 @@ test("participant UI generation fails closed if the pooled assertion block drift
   );
   assert.throws(
     () => buildAuthenticatedHarnessSource(drifted),
-    /pooled participant funding controls: expected source contract was not found/,
+    /pooled participant funding controls and sanitized readiness evidence: expected source contract was not found/,
   );
+});
+
+test("the workflow resolves the Stripe platform from the QA test key without recording its identity", () => {
+  assert.match(workflow, /Bind the exact QA Stripe test account without exposing its identity/);
+  assert.match(workflow, /accounts\.retrieveCurrent\(\)/);
+  assert.match(workflow, /STRIPE_PLATFORM_ACCOUNT_ID=\$\{account\.id\}/);
+  assert.match(workflow, /stripe-platform-binding\.json/);
+  assert.match(workflow, /configuredAccountMatchedAuthenticatedAccount/);
+  assert.match(workflow, /accountIdentityRecorded:\s*false/);
+  assert.doesNotMatch(workflow, /console\.log\([^\n]*account\.id/);
 });
 
 test("the generated harness uses the production milestone lifecycle before bilateral donation confirmation", () => {
