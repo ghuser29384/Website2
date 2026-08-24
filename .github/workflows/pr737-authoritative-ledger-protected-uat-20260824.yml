@@ -1,0 +1,566 @@
+name: PR 737 authoritative-ledger protected Preview UAT 20260824
+
+on:
+  push:
+    branches:
+      - ops/pr737-authoritative-ledger-protected-uat-20260824
+    paths:
+      - .github/workflows/pr737-authoritative-ledger-protected-uat-20260824.yml
+      - ops/pr737-uat/**
+
+concurrency:
+  group: pr737-authoritative-ledger-protected-uat-20260824
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  CONTROLLER_BRANCH: ops/pr737-authoritative-ledger-protected-uat-20260824
+  CANDIDATE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  CANDIDATE_HEAD_SHA: 5a3d9fee0bbe0c092655aa88c1863b2a9cf8b5ea
+  CANDIDATE_TREE_SHA: a9382bf0f20cfb1789ca991466bd27604c839a98
+  TRUSTED_UAT_SHA: 101f34631ccd726be2299f85fe54d65e8a80977e
+  NONHOSTED_CONTROLLER_RUN_ID: "32776988523"
+  LEDGER_QA_RUN_ID: "32747587559"
+  COMPACT_QA_RUN_ID: "32777344080"
+  EVIDENCE_PAYMENT_RUN_ID: "32777344078"
+  CANONICAL_VISUAL_RUN_ID: "32777344079"
+  EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+  FORBIDDEN_PROD_REF: jnpoxvalyjtdghnperyu
+  VERCEL_CLI_VERSION: 50.38.1
+  VERCEL_LOG_CLI_VERSION: 58.9.5
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  CONDITIONAL_PAYMENTS_MODE: disabled
+  TRADE_DONATION_POOL_ENABLED: "false"
+  TRADE_DONATION_POOL_MODE: disabled
+  DIRECT_DONATION_UPGRADES_ENABLED: "false"
+  DIRECT_DONATION_UPGRADE_MODE: disabled
+  MPGF_REAL_MONEY_ENABLED: "false"
+  MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+  MPGF_TEST_PAYMENT_ENABLED: "false"
+  EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+  PGSSLMODE: require
+
+jobs:
+  protected-ledger-uat:
+    name: Exact candidate protected Preview, multi-user ledger UAT, and zero residue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out one-use controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+
+      - name: Check out trusted prior protected-UAT harness
+        uses: actions/checkout@v4
+        with:
+          path: trusted
+          fetch-depth: 1
+          ref: ${{ env.TRUSTED_UAT_SHA }}
+
+      - name: Check out exact frozen PR 737 candidate
+        uses: actions/checkout@v4
+        with:
+          path: app
+          fetch-depth: 0
+          ref: ${{ env.CANDIDATE_HEAD_SHA }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Revalidate exact product, issue, scope, and same-SHA non-hosted gates
+        id: exact_state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git -C app rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
+          test "$(git -C app rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
+          test "$(git -C app status --porcelain)" = ""
+          test "$(git -C trusted rev-parse HEAD)" = "$TRUSTED_UAT_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$CANDIDATE_BRANCH" --jq '.commit.sha')" = "$CANDIDATE_HEAD_SHA"
+
+          gh api "repos/$GITHUB_REPOSITORY/pulls/737" > "$RUNNER_TEMP/pr737.json"
+          gh api "repos/$GITHUB_REPOSITORY/issues/734" > "$RUNNER_TEMP/issue734.json"
+          jq -e --arg head "$CANDIDATE_HEAD_SHA" '
+            .state == "open" and .draft == true and .merged == false
+            and .head.sha == $head and .changed_files == 16
+          ' "$RUNNER_TEMP/pr737.json" >/dev/null
+          jq -e '.state == "open"' "$RUNNER_TEMP/issue734.json" >/dev/null
+
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/737/files?per_page=100" --jq '.[].filename' | LC_ALL=C sort > "$RUNNER_TEMP/actual-files.txt"
+          cat > "$RUNNER_TEMP/expected-files.txt" <<'FILES'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          .github/workflows/mpgf-public-goods-compacts-qa.yml
+          docs/mpgf/compact-authoritative-outflow-ledger-v1.md
+          scripts/test-compact-authoritative-outflow-concurrency.sh
+          src/components/mpgf/mpgf-public-goods-compacts.tsx
+          src/lib/mpgf/compact-authoritative-outflow-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.test.ts
+          src/lib/mpgf/compact-authoritative-outflow.ts
+          supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+          supabase/tests/compact_authoritative_outflow_ledger_core.sql
+          tests/mpgf-public-goods-compacts.spec.ts
+          FILES
+          LC_ALL=C sort -o "$RUNNER_TEMP/expected-files.txt" "$RUNNER_TEMP/expected-files.txt"
+          diff -u "$RUNNER_TEMP/expected-files.txt" "$RUNNER_TEMP/actual-files.txt"
+
+          for run_id in "$LEDGER_QA_RUN_ID" "$COMPACT_QA_RUN_ID" "$EVIDENCE_PAYMENT_RUN_ID" "$CANONICAL_VISUAL_RUN_ID"; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$RUNNER_TEMP/run-$run_id.json"
+            jq -e --arg head "$CANDIDATE_HEAD_SHA" '
+              .head_sha == $head and .status == "completed" and .conclusion == "success"
+            ' "$RUNNER_TEMP/run-$run_id.json" >/dev/null
+          done
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$NONHOSTED_CONTROLLER_RUN_ID" \
+            --jq 'select(.status == "completed" and .conclusion == "success") | .id' >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/commits/$CANDIDATE_HEAD_SHA/status" > "$RUNNER_TEMP/status.json"
+          jq -e '[.statuses[] | select(.context == "release-classification" and .state == "success")] | length >= 1' "$RUNNER_TEMP/status.json" >/dev/null
+
+          test "$(gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$CANDIDATE_HEAD_SHA&per_page=100" --jq 'length')" = "0"
+          mkdir -p evidence
+          cp "$RUNNER_TEMP/actual-files.txt" evidence/candidate-files.txt
+          jq -n --arg head "$CANDIDATE_HEAD_SHA" --arg tree "$CANDIDATE_TREE_SHA" \
+            --arg ledger "$LEDGER_QA_RUN_ID" --arg compact "$COMPACT_QA_RUN_ID" \
+            --arg payment "$EVIDENCE_PAYMENT_RUN_ID" --arg visual "$CANONICAL_VISUAL_RUN_ID" \
+            '{candidate:{head:$head,tree:$tree,changedFiles:16},sameShaGates:{ledger:$ledger,compact:$compact,evidencePayment:$payment,canonicalVisual:$visual,releaseClassification:"success"},pr:{open:true,draft:true,merged:false},issue734Open:true}' \
+            > evidence/exact-state.json
+
+      - name: Install exact candidate dependencies and browser/database clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix app ci
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+          cd app
+          npx playwright install --with-deps chromium
+
+      - name: Re-run focused exact-head ledger contracts and strict types
+        shell: bash
+        working-directory: app
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/compact-authoritative-outflow.test.ts \
+            src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \
+            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts \
+            2>&1 | tee ../evidence/focused-ledger-tests.log
+          npx tsc --noEmit --pretty false 2>&1 | tee ../evidence/typescript.log
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
+          git diff --quiet
+
+      - name: Prove exact QA database binding and zero pre-existing Compact/ledger residue
+        id: qa_preflight
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          test -n "$QA_SUPABASE_DB_URL"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          value = os.environ["QA_SUPABASE_DB_URL"]
+          if os.environ["FORBIDDEN_PROD_REF"] in value:
+              raise SystemExit("Production project reference is forbidden.")
+          parsed = urlparse(value)
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and parse_qs(parsed.query).get("sslmode", ["require"]) == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only QA target.")
+          PY
+          test "$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "select coalesce(count(*)=1 and bool_and(singleton) and bool_and(environment='qa') and bool_and(project_ref='$EXPECTED_QA_REF') and bool_and(provisioned_out_of_band),false)::text from moraltrade_qa.environment_identity where singleton;")" = "true"
+          conninfo="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -X -c '\conninfo' 2>&1)"
+          [[ "$conninfo" == *"SSL connection"* ]]
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --file trusted/ops/pr663-uat712/schema-absence.sql > evidence/base-schema-absence.txt
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --file controller/ops/pr737-uat/ledger-schema-absence.sql > evidence/ledger-schema-absence.txt
+          for expected in compact_relations_before=0 compact_functions_before=0 eligibility_dependency_before=0 synthetic_users_before=0 synthetic_profiles_before=0; do grep -Fxq "$expected" evidence/base-schema-absence.txt; done
+          for expected in ledger_private_relations_before=0 ledger_private_functions_before=0 ledger_triggers_before=0; do grep -Fxq "$expected" evidence/ledger-schema-absence.txt; done
+          echo "cleanup_authorized=true" >> "$GITHUB_OUTPUT"
+
+      - name: Audit Vercel project, protection boundary, and one-use candidate deployment state
+        id: vercel_preflight
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p app/.vercel evidence
+          node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
+          const headers = {Authorization:`Bearer ${process.env.VERCEL_TOKEN}`};
+          const projectResponse = await fetch(`https://api.vercel.com/v9/projects/${process.env.VERCEL_PROJECT_ID}?teamId=${process.env.VERCEL_ORG_ID}`, {headers});
+          if (!projectResponse.ok) throw new Error("Canonical Vercel project lookup failed.");
+          const project = await projectResponse.json();
+          if (project.id !== process.env.VERCEL_PROJECT_ID || project.accountId !== process.env.VERCEL_ORG_ID) throw new Error("Vercel project identity drifted.");
+          const bypass = Object.entries(project.protectionBypass ?? {}).find(([,value]) => value?.scope === "automation-bypass");
+          if (!bypass) throw new Error("Protected automation boundary is unavailable.");
+          const deploymentsResponse = await fetch(`https://api.vercel.com/v6/deployments?projectId=${process.env.VERCEL_PROJECT_ID}&teamId=${process.env.VERCEL_ORG_ID}&limit=100`, {headers});
+          if (!deploymentsResponse.ok) throw new Error("Vercel deployment inventory lookup failed.");
+          const deployments = await deploymentsResponse.json();
+          const exact = (deployments.deployments ?? []).filter((deployment) => (deployment.meta?.githubCommitSha ?? deployment.gitSource?.sha ?? "") === process.env.CANDIDATE_HEAD_SHA);
+          if (exact.length !== 0) throw new Error("Exact PR 737 candidate already has a Vercel deployment; one-use UAT refuses reuse.");
+          const settings = {createdAt:project.createdAt,framework:project.framework,devCommand:project.devCommand,installCommand:project.installCommand,buildCommand:project.buildCommand,outputDirectory:project.outputDirectory,rootDirectory:project.rootDirectory,directoryListing:project.directoryListing,nodeVersion:project.nodeVersion};
+          await writeFile("app/.vercel/project.json", `${JSON.stringify({orgId:process.env.VERCEL_ORG_ID,projectId:process.env.VERCEL_PROJECT_ID,projectName:project.name,settings},null,2)}\n`);
+          await writeFile("evidence/vercel-preflight.json", `${JSON.stringify({projectId:project.id,teamId:project.accountId,exactCandidateDeploymentsBefore:0,deploymentProtectionAvailable:true,secretValuesRetained:false},null,2)}\n`);
+          process.stdout.write(bypass[0]);
+          NODE
+          bypass="$(tail -c 512 evidence/vercel-preflight.json >/dev/null; node --input-type=module <<'NODE'
+          const response = await fetch(`https://api.vercel.com/v9/projects/${process.env.VERCEL_PROJECT_ID}?teamId=${process.env.VERCEL_ORG_ID}`, {headers:{Authorization:`Bearer ${process.env.VERCEL_TOKEN}`}});
+          if (!response.ok) throw new Error("Protection bypass lookup failed.");
+          const project = await response.json();
+          const entry = Object.entries(project.protectionBypass ?? {}).find(([,value]) => value?.scope === "automation-bypass");
+          if (!entry) throw new Error("Automation bypass absent.");
+          process.stdout.write(entry[0]);
+          NODE
+          )"
+          test -n "$bypass"
+          echo "::add-mask::$bypass"
+          echo "VERCEL_AUTOMATION_BYPASS_SECRET=$bypass" >> "$GITHUB_ENV"
+
+      - name: Build exact candidate with public QA and disabled-payment configuration only
+        shell: bash
+        working-directory: app
+        env:
+          NEXT_PUBLIC_SITE_URL: https://preview.invalid
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          SITE_URL: https://preview.invalid
+          VERCEL_GIT_COMMIT_REF: feature/compact-authoritative-outflow-ledger-v1-20260816
+          VERCEL_GIT_COMMIT_SHA: ${{ env.CANDIDATE_HEAD_SHA }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${QA_SUPABASE_DB_URL:-}"
+          rm -rf .next .vercel/output
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build --yes --token="$VERCEL_TOKEN" 2>&1 | tee ../evidence/vercel-build.log
+          node ../trusted/ops/pr663-uat712/inject-runtime-attestation.mjs
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
+          git diff --quiet
+
+      - name: Deploy exact prebuilt candidate once as protected, unaliased Preview
+        id: deploy
+        shell: bash
+        working-directory: app
+        env:
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          VERCEL_GIT_COMMIT_REF: feature/compact-authoritative-outflow-ledger-v1-20260816
+          VERCEL_GIT_COMMIT_SHA: ${{ env.CANDIDATE_HEAD_SHA }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --archive=tgz --token="$VERCEL_TOKEN" \
+            --meta "githubCommitSha=$CANDIDATE_HEAD_SHA" --meta "githubCommitRef=$CANDIDATE_BRANCH" --meta "uatIssue=734" --meta "uatPr=737" \
+            --env "NEXT_PUBLIC_SITE_URL=https://preview.invalid" --env "SITE_URL=https://preview.invalid" \
+            --env "NEXT_PUBLIC_SUPABASE_URL=https://hvmxfjjbdcgjjudmthdz.supabase.co" --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" \
+            --env "SUPABASE_SERVICE_ROLE_KEY=" --env "SUPABASE_URL=" --env "SUPABASE_PROJECT_REF=" --env "SUPABASE_DB_URL=" --env "DATABASE_URL=" \
+            --env "POSTGRES_URL=" --env "POSTGRES_PRISMA_URL=" --env "POSTGRES_URL_NON_POOLING=" \
+            --env "CONDITIONAL_PAYMENTS_MODE=disabled" --env "TRADE_DONATION_POOL_ENABLED=false" --env "TRADE_DONATION_POOL_MODE=disabled" \
+            --env "DIRECT_DONATION_UPGRADES_ENABLED=false" --env "DIRECT_DONATION_UPGRADE_MODE=disabled" \
+            --env "MPGF_REAL_MONEY_ENABLED=false" --env "MPGF_REAL_MONEY_ACCEPTANCE_ENABLED=false" --env "MPGF_TEST_PAYMENT_ENABLED=false" \
+            --env "EVERY_ORG_PLEDGE_DONATIONS_ENABLED=false" --env "STRIPE_PLATFORM_ACCOUNT_ID=" --env "STRIPE_SECRET_KEY=" --env "STRIPE_WEBHOOK_SECRET=" \
+            --build-env "NEXT_PUBLIC_SITE_URL=https://preview.invalid" --build-env "SITE_URL=https://preview.invalid" \
+            --build-env "NEXT_PUBLIC_SUPABASE_URL=https://hvmxfjjbdcgjjudmthdz.supabase.co" --build-env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" \
+            --build-env "SUPABASE_SERVICE_ROLE_KEY=" --build-env "SUPABASE_URL=" --build-env "SUPABASE_PROJECT_REF=" --build-env "SUPABASE_DB_URL=" --build-env "DATABASE_URL=" \
+            --build-env "POSTGRES_URL=" --build-env "POSTGRES_PRISMA_URL=" --build-env "POSTGRES_URL_NON_POOLING=" \
+            --build-env "CONDITIONAL_PAYMENTS_MODE=disabled" --build-env "TRADE_DONATION_POOL_ENABLED=false" --build-env "TRADE_DONATION_POOL_MODE=disabled" \
+            --build-env "DIRECT_DONATION_UPGRADES_ENABLED=false" --build-env "DIRECT_DONATION_UPGRADE_MODE=disabled" \
+            --build-env "MPGF_REAL_MONEY_ENABLED=false" --build-env "MPGF_REAL_MONEY_ACCEPTANCE_ENABLED=false" --build-env "MPGF_TEST_PAYMENT_ENABLED=false" \
+            --build-env "EVERY_ORG_PLEDGE_DONATIONS_ENABLED=false" --build-env "STRIPE_PLATFORM_ACCOUNT_ID=" --build-env "STRIPE_SECRET_KEY=" --build-env "STRIPE_WEBHOOK_SECRET=")"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tr -d '\r' | tail -n 1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          printf '%s\n' "$deployment_url" > ../evidence/deployment-url.txt
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Prove exact deployment metadata, protection, noindex, and QA runtime before database mutation
+        id: deployment
+        shell: bash
+        env:
+          COMPACT_UAT_BASE_URL: ${{ steps.deploy.outputs.deployment_url }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          UAT712_EVIDENCE_DIR: ../evidence
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$CANDIDATE_BRANCH" --jq '.commit.sha')" = "$CANDIDATE_HEAD_SHA"
+          deployment_id="$(node --input-type=module <<'NODE'
+          const hostname = new URL(process.env.COMPACT_UAT_BASE_URL).hostname;
+          const response = await fetch(`https://api.vercel.com/v13/deployments/${encodeURIComponent(hostname)}?teamId=${process.env.VERCEL_ORG_ID}`, {headers:{Authorization:`Bearer ${process.env.VERCEL_TOKEN}`}});
+          if (!response.ok) throw new Error("Deployment lookup failed.");
+          const data = await response.json();
+          const aliases = data.alias ?? data.aliases ?? [];
+          const sha = data.meta?.githubCommitSha ?? data.gitSource?.sha ?? "";
+          const id = data.id ?? data.uid;
+          if (!id || data.projectId !== process.env.VERCEL_PROJECT_ID || data.readyState !== "READY" || data.target !== null || aliases.length !== 0) throw new Error("Deployment is not exact, READY, Preview-only, and unaliased.");
+          if (sha !== process.env.CANDIDATE_HEAD_SHA || data.meta?.uatIssue !== "734" || data.meta?.uatPr !== "737") throw new Error("Deployment metadata mismatch.");
+          process.stdout.write(id);
+          NODE
+          )"
+          [[ "$deployment_id" =~ ^dpl_[A-Za-z0-9]+$ ]]
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          jq -n --arg id "$deployment_id" --arg url "$COMPACT_UAT_BASE_URL" --arg head "$CANDIDATE_HEAD_SHA" --arg tree "$CANDIDATE_TREE_SHA" \
+            '{id:$id,url:$url,target:null,aliases:[],protected:true,noindex:true,candidate:{head:$head,tree:$tree}}' > evidence/deployment-metadata.json
+          unauth_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-redirs 0 "$COMPACT_UAT_BASE_URL/")"
+          case "$unauth_status" in 302|303|307|308|401|403) ;; *) echo "Protected Preview unexpectedly returned HTTP $unauth_status." >&2; exit 1;; esac
+          cd app
+          node ../trusted/ops/pr663-uat712/preflight.mjs
+
+      - name: Apply reviewed base and ledger migrations, rollback suites, and synthetic multi-user fixtures
+        id: fixtures
+        shell: bash
+        env:
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$CANDIDATE_BRANCH" --jq '.commit.sha')" = "$CANDIDATE_HEAD_SHA"
+          echo "cleanup_authorized=true" >> "$GITHUB_OUTPUT"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file trusted/ops/pr663-uat712/eligibility-dependency.sql
+          migrations=(
+            app/supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql
+            app/supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
+            app/supabase/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+            app/supabase/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+            app/supabase/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+            app/supabase/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+          )
+          sha256sum "${migrations[@]}" trusted/ops/pr663-uat712/eligibility-dependency.sql controller/ops/pr737-uat/ledger-fixture.sql > evidence/reviewed-database-sources.sha256
+          for migration in "${migrations[@]}"; do
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$migration"
+          done
+          for suite in \
+            app/supabase/tests/compact_authoritative_outflow_ledger_core.sql \
+            app/supabase/tests/compact_authoritative_outflow_ledger_authorization.sql; do
+            { printf 'begin;\n'; cat "$suite"; printf '\nrollback;\n'; } | psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1
+          done
+          qa_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$qa_password"
+          printf '%s' "$qa_password" > "$RUNNER_TEMP/pr737-uat-password"
+          chmod 600 "$RUNNER_TEMP/pr737-uat-password"
+          export COMPACT_UAT_PASSWORD="$qa_password"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file trusted/ops/pr663-uat712/fixture.sql
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file controller/ops/pr737-uat/ledger-fixture.sql
+          printf 'synthetic_users=3\ncoverage_records=4\noutflow_records=4\nobligation_records=1\nactive_compacts=0\n' > evidence/fixture-summary.txt
+          echo "fixtures_applied=true" >> "$GITHUB_OUTPUT"
+
+      - name: Execute signed-in complete, fail-closed, privacy, and mobile protected-Preview UAT
+        id: uat
+        shell: bash
+        working-directory: app
+        env:
+          COMPACT_UAT_BASE_URL: ${{ steps.deploy.outputs.deployment_url }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+        run: |
+          set -euo pipefail
+          mkdir -p uat737 test-results ../evidence
+          cp ../controller/ops/pr737-uat/ledger-uat.spec.ts uat737/
+          cp ../trusted/ops/pr663-uat712/playwright.config.ts uat737/
+          export COMPACT_UAT_PASSWORD="$(tr -d '\r\n' < "$RUNNER_TEMP/pr737-uat-password")"
+          test -n "$COMPACT_UAT_PASSWORD"
+          echo "::add-mask::$COMPACT_UAT_PASSWORD"
+          uat_start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "uat_start=$uat_start" >> "$GITHUB_OUTPUT"
+          npx playwright test uat737/ledger-uat.spec.ts --config uat737/playwright.config.ts --reporter=line 2>&1 | tee ../evidence/playwright.log
+          uat_end="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "uat_end=$uat_end" >> "$GITHUB_OUTPUT"
+          ALLOW_NO_TRACE=1 node ../trusted/ops/pr663-uat712/redact-traces.mjs test-results ../evidence > ../evidence/evidence-secret-scan.txt
+
+      - name: Prove ledger-only records and no payment, provider, activation, electorate, or settlement side effect
+        id: no_money
+        if: always() && steps.fixtures.outputs.fixtures_applied == 'true'
+        shell: bash
+        env:
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --file controller/ops/pr737-uat/ledger-no-money.sql > evidence/no-money-before-cleanup.txt
+          for expected in \
+            synthetic_users_before_cleanup=3 \
+            payment_provider_refs_before_cleanup=0 \
+            active_compacts_before_cleanup=0 \
+            electorate_records_before_cleanup=0 \
+            authorization_records_before_cleanup=0 \
+            coverage_records_before_cleanup=4 \
+            outflow_records_before_cleanup=4 \
+            obligation_records_before_cleanup=1 \
+            scheduled_records_before_cleanup=0 \
+            settlement_records_before_cleanup=0 \
+            qualification_records_before_cleanup=0 \
+            readiness_records_before_cleanup=0; do
+            grep -Fxq "$expected" evidence/no-money-before-cleanup.txt
+          done
+
+      - name: Unconditionally remove ledger, Compact schema, identities, sessions, and prove zero residue
+        id: cleanup
+        if: always() && steps.qa_preflight.outputs.cleanup_authorized == 'true'
+        shell: bash
+        env:
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file controller/ops/pr737-uat/ledger-cleanup.sql
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file trusted/ops/pr663-uat712/cleanup.sql
+          rm -f "$RUNNER_TEMP/pr737-uat-password"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --file trusted/ops/pr663-uat712/residue-proof.sql > evidence/base-zero-residue.txt
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --file controller/ops/pr737-uat/ledger-residue-proof.sql > evidence/ledger-zero-residue.txt
+          for expected in fixture_residue=0 synthetic_users=0 payment_refs=0 activation_records=0 electorate_records=0 compact_relations=0 compact_functions=0 eligibility_dependency_relations=0; do grep -Fxq "$expected" evidence/base-zero-residue.txt; done
+          for expected in ledger_private_relations_after=0 ledger_private_functions_after=0 ledger_triggers_after=0; do grep -Fxq "$expected" evidence/ledger-zero-residue.txt; done
+
+      - name: Inspect exact deployment runtime logs for the UAT window
+        id: runtime_logs
+        if: always() && steps.deployment.outputs.deployment_id != '' && steps.uat.outputs.uat_start != ''
+        shell: bash
+        working-directory: app
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          UAT_END: ${{ steps.uat.outputs.uat_end }}
+          UAT_START: ${{ steps.uat.outputs.uat_start }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_LOG_CLI_VERSION" logs "$DEPLOYMENT_ID" --since "$UAT_START" --until "$UAT_END" --limit 1000 --json --token "$VERCEL_TOKEN" \
+            | node ../trusted/ops/pr663-uat712/summarize-vercel-logs.mjs > ../evidence/vercel-runtime-log-summary.json
+          test "$(jq -r '.entries' ../evidence/vercel-runtime-log-summary.json)" -gt 0
+          test "$(jq -r '.errors' ../evidence/vercel-runtime-log-summary.json)" = "0"
+          test "$(jq -r '.warnings' ../evidence/vercel-runtime-log-summary.json)" = "0"
+          test "$(jq -r '.http5xx' ../evidence/vercel-runtime-log-summary.json)" = "0"
+          test "$(jq -r '.paymentSignals' ../evidence/vercel-runtime-log-summary.json)" = "0"
+          test "$(jq -r '.privateLeakSignals' ../evidence/vercel-runtime-log-summary.json)" = "0"
+
+      - name: Delete the one-use Preview deployment and verify removal
+        id: delete_preview
+        if: always() && steps.deployment.outputs.deployment_id != ''
+        shell: bash
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o "$RUNNER_TEMP/delete.json" -w '%{http_code}' -X DELETE \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID")"
+          case "$status" in 200|202|204) ;; *) cat "$RUNNER_TEMP/delete.json" >&2; exit 1;; esac
+          sleep 3
+          lookup="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID")"
+          case "$lookup" in 404|410) ;; *) echo "Deleted Preview still resolves with HTTP $lookup." >&2; exit 1;; esac
+          printf 'deployment_deleted=true\ndeployment_id=%s\n' "$DEPLOYMENT_ID" > evidence/deployment-deletion.txt
+
+      - name: Build result ledger, upload redacted evidence, and preserve branch/PR freeze
+        id: result
+        if: always()
+        shell: bash
+        env:
+          UAT_OUTCOME: ${{ steps.uat.outcome }}
+          NO_MONEY_OUTCOME: ${{ steps.no_money.outcome }}
+          CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
+          LOGS_OUTCOME: ${{ steps.runtime_logs.outcome }}
+          DELETE_OUTCOME: ${{ steps.delete_preview.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence app/test-results
+          if [[ "$UAT_OUTCOME" = success && "$NO_MONEY_OUTCOME" = success && "$CLEANUP_OUTCOME" = success && "$LOGS_OUTCOME" = success && "$DELETE_OUTCOME" = success ]]; then conclusion=success; else conclusion=failure; fi
+          jq -n --arg conclusion "$conclusion" --arg head "$CANDIDATE_HEAD_SHA" --arg tree "$CANDIDATE_TREE_SHA" \
+            --arg uat "$UAT_OUTCOME" --arg noMoney "$NO_MONEY_OUTCOME" --arg cleanup "$CLEANUP_OUTCOME" --arg logs "$LOGS_OUTCOME" --arg deleted "$DELETE_OUTCOME" \
+            --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{conclusion:$conclusion,candidate:{head:$head,tree:$tree},controllerRun:$run,steps:{protectedPreviewUat:$uat,noMoney:$noMoney,zeroResidue:$cleanup,runtimeLogs:$logs,previewDeletion:$deleted},forbiddenActions:{merge:false,readyForReview:false,productionDeployment:false,persistentMigration:false,productionPrivateData:false,providerAction:false,activation:false,electorate:false,moneyMovement:false}}' \
+            > evidence/result-summary.json
+          find evidence app/test-results -type f ! -name sha256-manifest.txt -print0 | sort -z | xargs -0 sha256sum > evidence/sha256-manifest.txt
+          test "$(git -C app rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
+          test "$(git -C app rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/$CANDIDATE_BRANCH" --jq '.commit.sha')" = "$CANDIDATE_HEAD_SHA"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+      - name: Upload protected-UAT evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr737-authoritative-ledger-protected-uat-${{ github.run_id }}-${{ env.CANDIDATE_HEAD_SHA }}
+          path: |
+            evidence
+            app/test-results
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish terminal UAT result to PR 737 and issue 734
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONCLUSION: ${{ steps.result.outputs.conclusion }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          UAT_OUTCOME: ${{ steps.uat.outcome }}
+          NO_MONEY_OUTCOME: ${{ steps.no_money.outcome }}
+          CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
+          LOGS_OUTCOME: ${{ steps.runtime_logs.outcome }}
+          DELETE_OUTCOME: ${{ steps.delete_preview.outcome }}
+        run: |
+          set -euo pipefail
+          body="$(cat <<EOF
+          <!-- pr737-authoritative-ledger-protected-uat-20260824:$GITHUB_RUN_ID -->
+          ## PR #737 protected isolated-QA authoritative-ledger UAT
+
+          - Exact candidate: \`$CANDIDATE_HEAD_SHA\`
+          - Exact tree: \`$CANDIDATE_TREE_SHA\`
+          - Controller: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Protected, unaliased, noindex Preview UAT: **$UAT_OUTCOME**
+          - Ledger-only/no-money proof: **$NO_MONEY_OUTCOME**
+          - QA database zero-residue cleanup: **$CLEANUP_OUTCOME**
+          - Exact deployment runtime logs: **$LOGS_OUTCOME**
+          - One-use Preview deletion: **$DELETE_OUTCOME**
+          - Terminal conclusion: **${CONCLUSION:-failure}**
+
+          Tested signed-out privacy, signed-in complete coverage with \`$160.00\` eligible outflow and \`$16.00\` shadow calculation, signed-in incomplete fail-closed coverage with no fabricated amount, exact event replay, refund/reversal/chargeback netting, mobile rendering, provider-request absence, no activation/electorate/settlement, and zero QA residue. The controller did not merge, mark ready, deploy to production, persist a migration, access production private data, call a payment/identity provider, activate a Compact, open an electorate, or move money.
+          EOF
+          )"
+          gh pr comment 737 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 734 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Enforce terminal success before authorizing the next sequence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.result.outputs.conclusion }}" = success
