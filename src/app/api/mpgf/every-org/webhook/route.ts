@@ -208,7 +208,7 @@ async function persistPartnerWebhookEvent(partnerWebhookEvent: MpgfEveryOrgPartn
 }
 
 export async function POST(request: Request) {
-  const authorization = authenticateEveryOrgPartnerWebhookRequest();
+  const authorization = authenticateEveryOrgPartnerWebhookRequest(request.headers);
 
   if (!authorization.authorized) {
     return NextResponse.json(

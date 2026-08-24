@@ -76,7 +76,7 @@ const config: TradeDonationProviderConfig = {
   environment: "staging",
   donateLinkWebhookToken,
   partnerWebhookAuthorizationTokenConfigured: true,
-  partnerWebhookAuthorizationContract: "unconfirmed",
+  partnerWebhookAuthorizationContract: "authorization_bearer_v1",
   webhookRouteId: "webhook-route-id-that-is-long-enough",
   metadataSecret: secret,
   blockers: [],
@@ -215,7 +215,7 @@ test("curated target registry includes direct AMF routing", () => {
 });
 
 
-test("connector environments and unconfirmed provider authentication fail closed", () => {
+test("connector environments and exact provider authentication boundaries fail closed", () => {
   const base = {
     EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "true",
     EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: donateLinkWebhookToken,
@@ -250,8 +250,12 @@ test("connector environments and unconfirmed provider authentication fail closed
     VERCEL_ENV: "preview",
     NEXT_PUBLIC_SITE_URL: "https://preview.example",
   });
-  assert.equal(staging.ready, false);
-  assert.match(staging.blockers.join(" "), /header contract is unconfirmed/);
+  assert.equal(staging.ready, true);
+  assert.equal(staging.blockers.length, 0);
+  assert.equal(
+    staging.partnerWebhookAuthorizationContract,
+    "authorization_bearer_v1",
+  );
 
   const equal = getTradeDonationProviderConfig({
     ...base,

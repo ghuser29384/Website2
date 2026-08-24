@@ -87,7 +87,7 @@ const config: DirectDonationUpgradeConfig = {
   publicApiKey: "",
   donateLinkWebhookToken,
   partnerWebhookAuthorizationTokenConfigured: true,
-  partnerWebhookAuthorizationContract: "unconfirmed",
+  partnerWebhookAuthorizationContract: "authorization_bearer_v1",
   webhookRouteId,
   metadataSecret,
   qaFixturesEnabled: true,
@@ -97,15 +97,19 @@ const config: DirectDonationUpgradeConfig = {
   blockers: [],
 };
 
-test("live mode preserves search but blocks commitments and checkout while provider authentication is unconfirmed", () => {
+test("live mode reaches connector readiness only on the exact canonical production boundary", () => {
   const live = getDirectDonationUpgradeConfig(configuredRuntime());
 
   assert.equal(live.mode, "live");
   assert.equal(live.environment, "live");
   assert.equal(live.readyForSearch, true);
-  assert.equal(live.readyForCommitments, false);
-  assert.equal(live.readyForCheckout, false);
-  assert.match(live.blockers.join(" "), /header contract is unconfirmed/);
+  assert.equal(live.readyForCommitments, true);
+  assert.equal(live.readyForCheckout, true);
+  assert.equal(live.blockers.length, 0);
+  assert.equal(
+    live.partnerWebhookAuthorizationContract,
+    "authorization_bearer_v1",
+  );
 });
 
 test("live mode fails closed for duplicate, unknown, Preview, conflicting, or noncanonical production metadata", () => {
@@ -164,7 +168,7 @@ test("live mode fails closed for duplicate, unknown, Preview, conflicting, or no
   }
 });
 
-test("staging search remains available while commitments require the bounded rendered-QA inspection mode", () => {
+test("staging exact auth enables checkout while bounded rendered-QA mode permits commitments without private auth", () => {
   const stagingBase = {
     DIRECT_DONATION_UPGRADE_MODE: "staging",
     DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true",
@@ -190,12 +194,15 @@ test("staging search remains available while commitments require the bounded ren
 
   assert.equal(local.readyForSearch, true);
   assert.equal(preview.readyForSearch, true);
-  assert.equal(local.readyForCommitments, false);
-  assert.equal(preview.readyForCommitments, false);
+  assert.equal(local.readyForCommitments, true);
+  assert.equal(preview.readyForCommitments, true);
+  assert.equal(local.readyForCheckout, true);
+  assert.equal(preview.readyForCheckout, true);
 
   const renderedQa = getDirectDonationUpgradeConfig(
     configuredRuntime({
       ...stagingBase,
+      EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: "",
       DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true",
       VERCEL_PROJECT_ID: "prj_unknown_preview",
       VERCEL_ENV: "preview",

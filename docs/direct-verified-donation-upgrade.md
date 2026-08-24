@@ -35,9 +35,9 @@ Permitted modes:
 
 Internal, database, or rendered QA does not substitute for provider staging approval or a real hosted-checkout and authoritative-webhook exercise.
 
-The public Donate Link token and private Partner Webhook authorization token must be configured independently and must differ. `EVERY_ORG_WEBHOOK_TOKEN` is unsupported and is never treated as an alias for either value. The webhook path and metadata secrets must each contain at least 32 characters.
+The public Donate Link token and private Partner Webhook authorization token must be configured independently and must differ. `EVERY_ORG_WEBHOOK_TOKEN` is unsupported and is never treated as an alias for either value. The webhook route ID must be 32-128 URL-safe characters and is not a credential; the metadata secret must contain at least 32 characters.
 
-Phase A intentionally keeps the Partner Webhook authorization contract in the `unconfirmed` state because Every.org has not yet supplied the literal header name and complete value format. In that state, search fixtures may remain available outside production, but publication and checkout stay fail-closed and every inbound Every.org webhook returns a generic `401` before body parsing or database access. A correct URL path is defense in depth and cannot bypass this gate.
+The confirmed Partner Webhook contract is exactly one `Authorization` header whose value is `Bearer <Auth Token>`, with the literal scheme, one ASCII space, and the private Auth Token. Missing, duplicated/coalesced, malformed, or incorrect authorization returns a generic `401` before body parsing or database access. A correct route ID remains defense in depth and cannot bypass this gate.
 
 ## Recipient identity
 
@@ -214,4 +214,4 @@ Before staging or production activation:
 
 ### Webhook route identifier
 
-`EVERY_ORG_WEBHOOK_ROUTE_ID` is an opaque, URL-safe routing identifier, not a credential. Provider and hosting infrastructure may retain the request pathname. The route ID may narrow dispatch as defense in depth, but it is never sufficient sender authentication. Only the separately configured, private Partner Webhook authorization token may authenticate an inbound delivery after Every.org supplies the exact written header contract.
+`EVERY_ORG_WEBHOOK_ROUTE_ID` is an opaque, URL-safe routing identifier, not a credential. Provider and hosting infrastructure may retain the request pathname. The route ID may narrow dispatch as defense in depth, but it is never sufficient sender authentication. Only the separately configured private Auth Token, presented through the exact `Authorization: Bearer <Auth Token>` contract, may authenticate an inbound delivery.

@@ -1,11 +1,15 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 export const EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN_ENV =
   "EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN" as const;
 export const EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN_ENV =
   "EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" as const;
+export const EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER =
+  "Authorization" as const;
+export const EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_VALUE_PREFIX =
+  "Bearer " as const;
 export const EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS =
-  "unconfirmed" as const;
+  "authorization_bearer_v1" as const;
 
 export type EveryOrgRuntimeEnvironment = Readonly<
   Record<string, string | undefined>
@@ -32,7 +36,11 @@ export interface EveryOrgCredentialConfiguration {
 
 export interface EveryOrgPartnerWebhookAuthorizationResult {
   authorized: boolean;
-  status: "configuration_invalid" | "unconfirmed";
+  status:
+    | "authorized"
+    | "configuration_invalid"
+    | "authorization_missing"
+    | "authorization_invalid";
 }
 
 export interface EveryOrgSharedConnectorMechanism {
@@ -60,14 +68,18 @@ function envText(environment: EveryOrgRuntimeEnvironment, name: string) {
   return String(environment[name] ?? "").trim();
 }
 
+function fixedTextDigest(value: string) {
+  return createHash("sha256").update(value, "utf8").digest();
+}
+
 function constantTimeTextEqual(left: string, right: string) {
-  const leftBuffer = Buffer.from(left, "utf8");
-  const rightBuffer = Buffer.from(right, "utf8");
+  const leftDigest = fixedTextDigest(left);
+  const rightDigest = fixedTextDigest(right);
 
   return (
-    leftBuffer.length === rightBuffer.length &&
-    leftBuffer.length > 0 &&
-    timingSafeEqual(leftBuffer, rightBuffer)
+    left.length > 0 &&
+    right.length > 0 &&
+    timingSafeEqual(leftDigest, rightDigest)
   );
 }
 
@@ -124,10 +136,6 @@ export function getEveryOrgCredentialConfiguration(
     unsupportedCredentialEnvironmentNames.length === 0 &&
     !publicAndPrivateTokensEqual;
 
-  blockers.push(
-    "Every.org Partner Webhook authorization header contract is unconfirmed.",
-  );
-
   return {
     // If both configured values are equal, the nominally public value is also the
     // private credential and must not be returned to any Donate Link builder.
@@ -145,27 +153,47 @@ export function getEveryOrgCredentialConfiguration(
     ],
     publicAndPrivateTokensEqual,
     credentialConfigurationValid,
-    partnerWebhookAuthorizationReady: false,
+    partnerWebhookAuthorizationReady: credentialConfigurationValid,
     blockers: [...new Set(blockers)],
   };
 }
 
 /**
- * Phase A deliberately accepts no request header. Every.org has confirmed that
- * a private token is sent in a header, but has not supplied the literal header
- * name or complete value format. Phase B must replace this fail-closed result
- * only with that exact provider contract.
+ * Every.org's written Partner Webhook contract is exactly one Authorization
+ * header whose value is `Bearer <Auth Token>`. Header names are case-insensitive
+ * under HTTP, while the scheme, one ASCII space, and token are matched exactly.
+ * Duplicate Authorization fields are coalesced by the Fetch Headers boundary and
+ * therefore cannot equal the single expected field value.
  */
 export function authenticateEveryOrgPartnerWebhookRequest(
+  headers: Headers,
   environment: EveryOrgRuntimeEnvironment = process.env,
 ): EveryOrgPartnerWebhookAuthorizationResult {
   const configuration = getEveryOrgCredentialConfiguration(environment);
 
+  if (!configuration.credentialConfigurationValid) {
+    return { authorized: false, status: "configuration_invalid" };
+  }
+
+  const candidate = headers.get(
+    EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_HEADER,
+  );
+  if (candidate === null) {
+    return { authorized: false, status: "authorization_missing" };
+  }
+
+  const partnerWebhookAuthorizationToken = envText(
+    environment,
+    EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN_ENV,
+  );
+  const expected =
+    EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_VALUE_PREFIX +
+    partnerWebhookAuthorizationToken;
+  const authorized = constantTimeTextEqual(candidate, expected);
+
   return {
-    authorized: false,
-    status: configuration.credentialConfigurationValid
-      ? "unconfirmed"
-      : "configuration_invalid",
+    authorized,
+    status: authorized ? "authorized" : "authorization_invalid",
   };
 }
 
