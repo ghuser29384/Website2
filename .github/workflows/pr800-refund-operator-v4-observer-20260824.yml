@@ -1,0 +1,56 @@
+name: PR800 refund operator recovery v4 observer
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-observer-20260824
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: pr800-refund-operator-recovery-v4-observer
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 200
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr800-refund-operator-recovery-v4-20260824.yml
+      TARGET_BRANCH: ops/pr800-refund-operator-recovery-v4-20260824
+    steps:
+      - name: Observe latest v4 recovery run
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=''
+          for attempt in $(seq 1 360); do
+            response="$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+              -f branch="$TARGET_BRANCH" -f per_page=20)"
+            latest="$(jq -c '.workflow_runs | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+            if [[ -n "$latest" && "$(jq -r '.status' <<<"$latest")" = completed ]]; then break; fi
+            sleep 30
+          done
+          test -n "$latest"
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          head_sha="$(jq -r '.head_sha' <<<"$latest")"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr800-refund-operator-recovery-v4-observer -->
+          ## Refund-operator recovery v4 observer
+
+          - run: \`$run_id\`
+          - status: \`$status\`
+          - conclusion: \`$conclusion\`
+          - controller head: \`$head_sha\`
+          - run page: $html_url"
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$status" = completed
+          test "$conclusion" = success
