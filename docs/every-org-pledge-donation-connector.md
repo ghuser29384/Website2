@@ -24,22 +24,35 @@ A browser return to Moral Trade is never treated as payment proof. Screenshots d
 ```bash
 EVERY_ORG_PLEDGE_DONATIONS_ENABLED=true
 EVERY_ORG_ENVIRONMENT=staging # live is accepted only on the canonical production deployment
-EVERY_ORG_WEBHOOK_TOKEN=<token from the Every.org developer dashboard>
-EVERY_ORG_WEBHOOK_PATH_SECRET=<at least 32 random characters>
+EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN=<public token included in Donate Links>
+EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN=<private inbound authorization token>
+EVERY_ORG_WEBHOOK_ROUTE_ID=<32-128 URL-safe opaque identifier>
 EVERY_ORG_PARTNER_METADATA_SECRET=<at least 32 random characters>
 ```
 
-Generate independent secrets. Do not reuse the Supabase service-role key, Stripe webhook secret, or session secrets. Staging is rejected on the canonical production deployment, and live mode is rejected on previews or local hosts.
+The two tokens are directional and must be different. The Donate Link token is public by design and may appear only as the outbound `webhook_token` query parameter. The Partner Webhook authorization token is private, server-only, and must never enter a URL, partner metadata, client bundle, HTML, log, artifact, snapshot, or error. Generate the opaque route ID and metadata secret independently. Do not reuse the Supabase service-role key, Stripe webhook secret, session secrets, or either Every.org token. Staging is rejected on the canonical production deployment, and live mode is rejected on previews or local hosts.
+
+### Fail-closed variable migration
+
+| Removed variable | Explicit replacement | Migration behavior |
+|---|---|---|
+| `EVERY_ORG_WEBHOOK_TOKEN` | `EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN` | The application does not read or alias the old name. An operator must explicitly configure the provider's public Donate Link token under the new name and remove the old variable. |
+| `MPGF_EVERY_ORG_PUBLIC_WEBHOOK_TOKEN` | `EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN` | MPGF Donate Links use the same directionally named public configuration; the old name is rejected. |
+| `MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET` | none | This guessed local header secret is rejected and must be removed. It must not be copied into the provider authorization-token variable. |
+
+`EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN` must contain only the private Partner Webhook token supplied by Every.org and must be configured independently of the public Donate Link token. Never derive it from, copy it from, or default it to the public token. If an old variable is still configured, or if the public and private values are equal, all affected mechanisms fail closed.
 
 ## Every.org dashboard setup
 
 Register this Partner Webhook URL in the matching Every.org environment:
 
 ```text
-https://<moral-trade-host>/api/connectors/every-org/<EVERY_ORG_WEBHOOK_PATH_SECRET>
+https://<moral-trade-host>/api/connectors/every-org/<EVERY_ORG_WEBHOOK_ROUTE_ID>
 ```
 
-The Donate Link includes `EVERY_ORG_WEBHOOK_TOKEN`, causing completed donations from that link to notify the registered partner webhook. The webhook URL secret authenticates the sender at the HTTP boundary; the random partner donation ID, HMAC-signed partner metadata, exact frozen-field checks, and unique charge hash provide additional fail-closed validation.
+The Donate Link includes only `EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN`, causing completed donations from that link to notify the registered Partner Webhook. Every.org's separate private Partner Webhook authorization token is the primary sender-authentication credential. The URL route ID is defense in depth only; a correct route never substitutes for a valid provider-authentication header. The random partner donation ID, HMAC-signed partner metadata, exact frozen-field checks, and unique charge hash remain later validation layers.
+
+Every.org's written Partner Webhook contract is exactly one `Authorization` header with the value `Bearer <Auth Token>`: the literal scheme is `Bearer`, followed by one ASCII space and the private Auth Token. Moral Trade compares the complete field value at a fixed digest width and returns the same generic `401` for missing, duplicated/coalesced, malformed, or incorrect authorization before body parsing, Supabase client creation, database lookup, RPC, or sensitive logging. The public Webhook Token, route ID, metadata secret, API key, and Vercel bypass credential are never accepted as substitutes.
 
 ## Staging verification
 
@@ -65,3 +78,7 @@ Keep `EVERY_ORG_PLEDGE_DONATIONS_ENABLED=false` in production until all of the f
 - The public connector registry accurately describes the relationship and does not imply endorsement.
 - Support has an operating procedure for `needs_review`, completed-after-cancellation, and donor questions.
 - A controlled live donation confirms that the intended nonprofit receives the gift and the Moral Trade evidence record activates exactly once.
+
+### Webhook route identifier
+
+`EVERY_ORG_WEBHOOK_ROUTE_ID` is an opaque, URL-safe routing identifier, not a credential. Provider and hosting infrastructure may retain the request pathname. The route ID may narrow dispatch as defense in depth, but it is never sufficient sender authentication. Only the separately configured private Auth Token, presented through the exact `Authorization: Bearer <Auth Token>` contract, may authenticate an inbound delivery.

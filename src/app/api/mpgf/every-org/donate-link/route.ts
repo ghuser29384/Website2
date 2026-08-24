@@ -11,6 +11,7 @@ import {
   buildMpgfEveryOrgDonateLink,
   buildMpgfEveryOrgPartnerDonationId,
 } from "@/lib/mpgf/public-goods-every-org";
+import { getEveryOrgCredentialConfiguration } from "@/lib/every-org-partner-webhook-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,10 +26,6 @@ function numberField(record: Record<string, unknown>, key: string) {
   const value = record[key];
 
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function publicWebhookToken() {
-  return process.env.MPGF_EVERY_ORG_PUBLIC_WEBHOOK_TOKEN?.trim() || undefined;
 }
 
 function successUrlFor(requestUrl: string, partnerDonationId?: string) {
@@ -92,11 +89,22 @@ async function recordDonateLinkAnalytics({
 
 async function responseFor(record: Record<string, unknown>, requestUrl: string) {
   const campaignId = stringField(record, "campaignId");
+  const credentials = getEveryOrgCredentialConfiguration();
 
   if (!campaignId) {
     return NextResponse.json(
       { ok: false, error: "MPGF Every.org Donate Link requires campaignId." },
       { status: 400, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+    );
+  }
+
+  if (
+    !credentials.credentialConfigurationValid ||
+    !credentials.partnerWebhookAuthorizationReady
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "The Every.org connector is not configured." },
+      { status: 503, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
   }
 
@@ -119,7 +127,7 @@ async function responseFor(record: Record<string, unknown>, requestUrl: string) 
     roundId: stringField(record, "roundId") ?? undefined,
     successUrl: stringField(record, "successUrl") ?? successUrlFor(requestUrl, partnerDonationId),
     userRef,
-    webhookToken: publicWebhookToken(),
+    donateLinkWebhookToken: credentials.donateLinkWebhookToken,
   });
   const analytics = await recordDonateLinkAnalytics({
     amountCents,
