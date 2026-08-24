@@ -23,6 +23,7 @@ env:
   TARGET_BRANCH: ops/pr737-ledger-isolated-qa-uat-r2-20260824
   CANDIDATE_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
   UAT_WORKFLOW: .github/workflows/pr737-ledger-isolated-qa-uat-20260824.yml
+  EXPORT_PATH: ops/pr737-ledger-uat/generated/pr737-ledger-isolated-qa-uat-r2-20260824.yml
   EXPECTED_OLD_UAT_BLOB: 880e38af72d510e2e1ddbbab649de72409ad2059
   OLD_CONTROLLER_BRANCH: ops/pr737-ledger-isolated-qa-uat-20260821
   NEW_CONTROLLER_BRANCH: ops/pr737-ledger-isolated-qa-uat-r2-20260824
@@ -66,7 +67,7 @@ jobs:
           remote_candidate="$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
           test "$remote_candidate" = "$NEW_CANDIDATE_HEAD"
 
-      - name: Rebind the one-use hosted UAT to the repaired exact head
+      - name: Generate exact repaired hosted-UAT blob outside workflow paths
         shell: bash
         run: |
           set -euo pipefail
@@ -158,22 +159,33 @@ jobs:
               if old in text:
                   raise SystemExit(f"{label}: stale source anchor remains")
 
-          path.write_text(text, encoding="utf-8")
+          export_path = Path(os.environ["EXPORT_PATH"])
+          export_path.parent.mkdir(parents=True, exist_ok=True)
+          export_path.write_text(text, encoding="utf-8")
           PY
 
-          git diff --check
-          test "$(git diff --name-only)" = "$UAT_WORKFLOW"
-          grep -Fq "CANDIDATE_HEAD_SHA: $NEW_CANDIDATE_HEAD" "$UAT_WORKFLOW"
-          grep -Fq "CANDIDATE_TREE_SHA: $NEW_CANDIDATE_TREE" "$UAT_WORKFLOW"
-          grep -Fq "CONTROLLER_BRANCH: $NEW_CONTROLLER_BRANCH" "$UAT_WORKFLOW"
-          grep -Fq 'PR 737 exact-head non-hosted controller r5' "$UAT_WORKFLOW"
+          test "$(git hash-object "$UAT_WORKFLOW")" = "$EXPECTED_OLD_UAT_BLOB"
+          grep -Fq "CANDIDATE_HEAD_SHA: $NEW_CANDIDATE_HEAD" "$EXPORT_PATH"
+          grep -Fq "CANDIDATE_TREE_SHA: $NEW_CANDIDATE_TREE" "$EXPORT_PATH"
+          grep -Fq "CONTROLLER_BRANCH: $NEW_CONTROLLER_BRANCH" "$EXPORT_PATH"
+          grep -Fq 'PR 737 exact-head non-hosted controller r5' "$EXPORT_PATH"
+          ! grep -Fq "$OLD_CANDIDATE_HEAD" "$EXPORT_PATH"
+          ! grep -Fq "$OLD_CONTROLLER_BRANCH" "$EXPORT_PATH"
+          git diff --check -- "$EXPORT_PATH"
 
-      - name: Commit the exact hosted-UAT rebinding
+      - name: Commit only the generated non-workflow blob
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$UAT_WORKFLOW"
-          git commit -m "ci: bind PR 737 hosted UAT to repaired exact head"
-          git push origin "HEAD:$TARGET_BRANCH"
+          git add "$EXPORT_PATH"
+          cached_files="$(git diff --cached --name-only)"
+          if [ -n "$cached_files" ]; then
+            test "$cached_files" = "$EXPORT_PATH"
+            git diff --cached --check
+            git commit -m "ops: export PR 737 hosted UAT r2 workflow blob"
+            git push origin "HEAD:$TARGET_BRANCH"
+          else
+            echo "Exact hosted-UAT export is already materialized."
+          fi
