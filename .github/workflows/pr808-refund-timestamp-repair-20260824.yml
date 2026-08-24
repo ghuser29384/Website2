@@ -1,0 +1,160 @@
+name: PR808 exact provider-refund timestamp UI repair
+
+on:
+  push:
+    branches:
+      - ops/pr808-refund-timestamp-repair-20260824
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: pr808-refund-timestamp-repair-20260824
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-ui-709-20260824-v2
+  EXPECTED_PRODUCT_HEAD: c31a2669d49e631d5d609731afc7e7e55a5f926c
+  EXPECTED_CONTROLLER_BRANCH: ops/pr808-refund-timestamp-repair-20260824
+  AUTHORIZATION_FILE: .github/pr808-refund-timestamp-repair.authorize
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BEFORE_SHA: ${{ github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact product branch and one-use authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_CONTROLLER_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+          git fetch --no-tags origin "$EXPECTED_PRODUCT_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          pr_tmp="$(mktemp)"
+          trap 'rm -f "$pr_tmp"' EXIT
+          gh api "repos/$EXPECTED_REPOSITORY/pulls/808" > "$pr_tmp"
+          jq -e --arg sha "$EXPECTED_PRODUCT_HEAD" '
+            .state == "open" and .draft == true and .merged == false and .head.sha == $sha
+          ' "$pr_tmp" >/dev/null
+          git diff --name-only "$BEFORE_SHA" HEAD | LC_ALL=C sort > changed-paths.txt
+          test "$(wc -l < changed-paths.txt | tr -d ' ')" = 1
+          grep -Fxq "$AUTHORIZATION_FILE" changed-paths.txt
+          expected_authorization="$(cat <<EOF_AUTH
+          schema=moral-trade-pr808-refund-timestamp-repair-v1
+          product_branch=$EXPECTED_PRODUCT_BRANCH
+          expected_head=$EXPECTED_PRODUCT_HEAD
+          controller_branch=$EXPECTED_CONTROLLER_BRANCH
+          controller_parent=$BEFORE_SHA
+          authorization=AUTHORIZE_PR808_REFUND_TIMESTAMP_REPAIR_C31A266
+          EOF_AUTH
+          )"
+          test -f "$AUTHORIZATION_FILE"
+          test "$(cat "$AUTHORIZATION_FILE")" = "$expected_authorization"
+
+      - name: Apply the bounded timezone-qualified timestamp UI and source-contract repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B repair-product "$EXPECTED_PRODUCT_HEAD"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          python3 - <<'PY'
+          from pathlib import Path
+
+          page = Path("src/app/admin/donation-upgrades/page.tsx")
+          source = page.read_text()
+          before = '''                      <label>
+                        Every.org refund timestamp
+                        <input
+                          name="provider_refunded_at"
+                          type="datetime-local"
+                          required
+                        />
+                      </label>'''
+          after = '''                      <label>
+                        Every.org refund timestamp (ISO 8601 with timezone)
+                        <input
+                          name="provider_refunded_at"
+                          type="text"
+                          inputMode="text"
+                          maxLength={40}
+                          autoComplete="off"
+                          placeholder="2026-08-24T21:15:30Z"
+                          required
+                        />
+                        <span className="field-note">
+                          Copy the exact Every.org timestamp with Z or an explicit UTC offset.
+                        </span>
+                      </label>'''
+          if source.count(before) != 1:
+              raise SystemExit("Exact timestamp input block was not found once.")
+          page.write_text(source.replace(before, after))
+
+          contract = Path("src/lib/provider-refund-operator-source-contract.test.ts")
+          source = contract.read_text()
+          anchor = '''    "p_currency: providerCurrency",
+  ]);'''
+          replacement = '''    "p_currency: providerCurrency",
+    "ISO_INSTANT_PATTERN",
+    "refundedAtInput",
+    "explicit UTC offset",
+  ]);'''
+          if source.count(anchor) != 1:
+              raise SystemExit("Action timestamp contract insertion point was not found once.")
+          source = source.replace(anchor, replacement)
+          anchor = '''    'name="evidence_reference"',
+    "do not enter donor names, donor email, payment data, or a raw webhook body",
+  ]);'''
+          replacement = '''    'name="evidence_reference"',
+    "Every.org refund timestamp (ISO 8601 with timezone)",
+    'placeholder="2026-08-24T21:15:30Z"',
+    "exact Every.org timestamp with Z or an explicit UTC offset",
+    "do not enter donor names, donor email, payment data, or a raw webhook body",
+  ]);'''
+          if source.count(anchor) != 1:
+              raise SystemExit("Admin timestamp contract insertion point was not found once.")
+          contract.write_text(source.replace(anchor, replacement))
+          PY
+          git diff --check
+          test "$(git diff --name-only | LC_ALL=C sort | tr '\n' ' ')" = "src/app/admin/donation-upgrades/page.tsx src/lib/provider-refund-operator-source-contract.test.ts "
+          grep -Fq 'type="text"' src/app/admin/donation-upgrades/page.tsx
+          grep -Fq 'placeholder="2026-08-24T21:15:30Z"' src/app/admin/donation-upgrades/page.tsx
+          grep -Fq 'ISO_INSTANT_PATTERN' src/app/admin/donation-upgrades/actions.ts
+          node --import tsx --test src/lib/provider-refund-operator-source-contract.test.ts
+          git add src/app/admin/donation-upgrades/page.tsx src/lib/provider-refund-operator-source-contract.test.ts
+          git commit -m "Require timezone-qualified provider refund timestamps"
+          new_head="$(git rev-parse HEAD)"
+          git fetch --no-tags origin "$EXPECTED_PRODUCT_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          git push origin "HEAD:$EXPECTED_PRODUCT_BRANCH"
+          printf '%s\n' "$new_head" > new-head.txt
+
+      - name: Post durable repair locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          new_head="$(cat new-head.txt)"
+          body="## Provider-refund timestamp input repaired under exact-head guard
+
+- prior head: \`$EXPECTED_PRODUCT_HEAD\`
+- repaired head: \`$new_head\`
+- changed paths: \`src/app/admin/donation-upgrades/page.tsx\`; \`src/lib/provider-refund-operator-source-contract.test.ts\`
+- semantic change: the operator must enter an exact ISO 8601 timestamp with \`Z\` or an explicit UTC offset; ambiguous browser-local \`datetime-local\` input is no longer accepted
+- permanent source contract: passed before push
+
+No refund was executed, no database or provider request occurred, and no PR #547, PR #711, production, deployment, credential, checkout, donation, payment, or feature state changed."
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/808/comments" -f body="$body" >/dev/null
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/709/comments" -f body="$body" >/dev/null
