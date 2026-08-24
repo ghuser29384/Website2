@@ -47,9 +47,25 @@ test("clean reconstruction proves legacy Compact behavior before ledger hardenin
   assert.ok(ledgerApply < finalLedgerSuites);
   assert.match(
     workflow,
-    /grep -Ev '\/2026081614150\[0-3\]_compact_authoritative_outflow_\.\*\\\.sql\$'/,
+    /ledger_skips=20260816141500_compact_authoritative_outflow_ledger_v1\.sql,20260816141501_compact_authoritative_outflow_freeze_v1\.sql,20260816141502_compact_authoritative_outflow_hardening_v1\.sql,20260816141503_compact_authoritative_outflow_replay_fix_v1\.sql/,
   );
-  assert.match(workflow, /test "\$\(wc -l < compact-outflow-clean\/ledger-migrations\.txt\)" -eq 4/);
+  assert.match(
+    workflow,
+    /SUPABASE_MIGRATION_SKIP_BASENAMES="\$\{qa_skips\},\$\{ledger_skips\}"/,
+  );
+
+  const applyBody = workflow.slice(ledgerApply, finalLedgerSuites);
+  const migrationPositions = [
+    "20260816141500_compact_authoritative_outflow_ledger_v1.sql",
+    "20260816141501_compact_authoritative_outflow_freeze_v1.sql",
+    "20260816141502_compact_authoritative_outflow_hardening_v1.sql",
+    "20260816141503_compact_authoritative_outflow_replay_fix_v1.sql",
+  ].map((migration) => {
+    const index = applyBody.indexOf(migration);
+    assert.notEqual(index, -1, `Missing ordered ledger migration: ${migration}`);
+    return index;
+  });
+  assert.deepEqual(migrationPositions, [...migrationPositions].sort((a, b) => a - b));
 });
 
 test("isolated QA keeps both schema phases in one outer rollback", () => {
@@ -74,6 +90,15 @@ test("isolated QA keeps both schema phases in one outer rollback", () => {
     /20260816141500_compact_authoritative_outflow_ledger_v1\.sql/,
   );
   assert.match(orderedBody, /savepoint authoritative_ledger_core;/);
+  assert.match(
+    orderedBody,
+    /rollback to savepoint authoritative_ledger_core;/,
+  );
+  assert.match(orderedBody, /savepoint authoritative_ledger_authorization;/);
+  assert.match(
+    orderedBody,
+    /rollback to savepoint authoritative_ledger_authorization;/,
+  );
   assert.match(
     orderedBody,
     /compact_authoritative_outflow_ledger_authorization\.sql/,
@@ -104,8 +129,10 @@ test("rollback suites are normalized without weakening their source envelopes", 
     workflow,
     /compact-outflow-rollback\/test-bodies\/compact_authoritative_outflow_ledger_core\.sql/,
   );
+  assert.match(workflow, /test-body-manifest\.json/);
+  assert.match(workflow, /sourceSha256/);
+  assert.match(workflow, /bodySha256/);
 });
-
 
 test("adjacent Compact QA runs legacy regressions before ledger authority hardening", () => {
   const preLedgerApply = adjacentPosition(
@@ -115,7 +142,7 @@ test("adjacent Compact QA runs legacy regressions before ledger authority harden
     "Run legacy role, lifecycle, privacy, and no-money tests before ledger authority hardening",
   );
   const legacyConcurrency = adjacentPosition(
-    "Run genuinely concurrent readiness freeze before ledger authority hardening",
+    "Run genuinely concurrent readiness freeze test before ledger authority hardening",
   );
   const ledgerApply = adjacentPosition(
     "Apply the four authoritative-ledger migrations after legacy Compact validation",
@@ -137,5 +164,30 @@ test("adjacent Compact QA runs legacy regressions before ledger authority harden
     /ledger_skips=20260816141500_compact_authoritative_outflow_ledger_v1\.sql,20260816141501_compact_authoritative_outflow_freeze_v1\.sql,20260816141502_compact_authoritative_outflow_hardening_v1\.sql,20260816141503_compact_authoritative_outflow_replay_fix_v1\.sql/,
   );
   assert.match(adjacentCompactWorkflow, /skipped_environment_bound_migration_count=12/);
-  assert.match(adjacentCompactWorkflow, /test "\$\(wc -l < mpgf-compacts-clean-qa\/final-no-money\.txt\)" -eq 3/);
+  assert.match(
+    adjacentCompactWorkflow,
+    /test "\$\(wc -l < mpgf-compacts-clean-qa\/final-no-money\.txt\)" -eq 3/,
+  );
+});
+
+test("piped validation gates propagate failures through tee", () => {
+  for (const marker of [
+    "Focused contracts",
+    "Complete repository tests",
+    "ESLint",
+    "Strict TypeScript",
+    "Production build",
+    "Four-viewpoint browser contract",
+    "Generate and compare public runtime types",
+  ]) {
+    const start = position(marker);
+    const next = workflow.indexOf("\n      - name:", start + marker.length);
+    const body = workflow.slice(start, next === -1 ? workflow.length : next);
+    assert.match(body, /shell: bash/, `${marker} must use the Bash shell`);
+    assert.match(
+      body,
+      /set -euo pipefail/,
+      `${marker} must propagate a failing command through tee`,
+    );
+  }
 });
