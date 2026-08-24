@@ -132,6 +132,28 @@ export function buildAuthenticatedHarnessSource(input) {
     "frozen participant semantic assertions and pre-assertion screenshot",
   );
 
+  const browserMfaSubmissionBlock = [
+    "  await Promise.all([",
+    '    page.waitForLoadState("domcontentloaded"),',
+    '    form.getByRole("button", { name: "Verify session" }).click(),',
+    "  ]);",
+    "  await page.reload();",
+    '  await expectText(page.locator("article#account-security"), /Session level\\s*aal2|AAL:\\s*aal2/i);',
+  ].join("\n");
+  source = replaceExactly(
+    source,
+    browserMfaSubmissionBlock,
+    [
+      '  await form.getByRole("button", { name: "Verify session" }).click();',
+      "  await panel",
+      '    .getByText("MFA verified for this session.", { exact: true })',
+      '    .waitFor({ state: "visible", timeout: 30_000 });',
+      "  await page.reload();",
+      '  await expectText(page.locator("article#account-security"), /Session level\\s*aal2|AAL:\\s*aal2/i);',
+    ].join("\n"),
+    "browser MFA server-action completion boundary",
+  );
+
   const participantUiBlock = [
     "  await expectText(stage, /The pooled donation is the activation gate/i);",
     "  await expectText(stage, /presumptive provider-facing donor of record/i);",

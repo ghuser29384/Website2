@@ -78,6 +78,34 @@ test("frozen participant generation fails closed if the stale source contract dr
   );
 });
 
+test("browser MFA waits for the React server action before reloading the session", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
+  assert.match(generated, /MFA verified for this session\./);
+  assert.doesNotMatch(
+    generated,
+    /page\.waitForLoadState\("domcontentloaded"\)[\s\S]*?Verify session/,
+  );
+  const click = generated.indexOf('form.getByRole("button", { name: "Verify session" }).click()');
+  const success = generated.indexOf('.getByText("MFA verified for this session.", { exact: true })');
+  const reload = generated.indexOf("await page.reload()", success);
+  const aal2 = generated.indexOf("/Session level\\s*aal2|AAL:\\s*aal2/i", reload);
+  assert.ok(click >= 0, "The browser MFA submission is missing.");
+  assert.ok(success > click, "The action success message must follow submission.");
+  assert.ok(reload > success, "The browser must reload only after the action succeeds.");
+  assert.ok(aal2 > reload, "The AAL2 assertion must follow the reloaded session.");
+});
+
+test("browser MFA generation fails closed if the old submission contract drifts", () => {
+  const drifted = original.replace(
+    '    page.waitForLoadState("domcontentloaded"),',
+    '    page.waitForLoadState("networkidle"),',
+  );
+  assert.throws(
+    () => buildAuthenticatedHarnessSource(drifted),
+    /browser MFA server-action completion boundary: expected source contract was not found/,
+  );
+});
+
 test("the generated participant UI check requires the pooled funding boundary", () => {
   const generated = buildAuthenticatedHarnessSource(original);
   assert.match(
