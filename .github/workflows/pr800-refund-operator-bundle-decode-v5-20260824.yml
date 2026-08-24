@@ -1,0 +1,121 @@
+name: PR800 refund operator bundle decode v5
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-bundle-decode-v5-20260824
+    paths:
+      - ".github/workflows/pr800-refund-operator-bundle-decode-v5-20260824.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_CONTROLLER_PARENT: 358adf99f338f25011b6de4204d72bce4475b12f
+      EXPECTED_CONTROLLER_PARENT_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      SOURCE_BRANCH: feature/direct-donation-upgrade-refund-safety-709-20260821
+    steps:
+      - name: Check out isolated controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decode each independently encoded bundle part and inspect archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CONTROLLER_PARENT"
+          test "$(git rev-parse "$EXPECTED_CONTROLLER_PARENT^{tree}")" = "$EXPECTED_CONTROLLER_PARENT_TREE"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/pr800-refund-operator-bundle-decode-v5-20260824.yml"
+
+          work="$RUNNER_TEMP/pr800-operator-bundle-v5"
+          mkdir -p "$work/extracted" operator-bundle-evidence/extracted
+          git fetch --no-tags origin "+refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"
+          source_ref="refs/remotes/origin/$SOURCE_BRANCH"
+
+          git ls-tree -r --name-only "$source_ref" -- .github/pr796-refund-operator-bundle/ \
+            | grep -E '^\.github/pr796-refund-operator-bundle/part-[0-9]{2}$' \
+            | sort > "$work/bundle-parts.txt"
+          test -s "$work/bundle-parts.txt"
+
+          : > "$work/operator.tar.gz"
+          while IFS= read -r part; do
+            git show "$source_ref:$part" | base64 --decode >> "$work/operator.tar.gz"
+          done < "$work/bundle-parts.txt"
+          gzip --test "$work/operator.tar.gz"
+
+          python3 - "$work/operator.tar.gz" "$work/bundle-paths.txt" <<'PY'
+          import sys, tarfile
+          from pathlib import PurePosixPath
+          archive, output = sys.argv[1:]
+          names = []
+          total = 0
+          with tarfile.open(archive, "r:gz") as tar:
+              for member in tar.getmembers():
+                  if not member.isfile():
+                      raise SystemExit(f"non-file member: {member.name}")
+                  path = PurePosixPath(member.name)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"unsafe path: {member.name}")
+                  if not (
+                      member.name.startswith("src/")
+                      or member.name == "docs/provider-review/every-org-donation-upgrade-review-packet.md"
+                  ):
+                      raise SystemExit(f"non-product path: {member.name}")
+                  if member.name.startswith(("src/generated/", "src/.")):
+                      raise SystemExit(f"forbidden path: {member.name}")
+                  if member.size > 1_500_000:
+                      raise SystemExit(f"oversized member: {member.name}")
+                  names.append(member.name)
+                  total += member.size
+          if not 3 <= len(names) <= 60:
+              raise SystemExit(f"path count {len(names)}")
+          if len(names) != len(set(names)):
+              raise SystemExit("duplicate path")
+          if total > 8_000_000:
+              raise SystemExit("archive too large")
+          open(output, "w", encoding="utf-8").write("\n".join(sorted(names)) + "\n")
+          PY
+
+          tar -xzf "$work/operator.tar.gz" -C "$work/extracted" --no-same-owner
+          while IFS= read -r path; do
+            mkdir -p "operator-bundle-evidence/extracted/$(dirname "$path")"
+            cp "$work/extracted/$path" "operator-bundle-evidence/extracted/$path"
+          done < "$work/bundle-paths.txt"
+
+          cp "$work/bundle-parts.txt" operator-bundle-evidence/
+          cp "$work/bundle-paths.txt" operator-bundle-evidence/
+          cp "$work/operator.tar.gz" operator-bundle-evidence/
+          sha256sum "$work/operator.tar.gz" > operator-bundle-evidence/archive-sha256.txt
+          while IFS= read -r path; do
+            sha256sum "$work/extracted/$path"
+          done < "$work/bundle-paths.txt" > operator-bundle-evidence/source-sha256.txt
+          {
+            printf 'controller_sha=%s\n' "$(git rev-parse HEAD)"
+            printf 'controller_parent=%s\n' "$EXPECTED_CONTROLLER_PARENT"
+            printf 'source_branch=%s\n' "$SOURCE_BRANCH"
+            printf 'source_sha=%s\n' "$(git rev-parse "$source_ref")"
+            printf 'path_count=%s\n' "$(wc -l < "$work/bundle-paths.txt" | tr -d ' ')"
+            printf 'providerRequestAttempted=false\n'
+            printf 'webhookMutationAttempted=false\n'
+            printf 'checkoutAttempted=false\n'
+            printf 'donationAttempted=false\n'
+            printf 'actualRefundAttempted=false\n'
+            printf 'databaseMigrationAttempted=false\n'
+            printf 'deploymentAttempted=false\n'
+            printf 'credentialMutationAttempted=false\n'
+            printf 'productionChanged=false\n'
+          } > operator-bundle-evidence/identity-and-non-actions.txt
+
+      - name: Upload decoded bundle inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-operator-bundle-v5-${{ github.run_id }}
+          path: operator-bundle-evidence/
+          if-no-files-found: error
+          retention-days: 30
