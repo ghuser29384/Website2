@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: pr737-candidate-validation-repair-20260824
@@ -25,6 +27,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Announce the exact one-use repair run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr comment 737 --repo "$GITHUB_REPOSITORY" --body "<!-- pr737-validation-repair-start:$GITHUB_RUN_ID -->
+          PR #737 fail-closed validation repair started: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. It is bound to candidate \`$EXPECTED_CANDIDATE_HEAD\` and may change only the permanent ledger QA workflow and its phase-order contract."
+
       - name: Check out the one-use controller
         uses: actions/checkout@v4
         with:
@@ -67,6 +78,7 @@ jobs:
           grep -Fq 'Run genuinely concurrent readiness freeze test before ledger authority hardening' src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
 
       - name: Commit the exact repair to the candidate branch
+        id: commit
         shell: bash
         working-directory: candidate
         run: |
@@ -80,4 +92,22 @@ jobs:
             .github/workflows/compact-authoritative-outflow-ledger-qa.yml \
             src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
           git commit -m "ci: make PR 737 validation fail closed"
+          repaired_head="$(git rev-parse HEAD)"
+          repaired_tree="$(git rev-parse HEAD^{tree})"
           git push origin "HEAD:$TARGET_BRANCH"
+          echo "head=$repaired_head" >> "$GITHUB_OUTPUT"
+          echo "tree=$repaired_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Publish terminal repair result
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPAIRED_HEAD: ${{ steps.commit.outputs.head }}
+          REPAIRED_TREE: ${{ steps.commit.outputs.tree }}
+          COMMIT_OUTCOME: ${{ steps.commit.outcome }}
+        run: |
+          set -euo pipefail
+          gh pr comment 737 --repo "$GITHUB_REPOSITORY" --body "<!-- pr737-validation-repair-final:$GITHUB_RUN_ID -->
+          PR #737 fail-closed validation repair outcome: **$COMMIT_OUTCOME**. Controller: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Repaired candidate: \`${REPAIRED_HEAD:-not-created}\`; tree: \`${REPAIRED_TREE:-not-created}\`. No merge, deployment, persistent migration, provider action, activation, electorate, or money movement was authorized."
+          test "$COMMIT_OUTCOME" = "success"
