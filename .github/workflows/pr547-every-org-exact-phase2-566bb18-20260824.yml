@@ -1,0 +1,707 @@
+name: PR 547 Every.org exact protected Phase 2 at 566bb18
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-phase2-566bb18-20260824
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr547-every-org-exact-phase2-566bb18-20260824
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_CANDIDATE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+  EXPECTED_CANDIDATE_TREE: 86c70b442272f5cff4cf29e63d030c949b4323cb
+  EXPECTED_CANDIDATE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+  EXPECTED_CONTROLLER_BRANCH: ops/pr547-every-org-phase2-566bb18-20260824
+  CONTROLLER_WORKFLOW: .github/workflows/pr547-every-org-exact-phase2-566bb18-20260824.yml
+  PHASE2_AUTHORIZATION: .github/pr547-every-org-exact-phase2-566bb18.authorize
+  PROVIDER_AUTHORIZATION_CONTRACT_STATUS: authorization_bearer_v1
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  STAGING_ALIAS: moraltrade-pr547-every-org-phase2-566bb18.vercel.app
+  QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+  WEBHOOK_ROUTE_ID: du-staging-566bb18db56848b40a3a1ab58979a6be
+
+jobs:
+  control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      authorized: ${{ steps.guard.outputs.authorized }}
+      ready: ${{ steps.guard.outputs.ready }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+      EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+      EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+      EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+      EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+      BEFORE_SHA: ${{ github.event.before }}
+    steps:
+      - name: Check out exact controller revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Mask every present Phase 2 credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            VERCEL_TOKEN \
+            QA_SUPABASE_PUBLISHABLE_KEY \
+            QA_SUPABASE_SERVICE_ROLE_KEY \
+            EVERY_ORG_STAGING_PUBLIC_API_KEY \
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET \
+            EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN \
+            EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN; do
+            value="${!name:-}"
+            if [[ -n "$value" ]]; then echo "::add-mask::$value"; fi
+          done
+
+      - name: Guard immutable candidate, PR state, one-use authorization, and Phase 2 prerequisites
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_CONTROLLER_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+          test "$PROVIDER_AUTHORIZATION_CONTRACT_STATUS" = authorization_bearer_v1
+          test -f "$CONTROLLER_WORKFLOW"
+          [[ "$WEBHOOK_ROUTE_ID" =~ ^[A-Za-z0-9_-]{32,128}$ ]]
+
+          git fetch --no-tags origin "$EXPECTED_CANDIDATE_BRANCH"
+          current_candidate="$(git rev-parse FETCH_HEAD)"
+          test "$current_candidate" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git show -s --format=%T "$current_candidate")" = "$EXPECTED_CANDIDATE_TREE"
+          test -f "src/app/api/connectors/every-org/[routeId]/route.ts"
+          test ! -e "src/app/api/connectors/every-org/[secret]/route.ts"
+          git diff --check "$EXPECTED_CANDIDATE_SHA^...$EXPECTED_CANDIDATE_SHA"
+
+          pr_tmp="$(mktemp)"
+          trap 'rm -f "$pr_tmp"' EXIT
+          curl -fsS \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$EXPECTED_REPOSITORY/pulls/547" > "$pr_tmp"
+          jq -e --arg sha "$EXPECTED_CANDIDATE_SHA" '
+            .state == "open"
+            and .draft == true
+            and .merged == false
+            and .head.sha == $sha
+          ' "$pr_tmp" >/dev/null
+
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            git diff-tree --no-commit-id --name-only -r HEAD > evidence/changed-paths.txt
+          else
+            git diff --name-only "$BEFORE_SHA" HEAD > evidence/changed-paths.txt
+          fi
+          sort -u -o evidence/changed-paths.txt evidence/changed-paths.txt
+
+          authorized=false
+          expected_authorization="$(cat <<EOF_AUTH
+          schema=moral-trade-pr547-every-org-staging-authorization-v5
+          phase=exact_protected_phase2
+          candidate=$EXPECTED_CANDIDATE_SHA
+          tree=$EXPECTED_CANDIDATE_TREE
+          controller_branch=$EXPECTED_CONTROLLER_BRANCH
+          controller_parent=$BEFORE_SHA
+          target=preview
+          authorization=AUTHORIZE_PR547_EVERY_ORG_EXACT_PHASE2_566BB18
+          EOF_AUTH
+          )"
+          if grep -Fxq "$PHASE2_AUTHORIZATION" evidence/changed-paths.txt; then
+            test "$(wc -l < evidence/changed-paths.txt | tr -d ' ')" = 1
+            test -f "$PHASE2_AUTHORIZATION"
+            test "$(cat "$PHASE2_AUTHORIZATION")" = "$expected_authorization"
+            authorized=true
+          fi
+
+          prerequisite_names=(
+            VERCEL_TOKEN
+            QA_SUPABASE_PUBLISHABLE_KEY
+            QA_SUPABASE_SERVICE_ROLE_KEY
+            EVERY_ORG_STAGING_PUBLIC_API_KEY
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET
+            EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET
+            EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN
+            EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN
+          )
+          missing=()
+          present=()
+          invalid=()
+          for name in "${prerequisite_names[@]}"; do
+            value="${!name:-}"
+            if [[ -n "$value" ]]; then present+=("$name"); else missing+=("$name"); fi
+            if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              invalid+=("$name:contains_line_break")
+            fi
+          done
+
+          if [[ -n "${EVERY_ORG_STAGING_PARTNER_METADATA_SECRET:-}" ]] \
+            && [[ ${#EVERY_ORG_STAGING_PARTNER_METADATA_SECRET} -lt 32 ]]; then
+            invalid+=("EVERY_ORG_STAGING_PARTNER_METADATA_SECRET:must_be_at_least_32_characters")
+          fi
+          if [[ -n "${EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET:-}" ]] \
+            && [[ ! "$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET" =~ ^[A-Za-z0-9]{32}$ ]]; then
+            invalid+=("EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET:must_be_registered_32_char_alphanumeric")
+          fi
+          if [[ -n "${EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN:-}" \
+            && -n "${EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN:-}" \
+            && "$EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN" == "$EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" ]]; then
+            invalid+=("provider_issued_public_and_private_tokens:must_be_distinct")
+          fi
+
+          distinct_names=(
+            EVERY_ORG_STAGING_PUBLIC_API_KEY
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET
+            EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET
+            EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN
+            EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN
+          )
+          for ((left=0; left<${#distinct_names[@]}; left++)); do
+            left_name="${distinct_names[$left]}"
+            left_value="${!left_name:-}"
+            [[ -n "$left_value" ]] || continue
+            for ((right=left+1; right<${#distinct_names[@]}; right++)); do
+              right_name="${distinct_names[$right]}"
+              right_value="${!right_name:-}"
+              if [[ -n "$right_value" && "$left_value" == "$right_value" ]]; then
+                invalid+=("$left_name,$right_name:must_be_distinct")
+              fi
+            done
+          done
+
+          ready=false
+          if [[ ${#missing[@]} -eq 0 && ${#invalid[@]} -eq 0 ]]; then ready=true; fi
+          if [[ "$authorized" = true && "$ready" != true ]]; then
+            echo 'Authorized exact Phase 2 deployment refused because prerequisites are incomplete or ambiguous.' >&2
+            exit 1
+          fi
+
+          csv() { local IFS=,; printf '%s' "$*"; }
+          export authorized ready current_candidate
+          export present_csv="$(csv "${present[@]:-}")"
+          export missing_csv="$(csv "${missing[@]:-}")"
+          export invalid_csv="$(csv "${invalid[@]:-}")"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def values(name):
+              return [value for value in os.environ.get(name, "").split(",") if value]
+
+          payload = {
+              "schemaVersion": "moral-trade-every-org-exact-phase2-preflight-v1",
+              "controllerBranch": os.environ["EXPECTED_CONTROLLER_BRANCH"],
+              "controllerCommit": os.environ["GITHUB_SHA"],
+              "candidateSha": os.environ["current_candidate"],
+              "candidateTree": os.environ["EXPECTED_CANDIDATE_TREE"],
+              "providerAuthorizationContractStatus": os.environ["PROVIDER_AUTHORIZATION_CONTRACT_STATUS"],
+              "authorized": os.environ["authorized"] == "true",
+              "phase2Ready": os.environ["ready"] == "true",
+              "presentPrerequisites": values("present_csv"),
+              "missingPrerequisites": values("missing_csv"),
+              "invalidPrerequisites": values("invalid_csv"),
+              "providerIssuedPublicTokenPresent": bool(os.environ.get("EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN")),
+              "providerIssuedPrivateTokenPresent": bool(os.environ.get("EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN")),
+              "providerIssuedTokensDistinct": (
+                  bool(os.environ.get("EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN"))
+                  and bool(os.environ.get("EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN"))
+                  and os.environ.get("EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN")
+                  != os.environ.get("EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN")
+              ),
+              "donationUpgradeMode": "staging",
+              "qaFixtures": False,
+              "checkoutAttempted": False,
+              "donationAttempted": False,
+              "deploymentAttempted": False,
+              "providerTransactionAttempted": False,
+          }
+          Path("evidence/preflight.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+          print(json.dumps(payload, sort_keys=True))
+          PY
+          {
+            echo "authorized=$authorized"
+            echo "ready=$ready"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Scrub and upload sanitized Phase 2 preflight evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          root = Path("evidence")
+          secret_names = [
+              "VERCEL_TOKEN",
+              "QA_SUPABASE_PUBLISHABLE_KEY",
+              "QA_SUPABASE_SERVICE_ROLE_KEY",
+              "EVERY_ORG_STAGING_PUBLIC_API_KEY",
+              "EVERY_ORG_STAGING_PARTNER_METADATA_SECRET",
+              "EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET",
+              "EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN",
+              "EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN",
+          ]
+          secrets = [os.environ[name].encode() for name in secret_names if os.environ.get(name)]
+          for path in root.rglob("*"):
+              if path.is_file() and any(secret in path.read_bytes() for secret in secrets):
+                  path.unlink()
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: every-org-exact-phase2-preflight-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  deploy_preview:
+    needs: control
+    if: needs.control.outputs.authorized == 'true' && needs.control.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out exact accepted Phase B candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Revalidate exact candidate without provider credentials in the test process
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git show -s --format=%T HEAD)" = "$EXPECTED_CANDIDATE_TREE"
+          git fetch --no-tags origin "$EXPECTED_CANDIDATE_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$PROVIDER_AUTHORIZATION_CONTRACT_STATUS" = authorization_bearer_v1
+          test -f "src/app/api/connectors/every-org/[routeId]/route.ts"
+          test ! -e "src/app/api/connectors/every-org/[secret]/route.ts"
+          git diff --check "$EXPECTED_CANDIDATE_SHA^...$EXPECTED_CANDIDATE_SHA"
+
+      - name: Run exact focused, complete, type, lint, and disabled-build gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          MPGF_REAL_MONEY_ENABLED: "false"
+          MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+          MPGF_TEST_PAYMENT_ENABLED: "false"
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          npm ci
+          node --import tsx --test \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/every-org-webhook-route-id-source-contract.test.ts \
+            src/lib/every-org-api-environment.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-split.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/direct-donation-upgrade-environment-contract.test.ts \
+            src/lib/trade-donation.test.ts \
+            src/lib/mpgf.test.ts \
+            2>&1 | tee evidence/focused-tests.log
+          npm test 2>&1 | tee evidence/complete-tests.log
+          npx tsc --noEmit --pretty false 2>&1 | tee evidence/typescript.log
+          npm run lint -- --quiet 2>&1 | tee evidence/eslint.log
+          npm run build 2>&1 | tee evidence/disabled-build.log
+          git diff --check
+
+      - name: Deploy exact candidate to protected non-production Phase 2 Preview
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+          EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel evidence
+          for name in \
+            VERCEL_TOKEN QA_SUPABASE_PUBLISHABLE_KEY QA_SUPABASE_SERVICE_ROLE_KEY \
+            EVERY_ORG_STAGING_PUBLIC_API_KEY EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN \
+            EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN; do
+            value="${!name:-}"
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+          test "$EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN" != "$EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN"
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          purpose=every-org-exact-phase2-566bb18
+          site_url="https://$STAGING_ALIAS"
+          cron_secret="$(printf '%s' "$VERCEL_TOKEN:$EXPECTED_CANDIDATE_SHA:exact-phase2" | sha256sum | awk '{print $1}')"
+          echo "::add-mask::$cron_secret"
+          flags=(
+            --yes
+            --token "$VERCEL_TOKEN"
+            --meta "moralTradeCandidateSha=$EXPECTED_CANDIDATE_SHA"
+            --meta "moralTradeCandidateTree=$EXPECTED_CANDIDATE_TREE"
+            --meta "moralTradePurpose=$purpose"
+            --env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
+            --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
+            --env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY"
+            --env "NEXT_PUBLIC_SITE_URL=$site_url"
+            --env "SITE_URL=$site_url"
+            --env "EVERY_ORG_ENVIRONMENT=staging"
+            --env "EVERY_ORG_PLEDGE_DONATIONS_ENABLED=false"
+            --env "DIRECT_DONATION_UPGRADES_ENABLED=true"
+            --env "DIRECT_DONATION_UPGRADE_MODE=staging"
+            --env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
+            --env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_STAGING_PUBLIC_API_KEY"
+            --env "EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN=$EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN"
+            --env "EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN=$EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN"
+            --env "EVERY_ORG_WEBHOOK_ROUTE_ID=$WEBHOOK_ROUTE_ID"
+            --env "EVERY_ORG_PARTNER_METADATA_SECRET=$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET"
+            --env "CONDITIONAL_PAYMENTS_MODE=disabled"
+            --env "TRADE_DONATION_POOL_ENABLED=false"
+            --env "TRADE_DONATION_POOL_MODE=disabled"
+            --env "MPGF_REAL_MONEY_ENABLED=false"
+            --env "MPGF_REAL_MONEY_ACCEPTANCE_ENABLED=false"
+            --env "MPGF_TEST_PAYMENT_ENABLED=false"
+            --env "CRON_SECRET=$cron_secret"
+            --build-env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
+            --build-env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
+            --build-env "NEXT_PUBLIC_SITE_URL=$site_url"
+            --build-env "SITE_URL=$site_url"
+            --build-env "EVERY_ORG_ENVIRONMENT=staging"
+            --build-env "EVERY_ORG_PLEDGE_DONATIONS_ENABLED=false"
+            --build-env "DIRECT_DONATION_UPGRADES_ENABLED=true"
+            --build-env "DIRECT_DONATION_UPGRADE_MODE=staging"
+            --build-env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
+            --build-env "CONDITIONAL_PAYMENTS_MODE=disabled"
+            --build-env "TRADE_DONATION_POOL_ENABLED=false"
+            --build-env "TRADE_DONATION_POOL_MODE=disabled"
+            --build-env "MPGF_REAL_MONEY_ENABLED=false"
+            --build-env "MPGF_REAL_MONEY_ACCEPTANCE_ENABLED=false"
+            --build-env "MPGF_TEST_PAYMENT_ENABLED=false"
+          )
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy "${flags[@]}" | tr -d '\r' | tail -n 1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          deployment_host="${deployment_url#https://}"
+          printf '%s\n' "$deployment_url" > evidence/deployment-url.txt
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$deployment_url" --wait --timeout 20m --token "$VERCEL_TOKEN" >/dev/null
+
+          detail_path="$(mktemp)"
+          trap 'rm -f "$detail_path"' EXIT
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${deployment_host}?teamId=${VERCEL_ORG_ID}" > "$detail_path"
+          deployment_id="$(jq -r '.id // .uid // empty' "$detail_path")"
+          test -n "$deployment_id"
+          jq -e \
+            --arg deployment_id "$deployment_id" \
+            --arg deployment_host "$deployment_host" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg expected_sha "$EXPECTED_CANDIDATE_SHA" \
+            --arg expected_tree "$EXPECTED_CANDIDATE_TREE" '
+              ((.id // .uid) == $deployment_id)
+              and (.url == $deployment_host)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and (.meta.moralTradeCandidateSha == $expected_sha)
+              and (.meta.moralTradeCandidateTree == $expected_tree)
+            ' "$detail_path" >/dev/null
+          {
+            echo "deployment_id=$deployment_id"
+            echo "deployment_url=$deployment_url"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run zero-money exact-header probes and prove unchanged Donation Upgrade table cardinalities
+        shell: bash
+        env:
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          private_dir="$(mktemp -d)"
+          trap 'rm -rf "$private_dir"' EXIT
+          for name in \
+            QA_SUPABASE_SERVICE_ROLE_KEY \
+            EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET \
+            EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN \
+            EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN; do
+            value="${!name:-}"
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+          test "$EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN" != "$EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN"
+
+          base="${{ steps.deploy.outputs.deployment_url }}"
+          bypass_encoded="$(python3 - <<'PY'
+          import os, urllib.parse
+          print(urllib.parse.quote(os.environ['EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET'], safe=''))
+          PY
+          )"
+          callback="$base/api/connectors/every-org/$WEBHOOK_ROUTE_ID?x-vercel-protection-bypass=$bypass_encoded"
+          wrong_path="$base/api/connectors/every-org/du-staging-wrong-route-id-0000000000000000?x-vercel-protection-bypass=$bypass_encoded"
+
+          count_table() {
+            local table="$1" headers="$private_dir/$table.headers"
+            curl -fsS \
+              -D "$headers" \
+              -o /dev/null \
+              -H "apikey: $QA_SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $QA_SUPABASE_SERVICE_ROLE_KEY" \
+              -H 'Prefer: count=exact' \
+              -H 'Range: 0-0' \
+              "$QA_SUPABASE_URL/rest/v1/$table?select=id"
+            awk -F/ 'tolower($1) ~ /^content-range:/ {gsub("\r", "", $2); print $2}' "$headers" | tail -n 1
+          }
+
+          tables=(
+            direct_donation_upgrade_offers
+            direct_donation_upgrade_candidates
+            direct_donation_upgrade_obligations
+            direct_donation_upgrade_impact_credits
+            direct_donation_upgrade_audit_events
+          )
+          declare -A before after
+          for table in "${tables[@]}"; do before[$table]="$(count_table "$table")"; test -n "${before[$table]}"; done
+
+          run_probe() {
+            local name="$1" expected="$2" body_file="$3"
+            shift 3
+            local code
+            code="$(curl --silent --show-error --max-time 30 \
+              --request POST \
+              --header 'content-type: application/json' \
+              --output "$body_file" \
+              --write-out '%{http_code}' \
+              "$@")"
+            printf '%s %s\n' "$name" "$code" >> evidence/probe-statuses.txt
+            test "$code" = "$expected"
+          }
+
+          run_probe missing-header 401 "$private_dir/missing.json" \
+            --data 'not-json' "$callback"
+          jq -e '. == {"ok": false}' "$private_dir/missing.json" >/dev/null
+
+          run_probe wrong-private-token 401 "$private_dir/wrong.json" \
+            --header 'Authorization: Bearer definitely-not-the-provider-token' \
+            --data 'not-json' "$callback"
+          jq -e '. == {"ok": false}' "$private_dir/wrong.json" >/dev/null
+
+          run_probe public-token-not-inbound 401 "$private_dir/public.json" \
+            --header "Authorization: Bearer $EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN" \
+            --data 'not-json' "$callback"
+          jq -e '. == {"ok": false}' "$private_dir/public.json" >/dev/null
+
+          run_probe raw-token-no-bearer 401 "$private_dir/raw.json" \
+            --header "Authorization: $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" \
+            --data 'not-json' "$callback"
+          jq -e '. == {"ok": false}' "$private_dir/raw.json" >/dev/null
+
+          run_probe lowercase-scheme 401 "$private_dir/lower.json" \
+            --header "Authorization: bearer $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" \
+            --data 'not-json' "$callback"
+          jq -e '. == {"ok": false}' "$private_dir/lower.json" >/dev/null
+
+          run_probe duplicate-authorization-fields 401 "$private_dir/duplicate.json" \
+            --header "Authorization: Bearer $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" \
+            --header "Authorization: Bearer $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" \
+            --data 'not-json' "$callback"
+          jq -e '. == {"ok": false}' "$private_dir/duplicate.json" >/dev/null
+
+          run_probe comma-coalesced-authorization 401 "$private_dir/coalesced.json" \
+            --header "Authorization: Bearer $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN, Bearer $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" \
+            --data 'not-json' "$callback"
+          jq -e '. == {"ok": false}' "$private_dir/coalesced.json" >/dev/null
+
+          run_probe correct-header-wrong-path 401 "$private_dir/wrong-path.json" \
+            --header "Authorization: Bearer $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" \
+            --data 'not-json' "$wrong_path"
+          jq -e '. == {"ok": false}' "$private_dir/wrong-path.json" >/dev/null
+
+          run_probe correct-header-malformed-json 400 "$private_dir/authorized-invalid-json.json" \
+            --header "Authorization: Bearer $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" \
+            --data 'not-json' "$callback"
+          jq -e '. == {"ok": false, "error": "invalid_json"}' "$private_dir/authorized-invalid-json.json" >/dev/null
+
+          run_probe correct-header-empty-payload 400 "$private_dir/authorized-empty.json" \
+            --header "Authorization: Bearer $EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN" \
+            --data '{}' "$callback"
+          jq -e '. == {"ok": false, "error": "missing_partner_donation_id"}' "$private_dir/authorized-empty.json" >/dev/null
+
+          for table in "${tables[@]}"; do
+            after[$table]="$(count_table "$table")"
+            test "${after[$table]}" = "${before[$table]}"
+            printf '%s unchanged=true\n' "$table" >> evidence/database-cardinality-invariants.txt
+          done
+
+          sha256sum "$private_dir"/*.json | sed -E 's#  .*/#  #' > evidence/response-body-sha256.txt
+          printf '%s\n' \
+            'provider_contract=Authorization: Bearer <AUTH_TOKEN>' \
+            'exact_one_ascii_space=true' \
+            'missing_header_generic_401=true' \
+            'wrong_header_generic_401=true' \
+            'public_token_rejected_as_inbound=true' \
+            'raw_token_rejected=true' \
+            'lowercase_scheme_rejected=true' \
+            'duplicate_header_rejected=true' \
+            'coalesced_header_rejected=true' \
+            'wrong_path_generic_401=true' \
+            'correct_header_reached_payload_validation=true' \
+            'database_cardinalities_unchanged=true' \
+            'provider_request_attempted=false' \
+            'checkout_attempted=false' \
+            'donation_attempted=false' \
+            'webhook_registration_attempted=false' \
+            'raw_http_bodies_retained=false' \
+            > evidence/probe-assertions.txt
+
+      - name: Assign and verify bounded non-production Phase 2 alias
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$VERCEL_TOKEN"
+          deployment_url="${{ steps.deploy.outputs.deployment_url }}"
+          deployment_id="${{ steps.deploy.outputs.deployment_id }}"
+          alias_tmp="$(mktemp)"
+          trap 'rm -f "$alias_tmp"' EXIT
+          npx --yes "vercel@$VERCEL_CLI_VERSION" alias set "$deployment_url" "$STAGING_ALIAS" --token "$VERCEL_TOKEN" >/dev/null
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v4/aliases/${STAGING_ALIAS}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" > "$alias_tmp"
+          jq -e \
+            --arg alias "$STAGING_ALIAS" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg deployment_id "$deployment_id" '
+              .alias == $alias
+              and .projectId == $project_id
+              and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment_id)
+            ' "$alias_tmp" >/dev/null
+          jq -n \
+            --arg candidate "$EXPECTED_CANDIDATE_SHA" \
+            --arg tree "$EXPECTED_CANDIDATE_TREE" \
+            --arg deployment_id "$deployment_id" \
+            --arg deployment_url "$deployment_url" \
+            --arg alias_url "https://$STAGING_ALIAS" \
+            --arg route_id "$WEBHOOK_ROUTE_ID" '
+              {
+                candidateSha: $candidate,
+                candidateTree: $tree,
+                deploymentId: $deployment_id,
+                deploymentUrl: $deployment_url,
+                aliasUrl: $alias_url,
+                routeId: $route_id,
+                target: "preview",
+                providerAuthorizationContractStatus: "authorization_bearer_v1",
+                providerIssuedPublicTokenInjected: true,
+                providerIssuedPrivateTokenInjected: true,
+                providerIssuedTokensDistinct: true,
+                donationUpgradeMode: "staging",
+                qaFixtures: false,
+                directFundsCustody: false,
+                checkoutAttempted: false,
+                donationAttempted: false,
+                providerTransactionAttempted: false,
+                productionAliasChanged: false,
+                rawHttpBodiesRetained: false
+              }
+            ' > evidence/deployment.json
+          printf '%s/api/connectors/every-org/%s?x-vercel-protection-bypass=<EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET>\n' \
+            "$deployment_url" "$WEBHOOK_ROUTE_ID" > evidence/webhook-url-template.txt
+
+      - name: Sanitize every retained evidence file
+        if: always()
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+          EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+          EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          rm -f evidence/*.body evidence/*detail*.json evidence/inspect.txt evidence/alias-command.txt
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          root = Path("evidence")
+          secret_names = [
+              "VERCEL_TOKEN",
+              "QA_SUPABASE_PUBLISHABLE_KEY",
+              "QA_SUPABASE_SERVICE_ROLE_KEY",
+              "EVERY_ORG_STAGING_PUBLIC_API_KEY",
+              "EVERY_ORG_STAGING_PARTNER_METADATA_SECRET",
+              "EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET",
+              "EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN",
+              "EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN",
+          ]
+          secrets = [os.environ[name].encode() for name in secret_names if os.environ.get(name)]
+          removed = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file():
+                  continue
+              data = path.read_bytes()
+              if any(secret in data for secret in secrets):
+                  removed.append(str(path.relative_to(root)))
+                  path.unlink()
+          (root / "sanitization.txt").write_text(
+              "secret_bearing_files_removed=" + str(bool(removed)).lower() + "\n"
+              + "removed_file_count=" + str(len(removed)) + "\n"
+              + "raw_http_bodies_retained=false\n"
+          )
+          PY
+
+      - name: Upload sanitized exact Phase 2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: every-org-exact-phase2-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
