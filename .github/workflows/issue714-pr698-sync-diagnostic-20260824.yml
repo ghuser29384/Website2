@@ -1,0 +1,79 @@
+name: Issue 714 PR 698 current-main sync diagnostic
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-pr698-sync-diagnostic-20260824.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_PR_HEAD: 335f0ab7e4dc8f95e2f06a082db6b5360caf3f27
+      EXPECTED_MAIN: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/issue714-pr698-sync-diagnostic-20260824
+          fetch-depth: 0
+
+      - name: Guard helper ancestry and repository state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PR_HEAD"
+          test "$(git diff --name-only HEAD^..HEAD)" = ".github/workflows/issue714-pr698-sync-diagnostic-20260824.yml"
+          git fetch --no-tags origin main agent/issue-675-activation-routing-canonical-walkthrough
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse origin/agent/issue-675-activation-routing-canonical-walkthrough)" = "$EXPECTED_PR_HEAD"
+          mkdir -p artifacts/sync-diagnostic
+          printf 'helper=%s\npr_head=%s\nmain=%s\nmerge_base=%s\n' \
+            "$(git rev-parse HEAD)" \
+            "$EXPECTED_PR_HEAD" \
+            "$EXPECTED_MAIN" \
+            "$(git merge-base "$EXPECTED_PR_HEAD" "$EXPECTED_MAIN")" \
+            > artifacts/sync-diagnostic/identity.txt
+          printf 'ahead=%s\nbehind=%s\n' \
+            "$(git rev-list --count "$EXPECTED_MAIN..$EXPECTED_PR_HEAD")" \
+            "$(git rev-list --count "$EXPECTED_PR_HEAD..$EXPECTED_MAIN")" \
+            >> artifacts/sync-diagnostic/identity.txt
+
+      - name: Attempt a non-writing merge and capture exact conflicts
+        shell: bash
+        run: |
+          set -uo pipefail
+          git config user.name "issue714-sync-diagnostic"
+          git config user.email "issue714-sync-diagnostic@example.invalid"
+          set +e
+          git merge --no-commit --no-ff "$EXPECTED_MAIN" \
+            > artifacts/sync-diagnostic/merge.stdout 2> artifacts/sync-diagnostic/merge.stderr
+          status=$?
+          set -e
+          printf 'merge_exit=%s\n' "$status" > artifacts/sync-diagnostic/result.txt
+          git status --short > artifacts/sync-diagnostic/status-short.txt
+          git diff --name-only --diff-filter=U > artifacts/sync-diagnostic/conflicted-files.txt
+          git ls-files -u > artifacts/sync-diagnostic/unmerged-index.txt
+          git diff --cc > artifacts/sync-diagnostic/combined-conflict.diff || true
+          git diff --name-status "$EXPECTED_PR_HEAD" > artifacts/sync-diagnostic/integrated-name-status.txt || true
+          git diff --stat "$EXPECTED_PR_HEAD" > artifacts/sync-diagnostic/integrated-stat.txt || true
+          if [[ "$status" = "0" ]]; then
+            printf 'merge_clean=true\n' >> artifacts/sync-diagnostic/result.txt
+          else
+            printf 'merge_clean=false\n' >> artifacts/sync-diagnostic/result.txt
+          fi
+          git merge --abort || git reset --hard HEAD
+          test -z "$(git status --porcelain)"
+
+      - name: Upload privacy-safe merge diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-pr698-sync-diagnostic-${{ github.run_id }}
+          path: artifacts/sync-diagnostic
+          if-no-files-found: error
+          retention-days: 14
