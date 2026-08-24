@@ -1,0 +1,7 @@
+schema=moral-trade-pr808-refund-operator-engineering-v1
+base=358adf99f338f25011b6de4204d72bce4475b12f
+product=a32ac22c9fabe329418efc9cdba05863064e9158
+tree=6f9e161b94ea853911dbded11daf0d48673a1df2
+controller_branch=ops/pr808-refund-operator-engineering-20260824
+controller_parent=acb4dc7a5b6f807e1d954e254da79b4596d56bcc
+authorization=AUTHORIZE_PR808_REFUND_OPERATOR_ENGINEERING_A32AC22
