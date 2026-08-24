@@ -1,0 +1,215 @@
+name: PR800 refund operator bundle decode v8
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-bundle-decode-v8-20260824
+    paths:
+      - ".github/workflows/pr800-refund-operator-bundle-decode-v8-20260824.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_CONTROLLER_PARENT: 358adf99f338f25011b6de4204d72bce4475b12f
+      EXPECTED_CONTROLLER_PARENT_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      CANONICAL_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      TRANSPORT_SHA: 31c6318bf2ef1e0bd86cf2d249ef853f7f3af1e7
+    steps:
+      - name: Check out exact isolated controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decode concatenated transport parts without applying them
+        id: decode
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/pr800-refund-operator-bundle-decode-v8-20260824.yml
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CONTROLLER_PARENT"
+          test "$(git rev-parse "$EXPECTED_CONTROLLER_PARENT^{tree}")" = "$EXPECTED_CONTROLLER_PARENT_TREE"
+          test "$(git diff --name-only HEAD^ HEAD)" = "$workflow"
+          git fetch --no-tags origin \
+            "+refs/heads/$CANONICAL_BRANCH:refs/remotes/origin/$CANONICAL_BRANCH"
+          test "$(git rev-parse refs/remotes/origin/$CANONICAL_BRANCH)" = "$EXPECTED_CONTROLLER_PARENT"
+          git cat-file -e "$TRANSPORT_SHA^{commit}"
+
+          rm -rf transport-evidence
+          mkdir -p transport-evidence
+          python3 - <<'PY'
+          import base64
+          import gzip
+          import hashlib
+          import io
+          import json
+          import os
+          import subprocess
+          import tarfile
+          import zipfile
+          from pathlib import Path, PurePosixPath
+
+          transport_sha = os.environ["TRANSPORT_SHA"]
+          output = Path("transport-evidence")
+          report = {
+              "transport_sha": transport_sha,
+              "roots": [],
+              "applied": False,
+          }
+
+          def git_text(*args: str) -> str:
+              return subprocess.check_output(["git", *args], text=True)
+
+          def safe_name(name: str) -> PurePosixPath:
+              path = PurePosixPath(name)
+              if path.is_absolute() or ".." in path.parts:
+                  raise SystemExit(f"unsafe archive path: {name}")
+              return path
+
+          for root_name in (
+              ".github/pr796-refund-operator-patch",
+              ".github/pr796-refund-operator-bundle",
+          ):
+              names = git_text(
+                  "ls-tree", "-r", "--name-only", transport_sha, "--", root_name
+              ).splitlines()
+              parts = sorted(
+                  name for name in names if PurePosixPath(name).name.startswith("part-")
+              )
+              if not parts:
+                  raise SystemExit(f"missing transport parts: {root_name}")
+              encoded = "".join(git_text("show", f"{transport_sha}:{name}") for name in parts)
+              data = base64.b64decode("".join(encoded.split()), validate=True)
+              gzip_layers = 0
+              while data.startswith(b"\x1f\x8b"):
+                  data = gzip.decompress(data)
+                  gzip_layers += 1
+
+              slug = PurePosixPath(root_name).name
+              root_output = output / slug
+              root_output.mkdir()
+              (root_output / "decoded.bin").write_bytes(data)
+              extracted = root_output / "extracted"
+              extracted.mkdir()
+              kind = "raw"
+              extracted_names: list[str] = []
+
+              if zipfile.is_zipfile(io.BytesIO(data)):
+                  kind = "zip"
+                  with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                      for info in archive.infolist():
+                          if info.is_dir():
+                              continue
+                          path = safe_name(info.filename)
+                          payload = archive.read(info)
+                          target = extracted.joinpath(*path.parts)
+                          target.parent.mkdir(parents=True, exist_ok=True)
+                          target.write_bytes(payload)
+                          extracted_names.append(path.as_posix())
+              else:
+                  try:
+                      with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as archive:
+                          kind = "tar"
+                          for member in archive.getmembers():
+                              if member.isdir():
+                                  continue
+                              if not member.isfile():
+                                  raise SystemExit(f"non-file tar member: {member.name}")
+                              path = safe_name(member.name)
+                              fileobj = archive.extractfile(member)
+                              if fileobj is None:
+                                  raise SystemExit(f"unreadable tar member: {member.name}")
+                              payload = fileobj.read()
+                              target = extracted.joinpath(*path.parts)
+                              target.parent.mkdir(parents=True, exist_ok=True)
+                              target.write_bytes(payload)
+                              extracted_names.append(path.as_posix())
+                  except tarfile.TarError:
+                      (extracted / "transport.raw").write_bytes(data)
+                      extracted_names.append("transport.raw")
+
+              root_report = {
+                  "root": root_name,
+                  "parts": parts,
+                  "encoded_chars": len("".join(encoded.split())),
+                  "decoded_bytes": len(data),
+                  "decoded_sha256": hashlib.sha256(data).hexdigest(),
+                  "gzip_layers": gzip_layers,
+                  "kind": kind,
+                  "extracted_names": sorted(extracted_names),
+              }
+              report["roots"].append(root_report)
+
+          (output / "inventory.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+          find transport-evidence -type f -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > transport-evidence/all-files-sha256.txt
+          if grep -R -I -n -E \
+            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            transport-evidence; then
+            exit 1
+          fi
+          {
+            printf 'controller_sha=%s\n' "$(git rev-parse HEAD)"
+            printf 'controller_parent=%s\n' "$EXPECTED_CONTROLLER_PARENT"
+            printf 'controller_tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'canonical_branch=%s\n' "$CANONICAL_BRANCH"
+            printf 'transport_sha=%s\n' "$TRANSPORT_SHA"
+            printf 'transport_applied=false\n'
+            printf 'providerRequestAttempted=false\n'
+            printf 'webhookMutationAttempted=false\n'
+            printf 'checkoutAttempted=false\n'
+            printf 'donationAttempted=false\n'
+            printf 'actualRefundAttempted=false\n'
+            printf 'databaseMigrationAttempted=false\n'
+            printf 'deploymentAttempted=false\n'
+            printf 'credentialMutationAttempted=false\n'
+            printf 'productionChanged=false\n'
+          } > transport-evidence/identity-and-non-actions.txt
+          cat transport-evidence/inventory.json
+
+      - name: Upload decoded inspection evidence
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-operator-bundle-v8-${{ github.run_id }}
+          path: transport-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish durable inspection identity
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DECODE_OUTCOME: ${{ steps.decode.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          inventory='unavailable'
+          if test -f transport-evidence/inventory.json; then
+            inventory="$(python3 - <<'PY'
+          import json
+          report=json.load(open('transport-evidence/inventory.json'))
+          print('; '.join(
+            f"{item['root'].split('/')[-1]}={item['kind']},"
+            f"{item['decoded_bytes']} bytes,{len(item['extracted_names'])} files,"
+            f"sha256:{item['decoded_sha256']}"
+            for item in report['roots']
+          ))
+          PY
+          )"
+          fi
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "<!-- pr800-refund-operator-bundle-decode-v8 -->
+          Refund-operator transport inspection run: [$GITHUB_RUN_ID]($run_url). Decode: \`$DECODE_OUTCOME\`. Upload: \`$UPLOAD_OUTCOME\`. Artifact: \`pr800-refund-operator-bundle-v8-$GITHUB_RUN_ID\`. Inventory: $inventory. The transport was inspected only and was not applied. No provider, webhook, database, deployment, checkout, donation, payment, refund, credential, production, or PR #711 action occurred."
