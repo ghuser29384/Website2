@@ -173,10 +173,14 @@ for (const viewport of [
       await expect(retry).toHaveAttribute("href", "/");
       await expect(discover).toBeVisible();
       await expect(discover).toHaveAttribute("href", "/discover");
-      const actionPaths = await page.locator("main a[href]").evaluateAll((elements) =>
+      const actionPaths = await page.locator("main .hero-actions a[href]").evaluateAll((elements) =>
         elements.map((element) => new URL((element as HTMLAnchorElement).href).pathname),
       );
+      expect(actionPaths).toHaveLength(2);
       expect(new Set(actionPaths)).toEqual(new Set(["/", "/discover"]));
+      await expect(page.locator('main .hero-actions a[href="/walkthrough"]')).toHaveCount(0);
+      await expect(page.locator('main .hero-actions a[href="/complete-profile"]')).toHaveCount(0);
+      await expect(page.locator('main .hero-actions a[href="/feed"]')).toHaveCount(0);
       await expectNoOverflow(page);
       await screenshot(page, testInfo, `${viewport.name}-account-state-unavailable`);
       await assertCleanRuntime();
