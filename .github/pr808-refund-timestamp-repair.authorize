@@ -1,0 +1,6 @@
+schema=moral-trade-pr808-refund-timestamp-repair-v1
+product_branch=feature/direct-donation-upgrade-refund-operator-ui-709-20260824-v2
+expected_head=c31a2669d49e631d5d609731afc7e7e55a5f926c
+controller_branch=ops/pr808-refund-timestamp-repair-20260824
+controller_parent=796bc8d24c7b485c9c66fe81007585f7d44539f1
+authorization=AUTHORIZE_PR808_REFUND_TIMESTAMP_REPAIR_C31A266
