@@ -38,6 +38,7 @@ EVIDENCE_ROOT="${RUNNER_TEMP:-/tmp}/preactivation-baseline-${GITHUB_RUN_ID:-loca
 ''',
         '''CATALOG_SQL="$ROOT/scripts/database/preactivation-catalog.sql"
 POLICY_CATALOG_SQL="$ROOT/scripts/database/preactivation-policy-catalog.sql"
+POLICY_DEFINITIONS_SQL="$ROOT/scripts/database/preactivation-policy-definitions.sql"
 PRIVILEGE_SQL="$ROOT/scripts/database/preactivation-privilege-reconciliation.sql"
 SEQUENCE_PRIVILEGE_SQL="$ROOT/scripts/database/preactivation-sequence-privilege-reconciliation.sql"
 EVIDENCE_ROOT="${RUNNER_TEMP:-/tmp}/preactivation-baseline-${GITHUB_RUN_ID:-local}"
@@ -57,6 +58,7 @@ BASELINE_TMP="$WORK_DIR/schema.sql"
         '''SOURCE_CATALOG_AFTER="$WORK_DIR/source-catalog-after.tsv"
 SOURCE_POLICY_CATALOG_BEFORE="$WORK_DIR/source-policy-catalog-before.tsv"
 SOURCE_POLICY_CATALOG_AFTER="$WORK_DIR/source-policy-catalog-after.tsv"
+SOURCE_POLICY_DEFINITIONS="$EVIDENCE_ROOT/manifests/source-policy-definitions.tsv"
 MIGRATION_HISTORY="$WORK_DIR/migration-history.tsv"
 EXTENSIONS_SQL="$WORK_DIR/extensions.sql"
 EXTENSIONS_TSV="$WORK_DIR/extensions.tsv"
@@ -125,6 +127,7 @@ if [[ ! -s "$SOURCE_CATALOG" ]]; then
 ''',
         '''readonly_file "$CATALOG_SQL" "$SOURCE_CATALOG_BEFORE"
 readonly_file "$POLICY_CATALOG_SQL" "$SOURCE_POLICY_CATALOG_BEFORE"
+readonly_file "$POLICY_DEFINITIONS_SQL" "$SOURCE_POLICY_DEFINITIONS"
 normalize_catalog "$SOURCE_CATALOG_BEFORE" "$SOURCE_POLICY_CATALOG_BEFORE" "$SOURCE_CATALOG"
 if [[ ! -s "$SOURCE_CATALOG" ]]; then
 ''',
