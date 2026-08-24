@@ -12,8 +12,10 @@ do $fixture$
 declare
   participant_id constant uuid := '712a0000-0000-4000-8000-000000000001'::uuid;
   batch_id uuid;
+  coverage_id uuid;
   coverage_result jsonb;
   result jsonb;
+  obligation public.mpgf_public_goods_obligation_snapshots%rowtype;
 begin
   if not exists (select 1 from public.profiles where id = participant_id) then
     raise exception 'Hosted ledger fixture participant is absent.';
@@ -48,8 +50,8 @@ begin
     true
   );
 
-  if result ->> 'status' <> 'inserted' then
-    raise exception 'Hosted ledger fixture event was not inserted: %', result;
+  if result ->> 'status' <> 'recorded' then
+    raise exception 'Hosted ledger fixture event was not recorded: %', result;
   end if;
 
   coverage_result := moral_trade_private.freeze_compact_outflow_coverage_v1(
@@ -68,8 +70,13 @@ begin
     'hosted-ledger-coverage-member-a-v1'
   );
 
-  if coverage_result ->> 'coverageSnapshotId' is null then
-    raise exception 'Hosted ledger fixture coverage did not freeze: %', coverage_result;
+  coverage_id := (coverage_result ->> 'coverageSnapshotId')::uuid;
+  if coverage_id is null
+     or coverage_result ->> 'authorityStatus' <> 'complete'
+     or (coverage_result ->> 'sourceObservationCount')::integer <> 1
+     or coalesce((coverage_result ->> 'moneyMoved')::boolean, true)
+     or coalesce((coverage_result ->> 'paymentMandateCreated')::boolean, true) then
+    raise exception 'Hosted ledger fixture coverage did not freeze exactly: %', coverage_result;
   end if;
 
   result := public.freeze_mpgf_public_goods_financial_cycle_v2(
@@ -78,11 +85,29 @@ begin
   );
 
   if result ->> 'authorityStatus' <> 'complete'
+     or result ->> 'obligationState' <> 'calculated'
      or (result ->> 'eligibleNetSettledOutflowCents')::bigint <> 12345
      or (result ->> 'obligationCents')::bigint <> 1234
      or coalesce((result ->> 'moneyMoved')::boolean, true)
      or coalesce((result ->> 'paymentMandateCreated')::boolean, true) then
     raise exception 'Hosted ledger fixture obligation was not the exact shadow-only result: %', result;
+  end if;
+
+  select * into obligation
+  from public.mpgf_public_goods_obligation_snapshots
+  where participant_id = participant_id
+    and cycle_key = '2026-08'
+  order by frozen_at desc, id desc
+  limit 1;
+
+  if obligation.id is null
+     or obligation.coverage_snapshot_id <> coverage_id
+     or obligation.state <> 'calculated'
+     or obligation.eligible_net_settled_outflow_cents <> 12345
+     or obligation.obligation_cents <> 1234
+     or obligation.source_observation_count <> 1
+     or obligation.supersedes_id is null then
+    raise exception 'The complete obligation did not supersede the prior unavailable snapshot.';
   end if;
 end;
 $fixture$;
