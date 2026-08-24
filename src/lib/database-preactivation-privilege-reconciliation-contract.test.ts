@@ -18,6 +18,18 @@ const policyCatalog = readFileSync(
   "scripts/database/preactivation-policy-catalog.sql",
   "utf8",
 );
+const policyDefinitions = readFileSync(
+  "scripts/database/preactivation-policy-definitions.sql",
+  "utf8",
+);
+const generatorPreparation = readFileSync(
+  "scripts/database/prepare-preactivation-generator.py",
+  "utf8",
+);
+const validatorPreparation = readFileSync(
+  "scripts/database/prepare-preactivation-validator.py",
+  "utf8",
+);
 
 test("pre-activation generator appends authoritative privilege reconciliation before auth triggers", () => {
   assert.match(generator, /PRIVILEGE_RECONCILIATION=/);
@@ -58,4 +70,14 @@ test("policy catalog treats policy role order as semantically irrelevant", () =>
   assert.match(policyCatalog, /string_agg\(role_name, ',' order by role_name\)/);
   assert.match(policyCatalog, /from unnest\(roles\) as role_name/);
   assert.match(policyCatalog, /where schemaname in \('public', 'moral_trade_private'\)/);
+});
+
+test("policy diagnostics preserve exact source and target definitions without user data", () => {
+  assert.match(policyDefinitions, /coalesce\(qual, ''\) as using_expression/);
+  assert.match(policyDefinitions, /coalesce\(with_check, ''\) as with_check_expression/);
+  assert.match(policyDefinitions, /string_agg\(role_name, ',' order by role_name\)/);
+  assert.match(generatorPreparation, /SOURCE_POLICY_DEFINITIONS/);
+  assert.match(generatorPreparation, /source-policy-definitions\.tsv/);
+  assert.match(validatorPreparation, /TARGET_POLICY_DEFINITIONS/);
+  assert.match(validatorPreparation, /target-policy-definitions\.tsv/);
 });
