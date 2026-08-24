@@ -1,0 +1,331 @@
+name: PR800 refund operator and rendering recovery
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-recovery-20260824
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: pr800-refund-operator-rendering-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FOUNDATION_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      FOUNDATION_SHA: 5aef1ba988203d43cd5178ee3c002d4ca6fef1a3
+      FOUNDATION_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      SOURCE_BRANCH: feature/direct-donation-upgrade-refund-safety-709-20260821
+      TARGET_BRANCH: feature/direct-donation-upgrade-refund-operator-rendering-709-20260824
+    steps:
+      - name: Check out isolated recovery controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Recover and inspect the prior operator bundle
+        id: recover
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/pr800-refund-operator-recovery"
+          candidate="$work/candidate"
+          mkdir -p "$work" operator-evidence
+
+          git fetch --no-tags origin \
+            "+refs/heads/$FOUNDATION_BRANCH:refs/remotes/origin/$FOUNDATION_BRANCH" \
+            "+refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH" \
+            "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+          test "$(git rev-parse refs/remotes/origin/$FOUNDATION_BRANCH)" = "$FOUNDATION_SHA"
+          test "$(git rev-parse "$FOUNDATION_SHA^{tree}")" = "$FOUNDATION_TREE"
+          test "$(git rev-parse refs/remotes/origin/$TARGET_BRANCH)" = "$FOUNDATION_SHA"
+          git merge-base --is-ancestor "$FOUNDATION_SHA" "refs/remotes/origin/$SOURCE_BRANCH"
+
+          source_ref="refs/remotes/origin/$SOURCE_BRANCH"
+          git ls-tree -r --name-only "$source_ref" -- .github/pr796-refund-operator-bundle/ \
+            | grep -E '^\.github/pr796-refund-operator-bundle/part-[0-9]{2}$' \
+            | sort > "$work/bundle-parts.txt"
+          part_count="$(wc -l < "$work/bundle-parts.txt" | tr -d ' ')"
+          test "$part_count" -ge 1
+          test "$part_count" -le 32
+
+          : > "$work/operator.b64"
+          while IFS= read -r part; do
+            git show "$source_ref:$part" >> "$work/operator.b64"
+          done < "$work/bundle-parts.txt"
+          base64 --decode "$work/operator.b64" > "$work/operator.tar.gz"
+          gzip --test "$work/operator.tar.gz"
+
+          python3 - "$work/operator.tar.gz" "$work/bundle-paths.txt" <<'PY'
+          import re
+          import sys
+          import tarfile
+          from pathlib import PurePosixPath
+
+          archive, output = sys.argv[1:]
+          allowed = [
+              re.compile(r"^docs/provider-review/every-org-donation-upgrade-review-packet\.md$"),
+              re.compile(r"^src/app/admin/donation-upgrades/[A-Za-z0-9_./\[\]-]+\.(?:ts|tsx)$"),
+              re.compile(r"^src/app/donation-upgrades/[A-Za-z0-9_./\[\]-]+\.(?:ts|tsx)$"),
+              re.compile(r"^src/lib/(?:direct-donation-upgrade|provider-refund)[A-Za-z0-9_.-]*\.(?:ts|tsx)$"),
+          ]
+          names = []
+          total = 0
+          with tarfile.open(archive, "r:gz") as tar:
+              for member in tar.getmembers():
+                  if not member.isfile():
+                      raise SystemExit(f"non-regular archive member: {member.name}")
+                  path = PurePosixPath(member.name)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"unsafe archive path: {member.name}")
+                  if member.size > 750_000:
+                      raise SystemExit(f"oversized archive member: {member.name}")
+                  if not any(pattern.fullmatch(member.name) for pattern in allowed):
+                      raise SystemExit(f"unexpected operator path: {member.name}")
+                  names.append(member.name)
+                  total += member.size
+          if not 3 <= len(names) <= 30:
+              raise SystemExit(f"unexpected operator path count: {len(names)}")
+          if len(names) != len(set(names)):
+              raise SystemExit("duplicate operator archive path")
+          if total > 4_000_000:
+              raise SystemExit(f"operator archive too large: {total}")
+          open(output, "w").write("\n".join(sorted(names)) + "\n")
+          PY
+
+          rm -rf "$candidate"
+          git worktree add --detach "$candidate" "$FOUNDATION_SHA"
+          tar --extract --gzip --file="$work/operator.tar.gz" \
+            --directory="$candidate" --no-same-owner
+
+          git -C "$candidate" status --porcelain \
+            | cut -c4- | sort > "$work/actual-paths.txt"
+          test -s "$work/actual-paths.txt"
+          comm -23 "$work/actual-paths.txt" "$work/bundle-paths.txt" \
+            > "$work/unexpected-changes.txt"
+          test ! -s "$work/unexpected-changes.txt"
+          actual_count="$(wc -l < "$work/actual-paths.txt" | tr -d ' ')"
+          test "$actual_count" -ge 3
+          test "$actual_count" -le 30
+
+          while IFS= read -r path; do
+            test -f "$candidate/$path"
+            test ! -L "$candidate/$path"
+            sha256sum "$candidate/$path"
+          done < "$work/actual-paths.txt" > "$work/source-sha256.txt"
+
+          python3 - "$candidate" "$work/actual-paths.txt" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          paths = [line.strip() for line in Path(sys.argv[2]).read_text().splitlines() if line.strip()]
+          sources = {path: (root / path).read_text() for path in paths}
+          combined = "\n".join(sources.values())
+          required = {
+              "active AAL2 boundary": r"\baal2\b|assurance_level|mfa",
+              "administrator boundary": r"admin(?:istrator)?|allowlist",
+              "service-only refund RPC": r"record_direct_donation_upgrade_provider_reversal",
+              "server action": r"[\"']use server[\"']",
+              "provider-reversed rendering": r"provider_reversed|Provider refund recorded",
+              "post-completion exception rendering": r"post_completion_exception|post-completion exception",
+              "current unreversed accounting": r"current_unreversed|currently unreversed",
+              "historical confirmation wording": r"historical|historically confirmed|original confirmation",
+          }
+          missing = [label for label, pattern in required.items() if not re.search(pattern, combined, re.I)]
+          if missing:
+              raise SystemExit("missing operator contracts: " + ", ".join(missing))
+          forbidden = {
+              "direct Every.org network request": r"https?://(?:staging\.)?every\.org|api\.every\.org",
+              "managed-payment execution": r"PaymentIntent|CheckoutSession|stripe\.checkout|createCheckoutSession",
+              "raw donor persistence": r"donor_email|donor_name|card_number|bank_account|raw_provider_payload",
+          }
+          violations = [label for label, pattern in forbidden.items() if re.search(pattern, combined, re.I)]
+          if violations:
+              raise SystemExit("forbidden operator behavior: " + ", ".join(violations))
+          action_sources = [source for path, source in sources.items() if path.endswith("actions.ts")]
+          if not action_sources:
+              raise SystemExit("operator bundle contains no server action")
+          if not any("record_direct_donation_upgrade_provider_reversal" in source for source in action_sources):
+              raise SystemExit("refund RPC is not invoked from an operator action")
+          PY
+
+          git -C "$candidate" diff --check
+          git -C "$candidate" diff --name-only | sort > "$work/post-contract-paths.txt"
+          diff -u "$work/actual-paths.txt" "$work/post-contract-paths.txt"
+
+          cp "$work/bundle-parts.txt" operator-evidence/
+          cp "$work/bundle-paths.txt" operator-evidence/
+          cp "$work/actual-paths.txt" operator-evidence/
+          cp "$work/source-sha256.txt" operator-evidence/
+          printf 'foundation_sha=%s\nfoundation_tree=%s\nsource_branch=%s\nsource_sha=%s\ncontroller_sha=%s\n' \
+            "$FOUNDATION_SHA" "$FOUNDATION_TREE" "$SOURCE_BRANCH" \
+            "$(git rev-parse "$source_ref")" "$(git rev-parse HEAD)" \
+            > operator-evidence/materialization-identity.txt
+          echo "CANDIDATE_DIR=$candidate" >> "$GITHUB_ENV"
+          echo "WORK_DIR=$work" >> "$GITHUB_ENV"
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ env.CANDIDATE_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npm ci > "$GITHUB_WORKSPACE/operator-evidence/npm-ci.log" 2>&1
+
+      - name: Run focused operator, refund, authentication, and rendering tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          mapfile -t recovered_tests < <(
+            while IFS= read -r path; do
+              [[ "$path" == *.test.ts || "$path" == *.test.tsx ]] && printf '%s\n' "$path"
+            done < "$WORK_DIR/actual-paths.txt"
+          )
+          tests=(
+            src/lib/provider-refund-contract.test.ts
+            src/lib/every-org-partner-webhook-auth.test.ts
+            src/lib/direct-donation-upgrade.test.ts
+            src/lib/direct-donation-upgrade-source-contract.test.ts
+          )
+          tests+=("${recovered_tests[@]}")
+          printf '%s\n' "${tests[@]}" | awk '!seen[$0]++' > "$WORK_DIR/focused-tests.txt"
+          mapfile -t unique_tests < "$WORK_DIR/focused-tests.txt"
+          node --import tsx --test "${unique_tests[@]}" \
+            > "$GITHUB_WORKSPACE/operator-evidence/focused-tests.log" 2>&1
+          cp "$WORK_DIR/focused-tests.txt" "$GITHUB_WORKSPACE/operator-evidence/"
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npm test > "$GITHUB_WORKSPACE/operator-evidence/repository-tests.log" 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npx tsc --noEmit > "$GITHUB_WORKSPACE/operator-evidence/typecheck.log" 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npm run lint -- --quiet > "$GITHUB_WORKSPACE/operator-evidence/lint.log" 2>&1
+
+      - name: Build with every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          npm run build > "$GITHUB_WORKSPACE/operator-evidence/build.log" 2>&1
+
+      - name: Publish exact stacked product branch
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CANDIDATE_DIR"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$FOUNDATION_SHA"
+          git status --porcelain | cut -c4- | sort > "$WORK_DIR/final-paths.txt"
+          diff -u "$WORK_DIR/actual-paths.txt" "$WORK_DIR/final-paths.txt"
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add --pathspec-from-file="$WORK_DIR/actual-paths.txt"
+          git diff --cached --name-only | sort > "$WORK_DIR/staged-paths.txt"
+          diff -u "$WORK_DIR/actual-paths.txt" "$WORK_DIR/staged-paths.txt"
+          git commit -m 'Add AAL2-gated refund operator and truthful rendering'
+          product_sha="$(git rev-parse HEAD)"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          test "$(git merge-base "$FOUNDATION_SHA" "$product_sha")" = "$FOUNDATION_SHA"
+          test "$(git rev-list --count "$FOUNDATION_SHA..$product_sha")" = 1
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'foundation_sha=%s\nproduct_sha=%s\nproduct_tree=%s\nchanged_files=%s\n' \
+            "$FOUNDATION_SHA" "$product_sha" "$product_tree" \
+            "$(wc -l < "$WORK_DIR/actual-paths.txt" | tr -d ' ')" \
+            | tee "$GITHUB_WORKSPACE/operator-evidence/product-identity.txt"
+          cp "$WORK_DIR/final-paths.txt" "$GITHUB_WORKSPACE/operator-evidence/"
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record successful operator recovery
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.publish.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
+        run: |
+          set -euo pipefail
+          path_count="$(wc -l < "$WORK_DIR/actual-paths.txt" | tr -d ' ')"
+          paths="$(sed 's/^/- `/' "$WORK_DIR/actual-paths.txt" | sed 's/$/`/')"
+          body="<!-- pr800-refund-operator-recovery-20260824 -->
+          ## AAL2 refund-operator and truthful-rendering tranche recovered
+
+          - exact foundation: \`$FOUNDATION_SHA\`
+          - exact product head: \`$PRODUCT_SHA\`
+          - exact product tree: \`$PRODUCT_TREE\`
+          - changed product paths: \`$path_count\`
+          - recovery run: \`$GITHUB_RUN_ID\`
+          - focused tests, complete repository tests, TypeScript, ESLint, disabled-money-rail build, source-contract, scope, and credential scans: passed
+
+          Durable product paths:
+          $paths
+
+          This remains a separate stacked, disabled, undeployed tranche. No Every.org request, webhook registration or invocation, checkout, donation, payment, actual refund, database migration, deployment, alias change, credential mutation, feature activation, custody, transfer, payout, email, brand submission, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Write explicit non-action record
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p operator-evidence
+          printf '%s\n' \
+            'providerRequestAttempted=false' \
+            'webhookMutationAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'actualRefundAttempted=false' \
+            'databaseMigrationAttempted=false' \
+            'deploymentAttempted=false' \
+            'credentialMutationAttempted=false' \
+            'productionChanged=false' \
+            > operator-evidence/non-actions.txt
+
+      - name: Upload sanitized operator recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr800-refund-operator-recovery-${{ github.run_id }}
+          path: operator-evidence/
+          if-no-files-found: error
+          retention-days: 30
