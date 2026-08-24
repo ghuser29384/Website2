@@ -54,7 +54,7 @@ jobs:
           psql --version
           pg_dump --version
 
-      - name: Prepare newline-safe generator source
+      - name: Prepare portable generator source
         shell: bash
         run: |
           set -euo pipefail
@@ -66,12 +66,75 @@ jobs:
 
           path = Path(os.environ["RUNNER_TEMP"]) / "generate-preactivation-baseline.sh"
           source = path.read_text()
-          bad = r"  E'\\n'," + "\n"
-          good = r"  E'\n'," + "\n"
-          if source.count(bad) == 1:
-              source = source.replace(bad, good)
-          elif source.count(good) != 1:
+
+          bad_newline = r"  E'\\n'," + "\n"
+          good_newline = r"  E'\n'," + "\n"
+          if source.count(bad_newline) == 1:
+              source = source.replace(bad_newline, good_newline)
+          elif source.count(good_newline) != 1:
               raise SystemExit("Expected auth-trigger newline serialization was not found exactly once.")
+
+          variable_old = '''CATALOG_SQL="$ROOT/scripts/database/preactivation-catalog.sql"
+          EVIDENCE_ROOT="${RUNNER_TEMP:-/tmp}/preactivation-baseline-${GITHUB_RUN_ID:-local}"
+          '''
+          variable_new = '''CATALOG_SQL="$ROOT/scripts/database/preactivation-catalog.sql"
+          PRIVILEGE_SQL="$ROOT/scripts/database/preactivation-privilege-reconciliation.sql"
+          EVIDENCE_ROOT="${RUNNER_TEMP:-/tmp}/preactivation-baseline-${GITHUB_RUN_ID:-local}"
+          '''
+          if source.count(variable_old) == 1:
+              source = source.replace(variable_old, variable_new)
+          elif source.count(variable_new) != 1:
+              raise SystemExit("Expected privilege-query source variable insertion point was not found.")
+
+          artifact_old = '''AUTH_TRIGGERS="$WORK_DIR/auth-user-triggers.sql"
+          BASELINE_TMP="$WORK_DIR/schema.sql"
+          '''
+          artifact_new = '''AUTH_TRIGGERS="$WORK_DIR/auth-user-triggers.sql"
+          PRIVILEGE_RECONCILIATION="$WORK_DIR/privilege-reconciliation.sql"
+          BASELINE_TMP="$WORK_DIR/schema.sql"
+          '''
+          if source.count(artifact_old) == 1:
+              source = source.replace(artifact_old, artifact_new)
+          elif source.count(artifact_new) != 1:
+              raise SystemExit("Expected privilege artifact insertion point was not found.")
+
+          query_old = '''if [[ ! -s "$AUTH_TRIGGERS" ]]; then
+            fail "The production auth-to-profile trigger boundary is empty."
+          fi
+
+          # This is the only source read outside an explicit SQL READ ONLY transaction.
+          '''
+          query_new = '''if [[ ! -s "$AUTH_TRIGGERS" ]]; then
+            fail "The production auth-to-profile trigger boundary is empty."
+          fi
+
+          readonly_query "$PRIVILEGE_RECONCILIATION" "$(cat "$PRIVILEGE_SQL")" -At
+          if [[ ! -s "$PRIVILEGE_RECONCILIATION" ]]; then
+            fail "The production privilege reconciliation boundary is empty."
+          fi
+
+          # This is the only source read outside an explicit SQL READ ONLY transaction.
+          '''
+          if source.count(query_old) == 1:
+              source = source.replace(query_old, query_new)
+          elif source.count(query_new) != 1:
+              raise SystemExit("Expected privilege-query execution insertion point was not found.")
+
+          assembly_old = '''cat "$DUMP_NORMALIZED" >> "$BASELINE_TMP"
+          printf '\\n-- Application-owned trigger(s) on Supabase-managed auth.users.\\n' >> "$BASELINE_TMP"
+          cat "$AUTH_TRIGGERS" >> "$BASELINE_TMP"
+          '''
+          assembly_new = '''cat "$DUMP_NORMALIZED" >> "$BASELINE_TMP"
+          printf '\\n-- Reconcile application privileges after portable no-owner replay.\\n' >> "$BASELINE_TMP"
+          cat "$PRIVILEGE_RECONCILIATION" >> "$BASELINE_TMP"
+          printf '\\n-- Application-owned trigger(s) on Supabase-managed auth.users.\\n' >> "$BASELINE_TMP"
+          cat "$AUTH_TRIGGERS" >> "$BASELINE_TMP"
+          '''
+          if source.count(assembly_old) == 1:
+              source = source.replace(assembly_old, assembly_new)
+          elif source.count(assembly_new) != 1:
+              raise SystemExit("Expected privilege reconciliation assembly insertion point was not found.")
+
           path.write_text(source)
           PY
           chmod +x "$RUNNER_TEMP/generate-preactivation-baseline.sh"
@@ -93,8 +156,11 @@ jobs:
         run: |
           set -euo pipefail
           node --import tsx --test \
-            src/lib/database-preactivation-baseline-contract.test.ts
-          npx eslint src/lib/database-preactivation-baseline-contract.test.ts
+            src/lib/database-preactivation-baseline-contract.test.ts \
+            src/lib/database-preactivation-privilege-reconciliation-contract.test.ts
+          npx eslint \
+            src/lib/database-preactivation-baseline-contract.test.ts \
+            src/lib/database-preactivation-privilege-reconciliation-contract.test.ts
           if grep -Fq '\nCREATE TRIGGER' supabase/baseline/pre_activation/schema.sql; then
             echo "The generated baseline contains a literal backslash-n trigger separator." >&2
             exit 1
