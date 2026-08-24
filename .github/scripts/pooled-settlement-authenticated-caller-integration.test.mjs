@@ -280,9 +280,12 @@ test("the generated cleanup discovers run-owned bundles even if failure preceded
 
 test("the generated harness confirms through each participant's real authenticated session", () => {
   const generated = buildAuthenticatedHarnessSource(original);
+  assert.match(generated, /const participantAuthenticatedClients = new Map\(\)/);
+  assert.match(generated, /participantAuthenticatedClients\.get\(user\.id\)/);
   assert.match(generated, /auth\.signInWithPassword/);
   assert.match(generated, /auth\.getUser\(\)/);
   assert.match(generated, /identity\.user\?\.id,\s*user\.id/);
+  assert.match(generated, /participantAuthenticatedClients\.set\(user\.id, client\)/);
   assert.match(generated, /confirmAsAuthenticatedParticipant/);
   assert.match(
     generated,
