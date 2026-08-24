@@ -119,8 +119,9 @@ jobs:
           const generated = alignParticipantUiTruthCopy(buildAuthenticatedHarnessSource(original));
           await writeFile("/tmp/issue-723-generated-harness.mjs", generated, "utf8");
           NODE
-          grep -Fq 'finalize_trade_agreement_milestones_v1' /tmp/issue-723-generated-harness.mjs
-          grep -Fq 'confirm_trade_agreement_milestone_manifest_v1' /tmp/issue-723-generated-harness.mjs
+          grep -Fq 'finalize_trade_milestone_manifest_v1' /tmp/issue-723-generated-harness.mjs
+          ! grep -Fq 'finalize_trade_agreement_milestones_v1' /tmp/issue-723-generated-harness.mjs
+          ! grep -Fq 'confirm_trade_agreement_milestone_manifest_v1' /tmp/issue-723-generated-harness.mjs
           grep -Fq 'await prepareMilestoneManifestForAuthenticatedConfirmation' /tmp/issue-723-generated-harness.mjs
           grep -Fq 'await probeConfirmationAuthorizationBoundary' /tmp/issue-723-generated-harness.mjs
           grep -Fq 'await confirmAsAuthenticatedParticipant' /tmp/issue-723-generated-harness.mjs
@@ -296,8 +297,7 @@ jobs:
             > "$POOLED_SETTLEMENT_QA_OUTPUT_DIR/lifecycle-function-diagnostic.json"
           select json_build_object(
             'requiredFunctions', json_build_array(
-              'finalize_trade_agreement_milestones_v1',
-              'confirm_trade_agreement_milestone_manifest_v1'
+              'finalize_trade_milestone_manifest_v1'
             ),
             'candidateFunctions', coalesce(
               (
@@ -349,8 +349,7 @@ jobs:
           const diagnosticPath = path.join(outputDir, "lifecycle-function-diagnostic.json");
           const diagnostic = JSON.parse((await readFile(diagnosticPath, "utf8")).trim());
           const required = [
-            "finalize_trade_agreement_milestones_v1",
-            "confirm_trade_agreement_milestone_manifest_v1",
+            "finalize_trade_milestone_manifest_v1",
           ];
           const rows = diagnostic.candidateFunctions.filter((row) => required.includes(row.name));
           await writeFile(
@@ -368,8 +367,8 @@ jobs:
             `${JSON.stringify({
               status: ready ? "ready" : "blocked",
               reason: ready
-                ? "Both required lifecycle functions are uniquely present."
-                : "One or both required lifecycle functions are absent or unexpectedly overloaded.",
+                ? "The production milestone finalizer is uniquely present with its authenticated contract."
+                : "The production milestone finalizer is absent or unexpectedly overloaded.",
               requiredFunctionCounts: counts,
               candidateFunctionNames: diagnostic.candidateFunctions.map((row) => row.signature),
             }, null, 2)}\n`,
@@ -379,6 +378,15 @@ jobs:
           for (const name of required) {
             assert.equal(rows.filter((row) => row.name === name).length, 1, `${name} must have exactly one public overload.`);
           }
+          const [contract] = rows;
+          assert.equal(contract.signature, "finalize_trade_milestone_manifest_v1(uuid)");
+          assert.deepEqual(contract.argumentNames, ["p_agreement_version_id"]);
+          assert.equal(contract.argumentTypes, "uuid");
+          assert.equal(contract.securityDefiner, true);
+          assert.ok(contract.config.includes('search_path=""'));
+          assert.equal(contract.anonExecute, false);
+          assert.equal(contract.authenticatedExecute, true);
+          assert.equal(contract.serviceRoleExecute, true);
           NODE
 
       - name: Upload sanitized lifecycle diagnostic evidence

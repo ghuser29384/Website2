@@ -25,8 +25,7 @@ test("the clean stack is pinned to exact PR #700 and corrected product-repair id
   assert.equal(PRODUCT_REPAIR_HEAD, "495f714b6dd4753ad78cf3d41945cffc84923876");
   assert.equal(QA_PROJECT_REF, "hvmxfjjbdcgjjudmthdz");
   assert.deepEqual(REQUIRED_MILESTONE_LIFECYCLE_FUNCTIONS, [
-    "finalize_trade_agreement_milestones_v1",
-    "confirm_trade_agreement_milestone_manifest_v1",
+    "finalize_trade_milestone_manifest_v1",
   ]);
   assert.equal(INTEGRATION_PATHS.length, 7);
   assert.ok(INTEGRATION_PATHS.includes(AUTHENTICATED_CONFIRMATION_MIGRATION));
@@ -69,20 +68,25 @@ test("participant UI copy alignment fails closed if the obsolete assertion block
   );
 });
 
-test("the generated harness uses the exact inspected milestone lifecycle before donation confirmation", () => {
+test("the generated harness uses the production milestone lifecycle before bilateral donation confirmation", () => {
   const generated = buildAuthenticatedHarnessSource(original);
   assert.match(generated, /create_trade_agreement_milestone_v1/);
-  assert.match(generated, /finalize_trade_agreement_milestones_v1/);
-  assert.match(generated, /confirm_trade_agreement_milestone_manifest_v1/);
+  assert.match(generated, /finalize_trade_milestone_manifest_v1/);
+  assert.match(generated, /finalize_trade_milestone_manifest_v1\(uuid\)/);
   assert.match(generated, /Unexpected milestone lifecycle overload inventory/);
-  assert.match(generated, /contains unknown argument/);
+  assert.match(generated, /p_agreement_version_id/);
+  assert.match(generated, /authenticatedExecute/);
+  assert.match(generated, /serviceRoleExecute/);
   assert.match(generated, /p_performer_id:\s*counterparty\.id/);
   assert.match(generated, /p_payer_id:\s*payer\.id/);
   assert.match(generated, /p_maximum_amount_cents:\s*0/);
   assert.match(generated, /expectedMilestoneHashes/);
   assert.match(generated, /finalizedVersion\.milestone_manifest_hash/);
   assert.match(generated, /finalizedVersion\.complete_terms_hash/);
-  assert.doesNotMatch(generated, /finalize_trade_milestone_manifest_v1/);
+  assert.match(generated, /assertFrozenManifestReviewedByBothParticipants/);
+  assert.match(generated, /Both authenticated participants must confirm the exact manifest-bound version/);
+  assert.doesNotMatch(generated, /finalize_trade_agreement_milestones_v1/);
+  assert.doesNotMatch(generated, /confirm_trade_agreement_milestone_manifest_v1/);
   assert.doesNotMatch(
     generated,
     /admin\.from\("trade_agreement_milestones"\)\.insert/,
@@ -98,8 +102,12 @@ test("the generated harness uses the exact inspected milestone lifecycle before 
     "    await confirmAsAuthenticatedParticipant(actor, agreement.id, version.id, label);",
   );
   assert.ok(prepare >= 0, "The milestone lifecycle preparation call is missing.");
-  assert.ok(negativeProbe > prepare, "Negative donation-confirmation probes must follow manifest review.");
+  assert.ok(negativeProbe > prepare, "Negative donation-confirmation probes must follow manifest finalization.");
   assert.ok(validConfirmation > negativeProbe, "Valid bilateral confirmation must follow the negative probes.");
+  const bilateralReview = generated.indexOf(
+    "  await assertFrozenManifestReviewedByBothParticipants({ agreement, version, label });",
+  );
+  assert.ok(bilateralReview > validConfirmation, "Bilateral review evidence must follow both valid confirmations.");
 });
 
 test("the generated harness cleans run-owned milestone rows before versions and auth users", () => {
