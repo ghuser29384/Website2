@@ -114,7 +114,7 @@ docker exec "$DB_CONTAINER" \
   psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -Atqc \
   "select current_user || E'\t' || session_user || E'\t' || rolsuper from pg_roles where rolname = current_user;" \
   > "$OUTPUT_DIR/baseline-administrator.txt"
-grep -Eq '^supabase_admin[[:space:]]+supabase_admin[[:space:]]+t$' \
+grep -Eq '^supabase_admin[[:space:]]+supabase_admin[[:space:]]+true$' \
   "$OUTPUT_DIR/baseline-administrator.txt"
 
 PRESTATE_RELATIONS="$OUTPUT_DIR/clean-room-prestate-relations.tsv"
