@@ -117,6 +117,7 @@ docker exec "$DB_CONTAINER" \
 grep -Eq '^supabase_admin[[:space:]]+supabase_admin[[:space:]]+t$' \
   "$OUTPUT_DIR/baseline-administrator.txt"
 
+PRESTATE_RELATIONS="$OUTPUT_DIR/clean-room-prestate-relations.tsv"
 PRE_RELATIONS="$(psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
 select count(*)
 from pg_class c
@@ -132,8 +133,31 @@ where n.nspname in ('public', 'moral_trade_private')
       and d.objsubid = 0
   );
 ")"
-test "$PRE_RELATIONS" = "0"
+psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\t' -c "
+select
+  n.nspname,
+  c.relname,
+  c.relkind,
+  coalesce(e.extname, '')
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+left join pg_depend d
+  on d.deptype = 'e'
+ and d.classid = 'pg_class'::regclass
+ and d.objid = c.oid
+ and d.objsubid = 0
+left join pg_extension e on e.oid = d.refobjid
+where n.nspname in ('public', 'moral_trade_private')
+  and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')
+  and e.oid is null
+order by n.nspname, c.relname, c.relkind;
+" > "$PRESTATE_RELATIONS"
 printf 'pre_application_relations=%s\n' "$PRE_RELATIONS" > "$OUTPUT_DIR/clean-room-prestate.txt"
+if [[ "$PRE_RELATIONS" != "0" ]]; then
+  echo "Fresh Supabase stack contains unexpected non-extension application relations:" >&2
+  cat "$PRESTATE_RELATIONS" >&2
+  exit 1
+fi
 
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 START_SECONDS="$(date +%s)"
