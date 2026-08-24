@@ -29,12 +29,12 @@ test("the stacked QA candidate is pinned to the clean stack and all product repa
   assert.equal(CLEAN_STACK_HEAD, "a67878590380f45af704ddd3e643ef1a135015f7");
   assert.equal(CONTEXT_READ_REPAIR_HEAD, "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d");
   assert.equal(OPERATOR_UI_REPAIR_HEAD, "a1f774eef872464528249d9e64a1d7d4466e7f2e");
-  assert.equal(STRIPE_GATE_REPAIR_HEAD, "17d7e32775d5a8c3dcafeb666fb84d06e8cb7752");
+  assert.equal(STRIPE_GATE_REPAIR_HEAD, "a3e11dab82d4edd235bef69ec5e90e3eb21f7e66");
   assert.equal(QA_PROJECT_REF, "hvmxfjjbdcgjjudmthdz");
   assert.deepEqual(REQUIRED_MILESTONE_LIFECYCLE_FUNCTIONS, [
     "finalize_trade_milestone_manifest_v1",
   ]);
-  assert.equal(INTEGRATION_PATHS.length, 13);
+  assert.equal(INTEGRATION_PATHS.length, 14);
   assert.ok(INTEGRATION_PATHS.includes(AUTHENTICATED_CONFIRMATION_MIGRATION));
 });
 
@@ -150,16 +150,22 @@ test("participant UI generation fails closed if the pooled assertion block drift
   );
 });
 
-test("the generated harness proves the signed Stripe webhook gate before operator handoff", () => {
+test("the generated harness binds signed Stripe evidence to accountable operator review before handoff", () => {
   const generated = buildAuthenticatedHarnessSource(original);
   assert.match(generated, /signed-stripe-webhook-gate\.json/);
   assert.match(generated, /stripe_signed_webhook/);
-  assert.match(generated, /handlerResults: primaryFunding\.map/);
-  assert.match(generated, /Signed Stripe test funding did not persist its provider-checkout gate/);
+  assert.match(generated, /trade_donation_pool_stripe_events/);
+  assert.match(generated, /review_trade_donation_pool_gate/);
+  assert.match(generated, /p_actor_profile_id: operator\.id/);
+  assert.match(generated, /p_evidence_sha256: signedWebhookEvidenceSha256/);
+  assert.match(generated, /evidencePayloadSha256: signedWebhookEvidenceSha256/);
+  assert.match(generated, /Synthetic QA operator review did not persist the signed-webhook provider-checkout gate/);
   const funding = generated.indexOf("const primaryFunding = await Promise.all(");
-  const gate = generated.indexOf('const signedWebhookGate = unwrap(', funding);
+  const review = generated.indexOf('await admin.rpc("review_trade_donation_pool_gate"', funding);
+  const gate = generated.indexOf('const signedWebhookGate = unwrap(', review);
   const handoff = generated.indexOf("await openEveryOrgThroughOperatorUi", gate);
-  assert.ok(gate > funding, "The signed-webhook gate proof must follow valid funding events.");
+  assert.ok(review > funding, "The evidence-bound operator review must follow valid funding events.");
+  assert.ok(gate > review, "The persisted gate proof must follow the operator review.");
   assert.ok(handoff > gate, "The operator handoff must follow the signed-webhook gate proof.");
 });
 
@@ -257,6 +263,7 @@ test("the generated cleanup discovers run-owned bundles even if failure preceded
   assert.match(generated, /position\(\$\{cleanupRunIdLiteral\} in target_id\) > 0/);
   assert.match(generated, /bundle_id in \(select id from pooled_qa_cleanup_bundle_ids\)/);
   assert.match(generated, /object_id in \(select id from pooled_qa_cleanup_bundle_ids\)/);
+  assert.match(generated, /actor_profile_id = any\(\$\{userIds\}\)/);
   assert.match(generated, /delete from public\.trade_donation_pool_bundles where id in \(select id from pooled_qa_cleanup_bundle_ids\)/);
   assert.doesNotMatch(generated, /delete from public\.trade_donation_pool_bundles where id = any\(\$\{bundleIds\}\)/);
 });
@@ -314,7 +321,7 @@ test("source transformation fails closed if the old service-role confirmation bl
   );
 });
 
-test("the stacked workflow is QA-only, exact-thirteen-file-scoped, and applies the forward migration", () => {
+test("the stacked workflow is QA-only, exact-fourteen-file-scoped, and applies the forward migration", () => {
   assert.match(workflow, new RegExp(PR700_HEAD));
   assert.match(workflow, new RegExp(PRODUCT_REPAIR_HEAD));
   assert.match(workflow, new RegExp(CLEAN_STACK_HEAD));

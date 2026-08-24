@@ -5,7 +5,7 @@ export const PRODUCT_REPAIR_HEAD = "495f714b6dd4753ad78cf3d41945cffc84923876";
 export const CLEAN_STACK_HEAD = "a67878590380f45af704ddd3e643ef1a135015f7";
 export const CONTEXT_READ_REPAIR_HEAD = "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d";
 export const OPERATOR_UI_REPAIR_HEAD = "a1f774eef872464528249d9e64a1d7d4466e7f2e";
-export const STRIPE_GATE_REPAIR_HEAD = "17d7e32775d5a8c3dcafeb666fb84d06e8cb7752";
+export const STRIPE_GATE_REPAIR_HEAD = "a3e11dab82d4edd235bef69ec5e90e3eb21f7e66";
 export const QA_PROJECT_REF = "hvmxfjjbdcgjjudmthdz";
 export const AUTHENTICATED_CONFIRMATION_MIGRATION =
   "supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql";
@@ -26,6 +26,7 @@ export const INTEGRATION_PATHS = [
   "src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts",
   "src/lib/payments/trade-donation-pool-webhook-gate-source-contract.test.ts",
   "src/lib/payments/trade-donation-pool-webhook.ts",
+  "src/lib/trade-donation-pool-stripe-environment-source-contract.test.ts",
   "src/lib/trade-donation-pool-operator-ui-source-contract.test.ts",
   "src/lib/trade-donation.ts",
   AUTHENTICATED_CONFIRMATION_MIGRATION,
@@ -232,10 +233,47 @@ export function buildAuthenticatedHarnessSource(input) {
     primaryFundingBoundary,
     [
       primaryFundingBoundary,
+      "  const signedWebhookEvents = unwrap(",
+      "    await admin",
+      '      .from("trade_donation_pool_stripe_events")',
+      '      .select("stripe_event_id,event_type,livemode,payload_hash,signature_verified")',
+      '      .in("stripe_event_id", primaryFunding.map(({ event }) => event.id))',
+      '      .order("stripe_event_id", { ascending: true }),',
+      '    "load exact signed Stripe test webhook evidence",',
+      "  );",
+      "  assert.equal(signedWebhookEvents.length, primaryFunding.length);",
+      "  assert.ok(signedWebhookEvents.every(({ livemode, signature_verified: verified }) => livemode === false && verified === true));",
+      "  const signedWebhookEvidence = {",
+      '    schemaVersion: "moral-trade-pooled-settlement-signed-webhook-evidence-v1",',
+      "    runId,",
+      "    commitSha,",
+      "    events: signedWebhookEvents,",
+      "    handlerResults: primaryFunding.map(({ response }) => ({",
+      "      pooledSettlement: response.pooledSettlement,",
+      "      duplicate: response.duplicate,",
+      "    })),",
+      "  };",
+      "  const signedWebhookEvidenceSha256 = sha256(canonicalJson(signedWebhookEvidence));",
+      "  const reviewedSignedWebhookGate = unwrap(",
+      '    await admin.rpc("review_trade_donation_pool_gate", {',
+      "      p_actor_profile_id: operator.id,",
+      '      p_environment: "test",',
+      '      p_gate_key: "stripe_signed_webhook",',
+      '      p_status: "passed",',
+      '      p_notes: "Synthetic QA operator reviewed exact signed Stripe test webhook evidence.",',
+      "      p_accountable_owner_name: operator.displayName,",
+      '      p_accountable_owner_role: "Synthetic QA operator",',
+      "      p_accountable_owner_email: operator.email,",
+      '      p_evidence_url: `https://github.com/ghuser29384/Website2/actions/runs/${runId}`,',
+      "      p_evidence_sha256: signedWebhookEvidenceSha256,",
+      "    }),",
+      '    "review signed Stripe test webhook gate with exact evidence",',
+      "  );",
+      '  assert.equal(reviewedSignedWebhookGate.status, "passed");',
       "  const signedWebhookGate = unwrap(",
       "    await admin",
       '      .from("trade_donation_pool_gate_status")',
-      '      .select("environment,gate_key,status,updated_at")',
+      '      .select("environment,gate_key,status,approved_by,approved_at,accountable_owner_name,accountable_owner_role,accountable_owner_email,evidence_url,evidence_sha256,evidence_recorded_at,updated_at")',
       '      .eq("environment", "test")',
       '      .eq("gate_key", "stripe_signed_webhook")',
       "      .single(),",
@@ -246,14 +284,14 @@ export function buildAuthenticatedHarnessSource(input) {
       "    runId,",
       "    commitSha,",
       "    gate: signedWebhookGate,",
-      "    handlerResults: primaryFunding.map(({ response }) => ({",
-      "      pooledSettlement: response.pooledSettlement,",
-      "      duplicate: response.duplicate,",
-      "    })),",
+      "    evidencePayload: signedWebhookEvidence,",
+      "    evidencePayloadSha256: signedWebhookEvidenceSha256,",
       "  });",
-      '  assert.equal(signedWebhookGate.status, "passed", "Signed Stripe test funding did not persist its provider-checkout gate.");',
+      '  assert.equal(signedWebhookGate.status, "passed", "Synthetic QA operator review did not persist the signed-webhook provider-checkout gate.");',
+      "  assert.equal(signedWebhookGate.approved_by, operator.id);",
+      "  assert.equal(signedWebhookGate.evidence_sha256, signedWebhookEvidenceSha256);",
     ].join("\n"),
-    "signed Stripe webhook gate persistence evidence",
+    "signed Stripe webhook evidence review",
   );
 
   source = replaceExactly(
@@ -316,7 +354,7 @@ export function buildAuthenticatedHarnessSource(input) {
   source = replaceExactly(
     source,
     "  where object_id = any(${obligationIds}) or object_id = any(${bundleIds});",
-    "  where object_id = any(${obligationIds}) or object_id in (select id from pooled_qa_cleanup_bundle_ids);",
+    "  where object_id = any(${obligationIds}) or object_id in (select id from pooled_qa_cleanup_bundle_ids) or actor_profile_id = any(${userIds});",
     "audit cleanup uses discovered bundle IDs",
   );
   source = replaceExactly(
