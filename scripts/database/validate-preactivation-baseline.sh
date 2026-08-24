@@ -6,6 +6,8 @@ BASELINE_DIR="$ROOT/supabase/baseline/pre_activation"
 BASELINE_SQL="$BASELINE_DIR/schema.sql"
 SOURCE_CATALOG="$BASELINE_DIR/source_catalog.tsv"
 CATALOG_SQL="$ROOT/scripts/database/preactivation-catalog.sql"
+POLICY_EQUIVALENCE_SQL="$ROOT/scripts/database/preactivation-policy-equivalence.sql"
+SOURCE_POLICY_PROBES="$BASELINE_DIR/source_policy_probes.sql"
 OUTPUT_DIR="${1:-$ROOT/artifacts/preactivation-baseline-clean-room}"
 SUPABASE_VERSION="2.110.0"
 CLEAN_ROOM_ROOT="$(mktemp -d "${RUNNER_TEMP:-/tmp}/website2-preactivation-clean-room.XXXXXX")"
@@ -15,6 +17,8 @@ DB_CONTAINER="supabase_db_${PROJECT_ID}"
 LOCAL_DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 TARGET_CATALOG="$OUTPUT_DIR/target-catalog.tsv"
 TARGET_CATALOG_NORMALIZED="$OUTPUT_DIR/target-catalog.normalized.tsv"
+POLICY_EQUIVALENCE="$OUTPUT_DIR/policy-equivalence.tsv"
+POLICY_PROBE_CLEANUP="$OUTPUT_DIR/policy-probe-cleanup.sql"
 START_LOG="$OUTPUT_DIR/supabase-start.log"
 STOP_LOG="$OUTPUT_DIR/supabase-stop.log"
 STATUS_LOG="$OUTPUT_DIR/supabase-status.log"
@@ -170,12 +174,43 @@ printf 'started_at=%s\nended_at=%s\nduration_seconds=%s\n' \
   "$STARTED_AT" "$ENDED_AT" "$((END_SECONDS - START_SECONDS))" \
   > "$OUTPUT_DIR/baseline-apply-timing.txt"
 
-psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \
+psql "$LOCAL_DB_URL" -X -q -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \
   > "$TARGET_CATALOG"
-LC_ALL=C sort -u "$TARGET_CATALOG" > "$TARGET_CATALOG_NORMALIZED"
+grep -v $'^POLICY\t' "$TARGET_CATALOG" | LC_ALL=C sort -u \
+  > "$TARGET_CATALOG_NORMALIZED"
 LC_ALL=C diff -u "$SOURCE_CATALOG" "$TARGET_CATALOG_NORMALIZED" \
   > "$OUTPUT_DIR/catalog.diff"
 test ! -s "$OUTPUT_DIR/catalog.diff"
+
+if [[ ! -s "$SOURCE_POLICY_PROBES" ]]; then
+  echo "The immutable source-policy probe contract is missing." >&2
+  exit 1
+fi
+docker exec -i "$DB_CONTAINER" \
+  psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -f - \
+  < "$SOURCE_POLICY_PROBES" > "$OUTPUT_DIR/policy-probe-apply.log" 2>&1
+psql "$LOCAL_DB_URL" -X -q -v ON_ERROR_STOP=1 -f "$POLICY_EQUIVALENCE_SQL" \
+  > "$POLICY_EQUIVALENCE"
+psql "$LOCAL_DB_URL" -X -q -v ON_ERROR_STOP=1 -Atc "
+select format('drop policy %I on %I.%I;', policyname, schemaname, tablename)
+from pg_policies
+where schemaname in ('public', 'moral_trade_private')
+  and policyname like '__mt_baseline_probe_%'
+order by schemaname, tablename, policyname;
+" > "$POLICY_PROBE_CLEANUP"
+docker exec -i "$DB_CONTAINER" \
+  psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -f - \
+  < "$POLICY_PROBE_CLEANUP" > "$OUTPUT_DIR/policy-probe-cleanup.log" 2>&1
+POLICY_PROBE_RESIDUE="$(psql "$LOCAL_DB_URL" -X -q -v ON_ERROR_STOP=1 -Atqc "
+select count(*)
+from pg_policies
+where schemaname in ('public', 'moral_trade_private')
+  and policyname like '__mt_baseline_probe_%';
+")"
+printf 'policy_probe_residue=%s\n' "$POLICY_PROBE_RESIDUE" \
+  > "$OUTPUT_DIR/policy-probe-residue.txt"
+test "$POLICY_PROBE_RESIDUE" = "0"
+test ! -s "$POLICY_EQUIVALENCE"
 
 if docker exec -i "$DB_CONTAINER" \
   psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -f - \
@@ -261,5 +296,5 @@ printf 'baseline_sha256=%s\nsource_catalog_sha256=%s\ntarget_catalog_sha256=%s\n
   "$(sha256sum "$SOURCE_CATALOG" | awk '{print $1}')" \
   "$(sha256sum "$TARGET_CATALOG_NORMALIZED" | awk '{print $1}')" \
   > "$OUTPUT_DIR/digests.txt"
-printf 'catalog_match=true\nauth_profile_trigger=true\nactivation_stage_absent=true\nnonempty_guard=true\nadmin_replay=true\nzero_synthetic_residue=true\n' \
+printf 'catalog_match=true\npolicy_equivalence=true\npolicy_probe_residue=0\nauth_profile_trigger=true\nactivation_stage_absent=true\nnonempty_guard=true\nadmin_replay=true\nzero_synthetic_residue=true\n' \
   > "$OUTPUT_DIR/result.txt"

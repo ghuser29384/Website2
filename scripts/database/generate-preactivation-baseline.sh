@@ -11,6 +11,9 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 BASELINE_DIR="$ROOT/supabase/baseline/pre_activation"
 CATALOG_SQL="$ROOT/scripts/database/preactivation-catalog.sql"
+POLICY_PROBES_SQL="$ROOT/scripts/database/preactivation-policy-probes.sql"
+PRIVILEGE_SQL="$ROOT/scripts/database/preactivation-privilege-reconciliation.sql"
+SEQUENCE_PRIVILEGE_SQL="$ROOT/scripts/database/preactivation-sequence-privilege-reconciliation.sql"
 EVIDENCE_ROOT="${RUNNER_TEMP:-/tmp}/preactivation-baseline-${GITHUB_RUN_ID:-local}"
 WORK_DIR="$(mktemp -d)"
 DUMP_RAW="$WORK_DIR/production-schema.raw.sql"
@@ -18,10 +21,13 @@ DUMP_NORMALIZED="$WORK_DIR/production-schema.normalized.sql"
 SOURCE_CATALOG_BEFORE="$WORK_DIR/source-catalog-before.tsv"
 SOURCE_CATALOG="$WORK_DIR/source-catalog.tsv"
 SOURCE_CATALOG_AFTER="$WORK_DIR/source-catalog-after.tsv"
+SOURCE_POLICY_PROBES="$WORK_DIR/source-policy-probes.sql"
 MIGRATION_HISTORY="$WORK_DIR/migration-history.tsv"
 EXTENSIONS_SQL="$WORK_DIR/extensions.sql"
 EXTENSIONS_TSV="$WORK_DIR/extensions.tsv"
 AUTH_TRIGGERS="$WORK_DIR/auth-user-triggers.sql"
+PRIVILEGE_RECONCILIATION="$WORK_DIR/privilege-reconciliation.sql"
+SEQUENCE_PRIVILEGE_RECONCILIATION="$WORK_DIR/sequence-privilege-reconciliation.sql"
 BASELINE_TMP="$WORK_DIR/schema.sql"
 MANIFEST_TMP="$WORK_DIR/manifest.json"
 TYPE_TEST_TMP="$WORK_DIR/database-preactivation-baseline-contract.test.ts"
@@ -103,6 +109,12 @@ readonly_file() {
   rm -f "$wrapper"
 }
 
+normalize_catalog() {
+  local catalog_input="$1"
+  local output="$2"
+  grep -v $'^POLICY\t' "$catalog_input" | LC_ALL=C sort -u > "$output"
+}
+
 readonly_query \
   "$EVIDENCE_ROOT/manifests/source-session.txt" \
   "select current_setting('transaction_read_only'), current_database();" \
@@ -143,7 +155,8 @@ if jq -e '.activation_stage_present == true or .activation_transition_functions_
 fi
 
 readonly_file "$CATALOG_SQL" "$SOURCE_CATALOG_BEFORE"
-LC_ALL=C sort -u "$SOURCE_CATALOG_BEFORE" > "$SOURCE_CATALOG"
+readonly_file "$POLICY_PROBES_SQL" "$SOURCE_POLICY_PROBES"
+normalize_catalog "$SOURCE_CATALOG_BEFORE" "$SOURCE_CATALOG"
 if [[ ! -s "$SOURCE_CATALOG" ]]; then
   fail "The production application catalog is empty."
 fi
@@ -201,7 +214,7 @@ readonly_query "$AUTH_TRIGGERS" "$(cat <<'SQL'
 select format(
   'drop trigger if exists %I on auth.users;%s%s;',
   t.tgname,
-  E'\\n',
+  E'\n',
   pg_get_triggerdef(t.oid, true)
 )
 from pg_trigger t
@@ -218,6 +231,18 @@ SQL
 )" -At
 if [[ ! -s "$AUTH_TRIGGERS" ]]; then
   fail "The production auth-to-profile trigger boundary is empty."
+fi
+if [[ ! -s "$SOURCE_POLICY_PROBES" ]]; then
+  fail "The production source-policy probe boundary is empty."
+fi
+
+readonly_query "$PRIVILEGE_RECONCILIATION" "$(cat "$PRIVILEGE_SQL")" -At
+if [[ ! -s "$PRIVILEGE_RECONCILIATION" ]]; then
+  fail "The production privilege reconciliation boundary is empty."
+fi
+readonly_query "$SEQUENCE_PRIVILEGE_RECONCILIATION" "$(cat "$SEQUENCE_PRIVILEGE_SQL")" -At
+if [[ ! -s "$SEQUENCE_PRIVILEGE_RECONCILIATION" ]]; then
+  fail "The production sequence privilege reconciliation boundary is empty."
 fi
 
 # This is the only source read outside an explicit SQL READ ONLY transaction.
@@ -311,7 +336,7 @@ Path(sys.argv[2]).write_text(normalized)
 PY
 
 readonly_file "$CATALOG_SQL" "$SOURCE_CATALOG_AFTER"
-LC_ALL=C sort -u "$SOURCE_CATALOG_AFTER" > "$WORK_DIR/source-catalog-after.sorted.tsv"
+normalize_catalog "$SOURCE_CATALOG_AFTER" "$WORK_DIR/source-catalog-after.sorted.tsv"
 if ! cmp "$SOURCE_CATALOG" "$WORK_DIR/source-catalog-after.sorted.tsv"; then
   fail "The production catalog drifted during baseline capture."
 fi
@@ -391,6 +416,9 @@ SQL
 cat "$EXTENSIONS_SQL" >> "$BASELINE_TMP"
 printf '\n' >> "$BASELINE_TMP"
 cat "$DUMP_NORMALIZED" >> "$BASELINE_TMP"
+printf '\n-- Reconcile application privileges after portable no-owner replay.\n' >> "$BASELINE_TMP"
+cat "$PRIVILEGE_RECONCILIATION" >> "$BASELINE_TMP"
+cat "$SEQUENCE_PRIVILEGE_RECONCILIATION" >> "$BASELINE_TMP"
 printf '\n-- Application-owned trigger(s) on Supabase-managed auth.users.\n' >> "$BASELINE_TMP"
 cat "$AUTH_TRIGGERS" >> "$BASELINE_TMP"
 cat >> "$BASELINE_TMP" <<'SQL'
@@ -420,6 +448,7 @@ python3 - \
   "$SOURCE_CATALOG" \
   "$MIGRATION_HISTORY" \
   "$EXTENSIONS_TSV" \
+  "$SOURCE_POLICY_PROBES" \
   "$MANIFEST_TMP" <<'PY'
 from hashlib import sha256
 from pathlib import Path
@@ -427,7 +456,7 @@ from datetime import datetime, timezone
 import json
 import sys
 
-source_head, source_main, baseline_path, catalog_path, history_path, extensions_path, manifest_path = sys.argv[1:]
+source_head, source_main, baseline_path, catalog_path, history_path, extensions_path, policy_probes_path, manifest_path = sys.argv[1:]
 
 def digest(path: str) -> str:
     return sha256(Path(path).read_bytes()).hexdigest()
@@ -435,6 +464,7 @@ def digest(path: str) -> str:
 history_lines = [line for line in Path(history_path).read_text().splitlines() if line]
 catalog_lines = [line for line in Path(catalog_path).read_text().splitlines() if line]
 extension_lines = [line for line in Path(extensions_path).read_text().splitlines() if line]
+policy_probe_lines = [line for line in Path(policy_probes_path).read_text().splitlines() if line]
 manifest = {
     "format_version": 1,
     "baseline_id": "moraltrade-pre-activation-production-2026-08-19",
@@ -469,11 +499,13 @@ manifest = {
         "source_catalog.tsv": digest(catalog_path),
         "source_migration_history.tsv": digest(history_path),
         "source_extensions.tsv": digest(extensions_path),
+        "source_policy_probes.sql": digest(policy_probes_path),
     },
     "counts": {
         "catalog_rows": len(catalog_lines),
         "migration_history_rows": len(history_lines),
         "extension_rows": len(extension_lines),
+        "policy_probe_rows": len(policy_probe_lines),
     },
 }
 Path(manifest_path).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
@@ -552,12 +584,14 @@ install -m 0644 "$BASELINE_TMP" "$BASELINE_DIR/schema.sql"
 install -m 0644 "$SOURCE_CATALOG" "$BASELINE_DIR/source_catalog.tsv"
 install -m 0644 "$MIGRATION_HISTORY" "$BASELINE_DIR/source_migration_history.tsv"
 install -m 0644 "$EXTENSIONS_TSV" "$BASELINE_DIR/source_extensions.tsv"
+install -m 0644 "$SOURCE_POLICY_PROBES" "$BASELINE_DIR/source_policy_probes.sql"
 install -m 0644 "$MANIFEST_TMP" "$BASELINE_DIR/manifest.json"
 install -m 0644 "$TYPE_TEST_TMP" "$ROOT/src/lib/database-preactivation-baseline-contract.test.ts"
 
 cp "$SOURCE_CATALOG" "$EVIDENCE_ROOT/manifests/source-catalog.tsv"
 cp "$MIGRATION_HISTORY" "$EVIDENCE_ROOT/manifests/source-migration-history.tsv"
 cp "$EXTENSIONS_TSV" "$EVIDENCE_ROOT/manifests/source-extensions.tsv"
+cp "$SOURCE_POLICY_PROBES" "$EVIDENCE_ROOT/manifests/source-policy-probes.sql"
 cp "$MANIFEST_TMP" "$EVIDENCE_ROOT/manifests/manifest.json"
 printf 'schema_sha256=%s\n' "$(sha256sum "$BASELINE_DIR/schema.sql" | awk '{print $1}')" \
   > "$EVIDENCE_ROOT/manifests/generated-files.txt"
@@ -566,6 +600,8 @@ printf 'catalog_sha256=%s\n' "$(sha256sum "$BASELINE_DIR/source_catalog.tsv" | a
 printf 'migration_history_sha256=%s\n' "$(sha256sum "$BASELINE_DIR/source_migration_history.tsv" | awk '{print $1}')" \
   >> "$EVIDENCE_ROOT/manifests/generated-files.txt"
 printf 'extensions_sha256=%s\n' "$(sha256sum "$BASELINE_DIR/source_extensions.tsv" | awk '{print $1}')" \
+  >> "$EVIDENCE_ROOT/manifests/generated-files.txt"
+printf 'policy_probes_sha256=%s\n' "$(sha256sum "$BASELINE_DIR/source_policy_probes.sql" | awk '{print $1}')" \
   >> "$EVIDENCE_ROOT/manifests/generated-files.txt"
 printf 'manifest_sha256=%s\n' "$(sha256sum "$BASELINE_DIR/manifest.json" | awk '{print $1}')" \
   >> "$EVIDENCE_ROOT/manifests/generated-files.txt"
