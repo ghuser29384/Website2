@@ -93,7 +93,9 @@ jobs:
           git diff --check
       - run: npm ci
       - name: Focused contracts
+        shell: bash
         run: |
+          set -euo pipefail
           node --import tsx --test \
             src/lib/mpgf/compact-authoritative-outflow.test.ts \
             src/lib/mpgf/compact-authoritative-outflow-contract.test.ts \
@@ -104,17 +106,32 @@ jobs:
             src/lib/mpgf/public-goods-compacts-hardening-contract.test.ts \
             2>&1 | tee focused.log
       - name: Complete repository tests
-        run: npm test 2>&1 | tee repository-tests.log
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee repository-tests.log
       - name: ESLint
-        run: npm run lint -- --quiet 2>&1 | tee eslint.log
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee eslint.log
       - name: Strict TypeScript
-        run: npx tsc --noEmit 2>&1 | tee typescript.log
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee typescript.log
       - name: Production build
-        run: npm run build 2>&1 | tee build.log
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee build.log
       - name: Install Chromium
         run: npx playwright install chromium
       - name: Four-viewpoint browser contract
-        run: npx playwright test tests/mpgf-public-goods-compacts.spec.ts --workers=1 --reporter=line 2>&1 | tee playwright.log
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test tests/mpgf-public-goods-compacts.spec.ts --workers=1 --reporter=line 2>&1 | tee playwright.log
       - name: Preserve exact source evidence
         if: always()
         shell: bash
@@ -191,7 +208,7 @@ jobs:
           supabase start --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor --log-level error --yes > /dev/null
           rmdir supabase/migrations
           mv "$RUNNER_TEMP/repo-migrations" supabase/migrations
-      - name: Apply pre-ledger production-compatible migrations
+      - name: Apply baseline and every production-compatible pre-ledger migration
         shell: bash
         run: |
           set -euo pipefail
@@ -207,7 +224,7 @@ jobs:
               exit 1
             fi
           done
-      - name: Validate original Compact lifecycle before ledger hardening
+      - name: Run legacy Compact regressions before ledger authority hardening
         shell: bash
         run: |
           set -euo pipefail
@@ -217,7 +234,7 @@ jobs:
           \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
           rollback;
           SQL
-      - name: Apply authoritative ledger migrations
+      - name: Apply the four authoritative-ledger migrations in order
         shell: bash
         run: |
           set -euo pipefail
@@ -235,10 +252,12 @@ jobs:
             grep -q "applying_ledger_migration=${version}_" db-evidence/ledger-migration.log
           done
       - name: Generate and compare public runtime types
+        shell: bash
         run: |
+          set -euo pipefail
           supabase gen types typescript --db-url "$DB_URL" --schema public > db-evidence/generated.types.ts
           node scripts/verify-mpgf-public-goods-compacts-generated-types.mjs db-evidence/generated.types.ts src/lib/supabase/database.types.ts | tee db-evidence/type-comparison.json
-      - name: Lint final schema and execute authoritative ledger lifecycle
+      - name: Run final authoritative-ledger lifecycle and authorization suites
         shell: bash
         run: |
           set -euo pipefail
@@ -337,11 +356,11 @@ jobs:
           assert u.hostname==os.environ['EXPECTED_HOST'] and u.port==5432 and u.path=='/postgres'
           assert os.environ['EXPECTED_QA_REF'] in (u.username or '') and bool(u.password)
           PY
-      - name: Record baseline
+      - name: Record baseline and normalize rollback suites
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p rollback-evidence/migrations
+          mkdir -p rollback-evidence/migrations compact-outflow-rollback/test-bodies
           psql "$QA_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' > rollback-evidence/before.txt
           select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
           union all select 'private_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
@@ -349,7 +368,10 @@ jobs:
           order by 1;
           SQL
           python3 - <<'PY'
+          import hashlib
+          import json
           from pathlib import Path
+
           for name in [
             '20260813163052_mpgf_public_goods_compacts.sql',
             '20260814031500_mpgf_public_goods_compacts_state_hardening.sql',
@@ -357,11 +379,77 @@ jobs:
             '20260816141501_compact_authoritative_outflow_freeze_v1.sql',
             '20260816141502_compact_authoritative_outflow_hardening_v1.sql',
             '20260816141503_compact_authoritative_outflow_replay_fix_v1.sql']:
-            src=Path('supabase/migrations')/name
-            lines=[x for x in src.read_text().splitlines() if x.strip().lower() not in {'begin;','commit;'}]
-            (Path('rollback-evidence/migrations')/name).write_text('\n'.join(lines)+'\n')
+            source = Path('supabase/migrations') / name
+            lines = [
+              line for line in source.read_text(encoding='utf-8').splitlines()
+              if line.strip().lower() not in {'begin;', 'commit;'}
+            ]
+            (Path('rollback-evidence/migrations') / name).write_text(
+              '\n'.join(lines) + '\n', encoding='utf-8'
+            )
+
+          manifest = []
+          for name in [
+            'mpgf_public_goods_compacts_lifecycle.sql',
+            'mpgf_public_goods_compacts_historical_freeze.sql',
+            'compact_authoritative_outflow_ledger_core.sql',
+            'compact_authoritative_outflow_ledger_authorization.sql']:
+            source_path = Path('supabase/tests') / name
+            source_bytes = source_path.read_bytes()
+            source_lines = source_bytes.decode('utf-8').splitlines(keepends=True)
+            controls = [
+              (index, line.strip().lower())
+              for index, line in enumerate(source_lines)
+              if line.strip().lower() in {'begin;', 'commit;', 'rollback;'}
+            ]
+            begins = [index for index, control in controls if control == 'begin;']
+            commits = [index for index, control in controls if control == 'commit;']
+            rollbacks = [index for index, control in controls if control == 'rollback;']
+            if commits:
+              raise SystemExit(
+                f'{name}: expected one rollback-only transaction envelope or an envelope-free workflow-owned suite; COMMIT is forbidden'
+              )
+            if not begins and not rollbacks:
+              body_lines = source_lines
+              envelope = 'workflow-owned'
+            elif len(begins) == 1 and len(rollbacks) == 1 and begins[0] < rollbacks[0]:
+              body_lines = [
+                line for index, line in enumerate(source_lines)
+                if index not in {begins[0], rollbacks[0]}
+              ]
+              envelope = 'source-rollback-only'
+            else:
+              raise SystemExit(
+                f'{name}: expected one rollback-only transaction envelope or an envelope-free workflow-owned suite; controls={controls}'
+              )
+            body_controls = [
+              line.strip().lower()
+              for line in body_lines
+              if line.strip().lower() in {'begin;', 'commit;', 'rollback;'}
+            ]
+            if 'begin;' in body_controls:
+              raise SystemExit(f'{name}: unexpected nested begin')
+            if 'rollback;' in body_controls:
+              raise SystemExit(f'{name}: unexpected nested rollback')
+            if 'commit;' in body_controls:
+              raise SystemExit(f'{name}: unexpected nested commit')
+            body_text = ''.join(body_lines)
+            if not body_text.endswith('\n'):
+              body_text += '\n'
+            target = Path('compact-outflow-rollback/test-bodies') / name
+            target.write_text(body_text, encoding='utf-8')
+            manifest.append({
+              'name': name,
+              'envelope': envelope,
+              'sourceSha256': hashlib.sha256(source_bytes).hexdigest(),
+              'bodySha256': hashlib.sha256(body_text.encode('utf-8')).hexdigest(),
+              'transactionControlsRemoved': len(controls),
+            })
+          Path('rollback-evidence/test-body-manifest.json').write_text(
+            json.dumps(manifest, sort_keys=True, indent=2) + '\n', encoding='utf-8'
+          )
           PY
-      - name: Execute rollback-only staged lifecycle
+      - name: Execute ordered rollback-only legacy and authoritative-ledger lifecycles
         shell: bash
         run: |
           set -euo pipefail
@@ -372,21 +460,29 @@ jobs:
           \i rollback-evidence/migrations/20260813163052_mpgf_public_goods_compacts.sql
           \i rollback-evidence/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
 
-          savepoint compact_pre_ledger_contract;
-          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
-          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
-          rollback to savepoint compact_pre_ledger_contract;
-          release savepoint compact_pre_ledger_contract;
+          savepoint legacy_compact_lifecycle;
+          \i compact-outflow-rollback/test-bodies/mpgf_public_goods_compacts_lifecycle.sql
+          \i compact-outflow-rollback/test-bodies/mpgf_public_goods_compacts_historical_freeze.sql
+          rollback to savepoint legacy_compact_lifecycle;
+          release savepoint legacy_compact_lifecycle;
 
           \i rollback-evidence/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
           \i rollback-evidence/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
           \i rollback-evidence/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
           \i rollback-evidence/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
-          \i supabase/tests/compact_authoritative_outflow_ledger_core.sql
-          \i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
+
+          savepoint authoritative_ledger_core;
+          \i compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_core.sql
+          rollback to savepoint authoritative_ledger_core;
+          release savepoint authoritative_ledger_core;
+
+          savepoint authoritative_ledger_authorization;
+          \i compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_authorization.sql
+          rollback to savepoint authoritative_ledger_authorization;
+          release savepoint authoritative_ledger_authorization;
           rollback;
           SQL
-      - name: Prove rollback and zero residue
+      - name: Prove rollback and zero fixture residue
         if: always()
         shell: bash
         run: |
