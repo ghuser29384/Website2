@@ -219,6 +219,25 @@ export function buildAuthenticatedHarnessSource(input) {
     "pooled participant funding controls and sanitized readiness evidence",
   );
 
+  source = replaceExactly(
+    source,
+    [
+      "  const refunds = await stripe.refunds.list({ payment_intent: paymentIntent.id, limit: 5 });",
+      "  const refund = refunds.data.find((candidate) => candidate.amount === obligation.amount_cents);",
+      '  assert.ok(refund, "Participant refund action did not create an exact Stripe test refund.");',
+    ].join("\n"),
+    [
+      "  let refund = null;",
+      "  for (let attempt = 0; attempt < 12 && !refund; attempt += 1) {",
+      "    const refunds = await stripe.refunds.list({ payment_intent: paymentIntent.id, limit: 5 });",
+      "    refund = refunds.data.find((candidate) => candidate.amount === obligation.amount_cents) ?? null;",
+      "    if (!refund) await new Promise((resolve) => setTimeout(resolve, 500));",
+      "  }",
+      '  assert.ok(refund, "Participant refund action did not create an exact Stripe test refund.");',
+    ].join("\n"),
+    "bounded Stripe refund observation",
+  );
+
   const primaryFundingBoundary = [
     "  const primaryFunding = await Promise.all(",
     "    primaryObligations.map((obligation, index) =>",
@@ -376,6 +395,39 @@ export function buildAuthenticatedHarnessSource(input) {
       "delete from public.trade_agreement_confirmations where agreement_version_id in (",
     ].join("\n"),
     "run-owned milestone cleanup",
+  );
+
+  source = replaceExactly(
+    source,
+    [
+      "      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);",
+      '      if (paymentIntent.status === "succeeded") {',
+      "        await stripe.refunds.create(",
+      "          { payment_intent: paymentIntentId },",
+      "          { idempotencyKey: `pooled-qa-cleanup-${runId}-${paymentIntentId}` },",
+      "        );",
+      "        stripeRefundedPaymentIntentIds.add(paymentIntentId);",
+      "      }",
+    ].join("\n"),
+    [
+      '      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ["latest_charge"] });',
+      "      const latestCharge = paymentIntent.latest_charge;",
+      '      const charge = typeof latestCharge === "string"',
+      "        ? await stripe.charges.retrieve(latestCharge)",
+      "        : latestCharge;",
+      "      if (charge && charge.amount_refunded >= charge.amount) {",
+      "        stripeRefundedPaymentIntentIds.add(paymentIntentId);",
+      "        continue;",
+      "      }",
+      '      if (paymentIntent.status === "succeeded") {',
+      "        await stripe.refunds.create(",
+      "          { payment_intent: paymentIntentId },",
+      "          { idempotencyKey: `pooled-qa-cleanup-${runId}-${paymentIntentId}` },",
+      "        );",
+      "        stripeRefundedPaymentIntentIds.add(paymentIntentId);",
+      "      }",
+    ].join("\n"),
+    "idempotent Stripe PaymentIntent cleanup",
   );
 
   const helperMarker = "async function establishAal2(user) {";

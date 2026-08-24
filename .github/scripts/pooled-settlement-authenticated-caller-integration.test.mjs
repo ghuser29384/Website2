@@ -150,6 +150,16 @@ test("participant UI generation fails closed if the pooled assertion block drift
   );
 });
 
+test("the generated harness observes participant refunds with a bounded poll and cleans already-refunded intents idempotently", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
+  assert.match(generated, /for \(let attempt = 0; attempt < 12 && !refund; attempt \+= 1\)/);
+  assert.match(generated, /stripe\.refunds\.list\(\{ payment_intent: paymentIntent\.id, limit: 5 \}\)/);
+  assert.match(generated, /setTimeout\(resolve, 500\)/);
+  assert.match(generated, /paymentIntents\.retrieve\(paymentIntentId, \{ expand: \["latest_charge"\] \}\)/);
+  assert.match(generated, /charge\.amount_refunded >= charge\.amount/);
+  assert.match(generated, /stripeRefundedPaymentIntentIds\.add\(paymentIntentId\);[\s\S]*?continue;/);
+});
+
 test("the generated harness binds signed Stripe evidence to accountable operator review before handoff", () => {
   const generated = buildAuthenticatedHarnessSource(original);
   assert.match(generated, /signed-stripe-webhook-gate\.json/);
