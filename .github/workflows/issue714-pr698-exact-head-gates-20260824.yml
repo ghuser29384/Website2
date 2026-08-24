@@ -1,0 +1,221 @@
+name: Issue 714 PR 698 synchronized exact-head gates
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-pr698-exact-head-gates-20260824.yml
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HEAD: fd38e9c6f3738abd89d88222c520ba799143a6ab
+  EXPECTED_TREE: 3bfcfc52524dcc5392fb6cbc914d62ebae423ebb
+  EXPECTED_MAIN: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
+  SPEC_BRANCH: ops/issue714-pr698-merge-diagnostic-20260817
+
+jobs:
+  exact-head-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out immutable synchronized candidate
+        uses: actions/checkout@v4
+        with:
+          ref: agent/issue-675-activation-routing-canonical-walkthrough
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Guard exact head, tree, ancestry, and migration identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/issue714 logs
+          git fetch --no-tags origin main "$TARGET_BRANCH" "$SPEC_BRANCH"
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          ACTUAL_TREE="$(git rev-parse HEAD^{tree})"
+          REMOTE_HEAD="$(git rev-parse "origin/$TARGET_BRANCH")"
+          ACTUAL_MAIN="$(git rev-parse origin/main)"
+          MERGE_BASE="$(git merge-base HEAD origin/main)"
+          AHEAD="$(git rev-list --count origin/main..HEAD)"
+          BEHIND="$(git rev-list --count HEAD..origin/main)"
+          test "$ACTUAL_HEAD" = "$EXPECTED_HEAD"
+          test "$ACTUAL_TREE" = "$EXPECTED_TREE"
+          test "$REMOTE_HEAD" = "$EXPECTED_HEAD"
+          test "$ACTUAL_MAIN" = "$EXPECTED_MAIN"
+          test "$MERGE_BASE" = "$EXPECTED_MAIN"
+          test "$BEHIND" = "0"
+          test -z "$(git status --porcelain)"
+          MIGRATION='supabase/migrations/20260814042516_account_activation_stage.sql'
+          MIGRATION_BLOB="$(git hash-object "$MIGRATION")"
+          MIGRATION_SHA256="$(sha256sum "$MIGRATION" | awk '{print $1}')"
+          CHANGED_COUNT="$(git diff --name-only origin/main...HEAD | wc -l | tr -d ' ')"
+          {
+            printf 'head=%s\n' "$ACTUAL_HEAD"
+            printf 'tree=%s\n' "$ACTUAL_TREE"
+            printf 'remote_head=%s\n' "$REMOTE_HEAD"
+            printf 'main=%s\n' "$ACTUAL_MAIN"
+            printf 'merge_base=%s\n' "$MERGE_BASE"
+            printf 'ahead=%s\nbehind=%s\n' "$AHEAD" "$BEHIND"
+            printf 'changed_files=%s\n' "$CHANGED_COUNT"
+            printf 'migration_blob=%s\n' "$MIGRATION_BLOB"
+            printf 'migration_sha256=%s\n' "$MIGRATION_SHA256"
+          } | tee artifacts/issue714/identity.txt
+          git diff --name-status origin/main...HEAD > artifacts/issue714/changed-files.txt
+          git log --format='%H %P %s' origin/main..HEAD > artifacts/issue714/commit-graph.txt
+          git diff --check origin/main...HEAD
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee logs/npm-ci.log
+
+      - name: Install non-committed exact-viewport acceptance spec
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "origin/$SPEC_BRANCH:.github/scripts/issue714-exact-head-visual.spec.ts" \
+            > tests/issue714-exact-head-visual.spec.ts
+          npx playwright test --config=playwright.release.config.ts \
+            tests/issue714-exact-head-visual.spec.ts --list --reporter=line \
+            2>&1 | tee logs/exact-viewport-discovery.log
+
+      - name: Run focused activation, auth, proxy, route, privacy, and release contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/account-activation-schema-contract.test.ts \
+            src/lib/account-activation.test.ts \
+            src/lib/auth-routes.test.ts \
+            src/auth-resolution-wiring.test.ts \
+            src/lib/auth-resolution.test.ts \
+            src/lib/supabase/proxy.test.ts \
+            src/proxy.test.ts \
+            src/walkthrough-next-canonical.test.ts \
+            src/walkthrough-private-handoff.test.ts \
+            src/lib/walkthrough-profile.test.ts \
+            src/live-now-truth-boundary.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/lib/create-interface/unified-entry-routes.test.ts \
+            src/lib/create-interface/create-ui-repairs.test.ts \
+            src/lib/release-browser-gate-contract.test.ts \
+            src/offers-density-viewport-contract.test.ts \
+            2>&1 | tee logs/focused-source-tests.log
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee logs/npm-test.log
+
+      - name: Run complete ESLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee logs/eslint.log
+
+      - name: Run standalone TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --pretty false 2>&1 | tee logs/typescript.log
+
+      - name: Run optimized production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee logs/build.log
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium 2>&1 | tee logs/playwright-install.log
+
+      - name: Run delayed and unavailable auth-resolution browser security suite
+        shell: bash
+        env:
+          CI: "true"
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.auth-resolution.config.ts \
+            --reporter=line --workers=1 \
+            2>&1 | tee logs/auth-resolution-browser.log
+
+      - name: Run complete credential-free release browser gate
+        shell: bash
+        env:
+          CI: "true"
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line --workers=1 \
+            2>&1 | tee logs/release-browser.log
+
+      - name: Run exact desktop, tablet, and mobile acceptance suite
+        shell: bash
+        env:
+          CI: "true"
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.release.config.ts \
+            tests/issue714-exact-head-visual.spec.ts \
+            --reporter=line --workers=1 \
+            2>&1 | tee logs/exact-viewport-browser.log
+
+      - name: Build privacy-safe screenshot and result manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/issue714/screenshots
+          if [ -d test-results ]; then
+            find test-results -type f -name '*.png' -print0 | while IFS= read -r -d '' file; do
+              name="$(basename "$file")"
+              parent="$(basename "$(dirname "$file")")"
+              cp "$file" "artifacts/issue714/screenshots/${parent}--${name}"
+            done
+          fi
+          find artifacts/issue714/screenshots -type f -name '*.png' -print0 \
+            | sort -z \
+            | xargs -0 -r sha256sum \
+            > artifacts/issue714/screenshot-sha256.txt
+          if grep -RIl --exclude='*.png' --exclude='*.zip' \
+              'synthetic-private-sentinel\|match_get=\|match_give=\|walkthrough_cause=' \
+              artifacts/issue714 logs test-results 2>/dev/null \
+              > artifacts/issue714/privacy-scan-matches.txt; then
+            test ! -s artifacts/issue714/privacy-scan-matches.txt
+          fi
+          printf 'candidate_head=%s\ncandidate_tree=%s\n' "$EXPECTED_HEAD" "$EXPECTED_TREE" \
+            > artifacts/issue714/result.txt
+          printf 'screenshot_count=%s\n' "$(find artifacts/issue714/screenshots -type f -name '*.png' | wc -l | tr -d ' ')" \
+            >> artifacts/issue714/result.txt
+          printf 'privacy_scan=passed\n' >> artifacts/issue714/result.txt
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-pr698-exact-head-gates-${{ github.run_id }}
+          path: |
+            artifacts/issue714
+            logs
+            test-results
+          if-no-files-found: warn
+          retention-days: 21
