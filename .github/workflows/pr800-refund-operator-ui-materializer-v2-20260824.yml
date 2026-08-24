@@ -1,0 +1,345 @@
+name: PR800 stacked refund operator and rendered review materializer v2
+
+on:
+  push:
+    branches:
+      - ops/pr800-refund-operator-ui-materializer-v2-20260824
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr800-stacked-refund-operator-ui-materializer-v2
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_BRANCH: feature/direct-donation-upgrade-refund-safety-709-clean-20260822
+      BASE_SHA: 358adf99f338f25011b6de4204d72bce4475b12f
+      BASE_TREE: b6be5280a4d9ac4e167763be1c07b94ce5e646b6
+      PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-ui-709-20260824
+      GENERATOR_PATH: .github/ops/pr800_refund_operator_ui_materialize.py
+    steps:
+      - name: Check out controller branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Freeze generator and verify exact base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/refund-operator-controller" materialization-evidence
+          test -f "$GENERATOR_PATH"
+          cp "$GENERATOR_PATH" "$RUNNER_TEMP/refund-operator-controller/materialize.py"
+          sha256sum "$GENERATOR_PATH" > materialization-evidence/controller-source-sha256.txt
+
+          git fetch --no-tags origin \
+            "+refs/heads/$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH"
+          test "$(git rev-parse refs/remotes/origin/$BASE_BRANCH)" = "$BASE_SHA"
+          test "$(git rev-parse "$BASE_SHA^{tree}")" = "$BASE_TREE"
+          test -z "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH")"
+
+      - name: Create clean stacked product workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$BASE_SHA"
+          git switch -c "$PRODUCT_BRANCH"
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$BASE_TREE"
+          test -z "$(git status --porcelain)"
+
+      - name: Generate bounded operator, rendering, QA, and review sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          generator="$RUNNER_TEMP/refund-operator-controller/materialize.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "refund-operator-controller/materialize.py"
+          text = path.read_text()
+          old = '''for candidate in route_root.rglob("page.tsx"):
+              relative_parts = candidate.relative_to(route_root).parts
+              if any(part.startswith("[") and part.endswith("]") for part in relative_parts[:-1]):
+                  detail_pages.append(candidate)
+          '''
+          new = '''for candidate in route_root.rglob("page.tsx"):
+              if candidate.parent.name.startswith("[") and candidate.parent.name.endswith("]"):
+                  detail_pages.append(candidate)
+          '''
+          if text.count(old) != 1:
+              raise SystemExit("dynamic-detail route refinement anchor changed")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          python3 "$generator"
+          cp .refund-operator-generated-manifest.json \
+            materialization-evidence/generated-manifest.json
+          rm .refund-operator-generated-manifest.json
+          git diff --check
+          git status --short > materialization-evidence/generated-status.txt
+          test -s materialization-evidence/generated-status.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci > materialization-evidence/npm-ci.log 2>&1
+
+      - name: Run new refund operator and rendering contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/direct-donation-upgrade-refund-input.test.ts \
+            src/lib/direct-donation-upgrade-refund-operator-contract.test.ts \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > materialization-evidence/focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test > materialization-evidence/repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit > materialization-evidence/typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet > materialization-evidence/lint.log 2>&1
+
+      - name: Build with every money rail and QA fixture disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -euo pipefail
+          npm run build > materialization-evidence/build.log 2>&1
+
+      - name: Install Chromium for exact rendered review evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium \
+            > materialization-evidence/playwright-install.log 2>&1
+
+      - name: Capture fail-closed desktop and mobile review inventory
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3100
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          BASE_URL: http://127.0.0.1:3100
+          OUTPUT_DIR: docs/provider-review/refund-screenshots
+        run: |
+          set -euo pipefail
+          rm -rf .next
+          ./node_modules/.bin/next dev \
+            --hostname 127.0.0.1 \
+            --port 3100 \
+            > materialization-evidence/qa-server.log 2>&1 &
+          server_pid=$!
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          ready=false
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:3100/qa/direct-donation-upgrade-refunds \
+              > /dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+          node scripts/capture-direct-donation-upgrade-refund-review.mjs \
+            > materialization-evidence/screenshot-capture.log 2>&1
+          test -s docs/provider-review/refund-screenshots/admin-and-participant-desktop.png
+          test -s docs/provider-review/refund-screenshots/admin-and-participant-mobile.png
+          file docs/provider-review/refund-screenshots/*.png \
+            > materialization-evidence/screenshot-file-types.txt
+          sha256sum docs/provider-review/refund-screenshots/*.png \
+            > materialization-evidence/screenshot-sha256.txt
+          cleanup
+          trap - EXIT
+
+      - name: Verify exact product scope, review boundaries, and residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("materialization-evidence/generated-manifest.json").read_text()
+          )
+          expected = set(manifest["created_paths"])
+          expected.update({
+              "docs/provider-review/refund-screenshots/admin-and-participant-desktop.png",
+              "docs/provider-review/refund-screenshots/admin-and-participant-mobile.png",
+          })
+          actual = set(
+              subprocess.check_output(
+                  ["git", "diff", "--name-only", "HEAD"], text=True
+              ).splitlines()
+          )
+          if actual != expected:
+              raise SystemExit(
+                  "unexpected product scope\nexpected="
+                  + "\n".join(sorted(expected))
+                  + "\nactual="
+                  + "\n".join(sorted(actual))
+              )
+          Path("materialization-evidence/expected-product-paths.txt").write_text(
+              "\n".join(sorted(expected)) + "\n"
+          )
+          Path("materialization-evidence/actual-product-paths.txt").write_text(
+              "\n".join(sorted(actual)) + "\n"
+          )
+          PY
+
+          git diff --check
+          test -z "$(git diff --name-only | grep -E '(^|/)(\.github|package-lock\.json|package\.json)$' || true)"
+          test -z "$(git status --porcelain | grep -E '^\?\?' || true)"
+
+          mapfile -t paths < materialization-evidence/actual-product-paths.txt
+          if grep -nH -E \
+            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            "${paths[@]}"; then
+            echo 'Refusing product scope containing suspected credential material.' >&2
+            exit 1
+          fi
+          if grep -nH -E \
+            '(donor_email|donor_name|card_number|bank_account|raw_payload)' \
+            src/lib/direct-donation-upgrade-refund-server.ts \
+            src/app/admin/donation-upgrade-refunds/actions.ts; then
+            echo 'Refusing new operator code containing forbidden persisted PII fields.' >&2
+            exit 1
+          fi
+
+          git diff --stat > materialization-evidence/product-diff-stat.txt
+          git diff --numstat > materialization-evidence/product-diff-numstat.txt
+          sha256sum "${paths[@]}" > materialization-evidence/product-source-sha256.txt
+
+      - name: Commit and publish exact stacked candidate
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$BASE_BRANCH" | awk '{print $1}')" = "$BASE_SHA"
+          test -z "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH")"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          mapfile -t paths < materialization-evidence/actual-product-paths.txt
+          git add -- "${paths[@]}"
+          git diff --cached --name-only | sort \
+            > materialization-evidence/staged-product-paths.txt
+          diff -u \
+            materialization-evidence/expected-product-paths.txt \
+            materialization-evidence/staged-product-paths.txt
+          git commit -m 'Add AAL2 refund operator and truthful refund rendering'
+          product_sha="$(git rev-parse HEAD)"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+          printf 'base_sha=%s\nbase_tree=%s\nproduct_sha=%s\nproduct_tree=%s\n' \
+            "$BASE_SHA" "$BASE_TREE" "$product_sha" "$product_tree" \
+            | tee materialization-evidence/product-identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Record completed bounded tranche
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.publish.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
+        run: |
+          set -euo pipefail
+          body="<!-- issue709-refund-operator-ui-materialized-v2 -->
+          ## Issue #709 AAL2 refund-operator and rendered-review tranche materialized
+
+          - exact stacked base: \`$BASE_SHA\`
+          - exact product head: \`$PRODUCT_SHA\`
+          - exact product tree: \`$PRODUCT_TREE\`
+          - product branch: \`$PRODUCT_BRANCH\`
+          - materialization run: \`$GITHUB_RUN_ID\`
+          - focused and complete tests, TypeScript, ESLint, disabled-rail build, source-contract, scope, credential, and residue gates: passed
+          - fail-closed desktop and mobile synthetic review screenshots: captured and hashed
+
+          The tranche adds an allowlisted AAL2/MFA administrator recording action; exact immutable-evidence comparison; server-memory hashing of raw charge and evidence references; service-role-only invocation of the already-adjudicated reversal RPC; historical-versus-current participant rendering; idempotent notification contract coverage; and a production-inaccessible, submission-disabled rendered review inventory.
+
+          No provider request, webhook registration or invocation, checkout, donation, payment, actual refund, persistent database migration, deployment, alias movement, credential mutation, feature activation, custody, transfer, payout, email, brand submission, merge, or production change occurred."
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Write explicit non-action record
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p materialization-evidence
+          printf '%s\n' \
+            'providerRequestAttempted=false' \
+            'webhookMutationAttempted=false' \
+            'checkoutAttempted=false' \
+            'donationAttempted=false' \
+            'paymentAttempted=false' \
+            'actualRefundAttempted=false' \
+            'databaseMigrationAttempted=false' \
+            'deploymentAttempted=false' \
+            'credentialMutationAttempted=false' \
+            'emailSent=false' \
+            'brandSubmissionSent=false' \
+            'productionChanged=false' \
+            > materialization-evidence/non-actions.txt
+
+      - name: Upload sanitized materialization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue709-refund-operator-ui-materialization-v2-${{ github.run_id }}
+          path: materialization-evidence/
+          if-no-files-found: error
+          retention-days: 30
