@@ -1,0 +1,376 @@
+name: PR 737 one-use fail-closed phase-order repair
+
+on:
+  push:
+    branches:
+      - feature/compact-authoritative-outflow-ledger-v1-20260816
+    paths:
+      - .github/workflows/pr737-fail-closed-phase-order-repair-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr737-fail-closed-phase-order-repair-once
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PARENT_SHA: 8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  CONTROLLER_PATH: .github/workflows/pr737-fail-closed-phase-order-repair-once.yml
+  LEDGER_WORKFLOW: .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+  ADJACENT_WORKFLOW: .github/workflows/mpgf-public-goods-compacts-qa.yml
+  PHASE_TEST: src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact one-use controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Verify bounded lineage and remote ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
+          test "$(git diff --name-only HEAD^...HEAD)" = "$CONTROLLER_PATH"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$(git rev-parse HEAD)"
+
+      - name: Materialize exact permanent repair and remove controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          ledger_path = Path(os.environ["LEDGER_WORKFLOW"])
+          adjacent_path = Path(os.environ["ADJACENT_WORKFLOW"])
+          test_path = Path(os.environ["PHASE_TEST"])
+
+          ledger = ledger_path.read_text(encoding="utf-8")
+          adjacent = adjacent_path.read_text(encoding="utf-8")
+          phase_test = test_path.read_text(encoding="utf-8")
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one anchor, found {count}")
+              return text.replace(old, new, 1)
+
+          # The source job previously piped every causal gate through tee without
+          # pipefail, allowing a failing test process to report success. Make each
+          # pipeline explicitly fail closed.
+          ledger = replace_once(
+              ledger,
+              """      - name: Focused contracts
+                run: |
+                  node --import tsx --test \\
+""",
+              """      - name: Focused contracts
+                shell: bash
+                run: |
+                  set -euo pipefail
+                  node --import tsx --test \\
+""",
+              "focused contracts pipefail",
+          )
+
+          single_line_steps = [
+              (
+                  "Complete repository tests",
+                  "npm test 2>&1 | tee repository-tests.log",
+              ),
+              (
+                  "ESLint",
+                  "npm run lint -- --quiet 2>&1 | tee eslint.log",
+              ),
+              (
+                  "Strict TypeScript",
+                  "npx tsc --noEmit 2>&1 | tee typescript.log",
+              ),
+              (
+                  "Production build",
+                  "npm run build 2>&1 | tee build.log",
+              ),
+              (
+                  "Four-viewpoint browser contract",
+                  "npx playwright test tests/mpgf-public-goods-compacts.spec.ts --workers=1 --reporter=line 2>&1 | tee playwright.log",
+              ),
+          ]
+          for name, command in single_line_steps:
+              ledger = replace_once(
+                  ledger,
+                  f"""      - name: {name}
+                run: {command}
+""",
+                  f"""      - name: {name}
+                shell: bash
+                run: |
+                  set -euo pipefail
+                  {command}
+""",
+                  f"{name} pipefail",
+              )
+
+          ledger = replace_once(
+              ledger,
+              """      - name: Generate and compare public runtime types
+                run: |
+                  supabase gen types typescript --db-url \"$DB_URL\" --schema public > db-evidence/generated.types.ts
+""",
+              """      - name: Generate and compare public runtime types
+                shell: bash
+                run: |
+                  set -euo pipefail
+                  supabase gen types typescript --db-url \"$DB_URL\" --schema public > db-evidence/generated.types.ts
+""",
+              "generated types pipefail",
+          )
+
+          # Align durable phase labels with the executable ordering contract.
+          label_replacements = [
+              (
+                  "      - name: Apply pre-ledger production-compatible migrations\n",
+                  "      - name: Apply baseline and every production-compatible pre-ledger migration\n",
+              ),
+              (
+                  "      - name: Validate original Compact lifecycle before ledger hardening\n",
+                  "      - name: Run legacy Compact regressions before ledger authority hardening\n",
+              ),
+              (
+                  "      - name: Apply authoritative ledger migrations\n",
+                  "      - name: Apply the four authoritative-ledger migrations in order\n",
+              ),
+              (
+                  "      - name: Lint final schema and execute authoritative ledger lifecycle\n",
+                  "      - name: Run final authoritative-ledger lifecycle and authorization suites\n",
+              ),
+              (
+                  "      - name: Prove rollback and zero residue\n",
+                  "      - name: Prove rollback and zero fixture residue\n",
+              ),
+          ]
+          for old, new in label_replacements:
+              ledger = replace_once(ledger, old, new, old.strip())
+
+          # Replace the rollback preparation with a deterministic normalizer. The
+          # current suites are workflow-owned and envelope-free; legacy suites with
+          # exactly one outer BEGIN/ROLLBACK remain accepted. Any COMMIT, partial
+          # envelope, or nested transaction control fails closed.
+          ledger = replace_once(
+              ledger,
+              "          mkdir -p rollback-evidence/migrations\n",
+              "          mkdir -p rollback-evidence/migrations compact-outflow-rollback/test-bodies\n",
+              "rollback directories",
+          )
+          prep_start = ledger.index(
+              "          python3 - <<'PY'\n          from pathlib import Path\n          for name in [\n",
+              ledger.index("      - name: Record baseline\n"),
+          )
+          lifecycle_marker = "      - name: Execute rollback-only staged lifecycle\n"
+          prep_end = ledger.index(lifecycle_marker, prep_start)
+          prep_replacement = r'''          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          migration_names = [
+            '20260813163052_mpgf_public_goods_compacts.sql',
+            '20260814031500_mpgf_public_goods_compacts_state_hardening.sql',
+            '20260816141500_compact_authoritative_outflow_ledger_v1.sql',
+            '20260816141501_compact_authoritative_outflow_freeze_v1.sql',
+            '20260816141502_compact_authoritative_outflow_hardening_v1.sql',
+            '20260816141503_compact_authoritative_outflow_replay_fix_v1.sql',
+          ]
+          for name in migration_names:
+            source = Path('supabase/migrations') / name
+            lines = [
+              line for line in source.read_text(encoding='utf-8').splitlines()
+              if line.strip().lower() not in {'begin;', 'commit;'}
+            ]
+            (Path('rollback-evidence/migrations') / name).write_text(
+              '\n'.join(lines) + '\n',
+              encoding='utf-8',
+            )
+
+          suite_names = [
+            'mpgf_public_goods_compacts_lifecycle.sql',
+            'mpgf_public_goods_compacts_historical_freeze.sql',
+            'compact_authoritative_outflow_ledger_core.sql',
+            'compact_authoritative_outflow_ledger_authorization.sql',
+          ]
+          manifest = []
+          for name in suite_names:
+            source_path = Path('supabase/tests') / name
+            source_bytes = source_path.read_bytes()
+            source_text = source_bytes.decode('utf-8')
+            source_lines = source_text.splitlines(keepends=True)
+            controls = [
+              (index, line.strip().lower())
+              for index, line in enumerate(source_lines)
+              if line.strip().lower() in {'begin;', 'commit;', 'rollback;'}
+            ]
+            begins = [index for index, control in controls if control == 'begin;']
+            commits = [index for index, control in controls if control == 'commit;']
+            rollbacks = [index for index, control in controls if control == 'rollback;']
+
+            if commits:
+              raise SystemExit(
+                f'{name}: expected one rollback-only transaction envelope or an '
+                'envelope-free workflow-owned suite; COMMIT is forbidden'
+              )
+            if not begins and not rollbacks:
+              body_lines = source_lines
+              envelope = 'workflow-owned'
+            elif len(begins) == 1 and len(rollbacks) == 1 and begins[0] < rollbacks[0]:
+              body_lines = [
+                line for index, line in enumerate(source_lines)
+                if index not in {begins[0], rollbacks[0]}
+              ]
+              envelope = 'source-rollback-only'
+            else:
+              raise SystemExit(
+                f'{name}: expected one rollback-only transaction envelope or an '
+                f'envelope-free workflow-owned suite; controls={controls}'
+              )
+
+            body_controls = [
+              line.strip().lower()
+              for line in body_lines
+              if line.strip().lower() in {'begin;', 'commit;', 'rollback;'}
+            ]
+            if 'begin;' in body_controls:
+              raise SystemExit(f'{name}: unexpected nested begin')
+            if 'rollback;' in body_controls:
+              raise SystemExit(f'{name}: unexpected nested rollback')
+            if 'commit;' in body_controls:
+              raise SystemExit(f'{name}: unexpected nested commit')
+
+            body_text = ''.join(body_lines)
+            if not body_text.endswith('\n'):
+              body_text += '\n'
+            target_path = Path('compact-outflow-rollback/test-bodies') / name
+            target_path.write_text(body_text, encoding='utf-8')
+            manifest.append({
+              'name': name,
+              'envelope': envelope,
+              'sourceSha256': hashlib.sha256(source_bytes).hexdigest(),
+              'bodySha256': hashlib.sha256(body_text.encode('utf-8')).hexdigest(),
+              'transactionControlsRemoved': len(controls),
+            })
+
+          Path('rollback-evidence/test-body-manifest.json').write_text(
+            json.dumps(manifest, sort_keys=True, indent=2) + '\n',
+            encoding='utf-8',
+          )
+          PY
+'''
+          ledger = ledger[:prep_start] + prep_replacement + ledger[prep_end:]
+
+          lifecycle_start = ledger.index(lifecycle_marker)
+          cleanup_marker = "      - name: Prove rollback and zero fixture residue\n"
+          lifecycle_end = ledger.index(cleanup_marker, lifecycle_start)
+          lifecycle_replacement = r'''      - name: Execute ordered rollback-only legacy and authoritative-ledger lifecycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee rollback-evidence/lifecycle.log
+          begin;
+          \i supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
+          \i supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
+          \i rollback-evidence/migrations/20260813163052_mpgf_public_goods_compacts.sql
+          \i rollback-evidence/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
+
+          savepoint legacy_compact_lifecycle;
+          \i compact-outflow-rollback/test-bodies/mpgf_public_goods_compacts_lifecycle.sql
+          \i compact-outflow-rollback/test-bodies/mpgf_public_goods_compacts_historical_freeze.sql
+          rollback to savepoint legacy_compact_lifecycle;
+          release savepoint legacy_compact_lifecycle;
+
+          \i rollback-evidence/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
+          \i rollback-evidence/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
+          \i rollback-evidence/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
+          \i rollback-evidence/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
+
+          savepoint authoritative_ledger_core;
+          \i compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_core.sql
+          rollback to savepoint authoritative_ledger_core;
+          release savepoint authoritative_ledger_core;
+
+          savepoint authoritative_ledger_authorization;
+          \i compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_authorization.sql
+          rollback to savepoint authoritative_ledger_authorization;
+          release savepoint authoritative_ledger_authorization;
+          rollback;
+          SQL
+'''
+          ledger = ledger[:lifecycle_start] + lifecycle_replacement + ledger[lifecycle_end:]
+
+          # Restore the durable adjacent source-contract marker. The prior head added
+          # the word "test", making the source disagree with its own contract.
+          adjacent = replace_once(
+              adjacent,
+              "      - name: Run genuinely concurrent readiness freeze test before ledger authority hardening\n",
+              "      - name: Run genuinely concurrent readiness freeze before ledger authority hardening\n",
+              "adjacent concurrency marker",
+          )
+
+          regression = r'''
+
+test("piped validation gates propagate failures through tee", () => {
+  for (const marker of [
+    "Focused contracts",
+    "Complete repository tests",
+    "ESLint",
+    "Strict TypeScript",
+    "Production build",
+    "Four-viewpoint browser contract",
+    "Generate and compare public runtime types",
+  ]) {
+    const start = position(marker);
+    const next = workflow.indexOf("\n      - name:", start + marker.length);
+    const body = workflow.slice(start, next === -1 ? workflow.length : next);
+    assert.match(body, /shell: bash/, `${marker} must use the Bash shell`);
+    assert.match(
+      body,
+      /set -euo pipefail/,
+      `${marker} must propagate a failing command through tee`,
+    );
+  }
+});
+'''
+          if 'test("piped validation gates propagate failures through tee"' in phase_test:
+              raise SystemExit('pipefail regression test already exists unexpectedly')
+          phase_test = phase_test.rstrip() + regression
+
+          ledger_path.write_text(ledger, encoding="utf-8")
+          adjacent_path.write_text(adjacent, encoding="utf-8")
+          test_path.write_text(phase_test, encoding="utf-8")
+          PY
+
+          rm "$CONTROLLER_PATH"
+          git diff --check
+          git diff --name-only "$EXPECTED_PARENT_SHA" | sort > /tmp/changed.txt
+          cat > /tmp/expected.txt <<'FILES'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          .github/workflows/mpgf-public-goods-compacts-qa.yml
+          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          FILES
+          sort -o /tmp/expected.txt /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/changed.txt
+
+          npm ci
+          node --import tsx --test "$PHASE_TEST"
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$LEDGER_WORKFLOW" "$ADJACENT_WORKFLOW" "$PHASE_TEST" "$CONTROLLER_PATH"
+          git commit -m "ci: make Compact phase-order validation fail closed"
+          git push origin "HEAD:$TARGET_BRANCH"
