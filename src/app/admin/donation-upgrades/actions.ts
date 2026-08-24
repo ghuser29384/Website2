@@ -19,6 +19,10 @@ const ALLOWED_EVIDENCE_SOURCES = new Set([
   "every_org_dashboard",
   "every_org_support",
 ]);
+const REFUND_RECORDABLE_OBLIGATION_STATUSES = new Set([
+  "verified",
+  "provider_reversed",
+]);
 
 class PublicProviderRefundError extends Error {}
 
@@ -164,9 +168,11 @@ export async function recordDirectDonationUpgradeProviderRefundAction(
     }
 
     const obligation = obligationData as Record<string, unknown>;
-    if (obligation.status !== "verified") {
+    if (
+      !REFUND_RECORDABLE_OBLIGATION_STATUSES.has(String(obligation.status ?? ""))
+    ) {
       throw new PublicProviderRefundError(
-        "Only a currently verified obligation can receive a first provider-refund record.",
+        "Only a verified obligation or an exact replay of a provider-reversed obligation can be recorded.",
       );
     }
     if (obligation.environment !== config.environment) {
