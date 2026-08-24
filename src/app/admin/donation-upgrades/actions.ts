@@ -116,6 +116,11 @@ export async function recordDirectDonationUpgradeProviderRefundAction(
         "Refund evidence must come from the Every.org dashboard or Every.org support.",
       );
     }
+    if (read(formData, "authority_confirmation") !== "yes") {
+      throw new PublicProviderRefundError(
+        "Confirm that the report is based on authoritative Every.org evidence and records rather than executes a refund.",
+      );
+    }
 
     const evidenceReference = required(formData, "evidence_reference");
     if (evidenceReference.length < 8 || evidenceReference.length > 500) {
@@ -223,7 +228,8 @@ export async function recordDirectDonationUpgradeProviderRefundAction(
       );
     }
 
-    const response = firstRow<Record<string, unknown>>(result.data as any) ??
+    const response =
+      firstRow<Record<string, unknown>>(result.data as any) ??
       (result.data as Record<string, unknown> | null);
     const outcome = String(response?.outcome ?? "");
     if (outcome === "needs_review") {
