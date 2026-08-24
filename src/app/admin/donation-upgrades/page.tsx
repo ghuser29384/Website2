@@ -16,6 +16,7 @@ import {
   type DirectDonationUpgradeOfferRow,
 } from "@/lib/direct-donation-upgrade";
 import { getFormMessage } from "@/lib/form-state";
+import { providerRefundRenderedQaAdminSnapshot } from "@/lib/provider-refund-rendered-qa";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -36,6 +37,17 @@ function statusLabel(value: unknown) {
 }
 
 async function loadSnapshot(environment: "staging" | "live" | null) {
+  const renderedQaSnapshot = providerRefundRenderedQaAdminSnapshot(environment);
+  if (renderedQaSnapshot) {
+    return renderedQaSnapshot as {
+      offers: DirectDonationUpgradeOfferRow[];
+      obligations: DirectDonationUpgradeObligationRow[];
+      credits: any[];
+      reversals: any[];
+      auditEvents: any[];
+      errors: string[];
+    };
+  }
   if (!environment) {
     return {
       offers: [],
