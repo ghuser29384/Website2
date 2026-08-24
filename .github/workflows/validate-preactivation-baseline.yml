@@ -8,13 +8,21 @@ on:
     paths:
       - supabase/baseline/pre_activation/**
       - src/lib/database-preactivation-baseline-contract.test.ts
+      - src/lib/database-preactivation-privilege-reconciliation-contract.test.ts
+      - .github/workflows/validate-preactivation-baseline.yml
   pull_request:
     paths:
       - supabase/baseline/pre_activation/**
       - scripts/database/validate-preactivation-baseline.sh
       - scripts/database/preactivation-catalog.sql
+      - scripts/database/preactivation-policy-equivalence.sql
+      - scripts/database/preactivation-policy-probes.sql
+      - scripts/database/preactivation-privilege-reconciliation.sql
+      - scripts/database/preactivation-sequence-privilege-reconciliation.sql
       - src/lib/database-preactivation-baseline-contract.test.ts
+      - src/lib/database-preactivation-privilege-reconciliation-contract.test.ts
       - docs/database/preactivation-schema-baseline.md
+      - .github/workflows/validate-preactivation-baseline.yml
 
 permissions:
   contents: read
@@ -54,8 +62,11 @@ jobs:
         run: |
           set -euo pipefail
           node --import tsx --test \
-            src/lib/database-preactivation-baseline-contract.test.ts
-          npx eslint src/lib/database-preactivation-baseline-contract.test.ts
+            src/lib/database-preactivation-baseline-contract.test.ts \
+            src/lib/database-preactivation-privilege-reconciliation-contract.test.ts
+          npx eslint \
+            src/lib/database-preactivation-baseline-contract.test.ts \
+            src/lib/database-preactivation-privilege-reconciliation-contract.test.ts
           git diff --check
 
       - name: Build the pre-activation database in a clean local Supabase stack
