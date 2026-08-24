@@ -1,0 +1,44 @@
+name: PR800 refund operator UI materializer v3 snapshot
+
+on:
+  push:
+    branches:
+      - ops/pr800-adjudication-observer-20260822
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr800-refund-operator-ui-materializer-20260823.yml
+      TARGET_BRANCH: ops/pr800-refund-operator-ui-materializer-20260823
+    steps:
+      - name: Record latest v3 materializer state
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+            -f branch="$TARGET_BRANCH" \
+            -f per_page=20)"
+          latest="$(jq -c '.workflow_runs | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+          if [[ -z "$latest" ]]; then
+            body='<!-- pr800-refund-operator-ui-materializer-v3-snapshot -->
+          Refund operator UI materializer v3: no run found.'
+          else
+            run_id="$(jq -r '.id' <<<"$latest")"
+            status="$(jq -r '.status' <<<"$latest")"
+            conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+            head_sha="$(jq -r '.head_sha' <<<"$latest")"
+            html_url="$(jq -r '.html_url' <<<"$latest")"
+            body="<!-- pr800-refund-operator-ui-materializer-v3-snapshot -->
+          Refund operator UI materializer v3: run \`$run_id\`, status \`$status\`, conclusion \`$conclusion\`, head \`$head_sha\`: $html_url"
+          fi
+          gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
