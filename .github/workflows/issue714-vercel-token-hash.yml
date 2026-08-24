@@ -1,0 +1,26 @@
+name: Issue 714 one-way Vercel token verifier hash
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-vercel-token-hash.yml
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+
+jobs:
+  hash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Emit only the one-way verifier digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          printf '%s' "$VERCEL_TOKEN_VALUE" | sha256sum | awk '{print "vercel_token_sha256=" $1}'
