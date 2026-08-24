@@ -6,6 +6,11 @@ on:
       - ops/pr737-ledger-isolated-qa-uat-r2-20260824
     paths:
       - ".github/workflows/pr737-ledger-uat-r2-materializer-20260824.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr737-ledger-uat-r2-materializer-20260824.yml"
 
 permissions:
   contents: write
@@ -51,7 +56,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "$TARGET_BRANCH"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            test "$GITHUB_HEAD_REF" = "$TARGET_BRANCH"
+          else
+            test "$GITHUB_REF_NAME" = "$TARGET_BRANCH"
+          fi
           test -z "$(git status --porcelain)"
           test "$(git hash-object "$UAT_WORKFLOW")" = "$EXPECTED_OLD_UAT_BLOB"
           remote_candidate="$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
