@@ -43,40 +43,28 @@ async function obligationIdFromPaymentIntent(paymentIntentId: string, livemode: 
   return String(data?.id ?? "");
 }
 
-async function passSignedWebhookGate(livemode: boolean) {
+async function verifySignedWebhookEvidence(input: {
+  event: Stripe.Event;
+  rawBodyHash: string;
+}) {
   const supabase = createServiceClient() as any;
-  const environment = livemode ? "live" : "test";
-  const gateKey = "stripe_signed_webhook";
-  const { data: existing, error: lookupError } = await supabase
-    .from("trade_donation_pool_gate_status")
-    .select("environment,gate_key")
-    .eq("environment", environment)
-    .eq("gate_key", gateKey)
-    .maybeSingle();
-  if (lookupError) {
-    throw new Error(`The signed Stripe ${environment} webhook gate could not be loaded: ${lookupError.message}`);
-  }
-  if (!existing) {
-    throw new Error(`The signed Stripe ${environment} webhook gate row was unavailable.`);
-  }
-  const timestamp = new Date().toISOString();
   const { data, error } = await supabase
-    .from("trade_donation_pool_gate_status")
-    .upsert({
-      environment,
-      gate_key: gateKey,
-      status: "passed",
-      notes: `A signed ${livemode ? "live" : "test"} Stripe webhook was processed by the pooled-settlement handler.`,
-      approved_at: timestamp,
-      updated_at: timestamp,
-    }, { onConflict: "environment,gate_key" })
-    .select("environment,gate_key,status")
+    .from("trade_donation_pool_stripe_events")
+    .select("stripe_event_id,event_type,livemode,payload_hash,signature_verified")
+    .eq("stripe_event_id", input.event.id)
     .maybeSingle();
   if (error) {
-    throw new Error(`The signed Stripe ${environment} webhook gate could not be persisted: ${error.message}`);
+    throw new Error(`The signed Stripe webhook evidence could not be loaded: ${error.message}`);
   }
-  if (!data || data.status !== "passed") {
-    throw new Error(`The signed Stripe ${environment} webhook gate did not persist its passed state.`);
+  if (
+    !data ||
+    data.stripe_event_id !== input.event.id ||
+    data.event_type !== input.event.type ||
+    data.livemode !== input.event.livemode ||
+    data.payload_hash !== input.rawBodyHash ||
+    data.signature_verified !== true
+  ) {
+    throw new Error("The signed Stripe webhook evidence did not persist its exact verified event identity.");
   }
 }
 
@@ -120,7 +108,7 @@ async function recordSuccess(input: {
   const result = Array.isArray(data) ? data[0] : data;
   const status = String(result?.status ?? "processed");
   if (["funded", "bundled", "already_funded"].includes(status)) {
-    await passSignedWebhookGate(input.event.livemode);
+    await verifySignedWebhookEvidence(input);
   }
   return {
     status,
@@ -153,7 +141,7 @@ async function recordFailure(input: {
   const result = Array.isArray(data) ? data[0] : data;
   const status = String(result?.status ?? "processed");
   if (["checkout_abandoned", "payment_failed"].includes(status)) {
-    await passSignedWebhookGate(input.event.livemode);
+    await verifySignedWebhookEvidence(input);
   }
   return {
     status,
@@ -191,7 +179,7 @@ async function recordRefundOrDispute(input: {
   const result = Array.isArray(data) ? data[0] : data;
   const status = String(result?.status ?? "processed");
   if (["refunded", "disputed", "needs_review"].includes(status)) {
-    await passSignedWebhookGate(input.event.livemode);
+    await verifySignedWebhookEvidence(input);
   }
   return {
     status,
