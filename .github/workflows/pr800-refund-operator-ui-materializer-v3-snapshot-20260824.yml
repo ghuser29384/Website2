@@ -1,4 +1,4 @@
-name: PR800 refund operator UI materializer v3 snapshot
+name: PR800 refund operator UI materializer v4 observer
 
 on:
   push:
@@ -11,34 +11,61 @@ permissions:
   contents: read
   issues: write
 
+concurrency:
+  group: pr800-refund-operator-ui-materializer-v4-observer
+  cancel-in-progress: true
+
 jobs:
-  snapshot:
+  observe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 100
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: pr800-refund-operator-ui-materializer-20260823.yml
       TARGET_BRANCH: ops/pr800-refund-operator-ui-materializer-20260823
+      TARGET_HEAD: 3aa067ddf4d36315a44e55c7583335b171601f93
     steps:
-      - name: Record latest v3 materializer state
+      - name: Observe exact v4 materializer run to completion
         shell: bash
         run: |
           set -euo pipefail
-          response="$(gh api --method GET \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
-            -f branch="$TARGET_BRANCH" \
-            -f per_page=20)"
-          latest="$(jq -c '.workflow_runs | sort_by(.created_at) | reverse | .[0] // empty' <<<"$response")"
+          latest=''
+          for attempt in $(seq 1 180); do
+            response="$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs" \
+              -f branch="$TARGET_BRANCH" \
+              -f per_page=30)"
+            latest="$(jq -c \
+              --arg sha "$TARGET_HEAD" \
+              '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | reverse | .[0] // empty' \
+              <<<"$response")"
+            if [[ -n "$latest" ]]; then
+              status="$(jq -r '.status' <<<"$latest")"
+              if [[ "$status" = completed ]]; then
+                break
+              fi
+            fi
+            sleep 30
+          done
+
           if [[ -z "$latest" ]]; then
-            body='<!-- pr800-refund-operator-ui-materializer-v3-snapshot -->
-          Refund operator UI materializer v3: no run found.'
-          else
-            run_id="$(jq -r '.id' <<<"$latest")"
-            status="$(jq -r '.status' <<<"$latest")"
-            conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
-            head_sha="$(jq -r '.head_sha' <<<"$latest")"
-            html_url="$(jq -r '.html_url' <<<"$latest")"
-            body="<!-- pr800-refund-operator-ui-materializer-v3-snapshot -->
-          Refund operator UI materializer v3: run \`$run_id\`, status \`$status\`, conclusion \`$conclusion\`, head \`$head_sha\`: $html_url"
+            gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body '<!-- pr800-refund-operator-ui-materializer-v4-observer -->
+          No exact refund operator UI materializer v4 run was found.'
+            exit 1
           fi
+
+          run_id="$(jq -r '.id' <<<"$latest")"
+          status="$(jq -r '.status' <<<"$latest")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          html_url="$(jq -r '.html_url' <<<"$latest")"
+          body="<!-- pr800-refund-operator-ui-materializer-v4-observer -->
+          ## PR #800 refund operator UI materializer v4 observer
+
+          - run: \`$run_id\`
+          - status: \`$status\`
+          - conclusion: \`$conclusion\`
+          - controller head: \`$TARGET_HEAD\`
+          - run page: $html_url"
           gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$status" = completed
+          test "$conclusion" = success
