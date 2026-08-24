@@ -110,6 +110,28 @@ export function buildAuthenticatedHarnessSource(input) {
     "remaining canonical participant and operator content roots",
   );
 
+  const frozenParticipantBlock = [
+    '  await expectText(page.locator("#main-content"), /immutable provider bundle|frozen bundle/i);',
+    '  assert.equal(await page.getByRole("button", { name: "Refund before bundle freeze" }).count(), 0);',
+    '  assert.equal(await page.getByRole("button", { name: "Cancel before verified funding" }).count(), 0);',
+    "  await assertNoHorizontalOverflow(page);",
+    '  await screenshot(page, "participant-mobile-frozen.png");',
+  ].join("\n");
+  source = replaceExactly(
+    source,
+    frozenParticipantBlock,
+    [
+      '  const frozenStage = page.locator("#main-content");',
+      "  await assertNoHorizontalOverflow(page);",
+      '  await screenshot(page, "participant-mobile-frozen.png");',
+      "  await expectText(frozenStage, /Bundle Frozen/i);",
+      "  await expectText(frozenStage, /This allocation is immutable/i);",
+      '  assert.equal(await page.getByRole("button", { name: "Refund before bundle freeze" }).count(), 0);',
+      '  assert.equal(await page.getByRole("button", { name: "Cancel before verified funding" }).count(), 0);',
+    ].join("\n"),
+    "frozen participant semantic assertions and pre-assertion screenshot",
+  );
+
   const participantUiBlock = [
     "  await expectText(stage, /The pooled donation is the activation gate/i);",
     "  await expectText(stage, /presumptive provider-facing donor of record/i);",

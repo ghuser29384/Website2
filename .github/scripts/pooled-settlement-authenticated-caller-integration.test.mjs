@@ -55,6 +55,29 @@ test("content-root generation fails closed if any later participant or operator 
   );
 });
 
+test("the frozen participant check uses current semantic copy and captures evidence first", () => {
+  const generated = buildAuthenticatedHarnessSource(original);
+  assert.match(generated, /const frozenStage = page\.locator\("#main-content"\)/);
+  assert.match(generated, /await expectText\(frozenStage, \/Bundle Frozen\/i\)/);
+  assert.match(generated, /await expectText\(frozenStage, \/This allocation is immutable\/i\)/);
+  assert.doesNotMatch(generated, /immutable provider bundle\|frozen bundle/);
+  const screenshot = generated.indexOf('await screenshot(page, "participant-mobile-frozen.png")');
+  const semanticAssertion = generated.indexOf("await expectText(frozenStage, /Bundle Frozen/i)");
+  assert.ok(screenshot >= 0, "The frozen participant screenshot is missing.");
+  assert.ok(semanticAssertion > screenshot, "The frozen screenshot must precede semantic assertions.");
+});
+
+test("frozen participant generation fails closed if the stale source contract drifts", () => {
+  const drifted = original.replace(
+    "/immutable provider bundle|frozen bundle/i",
+    "/drifted frozen copy/i",
+  );
+  assert.throws(
+    () => buildAuthenticatedHarnessSource(drifted),
+    /frozen participant semantic assertions and pre-assertion screenshot: expected source contract was not found/,
+  );
+});
+
 test("the generated participant UI check requires the pooled funding boundary", () => {
   const generated = buildAuthenticatedHarnessSource(original);
   assert.match(
