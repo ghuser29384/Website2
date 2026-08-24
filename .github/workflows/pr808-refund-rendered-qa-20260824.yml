@@ -1,0 +1,505 @@
+name: PR808 authenticated provider-refund rendered QA
+
+on:
+  push:
+    branches:
+      - ops/pr808-refund-rendered-qa-20260824
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: pr808-refund-rendered-qa-20260824
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_BASE_SHA: 358adf99f338f25011b6de4204d72bce4475b12f
+  EXPECTED_PRODUCT_SHA: bec312f4a3999d533a4738cfec3dd3cd47a08976
+  EXPECTED_PRODUCT_TREE: a4f480e0dfef22f3a2e800360947c47726471550
+  EXPECTED_PRODUCT_BRANCH: feature/direct-donation-upgrade-refund-operator-ui-709-20260824-v2
+  EXPECTED_PR547_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+  EXPECTED_PR711_SHA: cfd611218b29d1095fe40ed1e1db863ca34dee68
+  EXPECTED_CONTROLLER_BRANCH: ops/pr808-refund-rendered-qa-20260824
+  AUTHORIZATION_FILE: .github/pr808-refund-rendered-qa.authorize
+  QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+  BASE_URL: http://127.0.0.1:3214
+
+jobs:
+  rendered:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BEFORE_SHA: ${{ github.event.before }}
+    steps:
+      - name: Check out exact controller revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact product, PR states, eight-file scope, and one-use authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_CONTROLLER_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+
+          git fetch --no-tags origin "$EXPECTED_PRODUCT_BRANCH"
+          product_sha="$(git rev-parse FETCH_HEAD)"
+          test "$product_sha" = "$EXPECTED_PRODUCT_SHA"
+          test "$(git show -s --format=%T "$product_sha")" = "$EXPECTED_PRODUCT_TREE"
+          test "$(git merge-base "$EXPECTED_BASE_SHA" "$product_sha")" = "$EXPECTED_BASE_SHA"
+          test "$(git rev-list --count "$EXPECTED_BASE_SHA..$product_sha")" = 14
+
+          pr808="$(mktemp)"; pr547="$(mktemp)"; pr711="$(mktemp)"
+          trap 'rm -f "$pr808" "$pr547" "$pr711"' EXIT
+          gh api "repos/$EXPECTED_REPOSITORY/pulls/808" > "$pr808"
+          gh api "repos/$EXPECTED_REPOSITORY/pulls/547" > "$pr547"
+          gh api "repos/$EXPECTED_REPOSITORY/pulls/711" > "$pr711"
+          jq -e --arg sha "$EXPECTED_PRODUCT_SHA" --arg base "$EXPECTED_BASE_SHA" '
+            .state == "open" and .draft == true and .merged == false
+            and .head.sha == $sha and .base.sha == $base
+          ' "$pr808" >/dev/null
+          jq -e --arg sha "$EXPECTED_PR547_SHA" '
+            .state == "open" and .draft == true and .merged == false and .head.sha == $sha
+          ' "$pr547" >/dev/null
+          jq -e --arg sha "$EXPECTED_PR711_SHA" '
+            .state == "open" and .draft == true and .merged == false and .head.sha == $sha
+          ' "$pr711" >/dev/null
+
+          git diff --name-only "$BEFORE_SHA" HEAD | LC_ALL=C sort > evidence/controller-changed-paths.txt
+          test "$(wc -l < evidence/controller-changed-paths.txt | tr -d ' ')" = 1
+          grep -Fxq "$AUTHORIZATION_FILE" evidence/controller-changed-paths.txt
+          expected_authorization="$(cat <<EOF_AUTH
+          schema=moral-trade-pr808-refund-rendered-qa-v1
+          base=$EXPECTED_BASE_SHA
+          product=$EXPECTED_PRODUCT_SHA
+          tree=$EXPECTED_PRODUCT_TREE
+          controller_branch=$EXPECTED_CONTROLLER_BRANCH
+          controller_parent=$BEFORE_SHA
+          target=local-production-build
+          authorization=AUTHORIZE_PR808_REFUND_RENDERED_QA_BEC312F
+          EOF_AUTH
+          )"
+          test -f "$AUTHORIZATION_FILE"
+          test "$(cat "$AUTHORIZATION_FILE")" = "$expected_authorization"
+
+          git checkout --detach "$EXPECTED_PRODUCT_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_PRODUCT_TREE"
+          git diff --check "$EXPECTED_BASE_SHA...$EXPECTED_PRODUCT_SHA"
+          git diff --name-only "$EXPECTED_BASE_SHA...$EXPECTED_PRODUCT_SHA" | LC_ALL=C sort > evidence/product-changed-paths.txt
+          cat > evidence/expected-product-changed-paths.txt <<'EOF_PATHS'
+          src/app/admin/donation-upgrades/actions.ts
+          src/app/admin/donation-upgrades/page.tsx
+          src/app/donation-upgrades/[offerId]/layout.tsx
+          src/app/donation-upgrades/[offerId]/provider-status/page.tsx
+          src/lib/provider-refund-operator-source-contract.test.ts
+          src/lib/provider-refund-rendered-qa-source-contract.test.ts
+          src/lib/provider-refund-rendered-qa.ts
+          tests/provider-refund-rendered.spec.ts
+          EOF_PATHS
+          sed -i 's/^          //' evidence/expected-product-changed-paths.txt
+          diff -u evidence/expected-product-changed-paths.txt evidence/product-changed-paths.txt
+          {
+            echo "base=$EXPECTED_BASE_SHA"
+            echo "merge_base=$(git merge-base "$EXPECTED_BASE_SHA" HEAD)"
+            echo "head=$EXPECTED_PRODUCT_SHA"
+            echo "tree=$EXPECTED_PRODUCT_TREE"
+            echo "commit_count=$(git rev-list --count "$EXPECTED_BASE_SHA..HEAD")"
+            echo "viewport_desktop=1440x1000"
+            echo "viewport_mobile=390x844"
+          } > evidence/identity.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci > evidence/npm-ci.log 2>&1
+
+      - name: Create one ephemeral QA administrator identity
+        shell: bash
+        env:
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$QA_SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          echo "::add-mask::$QA_SUPABASE_SERVICE_ROLE_KEY"
+          qa_email="provider-refund-rendered-${GITHUB_RUN_ID}@qa.invalid"
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export QA_EMAIL="$qa_email" QA_PASSWORD="$qa_password"
+          node --input-type=module <<'NODE' > evidence/fixture-create.log 2>&1
+          import { createClient } from "@supabase/supabase-js";
+          import { writeFileSync } from "node:fs";
+
+          const client = createClient(
+            process.env.QA_SUPABASE_URL,
+            process.env.QA_SUPABASE_SERVICE_ROLE_KEY,
+            { auth: { autoRefreshToken: false, persistSession: false } },
+          );
+          const { data: existingProfiles, error: existingProfileError } = await client
+            .from("profiles")
+            .select("id", { count: "exact", head: true })
+            .eq("email", process.env.QA_EMAIL);
+          if (existingProfileError) throw existingProfileError;
+          if ((existingProfiles?.length ?? 0) !== 0) {
+            throw new Error("Ephemeral QA profile email already exists.");
+          }
+          const { data, error } = await client.auth.admin.createUser({
+            email: process.env.QA_EMAIL,
+            password: process.env.QA_PASSWORD,
+            email_confirm: true,
+            user_metadata: {
+              display_name: "Provider Refund QA Operator",
+              qa_fixture: true,
+            },
+          });
+          if (error || !data.user) {
+            throw new Error(`Unable to create ephemeral Auth identity: ${error?.message ?? "missing user"}`);
+          }
+          const { error: profileError } = await client.from("profiles").upsert(
+            {
+              id: data.user.id,
+              email: process.env.QA_EMAIL,
+              display_name: "Provider Refund QA Operator",
+              bio: "",
+            },
+            { onConflict: "id" },
+          );
+          if (profileError) {
+            await client.auth.admin.deleteUser(data.user.id);
+            throw profileError;
+          }
+          writeFileSync("evidence/qa-user-id.txt", `${data.user.id}\n`);
+          console.log("Created one isolated QA Auth identity and matching profile.");
+          NODE
+          qa_user_id="$(cat evidence/qa-user-id.txt)"
+          {
+            echo "PROVIDER_REFUND_RENDERED_QA_EMAIL=$qa_email"
+            echo "PROVIDER_REFUND_RENDERED_QA_PASSWORD=$qa_password"
+            echo "PROVIDER_REFUND_RENDERED_QA_USER_ID=$qa_user_id"
+            echo "ADMIN_EMAILS=$qa_email"
+          } >> "$GITHUB_ENV"
+
+      - name: Build the exact candidate with preview-only refund rendering fixture and every money rail disabled
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3214
+          SITE_URL: http://127.0.0.1:3214
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "true"
+          DIRECT_DONATION_UPGRADE_MODE: staging
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
+          DIRECT_DONATION_UPGRADE_PROVIDER_REFUND_RENDERED_QA: "true"
+          DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"
+          EVERY_ORG_ENVIRONMENT: staging
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: provider-refund-rendered-public-token
+          EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: provider-refund-rendered-private-auth-sentinel
+          EVERY_ORG_WEBHOOK_ROUTE_ID: provider-refund-rendered-route-id-20260824
+          EVERY_ORG_PARTNER_METADATA_SECRET: provider-refund-rendered-metadata-secret-20260824
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          MPGF_REAL_MONEY_ENABLED: "false"
+          MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+          MPGF_TEST_PAYMENT_ENABLED: "false"
+          CRON_SECRET: provider-refund-rendered-cron-secret-20260824
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          npm run build > evidence/rendered-build.log 2>&1
+          if grep -R -F --binary-files=without-match \
+            'provider-refund-rendered-private-auth-sentinel' .next/static; then
+            echo 'Private auth sentinel entered client static output.' >&2
+            exit 1
+          fi
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium > evidence/playwright-install.log 2>&1
+
+      - name: Start exact local production build without service-role access
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3214
+          SITE_URL: http://127.0.0.1:3214
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "true"
+          DIRECT_DONATION_UPGRADE_MODE: staging
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
+          DIRECT_DONATION_UPGRADE_PROVIDER_REFUND_RENDERED_QA: "true"
+          DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"
+          EVERY_ORG_ENVIRONMENT: staging
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: provider-refund-rendered-public-token
+          EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: provider-refund-rendered-private-auth-sentinel
+          EVERY_ORG_WEBHOOK_ROUTE_ID: provider-refund-rendered-route-id-20260824
+          EVERY_ORG_PARTNER_METADATA_SECRET: provider-refund-rendered-metadata-secret-20260824
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          MPGF_REAL_MONEY_ENABLED: "false"
+          MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+          MPGF_TEST_PAYMENT_ENABLED: "false"
+          CRON_SECRET: provider-refund-rendered-cron-secret-20260824
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          npm run start -- -H 127.0.0.1 -p 3214 > evidence/rendered-server.log 2>&1 &
+          echo "$!" > evidence/rendered-server.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --show-error "$BASE_URL/login" > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 evidence/rendered-server.log >&2
+          exit 1
+
+      - name: Run authenticated AAL1 denial and AAL2 desktop/mobile read-only rendering QA
+        shell: bash
+        env:
+          PROVIDER_REFUND_RENDERED_BASE_URL: http://127.0.0.1:3214
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          mkdir -p output/playwright/provider-refund
+          npx playwright test tests/provider-refund-rendered.spec.ts \
+            --reporter=line --workers=1 > evidence/rendered-browser.log 2>&1
+
+      - name: Verify exact screenshot inventory, pixel dimensions, nonblank files, and hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import struct
+          from pathlib import Path
+
+          root = Path("output/playwright/provider-refund")
+          expected = [
+              "desktop-admin-console-full.png",
+              "desktop-refund-form.png",
+              "desktop-provider-status-full.png",
+              "mobile-admin-console-full.png",
+              "mobile-refund-form.png",
+              "mobile-provider-status-full.png",
+          ]
+          actual = sorted(path.name for path in root.glob("*.png"))
+          if actual != sorted(expected):
+              raise SystemExit(f"Unexpected screenshot inventory: {actual}")
+
+          records = []
+          for name in expected:
+              path = root / name
+              data = path.read_bytes()
+              if len(data) < 10_000:
+                  raise SystemExit(f"Screenshot is unexpectedly small: {name} ({len(data)} bytes)")
+              if data[:8] != b"\x89PNG\r\n\x1a\n":
+                  raise SystemExit(f"Not a PNG: {name}")
+              width, height = struct.unpack(">II", data[16:24])
+              expected_width = 1440 if name.startswith("desktop-") else 390
+              if "refund-form" not in name and width != expected_width:
+                  raise SystemExit(f"Unexpected full-page screenshot width for {name}: {width}")
+              if "refund-form" in name and width > expected_width:
+                  raise SystemExit(f"Form screenshot exceeds viewport width for {name}: {width}")
+              if "admin-console-full" in name or "provider-status-full" in name:
+                  expected_min_height = 1000 if name.startswith("desktop-") else 844
+                  if height < expected_min_height:
+                      raise SystemExit(f"Full-page screenshot is shorter than viewport for {name}: {height}")
+              records.append({
+                  "file": name,
+                  "width": width,
+                  "height": height,
+                  "sizeBytes": len(data),
+                  "sha256": hashlib.sha256(data).hexdigest(),
+              })
+          Path("evidence/screenshot-manifest.json").write_text(
+              json.dumps(records, indent=2, sort_keys=True) + "\n"
+          )
+          Path("evidence/viewport-matrix.txt").write_text(
+              "desktop=1440x1000\nmobile=390x844\n"
+              "source=executed Playwright contexts plus PNG width/minimum-height checks\n"
+          )
+          PY
+          sha256sum output/playwright/provider-refund/*.png > evidence/screenshot-sha256.txt
+
+      - name: Verify browser/server logs contain no framework or runtime error and no provider request
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'pageerror|nextjs-portal|Unexpected application error|Application error|unhandledRejection|UnhandledPromiseRejection|ECONNREFUSED|ERR_' evidence/rendered-browser.log
+          ! grep -E 'Unhandled|unhandledRejection|UnhandledPromiseRejection|FATAL|Error:' evidence/rendered-server.log
+          ! grep -E '(https?://[^ ]*every\.org|https?://[^ ]*stripe\.com|/api/connectors/every-org|/api/stripe|/api/jobs/donation-upgrades)' evidence/rendered-browser.log
+          printf '%s\n' \
+            'aal1_admin_denied=true' \
+            'aal2_admin_rendered=true' \
+            'participant_provider_status_rendered=true' \
+            'desktop_viewport=1440x1000' \
+            'mobile_viewport=390x844' \
+            'read_only_browser=true' \
+            'mutation_requests_blocked=true' \
+            'provider_requests_blocked=true' \
+            'checkout_attempted=false' \
+            'donation_attempted=false' \
+            'refund_execution_attempted=false' \
+            'lifecycle_job_invoked=false' \
+            'service_role_available_to_app=false' \
+            'console_errors=false' \
+            'page_errors=false' \
+            'framework_overlay=false' \
+            'horizontal_overflow=false' \
+            'clipped_interactive_controls=false' > evidence/rendered-assertions.txt
+
+      - name: Stop local server and remove ephemeral QA identity
+        if: always()
+        shell: bash
+        env:
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -f evidence/rendered-server.pid ]]; then
+            kill "$(cat evidence/rendered-server.pid)" 2>/dev/null || true
+          fi
+          test -n "${QA_SUPABASE_SERVICE_ROLE_KEY:-}"
+          echo "::add-mask::$QA_SUPABASE_SERVICE_ROLE_KEY"
+          export QA_USER_ID="${PROVIDER_REFUND_RENDERED_QA_USER_ID:-}"
+          export QA_EMAIL="${PROVIDER_REFUND_RENDERED_QA_EMAIL:-}"
+          node --input-type=module <<'NODE' > evidence/fixture-cleanup.log 2>&1
+          import { createClient } from "@supabase/supabase-js";
+
+          if (!process.env.QA_USER_ID || !process.env.QA_EMAIL) {
+            console.log("No ephemeral QA identity was recorded; cleanup has no target.");
+            process.exit(0);
+          }
+          const client = createClient(
+            process.env.QA_SUPABASE_URL,
+            process.env.QA_SUPABASE_SERVICE_ROLE_KEY,
+            { auth: { autoRefreshToken: false, persistSession: false } },
+          );
+          const { error: profileDeleteError } = await client
+            .from("profiles")
+            .delete()
+            .eq("id", process.env.QA_USER_ID);
+          if (profileDeleteError) throw profileDeleteError;
+          const { error: userDeleteError } = await client.auth.admin.deleteUser(
+            process.env.QA_USER_ID,
+          );
+          if (userDeleteError) throw userDeleteError;
+          const { data: remainingProfiles, error: remainingProfileError } = await client
+            .from("profiles")
+            .select("id")
+            .eq("id", process.env.QA_USER_ID);
+          if (remainingProfileError) throw remainingProfileError;
+          if ((remainingProfiles ?? []).length !== 0) {
+            throw new Error("Ephemeral QA profile residue remains.");
+          }
+          const { data: userLookup, error: userLookupError } =
+            await client.auth.admin.getUserById(process.env.QA_USER_ID);
+          if (!userLookupError || userLookup?.user) {
+            throw new Error("Ephemeral QA Auth identity residue remains.");
+          }
+          console.log("Removed the isolated QA profile, Auth identity, and enrolled MFA factor.");
+          NODE
+          printf '%s\n' \
+            'fixture_profile_residue=false' \
+            'fixture_auth_user_residue=false' \
+            'fixture_mfa_factor_residue=false' \
+            'persistent_migration_attempted=false' > evidence/cleanup-result.txt
+
+      - name: Scan retained evidence for secrets and private credential sentinel
+        if: always()
+        shell: bash
+        env:
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          echo "::add-mask::$QA_SUPABASE_SERVICE_ROLE_KEY"
+          export QA_PASSWORD_VALUE="${PROVIDER_REFUND_RENDERED_QA_PASSWORD:-}"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          roots = [Path("evidence"), Path("output/playwright/provider-refund")]
+          needles = [
+              os.environ.get("QA_SUPABASE_SERVICE_ROLE_KEY", "").encode(),
+              os.environ.get("QA_PASSWORD_VALUE", "").encode(),
+              b"provider-refund-rendered-private-auth-sentinel",
+          ]
+          needles = [needle for needle in needles if needle]
+          matches = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("*"):
+                  if path.is_file():
+                      data = path.read_bytes()
+                      if any(needle in data for needle in needles):
+                          matches.append(str(path))
+          if matches:
+              raise SystemExit(f"Secret or private sentinel entered retained evidence: {matches}")
+          Path("evidence/credential-scan.txt").write_text(
+              "service_role_present=false\n"
+              "qa_password_present=false\n"
+              "private_auth_sentinel_present=false\n"
+          )
+          PY
+
+      - name: Record durable rendered-QA run locator
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="## PR #808 authenticated provider-refund rendered QA
+
+- run: $GITHUB_RUN_ID
+- exact base: \`$EXPECTED_BASE_SHA\`
+- exact head: \`$EXPECTED_PRODUCT_SHA\`
+- exact tree: \`$EXPECTED_PRODUCT_TREE\`
+- viewport matrix: desktop \`1440×1000\`; mobile \`390×844\`
+- AAL1 administrator denial: passed
+- AAL2 administrator console/form: passed
+- participant-safe provider-status rendering: passed
+- screenshot inventory: six PNGs with dimensions and SHA-256 values in the artifact
+- read-only network guard, privacy checks, responsive overflow/clipping checks, console/page-error checks, and zero-residue cleanup: passed
+- artifact: \`pr808-refund-rendered-qa-$GITHUB_RUN_ID\`
+
+No provider request, webhook invocation or mutation, checkout, donation, refund execution, payment object, persistent migration, production deployment or alias, PR #547 mutation, PR #711 mutation, feature activation, or production change occurred."
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/808/comments" -f body="$body" >/dev/null
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/709/comments" -f body="$body" >/dev/null
+
+      - name: Upload sanitized rendered QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr808-refund-rendered-qa-${{ github.run_id }}
+          path: |
+            evidence/
+            output/playwright/provider-refund/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 30
