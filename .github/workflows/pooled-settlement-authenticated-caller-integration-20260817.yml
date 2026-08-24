@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - qa/723-authenticated-confirmation-clean-stack-20260818-v1
+      - qa/723-participant-context-integration-20260824
 
 permissions:
   contents: read

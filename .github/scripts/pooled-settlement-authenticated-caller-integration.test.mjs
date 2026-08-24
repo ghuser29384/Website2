@@ -188,6 +188,7 @@ test("the stacked workflow is QA-only, exact-nine-file-scoped, and applies the f
   assert.match(workflow, new RegExp(CONTEXT_READ_REPAIR_HEAD));
   assert.match(workflow, new RegExp(QA_PROJECT_REF));
   assert.match(workflow, /qa\/723-authenticated-confirmation-clean-stack-20260818-v1/);
+  assert.match(workflow, /qa\/723-participant-context-integration-20260824/);
   for (const path of INTEGRATION_PATHS) {
     assert.match(workflow, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
