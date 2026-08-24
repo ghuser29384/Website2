@@ -5,6 +5,7 @@ const viewports = [
   { name: "desktop", width: 1440, height: 900 },
   { name: "tablet", width: 1024, height: 768 },
   { name: "mobile", width: 390, height: 844 },
+  { name: "compact-mobile", width: 320, height: 568 },
 ] as const;
 
 for (const viewport of viewports) {
@@ -13,9 +14,11 @@ for (const viewport of viewports) {
   }, testInfo) => {
     await page.setViewportSize(viewport);
     const errors: string[] = [];
+    const warnings: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => {
       if (message.type() === "error") errors.push(message.text());
+      if (message.type() === "warning") warnings.push(message.text());
     });
 
     const response = await page.goto("/mpgf/compacts", {
@@ -61,6 +64,10 @@ for (const viewport of viewports) {
       "Published constitution examples",
     );
     await expect(page.getByText("No amount is inferred from self-reporting")).toBeVisible();
+    await expect(page.getByText("Shadow calculated 10% amount")).toBeVisible();
+    await expect(
+      page.getByText(/shadow calculation only—not a charge, collection, legal debt, mandate, or settlement/),
+    ).toBeVisible();
     await expect(page.getByText("70% equal + 30% square-root").first()).toBeVisible();
     await expect(page.getByText("100 verified unique people and $500 planned").first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Sign in to join" })).toHaveAttribute(
@@ -82,6 +89,7 @@ for (const viewport of viewports) {
     expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
     expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
     expect(errors).toEqual([]);
+    expect(warnings).toEqual([]);
 
     await mkdir("test-results", { recursive: true });
     const screenshotPath = `test-results/mpgf-public-goods-compacts-${viewport.width}x${viewport.height}.png`;
