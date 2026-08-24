@@ -1,0 +1,143 @@
+name: Audit administrative no-op drift on #708 branches
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-phase2-566bb18-20260824
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: audit-administrative-noop-drift-708-20260824
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_BRANCH: ops/pr547-every-org-phase2-566bb18-20260824
+  ACCEPTED_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+  ACCEPTED_TREE: 86c70b442272f5cff4cf29e63d030c949b4323cb
+  FEATURE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+  PHASE_B_BRANCH: fix/every-org-partner-webhook-authorization-708-20260820
+  MARKER: .github/audit-administrative-noop-drift-708.marker
+
+jobs:
+  audit:
+    if: github.event.head_commit.message == 'Audit administrative no-op branch drift'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out audit controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Prove both branch tips remain byte-identical to the accepted tree
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
+          test -f "$MARKER"
+          git cat-file -e "$ACCEPTED_SHA^{commit}"
+          test "$(git show -s --format=%T "$ACCEPTED_SHA")" = "$ACCEPTED_TREE"
+
+          git fetch --no-tags origin "$FEATURE_BRANCH" "$PHASE_B_BRANCH"
+          feature_head="$(git rev-parse "origin/$FEATURE_BRANCH")"
+          phase_b_head="$(git rev-parse "origin/$PHASE_B_BRANCH")"
+          feature_tree="$(git show -s --format=%T "$feature_head")"
+          phase_b_tree="$(git show -s --format=%T "$phase_b_head")"
+
+          git merge-base --is-ancestor "$ACCEPTED_SHA" "$feature_head"
+          git merge-base --is-ancestor "$ACCEPTED_SHA" "$phase_b_head"
+          test "$feature_tree" = "$ACCEPTED_TREE"
+          test "$phase_b_tree" = "$ACCEPTED_TREE"
+          git diff --quiet "$ACCEPTED_SHA" "$feature_head"
+          git diff --quiet "$ACCEPTED_SHA" "$phase_b_head"
+
+          feature_paths="$(git log --format= --name-only "$ACCEPTED_SHA..$feature_head" | sed '/^$/d' | sort -u)"
+          phase_b_paths="$(git log --format= --name-only "$ACCEPTED_SHA..$phase_b_head" | sed '/^$/d' | sort -u)"
+          test "$feature_paths" = '.github/DO_NOT_COMMIT_PHASE2.tmp'
+          test "$phase_b_paths" = '.github/DO_NOT_COMMIT_PHASE2.tmp'
+
+          feature_count="$(git rev-list --count "$ACCEPTED_SHA..$feature_head")"
+          phase_b_count="$(git rev-list --count "$ACCEPTED_SHA..$phase_b_head")"
+          test "$feature_count" = 2
+          test "$phase_b_count" = 2
+
+          {
+            echo "feature_head=$feature_head"
+            echo "feature_tree=$feature_tree"
+            echo "feature_count=$feature_count"
+            echo "phase_b_head=$phase_b_head"
+            echo "phase_b_tree=$phase_b_tree"
+            echo "phase_b_count=$phase_b_count"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Record the transparent no-op audit on PR 547 and PR 795
+        shell: bash
+        run: |
+          set -euo pipefail
+          post_once() {
+            local issue="$1" marker="$2" body="$3"
+            local existing
+            existing="$(curl -fsS \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$issue/comments?per_page=100" \
+              | jq -r --arg marker "$marker" '.[] | select(.body | contains($marker)) | .id' | head -n 1)"
+            test -z "$existing"
+            payload="$(jq -n --arg body "$body" '{body:$body}')"
+            curl -fsS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'Content-Type: application/json' \
+              --data "$payload" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$issue/comments" >/dev/null
+          }
+
+          common="$(cat <<EOF_COMMON
+          During Phase 2 controller setup, a temporary path named \`.github/DO_NOT_COMMIT_PHASE2.tmp\` was accidentally added and then immediately removed through ordinary, non-force commits. The temporary file is absent from the current tree.
+
+          Executed ancestry and tree audit proves:
+
+          - accepted product SHA/tree: \`$ACCEPTED_SHA\` / \`$ACCEPTED_TREE\`;
+          - current branch tip descends normally from the accepted SHA;
+          - exactly two administrative commits intervene;
+          - the only historical path touched by those commits is the temporary path above;
+          - cumulative diff from the accepted SHA is empty;
+          - current tree is byte-identical to the accepted tree;
+          - no application, test, migration, documentation, provider, configuration, or feature byte changed.
+
+          No history was rewritten or force-pushed. Future exact-head evidence should name the current branch tip while explicitly carrying forward the accepted source evidence by proven tree identity.
+          EOF_COMMON
+          )"
+
+          marker_547='<!-- administrative-noop-drift-pr547-20260824 -->'
+          body_547="$(cat <<EOF_547
+          $marker_547
+          ## Transparent administrative no-op drift record
+
+          $common
+
+          PR #547 current tip: \`${{ steps.audit.outputs.feature_head }}\`; tree: \`${{ steps.audit.outputs.feature_tree }}\`.
+          EOF_547
+          )"
+          post_once 547 "$marker_547" "$body_547"
+
+          marker_795='<!-- administrative-noop-drift-pr795-20260824 -->'
+          body_795="$(cat <<EOF_795
+          $marker_795
+          ## Transparent administrative no-op drift record
+
+          $common
+
+          PR #795 current tip: \`${{ steps.audit.outputs.phase_b_head }}\`; tree: \`${{ steps.audit.outputs.phase_b_tree }}\`.
+          EOF_795
+          )"
+          post_once 795 "$marker_795" "$body_795"
