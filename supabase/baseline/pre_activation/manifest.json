@@ -1,0 +1,54 @@
+{
+  "baseline_id": "moraltrade-pre-activation-production-2026-08-19",
+  "boundary": "pre_activation",
+  "counts": {
+    "catalog_rows": 17778,
+    "extension_rows": 5,
+    "migration_history_rows": 130,
+    "policy_probe_rows": 601
+  },
+  "cutover": {
+    "baseline_state": "production immediately before activation_stage",
+    "legacy_migrations_replayed_after_baseline": [],
+    "next_migration": "20260814042516_account_activation_stage.sql"
+  },
+  "files": {
+    "schema.sql": "523e2ad5464b507f91cba4321b28ba88f475057b74b8d756183b7f7ac1f340fc",
+    "source_catalog.tsv": "2567ccae61ec5011f2874888a4854e95f7c1206158eb7287f5177b15a3f36ca3",
+    "source_extensions.tsv": "97843e3b4c0a06b8a3ea6fa3abd7ba870316f3cb1c59f3791cbfc909c6a40ed3",
+    "source_migration_history.tsv": "2f71391c0ed9bbcbe70e746296e53355581d4badc440fffd4a9897e391221b98",
+    "source_policy_probes.sql": "c1ee73d52ad33f321e6d69139c68db06441edf696861326b6ff371a963f643e2"
+  },
+  "format_version": 1,
+  "scope": {
+    "cross_schema_objects": [
+      "application-owned triggers on auth.users"
+    ],
+    "excludes": [
+      "table data",
+      "Auth user data",
+      "Supabase-managed schema internals",
+      "database role passwords and secrets",
+      "comments and security labels"
+    ],
+    "privilege_roles": [
+      "anon",
+      "authenticated",
+      "service_role",
+      "authenticator",
+      "supabase_auth_admin"
+    ],
+    "schemas": [
+      "public",
+      "moral_trade_private"
+    ]
+  },
+  "source": {
+    "captured_at_utc": "2026-08-24T22:17:26+00:00",
+    "production_access": "explicit READ ONLY catalog transactions; schema-only pg_dump",
+    "production_project_ref": "jnpoxvalyjtdghnperyu",
+    "repository": "ghuser29384/Website2",
+    "source_head": "f16e56a6ed21ba394a446d01534692a00d02e749",
+    "source_main": "26d1fe436dbf9a4440bfafd501ddf8db944a1127"
+  }
+}
