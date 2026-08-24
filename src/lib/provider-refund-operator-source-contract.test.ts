@@ -24,7 +24,9 @@ test("provider-refund action is AAL2/admin gated and derives exact immutable pro
     "loadBackgroundAccountSecuritySummary",
     "viewer.profile.id",
     '.from("direct_donation_upgrade_obligations")',
-    'obligation.status !== "verified"',
+    "REFUND_RECORDABLE_OBLIGATION_STATUSES",
+    '"verified"',
+    '"provider_reversed"',
     "provider_charge_id_hash",
     "partner_donation_id",
     "expected_recipient_hash",
@@ -50,6 +52,22 @@ test("provider-refund action is AAL2/admin gated and derives exact immutable pro
         '"record_direct_donation_upgrade_provider_reversal"',
       ),
     "immutable obligation lookup must precede reversal RPC",
+  );
+});
+
+test("operator path preserves exact replay idempotency while altered reports remain delegated to fail-closed RPC reconciliation", () => {
+  assertIncludesAll(actionSource, [
+    'const REFUND_RECORDABLE_OBLIGATION_STATUSES = new Set([',
+    '"verified"',
+    '"provider_reversed"',
+    'outcome === "already_recorded"',
+    "That exact Every.org provider refund was already recorded.",
+    'outcome === "needs_review"',
+    "did not exactly match the immutable confirmation and was moved to review",
+  ]);
+  assert.ok(
+    !actionSource.includes('obligation.status !== "verified"'),
+    "operator path must not block exact replay before the idempotent RPC",
   );
 });
 
