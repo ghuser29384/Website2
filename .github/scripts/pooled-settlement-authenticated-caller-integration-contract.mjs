@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 
 export const PR700_HEAD = "813573f64eaa17d2ca240c50f76ead9a3b535f97";
 export const PRODUCT_REPAIR_HEAD = "495f714b6dd4753ad78cf3d41945cffc84923876";
+export const CLEAN_STACK_HEAD = "a67878590380f45af704ddd3e643ef1a135015f7";
+export const CONTEXT_READ_REPAIR_HEAD = "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d";
+export const OPERATOR_UI_REPAIR_HEAD = "a1f774eef872464528249d9e64a1d7d4466e7f2e";
+export const STRIPE_GATE_REPAIR_HEAD = "a3e11dab82d4edd235bef69ec5e90e3eb21f7e66";
 export const QA_PROJECT_REF = "hvmxfjjbdcgjjudmthdz";
 export const AUTHENTICATED_CONFIRMATION_MIGRATION =
   "supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql";
@@ -16,8 +20,15 @@ export const INTEGRATION_PATHS = [
   ".github/scripts/pooled-settlement-authenticated-caller-integration.mjs",
   ".github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs",
   ".github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml",
+  "src/app/admin/trade-donation-pools/page.tsx",
   "src/app/trade-donation-actions-base.ts",
+  "src/lib/moral-trade/trade-donation-context-read-boundary.test.ts",
   "src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts",
+  "src/lib/payments/trade-donation-pool-webhook-gate-source-contract.test.ts",
+  "src/lib/payments/trade-donation-pool-webhook.ts",
+  "src/lib/trade-donation-pool-stripe-environment-source-contract.test.ts",
+  "src/lib/trade-donation-pool-operator-ui-source-contract.test.ts",
+  "src/lib/trade-donation.ts",
   AUTHENTICATED_CONFIRMATION_MIGRATION,
 ];
 
@@ -30,6 +41,16 @@ function replaceExactly(source, before, after, label) {
     `${label}: expected source contract was not unique.`,
   );
   return source.slice(0, first) + after + source.slice(first + before.length);
+}
+
+function replaceCount(source, before, after, expectedCount, label) {
+  const actualCount = source.split(before).length - 1;
+  assert.equal(
+    actualCount,
+    expectedCount,
+    `${label}: expected ${expectedCount} source contracts but found ${actualCount}.`,
+  );
+  return source.split(before).join(after);
 }
 
 export function buildAuthenticatedHarnessSource(input) {
@@ -88,6 +109,279 @@ export function buildAuthenticatedHarnessSource(input) {
     '  const stage = page.locator("#main-content");',
     "canonical participant content root",
   );
+  source = replaceCount(
+    source,
+    'page.locator("main")',
+    'page.locator("#main-content")',
+    3,
+    "remaining canonical participant and operator content roots",
+  );
+
+  const frozenParticipantBlock = [
+    '  await expectText(page.locator("#main-content"), /immutable provider bundle|frozen bundle/i);',
+    '  assert.equal(await page.getByRole("button", { name: "Refund before bundle freeze" }).count(), 0);',
+    '  assert.equal(await page.getByRole("button", { name: "Cancel before verified funding" }).count(), 0);',
+    "  await assertNoHorizontalOverflow(page);",
+    '  await screenshot(page, "participant-mobile-frozen.png");',
+  ].join("\n");
+  source = replaceExactly(
+    source,
+    frozenParticipantBlock,
+    [
+      '  const frozenStage = page.locator("#main-content");',
+      "  await expectText(frozenStage, /Bundle Frozen/i);",
+      "  await expectText(frozenStage, /This allocation is immutable/i);",
+      '  assert.equal(await page.getByRole("button", { name: "Refund before bundle freeze" }).count(), 0);',
+      '  assert.equal(await page.getByRole("button", { name: "Cancel before verified funding" }).count(), 0);',
+      "  await assertNoHorizontalOverflow(page);",
+      '  await screenshot(page, "participant-mobile-frozen.png");',
+    ].join("\n"),
+    "frozen participant semantic readiness and rendered screenshot",
+  );
+
+  const browserMfaSubmissionBlock = [
+    "  await Promise.all([",
+    '    page.waitForLoadState("domcontentloaded"),',
+    '    form.getByRole("button", { name: "Verify session" }).click(),',
+    "  ]);",
+    "  await page.reload();",
+    '  await expectText(page.locator("article#account-security"), /Session level\\s*aal2|AAL:\\s*aal2/i);',
+  ].join("\n");
+  source = replaceExactly(
+    source,
+    browserMfaSubmissionBlock,
+    [
+      "  const verificationResponsePromise = page.waitForResponse(",
+      "    (response) =>",
+      '      response.request().method() === "POST" &&',
+      '      Boolean(response.request().headers()["next-action"]),',
+      "    { timeout: 30_000 },",
+      "  );",
+      "  const [, verificationResponse] = await Promise.all([",
+      '    form.getByRole("button", { name: "Verify session" }).click(),',
+      "    verificationResponsePromise,",
+      "  ]);",
+      '  assert.equal(verificationResponse.ok(), true, "The browser MFA server action did not return a successful response.");',
+      "  await page.waitForTimeout(500);",
+      '  await screenshot(page, "operator-mfa-step-up.png");',
+      '  const verificationError = panel.locator("p.text-danger").last();',
+      "  if (await verificationError.isVisible()) {",
+      '    throw new Error(`Browser MFA verification failed closed: ${(await verificationError.innerText()).trim()}`);',
+      "  }",
+      "  await page.reload();",
+      '  await expectText(page.locator("article#account-security"), /Session level\\s*aal2|AAL:\\s*aal2/i);',
+    ].join("\n"),
+    "browser MFA server-action completion boundary",
+  );
+
+  const participantUiBlock = [
+    "  await expectText(stage, /The pooled donation is the activation gate/i);",
+    "  await expectText(stage, /presumptive provider-facing donor of record/i);",
+    "  await assertNoHorizontalOverflow(page);",
+    "  await screenshot(page, `participant-${suffix}.png`);",
+  ].join("\n");
+  source = replaceExactly(
+    source,
+    participantUiBlock,
+    [
+      participantUiBlock,
+      "  const disclosure = page.locator('input[name=\"pooled_disclosures\"]');",
+      "  const stageText = await stage.innerText();",
+      "  const recognizedBlockers = [",
+      "    \"Cross-user pooled settlement is disabled.\",",
+      "    \"TRADE_DONATION_POOL_MODE is disabled.\",",
+      "    \"Stripe test funding and Every.org staging settlement are blocked on production.\",",
+      "    \"Live pooled settlement is restricted to the canonical production deployment.\",",
+      "    \"STRIPE_SECRET_KEY is missing.\",",
+      "    \"STRIPE_WEBHOOK_SECRET is missing.\",",
+      "    \"Pooled-settlement test mode requires a Stripe test secret key.\",",
+      "    \"Pooled-settlement live mode requires a Stripe live secret key.\",",
+      "    \"The pledge-donation connector is disabled.\",",
+      "    \"Every.org webhook token is missing.\",",
+      "    \"Every.org webhook path secret must be at least 32 characters.\",",
+      "    \"Every.org metadata signing secret must be at least 32 characters.\",",
+      "    \"Pooled-settlement test mode requires Every.org staging.\",",
+      "    \"Pooled-settlement live mode requires Every.org live mode.\",",
+      "    \"The configured Stripe platform account could not be verified.\",",
+      "  ].filter((blocker) => stageText.includes(blocker));",
+      "  await writeJson(`participant-ui-readiness-${suffix}.json`, {",
+      "    schemaVersion: \"moral-trade-pooled-settlement-participant-ui-readiness-v1\",",
+      "    runId,",
+      "    commitSha,",
+      "    viewport,",
+      "    pooledStageRendered: true,",
+      "    payerDisclosureVisible: await disclosure.isVisible().catch(() => false),",
+      "    failClosedStatusVisible: stageText.includes(\"Pooled settlement is fail-closed.\"),",
+      "    recognizedBlockers,",
+      "  });",
+      "  await disclosure.waitFor({ state: \"visible\", timeout: 30_000 });",
+    ].join("\n"),
+    "pooled participant funding controls and sanitized readiness evidence",
+  );
+
+  source = replaceExactly(
+    source,
+    [
+      "  const refunds = await stripe.refunds.list({ payment_intent: paymentIntent.id, limit: 5 });",
+      "  const refund = refunds.data.find((candidate) => candidate.amount === obligation.amount_cents);",
+      '  assert.ok(refund, "Participant refund action did not create an exact Stripe test refund.");',
+    ].join("\n"),
+    [
+      "  let refund = null;",
+      "  for (let attempt = 0; attempt < 12 && !refund; attempt += 1) {",
+      "    const refunds = await stripe.refunds.list({ payment_intent: paymentIntent.id, limit: 5 });",
+      "    refund = refunds.data.find((candidate) => candidate.amount === obligation.amount_cents) ?? null;",
+      "    if (!refund) await new Promise((resolve) => setTimeout(resolve, 500));",
+      "  }",
+      '  assert.ok(refund, "Participant refund action did not create an exact Stripe test refund.");',
+    ].join("\n"),
+    "bounded Stripe refund observation",
+  );
+
+  const primaryFundingBoundary = [
+    "  const primaryFunding = await Promise.all(",
+    "    primaryObligations.map((obligation, index) =>",
+    "      fundWithActualStripeTestObject(primaryFixtures[index], obligation, {",
+    '        eventId: `evt_qa_primary_${runId.replaceAll("-", "")}_${index + 1}`,',
+    "      }),",
+    "    ),",
+    "  );",
+  ].join("\n");
+  source = replaceExactly(
+    source,
+    primaryFundingBoundary,
+    [
+      primaryFundingBoundary,
+      "  const signedWebhookEvents = unwrap(",
+      "    await admin",
+      '      .from("trade_donation_pool_stripe_events")',
+      '      .select("stripe_event_id,event_type,livemode,payload_hash,signature_verified")',
+      '      .in("stripe_event_id", primaryFunding.map(({ event }) => event.id))',
+      '      .order("stripe_event_id", { ascending: true }),',
+      '    "load exact signed Stripe test webhook evidence",',
+      "  );",
+      "  assert.equal(signedWebhookEvents.length, primaryFunding.length);",
+      "  assert.ok(signedWebhookEvents.every(({ livemode, signature_verified: verified }) => livemode === false && verified === true));",
+      "  const signedWebhookEvidence = {",
+      '    schemaVersion: "moral-trade-pooled-settlement-signed-webhook-evidence-v1",',
+      "    runId,",
+      "    commitSha,",
+      "    events: signedWebhookEvents,",
+      "    handlerResults: primaryFunding.map(({ response }) => ({",
+      "      pooledSettlement: response.pooledSettlement,",
+      "      duplicate: response.duplicate,",
+      "    })),",
+      "  };",
+      "  const signedWebhookEvidenceSha256 = sha256(canonicalJson(signedWebhookEvidence));",
+      "  const reviewedSignedWebhookGate = unwrap(",
+      '    await admin.rpc("review_trade_donation_pool_gate", {',
+      "      p_actor_profile_id: operator.id,",
+      '      p_environment: "test",',
+      '      p_gate_key: "stripe_signed_webhook",',
+      '      p_status: "passed",',
+      '      p_notes: "Synthetic QA operator reviewed exact signed Stripe test webhook evidence.",',
+      "      p_accountable_owner_name: operator.displayName,",
+      '      p_accountable_owner_role: "Synthetic QA operator",',
+      "      p_accountable_owner_email: operator.email,",
+      '      p_evidence_url: `https://github.com/ghuser29384/Website2/actions/runs/${runId}`,',
+      "      p_evidence_sha256: signedWebhookEvidenceSha256,",
+      "    }),",
+      '    "review signed Stripe test webhook gate with exact evidence",',
+      "  );",
+      '  assert.equal(reviewedSignedWebhookGate.status, "passed");',
+      "  const signedWebhookGate = unwrap(",
+      "    await admin",
+      '      .from("trade_donation_pool_gate_status")',
+      '      .select("environment,gate_key,status,approved_by,approved_at,accountable_owner_name,accountable_owner_role,accountable_owner_email,evidence_url,evidence_sha256,evidence_recorded_at,updated_at")',
+      '      .eq("environment", "test")',
+      '      .eq("gate_key", "stripe_signed_webhook")',
+      "      .single(),",
+      '    "load signed Stripe test webhook gate",',
+      "  );",
+      '  await writeJson("signed-stripe-webhook-gate.json", {',
+      '    schemaVersion: "moral-trade-pooled-settlement-signed-webhook-gate-v1",',
+      "    runId,",
+      "    commitSha,",
+      "    gate: signedWebhookGate,",
+      "    evidencePayload: signedWebhookEvidence,",
+      "    evidencePayloadSha256: signedWebhookEvidenceSha256,",
+      "  });",
+      '  assert.equal(signedWebhookGate.status, "passed", "Synthetic QA operator review did not persist the signed-webhook provider-checkout gate.");',
+      "  assert.equal(signedWebhookGate.approved_by, operator.id);",
+      "  assert.equal(signedWebhookGate.evidence_sha256, signedWebhookEvidenceSha256);",
+    ].join("\n"),
+    "signed Stripe webhook evidence review",
+  );
+
+  source = replaceExactly(
+    source,
+    [
+      "function runCleanupSql() {",
+      "  const obligationIds = sqlUuidArray(createdObligationIds);",
+      "  const bundleIds = sqlUuidArray(createdBundleIds);",
+    ].join("\n"),
+    [
+      "function runCleanupSql() {",
+      "  const obligationIds = sqlUuidArray(createdObligationIds);",
+      "  const bundleIds = sqlUuidArray(createdBundleIds);",
+      "  const cleanupRunId = String(runId);",
+      '  assert.match(cleanupRunId, /^[0-9]+$/, "Cleanup requires a numeric GitHub run ID.");',
+      '  const cleanupRunIdLiteral = `\'${cleanupRunId}\'`;',
+    ].join("\n"),
+    "run-owned cleanup identifier",
+  );
+  source = replaceExactly(
+    source,
+    [
+      "begin;",
+      "set local session_replication_role = replica;",
+      "delete from public.trade_donation_pool_ledger_lines where journal_id in (",
+    ].join("\n"),
+    [
+      "begin;",
+      "set local session_replication_role = replica;",
+      "create temporary table pooled_qa_cleanup_bundle_ids(id uuid primary key) on commit drop;",
+      "insert into pooled_qa_cleanup_bundle_ids(id)",
+      "select unnest(${bundleIds}) on conflict do nothing;",
+      "insert into pooled_qa_cleanup_bundle_ids(id)",
+      "select distinct bundle_id from public.trade_donation_pool_obligations",
+      "where agreement_id = any(${agreementIds}) and bundle_id is not null",
+      "on conflict do nothing;",
+      "insert into pooled_qa_cleanup_bundle_ids(id)",
+      "select id from public.trade_donation_pool_bundles",
+      "where environment = 'test'",
+      "  and (position(${cleanupRunIdLiteral} in nonprofit_slug) > 0",
+      "       or position(${cleanupRunIdLiteral} in target_id) > 0)",
+      "on conflict do nothing;",
+      "delete from public.trade_donation_pool_ledger_lines where journal_id in (",
+    ].join("\n"),
+    "database-discovered run-owned bundle cleanup",
+  );
+  source = replaceCount(
+    source,
+    "  where obligation_id = any(${obligationIds}) or bundle_id = any(${bundleIds});",
+    "  where obligation_id = any(${obligationIds}) or bundle_id in (select id from pooled_qa_cleanup_bundle_ids);",
+    2,
+    "ledger cleanup uses discovered bundle IDs",
+  );
+  source = replaceExactly(
+    source,
+    "  where obligation_id = any(${obligationIds}) or bundle_id = any(${bundleIds})\n);",
+    "  where obligation_id = any(${obligationIds}) or bundle_id in (select id from pooled_qa_cleanup_bundle_ids)\n);",
+    "ledger-line cleanup uses discovered bundle IDs",
+  );
+  source = replaceExactly(
+    source,
+    "  where object_id = any(${obligationIds}) or object_id = any(${bundleIds});",
+    "  where object_id = any(${obligationIds}) or object_id in (select id from pooled_qa_cleanup_bundle_ids) or actor_profile_id = any(${userIds});",
+    "audit cleanup uses discovered bundle IDs",
+  );
+  source = replaceExactly(
+    source,
+    "delete from public.trade_donation_pool_bundles where id = any(${bundleIds});",
+    "delete from public.trade_donation_pool_bundles where id in (select id from pooled_qa_cleanup_bundle_ids);",
+    "bundle cleanup uses discovered bundle IDs",
+  );
 
   source = replaceExactly(
     source,
@@ -103,13 +397,50 @@ export function buildAuthenticatedHarnessSource(input) {
     "run-owned milestone cleanup",
   );
 
+  source = replaceExactly(
+    source,
+    [
+      "      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);",
+      '      if (paymentIntent.status === "succeeded") {',
+      "        await stripe.refunds.create(",
+      "          { payment_intent: paymentIntentId },",
+      "          { idempotencyKey: `pooled-qa-cleanup-${runId}-${paymentIntentId}` },",
+      "        );",
+      "        stripeRefundedPaymentIntentIds.add(paymentIntentId);",
+      "      }",
+    ].join("\n"),
+    [
+      '      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ["latest_charge"] });',
+      "      const latestCharge = paymentIntent.latest_charge;",
+      '      const charge = typeof latestCharge === "string"',
+      "        ? await stripe.charges.retrieve(latestCharge)",
+      "        : latestCharge;",
+      "      if (charge && charge.amount_refunded >= charge.amount) {",
+      "        stripeRefundedPaymentIntentIds.add(paymentIntentId);",
+      "        continue;",
+      "      }",
+      '      if (paymentIntent.status === "succeeded") {',
+      "        await stripe.refunds.create(",
+      "          { payment_intent: paymentIntentId },",
+      "          { idempotencyKey: `pooled-qa-cleanup-${runId}-${paymentIntentId}` },",
+      "        );",
+      "        stripeRefundedPaymentIntentIds.add(paymentIntentId);",
+      "      }",
+    ].join("\n"),
+    "idempotent Stripe PaymentIntent cleanup",
+  );
+
   const helperMarker = "async function establishAal2(user) {";
   const helpers = [
     "const MILESTONE_LIFECYCLE_FUNCTIONS = [",
     '  "finalize_trade_milestone_manifest_v1",',
     "];",
     "",
+    "const participantAuthenticatedClients = new Map();",
+    "",
     "async function participantAuthenticatedClient(user) {",
+    "  const cached = participantAuthenticatedClients.get(user.id);",
+    "  if (cached) return cached;",
     "  const client = createClient(supabaseUrl, publishableKey, {",
     "    auth: { autoRefreshToken: false, persistSession: false },",
     "  });",
@@ -119,6 +450,7 @@ export function buildAuthenticatedHarnessSource(input) {
     "  );",
     '  const identity = unwrap(await client.auth.getUser(), user.role + " getUser");',
     '  assert.equal(identity.user?.id, user.id, user.role + " authenticated as the wrong user.");',
+    "  participantAuthenticatedClients.set(user.id, client);",
     "  return client;",
     "}",
     "",

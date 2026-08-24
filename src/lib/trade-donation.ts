@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { getSiteUrl } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 export const MIN_TRADE_DONATION_CENTS = 100;
 export const MAX_TRADE_DONATION_CENTS = 50_000;
@@ -480,17 +480,21 @@ function firstRow<T>(data: T | T[] | null | undefined): T | null {
 export async function loadTradeDonationAgreementContext(
   agreementId: string,
 ): Promise<TradeDonationAgreementContext | null> {
-  const supabase = (await createClient()) as any;
-  const { data: agreement, error: agreementError } = await supabase
+  const participantSupabase = (await createClient()) as any;
+  const { data: agreement, error: agreementError } = await participantSupabase
     .from("agreements")
     .select("*")
     .eq("id", agreementId)
     .maybeSingle();
   if (agreementError || !agreement) return null;
 
+  // Donation terms and intents are deliberately unavailable to browser roles.
+  // Resolve them server-side only after RLS proves the viewer can read this
+  // participant-bound agreement.
+  const privateSupabase = createServiceClient() as any;
   let term: TradeDonationTermRow | null = null;
   if (agreement.current_version_id) {
-    const result = await supabase
+    const result = await privateSupabase
       .from("trade_donation_terms")
       .select("*")
       .eq("agreement_version_id", agreement.current_version_id)
@@ -500,7 +504,7 @@ export async function loadTradeDonationAgreementContext(
 
   let intent: TradeDonationIntentRow | null = null;
   if (term) {
-    const result = await supabase
+    const result = await privateSupabase
       .from("trade_donation_intents")
       .select("*")
       .eq("donation_term_id", term.id)
@@ -510,7 +514,7 @@ export async function loadTradeDonationAgreementContext(
 
   let eligible = false;
   if (agreement.offer_id) {
-    const offerResult = await supabase
+    const offerResult = await participantSupabase
       .from("offers")
       .select("mode")
       .eq("id", agreement.offer_id)

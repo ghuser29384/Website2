@@ -51,7 +51,7 @@ export default async function TradeDonationPoolsAdminPage({ searchParams }: Page
   const snapshot = access.allowed ? await loadTradeDonationPoolAdminSnapshot() : null;
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className="page-shell marketplace-app-shell trade-workflow-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
