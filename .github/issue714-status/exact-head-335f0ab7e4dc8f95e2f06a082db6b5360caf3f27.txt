@@ -1,7 +1,7 @@
-status=success
-run_id=32112088285
+status=failure
+run_id=32787640603
 run_attempt=1
 candidate_head=335f0ab7e4dc8f95e2f06a082db6b5360caf3f27
 candidate_tree=b40e49e531767ab5dc0db2ff58a2e9c8f64b6c01
 synchronization_main=f9ae5480ae7c20176f24c5f8b678088b5823fc39
-completed_at=2026-08-18T07:46:52Z
+completed_at=2026-08-24T23:04:32Z
