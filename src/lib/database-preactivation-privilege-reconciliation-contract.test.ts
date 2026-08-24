@@ -14,12 +14,12 @@ const sequenceReconciliation = readFileSync(
   "scripts/database/preactivation-sequence-privilege-reconciliation.sql",
   "utf8",
 );
-const policyCatalog = readFileSync(
-  "scripts/database/preactivation-policy-catalog.sql",
+const policyProbes = readFileSync(
+  "scripts/database/preactivation-policy-probes.sql",
   "utf8",
 );
-const policyDefinitions = readFileSync(
-  "scripts/database/preactivation-policy-definitions.sql",
+const policyEquivalence = readFileSync(
+  "scripts/database/preactivation-policy-equivalence.sql",
   "utf8",
 );
 const generatorPreparation = readFileSync(
@@ -36,7 +36,6 @@ test("pre-activation generator appends authoritative privilege reconciliation be
   assert.match(generator, /SEQUENCE_PRIVILEGE_RECONCILIATION=/);
   assert.match(generator, /preactivation-privilege-reconciliation\.sql/);
   assert.match(generator, /preactivation-sequence-privilege-reconciliation\.sql/);
-  assert.match(generator, /preactivation-policy-catalog\.sql/);
   assert.match(generator, /cat "\$PRIVILEGE_RECONCILIATION" >> "\$BASELINE_TMP"/);
   assert.match(generator, /cat "\$SEQUENCE_PRIVILEGE_RECONCILIATION" >> "\$BASELINE_TMP"/);
   assert.match(generator, /-- Reconcile application privileges after portable no-owner replay\./);
@@ -66,18 +65,24 @@ test("sequence privilege reconciliation preserves usage, select, and update with
   assert.match(sequenceReconciliation, /PUBLIC, anon, authenticated, service_role/);
 });
 
-test("policy catalog treats policy role order as semantically irrelevant", () => {
-  assert.match(policyCatalog, /string_agg\(role_name, ',' order by role_name\)/);
-  assert.match(policyCatalog, /from unnest\(roles\) as role_name/);
-  assert.match(policyCatalog, /where schemaname in \('public', 'moral_trade_private'\)/);
+test("source-policy probes compare policies after both are parsed by the target PostgreSQL version", () => {
+  assert.match(policyProbes, /create policy %I on %I\.%I as %s for %s to %s%s%s;/);
+  assert.match(policyProbes, /__mt_baseline_probe_/);
+  assert.match(policyProbes, /md5\(schemaname \|\| E'\\x1f'/);
+  assert.match(policyProbes, /string_agg/);
+  assert.match(policyEquivalence, /missing_or_different_probe/);
+  assert.match(policyEquivalence, /unexpected_probe/);
+  assert.match(policyEquivalence, /a\.qual is distinct from p\.qual/);
+  assert.match(policyEquivalence, /a\.with_check is distinct from p\.with_check/);
 });
 
-test("policy diagnostics preserve exact source and target definitions without user data", () => {
-  assert.match(policyDefinitions, /coalesce\(qual, ''\) as using_expression/);
-  assert.match(policyDefinitions, /coalesce\(with_check, ''\) as with_check_expression/);
-  assert.match(policyDefinitions, /string_agg\(role_name, ',' order by role_name\)/);
-  assert.match(generatorPreparation, /SOURCE_POLICY_DEFINITIONS/);
-  assert.match(generatorPreparation, /source-policy-definitions\.tsv/);
-  assert.match(validatorPreparation, /TARGET_POLICY_DEFINITIONS/);
-  assert.match(validatorPreparation, /target-policy-definitions\.tsv/);
+test("generator and validator exclude version-sensitive policy deparsing from the main catalog", () => {
+  assert.match(generatorPreparation, /SOURCE_POLICY_PROBES/);
+  assert.match(generatorPreparation, /source_policy_probes\.sql/);
+  assert.match(generatorPreparation, /grep -v \$'\^POLICY\\\\t'/);
+  assert.match(generatorPreparation, /policy_probe_rows/);
+  assert.match(validatorPreparation, /POLICY_EQUIVALENCE_SQL/);
+  assert.match(validatorPreparation, /policy-equivalence\.tsv/);
+  assert.match(validatorPreparation, /policy_probe_residue/);
+  assert.match(validatorPreparation, /test ! -s "\$POLICY_EQUIVALENCE"/);
 });
