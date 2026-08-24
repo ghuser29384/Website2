@@ -16,6 +16,7 @@ begin
       n.nspname = 'moral_trade_private'
       and (
         p.proname like 'compact_outflow_%'
+        or p.proname like 'assign_compact_outflow_%'
         or p.proname like 'reject_compact_outflow_%'
         or p.proname like 'require_compact_outflow_%'
       )
