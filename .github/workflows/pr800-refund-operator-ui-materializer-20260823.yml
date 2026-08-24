@@ -1,4 +1,4 @@
-name: PR800 stacked refund operator and rendered review materializer v3
+name: PR800 stacked refund operator and rendered review materializer v4
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: pr800-stacked-refund-operator-ui-materializer-v3
+  group: pr800-stacked-refund-operator-ui-materializer-v4
   cancel-in-progress: false
 
 jobs:
@@ -36,10 +36,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/refund-operator-controller" materialization-evidence
+          mkdir -p "$RUNNER_TEMP/refund-operator-controller"
           test -f "$GENERATOR_PATH"
           cp "$GENERATOR_PATH" "$RUNNER_TEMP/refund-operator-controller/materialize.py"
-          sha256sum "$GENERATOR_PATH" > materialization-evidence/controller-source-sha256.txt
+          sha256sum "$GENERATOR_PATH" \
+            > "$RUNNER_TEMP/refund-operator-controller/controller-source-sha256.txt"
           git fetch --no-tags origin \
             "+refs/heads/$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH"
           test "$(git rev-parse refs/remotes/origin/$BASE_BRANCH)" = "$BASE_SHA"
@@ -55,6 +56,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "$BASE_SHA"
           test "$(git rev-parse HEAD^{tree})" = "$BASE_TREE"
           test -z "$(git status --porcelain)"
+          mkdir -p materialization-evidence
+          cp "$RUNNER_TEMP/refund-operator-controller/controller-source-sha256.txt" \
+            materialization-evidence/controller-source-sha256.txt
 
       - name: Generate bounded operator, rendering, QA, and review sources
         shell: bash
@@ -295,7 +299,7 @@ jobs:
           PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
         run: |
           set -euo pipefail
-          body="<!-- issue709-refund-operator-ui-materialized-v3 -->
+          body="<!-- issue709-refund-operator-ui-materialized-v4 -->
           ## Issue #709 AAL2 refund-operator and rendered-review tranche materialized
 
           - exact stacked base: \`$BASE_SHA\`
@@ -335,7 +339,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: issue709-refund-operator-ui-materialization-v3-${{ github.run_id }}
+          name: issue709-refund-operator-ui-materialization-v4-${{ github.run_id }}
           path: materialization-evidence/
           if-no-files-found: error
           retention-days: 30
