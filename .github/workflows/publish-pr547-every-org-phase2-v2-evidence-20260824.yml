@@ -1,0 +1,214 @@
+name: Publish PR 547 Every.org exact Phase 2 v2 evidence
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-phase2-566bb18-20260824
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: publish-pr547-every-org-phase2-v2-evidence-20260824
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_BRANCH: ops/pr547-every-org-phase2-566bb18-20260824
+  EXPECTED_CANDIDATE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+  EXPECTED_CANDIDATE_TREE: 86c70b442272f5cff4cf29e63d030c949b4323cb
+  EXPECTED_ALIAS: moraltrade-pr547-every-org-phase2-566bb18.vercel.app
+  EXPECTED_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  EXPECTED_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  SOURCE_WORKFLOW: pr547-every-org-exact-phase2-v2-566bb18-20260824.yml
+  MARKER: .github/publish-pr547-every-org-phase2-v2-evidence.marker
+
+jobs:
+  publish:
+    if: github.event.head_commit.message == 'Publish exact Every.org Phase 2 v2 evidence'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check out exact publisher revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Locate decisive successful run and verify its artifact
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
+          test -f "$MARKER"
+          test -n "$VERCEL_TOKEN"
+          echo "::add-mask::$VERCEL_TOKEN"
+          mkdir -p observed extracted
+
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          auth=(-H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json')
+          curl -fsS "${auth[@]}" \
+            "$api/actions/workflows/$SOURCE_WORKFLOW/runs?branch=$EXPECTED_BRANCH&status=success&per_page=20" \
+            > observed/runs.json
+
+          selected_run=''
+          selected_artifact=''
+          while IFS= read -r run_id; do
+            curl -fsS "${auth[@]}" "$api/actions/runs/$run_id/artifacts" > "observed/artifacts-$run_id.json"
+            artifact_id="$(jq -r --arg name "every-org-exact-phase2-v2-$run_id" '.artifacts[] | select(.name == $name and .expired == false) | .id' "observed/artifacts-$run_id.json" | head -n 1)"
+            if [[ -n "$artifact_id" ]]; then
+              selected_run="$run_id"
+              selected_artifact="$artifact_id"
+              cp "observed/artifacts-$run_id.json" observed/artifacts.json
+              break
+            fi
+          done < <(jq -r '.workflow_runs[].id' observed/runs.json)
+
+          test -n "$selected_run"
+          test -n "$selected_artifact"
+          conclusion="$(jq -r --argjson id "$selected_run" '.workflow_runs[] | select(.id == $id) | .conclusion' observed/runs.json)"
+          head_sha="$(jq -r --argjson id "$selected_run" '.workflow_runs[] | select(.id == $id) | .head_sha' observed/runs.json)"
+          test "$conclusion" = success
+
+          curl -fsSL "${auth[@]}" "$api/actions/artifacts/$selected_artifact/zip" > observed/phase2.zip
+          artifact_size="$(wc -c < observed/phase2.zip | tr -d ' ')"
+          artifact_sha256="$(sha256sum observed/phase2.zip | awk '{print $1}')"
+          unzip -q observed/phase2.zip -d extracted
+
+          test -f extracted/deployment.json
+          test -f extracted/probe-assertions.txt
+          test -f extracted/auth-matrix-status.txt
+          test -f extracted/sanitization.txt
+          jq -e \
+            --arg candidate "$EXPECTED_CANDIDATE_SHA" \
+            --arg tree "$EXPECTED_CANDIDATE_TREE" '
+              .candidateSha == $candidate
+              and .candidateTree == $tree
+              and .target == "preview"
+              and .providerAuthorizationContractStatus == "confirmed"
+              and .phase2ConfigurationReady == true
+              and .publicPrivateCredentialDistinctnessChecked == true
+              and .providerDeliveryObserved == false
+              and .actualProviderUatComplete == false
+              and .productionAliasChanged == false
+              and .providerTransactionAttempted == false
+              and .rawHttpBodiesRetained == false
+            ' extracted/deployment.json >/dev/null
+
+          grep -Fxq 'missing_authorization_401=true' extracted/probe-assertions.txt
+          grep -Fxq 'wrong_authorization_401=true' extracted/probe-assertions.txt
+          grep -Fxq 'wrong_scheme_401=true' extracted/probe-assertions.txt
+          grep -Fxq 'raw_token_401=true' extracted/probe-assertions.txt
+          grep -Fxq 'duplicate_authorization_401=true' extracted/probe-assertions.txt
+          grep -Fxq 'coalesced_authorization_401=true' extracted/probe-assertions.txt
+          grep -Fxq 'correct_authorization_wrong_route_401=true' extracted/probe-assertions.txt
+          grep -Fxq 'correct_authorization_reached_payload_validation=true' extracted/probe-assertions.txt
+          grep -Fxq 'provider_transaction_attempted=false' extracted/probe-assertions.txt
+          grep -Fxq 'checkout_attempted=false' extracted/probe-assertions.txt
+          grep -Fxq 'donation_attempted=false' extracted/probe-assertions.txt
+          grep -Fxq 'raw_http_bodies_retained=false' extracted/probe-assertions.txt
+
+          deployment_id="$(jq -r '.deploymentId' extracted/deployment.json)"
+          deployment_url="$(jq -r '.deploymentUrl' extracted/deployment.json)"
+          alias_url="$(jq -r '.aliasUrl' extracted/deployment.json)"
+          route_id="$(jq -r '.routeId' extracted/deployment.json)"
+          test "$alias_url" = "https://$EXPECTED_ALIAS"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          [[ "$route_id" =~ ^[A-Za-z0-9_-]{32,128}$ ]]
+
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_id?teamId=$EXPECTED_TEAM_ID" \
+            > observed/deployment.json
+          jq -e \
+            --arg deployment_id "$deployment_id" \
+            --arg project_id "$EXPECTED_PROJECT_ID" \
+            --arg candidate "$EXPECTED_CANDIDATE_SHA" \
+            --arg tree "$EXPECTED_CANDIDATE_TREE" '
+              ((.id // .uid) == $deployment_id)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and (.meta.moralTradeCandidateSha == $candidate)
+              and (.meta.moralTradeCandidateTree == $tree)
+            ' observed/deployment.json >/dev/null
+
+          {
+            echo "run_id=$selected_run"
+            echo "run_head=$head_sha"
+            echo "artifact_id=$selected_artifact"
+            echo "artifact_size=$artifact_size"
+            echo "artifact_sha256=$artifact_sha256"
+            echo "deployment_id=$deployment_id"
+            echo "deployment_url=$deployment_url"
+            echo "alias_url=$alias_url"
+            echo "route_id=$route_id"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish sanitized durable checkpoint to Issue 708
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker='<!-- every-org-exact-phase2-v2-566bb18-evidence -->'
+          existing="$(curl -fsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/708/comments?per_page=100" \
+            | jq -r --arg marker "$marker" '.[] | select(.body | contains($marker)) | .id' | head -n 1)"
+          test -z "$existing"
+
+          body="$(cat <<EOF_BODY
+          $marker
+          ## Exact Phase 2 configuration and synthetic authentication matrix passed
+
+          The accepted #708 candidate remains:
+
+          - SHA: \`$EXPECTED_CANDIDATE_SHA\`
+          - tree: \`$EXPECTED_CANDIDATE_TREE\`
+
+          The decisive exact-head controller run completed successfully:
+
+          - run: https://github.com/$GITHUB_REPOSITORY/actions/runs/${{ steps.evidence.outputs.run_id }}
+          - run head: \`${{ steps.evidence.outputs.run_head }}\`
+          - artifact: https://github.com/$GITHUB_REPOSITORY/actions/runs/${{ steps.evidence.outputs.run_id }}/artifacts/${{ steps.evidence.outputs.artifact_id }}
+          - artifact size: \`${{ steps.evidence.outputs.artifact_size }}\` bytes
+          - independently calculated artifact SHA-256: \`${{ steps.evidence.outputs.artifact_sha256 }}\`
+
+          Protected Preview:
+
+          - deployment ID: \`${{ steps.evidence.outputs.deployment_id }}\`
+          - immutable deployment URL: \`${{ steps.evidence.outputs.deployment_url }}\`
+          - non-production alias: \`${{ steps.evidence.outputs.alias_url }}\`
+          - target: Preview; state READY; candidate SHA/tree metadata verified
+
+          The workflow proved, without retaining token values:
+
+          - both staging webhook credentials are present and distinct;
+          - missing, wrong, wrong-scheme, raw-token, duplicate, and coalesced Authorization inputs return the same generic 401;
+          - correct Authorization plus the wrong route ID returns the same generic 401;
+          - correct route ID plus correct Authorization reaches bounded payload validation;
+          - the private authorization token is absent from build artifacts and retained evidence;
+          - the public Donate-Link token is absent from client static assets and retained evidence;
+          - no provider-origin delivery, checkout, donation, provider transaction, persistent migration, production alias change, or production change occurred.
+
+          This is **synthetic staging authentication evidence**, not completed provider-origin UAT. The one existing staging Partner Webhook must now be updated to this immutable Phase 2 callback:
+
+          \`${{ steps.evidence.outputs.deployment_url }}/api/connectors/every-org/${{ steps.evidence.outputs.route_id }}?x-vercel-protection-bypass=<EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET>\`
+
+          Use the owner-controlled bypass value without posting the completed URL. If the staging dashboard offers a no-donation test-delivery action, trigger it once after saving. Do not create another webhook, use the alias, make a donation, or configure production.
+          EOF_BODY
+          )"
+
+          payload="$(jq -n --arg body "$body" '{body:$body}')"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/708/comments" >/dev/null
