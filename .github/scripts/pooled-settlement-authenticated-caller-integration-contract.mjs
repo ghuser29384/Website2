@@ -4,6 +4,7 @@ export const PR700_HEAD = "813573f64eaa17d2ca240c50f76ead9a3b535f97";
 export const PRODUCT_REPAIR_HEAD = "495f714b6dd4753ad78cf3d41945cffc84923876";
 export const CLEAN_STACK_HEAD = "a67878590380f45af704ddd3e643ef1a135015f7";
 export const CONTEXT_READ_REPAIR_HEAD = "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d";
+export const OPERATOR_UI_REPAIR_HEAD = "a1f774eef872464528249d9e64a1d7d4466e7f2e";
 export const QA_PROJECT_REF = "hvmxfjjbdcgjjudmthdz";
 export const AUTHENTICATED_CONFIRMATION_MIGRATION =
   "supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql";
@@ -18,9 +19,11 @@ export const INTEGRATION_PATHS = [
   ".github/scripts/pooled-settlement-authenticated-caller-integration.mjs",
   ".github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs",
   ".github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml",
+  "src/app/admin/trade-donation-pools/page.tsx",
   "src/app/trade-donation-actions-base.ts",
   "src/lib/moral-trade/trade-donation-context-read-boundary.test.ts",
   "src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts",
+  "src/lib/trade-donation-pool-operator-ui-source-contract.test.ts",
   "src/lib/trade-donation.ts",
   AUTHENTICATED_CONFIRMATION_MIGRATION,
 ];

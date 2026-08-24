@@ -8,6 +8,7 @@ import {
   CONFIRMATION_SIGNATURE,
   CONTEXT_READ_REPAIR_HEAD,
   INTEGRATION_PATHS,
+  OPERATOR_UI_REPAIR_HEAD,
   PR700_HEAD,
   PRODUCT_REPAIR_HEAD,
   QA_PROJECT_REF,
@@ -21,16 +22,17 @@ const workflow = readFileSync(
   "utf8",
 );
 
-test("the stacked QA candidate is pinned to the clean stack and both product repairs", () => {
+test("the stacked QA candidate is pinned to the clean stack and all product repairs", () => {
   assert.equal(PR700_HEAD, "813573f64eaa17d2ca240c50f76ead9a3b535f97");
   assert.equal(PRODUCT_REPAIR_HEAD, "495f714b6dd4753ad78cf3d41945cffc84923876");
   assert.equal(CLEAN_STACK_HEAD, "a67878590380f45af704ddd3e643ef1a135015f7");
   assert.equal(CONTEXT_READ_REPAIR_HEAD, "ff2e94db6dffc0a2fe9e665733ad15e3fd26026d");
+  assert.equal(OPERATOR_UI_REPAIR_HEAD, "a1f774eef872464528249d9e64a1d7d4466e7f2e");
   assert.equal(QA_PROJECT_REF, "hvmxfjjbdcgjjudmthdz");
   assert.deepEqual(REQUIRED_MILESTONE_LIFECYCLE_FUNCTIONS, [
     "finalize_trade_milestone_manifest_v1",
   ]);
-  assert.equal(INTEGRATION_PATHS.length, 9);
+  assert.equal(INTEGRATION_PATHS.length, 11);
   assert.ok(INTEGRATION_PATHS.includes(AUTHENTICATED_CONFIRMATION_MIGRATION));
 });
 
@@ -274,11 +276,12 @@ test("source transformation fails closed if the old service-role confirmation bl
   );
 });
 
-test("the stacked workflow is QA-only, exact-nine-file-scoped, and applies the forward migration", () => {
+test("the stacked workflow is QA-only, exact-eleven-file-scoped, and applies the forward migration", () => {
   assert.match(workflow, new RegExp(PR700_HEAD));
   assert.match(workflow, new RegExp(PRODUCT_REPAIR_HEAD));
   assert.match(workflow, new RegExp(CLEAN_STACK_HEAD));
   assert.match(workflow, new RegExp(CONTEXT_READ_REPAIR_HEAD));
+  assert.match(workflow, new RegExp(OPERATOR_UI_REPAIR_HEAD));
   assert.match(workflow, new RegExp(QA_PROJECT_REF));
   assert.match(workflow, /qa\/723-authenticated-confirmation-clean-stack-20260818-v1/);
   assert.match(workflow, /qa\/723-participant-context-integration-20260824/);

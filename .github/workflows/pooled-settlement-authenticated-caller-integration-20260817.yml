@@ -20,6 +20,7 @@ env:
   PRODUCT_REPAIR_HEAD: 495f714b6dd4753ad78cf3d41945cffc84923876
   CLEAN_STACK_HEAD: a67878590380f45af704ddd3e643ef1a135015f7
   CONTEXT_READ_REPAIR_HEAD: ff2e94db6dffc0a2fe9e665733ad15e3fd26026d
+  OPERATOR_UI_REPAIR_HEAD: a1f774eef872464528249d9e64a1d7d4466e7f2e
   AUTH_MIGRATION_PATH: supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
   NEXT_TELEMETRY_DISABLED: "1"
 
@@ -38,12 +39,12 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Verify exact clean-stack ancestry, product bytes, and nine-file scope
+      - name: Verify exact clean-stack ancestry, product bytes, and eleven-file scope
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD" "$CLEAN_STACK_HEAD" "$CONTEXT_READ_REPAIR_HEAD"
+          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD" "$CLEAN_STACK_HEAD" "$CONTEXT_READ_REPAIR_HEAD" "$OPERATOR_UI_REPAIR_HEAD"
           git merge-base --is-ancestor "$PR700_HEAD" HEAD
           git merge-base --is-ancestor "$CLEAN_STACK_HEAD" HEAD
 
@@ -53,9 +54,11 @@ jobs:
             '.github/scripts/pooled-settlement-authenticated-caller-integration.mjs' \
             '.github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs' \
             '.github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml' \
+            'src/app/admin/trade-donation-pools/page.tsx' \
             'src/app/trade-donation-actions-base.ts' \
             'src/lib/moral-trade/trade-donation-context-read-boundary.test.ts' \
             'src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts' \
+            'src/lib/trade-donation-pool-operator-ui-source-contract.test.ts' \
             'src/lib/trade-donation.ts' \
             'supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql' \
             | LC_ALL=C sort)"
@@ -81,6 +84,13 @@ jobs:
             test "$(git rev-parse "$CONTEXT_READ_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
           done
 
+          for path in \
+            src/app/admin/trade-donation-pools/page.tsx \
+            src/lib/trade-donation-pool-operator-ui-source-contract.test.ts
+          do
+            test "$(git rev-parse "$OPERATOR_UI_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
+
           git diff --check "$PR700_HEAD" HEAD
           grep -F 'import { createClient, createServiceClient } from "@/lib/supabase/server";' src/app/trade-donation-actions-base.ts
           grep -F 'const supabase = (await createClient()) as any;' src/app/trade-donation-actions-base.ts
@@ -95,9 +105,11 @@ jobs:
             .github/scripts/pooled-settlement-authenticated-caller-integration.mjs
             .github/scripts/pooled-settlement-authenticated-caller-integration.test.mjs
             .github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml
+            src/app/admin/trade-donation-pools/page.tsx
             src/app/trade-donation-actions-base.ts
             src/lib/moral-trade/trade-donation-context-read-boundary.test.ts
             src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts
+            src/lib/trade-donation-pool-operator-ui-source-contract.test.ts
             src/lib/trade-donation.ts
             supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql
           )
@@ -157,6 +169,7 @@ jobs:
           node --import tsx --test \
             src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts \
             src/lib/moral-trade/trade-donation-context-read-boundary.test.ts \
+            src/lib/trade-donation-pool-operator-ui-source-contract.test.ts \
             src/lib/trade-donation-pool.test.ts \
             src/lib/trade-donation-pool-source-contract.test.ts \
             src/lib/trade-donation-pool-environment-source-contract.test.ts \
@@ -254,10 +267,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD" "$CLEAN_STACK_HEAD" "$CONTEXT_READ_REPAIR_HEAD"
+          git fetch --no-tags origin "$PR700_HEAD" "$PRODUCT_REPAIR_HEAD" "$CLEAN_STACK_HEAD" "$CONTEXT_READ_REPAIR_HEAD" "$OPERATOR_UI_REPAIR_HEAD"
           git merge-base --is-ancestor "$PR700_HEAD" HEAD
           git merge-base --is-ancestor "$CLEAN_STACK_HEAD" HEAD
-          test "$(git diff --name-only "$PR700_HEAD" HEAD | wc -l | tr -d ' ')" = "9"
+          test "$(git diff --name-only "$PR700_HEAD" HEAD | wc -l | tr -d ' ')" = "11"
           ! git ls-tree -r --name-only HEAD | grep -q '^\.github/workflows/bootstrap-issue-723-'
           for path in \
             src/app/trade-donation-actions-base.ts \
@@ -271,6 +284,12 @@ jobs:
             src/lib/trade-donation.ts
           do
             test "$(git rev-parse "$CONTEXT_READ_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
+          for path in \
+            src/app/admin/trade-donation-pools/page.tsx \
+            src/lib/trade-donation-pool-operator-ui-source-contract.test.ts
+          do
+            test "$(git rev-parse "$OPERATOR_UI_REPAIR_HEAD:$path")" = "$(git rev-parse "HEAD:$path")"
           done
 
       - name: Use Node.js 24
