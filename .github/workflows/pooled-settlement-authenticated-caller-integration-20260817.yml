@@ -463,6 +463,7 @@ jobs:
             }
             const configuredAccount = String(process.env.STRIPE_PLATFORM_ACCOUNT_ID ?? "").trim()
               || "acct_1TLqUmAf75xWktVp";
+            process.stdout.write(`::add-mask::${account.id}\n`);
             await appendFile(
               process.env.GITHUB_ENV,
               `STRIPE_PLATFORM_ACCOUNT_ID=${account.id}\n`,

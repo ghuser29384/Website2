@@ -40,7 +40,19 @@ test("the generated harness creates route-complete run-owned profiles and uses t
   assert.match(generated, /return "pq-" \+ sha256\(runId \+ ":" \+ role\)\.slice\(0, 20\)/);
   assert.match(generated, /username:\s*qaUsername\(role\)/);
   assert.match(generated, /const stage = page\.locator\("#main-content"\)/);
-  assert.doesNotMatch(generated, /const stage = page\.locator\("main"\)/);
+  assert.equal((generated.match(/page\.locator\("#main-content"\)/g) ?? []).length, 4);
+  assert.doesNotMatch(generated, /page\.locator\("main"\)/);
+});
+
+test("content-root generation fails closed if any later participant or operator locator drifts", () => {
+  const drifted = original.replace(
+    'await expectText(page.locator("main"), /immutable provider bundle|frozen bundle/i);',
+    'await expectText(page.locator("section"), /immutable provider bundle|frozen bundle/i);',
+  );
+  assert.throws(
+    () => buildAuthenticatedHarnessSource(drifted),
+    /remaining canonical participant and operator content roots: expected 3 source contracts but found 2/,
+  );
 });
 
 test("the generated participant UI check requires the pooled funding boundary", () => {
@@ -79,11 +91,16 @@ test("participant UI generation fails closed if the pooled assertion block drift
 test("the workflow resolves the Stripe platform from the QA test key without recording its identity", () => {
   assert.match(workflow, /Bind the exact QA Stripe test account without exposing its identity/);
   assert.match(workflow, /accounts\.retrieveCurrent\(\)/);
+  assert.match(workflow, /::add-mask::\$\{account\.id\}/);
   assert.match(workflow, /STRIPE_PLATFORM_ACCOUNT_ID=\$\{account\.id\}/);
   assert.match(workflow, /stripe-platform-binding\.json/);
   assert.match(workflow, /configuredAccountMatchedAuthenticatedAccount/);
   assert.match(workflow, /accountIdentityRecorded:\s*false/);
   assert.doesNotMatch(workflow, /console\.log\([^\n]*account\.id/);
+  const mask = workflow.indexOf("::add-mask::${account.id}");
+  const bind = workflow.indexOf("STRIPE_PLATFORM_ACCOUNT_ID=${account.id}");
+  assert.ok(mask >= 0, "The Stripe account mask command is missing.");
+  assert.ok(bind > mask, "The Stripe account identity must be masked before it enters GITHUB_ENV.");
 });
 
 test("the generated harness uses the production milestone lifecycle before bilateral donation confirmation", () => {

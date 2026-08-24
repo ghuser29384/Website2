@@ -36,6 +36,16 @@ function replaceExactly(source, before, after, label) {
   return source.slice(0, first) + after + source.slice(first + before.length);
 }
 
+function replaceCount(source, before, after, expectedCount, label) {
+  const actualCount = source.split(before).length - 1;
+  assert.equal(
+    actualCount,
+    expectedCount,
+    `${label}: expected ${expectedCount} source contracts but found ${actualCount}.`,
+  );
+  return source.split(before).join(after);
+}
+
 export function buildAuthenticatedHarnessSource(input) {
   let source = String(input);
 
@@ -91,6 +101,13 @@ export function buildAuthenticatedHarnessSource(input) {
     '  const stage = page.locator("main");',
     '  const stage = page.locator("#main-content");',
     "canonical participant content root",
+  );
+  source = replaceCount(
+    source,
+    'page.locator("main")',
+    'page.locator("#main-content")',
+    3,
+    "remaining canonical participant and operator content roots",
   );
 
   const participantUiBlock = [
