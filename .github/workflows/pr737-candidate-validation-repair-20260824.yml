@@ -6,6 +6,7 @@ on:
       - ops/pr737-ledger-isolated-qa-uat-20260821
     paths:
       - ".github/workflows/pr737-candidate-validation-repair-20260824.yml"
+      - "ops/pr737-ledger-uat/repair-candidate-validation.py"
 
 permissions:
   contents: write
@@ -17,7 +18,6 @@ concurrency:
 env:
   EXPECTED_CANDIDATE_HEAD: 8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91
   TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
-  TARGET_PATH: .github/workflows/compact-authoritative-outflow-ledger-qa.yml
 
 jobs:
   repair:
@@ -25,14 +25,22 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Check out the one-use controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+
       - name: Check out the exact frozen candidate
         uses: actions/checkout@v4
         with:
+          path: candidate
           fetch-depth: 0
           ref: ${{ env.EXPECTED_CANDIDATE_HEAD }}
 
       - name: Verify the candidate branch has not moved
         shell: bash
+        working-directory: candidate
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_HEAD"
@@ -40,338 +48,27 @@ jobs:
           test "$remote_head" = "$EXPECTED_CANDIDATE_HEAD"
           test -z "$(git status --porcelain)"
 
-      - name: Apply the bounded validation repair
+      - name: Apply and verify the bounded two-file validation repair
         shell: bash
+        working-directory: candidate
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          path = Path(os.environ["TARGET_PATH"])
-          text = path.read_text()
-
-          def replace_once(old: str, new: str, label: str) -> None:
-              global text
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
-              text = text.replace(old, new, 1)
-
-          def replace_between(start: str, end: str, replacement: str, label: str) -> None:
-              global text
-              start_count = text.count(start)
-              end_count = text.count(end)
-              if start_count != 1 or end_count != 1:
-                  raise SystemExit(
-                      f"{label}: expected one start/end marker, found {start_count}/{end_count}"
-                  )
-              start_index = text.index(start)
-              end_index = text.index(end, start_index)
-              text = text[:start_index] + replacement + text[end_index:]
-
-          replace_once(
-              "      - name: Focused contracts\n        run: |\n",
-              "      - name: Focused contracts\n        shell: bash\n        run: |\n          set -euo pipefail\n",
-              "focused contracts pipefail",
-          )
-          for name, command in [
-              ("Complete repository tests", "npm test 2>&1 | tee repository-tests.log"),
-              ("ESLint", "npm run lint -- --quiet 2>&1 | tee eslint.log"),
-              ("Strict TypeScript", "npx tsc --noEmit 2>&1 | tee typescript.log"),
-              ("Production build", "npm run build 2>&1 | tee build.log"),
-              (
-                  "Four-viewpoint browser contract",
-                  "npx playwright test tests/mpgf-public-goods-compacts.spec.ts --workers=1 --reporter=line 2>&1 | tee playwright.log",
-              ),
-          ]:
-              replace_once(
-                  f"      - name: {name}\n        run: {command}\n",
-                  f"      - name: {name}\n        shell: bash\n        run: |\n          set -euo pipefail\n          {command}\n",
-                  f"{name} pipefail",
-              )
-
-          replace_once(
-              "      - name: Generate and compare public runtime types\n        run: |\n",
-              "      - name: Generate and compare public runtime types\n        shell: bash\n        run: |\n          set -euo pipefail\n",
-              "generated types pipefail",
-          )
-
-          replace_once(
-              "      - name: Apply pre-ledger production-compatible migrations\n",
-              "      - name: Apply baseline and every production-compatible pre-ledger migration\n",
-              "pre-ledger phase name",
-          )
-          replace_once(
-              "      - name: Validate original Compact lifecycle before ledger hardening\n",
-              "      - name: Run legacy Compact regressions before ledger authority hardening\n",
-              "legacy phase name",
-          )
-          replace_once(
-              "      - name: Apply authoritative ledger migrations\n",
-              "      - name: Apply the four authoritative-ledger migrations in order\n",
-              "ledger migration phase name",
-          )
-
-          replace_between(
-              "      - name: Lint final schema and execute authoritative ledger lifecycle\n",
-              "      - name: Concurrent canonical freeze\n",
-              """      - name: Lint final public and private schemas
-        shell: bash
-        run: |
-          set -euo pipefail
-          supabase db lint --db-url "$DB_URL" --schema public --level warning --fail-on none 2>&1 | tee db-evidence/public-lint.log
-          supabase db lint --db-url "$DB_URL" --schema moral_trade_private --level warning --fail-on none 2>&1 | tee db-evidence/private-lint.log
-          node scripts/verify-mpgf-public-goods-compacts-db-lint.mjs db-evidence/public-lint.log | tee db-evidence/owned-lint.json
-      - name: Run final authoritative-ledger lifecycle and authorization suites
-        shell: bash
-        run: |
-          set -euo pipefail
-          psql "$DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee db-evidence/ledger-lifecycle.log
-          begin;
-          \\i supabase/tests/compact_authoritative_outflow_ledger_core.sql
-          \\i supabase/tests/compact_authoritative_outflow_ledger_authorization.sql
-          rollback;
-          SQL
-""",
-              "split final lint and lifecycle phases",
-          )
-
-          replace_between(
-              "      - name: Record baseline\n",
-              "      - name: Execute rollback-only staged lifecycle\n",
-              """      - name: Record baseline and normalize rollback-only sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p compact-outflow-rollback/migrations compact-outflow-rollback/test-bodies
-          psql "$QA_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' > compact-outflow-rollback/before.txt
-          select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
-          union all select 'private_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
-          union all select 'fixture_users|' || count(*) from auth.users where email like 'ledger-%@example.test'
-          union all select 'fixture_profiles|' || count(*) from public.profiles where email like 'ledger-%@example.test'
-          order by 1;
-          SQL
-          python3 - <<'PY_NORMALIZE'
-          from pathlib import Path
-
-          output_root = Path("compact-outflow-rollback")
-
-          def significant_indices(lines: list[str]) -> list[int]:
-              return [
-                  index
-                  for index, line in enumerate(lines)
-                  if line.strip() and not line.lstrip().startswith("--")
-              ]
-
-          def standalone(lines: list[str], command: str) -> list[int]:
-              return [
-                  index
-                  for index, line in enumerate(lines)
-                  if line.strip().lower() == command
-              ]
-
-          def write_without(lines: list[str], removed: set[int], target: Path) -> None:
-              target.write_text("\n".join(
-                  line for index, line in enumerate(lines) if index not in removed
-              ) + "\n")
-
-          def normalize_migration(source: Path, target: Path) -> None:
-              lines = source.read_text().splitlines()
-              significant = significant_indices(lines)
-              begins = standalone(lines, "begin;")
-              commits = standalone(lines, "commit;")
-              rollbacks = standalone(lines, "rollback;")
-              if len(begins) > 1:
-                  raise SystemExit(f"unexpected nested begin in {source}")
-              if len(commits) > 1:
-                  raise SystemExit(f"unexpected nested commit in {source}")
-              if rollbacks:
-                  raise SystemExit(f"unexpected nested rollback in migration {source}")
-              if begins or commits:
-                  if (
-                      len(begins) != 1
-                      or len(commits) != 1
-                      or not significant
-                      or begins[0] != significant[0]
-                      or commits[0] != significant[-1]
-                  ):
-                      raise SystemExit(
-                          f"migration {source} did not contain exactly one removable outer transaction envelope"
-                      )
-                  write_without(lines, {begins[0], commits[0]}, target)
-              else:
-                  write_without(lines, set(), target)
-
-          def normalize_test_body(source: Path, target: Path) -> None:
-              text = source.read_text()
-              lines = text.splitlines()
-              significant = significant_indices(lines)
-              begins = standalone(lines, "begin;")
-              commits = standalone(lines, "commit;")
-              rollbacks = standalone(lines, "rollback;")
-              if len(begins) > 1:
-                  raise SystemExit(f"unexpected nested begin in {source}")
-              if len(rollbacks) > 1:
-                  raise SystemExit(f"unexpected nested rollback in {source}")
-              if commits:
-                  raise SystemExit(f"unexpected commit in rollback-only test {source}")
-              if not begins and not rollbacks:
-                  marker = text.lower()
-                  if (
-                      "workflow-owned transaction" not in marker
-                      and "rollback-only transaction" not in marker
-                  ):
-                      raise SystemExit(
-                          f"{source}: expected one rollback-only transaction envelope or an explicitly workflow-owned body"
-                      )
-                  write_without(lines, set(), target)
-                  return
-              if (
-                  len(begins) != 1
-                  or len(rollbacks) != 1
-                  or not significant
-                  or begins[0] != significant[0]
-                  or rollbacks[0] != significant[-1]
-              ):
-                  raise SystemExit(
-                      f"{source}: expected one rollback-only transaction envelope"
-                  )
-              write_without(lines, {begins[0], rollbacks[0]}, target)
-
-          migration_names = [
-              "20260607_moral_trade_release_gate_policy_snapshots.sql",
-              "20260607_zzzzz_moral_trade_participant_eligibility_records.sql",
-              "20260813163052_mpgf_public_goods_compacts.sql",
-              "20260814031500_mpgf_public_goods_compacts_state_hardening.sql",
-              "20260816141500_compact_authoritative_outflow_ledger_v1.sql",
-              "20260816141501_compact_authoritative_outflow_freeze_v1.sql",
-              "20260816141502_compact_authoritative_outflow_hardening_v1.sql",
-              "20260816141503_compact_authoritative_outflow_replay_fix_v1.sql",
-          ]
-          for name in migration_names:
-              normalize_migration(
-                  Path("supabase/migrations") / name,
-                  output_root / "migrations" / name,
-              )
-
-          test_names = [
-              "mpgf_public_goods_compacts_lifecycle.sql",
-              "mpgf_public_goods_compacts_historical_freeze.sql",
-              "compact_authoritative_outflow_ledger_core.sql",
-              "compact_authoritative_outflow_ledger_authorization.sql",
-          ]
-          for name in test_names:
-              normalize_test_body(
-                  Path("supabase/tests") / name,
-                  output_root / "test-bodies" / name,
-              )
-          PY_NORMALIZE
-""",
-              "rollback source normalization",
-          )
-
-          replace_between(
-              "      - name: Execute rollback-only staged lifecycle\n",
-              "      - name: Prove rollback and zero residue\n",
-              """      - name: Execute ordered rollback-only legacy and authoritative-ledger lifecycles
-        shell: bash
-        run: |
-          set -euo pipefail
-          psql "$QA_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 2>&1 <<'SQL' | tee compact-outflow-rollback/lifecycle.log
-          begin;
-          \\i compact-outflow-rollback/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
-          \\i compact-outflow-rollback/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
-          \\i compact-outflow-rollback/migrations/20260813163052_mpgf_public_goods_compacts.sql
-          \\i compact-outflow-rollback/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
-
-          savepoint legacy_compact_lifecycle;
-          \\i compact-outflow-rollback/test-bodies/mpgf_public_goods_compacts_lifecycle.sql
-          \\i compact-outflow-rollback/test-bodies/mpgf_public_goods_compacts_historical_freeze.sql
-          rollback to savepoint legacy_compact_lifecycle;
-          release savepoint legacy_compact_lifecycle;
-
-          \\i compact-outflow-rollback/migrations/20260816141500_compact_authoritative_outflow_ledger_v1.sql
-          \\i compact-outflow-rollback/migrations/20260816141501_compact_authoritative_outflow_freeze_v1.sql
-          \\i compact-outflow-rollback/migrations/20260816141502_compact_authoritative_outflow_hardening_v1.sql
-          \\i compact-outflow-rollback/migrations/20260816141503_compact_authoritative_outflow_replay_fix_v1.sql
-
-          savepoint authoritative_ledger_core;
-          \\i compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_core.sql
-          rollback to savepoint authoritative_ledger_core;
-          release savepoint authoritative_ledger_core;
-
-          savepoint authoritative_ledger_authorization;
-          \\i compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_authorization.sql
-          rollback to savepoint authoritative_ledger_authorization;
-          release savepoint authoritative_ledger_authorization;
-          rollback;
-          SQL
-""",
-              "ordered rollback lifecycle",
-          )
-
-          replace_between(
-              "      - name: Prove rollback and zero residue\n",
-              "      - name: Upload rollback evidence\n",
-              """      - name: Prove rollback and zero fixture residue
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          psql "$QA_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^$/d' > compact-outflow-rollback/after.txt
-          select 'public_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'mpgf_public_goods_%'
-          union all select 'private_relations|' || count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='moral_trade_private' and c.relname like 'compact_outflow_%'
-          union all select 'fixture_users|' || count(*) from auth.users where email like 'ledger-%@example.test'
-          union all select 'fixture_profiles|' || count(*) from public.profiles where email like 'ledger-%@example.test'
-          order by 1;
-          SQL
-          diff -u compact-outflow-rollback/before.txt compact-outflow-rollback/after.txt
-          git rev-parse HEAD > compact-outflow-rollback/head-sha.txt
-""",
-              "rollback residue proof",
-          )
-
-          replace_once(
-              "          path: rollback-evidence\n",
-              "          path: compact-outflow-rollback\n",
-              "rollback artifact path",
-          )
-
-          required = [
-              "set -euo pipefail\n          node --import tsx --test",
-              "Apply baseline and every production-compatible pre-ledger migration",
-              "Run legacy Compact regressions before ledger authority hardening",
-              "Apply the four authoritative-ledger migrations in order",
-              "Run final authoritative-ledger lifecycle and authorization suites",
-              "Execute ordered rollback-only legacy and authoritative-ledger lifecycles",
-              "savepoint legacy_compact_lifecycle;",
-              "savepoint authoritative_ledger_core;",
-              "compact-outflow-rollback/test-bodies/compact_authoritative_outflow_ledger_core.sql",
-              "expected one rollback-only transaction envelope",
-              "unexpected nested begin",
-              "unexpected nested rollback",
-              "Prove rollback and zero fixture residue",
-          ]
-          for marker in required:
-              if marker not in text:
-                  raise SystemExit(f"required repaired marker absent: {marker}")
-
-          for stale in [
-              "      - name: Execute rollback-only staged lifecycle\n",
-              "      - name: Lint final schema and execute authoritative ledger lifecycle\n",
-          ]:
-              if stale in text:
-                  raise SystemExit(f"stale validation phase remains: {stale.strip()}")
-
-          path.write_text(text)
-          PY
-
+          python3 ../controller/ops/pr737-ledger-uat/repair-candidate-validation.py
           git diff --check
-          test "$(git diff --name-only)" = "$TARGET_PATH"
+          git diff --name-only | LC_ALL=C sort > "$RUNNER_TEMP/actual-repair-files.txt"
+          cat > "$RUNNER_TEMP/expected-repair-files.txt" <<'FILES'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          FILES
+          diff -u "$RUNNER_TEMP/expected-repair-files.txt" "$RUNNER_TEMP/actual-repair-files.txt"
+          grep -Fq 'set -euo pipefail' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'Execute ordered rollback-only legacy and authoritative-ledger lifecycles' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'savepoint authoritative_ledger_authorization;' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'Run genuinely concurrent readiness freeze test before ledger authority hardening' src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
 
-      - name: Commit the exact workflow repair to the candidate branch
+      - name: Commit the exact repair to the candidate branch
         shell: bash
+        working-directory: candidate
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_HEAD"
@@ -379,6 +76,8 @@ jobs:
           test "$remote_head" = "$EXPECTED_CANDIDATE_HEAD"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add "$TARGET_PATH"
+          git add \
+            .github/workflows/compact-authoritative-outflow-ledger-qa.yml \
+            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
           git commit -m "ci: make PR 737 validation fail closed"
           git push origin "HEAD:$TARGET_BRANCH"
