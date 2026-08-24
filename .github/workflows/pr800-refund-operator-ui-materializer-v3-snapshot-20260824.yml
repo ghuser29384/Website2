@@ -1,4 +1,4 @@
-name: PR800 refund operator UI materializer v4 observer
+name: PR800 refund operator UI materializer v5 observer
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr800-refund-operator-ui-materializer-v4-observer
+  group: pr800-refund-operator-ui-materializer-v5-observer
   cancel-in-progress: true
 
 jobs:
@@ -23,9 +23,9 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: pr800-refund-operator-ui-materializer-20260823.yml
       TARGET_BRANCH: ops/pr800-refund-operator-ui-materializer-20260823
-      TARGET_HEAD: 3aa067ddf4d36315a44e55c7583335b171601f93
+      TARGET_HEAD: 2512d193a1a0202aa9d65eeaa3ea42afeadb948f
     steps:
-      - name: Observe exact v4 materializer run to completion
+      - name: Observe exact v5 materializer run to completion
         shell: bash
         run: |
           set -euo pipefail
@@ -49,8 +49,8 @@ jobs:
           done
 
           if [[ -z "$latest" ]]; then
-            gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body '<!-- pr800-refund-operator-ui-materializer-v4-observer -->
-          No exact refund operator UI materializer v4 run was found.'
+            gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body '<!-- pr800-refund-operator-ui-materializer-v5-observer -->
+          No exact refund operator UI materializer v5 run was found.'
             exit 1
           fi
 
@@ -58,8 +58,8 @@ jobs:
           status="$(jq -r '.status' <<<"$latest")"
           conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
           html_url="$(jq -r '.html_url' <<<"$latest")"
-          body="<!-- pr800-refund-operator-ui-materializer-v4-observer -->
-          ## PR #800 refund operator UI materializer v4 observer
+          body="<!-- pr800-refund-operator-ui-materializer-v5-observer -->
+          ## PR #800 refund operator UI materializer v5 observer
 
           - run: \`$run_id\`
           - status: \`$status\`
