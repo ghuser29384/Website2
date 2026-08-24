@@ -68,8 +68,9 @@ jobs:
             "$RUNNER_TEMP/generate-preactivation-baseline.sh"
           python3 - <<'PY'
           from pathlib import Path
+          import os
 
-          path = Path(__import__("os").environ["RUNNER_TEMP"]) / "generate-preactivation-baseline.sh"
+          path = Path(os.environ["RUNNER_TEMP"]) / "generate-preactivation-baseline.sh"
           source = path.read_text()
           bad = r"  E'\\n'," + "\n"
           good = r"  E'\n'," + "\n"
@@ -89,6 +90,9 @@ jobs:
           bash "$RUNNER_TEMP/generate-preactivation-baseline.sh"
           cp "$RUNNER_TEMP/generate-preactivation-baseline.sh" \
             scripts/database/generate-preactivation-baseline.sh
+          grep -nE '^(GRANT|REVOKE|ALTER DEFAULT PRIVILEGES)' \
+            supabase/baseline/pre_activation/schema.sql \
+            > "${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}/manifests/baseline-acl-statements.txt"
 
       - name: Verify source contracts
         shell: bash
