@@ -1,4 +1,4 @@
-name: PR800 stacked refund operator and rendered review materializer v4
+name: PR800 stacked refund operator and rendered review materializer v5
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: pr800-stacked-refund-operator-ui-materializer-v4
+  group: pr800-stacked-refund-operator-ui-materializer-v5
   cancel-in-progress: false
 
 jobs:
@@ -84,7 +84,29 @@ jobs:
               raise SystemExit("dynamic-detail route refinement anchor changed")
           path.write_text(text.replace(old, new, 1))
           PY
+
           python3 "$generator"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/capture-direct-donation-upgrade-refund-review.mjs")
+          text = path.read_text()
+          desktop_old = '{ name: "admin-and-participant-desktop", viewport: { width: 1440, height: 1000 } }'
+          mobile_old = '{ name: "admin-and-participant-mobile", viewport: { width: 390, height: 844 } }'
+          path_old = 'path: path.join(outputDirectory, `${fixture.name}.png`),'
+          replacements = {
+              desktop_old: '{ fileName: "admin-and-participant-desktop.png", viewport: { width: 1440, height: 1000 } }',
+              mobile_old: '{ fileName: "admin-and-participant-mobile.png", viewport: { width: 390, height: 844 } }',
+              path_old: 'path: path.join(outputDirectory, fixture.fileName),',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f"unexpected generated capture anchor count for {old!r}: {text.count(old)}")
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
           cp .refund-operator-generated-manifest.json \
             materialization-evidence/generated-manifest.json
           rm .refund-operator-generated-manifest.json
@@ -299,7 +321,7 @@ jobs:
           PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
         run: |
           set -euo pipefail
-          body="<!-- issue709-refund-operator-ui-materialized-v4 -->
+          body="<!-- issue709-refund-operator-ui-materialized-v5 -->
           ## Issue #709 AAL2 refund-operator and rendered-review tranche materialized
 
           - exact stacked base: \`$BASE_SHA\`
@@ -339,7 +361,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: issue709-refund-operator-ui-materialization-v4-${{ github.run_id }}
+          name: issue709-refund-operator-ui-materialization-v5-${{ github.run_id }}
           path: materialization-evidence/
           if-no-files-found: error
           retention-days: 30
