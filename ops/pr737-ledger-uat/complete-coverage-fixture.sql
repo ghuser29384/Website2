@@ -10,19 +10,19 @@ select pg_catalog.set_config(
 
 do $fixture$
 declare
-  participant_id constant uuid := '712a0000-0000-4000-8000-000000000001'::uuid;
+  fixture_participant_id constant uuid := '712a0000-0000-4000-8000-000000000001'::uuid;
   batch_id uuid;
   coverage_id uuid;
   coverage_result jsonb;
   result jsonb;
   obligation public.mpgf_public_goods_obligation_snapshots%rowtype;
 begin
-  if not exists (select 1 from public.profiles where id = participant_id) then
+  if not exists (select 1 from public.profiles where id = fixture_participant_id) then
     raise exception 'Hosted ledger fixture participant is absent.';
   end if;
 
   batch_id := moral_trade_private.compact_outflow_ingest_batch_v1(
-    participant_id,
+    fixture_participant_id,
     '2026-08',
     'qa',
     'USD',
@@ -80,7 +80,7 @@ begin
   end if;
 
   result := public.freeze_mpgf_public_goods_financial_cycle_v2(
-    participant_id,
+    fixture_participant_id,
     '2026-08'
   );
 
@@ -94,10 +94,10 @@ begin
   end if;
 
   select * into obligation
-  from public.mpgf_public_goods_obligation_snapshots
-  where participant_id = participant_id
-    and cycle_key = '2026-08'
-  order by frozen_at desc, id desc
+  from public.mpgf_public_goods_obligation_snapshots candidate
+  where candidate.participant_id = fixture_participant_id
+    and candidate.cycle_key = '2026-08'
+  order by candidate.frozen_at desc, candidate.id desc
   limit 1;
 
   if obligation.id is null
