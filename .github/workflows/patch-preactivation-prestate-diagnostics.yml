@@ -1,4 +1,4 @@
-name: Patch pre-activation clean-room prestate diagnostics
+name: Remove obsolete pre-activation one-time patch workflow
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  patch:
+  remove:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -20,96 +20,14 @@ jobs:
           fetch-depth: 2
           token: ${{ github.token }}
 
-      - name: Guard one-time patch parent
+      - name: Delete this superseded one-time controller
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "debbb465716220e045d3cd3798cd8fc8b130f92e"
+          test "$(git rev-parse HEAD^)" = "35575ad5c141442e81f4d9a16b188f538f0778e3"
           test "$(git diff --name-only HEAD^..HEAD)" = ".github/workflows/patch-preactivation-prestate-diagnostics.yml"
-
-      - name: Persist exact empty-schema diagnostics before failing
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("scripts/database/validate-preactivation-baseline.sh")
-          source = path.read_text()
-          old = '''PRE_RELATIONS="$(psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
-select count(*)
-from pg_class c
-join pg_namespace n on n.oid = c.relnamespace
-where n.nspname in ('public', 'moral_trade_private')
-  and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')
-  and not exists (
-    select 1
-    from pg_depend d
-    where d.deptype = 'e'
-      and d.classid = 'pg_class'::regclass
-      and d.objid = c.oid
-      and d.objsubid = 0
-  );
-")"
-test "$PRE_RELATIONS" = "0"
-printf 'pre_application_relations=%s\\n' "$PRE_RELATIONS" > "$OUTPUT_DIR/clean-room-prestate.txt"
-'''
-          new = '''PRESTATE_RELATIONS="$OUTPUT_DIR/clean-room-prestate-relations.tsv"
-PRE_RELATIONS="$(psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
-select count(*)
-from pg_class c
-join pg_namespace n on n.oid = c.relnamespace
-where n.nspname in ('public', 'moral_trade_private')
-  and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')
-  and not exists (
-    select 1
-    from pg_depend d
-    where d.deptype = 'e'
-      and d.classid = 'pg_class'::regclass
-      and d.objid = c.oid
-      and d.objsubid = 0
-  );
-")"
-psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\\t' -c "
-select
-  n.nspname,
-  c.relname,
-  c.relkind,
-  coalesce(e.extname, '')
-from pg_class c
-join pg_namespace n on n.oid = c.relnamespace
-left join pg_depend d
-  on d.deptype = 'e'
- and d.classid = 'pg_class'::regclass
- and d.objid = c.oid
- and d.objsubid = 0
-left join pg_extension e on e.oid = d.refobjid
-where n.nspname in ('public', 'moral_trade_private')
-  and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')
-  and e.oid is null
-order by n.nspname, c.relname, c.relkind;
-" > "$PRESTATE_RELATIONS"
-printf 'pre_application_relations=%s\\n' "$PRE_RELATIONS" > "$OUTPUT_DIR/clean-room-prestate.txt"
-if [[ "$PRE_RELATIONS" != "0" ]]; then
-  echo "Fresh Supabase stack contains unexpected non-extension application relations:" >&2
-  cat "$PRESTATE_RELATIONS" >&2
-  exit 1
-fi
-'''
-          if source.count(old) != 1:
-              raise SystemExit("Expected clean-room prestate block was not found exactly once.")
-          path.write_text(source.replace(old, new))
-          PY
-          rm .github/workflows/patch-preactivation-prestate-diagnostics.yml
-          git diff --check
-
-      - name: Commit and push the durable diagnostic repair
-        shell: bash
-        run: |
-          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/database/validate-preactivation-baseline.sh
-          git rm --cached .github/workflows/patch-preactivation-prestate-diagnostics.yml
-          git commit -m "Persist clean-room prestate diagnostics before rejection"
+          git rm .github/workflows/patch-preactivation-prestate-diagnostics.yml
+          git commit -m "Remove obsolete pre-activation patch controller"
           git push origin HEAD:database/preactivation-schema-baseline-clean-20260819
