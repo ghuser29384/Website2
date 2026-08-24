@@ -6,6 +6,10 @@ import {
   getDirectDonationUpgradeConfig,
 } from "@/lib/direct-donation-upgrade";
 import { loadDirectDonationUpgradePrivateDetail } from "@/lib/direct-donation-upgrade-data";
+import {
+  PROVIDER_REFUND_RENDERED_QA_OFFER_ID,
+  providerRefundRenderedQaPublicOffer,
+} from "@/lib/provider-refund-rendered-qa";
 
 interface LayoutProps {
   children: ReactNode;
@@ -26,7 +30,13 @@ export default async function DonationUpgradeOfferLayout({
     viewerId: viewer?.authUser.id ?? null,
     environment: config.environment,
   });
-  const publicOffer = detail.publicOffer;
+  const renderedQaOffer =
+    offerId === PROVIDER_REFUND_RENDERED_QA_OFFER_ID
+      ? providerRefundRenderedQaPublicOffer(config.environment)
+      : null;
+  const publicOffer = (renderedQaOffer ?? detail.publicOffer) as
+    | NonNullable<typeof detail.publicOffer>
+    | null;
   if (!publicOffer) return children;
 
   const reversedCount = publicOffer.provider_reversed_obligation_count ?? 0;
