@@ -1,3 +1,4 @@
+# Exact-head validation is intentionally re-run after one-time controller cleanup.
 name: Validate authoritative pre-activation Supabase baseline
 
 on:
