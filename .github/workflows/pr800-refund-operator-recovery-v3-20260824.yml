@@ -1,4 +1,4 @@
-name: PR800 refund operator and rendering recovery v3
+name: PR800 refund operator and rendering recovery v4
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr800-refund-operator-rendering-recovery-v3
+  group: pr800-refund-operator-rendering-recovery-v4
   cancel-in-progress: false
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          work="$RUNNER_TEMP/pr800-refund-operator-v3"
+          work="$RUNNER_TEMP/pr800-refund-operator-v4"
           candidate="$work/candidate"
           mkdir -p "$work" operator-evidence
           git fetch --no-tags origin \
@@ -50,12 +50,30 @@ jobs:
             | grep -E '^\.github/pr796-refund-operator-bundle/part-[0-9]{2}$' \
             | sort > "$work/bundle-parts.txt"
           test -s "$work/bundle-parts.txt"
-          : > "$work/operator.b64"
+
+          # The retained bundle stores independently base64-encoded binary chunks.
+          # Decode each chunk first, then concatenate the decoded bytes. Concatenating
+          # the encoded chunks is invalid when an intermediate chunk carries padding.
+          : > "$work/operator.tar.gz"
+          : > "$work/bundle-decode.txt"
           while IFS= read -r part; do
-            git show "$source_ref:$part" >> "$work/operator.b64"
+            part_name="$(basename "$part")"
+            encoded="$work/$part_name.b64"
+            decoded="$work/$part_name.bin"
+            git show "$source_ref:$part" > "$encoded"
+            base64 --decode "$encoded" > "$decoded"
+            test -s "$decoded"
+            printf '%s encoded_bytes=%s decoded_bytes=%s encoded_sha256=%s decoded_sha256=%s\n' \
+              "$part" \
+              "$(wc -c < "$encoded" | tr -d ' ')" \
+              "$(wc -c < "$decoded" | tr -d ' ')" \
+              "$(sha256sum "$encoded" | awk '{print $1}')" \
+              "$(sha256sum "$decoded" | awk '{print $1}')" \
+              >> "$work/bundle-decode.txt"
+            cat "$decoded" >> "$work/operator.tar.gz"
           done < "$work/bundle-parts.txt"
-          base64 --decode "$work/operator.b64" > "$work/operator.tar.gz"
           gzip --test "$work/operator.tar.gz"
+          cp "$work/bundle-decode.txt" operator-evidence/
 
           python3 - "$work/operator.tar.gz" "$work/bundle-paths.txt" <<'PY'
           import sys, tarfile
@@ -195,7 +213,7 @@ jobs:
           PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
         run: |
           set -euo pipefail
-          body="<!-- pr800-refund-operator-recovery-v3-20260824 -->
+          body="<!-- pr800-refund-operator-recovery-v4-20260824 -->
           ## AAL2 refund-operator and truthful-rendering tranche recovered
 
           - exact foundation: \`$FOUNDATION_SHA\`
@@ -203,7 +221,7 @@ jobs:
           - exact product tree: \`$PRODUCT_TREE\`
           - changed paths: \`$(wc -l < "$WORK_DIR/actual-paths.txt" | tr -d ' ')\`
           - recovery run: \`$GITHUB_RUN_ID\`
-          - recovered focused tests, complete tests, TypeScript, ESLint, disabled-rail build, scope and safety scans: passed
+          - chunk-by-chunk bundle verification, recovered focused tests, complete tests, TypeScript, ESLint, disabled-rail build, scope and safety scans: passed
 
           No provider request, webhook mutation, checkout, donation, payment, actual refund, database migration, deployment, credential mutation, brand submission, or production change occurred."
           gh issue comment 709 --repo "$GITHUB_REPOSITORY" --body "$body"
@@ -219,7 +237,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr800-refund-operator-recovery-v3-${{ github.run_id }}
+          name: pr800-refund-operator-recovery-v4-${{ github.run_id }}
           path: operator-evidence/
           if-no-files-found: error
           retention-days: 30
