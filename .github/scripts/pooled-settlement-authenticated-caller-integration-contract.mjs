@@ -129,14 +129,14 @@ export function buildAuthenticatedHarnessSource(input) {
     frozenParticipantBlock,
     [
       '  const frozenStage = page.locator("#main-content");',
-      "  await assertNoHorizontalOverflow(page);",
-      '  await screenshot(page, "participant-mobile-frozen.png");',
       "  await expectText(frozenStage, /Bundle Frozen/i);",
       "  await expectText(frozenStage, /This allocation is immutable/i);",
       '  assert.equal(await page.getByRole("button", { name: "Refund before bundle freeze" }).count(), 0);',
       '  assert.equal(await page.getByRole("button", { name: "Cancel before verified funding" }).count(), 0);',
+      "  await assertNoHorizontalOverflow(page);",
+      '  await screenshot(page, "participant-mobile-frozen.png");',
     ].join("\n"),
-    "frozen participant semantic assertions and pre-assertion screenshot",
+    "frozen participant semantic readiness and rendered screenshot",
   );
 
   const browserMfaSubmissionBlock = [

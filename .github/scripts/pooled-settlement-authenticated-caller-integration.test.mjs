@@ -59,7 +59,7 @@ test("content-root generation fails closed if any later participant or operator 
   );
 });
 
-test("the frozen participant check uses current semantic copy and captures evidence first", () => {
+test("the frozen participant check uses current semantic copy before capturing rendered evidence", () => {
   const generated = buildAuthenticatedHarnessSource(original);
   assert.match(generated, /const frozenStage = page\.locator\("#main-content"\)/);
   assert.match(generated, /await expectText\(frozenStage, \/Bundle Frozen\/i\)/);
@@ -68,7 +68,8 @@ test("the frozen participant check uses current semantic copy and captures evide
   const screenshot = generated.indexOf('await screenshot(page, "participant-mobile-frozen.png")');
   const semanticAssertion = generated.indexOf("await expectText(frozenStage, /Bundle Frozen/i)");
   assert.ok(screenshot >= 0, "The frozen participant screenshot is missing.");
-  assert.ok(semanticAssertion > screenshot, "The frozen screenshot must precede semantic assertions.");
+  assert.ok(semanticAssertion >= 0, "The frozen semantic readiness assertion is missing.");
+  assert.ok(screenshot > semanticAssertion, "The frozen screenshot must follow semantic readiness.");
 });
 
 test("frozen participant generation fails closed if the stale source contract drifts", () => {
@@ -78,7 +79,7 @@ test("frozen participant generation fails closed if the stale source contract dr
   );
   assert.throws(
     () => buildAuthenticatedHarnessSource(drifted),
-    /frozen participant semantic assertions and pre-assertion screenshot: expected source contract was not found/,
+    /frozen participant semantic readiness and rendered screenshot: expected source contract was not found/,
   );
 });
 
