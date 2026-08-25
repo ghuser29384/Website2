@@ -17,12 +17,12 @@ jobs:
     env:
       SUPABASE_URL: https://msuvwouzyempbavtqhva.supabase.co
       SUPABASE_PUBLISHABLE_KEY: sb_publishable_cHY53ziSs2vP6LhFb2w_hw_5Y7XcB7C
-      EVIDENCE_DIR: ${{ runner.temp }}/issue714-lock-synchronized-evidence
     steps:
       - name: Wait for the isolated activation-migration lock signal
         shell: bash
         run: |
           set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/issue714-lock-synchronized-evidence"
           mkdir -p "$EVIDENCE_DIR"
           response="$RUNNER_TEMP/lock-signal-response.json"
           detected=false
@@ -54,6 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/issue714-lock-synchronized-evidence"
           body="$RUNNER_TEMP/signup-response.json"
           started_at="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
           start_epoch="$(date +%s%N)"
