@@ -97,6 +97,7 @@ export interface DirectDonationUpgradeOfferRow {
     | "matched"
     | "fallback_selected"
     | "completed"
+    | "post_completion_exception"
     | "defaulted"
     | "expired"
     | "cancelled"
@@ -170,6 +171,7 @@ export interface DirectDonationUpgradeObligationRow {
     | "pending"
     | "checkout_started"
     | "verified"
+    | "provider_reversed"
     | "defaulted"
     | "cancelled"
     | "needs_review";
@@ -188,6 +190,7 @@ export interface DirectDonationUpgradeObligationRow {
   failure_code: string;
   failure_message: string;
   verified_at: string | null;
+  provider_reversed_at?: string | null;
   created_at: string;
   updated_at: string;
 }
