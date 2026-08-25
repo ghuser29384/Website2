@@ -83,7 +83,7 @@ jobs:
             curl --silent --show-error --location --max-redirs 10 --max-time 90 \
               --cookie-jar "$bypass_cookies" --cookie "$bypass_cookies" \
               --output "$bypass_body" --dump-header "$bypass_headers" \
-              --write-out '%{http_code} %{num_redirects} %{url_effective}' \
+              --write-out $'%{http_code} %{num_redirects} %{url_effective}\n' \
               --header "x-vercel-protection-bypass: $BYPASS_SECRET" \
               --header 'x-vercel-set-bypass-cookie: true' \
               "$url"
