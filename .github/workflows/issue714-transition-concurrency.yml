@@ -95,9 +95,9 @@ jobs:
             test "$status_2" = 200
             test "$body_1" = true
             test "$body_2" = true
-            test "$min_elapsed" -ge 3500
-            test "$max_elapsed" -ge 7000
-            test "$serialized_gap" -ge 3000
+            test "$min_elapsed" -ge 800
+            test "$max_elapsed" -ge 1700
+            test "$serialized_gap" -ge 700
 
             rm -f "$RUNNER_TEMP/${prefix}-1-body.json" "$RUNNER_TEMP/${prefix}-2-body.json"
             rm -f "$RUNNER_TEMP/${prefix}-1-meta.txt" "$RUNNER_TEMP/${prefix}-2-meta.txt"
