@@ -271,7 +271,8 @@ jobs:
           SQL
           docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" \
             --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
-            < "$RUNNER_TEMP/guard.sql" | tee "$BACKUP_DIR/database-guard.json"
+            < "$RUNNER_TEMP/guard.sql" | tee "$BACKUP_DIR/database-guard.raw"
+          grep -E '^\{' "$BACKUP_DIR/database-guard.raw" | tail -n 1 > "$BACKUP_DIR/database-guard.json"
           jq -e '.paymentReferences==0 and .authorizedAggregateRows==0 and .migrationRows==11 and .requiredFunctions==6' "$BACKUP_DIR/database-guard.json" >/dev/null
 
       - name: Create consistent PostgreSQL custom archive
