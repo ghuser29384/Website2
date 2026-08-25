@@ -73,20 +73,23 @@ jobs:
           unauth_headers="$RUNNER_TEMP/unauth-headers"
           bypass_body="$RUNNER_TEMP/bypass-body"
           bypass_headers="$RUNNER_TEMP/bypass-headers"
+          bypass_cookies="$RUNNER_TEMP/bypass-cookies"
           url="https://$DEPLOYMENT_HOST/discover"
 
           unauth_status="$(curl --silent --show-error --max-time 60 \
             --output "$unauth_body" --dump-header "$unauth_headers" \
             --write-out '%{http_code}' "$url")"
-          bypass_status="$(curl --silent --show-error --max-time 60 \
-            --output "$bypass_body" --dump-header "$bypass_headers" \
-            --write-out '%{http_code}' \
-            --header "x-vercel-protection-bypass: $BYPASS_SECRET" \
-            --header 'x-vercel-set-bypass-cookie: true' \
-            "$url")"
+          read -r bypass_status bypass_redirects bypass_final_url < <(
+            curl --silent --show-error --location --max-redirs 10 --max-time 90 \
+              --cookie-jar "$bypass_cookies" --cookie "$bypass_cookies" \
+              --output "$bypass_body" --dump-header "$bypass_headers" \
+              --write-out '%{http_code} %{num_redirects} %{url_effective}' \
+              --header "x-vercel-protection-bypass: $BYPASS_SECRET" \
+              --header 'x-vercel-set-bypass-cookie: true' \
+              "$url"
+          )
 
           unauth_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,""); print substr($0,index($0,":")+2); exit}' "$unauth_headers")"
-          bypass_cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/{sub(/\r$/,""); print substr($0,index($0,":")+2); exit}' "$bypass_headers")"
           body_has_brand=false
           if grep -q 'Moral Trade' "$bypass_body"; then body_has_brand=true; fi
           {
@@ -96,11 +99,11 @@ jobs:
             printf '%s' "$unauth_location" | sha256sum | awk '{print "unauthenticated_location_sha256=" $1}'
             printf 'unauthenticated_body_bytes=%s\n' "$(wc -c < "$unauth_body")"
             sha256sum "$unauth_body" | awk '{print "unauthenticated_body_sha256=" $1}'
-            printf 'bypassed_http_status=%s\n' "$bypass_status"
+            printf 'bypassed_final_http_status=%s\n' "$bypass_status"
+            printf 'bypassed_redirect_count=%s\n' "$bypass_redirects"
+            printf 'bypassed_final_url_bytes=%s\n' "${#bypass_final_url}"
+            printf '%s' "$bypass_final_url" | sha256sum | awk '{print "bypassed_final_url_sha256=" $1}'
             printf 'bypassed_body_contains_brand=%s\n' "$body_has_brand"
-            printf 'bypassed_cache_control_present=%s\n' "$([[ -n "$bypass_cache_control" ]] && echo true || echo false)"
-            printf 'bypassed_cache_control_bytes=%s\n' "${#bypass_cache_control}"
-            printf '%s' "$bypass_cache_control" | sha256sum | awk '{print "bypassed_cache_control_sha256=" $1}'
             printf 'bypassed_body_bytes=%s\n' "$(wc -c < "$bypass_body")"
             sha256sum "$bypass_body" | awk '{print "bypassed_body_sha256=" $1}'
           } > "$evidence/protection.txt"
@@ -110,8 +113,12 @@ jobs:
           esac
           test "$bypass_status" = 200
           test "$body_has_brand" = true
+          case "$bypass_final_url" in
+            https://$DEPLOYMENT_HOST/*) ;;
+            *) echo 'Bypass escaped the exact Preview host.' >&2; exit 1;;
+          esac
           printf 'protected=true\n' >> "$evidence/protection.txt"
-          rm -f "$unauth_body" "$unauth_headers" "$bypass_body" "$bypass_headers"
+          rm -f "$unauth_body" "$unauth_headers" "$bypass_body" "$bypass_headers" "$bypass_cookies"
 
       - name: Prove canonical aliases still target the unchanged production deployment
         if: always()
