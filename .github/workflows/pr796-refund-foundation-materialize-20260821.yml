@@ -1,0 +1,53 @@
+name: PR 796 exact-head source export
+
+on:
+  pull_request:
+    branches:
+      - integration/direct-donation-upgrade-current-main-20260807
+    paths:
+      - ".github/workflows/pr796-refund-foundation-materialize-20260821.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr796-exact-head-source-export
+  cancel-in-progress: true
+
+jobs:
+  export:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact candidate revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Package exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          tree="$(git rev-parse HEAD^{tree})"
+          git archive --format=zip --output="pr796-source-${head}.zip" HEAD
+          {
+            printf 'head=%s\n' "$head"
+            printf 'tree=%s\n' "$tree"
+          } > pr796-source-identity.txt
+          sha256sum "pr796-source-${head}.zip" > pr796-source-sha256.txt
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr796-source-${{ github.run_id }}
+          path: |
+            pr796-source-*.zip
+            pr796-source-identity.txt
+            pr796-source-sha256.txt
+          if-no-files-found: error
+          retention-days: 7

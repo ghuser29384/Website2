@@ -1,0 +1,254 @@
+name: PR796 refund foundation resilient finalizer
+
+on:
+  push:
+    branches:
+      - feature/direct-donation-upgrade-refund-safety-709-20260821
+    paths:
+      - ".github/workflows/pr796-refund-foundation-resilient-finalizer-20260822.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr796-refund-foundation-clean-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - name: Check out exact controller revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Reconstruct exact seven-path product candidate
+        shell: bash
+        env:
+          BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+        run: |
+          set -euo pipefail
+          controller_sha="$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$BASE_SHA" "$controller_sha"
+
+          cat > /tmp/pr796-expected-paths.txt <<'EOF'
+          docs/provider-review/every-org-donation-upgrade-review-packet.md
+          src/lib/direct-donation-upgrade-data.ts
+          src/lib/direct-donation-upgrade-negotiation.ts
+          src/lib/direct-donation-upgrade.ts
+          src/lib/provider-refund-contract.test.ts
+          supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql
+          supabase/tests/direct_donation_upgrade_provider_refunds.sql
+          EOF
+          sed -i 's/^          //' /tmp/pr796-expected-paths.txt
+
+          complete_snapshot=true
+          while IFS= read -r path; do
+            [[ -s "$path" ]] || complete_snapshot=false
+          done < /tmp/pr796-expected-paths.txt
+
+          if [[ "$complete_snapshot" == true ]]; then
+            tar -cf /tmp/pr796-product-snapshot.tar \
+              -T /tmp/pr796-expected-paths.txt
+          else
+            test -s docs/provider-review/every-org-donation-upgrade-review-packet.md
+            cp docs/provider-review/every-org-donation-upgrade-review-packet.md \
+              /tmp/pr796-review-packet.md
+            cat .github/pr796-refund-bundle/part-* \
+              > /tmp/pr796-refund-bundle.b64
+            base64 --decode /tmp/pr796-refund-bundle.b64 \
+              > /tmp/pr796-refund-bundle.gz
+            gzip --test /tmp/pr796-refund-bundle.gz
+            gzip --decompress --stdout /tmp/pr796-refund-bundle.gz \
+              > /tmp/pr796-refund-bundle.payload
+            test -s /tmp/pr796-refund-bundle.payload
+          fi
+
+          git reset --hard "$BASE_SHA"
+
+          if [[ "$complete_snapshot" == true ]]; then
+            tar -xf /tmp/pr796-product-snapshot.tar -C .
+          else
+            applied=false
+            if git apply --check /tmp/pr796-refund-bundle.payload \
+                >/dev/null 2>&1; then
+              git apply /tmp/pr796-refund-bundle.payload
+              applied=true
+            else
+              mkdir -p docs/provider-review
+              cp /tmp/pr796-review-packet.md \
+                docs/provider-review/every-org-donation-upgrade-review-packet.md
+              if git apply --check /tmp/pr796-refund-bundle.payload \
+                  >/dev/null 2>&1; then
+                git apply /tmp/pr796-refund-bundle.payload
+                applied=true
+              fi
+            fi
+
+            if [[ "$applied" != true ]]; then
+              git reset --hard "$BASE_SHA"
+              if tar -tf /tmp/pr796-refund-bundle.payload >/dev/null 2>&1; then
+                tar -xf /tmp/pr796-refund-bundle.payload -C .
+                applied=true
+              elif unzip -tqq /tmp/pr796-refund-bundle.payload \
+                  >/dev/null 2>&1; then
+                unzip -q /tmp/pr796-refund-bundle.payload -d .
+                applied=true
+              fi
+            fi
+
+            if [[ "$applied" != true ]]; then
+              echo "Unable to materialize the pinned refund product bundle." >&2
+              file /tmp/pr796-refund-bundle.payload >&2 || true
+              exit 1
+            fi
+
+            if [[ ! -s docs/provider-review/every-org-donation-upgrade-review-packet.md ]]; then
+              mkdir -p docs/provider-review
+              cp /tmp/pr796-review-packet.md \
+                docs/provider-review/every-org-donation-upgrade-review-packet.md
+            fi
+          fi
+
+          while IFS= read -r path; do
+            test -s "$path"
+          done < /tmp/pr796-expected-paths.txt
+
+          git add -A
+          git diff --cached --name-only | sort > /tmp/pr796-actual-paths.txt
+          diff -u /tmp/pr796-expected-paths.txt /tmp/pr796-actual-paths.txt
+          git diff --cached --check
+          printf 'controller_sha=%s\nbase_sha=%s\n' \
+            "$controller_sha" "$BASE_SHA" \
+            > /tmp/pr796-controller-identity.txt
+
+      - name: Install exact dependencies
+        run: npm ci > /tmp/pr796-npm-ci.log 2>&1
+
+      - name: Run focused refund and inherited rail tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/provider-refund-contract.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-split.test.ts \
+            src/lib/direct-donation-upgrade-environment-contract.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            > /tmp/pr796-focused-tests.log 2>&1
+
+      - name: Run complete repository tests
+        run: npm test > /tmp/pr796-repository-tests.log 2>&1
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit > /tmp/pr796-typecheck.log 2>&1
+
+      - name: Run repository ESLint
+        run: npm run lint -- --quiet > /tmp/pr796-lint.log 2>&1
+
+      - name: Build with all money rails disabled
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > /tmp/pr796-build.log 2>&1
+
+      - name: Replace temporary history with one clean product commit
+        id: publish
+        shell: bash
+        env:
+          BASE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+          BRANCH: feature/direct-donation-upgrade-refund-safety-709-20260821
+          CONTROLLER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Implement refund-safe Donation Upgrade accounting foundation"
+          product_sha="$(git rev-parse HEAD)"
+          product_tree="$(git rev-parse HEAD^{tree})"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          git diff --name-only "$BASE_SHA"...HEAD | sort \
+            > /tmp/pr796-final-paths.txt
+          diff -u /tmp/pr796-expected-paths.txt /tmp/pr796-final-paths.txt
+          git push \
+            --force-with-lease="refs/heads/${BRANCH}:${CONTROLLER_SHA}" \
+            origin "HEAD:refs/heads/${BRANCH}"
+          {
+            printf 'product_sha=%s\n' "$product_sha"
+            printf 'product_tree=%s\n' "$product_tree"
+            printf 'product_parent=%s\n' "$(git rev-parse HEAD^)"
+            printf 'controller_run=%s\n' "$GITHUB_RUN_ID"
+          } | tee /tmp/pr796-final-identity.txt
+          echo "product_sha=$product_sha" >> "$GITHUB_OUTPUT"
+          echo "product_tree=$product_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Package sanitized evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr796-evidence
+          cp /tmp/pr796-npm-ci.log /tmp/pr796-evidence/
+          cp /tmp/pr796-focused-tests.log /tmp/pr796-evidence/
+          cp /tmp/pr796-repository-tests.log /tmp/pr796-evidence/
+          cp /tmp/pr796-typecheck.log /tmp/pr796-evidence/
+          cp /tmp/pr796-lint.log /tmp/pr796-evidence/
+          cp /tmp/pr796-build.log /tmp/pr796-evidence/
+          cp /tmp/pr796-controller-identity.txt /tmp/pr796-evidence/
+          cp /tmp/pr796-final-identity.txt /tmp/pr796-evidence/
+          cp /tmp/pr796-final-paths.txt /tmp/pr796-evidence/
+          sha256sum \
+            supabase/migrations/20260821140000_direct_donation_upgrade_provider_refunds.sql \
+            supabase/tests/direct_donation_upgrade_provider_refunds.sql \
+            src/lib/provider-refund-contract.test.ts \
+            docs/provider-review/every-org-donation-upgrade-review-packet.md \
+            > /tmp/pr796-evidence/product-sha256.txt
+          {
+            printf 'deploymentAttempted=false\n'
+            printf 'providerRequestAttempted=false\n'
+            printf 'checkoutAttempted=false\n'
+            printf 'donationAttempted=false\n'
+            printf 'refundExecuted=false\n'
+            printf 'remoteDatabaseAddressed=false\n'
+            printf 'credentialMutationAttempted=false\n'
+            printf 'productionChanged=false\n'
+          } > /tmp/pr796-evidence/non-actions.txt
+          ! grep -R -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk_live_|sk_test_|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._~-]{20,})' \
+            /tmp/pr796-evidence
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr796-refund-foundation-resilient-${{ github.run_id }}
+          path: /tmp/pr796-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record exact product result
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_SHA: ${{ steps.publish.outputs.product_sha }}
+          PRODUCT_TREE: ${{ steps.publish.outputs.product_tree }}
+        run: |
+          set -euo pipefail
+          gh pr comment 796 --repo "$GITHUB_REPOSITORY" --body "## Refund-foundation resilient finalizer completed\n\n- exact base: \`566bb18db56848b40a3a1ab58979a6be88ba45a8\`\n- product SHA: \`${PRODUCT_SHA}\`\n- product tree: \`${PRODUCT_TREE}\`\n- run: \`${GITHUB_RUN_ID}\`\n- durable scope: exactly seven product paths\n\nFocused refund and inherited rail tests, complete repository tests, strict TypeScript, repository ESLint, the disabled-money-rail production build, exact scope, and diff integrity passed. Temporary controller and bundle history was replaced under a force-with-lease guard.\n\nNo provider request, webhook operation, checkout, donation, refund execution, remote database operation, credential mutation, deployment, alias movement, feature activation, merge, or production change occurred."
