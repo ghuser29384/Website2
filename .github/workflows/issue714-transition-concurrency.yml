@@ -1,0 +1,104 @@
+name: Issue 714 row-locked service transition concurrency
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-transition-concurrency.yml
+
+permissions:
+  contents: read
+
+jobs:
+  concurrency:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: https://msuvwouzyempbavtqhva.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_cHY53ziSs2vP6LhFb2w_hw_5Y7XcB7C
+    steps:
+      - name: Run concurrent walkthrough and profile transitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/issue714-transition-concurrency-evidence"
+          mkdir -p "$evidence"
+
+          run_pair() {
+            local endpoint="$1"
+            local expected="$2"
+            local prefix="$3"
+
+            for n in 1 2; do
+              (
+                body="$RUNNER_TEMP/${prefix}-${n}-body.json"
+                meta="$RUNNER_TEMP/${prefix}-${n}-meta.txt"
+                started_at="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+                start_epoch="$(date +%s%N)"
+                status="$(curl --silent --show-error --max-time 60 \
+                  --output "$body" \
+                  --write-out '%{http_code}' \
+                  --request POST "$SUPABASE_URL/rest/v1/rpc/$endpoint" \
+                  --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+                  --header 'Content-Type: application/json' \
+                  --data '{}')"
+                end_epoch="$(date +%s%N)"
+                finished_at="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+                elapsed_ms="$(( (end_epoch - start_epoch) / 1000000 ))"
+                {
+                  printf 'request=%s\n' "$n"
+                  printf 'http_status=%s\n' "$status"
+                  printf 'started_at=%s\n' "$started_at"
+                  printf 'finished_at=%s\n' "$finished_at"
+                  printf 'elapsed_ms=%s\n' "$elapsed_ms"
+                  printf 'response_bytes=%s\n' "$(wc -c < "$body")"
+                  sha256sum "$body" | awk '{print "response_sha256=" $1}'
+                } > "$meta"
+              ) &
+            done
+            wait
+
+            elapsed_1="$(awk -F= '$1=="elapsed_ms"{print $2}' "$RUNNER_TEMP/${prefix}-1-meta.txt")"
+            elapsed_2="$(awk -F= '$1=="elapsed_ms"{print $2}' "$RUNNER_TEMP/${prefix}-2-meta.txt")"
+            status_1="$(awk -F= '$1=="http_status"{print $2}' "$RUNNER_TEMP/${prefix}-1-meta.txt")"
+            status_2="$(awk -F= '$1=="http_status"{print $2}' "$RUNNER_TEMP/${prefix}-2-meta.txt")"
+
+            test "$status_1" = 200
+            test "$status_2" = 200
+            jq -e --arg expected "$expected" '. == $expected' "$RUNNER_TEMP/${prefix}-1-body.json" >/dev/null
+            jq -e --arg expected "$expected" '. == $expected' "$RUNNER_TEMP/${prefix}-2-body.json" >/dev/null
+
+            if (( elapsed_1 < elapsed_2 )); then
+              min_elapsed="$elapsed_1"
+              max_elapsed="$elapsed_2"
+            else
+              min_elapsed="$elapsed_2"
+              max_elapsed="$elapsed_1"
+            fi
+            test "$min_elapsed" -ge 1800
+            test "$max_elapsed" -ge 3500
+
+            {
+              printf 'phase=%s\n' "$prefix"
+              printf 'expected_stage=%s\n' "$expected"
+              printf 'minimum_elapsed_ms=%s\n' "$min_elapsed"
+              printf 'maximum_elapsed_ms=%s\n' "$max_elapsed"
+              cat "$RUNNER_TEMP/${prefix}-1-meta.txt"
+              cat "$RUNNER_TEMP/${prefix}-2-meta.txt"
+            } | tee "$evidence/${prefix}.txt"
+
+            rm -f "$RUNNER_TEMP/${prefix}-1-body.json" "$RUNNER_TEMP/${prefix}-2-body.json"
+            rm -f "$RUNNER_TEMP/${prefix}-1-meta.txt" "$RUNNER_TEMP/${prefix}-2-meta.txt"
+          }
+
+          run_pair issue714_test_concurrent_walkthrough_v1 sparks_required walkthrough
+          run_pair issue714_test_concurrent_profile_v1 setup_complete profile
+
+      - name: Upload privacy-safe transition concurrency evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-transition-concurrency
+          path: ${{ runner.temp }}/issue714-transition-concurrency-evidence
+          if-no-files-found: error
+          retention-days: 7
