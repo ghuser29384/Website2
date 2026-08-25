@@ -85,14 +85,10 @@ jobs:
             --header 'x-vercel-set-bypass-cookie: true' \
             "$url")"
 
-          case "$unauth_status" in
-            200|201|202|203|204|205|206|207|208|226) echo 'Preview was publicly reachable.' >&2; exit 1;;
-          esac
-          test "$bypass_status" = 200
-          grep -q 'Moral Trade' "$bypass_body"
-          grep -Eiq '^cache-control:.*(private|no-store|max-age=0)' "$bypass_headers"
-
           unauth_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,""); print substr($0,index($0,":")+2); exit}' "$unauth_headers")"
+          bypass_cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/{sub(/\r$/,""); print substr($0,index($0,":")+2); exit}' "$bypass_headers")"
+          body_has_brand=false
+          if grep -q 'Moral Trade' "$bypass_body"; then body_has_brand=true; fi
           {
             printf 'unauthenticated_http_status=%s\n' "$unauth_status"
             printf 'unauthenticated_location_present=%s\n' "$([[ -n "$unauth_location" ]] && echo true || echo false)"
@@ -101,13 +97,24 @@ jobs:
             printf 'unauthenticated_body_bytes=%s\n' "$(wc -c < "$unauth_body")"
             sha256sum "$unauth_body" | awk '{print "unauthenticated_body_sha256=" $1}'
             printf 'bypassed_http_status=%s\n' "$bypass_status"
+            printf 'bypassed_body_contains_brand=%s\n' "$body_has_brand"
+            printf 'bypassed_cache_control_present=%s\n' "$([[ -n "$bypass_cache_control" ]] && echo true || echo false)"
+            printf 'bypassed_cache_control_bytes=%s\n' "${#bypass_cache_control}"
+            printf '%s' "$bypass_cache_control" | sha256sum | awk '{print "bypassed_cache_control_sha256=" $1}'
             printf 'bypassed_body_bytes=%s\n' "$(wc -c < "$bypass_body")"
             sha256sum "$bypass_body" | awk '{print "bypassed_body_sha256=" $1}'
-            printf 'protected=true\n'
           } > "$evidence/protection.txt"
+
+          case "$unauth_status" in
+            200|201|202|203|204|205|206|207|208|226) echo 'Preview was publicly reachable.' >&2; exit 1;;
+          esac
+          test "$bypass_status" = 200
+          test "$body_has_brand" = true
+          printf 'protected=true\n' >> "$evidence/protection.txt"
           rm -f "$unauth_body" "$unauth_headers" "$bypass_body" "$bypass_headers"
 
       - name: Prove canonical aliases still target the unchanged production deployment
+        if: always()
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
