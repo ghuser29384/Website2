@@ -1,0 +1,264 @@
+name: Issue 714 protected isolated Preview deployment
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-protected-preview-deploy.yml
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_SHA: fd38e9c6f3738abd89d88222c520ba799143a6ab
+  EXPECTED_TREE: 3bfcfc52524dcc5392fb6cbc914d62ebae423ebb
+  RELEASE_REF: release/vercel-preview
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  SUPABASE_URL: https://msuvwouzyempbavtqhva.supabase.co
+  SUPABASE_PUBLISHABLE_KEY: sb_publishable_cHY53ziSs2vP6LhFb2w_hw_5Y7XcB7C
+  BROKER_URL: https://msuvwouzyempbavtqhva.supabase.co/functions/v1/issue714-qa-broker
+  EVIDENCE_DIR: issue714-preview-deployment-evidence
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out the frozen published Preview ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_REF }}
+          fetch-depth: 0
+
+      - name: Guard exact repository candidate, tree, remote ref, and migration bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          test "$(git ls-remote origin refs/heads/$RELEASE_REF | awk '{print $1}')" = "$EXPECTED_SHA"
+          migration=supabase/migrations/20260814042516_account_activation_stage.sql
+          migration_sha="$(sha256sum "$migration" | awk '{print $1}')"
+          migration_bytes="$(wc -c < "$migration")"
+          test "$migration_sha" = d9dc595563337352d94cabe8e9db5014e1565a480bfd03979128454ece9031de
+          test "$migration_bytes" = 5954
+          git diff --check HEAD^
+          {
+            printf 'candidate=%s\n' "$EXPECTED_SHA"
+            printf 'tree=%s\n' "$EXPECTED_TREE"
+            printf 'release_ref=%s\n' "$RELEASE_REF"
+            printf 'migration_sha256=%s\n' "$migration_sha"
+            printf 'migration_bytes=%s\n' "$migration_bytes"
+          } | tee "$EVIDENCE_DIR/source-identity.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Link only the canonical Vercel project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull the branch-scoped Preview build configuration
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=preview \
+            --git-branch="$RELEASE_REF" \
+            --token="$VERCEL_TOKEN"
+
+      - name: Retrieve and mask the disposable branch service credential
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/issue714-branch-service-key.json"
+          status="$(curl --silent --show-error --max-time 60 \
+            --output "$body" --write-out '%{http_code}' \
+            --request POST "$BROKER_URL" \
+            --header "x-issue714-capability: $VERCEL_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data '{"action":"service-key"}')"
+          test "$status" = 200
+          branch_key="$(jq -er '.service_role_key' "$body")"
+          test -n "$branch_key"
+          echo "::add-mask::$branch_key"
+          printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$branch_key" >> "$GITHUB_ENV"
+          {
+            printf 'broker_http_status=%s\n' "$status"
+            printf 'service_key_bytes=%s\n' "${#branch_key}"
+            printf '%s' "$branch_key" | sha256sum | awk '{print "service_key_sha256=" $1}'
+          } | tee "$EVIDENCE_DIR/branch-credential-binding.txt"
+          rm -f "$body"
+
+      - name: Record canonical aliases before Preview upload
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          for alias in moraltrade.org www.moraltrade.org; do
+            key="${alias//./-}"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/$alias?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID" \
+              > "$EVIDENCE_DIR/canonical-before-$key.json"
+          done
+
+      - name: Build the exact candidate against only the disposable data plane
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ env.SUPABASE_PUBLISHABLE_KEY }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL: '1'
+          VERCEL_ENV: preview
+          VERCEL_GIT_COMMIT_SHA: ${{ env.EXPECTED_SHA }}
+          VERCEL_GIT_COMMIT_REF: ${{ env.RELEASE_REF }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          rm -rf .next .vercel/output
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+            --token="$VERCEL_TOKEN" \
+            | tee "$EVIDENCE_DIR/vercel-build.log"
+
+      - name: Upload the prebuilt artifact as a protected unaliased Preview
+        id: upload
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ env.SUPABASE_PUBLISHABLE_KEY }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+            --prebuilt \
+            --token="$VERCEL_TOKEN" \
+            --env "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" \
+            --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY" \
+            --env "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+            --meta "githubCommitOrg=ghuser29384" \
+            --meta "githubCommitRepo=Website2" \
+            --meta "githubCommitSha=$EXPECTED_SHA" \
+            --meta "githubCommitRef=$RELEASE_REF")"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tr -d '\r' | tail -n 1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app$ ]]
+          deployment_host="${deployment_url#https://}"
+          printf '%s\n' "$deployment_url" | tee "$EVIDENCE_DIR/deployment-url.txt"
+          printf 'deployment_url=%s\ndeployment_host=%s\n' "$deployment_url" "$deployment_host" >> "$GITHUB_OUTPUT"
+
+      - name: Guard exact deployment identity, isolation, protection target, and absence of canonical aliases
+        id: guard
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_HOST: ${{ steps.upload.outputs.deployment_host }}
+        run: |
+          set -euo pipefail
+          detail="$EVIDENCE_DIR/deployment-detail.json"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_HOST?teamId=$VERCEL_ORG_ID" \
+            > "$detail"
+          deployment_id="$(jq -er '.id // .uid' "$detail")"
+          jq -e \
+            --arg id "$deployment_id" \
+            --arg host "$DEPLOYMENT_HOST" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_SHA" '
+              ((.id // .uid) == $id)
+              and (.url == $host)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+            ' "$detail" >/dev/null
+          if jq -e '(.alias // .aliases // []) | any(. == "moraltrade.org" or . == "www.moraltrade.org")' "$detail" >/dev/null; then
+            echo 'Preview unexpectedly acquired a canonical alias.' >&2
+            exit 1
+          fi
+          printf 'deployment_id=%s\n' "$deployment_id" | tee "$EVIDENCE_DIR/deployment-identity.txt"
+          printf 'deployment_id=%s\n' "$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Verify protected Preview is reachable only with the automation bypass
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.upload.outputs.deployment_url }}
+          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$BYPASS_SECRET"
+          unauth_status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$DEPLOYMENT_URL/discover")"
+          auth_body="$RUNNER_TEMP/issue714-preview-discover.html"
+          auth_status="$(curl --silent --show-error --max-time 60 \
+            --output "$auth_body" --write-out '%{http_code}' \
+            --header "x-vercel-protection-bypass: $BYPASS_SECRET" \
+            --header 'x-vercel-set-bypass-cookie: true' \
+            "$DEPLOYMENT_URL/discover")"
+          test "$unauth_status" = 401
+          test "$auth_status" = 200
+          grep -q 'Moral Trade' "$auth_body"
+          {
+            printf 'unauthenticated_http_status=%s\n' "$unauth_status"
+            printf 'bypassed_http_status=%s\n' "$auth_status"
+            printf 'bypassed_response_bytes=%s\n' "$(wc -c < "$auth_body")"
+            sha256sum "$auth_body" | awk '{print "bypassed_response_sha256=" $1}'
+          } | tee "$EVIDENCE_DIR/protection-check.txt"
+          rm -f "$auth_body"
+
+      - name: Prove canonical aliases remained unchanged after Preview upload
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PREVIEW_DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          for alias in moraltrade.org www.moraltrade.org; do
+            key="${alias//./-}"
+            after="$EVIDENCE_DIR/canonical-after-$key.json"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/$alias?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID" \
+              > "$after"
+            cmp "$EVIDENCE_DIR/canonical-before-$key.json" "$after"
+            if jq -e --arg preview "$PREVIEW_DEPLOYMENT_ID" '(.deploymentId // .deployment.id // .deployment.uid // "") == $preview' "$after" >/dev/null; then
+              echo 'Canonical alias moved to Preview.' >&2
+              exit 1
+            fi
+          done
+          printf 'canonical_aliases_unchanged=true\n' | tee "$EVIDENCE_DIR/canonical-alias-result.txt"
+
+      - name: Upload immutable privacy-safe deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-protected-preview-deployment-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: warn
+          retention-days: 7
