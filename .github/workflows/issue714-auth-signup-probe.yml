@@ -1,4 +1,4 @@
-name: Issue 714 synthetic branch Auth signup probe
+name: Issue 714 deterministic concurrent Auth signup probe
 
 on:
   push:
@@ -15,39 +15,50 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Exercise synthetic-only password signup without logging response data
+      - name: Wait for the migration lock window
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'wait_started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          sleep 25
+          printf 'wait_finished_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+
+      - name: Exercise concurrent synthetic-only password signup without logging response data
         shell: bash
         env:
           SUPABASE_URL: https://msuvwouzyempbavtqhva.supabase.co
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_cHY53ziSs2vP6LhFb2w_hw_5Y7XcB7C
         run: |
           set -euo pipefail
-          evidence="$RUNNER_TEMP/issue714-signup-evidence"
+          evidence="$RUNNER_TEMP/issue714-concurrency-evidence"
           mkdir -p "$evidence"
           body="$RUNNER_TEMP/signup-response.json"
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
           start_epoch="$(date +%s%N)"
-          status="$(curl --silent --show-error --max-time 120 \
+          status="$(curl --silent --show-error --max-time 180 \
             --output "$body" \
             --write-out '%{http_code}' \
             --request POST "$SUPABASE_URL/auth/v1/signup" \
             --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
             --header 'Content-Type: application/json' \
-            --data '{"email":"issue714-signup-probe-20260825@example.invalid","password":"Q4!issue714-SignupProbe-9Tn4kP","data":{"display_name":"Issue 714 Signup Probe"}}')"
+            --data '{"email":"issue714-concurrency-20260825@example.invalid","password":"Q4!issue714-Concurrency-6Vm9sK","data":{"display_name":"Issue 714 Concurrency Synthetic"}}')"
           end_epoch="$(date +%s%N)"
+          finished_at="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
           elapsed_ms="$(( (end_epoch - start_epoch) / 1000000 ))"
           sha256sum "$body" | awk '{print "response_sha256=" $1}' > "$evidence/result.txt"
-          printf 'http_status=%s\nelapsed_ms=%s\nresponse_bytes=%s\n' \
-            "$status" "$elapsed_ms" "$(wc -c < "$body")" >> "$evidence/result.txt"
+          printf 'http_status=%s\nstarted_at=%s\nfinished_at=%s\nelapsed_ms=%s\nresponse_bytes=%s\n' \
+            "$status" "$started_at" "$finished_at" "$elapsed_ms" "$(wc -c < "$body")" >> "$evidence/result.txt"
           rm -f "$body"
           cat "$evidence/result.txt"
           case "$status" in
             200|201) ;;
             *) exit 1 ;;
           esac
-      - name: Upload privacy-safe signup evidence
+
+      - name: Upload privacy-safe concurrency evidence
         uses: actions/upload-artifact@v4
         with:
-          name: issue714-auth-signup-probe
-          path: ${{ runner.temp }}/issue714-signup-evidence
+          name: issue714-auth-concurrency-probe
+          path: ${{ runner.temp }}/issue714-concurrency-evidence
           if-no-files-found: error
           retention-days: 7
