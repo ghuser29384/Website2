@@ -1,0 +1,147 @@
+name: Issue 714 Preview protection and alias proof
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-preview-protection-diagnostic.yml
+
+permissions:
+  contents: read
+
+env:
+  DEPLOYMENT_ID: dpl_FfZEaze9jSLMkxiQUCRvBcY8yW5u
+  DEPLOYMENT_HOST: moraltrade-site-e3n1m0jpl-ellen-s.vercel.app
+  EXPECTED_SHA: fd38e9c6f3738abd89d88222c520ba799143a6ab
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  PRODUCTION_DEPLOYMENT_ID: dpl_GbKHA9YfvjEW3iqymgY4uzp7MWsX
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Prove exact Preview identity and no canonical alias
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          evidence="$RUNNER_TEMP/issue714-preview-protection"
+          mkdir -p "$evidence"
+          detail="$RUNNER_TEMP/deployment-detail.json"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > "$detail"
+          jq -e \
+            --arg id "$DEPLOYMENT_ID" \
+            --arg host "$DEPLOYMENT_HOST" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_SHA" '
+              ((.id // .uid) == $id)
+              and (.url == $host)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+              and (((.alias // .aliases // []) | length) == 0)
+            ' "$detail" >/dev/null
+          {
+            printf 'deployment_id=%s\n' "$DEPLOYMENT_ID"
+            printf 'deployment_host=%s\n' "$DEPLOYMENT_HOST"
+            printf 'candidate=%s\n' "$EXPECTED_SHA"
+            printf 'ready=true\npreview=true\ncanonical_alias_count=0\n'
+            sha256sum "$detail" | awk '{print "deployment_detail_sha256=" $1}'
+          } > "$evidence/deployment-identity.txt"
+          rm -f "$detail"
+
+      - name: Prove unauthenticated denial and bypassed access
+        shell: bash
+        env:
+          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$BYPASS_SECRET"
+          evidence="$RUNNER_TEMP/issue714-preview-protection"
+          unauth_body="$RUNNER_TEMP/unauth-body"
+          unauth_headers="$RUNNER_TEMP/unauth-headers"
+          bypass_body="$RUNNER_TEMP/bypass-body"
+          bypass_headers="$RUNNER_TEMP/bypass-headers"
+          url="https://$DEPLOYMENT_HOST/discover"
+
+          unauth_status="$(curl --silent --show-error --max-time 60 \
+            --output "$unauth_body" --dump-header "$unauth_headers" \
+            --write-out '%{http_code}' "$url")"
+          bypass_status="$(curl --silent --show-error --max-time 60 \
+            --output "$bypass_body" --dump-header "$bypass_headers" \
+            --write-out '%{http_code}' \
+            --header "x-vercel-protection-bypass: $BYPASS_SECRET" \
+            --header 'x-vercel-set-bypass-cookie: true' \
+            "$url")"
+
+          case "$unauth_status" in
+            200|201|202|203|204|205|206|207|208|226) echo 'Preview was publicly reachable.' >&2; exit 1;;
+          esac
+          test "$bypass_status" = 200
+          grep -q 'Moral Trade' "$bypass_body"
+          grep -Eiq '^cache-control:.*(private|no-store|max-age=0)' "$bypass_headers"
+
+          unauth_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,""); print substr($0,index($0,":")+2); exit}' "$unauth_headers")"
+          {
+            printf 'unauthenticated_http_status=%s\n' "$unauth_status"
+            printf 'unauthenticated_location_present=%s\n' "$([[ -n "$unauth_location" ]] && echo true || echo false)"
+            printf 'unauthenticated_location_bytes=%s\n' "${#unauth_location}"
+            printf '%s' "$unauth_location" | sha256sum | awk '{print "unauthenticated_location_sha256=" $1}'
+            printf 'unauthenticated_body_bytes=%s\n' "$(wc -c < "$unauth_body")"
+            sha256sum "$unauth_body" | awk '{print "unauthenticated_body_sha256=" $1}'
+            printf 'bypassed_http_status=%s\n' "$bypass_status"
+            printf 'bypassed_body_bytes=%s\n' "$(wc -c < "$bypass_body")"
+            sha256sum "$bypass_body" | awk '{print "bypassed_body_sha256=" $1}'
+            printf 'protected=true\n'
+          } > "$evidence/protection.txt"
+          rm -f "$unauth_body" "$unauth_headers" "$bypass_body" "$bypass_headers"
+
+      - name: Prove canonical aliases still target the unchanged production deployment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/issue714-preview-protection"
+          for alias in moraltrade.org www.moraltrade.org; do
+            body="$RUNNER_TEMP/${alias//./-}.json"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/$alias?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID" \
+              > "$body"
+            jq -e \
+              --arg alias "$alias" \
+              --arg production "$PRODUCTION_DEPLOYMENT_ID" \
+              --arg preview "$DEPLOYMENT_ID" '
+                (.alias == $alias)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $production)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") != $preview)
+              ' "$body" >/dev/null
+            {
+              printf 'alias=%s\n' "$alias"
+              printf 'deployment_id=%s\n' "$PRODUCTION_DEPLOYMENT_ID"
+              sha256sum "$body" | awk '{print "alias_response_sha256=" $1}'
+            } >> "$evidence/canonical-aliases.txt"
+            rm -f "$body"
+          done
+          printf 'canonical_aliases_unchanged=true\n' >> "$evidence/canonical-aliases.txt"
+
+      - name: Upload privacy-safe protection evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-preview-protection
+          path: ${{ runner.temp }}/issue714-preview-protection
+          if-no-files-found: warn
+          retention-days: 7
