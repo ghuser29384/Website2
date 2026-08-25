@@ -40,20 +40,20 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
-      - name: Check out exact one-file controller
+      - name: Check out exact controller
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Guard exact source and one-file controller scope
+      - name: Guard exact source and controller-only scope
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
           test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git merge-base HEAD "$EXPECTED_MAIN_SHA")" = "$EXPECTED_MAIN_SHA"
           test "$(git rev-parse "$EXPECTED_MAIN_SHA^{tree}")" = "$EXPECTED_MAIN_TREE"
           remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_main" = "$EXPECTED_MAIN_SHA"
@@ -68,48 +68,40 @@ jobs:
             --arg mainTree "$EXPECTED_MAIN_TREE" \
             --arg remoteMain "$remote_main" \
             --arg checkedAt "$(date -u +%FT%TZ)" \
-            '{repository:$repository,controllerBranch:$controllerBranch,controllerSha:$controllerSha,mainSha:$mainSha,mainTree:$mainTree,remoteMain:$remoteMain,oneFileController:true,checkedAt:$checkedAt}' \
+            '{repository:$repository,controllerBranch:$controllerBranch,controllerSha:$controllerSha,mainSha:$mainSha,mainTree:$mainTree,remoteMain:$remoteMain,controllerOnlyDiff:true,checkedAt:$checkedAt}' \
             > "$BACKUP_DIR/source-identity.json"
 
       - name: Re-prove immutable release and post-cutover evidence
         shell: bash
         run: |
           set -euo pipefail
-          release_run="$RUNNER_TEMP/release-run.json"
-          release_artifacts="$RUNNER_TEMP/release-artifacts.json"
-          post_run="$RUNNER_TEMP/post-run.json"
-          post_artifacts="$RUNNER_TEMP/post-artifacts.json"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/32226007777" > "$release_run"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/32226007777/artifacts" > "$release_artifacts"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/32226071677" > "$post_run"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/32226071677/artifacts" > "$post_artifacts"
-          jq -e --arg sha "$EXPECTED_MAIN_SHA" '.status=="completed" and .conclusion=="success" and .head_sha==$sha and .name=="Gated Vercel release"' "$release_run" >/dev/null
-          jq -e --arg digest 'sha256:28a52dc6bd81c69e4a800e13398ecf57b6a2a14df465571e319c485b9519a98b' '
-            .total_count==1 and .artifacts[0].id==9355876787 and .artifacts[0].expired==false and .artifacts[0].digest==$digest
-          ' "$release_artifacts" >/dev/null
-          jq -e '.status=="completed" and .conclusion=="success" and .id==32226071677' "$post_run" >/dev/null
-          jq -e --arg digest 'sha256:6291a9377a9f284993cd524fb6a80b6cf367d42c3eba2a008fe46fab01abd01e' '
-            .total_count==1 and .artifacts[0].id==9355560933 and .artifacts[0].expired==false and .artifacts[0].digest==$digest
-          ' "$post_artifacts" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/32226007777" > "$RUNNER_TEMP/release-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/32226007777/artifacts" > "$RUNNER_TEMP/release-artifacts.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/32226071677" > "$RUNNER_TEMP/post-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/32226071677/artifacts" > "$RUNNER_TEMP/post-artifacts.json"
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '.status=="completed" and .conclusion=="success" and .head_sha==$sha and .name=="Gated Vercel release"' "$RUNNER_TEMP/release-run.json" >/dev/null
+          jq -e --arg digest 'sha256:28a52dc6bd81c69e4a800e13398ecf57b6a2a14df465571e319c485b9519a98b' '.total_count==1 and .artifacts[0].id==9355876787 and .artifacts[0].expired==false and .artifacts[0].digest==$digest' "$RUNNER_TEMP/release-artifacts.json" >/dev/null
+          jq -e '.status=="completed" and .conclusion=="success" and .id==32226071677' "$RUNNER_TEMP/post-run.json" >/dev/null
+          jq -e --arg digest 'sha256:6291a9377a9f284993cd524fb6a80b6cf367d42c3eba2a008fe46fab01abd01e' '.total_count==1 and .artifacts[0].id==9355560933 and .artifacts[0].expired==false and .artifacts[0].digest==$digest' "$RUNNER_TEMP/post-artifacts.json" >/dev/null
           jq -n \
             --argjson releaseRunId 32226007777 \
             --argjson releaseArtifactId 9355876787 \
-            --arg releaseArtifactDigest 'sha256:28a52dc6bd81c69e4a800e13398ecf57b6a2a14df465571e319c485b9519a98b' \
-            --argjson postCutoverRunId 32226071677 \
-            --argjson postCutoverArtifactId 9355560933 \
-            --arg postCutoverArtifactDigest 'sha256:6291a9377a9f284993cd524fb6a80b6cf367d42c3eba2a008fe46fab01abd01e' \
+            --arg releaseDigest 'sha256:28a52dc6bd81c69e4a800e13398ecf57b6a2a14df465571e319c485b9519a98b' \
+            --argjson postRunId 32226071677 \
+            --argjson postArtifactId 9355560933 \
+            --arg postDigest 'sha256:6291a9377a9f284993cd524fb6a80b6cf367d42c3eba2a008fe46fab01abd01e' \
             --arg verifiedAt "$(date -u +%FT%TZ)" \
-            '{release:{runId:$releaseRunId,artifactId:$releaseArtifactId,digest:$releaseArtifactDigest,success:true,expired:false},postCutover:{runId:$postCutoverRunId,artifactId:$postCutoverArtifactId,digest:$postCutoverArtifactDigest,success:true,expired:false},verifiedAt:$verifiedAt}' \
+            '{release:{runId:$releaseRunId,artifactId:$releaseArtifactId,digest:$releaseDigest,success:true,expired:false},postCutover:{runId:$postRunId,artifactId:$postArtifactId,digest:$postDigest,success:true,expired:false},verifiedAt:$verifiedAt}' \
             > "$BACKUP_DIR/prior-evidence.json"
 
-      - name: Guard exact production deployment and canonical aliases
+      - name: Guard exact deployment and canonical aliases
         shell: bash
         run: |
           set -euo pipefail
           test -n "${VERCEL_TOKEN:-}"
-          raw="$RUNNER_TEMP/deployment.json"
           curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v13/deployments/$EXPECTED_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" > "$raw"
+            "https://api.vercel.com/v13/deployments/$EXPECTED_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" \
+            > "$RUNNER_TEMP/deployment.json"
           jq -e \
             --arg id "$EXPECTED_DEPLOYMENT_ID" \
             --arg project "$EXPECTED_VERCEL_PROJECT_ID" \
@@ -124,17 +116,17 @@ jobs:
               and ((.aliasError // null)==null)
               and ((.alias // .aliases // []) | any(.=="moraltrade.org"))
               and ((.alias // .aliases // []) | any(.=="www.moraltrade.org"))
-            ' "$raw" >/dev/null
+            ' "$RUNNER_TEMP/deployment.json" >/dev/null
           mkdir -p "$BACKUP_DIR/aliases"
           for alias_name in moraltrade.org www.moraltrade.org; do
             key="${alias_name//./-}"
-            alias_raw="$RUNNER_TEMP/alias-${key}.json"
             curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v4/aliases/$alias_name?projectId=$EXPECTED_VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID" > "$alias_raw"
+              "https://api.vercel.com/v4/aliases/$alias_name?projectId=$EXPECTED_VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID" \
+              > "$RUNNER_TEMP/alias-${key}.json"
             jq -e --arg alias "$alias_name" --arg project "$EXPECTED_VERCEL_PROJECT_ID" --arg deployment "$EXPECTED_DEPLOYMENT_ID" '
               (.alias==$alias) and (.projectId==$project) and ((.deploymentId // .deployment.id // .deployment.uid // "")==$deployment)
-            ' "$alias_raw" >/dev/null
-            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' "$alias_raw" > "$BACKUP_DIR/aliases/${key}.json"
+            ' "$RUNNER_TEMP/alias-${key}.json" >/dev/null
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' "$RUNNER_TEMP/alias-${key}.json" > "$BACKUP_DIR/aliases/${key}.json"
           done
           jq -n \
             --arg deploymentId "$EXPECTED_DEPLOYMENT_ID" \
@@ -171,7 +163,7 @@ jobs:
           docker pull "$POSTGRES_IMAGE"
           docker image inspect "$POSTGRES_IMAGE" --format '{{index .RepoDigests 0}}' > "$BACKUP_DIR/postgres-image.txt"
 
-      - name: Execute read-only migration, schema, RLS, grant, and zero-state guard
+      - name: Execute read-only migration schema RLS grant and zero-state guard
         shell: bash
         run: |
           set -euo pipefail
@@ -221,17 +213,26 @@ jobs:
               'mpgf_public_goods_match_pools','mpgf_public_goods_rounds','mpgf_public_goods_campaigns','mpgf_public_goods_pledges',
               'mpgf_dac_pledge_intents','mpgf_dac_pledge_events','mpgf_dac_campaign_outcomes'
             ] loop
-              if to_regclass('public.'||table_name) is null then raise exception 'missing table %', table_name; end if;
-              if not exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname=table_name and c.relrowsecurity) then
+              if to_regclass('public.'||table_name) is null then
+                raise exception 'missing table %', table_name;
+              end if;
+              if not exists (
+                select 1
+                from pg_class c
+                join pg_namespace n on n.oid=c.relnamespace
+                where n.nspname='public' and c.relname=table_name and c.relrowsecurity
+              ) then
                 raise exception 'RLS disabled on %', table_name;
               end if;
               execute format('select count(*) from public.%I', table_name) into row_count;
-              if row_count <> 0 then raise exception 'nonzero authorized aggregate state on %', table_name; end if;
+              if row_count <> 0 then
+                raise exception 'nonzero authorized aggregate state on %', table_name;
+              end if;
             end loop;
             if to_regprocedure('public.mpgf_approve_and_freeze_pool_proposal(uuid,uuid,text)') is null
                or to_regprocedure('public.mpgf_publish_pool_proposal(uuid,text,text,uuid,text)') is null
                or to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') is null
-               or to_regprocedure('public.mpgf_review_dac_pledge(uuid,text,integer,text,uuid)') is null
+               or to_regprocedure('public.mpgf_review_dac_pledge_eligibility(uuid,uuid,text,integer,text)') is null
                or to_regprocedure('public.mpgf_finalize_dac_campaign(text,uuid,text)') is null
                or to_regprocedure('public.mpgf_public_dac_campaign_terms(text)') is null then
               raise exception 'required DAC function missing';
@@ -255,7 +256,7 @@ jobs:
             end if;
           end
           $guard$;
-          select json_build_object(
+          select jsonb_build_object(
             'migrationRows',11,
             'requiredTables',11,
             'rlsEnabled',true,
@@ -271,7 +272,7 @@ jobs:
           docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" \
             --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
             < "$RUNNER_TEMP/guard.sql" | tee "$BACKUP_DIR/database-guard.json"
-          grep -Fq '"paymentReferences" : 0' "$BACKUP_DIR/database-guard.json"
+          jq -e '.paymentReferences==0 and .authorizedAggregateRows==0 and .migrationRows==11 and .requiredFunctions==6' "$BACKUP_DIR/database-guard.json" >/dev/null
 
       - name: Create consistent PostgreSQL custom archive
         shell: bash
@@ -286,8 +287,7 @@ jobs:
             --no-privileges \
             > "$BACKUP_DIR/moraltrade-production-issue782-postcutover.dump"
           test -s "$BACKUP_DIR/moraltrade-production-issue782-postcutover.dump"
-          sha256sum "$BACKUP_DIR/moraltrade-production-issue782-postcutover.dump" \
-            | tee "$BACKUP_DIR/plaintext-backup.sha256"
+          sha256sum "$BACKUP_DIR/moraltrade-production-issue782-postcutover.dump" > "$BACKUP_DIR/plaintext-backup.sha256"
 
       - name: Verify archive structure
         shell: bash
@@ -318,8 +318,7 @@ jobs:
             -pass env:BACKUP_KEY
           cmp --silent "$BACKUP_DIR/moraltrade-production-issue782-postcutover.dump" "$RUNNER_TEMP/roundtrip.dump"
           rm -f "$RUNNER_TEMP/roundtrip.dump"
-          sha256sum "$BACKUP_DIR/moraltrade-production-issue782-postcutover.dump.enc" \
-            | tee "$BACKUP_DIR/encrypted-backup.sha256"
+          sha256sum "$BACKUP_DIR/moraltrade-production-issue782-postcutover.dump.enc" > "$BACKUP_DIR/encrypted-backup.sha256"
 
       - name: Write manifest and remove plaintext
         shell: bash
@@ -350,11 +349,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY' | tee "$BACKUP_DIR/privacy-scan.json"
+          python3 - <<'PY' > "$BACKUP_DIR/privacy-scan.json"
           from pathlib import Path
-          import json, re
+          import json
+          import re
           root = Path('issue782-replacement-backup-evidence')
-          files = [p for p in root.rglob('*') if p.is_file() and p.suffix in {'.json','.txt','.sha256'}]
+          files = [p for p in root.rglob('*') if p.is_file() and p.suffix in {'.json', '.txt', '.sha256'}]
           patterns = {
               'database_url': re.compile(rb'postgres(?:ql)?://[^\s"\']+', re.I),
               'jwt': re.compile(rb'eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}'),
@@ -362,16 +362,19 @@ jobs:
               'private_key': re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
               'provider_secret': re.compile(rb'(?:sk_(?:live|test)_|whsec_)[A-Za-z0-9_-]{8,}', re.I),
           }
-          findings=[]
+          findings = []
           for file in files:
-              data=file.read_bytes()
+              data = file.read_bytes()
               for label, pattern in patterns.items():
-                  if pattern.search(data): findings.append({'type':label,'file':str(file)})
-          result={'filesScanned':len(files),'findings':findings}
-          print(json.dumps(result,sort_keys=True))
-          if findings: raise SystemExit('Credential-like material found in retained backup evidence.')
+                  if pattern.search(data):
+                      findings.append({'type': label, 'file': str(file)})
+          result = {'filesScanned': len(files), 'findings': findings}
+          print(json.dumps(result, sort_keys=True))
+          if findings:
+              raise SystemExit('Credential-like material found in retained backup evidence.')
           PY
-          rm -f "$RUNNER_TEMP/guard.sql" "$RUNNER_TEMP"/*run.json "$RUNNER_TEMP"/*artifacts.json "$RUNNER_TEMP"/deployment.json "$RUNNER_TEMP"/alias-*.json
+          jq -e '.findings==[]' "$BACKUP_DIR/privacy-scan.json" >/dev/null
+          rm -f "$RUNNER_TEMP/guard.sql" "$RUNNER_TEMP"/*-run.json "$RUNNER_TEMP"/*-artifacts.json "$RUNNER_TEMP/deployment.json" "$RUNNER_TEMP"/alias-*.json
 
       - name: Upload encrypted backup and verification evidence
         uses: actions/upload-artifact@v4
@@ -393,6 +396,7 @@ jobs:
             echo "- deployment: \`$EXPECTED_DEPLOYMENT_ID\`"
             echo "- project: \`$EXPECTED_PROJECT_REF\`"
             echo '- migration/schema/RLS/grant/zero-state drift guard: passed'
+            echo '- exact reviewed DAC function set: passed'
             echo '- archive structure: verified'
             echo '- encrypted decrypt round trip: verified'
             echo '- plaintext retained: no'
