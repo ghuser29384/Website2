@@ -1,0 +1,38 @@
+name: Issue 714 export exact pre-activation baseline
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-export-preactivation-baseline.yml
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact reviewed baseline candidate
+        uses: actions/checkout@v4
+        with:
+          ref: add619aaee875867c039cbc2274300cc82d90693
+      - name: Verify exact file digest and package privacy-safe source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "add619aaee875867c039cbc2274300cc82d90693"
+          actual="$(sha256sum supabase/baseline/pre_activation/schema.sql | awk '{print $1}')"
+          test "$actual" = "523e2ad5464b507f91cba4321b28ba88f475057b74b8d756183b7f7ac1f340fc"
+          mkdir -p issue714-baseline-export
+          cp supabase/baseline/pre_activation/schema.sql issue714-baseline-export/schema.sql
+          printf 'source_commit=%s\nsha256=%s\n' "$(git rev-parse HEAD)" "$actual" > issue714-baseline-export/identity.txt
+      - name: Upload exact baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-preactivation-baseline-add619aa
+          path: issue714-baseline-export
+          if-no-files-found: error
+          retention-days: 7
