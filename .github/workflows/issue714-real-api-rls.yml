@@ -1,0 +1,209 @@
+name: Issue 714 real branch Auth and RLS proof
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-real-api-rls.yml
+
+permissions:
+  contents: read
+
+jobs:
+  api-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: https://msuvwouzyempbavtqhva.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_cHY53ziSs2vP6LhFb2w_hw_5Y7XcB7C
+      BROKER_URL: https://msuvwouzyempbavtqhva.supabase.co/functions/v1/issue714-qa-broker
+      VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Exercise canonical Auth and PostgREST boundaries without logging secrets or identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          evidence="$RUNNER_TEMP/issue714-real-api-evidence"
+          work="$RUNNER_TEMP/issue714-real-api-work"
+          mkdir -p "$evidence" "$work"
+
+          record_response() {
+            local name="$1" status="$2" body="$3" validated="$4"
+            {
+              printf 'test=%s\n' "$name"
+              printf 'http_status=%s\n' "$status"
+              printf 'validated=%s\n' "$validated"
+              printf 'response_bytes=%s\n' "$(wc -c < "$body")"
+              sha256sum "$body" | awk '{print "response_sha256=" $1}'
+            } >> "$evidence/results.txt"
+          }
+
+          provision_body="$work/provision.json"
+          provision_status="$(curl --silent --show-error --max-time 60 \
+            --output "$provision_body" --write-out '%{http_code}' \
+            --request POST "$BROKER_URL" \
+            --header "x-issue714-capability: $VERCEL_TOKEN_VALUE" \
+            --header 'Content-Type: application/json' \
+            --data '{"action":"provision-users"}')"
+          test "$provision_status" = 200
+          jq -e '.users | length == 2 and all(.[]; (.id|type)=="string" and (.email|type)=="string" and (.password|type)=="string")' \
+            "$provision_body" >/dev/null
+
+          id_a="$(jq -er '.users[0].id' "$provision_body")"
+          email_a="$(jq -er '.users[0].email' "$provision_body")"
+          password_a="$(jq -er '.users[0].password' "$provision_body")"
+          id_b="$(jq -er '.users[1].id' "$provision_body")"
+          email_b="$(jq -er '.users[1].email' "$provision_body")"
+          password_b="$(jq -er '.users[1].password' "$provision_body")"
+          for secret_value in "$id_a" "$email_a" "$password_a" "$id_b" "$email_b" "$password_b"; do
+            echo "::add-mask::$secret_value"
+          done
+          record_response provision_users "$provision_status" "$provision_body" true
+          rm -f "$provision_body"
+
+          login() {
+            local label="$1" email="$2" password="$3"
+            local body="$work/login-${label}.json"
+            local payload
+            payload="$(jq -cn --arg email "$email" --arg password "$password" '{email:$email,password:$password}')"
+            local status
+            status="$(curl --silent --show-error --max-time 60 \
+              --output "$body" --write-out '%{http_code}' \
+              --request POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+              --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+              --header 'Content-Type: application/json' \
+              --data "$payload")"
+            test "$status" = 200
+            jq -e '.access_token|type=="string"' "$body" >/dev/null
+            jq -e '.user.id|type=="string"' "$body" >/dev/null
+            local token returned_id
+            token="$(jq -er '.access_token' "$body")"
+            returned_id="$(jq -er '.user.id' "$body")"
+            echo "::add-mask::$token"
+            echo "::add-mask::$returned_id"
+            printf '%s' "$token" > "$work/token-${label}"
+            printf '%s' "$returned_id" > "$work/id-${label}"
+            record_response "password_login_${label}" "$status" "$body" true
+            rm -f "$body"
+          }
+
+          login a "$email_a" "$password_a"
+          login b "$email_b" "$password_b"
+          token_a="$(cat "$work/token-a")"
+          returned_id_a="$(cat "$work/id-a")"
+          returned_id_b="$(cat "$work/id-b")"
+          test "$returned_id_a" = "$id_a"
+          test "$returned_id_b" = "$id_b"
+
+          suffix="$(openssl rand -hex 6)"
+          username="qa714api${suffix}"
+          own_body="$work/own-edit.json"
+          own_payload="$(jq -cn --arg display 'Issue 714 API ordinary edit' --arg username "$username" '{display_name:$display,username:$username}')"
+          own_status="$(curl --silent --show-error --max-time 60 \
+            --output "$own_body" --write-out '%{http_code}' \
+            --request PATCH "$SUPABASE_URL/rest/v1/profiles?id=eq.$id_a&select=id,display_name,username,activation_stage" \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header "Authorization: Bearer $token_a" \
+            --header 'Content-Type: application/json' \
+            --header 'Prefer: return=representation' \
+            --data "$own_payload")"
+          own_valid=false
+          if [[ "$own_status" = 200 ]] && jq -e --arg username "$username" \
+            'length==1 and .[0].username==$username and .[0].activation_stage=="walkthrough_required"' \
+            "$own_body" >/dev/null; then own_valid=true; fi
+          record_response authenticated_ordinary_own_profile_edit "$own_status" "$own_body" "$own_valid"
+          test "$own_valid" = true
+
+          activation_body="$work/activation-write.json"
+          activation_status="$(curl --silent --show-error --max-time 60 \
+            --output "$activation_body" --write-out '%{http_code}' \
+            --request PATCH "$SUPABASE_URL/rest/v1/profiles?id=eq.$id_a" \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header "Authorization: Bearer $token_a" \
+            --header 'Content-Type: application/json' \
+            --header 'Prefer: return=representation' \
+            --data '{"activation_stage":"sparks_required"}')"
+          activation_valid=false
+          case "$activation_status" in 401|403) activation_valid=true;; esac
+          record_response authenticated_direct_activation_write_denied "$activation_status" "$activation_body" "$activation_valid"
+          test "$activation_valid" = true
+
+          rpc_body="$work/auth-rpc.json"
+          rpc_payload="$(jq -cn --arg actor "$id_a" --arg target "$id_a" '{actor_profile_id:$actor,target_profile_id:$target}')"
+          rpc_status="$(curl --silent --show-error --max-time 60 \
+            --output "$rpc_body" --write-out '%{http_code}' \
+            --request POST "$SUPABASE_URL/rest/v1/rpc/complete_walkthrough_activation_v1" \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header "Authorization: Bearer $token_a" \
+            --header 'Content-Type: application/json' \
+            --data "$rpc_payload")"
+          rpc_valid=false
+          case "$rpc_status" in 401|403|404) rpc_valid=true;; esac
+          record_response authenticated_service_rpc_denied "$rpc_status" "$rpc_body" "$rpc_valid"
+          test "$rpc_valid" = true
+
+          cross_body="$work/cross-edit.json"
+          cross_status="$(curl --silent --show-error --max-time 60 \
+            --output "$cross_body" --write-out '%{http_code}' \
+            --request PATCH "$SUPABASE_URL/rest/v1/profiles?id=eq.$id_b&select=id" \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header "Authorization: Bearer $token_a" \
+            --header 'Content-Type: application/json' \
+            --header 'Prefer: return=representation' \
+            --data '{"display_name":"Cross-profile edit must not land"}')"
+          cross_valid=false
+          if [[ "$cross_status" = 200 ]] && jq -e 'type=="array" and length==0' "$cross_body" >/dev/null; then cross_valid=true; fi
+          record_response authenticated_cross_profile_edit_blocked "$cross_status" "$cross_body" "$cross_valid"
+          test "$cross_valid" = true
+
+          anon_activation_body="$work/anon-activation.json"
+          anon_activation_status="$(curl --silent --show-error --max-time 60 \
+            --output "$anon_activation_body" --write-out '%{http_code}' \
+            --request PATCH "$SUPABASE_URL/rest/v1/profiles?id=eq.$id_a" \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header 'Content-Type: application/json' \
+            --data '{"activation_stage":"sparks_required"}')"
+          anon_activation_valid=false
+          case "$anon_activation_status" in 401|403) anon_activation_valid=true;; esac
+          record_response anon_direct_activation_write_denied "$anon_activation_status" "$anon_activation_body" "$anon_activation_valid"
+          test "$anon_activation_valid" = true
+
+          anon_rpc_body="$work/anon-rpc.json"
+          anon_rpc_status="$(curl --silent --show-error --max-time 60 \
+            --output "$anon_rpc_body" --write-out '%{http_code}' \
+            --request POST "$SUPABASE_URL/rest/v1/rpc/complete_walkthrough_activation_v1" \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header 'Content-Type: application/json' \
+            --data "$rpc_payload")"
+          anon_rpc_valid=false
+          case "$anon_rpc_status" in 401|403|404) anon_rpc_valid=true;; esac
+          record_response anon_service_rpc_denied "$anon_rpc_status" "$anon_rpc_body" "$anon_rpc_valid"
+          test "$anon_rpc_valid" = true
+
+          final_body="$work/final-own-profile.json"
+          final_status="$(curl --silent --show-error --max-time 60 \
+            --output "$final_body" --write-out '%{http_code}' \
+            "$SUPABASE_URL/rest/v1/profiles?id=eq.$id_a&select=username,activation_stage" \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header "Authorization: Bearer $token_a")"
+          final_valid=false
+          if [[ "$final_status" = 200 ]] && jq -e --arg username "$username" \
+            'length==1 and .[0].username==$username and .[0].activation_stage=="walkthrough_required"' \
+            "$final_body" >/dev/null; then final_valid=true; fi
+          record_response final_activation_unchanged_after_denied_calls "$final_status" "$final_body" "$final_valid"
+          test "$final_valid" = true
+
+          printf 'all_required_tests_passed=true\n' >> "$evidence/results.txt"
+          rm -rf "$work"
+          cat "$evidence/results.txt"
+
+      - name: Upload privacy-safe API evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-real-api-rls
+          path: ${{ runner.temp }}/issue714-real-api-evidence
+          if-no-files-found: warn
+          retention-days: 7
