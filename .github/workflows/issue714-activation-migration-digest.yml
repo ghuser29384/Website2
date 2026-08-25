@@ -1,0 +1,45 @@
+name: Issue 714 bind exact activation migration
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-activation-migration-digest.yml
+
+permissions:
+  contents: read
+
+jobs:
+  bind:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out frozen PR 698 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: fd38e9c6f3738abd89d88222c520ba799143a6ab
+      - name: Bind exact migration bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "fd38e9c6f3738abd89d88222c520ba799143a6ab"
+          path="supabase/migrations/20260814042516_account_activation_stage.sql"
+          test -f "$path"
+          mkdir -p issue714-activation-migration
+          cp "$path" issue714-activation-migration/20260814042516_account_activation_stage.sql
+          sha256sum "$path" | tee issue714-activation-migration/sha256.txt
+          wc -c "$path" | tee issue714-activation-migration/size.txt
+          printf 'candidate=%s\ntree=%s\npath=%s\nblob=%s\n' \
+            "$(git rev-parse HEAD)" \
+            "$(git rev-parse HEAD^{tree})" \
+            "$path" \
+            "$(git hash-object "$path")" \
+            > issue714-activation-migration/identity.txt
+      - name: Upload exact migration
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-activation-migration-fd38e9c6
+          path: issue714-activation-migration
+          if-no-files-found: error
+          retention-days: 7
