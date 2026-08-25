@@ -1,4 +1,4 @@
-name: Issue 714 deterministic concurrent Auth signup probe
+name: Issue 714 lock-synchronized Auth signup probe
 
 on:
   push:
@@ -14,24 +14,46 @@ jobs:
   signup:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      SUPABASE_URL: https://msuvwouzyempbavtqhva.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_cHY53ziSs2vP6LhFb2w_hw_5Y7XcB7C
+      EVIDENCE_DIR: ${{ runner.temp }}/issue714-lock-synchronized-evidence
     steps:
-      - name: Wait for the migration lock window
+      - name: Wait for the isolated activation-migration lock signal
         shell: bash
         run: |
           set -euo pipefail
-          printf 'wait_started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
-          sleep 25
-          printf 'wait_finished_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          mkdir -p "$EVIDENCE_DIR"
+          response="$RUNNER_TEMP/lock-signal-response.json"
+          detected=false
+          for attempt in $(seq 1 300); do
+            status="$(curl --silent --show-error --max-time 10 \
+              --output "$response" \
+              --write-out '%{http_code}' \
+              --request POST "$SUPABASE_URL/rest/v1/rpc/issue714_migration_lock_ready_v1" \
+              --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+              --header 'Content-Type: application/json' \
+              --data '{}')"
+            if [[ "$status" = "200" ]] && jq -e '. == true' "$response" >/dev/null; then
+              detected=true
+              {
+                printf 'lock_signal_detected=true\n'
+                printf 'poll_attempt=%s\n' "$attempt"
+                printf 'detected_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+                sha256sum "$response" | awk '{print "signal_response_sha256=" $1}'
+                printf 'signal_response_bytes=%s\n' "$(wc -c < "$response")"
+              } | tee "$EVIDENCE_DIR/signal.txt"
+              break
+            fi
+            sleep 1
+          done
+          rm -f "$response"
+          test "$detected" = true
 
-      - name: Exercise concurrent synthetic-only password signup without logging response data
+      - name: Exercise canonical password signup while the profile lock is held
         shell: bash
-        env:
-          SUPABASE_URL: https://msuvwouzyempbavtqhva.supabase.co
-          SUPABASE_PUBLISHABLE_KEY: sb_publishable_cHY53ziSs2vP6LhFb2w_hw_5Y7XcB7C
         run: |
           set -euo pipefail
-          evidence="$RUNNER_TEMP/issue714-concurrency-evidence"
-          mkdir -p "$evidence"
           body="$RUNNER_TEMP/signup-response.json"
           started_at="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
           start_epoch="$(date +%s%N)"
@@ -41,24 +63,29 @@ jobs:
             --request POST "$SUPABASE_URL/auth/v1/signup" \
             --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
             --header 'Content-Type: application/json' \
-            --data '{"email":"issue714-concurrency-20260825@example.invalid","password":"Q4!issue714-Concurrency-6Vm9sK","data":{"display_name":"Issue 714 Concurrency Synthetic"}}')"
+            --data '{"email":"issue714-concurrency-locked-20260825@example.invalid","password":"Q4!issue714-Locked-6Vm9sK","data":{"display_name":"Issue 714 Locked Concurrency Synthetic"}}')"
           end_epoch="$(date +%s%N)"
           finished_at="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
           elapsed_ms="$(( (end_epoch - start_epoch) / 1000000 ))"
-          sha256sum "$body" | awk '{print "response_sha256=" $1}' > "$evidence/result.txt"
-          printf 'http_status=%s\nstarted_at=%s\nfinished_at=%s\nelapsed_ms=%s\nresponse_bytes=%s\n' \
-            "$status" "$started_at" "$finished_at" "$elapsed_ms" "$(wc -c < "$body")" >> "$evidence/result.txt"
+          {
+            sha256sum "$body" | awk '{print "response_sha256=" $1}'
+            printf 'http_status=%s\n' "$status"
+            printf 'started_at=%s\n' "$started_at"
+            printf 'finished_at=%s\n' "$finished_at"
+            printf 'elapsed_ms=%s\n' "$elapsed_ms"
+            printf 'response_bytes=%s\n' "$(wc -c < "$body")"
+          } | tee "$EVIDENCE_DIR/signup.txt"
           rm -f "$body"
-          cat "$evidence/result.txt"
           case "$status" in
             200|201) ;;
             *) exit 1 ;;
           esac
+          test "$elapsed_ms" -ge 10000
 
-      - name: Upload privacy-safe concurrency evidence
+      - name: Upload privacy-safe lock and signup evidence
         uses: actions/upload-artifact@v4
         with:
-          name: issue714-auth-concurrency-probe
-          path: ${{ runner.temp }}/issue714-concurrency-evidence
+          name: issue714-lock-synchronized-auth-signup
+          path: ${{ runner.temp }}/issue714-lock-synchronized-evidence
           if-no-files-found: error
           retention-days: 7
