@@ -1,0 +1,53 @@
+name: Issue 714 synthetic branch Auth signup probe
+
+on:
+  push:
+    branches:
+      - ops/issue714-pr698-sync-diagnostic-20260824
+    paths:
+      - .github/workflows/issue714-auth-signup-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  signup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Exercise synthetic-only password signup without logging response data
+        shell: bash
+        env:
+          SUPABASE_URL: https://msuvwouzyempbavtqhva.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_cHY53ziSs2vP6LhFb2w_hw_5Y7XcB7C
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/issue714-signup-evidence"
+          mkdir -p "$evidence"
+          body="$RUNNER_TEMP/signup-response.json"
+          start_epoch="$(date +%s%N)"
+          status="$(curl --silent --show-error --max-time 120 \
+            --output "$body" \
+            --write-out '%{http_code}' \
+            --request POST "$SUPABASE_URL/auth/v1/signup" \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header 'Content-Type: application/json' \
+            --data '{"email":"issue714-signup-probe-20260825@example.invalid","password":"Q4!issue714-SignupProbe-9Tn4kP","data":{"display_name":"Issue 714 Signup Probe"}}')"
+          end_epoch="$(date +%s%N)"
+          elapsed_ms="$(( (end_epoch - start_epoch) / 1000000 ))"
+          sha256sum "$body" | awk '{print "response_sha256=" $1}' > "$evidence/result.txt"
+          printf 'http_status=%s\nelapsed_ms=%s\nresponse_bytes=%s\n' \
+            "$status" "$elapsed_ms" "$(wc -c < "$body")" >> "$evidence/result.txt"
+          rm -f "$body"
+          cat "$evidence/result.txt"
+          case "$status" in
+            200|201) ;;
+            *) exit 1 ;;
+          esac
+      - name: Upload privacy-safe signup evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-auth-signup-probe
+          path: ${{ runner.temp }}/issue714-signup-evidence
+          if-no-files-found: error
+          retention-days: 7
