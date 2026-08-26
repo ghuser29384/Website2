@@ -1,0 +1,562 @@
+name: Issue 714 persisted activation guard repair v2
+
+on:
+  push:
+    branches:
+      - ops/issue714-hosted-uat-20260826
+    paths:
+      - .github/workflows/issue714-activation-guard-repair-v2.yml
+
+permissions:
+  contents: write
+
+env:
+  TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
+  EXPECTED_HEAD: fd38e9c6f3738abd89d88222c520ba799143a6ab
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out exact PR candidate
+        uses: actions/checkout@v4
+        with:
+          ref: agent/issue-675-activation-routing-canonical-walkthrough
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact mutable target
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse origin/$TARGET_BRANCH)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+
+      - name: Remove username inference from activation routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          actions_path = Path("src/app/actions.ts")
+          actions = actions_path.read_text()
+          import_line = 'import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";\n'
+          if actions.count(import_line) != 1:
+              raise SystemExit(f"unexpected actions import count: {actions.count(import_line)}")
+          actions = actions.replace(import_line, "", 1)
+
+          start = actions.index("export async function signInAction")
+          next_export = actions.find("\nexport async function ", start + 1)
+          end = next_export if next_export != -1 else len(actions)
+          block = actions[start:end]
+          completed_definition = (
+              "    const completedDestination = profileNeedsUsername(profile)\n"
+              "      ? buildUsernameCompletionPath(next)\n"
+              "      : next;\n"
+          )
+          if block.count(completed_definition) != 1:
+              raise SystemExit(
+                  f"unexpected completed destination definition count: {block.count(completed_definition)}"
+              )
+          block = block.replace(completed_definition, "", 1)
+          if block.count("          completedDestination,\n") != 1:
+              raise SystemExit(
+                  f"unexpected completed destination argument count: {block.count('          completedDestination,\\n')}"
+              )
+          block = block.replace("          completedDestination,\n", "          next,\n", 1)
+          if "profileNeedsUsername" in block or "buildUsernameCompletionPath" in block:
+              raise SystemExit("username-derived setup routing remains in signInAction")
+          actions = actions[:start] + block + actions[end:]
+          actions_path.write_text(actions)
+
+          confirm_path = Path("src/app/auth/confirm/route.ts")
+          confirm = confirm_path.read_text()
+          confirm_import = 'import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";\n'
+          if confirm.count(confirm_import) != 1:
+              raise SystemExit(f"unexpected confirm import count: {confirm.count(confirm_import)}")
+          confirm = confirm.replace(confirm_import, "", 1)
+          helper = (
+              "function getCompletedAccountDestination(\n"
+              "  profile: Parameters<typeof profileNeedsUsername>[0],\n"
+              "  next: string,\n"
+              ") {\n"
+              "  return profileNeedsUsername(profile) ? buildUsernameCompletionPath(next) : next;\n"
+              "}\n\n"
+          )
+          if confirm.count(helper) != 1:
+              raise SystemExit(f"unexpected confirm helper count: {confirm.count(helper)}")
+          confirm = confirm.replace(helper, "", 1)
+          if confirm.count("getCompletedAccountDestination(profile, next)") != 2:
+              raise SystemExit("unexpected direct confirm destination call count")
+          confirm = confirm.replace("getCompletedAccountDestination(profile, next)", "next")
+          viewer_expression = "viewer ? getCompletedAccountDestination(viewer.profile, next) : next"
+          if confirm.count(viewer_expression) != 2:
+              raise SystemExit("unexpected viewer confirm destination call count")
+          confirm = confirm.replace(viewer_expression, "next")
+          if "getCompletedAccountDestination" in confirm or "profileNeedsUsername" in confirm:
+              raise SystemExit("username-derived setup routing remains in confirm route")
+          confirm_path.write_text(confirm)
+          PY
+
+      - name: Install persisted activation guard in the unified proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > src/proxy.ts <<'TS'
+          import { createServerClient } from "@supabase/ssr";
+          import type { NextRequest } from "next/server";
+          import { NextResponse } from "next/server";
+
+          import {
+            ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
+            isAccountActivationStage,
+            type AccountActivationState,
+          } from "@/lib/account-activation";
+          import { getPrivateNoStoreHeaders } from "@/lib/background-privacy-controls";
+          import { getSupabaseEnv, hasSupabaseEnv } from "@/lib/supabase/config";
+          import type { Database } from "@/lib/supabase/database.types";
+          import { updateSession } from "@/lib/supabase/proxy";
+          import { isPostgresUuid } from "@/lib/uuid";
+
+          const STATIC_OFFER_SEGMENTS = new Set(["examples", "new", "plane"]);
+          const ACTIVATION_GUARDED_EXACT_PATHS = new Set([
+            "/feed",
+            "/dashboard",
+            "/create",
+            "/trades/new",
+            "/offers",
+            "/agreements",
+            "/saved-offers",
+            "/admin",
+            "/mpgf/account",
+            "/mpgf/admin",
+          ]);
+          const ACTIVATION_GUARDED_PREFIXES = [
+            "/dashboard/",
+            "/trades/new/",
+            "/offers/",
+            "/agreements/",
+            "/saved-offers/",
+            "/admin/",
+            "/mpgf/account/",
+            "/mpgf/admin/",
+          ];
+          const ACTIVATION_RESOLUTION_TIMEOUT_MS = 2_500;
+
+          function isPrefetch(request: NextRequest) {
+            const purpose = [
+              request.headers.get("purpose"),
+              request.headers.get("sec-purpose"),
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+
+            return request.headers.has("next-router-prefetch") || purpose.includes("prefetch");
+          }
+
+          function rewriteToUnifiedCreate(request: NextRequest) {
+            const createUrl = request.nextUrl.clone();
+            createUrl.pathname = "/trades/new";
+
+            return NextResponse.rewrite(createUrl);
+          }
+
+          function getOfferRecordSegment(pathname: string) {
+            if (!pathname.startsWith("/offers/")) {
+              return null;
+            }
+
+            const [segment = ""] = pathname.slice("/offers/".length).split("/");
+
+            if (!segment || STATIC_OFFER_SEGMENTS.has(segment)) {
+              return null;
+            }
+
+            return segment;
+          }
+
+          function isInvalidOfferRecordPath(pathname: string) {
+            const offerRecordSegment = getOfferRecordSegment(pathname);
+            return offerRecordSegment !== null && !isPostgresUuid(offerRecordSegment);
+          }
+
+          function rewriteToInvalidOfferRecord(request: NextRequest) {
+            const invalidOfferUrl = request.nextUrl.clone();
+            invalidOfferUrl.pathname = "/invalid-offer-record";
+            invalidOfferUrl.search = "";
+
+            return NextResponse.rewrite(invalidOfferUrl, {
+              status: 404,
+              headers: {
+                "Cache-Control": "private, no-store",
+                "X-Robots-Tag": "noindex, nofollow",
+              },
+            });
+          }
+
+          export function isActivationGuardedPath(pathname: string) {
+            return (
+              ACTIVATION_GUARDED_EXACT_PATHS.has(pathname) ||
+              ACTIVATION_GUARDED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+            );
+          }
+
+          export function getActivationGuardDestination(
+            pathname: string,
+            state: AccountActivationState,
+          ) {
+            if (!isActivationGuardedPath(pathname) || state.kind === "signed_out") {
+              return null;
+            }
+
+            if (state.kind === "unavailable") {
+              return ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
+            }
+
+            if (state.stage === "walkthrough_required") {
+              return "/walkthrough";
+            }
+
+            if (state.stage === "sparks_required") {
+              return "/complete-profile";
+            }
+
+            return null;
+          }
+
+          function hasSupabaseSessionCookie(request: NextRequest) {
+            return request.cookies
+              .getAll()
+              .some(({ name }) => /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i.test(name));
+          }
+
+          async function resolveActivationState(request: NextRequest): Promise<AccountActivationState> {
+            if (!hasSupabaseSessionCookie(request)) {
+              return { kind: "signed_out" };
+            }
+
+            const hostname = request.headers.get("host") ?? request.nextUrl.hostname;
+            if (!hasSupabaseEnv(hostname)) {
+              return { kind: "unavailable" };
+            }
+
+            const resolveFromDatabase = async (): Promise<AccountActivationState> => {
+              try {
+                const { url, publishableKey } = getSupabaseEnv(hostname);
+                const supabase = createServerClient<Database>(url, publishableKey, {
+                  cookies: {
+                    getAll() {
+                      return request.cookies.getAll();
+                    },
+                    setAll() {
+                      // updateSession has already propagated refreshed cookies.
+                    },
+                  },
+                });
+                const {
+                  data: { user },
+                  error: userError,
+                } = await supabase.auth.getUser();
+
+                if (userError || !user) {
+                  return { kind: "unavailable" };
+                }
+
+                const { data: profile, error: profileError } = await supabase
+                  .from("profiles")
+                  .select("activation_stage")
+                  .eq("id", user.id)
+                  .maybeSingle();
+
+                if (profileError || !profile || !isAccountActivationStage(profile.activation_stage)) {
+                  return { kind: "unavailable" };
+                }
+
+                return { kind: "available", stage: profile.activation_stage };
+              } catch {
+                return { kind: "unavailable" };
+              }
+            };
+
+            return Promise.race([
+              resolveFromDatabase(),
+              new Promise<AccountActivationState>((resolve) => {
+                setTimeout(
+                  () => resolve({ kind: "unavailable" }),
+                  ACTIVATION_RESOLUTION_TIMEOUT_MS,
+                );
+              }),
+            ]);
+          }
+
+          function copySessionAndSafeHeaders(source: NextResponse, target: NextResponse) {
+            for (const cookie of source.cookies.getAll()) {
+              target.cookies.set(cookie);
+            }
+
+            for (const [name, value] of source.headers.entries()) {
+              const normalized = name.toLowerCase();
+              if (
+                normalized === "location" ||
+                normalized === "set-cookie" ||
+                normalized === "content-length" ||
+                normalized === "content-type" ||
+                normalized.startsWith("x-middleware-")
+              ) {
+                continue;
+              }
+              target.headers.set(name, value);
+            }
+
+            return target;
+          }
+
+          function createActivationRedirect(
+            request: NextRequest,
+            response: NextResponse,
+            destination: string,
+          ) {
+            const destinationUrl = request.nextUrl.clone();
+            destinationUrl.pathname = destination;
+            destinationUrl.search = "";
+            const redirectResponse = copySessionAndSafeHeaders(
+              response,
+              NextResponse.redirect(destinationUrl),
+            );
+            redirectResponse.headers.set("Cache-Control", "private, no-store, max-age=0");
+            redirectResponse.headers.set("X-Robots-Tag", "noindex, nofollow");
+            return redirectResponse;
+          }
+
+          export function createCompatibilityResponse(request: NextRequest) {
+            const { pathname } = request.nextUrl;
+
+            if (pathname === "/create") {
+              if (request.nextUrl.searchParams.get("mode") === "back") {
+                return NextResponse.next({ request });
+              }
+
+              return rewriteToUnifiedCreate(request);
+            }
+
+            if (isInvalidOfferRecordPath(pathname)) {
+              return rewriteToInvalidOfferRecord(request);
+            }
+
+            if (pathname !== "/offers") {
+              return NextResponse.next({ request });
+            }
+
+            if (request.nextUrl.searchParams.size === 0) {
+              if (isPrefetch(request)) {
+                return NextResponse.next({ request });
+              }
+
+              const discoverUrl = request.nextUrl.clone();
+              discoverUrl.pathname = "/discover";
+              discoverUrl.searchParams.set("domain", "offers");
+              discoverUrl.searchParams.set("view", "list");
+
+              return NextResponse.redirect(discoverUrl);
+            }
+
+            if (
+              request.nextUrl.searchParams.get("view") === "templates" ||
+              request.nextUrl.searchParams.get("tab") === "templates"
+            ) {
+              return rewriteToUnifiedCreate(request);
+            }
+
+            if (request.nextUrl.searchParams.has("view")) {
+              return NextResponse.next({ request });
+            }
+
+            const liveDirectoryUrl = request.nextUrl.clone();
+            liveDirectoryUrl.searchParams.set("view", "live");
+
+            return NextResponse.redirect(liveDirectoryUrl);
+          }
+
+          export async function proxy(request: NextRequest) {
+            let response = await updateSession(request, {
+              responseFactory: createCompatibilityResponse,
+            });
+
+            if (response.status < 400 && isActivationGuardedPath(request.nextUrl.pathname)) {
+              const state = await resolveActivationState(request);
+              const destination = getActivationGuardDestination(request.nextUrl.pathname, state);
+              if (destination) {
+                response = createActivationRedirect(request, response, destination);
+              }
+            }
+
+            const privateHeaders = getPrivateNoStoreHeaders(request.nextUrl.pathname);
+            if (privateHeaders) {
+              for (const [name, value] of Object.entries(privateHeaders)) {
+                response.headers.set(name, value);
+              }
+            }
+
+            return response;
+          }
+
+          export const config = {
+            matcher: [
+              "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+            ],
+          };
+          TS
+
+      - name: Add permanent activation authority contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > src/account-activation-routing-contract.test.ts <<'TS'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          import test from "node:test";
+
+          import {
+            getActivationGuardDestination,
+            isActivationGuardedPath,
+          } from "@/proxy";
+
+          test("persisted activation guards every required post-auth surface", () => {
+            for (const path of [
+              "/feed",
+              "/dashboard",
+              "/dashboard/security",
+              "/create",
+              "/trades/new",
+              "/offers",
+              "/offers/new",
+              "/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b",
+              "/agreements",
+              "/saved-offers",
+              "/admin",
+              "/mpgf/account",
+            ]) {
+              assert.equal(isActivationGuardedPath(path), true, path);
+              assert.equal(
+                getActivationGuardDestination(path, {
+                  kind: "available",
+                  stage: "walkthrough_required",
+                }),
+                "/walkthrough",
+                path,
+              );
+              assert.equal(
+                getActivationGuardDestination(path, {
+                  kind: "available",
+                  stage: "sparks_required",
+                }),
+                "/complete-profile",
+                path,
+              );
+              assert.equal(
+                getActivationGuardDestination(path, {
+                  kind: "available",
+                  stage: "setup_complete",
+                }),
+                null,
+                path,
+              );
+              assert.equal(
+                getActivationGuardDestination(path, { kind: "unavailable" }),
+                "/account-state-unavailable",
+                path,
+              );
+              assert.equal(
+                getActivationGuardDestination(path, { kind: "signed_out" }),
+                null,
+                path,
+              );
+            }
+          });
+
+          test("activation guards do not reclassify public and activation-owned routes", () => {
+            for (const path of [
+              "/",
+              "/discover",
+              "/walkthrough",
+              "/complete-profile",
+              "/account-state-unavailable",
+              "/contact",
+            ]) {
+              assert.equal(isActivationGuardedPath(path), false, path);
+              assert.equal(
+                getActivationGuardDestination(path, {
+                  kind: "available",
+                  stage: "walkthrough_required",
+                }),
+                null,
+                path,
+              );
+            }
+          });
+
+          test("activation_stage remains the sole post-auth setup-routing authority", () => {
+            const actions = readFileSync("src/app/actions.ts", "utf8");
+            const confirm = readFileSync("src/app/auth/confirm/route.ts", "utf8");
+            assert.doesNotMatch(actions, /profileNeedsUsername/);
+            assert.doesNotMatch(actions, /buildUsernameCompletionPath/);
+            assert.doesNotMatch(confirm, /profileNeedsUsername/);
+            assert.doesNotMatch(confirm, /buildUsernameCompletionPath/);
+            assert.match(actions, /getPostAuthActivationDestination[\s\S]*?next/);
+            assert.match(confirm, /getPostAuthActivationDestination/);
+          });
+
+          test("the proxy reads persisted activation for guarded browser routes", () => {
+            const source = readFileSync("src/proxy.ts", "utf8");
+            assert.match(source, /\.from\("profiles"\)/);
+            assert.match(source, /\.select\("activation_stage"\)/);
+            assert.match(source, /ACCOUNT_ACTIVATION_UNAVAILABLE_PATH/);
+            assert.match(source, /createActivationRedirect/);
+          });
+          TS
+
+          git diff --check
+          git diff --stat
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused activation and proxy contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/account-activation-routing-contract.test.ts \
+            src/lib/account-activation.test.ts \
+            src/lib/auth-routes.test.ts \
+            src/lib/supabase/proxy.test.ts \
+            src/proxy.test.ts
+
+      - name: Run complete repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit --pretty false
+          npm run build
+
+      - name: Commit and push normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(git status --porcelain)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/app/actions.ts \
+            src/app/auth/confirm/route.ts \
+            src/proxy.ts \
+            src/account-activation-routing-contract.test.ts
+          git commit -m "Enforce persisted activation across post-auth routes"
+          git push origin "HEAD:$TARGET_BRANCH"
