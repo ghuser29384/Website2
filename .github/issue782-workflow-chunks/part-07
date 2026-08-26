@@ -1,0 +1,175 @@
+          if [[ -s "${ISSUE782_MANIFEST_PATH:-}" ]]; then
+            users="$(jq -r '[.users[].id | select(type=="string") | "'\''" + . + "'\''::uuid"] | join(",")' "$ISSUE782_MANIFEST_PATH")"
+            proposals="$(jq -r '[.proposals[] | "'\''" + . + "'\''::uuid"] | join(",")' "$ISSUE782_MANIFEST_PATH")"
+            submissions="$(jq -r '[.submissions[] | "'\''" + . + "'\''::uuid"] | join(",")' "$ISSUE782_MANIFEST_PATH")"
+            campaigns="$(jq -r '[.proposals[] | "campaign-" + gsub("-";"")] | map("'"'"'" + . + "'"'"'") | join(",")' "$ISSUE782_MANIFEST_PATH")"
+            docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<SQL \
+              > "$EVIDENCE_DIR/cleanup/zero-residue.raw" || cleanup_code=110
+            select jsonb_build_object(
+              'authUsers',(select count(*) from auth.users where id in ($users)),
+              'identities',(select count(*) from auth.identities where user_id in ($users)),
+              'sessions',(select count(*) from auth.sessions where user_id in ($users)),
+              'refreshTokens',(select count(*) from auth.refresh_tokens where user_id = any(array[$(jq -r '[.users[].id | select(type=="string") | "'\''" + . + "'\''"] | join(",")' "$ISSUE782_MANIFEST_PATH")])),
+              'mfaFactors',(select count(*) from auth.mfa_factors where user_id in ($users)),
+              'profiles',(select count(*) from public.profiles where id in ($users)),
+              'personAccounts',(select count(*) from moral_trade_private.person_accounts where profile_id in ($users)),
+              'reviewers',(select count(*) from public.mpgf_pool_reviewers where reviewer_id in ($users)),
+              'proposals',(select count(*) from public.mpgf_pool_proposals where id in ($proposals)),
+              'proposalVersions',(select count(*) from public.mpgf_pool_proposal_versions where proposal_id in ($proposals)),
+              'lifecycleEvents',(select count(*) from public.mpgf_pool_lifecycle_events where proposal_id in ($proposals)),
+              'createSubmissions',(select count(*) from public.moral_trade_create_submissions where id in ($submissions)),
+              'createPoolTerms',(select count(*) from public.moral_trade_create_pool_terms where pool_proposal_id in ($proposals)),
+              'campaigns',(select count(*) from public.mpgf_public_goods_campaigns where id in ($campaigns)),
+              'pledges',(select count(*) from public.mpgf_public_goods_pledges where campaign_id in ($campaigns)),
+              'pledgeIntents',(select count(*) from public.mpgf_dac_pledge_intents where campaign_id in ($campaigns)),
+              'pledgeEvents',(select count(*) from public.mpgf_dac_pledge_events where campaign_id in ($campaigns)),
+              'outcomes',(select count(*) from public.mpgf_dac_campaign_outcomes where campaign_id in ($campaigns)),
+              'paymentReferences',(select count(*) from public.mpgf_public_goods_pledges where campaign_id in ($campaigns) and (payment_intent_ref is not null or status='captured')),
+              'checkedAt',clock_timestamp()
+            );
+          SQL
+            grep -E '^\{' "$EVIDENCE_DIR/cleanup/zero-residue.raw" | tail -n 1 > "$EVIDENCE_DIR/cleanup/zero-residue.json" || cleanup_code=111
+            jq -e '
+              ([to_entries[] | select(.key!="checkedAt" and .value!=0)] | length)==0
+            ' "$EVIDENCE_DIR/cleanup/zero-residue.json" >/dev/null || cleanup_code=112
+          fi
+
+          # Prove ADMIN_EMAILS returned to zero.
+          env_verify="$RUNNER_TEMP/envs-after-cleanup.json"
+          if curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-cleanup-verify" \
+            > "$env_verify"; then
+            remaining="$(jq '[.envs[]? | select(.key=="ADMIN_EMAILS" and ((.target|type)=="array" and (.target|index("production"))!=null or .target=="production"))] | length' "$env_verify")"
+            [[ "$remaining" = "0" ]] || cleanup_code=113
+          else
+            cleanup_code=114
+          fi
+
+          # Delete only the exact temporary same-SHA deployment after restoration.
+          if [[ -n "$temp_id" && "$temp_id" != "$ORIGINAL_DEPLOYMENT_ID" ]]; then
+            detail="$RUNNER_TEMP/temp-deployment-before-delete.json"
+            if curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$temp_id?teamId=$VERCEL_TEAM_ID" > "$detail"; then
+              if jq -e --arg id "$temp_id" --arg project "$VERCEL_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+                ((.id // .uid)==$id) and ((.projectId // .project.id // "")==$project)
+                and (.meta.githubCommitSha==$sha)
+                and (((.alias // .aliases // []) | map(select(.=="moraltrade.org" or .=="www.moraltrade.org")) | length)==0)
+              ' "$detail" >/dev/null; then
+                curl -fsS -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
+                  "https://api.vercel.com/v13/deployments/$temp_id?teamId=$VERCEL_TEAM_ID" \
+                  > "$EVIDENCE_DIR/cleanup/deployment-delete.json" || cleanup_code=115
+              else
+                cleanup_code=116
+              fi
+            fi
+          fi
+
+          restored_at="$(date +%s)"
+          alias_started="${ISSUE782_ALIAS_STARTED_EPOCH:-${discovered_started_epoch:-${ISSUE782_RELEASE_DISPATCH_EPOCH:-$restored_at}}}"
+          alias_seconds="$((restored_at-alias_started))"
+          [[ "$alias_seconds" -le 5400 ]] || cleanup_code=117
+          jq -n \
+            --argjson exitCode "$cleanup_code" \
+            --arg originalDeploymentId "$ORIGINAL_DEPLOYMENT_ID" \
+            --arg temporaryDeploymentId "$temp_id" \
+            --argjson aliasWindowSeconds "$alias_seconds" \
+            --arg completedAt "$(date -u +%FT%TZ)" \
+            '{exitCode:$exitCode,aliasesRestored:true,originalDeploymentId:$originalDeploymentId,temporaryDeploymentId:(if $temporaryDeploymentId=="" then null else $temporaryDeploymentId end),temporaryAdminEmailsRemoved:($exitCode==0),exactOwnedRowsCleaned:($exitCode==0),syntheticAuthDeleted:($exitCode==0),temporaryDeploymentDeleted:($exitCode==0),aliasWindowSeconds:$aliasWindowSeconds,withinNinetyMinutes:($aliasWindowSeconds<=5400),completedAt:$completedAt}' \
+            > "$EVIDENCE_DIR/cleanup/cleanup-summary.json"
+          echo "exit_code=$cleanup_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Privacy-scan retained evidence and remove exact manifests and secret-bearing files
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence_code=0
+          rm -f \
+            "$RUNNER_TEMP/issue782-password" \
+            "$RUNNER_TEMP/issue782-production-secrets.env" \
+            "$RUNNER_TEMP/issue782-manifest.json" \
+            "$RUNNER_TEMP/issue782-admin-env-id" \
+            "$RUNNER_TEMP/issue782-temp-deployment-id" \
+            "$RUNNER_TEMP/issue782-temp-deployment-url" \
+            "$RUNNER_TEMP/issue782-alias-started-epoch" \
+            "$RUNNER_TEMP"/user-*.json \
+            "$RUNNER_TEMP"/user-*.log \
+            "$RUNNER_TEMP"/env*.json \
+            "$RUNNER_TEMP"/alias-*.json \
+            "$RUNNER_TEMP"/issue782-guard.sql \
+            "$RUNNER_TEMP"/vercel-pull.log
+          rm -f tests/issue782-generated-dac-product-lifecycle.spec.ts playwright.issue782.config.ts
+          rm -rf "$GENERATED_DIR"
+          python3 - <<'PY' > "$EVIDENCE_DIR/privacy-scan.json"
+          from pathlib import Path
+          import json,re
+          root=Path('issue782-bounded-reviewer-uat-evidence')
+          files=[p for p in root.rglob('*') if p.is_file() and p.suffix.lower() not in {'.png','.zip','.trace'} and p.stat().st_size<25_000_000]
+          patterns={
+            'database_url':re.compile(rb'postgres(?:ql)?://[^\s"\']+',re.I),
+            'jwt':re.compile(rb'eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}'),
+            'bearer':re.compile(rb'Bearer\s+[A-Za-z0-9._~+/-]{20,}',re.I),
+            'refresh_token':re.compile(rb'refresh[_-]?token["\'=:\s]+[A-Za-z0-9._~+/-]{16,}',re.I),
+            'cookie':re.compile(rb'(?:set-cookie|cookie):\s*[^\r\n]+',re.I),
+            'totp_secret':re.compile(rb'(?:secret|totp)["\'=:\s]+[A-Z2-7]{16,}',re.I),
+            'private_key':re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+            'provider_secret':re.compile(rb'(?:sk_(?:live|test)_|whsec_)[A-Za-z0-9_-]{8,}',re.I),
+            'real_email':re.compile(rb'\b[A-Z0-9._%+-]+@(?!qa\.moraltrade\.invalid\b)[A-Z0-9.-]+\.[A-Z]{2,}\b',re.I),
+          }
+          findings=[]
+          for file in files:
+            data=file.read_bytes()
+            for label,pattern in patterns.items():
+              if pattern.search(data): findings.append({'type':label,'file':str(file)})
+          print(json.dumps({'filesScanned':len(files),'findings':findings},sort_keys=True))
+          if findings: raise SystemExit('Sensitive material found in retained evidence.')
+          PY
+          privacy_code=$?
+          [[ "$privacy_code" -eq 0 ]] || evidence_code=120
+          echo "exit_code=$evidence_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload immutable bounded-UAT evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue782-bounded-reviewer-uat-${{ env.EXPECTED_MAIN_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce exact bounded UAT and restoration result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.production_env.outputs.exit_code }}" = "0"
+          test "${{ steps.admin_env.outputs.exit_code }}" = "0"
+          test "${{ steps.users.outputs.exit_code }}" = "0"
+          test "${{ steps.fixture.outputs.exit_code }}" = "0"
+          test "${{ steps.auth_create.outputs.exit_code }}" = "0"
+          test "${{ steps.uat.outputs.exit_code }}" = "0"
+          test "${{ steps.logs.outputs.exit_code }}" = "0"
+          test "${{ steps.cleanup.outputs.exit_code }}" = "0"
+          test "${{ steps.evidence.outputs.exit_code }}" = "0"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          {
+            echo "### Issue 782 bounded canonical reviewer UAT"
+            echo "- exact main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- permanent release run: \`${ISSUE782_RELEASE_RUN_ID:-unknown}\`"
+            echo "- temporary deployment: \`${ISSUE782_TEMP_DEPLOYMENT_ID:-unknown}\`"
+            echo "- Auth/Create/reviewer diagnostics: passed"
+            echo "- complete rendered DAC lifecycle: passed"
+            echo "- aliases restored: passed"
+            echo "- ADMIN_EMAILS returned to zero: passed"
+            echo "- exact-owned zero residue and zero payment references: passed"
+            echo "- temporary deployment deleted: passed"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  rescue:
+    name: Independent post-job restoration and zero-configuration guard
+    if: always()
+    needs: execute
