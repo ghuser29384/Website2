@@ -78,9 +78,10 @@ jobs:
           diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
           git diff --cached --check
 
-          if git diff --cached | grep -E \
-            'evaluator-core-loop-|81000000-|82000000-|83000000-|@qa\.invalid' >/dev/null; then
-            echo "Initial R unexpectedly contains evaluator fixture or static QA identity material." >&2
+          # Reject only permanent fixture identities. Generic product/test text
+          # may legitimately say "evaluator core loop".
+          if git diff --cached --unified=0 | grep -E '^\+.*(81000000-|82000000-|83000000-|evaluator-core-loop-[a-z-]+@qa\.invalid)' >/dev/null; then
+            echo "Initial R unexpectedly adds a fixed evaluator UUID or QA email." >&2
             exit 1
           fi
 
@@ -126,8 +127,6 @@ jobs:
 
       - name: Commit and push exact output branch
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
