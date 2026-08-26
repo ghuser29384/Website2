@@ -1,0 +1,35 @@
+name: Issue 714 activation source diagnostic
+on:
+  push:
+    branches: [ops/issue714-hosted-uat-20260826]
+    paths: [.github/workflows/issue714-source-diagnostic.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fd38e9c6f3738abd89d88222c520ba799143a6ab
+          fetch-depth: 1
+      - name: Print bounded activation-routing source context
+        shell: bash
+        run: |
+          set -euo pipefail
+          print_context() {
+            file="$1"; pattern="$2"; before="${3:-35}"; after="${4:-80}"
+            printf '\n===== %s :: %s =====\n' "$file" "$pattern"
+            line="$(grep -n -m1 -E "$pattern" "$file" | cut -d: -f1 || true)"
+            if [ -z "$line" ]; then echo 'NOT FOUND'; return; fi
+            start=$(( line > before ? line - before : 1 )); end=$(( line + after ))
+            sed -n "${start},${end}p" "$file"
+          }
+          print_context src/app/actions.ts 'export async function signInAction|async function signInAction' 30 150
+          print_context src/app/actions.ts 'profileNeedsUsername' 40 100
+          print_context src/app/actions.ts 'getPostAuthActivationDestination' 40 100
+          print_context src/app/auth/callback/route.ts 'getPostAuthActivationDestination|profileNeedsUsername' 40 100
+          print_context src/app/feed/page.tsx 'export default' 20 100
+          print_context src/app/dashboard/page.tsx 'export default' 20 100
+          print_context src/app/trades/new/page.tsx 'export default' 20 100
