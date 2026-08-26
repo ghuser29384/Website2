@@ -1,0 +1,249 @@
+name: Issue 782 authorized production UAT supervisor
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - .github/workflows/dac-production-issue782-authorized-supervisor-20260826.yml
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+
+concurrency:
+  group: issue782-authorized-production-uat-supervisor
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/dac-production-canonical-uat-26d1fe43-20260824
+  CONTROLLER_PATH: .github/workflows/dac-production-issue782-authorized-supervisor-20260826.yml
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  EXPECTED_MAIN_TREE: 47fe96dfc881f1c57dea711283fc3db36a44e053
+  AUTHORIZATION_COMMENT_ID: "5420203746"
+  ISSUE_NUMBER: "782"
+  EVIDENCE_DIR: issue782-supervisor-evidence
+
+jobs:
+  supervise:
+    name: Discover, validate, and start the one-use authorized controller
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out exact operations branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact state and owner authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git merge-base HEAD "$EXPECTED_MAIN_SHA")" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse "$EXPECTED_MAIN_SHA^{tree}")" = "$EXPECTED_MAIN_TREE"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+          mkdir -p "$EVIDENCE_DIR"
+
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$AUTHORIZATION_COMMENT_ID" > "$RUNNER_TEMP/authorization.json"
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '
+            .author_association == "OWNER"
+            and (.body | contains("bounded one-use canonical production reviewer UAT enablement"))
+            and (.body | contains($sha))
+            and (.body | contains("9584433427"))
+            and (.body | contains("dpl_GbKHA9YfvjEW3iqymgY4uzp7MWsX"))
+          ' "$RUNNER_TEMP/authorization.json" >/dev/null
+
+          active_release_count="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?per_page=50" \
+            | jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+          test "$active_release_count" = '0'
+
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg controllerSha "$GITHUB_SHA" \
+            --arg mainSha "$EXPECTED_MAIN_SHA" \
+            --arg mainTree "$EXPECTED_MAIN_TREE" \
+            --argjson authorizationCommentId "$AUTHORIZATION_COMMENT_ID" \
+            --arg checkedAt "$(date -u +%FT%TZ)" \
+            '{repository:$repository,controllerSha:$controllerSha,mainSha:$mainSha,mainTree:$mainTree,authorizationCommentId:$authorizationCommentId,checkedAt:$checkedAt}' \
+            > "$EVIDENCE_DIR/source-and-authorization.json"
+
+      - name: Discover and statically validate the one-use production controller
+        id: discover
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD | sort)
+          printf '%s\n' "${changed[@]}" > "$EVIDENCE_DIR/controller-diff-files.txt"
+
+          for file in "${changed[@]}"; do
+            case "$file" in
+              .github/scripts/issue782-*|.github/workflows/dac-production-issue782-*|supabase/tests/issue782-*|tests/issue782-*) ;;
+              *) echo "Refusing out-of-scope operations file: $file" >&2; exit 1 ;;
+            esac
+          done
+
+          python3 - <<'PY' > "$RUNNER_TEMP/discovery.json"
+          from pathlib import Path
+          import json
+
+          base = Path('.github/workflows')
+          supervisor = Path('.github/workflows/dac-production-issue782-authorized-supervisor-20260826.yml')
+          required = [
+              'ADMIN_EMAILS',
+              'ISSUE782_ORIGINS',
+              'vercel-release.yml',
+              '9584433427',
+              'dpl_GbKHA9YfvjEW3iqymgY4uzp7MWsX',
+              'zero-residue',
+              'cleanup',
+          ]
+          candidates=[]
+          for path in base.glob('*issue782*.yml'):
+              if path == supervisor:
+                  continue
+              text=path.read_text()
+              if all(token in text for token in required):
+                  candidates.append(str(path))
+          scripts=[]
+          for path in Path('.github/scripts').glob('*issue782*.mjs'):
+              text=path.read_text()
+              if 'ISSUE782_ORIGINS' in text and 'NEXT_PUBLIC_SUPABASE_URL' in text:
+                  scripts.append(str(path))
+          print(json.dumps({'workflows':candidates,'scripts':scripts},sort_keys=True))
+          if len(candidates) != 1 or len(scripts) != 1:
+              raise SystemExit(f'Expected one final workflow and one browser script, found {candidates} / {scripts}')
+          PY
+
+          workflow_path="$(jq -r '.workflows[0]' "$RUNNER_TEMP/discovery.json")"
+          script_path="$(jq -r '.scripts[0]' "$RUNNER_TEMP/discovery.json")"
+          ruby -e "require 'yaml'; YAML.parse_file(ARGV[0])" "$workflow_path"
+          node --check "$script_path"
+
+          for token in \
+            '5420203746' \
+            '9584433427' \
+            'ADMIN_EMAILS' \
+            'dpl_GbKHA9YfvjEW3iqymgY4uzp7MWsX' \
+            'ISSUE782_ORIGINS' \
+            'zero-residue' \
+            'alias' \
+            'cleanup'; do
+            grep -Fq "$token" "$workflow_path"
+          done
+          for token in '1440' '1024' '390' '320' 'TOTP' 'AAL2' '/profile' '/trades/new' '/dashboard' '/feed'; do
+            grep -Fqi "$token" "$script_path"
+          done
+
+          cp "$RUNNER_TEMP/discovery.json" "$EVIDENCE_DIR/discovery.json"
+          printf '%s\n' "$workflow_path" > "$EVIDENCE_DIR/final-workflow-path.txt"
+          printf '%s\n' "$script_path" > "$EVIDENCE_DIR/browser-script-path.txt"
+          echo "workflow_path=$workflow_path" >> "$GITHUB_OUTPUT"
+
+      - name: Observe an existing execution or trigger exactly one fresh execution
+        id: execute
+        shell: bash
+        env:
+          WORKFLOW_PATH: ${{ steps.discover.outputs.workflow_path }}
+        run: |
+          set -euo pipefail
+          workflow_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows" --paginate \
+            | jq -r --arg path "$WORKFLOW_PATH" '.workflows[] | select(.path==$path) | .id' | head -n1)"
+          [[ "$workflow_id" =~ ^[0-9]+$ ]]
+
+          runs_json="$RUNNER_TEMP/controller-runs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=$CONTROLLER_BRANCH&per_page=50" > "$runs_json"
+          run_id="$(jq -r '[.workflow_runs[] | select(.status != "completed")] | sort_by(.created_at) | last | .id // empty' "$runs_json")"
+
+          if [[ -z "$run_id" ]]; then
+            latest_success="$(jq -r '[.workflow_runs[] | select(.status=="completed" and .conclusion=="success")] | sort_by(.created_at) | last | .id // empty' "$runs_json")"
+            if [[ -n "$latest_success" ]]; then
+              run_id="$latest_success"
+            else
+              content_json="$RUNNER_TEMP/workflow-content.json"
+              gh api "repos/$GITHUB_REPOSITORY/contents/$WORKFLOW_PATH?ref=$CONTROLLER_BRANCH" > "$content_json"
+              blob_sha="$(jq -r .sha "$content_json")"
+              decoded="$RUNNER_TEMP/final-workflow.yml"
+              jq -r .content "$content_json" | tr -d '\n' | base64 --decode > "$decoded"
+              printf '\n# supervised trigger %s\n' "$GITHUB_RUN_ID" >> "$decoded"
+              encoded="$(base64 -w0 < "$decoded")"
+              gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$WORKFLOW_PATH" \
+                -f message="ops: trigger authorized issue 782 production UAT" \
+                -f branch="$CONTROLLER_BRANCH" \
+                -f sha="$blob_sha" \
+                -f content="$encoded" > "$RUNNER_TEMP/trigger-commit.json"
+              trigger_sha="$(jq -r .commit.sha "$RUNNER_TEMP/trigger-commit.json")"
+              [[ "$trigger_sha" =~ ^[0-9a-f]{40}$ ]]
+              triggered_at="$(date -u +%FT%TZ)"
+              for attempt in $(seq 1 90); do
+                gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=$CONTROLLER_BRANCH&per_page=30" > "$runs_json"
+                run_id="$(jq -r --arg sha "$trigger_sha" --arg at "$triggered_at" '[.workflow_runs[] | select(.head_sha==$sha and .created_at >= $at)] | sort_by(.created_at) | last | .id // empty' "$runs_json")"
+                [[ -n "$run_id" ]] && break
+                sleep 2
+              done
+            fi
+          fi
+
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf 'controller_workflow_id=%s\ncontroller_run_id=%s\n' "$workflow_id" "$run_id" > "$EVIDENCE_DIR/controller-run.txt"
+          gh run watch "$run_id" --exit-status --interval 15
+
+      - name: Retain terminal controller metadata
+        if: always()
+        shell: bash
+        env:
+          CONTROLLER_RUN_ID: ${{ steps.execute.outputs.run_id }}
+        run: |
+          set -uo pipefail
+          if [[ "$CONTROLLER_RUN_ID" =~ ^[0-9]+$ ]]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CONTROLLER_RUN_ID" > "$EVIDENCE_DIR/controller-run.json" || true
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CONTROLLER_RUN_ID/jobs?per_page=100" > "$EVIDENCE_DIR/controller-jobs.json" || true
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CONTROLLER_RUN_ID/artifacts" > "$EVIDENCE_DIR/controller-artifacts.json" || true
+          fi
+
+      - name: Upload supervisor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue782-authorized-supervisor-${{ github.run_id }}-${{ github.sha }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record supervisor disposition on issue 782
+        if: always()
+        shell: bash
+        env:
+          CONTROLLER_RUN_ID: ${{ steps.execute.outputs.run_id }}
+        run: |
+          set -uo pipefail
+          conclusion=unknown
+          status=unknown
+          url=''
+          if [[ -f "$EVIDENCE_DIR/controller-run.json" ]]; then
+            conclusion="$(jq -r '.conclusion // "unknown"' "$EVIDENCE_DIR/controller-run.json")"
+            status="$(jq -r '.status // "unknown"' "$EVIDENCE_DIR/controller-run.json")"
+            url="$(jq -r '.html_url // ""' "$EVIDENCE_DIR/controller-run.json")"
+          fi
+          body="$RUNNER_TEMP/comment.md"
+          {
+            echo '## Authorized issue #782 controller supervision'
+            echo
+            echo "- supervisor run: \`$GITHUB_RUN_ID\`"
+            echo "- controller run: \`${CONTROLLER_RUN_ID:-unknown}\`"
+            echo "- controller status: \`$status\`"
+            echo "- controller conclusion: \`$conclusion\`"
+            [[ -n "$url" ]] && echo "- controller URL: $url"
+            echo
+            echo 'This supervisor performed no migration, application deployment, alias operation, synthetic-data mutation, provider action, or payment action itself. The controller run and its immutable artifact remain the authoritative execution evidence.'
+          } > "$body"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$(cat "$body")" || true
