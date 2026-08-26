@@ -101,7 +101,6 @@ import {
   type BackgroundPurposeBinding,
 } from "@/lib/background-purpose-registry";
 import { getSafeInternalPath } from "@/lib/paths";
-import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";
 import {
   getBaselineBondAppealWindowEndsAt,
   getBaselineBondStatusAfterAccepted,
@@ -3303,9 +3302,6 @@ export async function signInAction(formData: FormData) {
   let destination = ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
   if (data.user) {
     const { profile, profileResult } = await ensureAccountRowsForUser(data.user, supabase);
-    const completedDestination = profileNeedsUsername(profile)
-      ? buildUsernameCompletionPath(next)
-      : next;
     destination = getPostAuthActivationDestination(
       getAccountActivationState({
         authenticated: true,
@@ -3315,7 +3311,7 @@ export async function signInAction(formData: FormData) {
           profileSyncError: profileResult.profileSyncError,
         },
       }),
-      completedDestination,
+      next,
     );
   }
 
