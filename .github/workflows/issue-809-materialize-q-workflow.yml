@@ -28,48 +28,58 @@ jobs:
           fetch-depth: 0
           ref: automation/issue-809-q-workflow-20260826
 
-      - name: Preserve corrected materializer and fetch exact Q
+      - name: Preserve validated fragment and fetch exact Q
         shell: bash
         run: |
           set -euo pipefail
-          cp .github/workflows/issue-809-materialize-q-workflow-v2.yml \
-            /tmp/issue-809-materializer-v2.yml
+          cp .github/issue-809-evaluator-job.fragment.yml \
+            /tmp/issue-809-evaluator-job.fragment.yml
           git fetch --no-tags origin "$Q_BRANCH:refs/remotes/origin/issue-809-q"
           test "$(git rev-parse refs/remotes/origin/issue-809-q)" = "$EXPECTED_Q_HEAD"
           git switch -c "$Q_BRANCH" refs/remotes/origin/issue-809-q
 
-      - name: Execute the corrected materializer source
+      - name: Add exact paths and evaluator job
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          lines = Path('/tmp/issue-809-materializer-v2.yml').read_text().splitlines()
-          start = next(
-              index for index, line in enumerate(lines)
-              if line.strip() == "python3 - <<'PY'"
-          ) + 1
-          end = next(
-              index for index in range(start, len(lines))
-              if lines[index].strip() == 'PY'
+          path = Path('.github/workflows/evidence-payment-release-qa.yml')
+          text = path.read_text()
+          if '\n  evaluator-core-loop-gate:\n' in text:
+              raise SystemExit('Permanent evaluator job already exists.')
+          marker = '      - "tests/evidence-weighted-payment-authenticated.spec.ts"\n'
+          if marker not in text:
+              raise SystemExit('Exact path marker missing.')
+          additions = (
+              '      - "scripts/evaluator-core-loop-qa-run-ownership.test.mjs"\n'
+              '      - "docs/evaluator-core-loop-audit.md"\n'
+              '      - "src/app/actions.ts"\n'
+              '      - "src/app/api/live-now/feedback/**"\n'
+              '      - "src/components/core-trade/full-navigation-action-form.tsx"\n'
+              '      - "src/components/core-trade/trade-agreement-stage-base.tsx"\n'
+              '      - "src/components/marketplace/participant-offer-group.tsx"\n'
+              '      - "src/lib/evidence-weighted-payment-lifecycle.test.ts"\n'
+              '      - "src/lib/marketplace-delta-contract.test.ts"\n'
+              '      - "src/lib/trade-evidence-reviewer-rls-contract.test.ts"\n'
+              '      - "supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql"\n'
+              '      - "supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql"\n'
+              '      - "supabase/tests/evaluator_core_loop_*.sql"\n'
+              '      - "tests/evaluator-core-loop-authenticated.spec.ts"\n'
           )
-          script_lines = []
-          for line in lines[start:end]:
-              script_lines.append(line[10:] if line.startswith('          ') else line)
-          Path('/tmp/issue-809-materialize-q.py').write_text(
-              '\n'.join(script_lines) + '\n'
-          )
+          fragment = Path('/tmp/issue-809-evaluator-job.fragment.yml').read_text()
+          if not fragment.startswith('  evaluator-core-loop-gate:\n'):
+              raise SystemExit('Validated fragment has the wrong root.')
+          text = text.replace(marker, marker + additions, 1)
+          path.write_text(text.rstrip() + '\n\n' + fragment.rstrip() + '\n')
           PY
-          python3 /tmp/issue-809-materialize-q.py
 
       - name: Validate permanent workflow and source gates
         shell: bash
         run: |
           set -euo pipefail
           npm ci
-          nl -ba .github/workflows/evidence-payment-release-qa.yml \
-            | sed -n '390,430p'
           ruby -e "require 'yaml'; abort('invalid YAML') unless YAML.parse_file('.github/workflows/evidence-payment-release-qa.yml')"
           node --test \
             scripts/evidence-payment-qa-namespace.test.mjs \
