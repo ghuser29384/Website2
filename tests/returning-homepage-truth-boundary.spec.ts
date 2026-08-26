@@ -41,12 +41,13 @@ const readyPayload = {
   status: "ready",
 };
 
-async function openReadyHome(page: Page, width: number, height: number) {
+async function openReadyFeed(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height });
   await page.route("**/api/live-now", async (route) => {
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(readyPayload) });
   });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/feed", { waitUntil: "domcontentloaded" });
+  await expect(page).toHaveURL(/\/feed$/);
   await expect(page.locator('[data-mt-live-now-state="ready"]')).toBeVisible({ timeout: 30_000 });
 }
 
@@ -58,8 +59,8 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1);
 }
 
-test("labels desktop recommendations as review-only rather than agreements", async ({ page }, testInfo) => {
-  await openReadyHome(page, 1487, 1058);
+test("labels desktop Feed recommendations as review-only rather than agreements", async ({ page }, testInfo) => {
+  await openReadyFeed(page, 1487, 1058);
 
   await expect(page.locator("#mt-live-document-heading")).toHaveText(
     "Current opportunities and next actions",
@@ -76,8 +77,8 @@ test("labels desktop recommendations as review-only rather than agreements", asy
   await page.screenshot({ path: testInfo.outputPath("home-now-review-boundary-desktop.png") });
 });
 
-test("keeps the review-only boundary readable without mobile overflow", async ({ page }, testInfo) => {
-  await openReadyHome(page, 390, 844);
+test("keeps the Feed review-only boundary readable without mobile overflow", async ({ page }, testInfo) => {
+  await openReadyFeed(page, 390, 844);
 
   await expect(page.getByRole("note", { name: "Recommendation status" })).toBeVisible();
   await expect(page.locator("[data-mt-live-now-recommendation]")).toHaveCount(1);

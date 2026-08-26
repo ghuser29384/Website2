@@ -44,8 +44,8 @@ test("the release browser gate is a named, serial, credential-free current-produ
   assert.match(workflow, /npm run test:e2e:release -- --reporter=line/);
   assert.doesNotMatch(workflow, /npm run test:e2e -- --reporter=line/);
 
-  assert.match(createRouting, /replaces a direct legacy Trade hash without replacing Home/);
+  assert.match(createRouting, /replaces a direct legacy Feed Trade hash without replacing Feed/);
   assert.match(createRouting, /obsolete Trade sidebar/);
-  assert.match(publicRoutes, /the live home workspace has one semantic page heading/);
+  assert.match(publicRoutes, /the signed-out root transfers to the public Discover workspace/);
   assert.doesNotMatch(commandRouter, /\[data-action="from-command"\]/);
 });

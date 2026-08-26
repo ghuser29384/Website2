@@ -33,12 +33,6 @@ async function expectCanonicalFavicon(page: import("@playwright/test").Page) {
     .toBe(true);
 }
 
-async function completeMandatoryWalkthrough(page: import("@playwright/test").Page) {
-  await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(/\/walkthrough(?:\?|$)/);
-  await expectCanonicalFavicon(page);
-}
-
 async function expectUnifiedCreate(page: import("@playwright/test").Page) {
   const frameElement = page.locator('[data-create-interface-frame="true"]');
 
@@ -112,11 +106,10 @@ const feedFixture = {
 };
 
 test.describe("Home, Trade, and Create entry routing", () => {
-  test("keeps the root route on the live Feed and opens Create from Trade", async ({ page }) => {
-    await completeMandatoryWalkthrough(page);
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+  test("keeps the activated Feed route live and opens Create from Trade", async ({ page }) => {
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
 
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/feed$/);
     await expectCanonicalFavicon(page);
     await expect(page.locator('[data-create-interface-frame="true"]')).toHaveCount(0);
     const tradeEntry = page.locator('[data-page="trade"]');
@@ -128,9 +121,8 @@ test.describe("Home, Trade, and Create entry routing", () => {
     await expectUnifiedCreate(page);
   });
 
-  test("replaces a direct legacy Trade hash without replacing Home", async ({ page }) => {
-    await completeMandatoryWalkthrough(page);
-    await page.goto("/#trade", { waitUntil: "domcontentloaded" });
+  test("replaces a direct legacy Feed Trade hash without replacing Feed", async ({ page }) => {
+    await page.goto("/feed#trade", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/trades\/new(?:\?|$)/);
     await expectUnifiedCreate(page);

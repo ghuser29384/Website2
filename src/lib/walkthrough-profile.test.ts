@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildWalkthroughCompleteProfilePath,
   buildWalkthroughOnboardingPath,
   createDirectCompleteProfileDraft,
   createWalkthroughProfileDraft,
@@ -18,7 +19,7 @@ test("maps walkthrough causes to onboarding cause areas", () => {
   assert.equal(mapWalkthroughCauseToCauseArea("Global health"), "Public health");
 });
 
-test("round-trips a private walkthrough starter profile", () => {
+test("round-trips a private walkthrough starter profile without serializing it into paths", () => {
   const draft = createWalkthroughProfileDraft({
     originalCause: "AI safety",
     offerType: "Money",
@@ -31,7 +32,8 @@ test("round-trips a private walkthrough starter profile", () => {
   assert.ok(draft);
   assert.equal(draft.causeArea, "Existential risk");
   assert.deepEqual(parseWalkthroughProfileDraft(encodeWalkthroughProfileDraft(draft)), draft);
-  assert.match(buildWalkthroughOnboardingPath(draft), /^\/onboarding\?source=walkthrough&/);
+  assert.equal(buildWalkthroughOnboardingPath(draft), "/onboarding");
+  assert.equal(buildWalkthroughCompleteProfilePath(draft), "/complete-profile");
 });
 
 test("parses an already decoded cookie containing a literal percent sign", () => {
@@ -47,29 +49,38 @@ test("parses an already decoded cookie containing a literal percent sign", () =>
   assert.deepEqual(parseWalkthroughProfileDraft(JSON.stringify(draft)), draft);
 });
 
-test("query values take precedence over an older cookie draft", () => {
+test("legacy query values cannot override or create a private Walkthrough draft", () => {
   const cookieDraft = createWalkthroughProfileDraft({
     originalCause: "Climate",
     offerType: "Time",
     matchName: "Asha",
+    matchGet: "Review a clean-energy proposal",
+    matchGive: "Volunteer for one hour",
     createdAt: "2026-07-17T16:00:00.000Z",
   });
   assert.ok(cookieDraft);
 
+  const legacySearchParams = {
+    source: "walkthrough",
+    cause_area: "Animal welfare",
+    walkthrough_cause: "Factory farming",
+    offer_type: "A pledge",
+    match_name: "Noor",
+    match_get: "private requested action",
+    match_give: "private offered action",
+  };
+
   const draft = getWalkthroughProfileDraft({
     cookieValue: encodeWalkthroughProfileDraft(cookieDraft),
-    searchParams: {
-      source: "walkthrough",
-      cause_area: "Animal welfare",
-      walkthrough_cause: "Factory farming",
-      offer_type: "A pledge",
-      match_name: "Noor",
-    },
+    searchParams: legacySearchParams,
   });
 
-  assert.equal(draft?.causeArea, "Animal welfare");
-  assert.equal(draft?.offerType, "A pledge");
-  assert.equal(draft?.matchName, "Noor");
+  assert.equal(draft?.causeArea, "Climate");
+  assert.equal(draft?.offerType, "Time");
+  assert.equal(draft?.matchName, "Asha");
+  assert.equal(draft?.matchGet, "Review a clean-energy proposal");
+  assert.equal(draft?.matchGive, "Volunteer for one hour");
+  assert.equal(getWalkthroughProfileDraft({ searchParams: legacySearchParams }), null);
 });
 
 test("first-time direct Complete Profile visits do not receive a direct draft", () => {
@@ -101,19 +112,35 @@ test("direct Complete Profile draft creation is deterministic when time is suppl
   assert.equal(draft.createdAt, "2026-07-31T07:00:00.000Z");
 });
 
-test("Complete Profile preserves genuine Walkthrough context without returning-user state", () => {
+test("Complete Profile preserves genuine Walkthrough context only through the private handoff", () => {
+  const cookieDraft = createWalkthroughProfileDraft({
+    originalCause: "AI safety",
+    causeArea: "Existential risk",
+    offerType: "Money",
+    matchName: "Rae",
+    matchGet: "Review a technical proposal",
+    matchGive: "$20 to a public-interest project",
+    createdAt: "2026-07-17T16:00:00.000Z",
+  });
+  assert.ok(cookieDraft);
+
   const draft = getCompleteProfileDraft({
+    cookieValue: encodeWalkthroughProfileDraft(cookieDraft),
     searchParams: {
       source: "walkthrough",
-      walkthrough_cause: "AI safety",
-      cause_area: "Existential risk",
-      offer_type: "Money",
-      match_name: "Rae",
+      walkthrough_cause: "Factory farming",
+      cause_area: "Animal welfare",
+      offer_type: "A pledge",
+      match_name: "Noor",
+      match_get: "legacy private request",
+      match_give: "legacy private offer",
     },
   });
 
   assert.ok(draft);
   assert.equal(draft.source, "walkthrough");
   assert.equal(draft.originalCause, "AI safety");
+  assert.equal(draft.causeArea, "Existential risk");
   assert.equal(draft.offerType, "Money");
+  assert.equal(draft.matchName, "Rae");
 });

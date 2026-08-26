@@ -22,6 +22,11 @@ import {
   requireViewer,
 } from "@/lib/app-data";
 import {
+  ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
+  getAccountActivationState,
+  getPostAuthActivationDestination,
+} from "@/lib/account-activation";
+import {
   buildDeterministicClarificationQuestions,
   buildDeterministicSynthesis,
   evaluateDeterministicMatch,
@@ -96,7 +101,6 @@ import {
   type BackgroundPurposeBinding,
 } from "@/lib/background-purpose-registry";
 import { getSafeInternalPath } from "@/lib/paths";
-import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";
 import {
   getBaselineBondAppealWindowEndsAt,
   getBaselineBondStatusAfterAccepted,
@@ -2979,7 +2983,7 @@ async function generateWishMatchSuggestions({
 }
 
 export async function signUpAction(formData: FormData) {
-  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/onboarding");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/walkthrough");
   const signupPath = buildAuthPath({
     method: "email",
     mode: "signup",
@@ -3009,7 +3013,7 @@ export async function signUpAction(formData: FormData) {
   const supabase = await createClient();
   const headerStore = await headers();
   const origin = headerStore.get("origin") ?? getSiteUrl();
-  const confirmUrl = buildSupabaseAuthCallbackUrl(origin, returnTo);
+  const confirmUrl = buildSupabaseAuthCallbackUrl(origin, returnTo, "signup");
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -3027,7 +3031,7 @@ export async function signUpAction(formData: FormData) {
   }
 
   if (data.user && data.session) {
-    await ensureAccountRowsForUser(data.user, supabase);
+    const { profile, profileResult } = await ensureAccountRowsForUser(data.user, supabase);
     await persistCohortAttribution({
       lastPath: returnTo,
       profileId: data.user.id,
@@ -3048,7 +3052,19 @@ export async function signUpAction(formData: FormData) {
       source: "signup",
       supabase,
     });
-    redirectWithMessage(returnTo, "message", "Account created. Choose one low-risk first action.");
+    const activationState = getAccountActivationState({
+      authenticated: true,
+      viewer: {
+        profile,
+        profileStatus: profileResult.profileStatus,
+        profileSyncError: profileResult.profileSyncError,
+      },
+    });
+    redirectWithMessage(
+      getPostAuthActivationDestination(activationState, returnTo),
+      "message",
+      "Account created. Continue the private setup walkthrough.",
+    );
   }
 
   await subscribeEmailNurture({
@@ -3245,7 +3261,7 @@ export async function createWebinarRsvpAction(formData: FormData) {
 export async function signInAction(formData: FormData) {
   const next = getSafeInternalPath(
     readOptional(formData, "next") || readOptional(formData, "return_to"),
-    "/dashboard",
+    "/feed",
   );
   const loginPath = buildAuthPath({
     method: "email",
@@ -3283,12 +3299,20 @@ export async function signInAction(formData: FormData) {
     redirectWithMessage(loginPath, "error", error.message);
   }
 
-  let destination = next;
+  let destination = ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
   if (data.user) {
-    const { profile } = await ensureAccountRowsForUser(data.user, supabase);
-    if (profileNeedsUsername(profile)) {
-      destination = buildUsernameCompletionPath(next);
-    }
+    const { profile, profileResult } = await ensureAccountRowsForUser(data.user, supabase);
+    destination = getPostAuthActivationDestination(
+      getAccountActivationState({
+        authenticated: true,
+        viewer: {
+          profile,
+          profileStatus: profileResult.profileStatus,
+          profileSyncError: profileResult.profileSyncError,
+        },
+      }),
+      next,
+    );
   }
 
   redirect(destination);

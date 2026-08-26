@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
-import { HomePage } from "@/components/home/home-page";
+import {
+  getAccountActivationState,
+  getRootActivationDestination,
+} from "@/lib/account-activation";
 import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
+import { hasSupabaseAuthCookie } from "@/lib/supabase/auth-cookie";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 const homeDescription = truncateDescription(
@@ -29,16 +34,14 @@ export const metadata: Metadata = {
   },
 };
 
-function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
-  return cookieStore
-    .getAll()
-    .some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
-}
-
 export default async function Page() {
   const cookieStore = await cookies();
-  const viewer =
-    hasSupabaseEnv() && hasSupabaseAuthCookie(cookieStore) ? await getViewer() : null;
+  const authenticated = hasSupabaseEnv() && hasSupabaseAuthCookie(cookieStore.getAll());
+  const viewer = authenticated ? await getViewer() : null;
 
-  return <HomePage displayName={viewer?.displayName ?? null} />;
+  redirect(
+    getRootActivationDestination(
+      getAccountActivationState({ authenticated, viewer }),
+    ),
+  );
 }

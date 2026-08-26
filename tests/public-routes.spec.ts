@@ -201,28 +201,19 @@ for (const { route, heading } of dataDependentPublicRoutes) {
   });
 }
 
-test("the live home workspace has one semantic page heading and its dedicated navigation", async ({
+test("the signed-out root transfers to the public Discover workspace", async ({
   page,
 }) => {
   const errors = recordUnexpectedErrors(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await waitForResolvedPage(page);
 
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/discover");
   await expect(
-    page.getByRole("heading", { level: 1, name: "Current opportunities and next actions" }),
+    page.getByRole("heading", { level: 1, name: "Discover where value can move." }),
   ).toHaveCount(1);
   await expectVisibleCount(page, "main", 1);
   await expectVisibleCount(page, ".mt-site-footer", 0);
-
-  const feedControl = page.locator('[data-mt-feed-link="true"]:visible');
-  const discoverControl = page.locator('[data-mt-discover-link="true"]:visible');
-  const evidenceControl = page.locator('[data-mt-evidence-link="true"]:visible');
-  await expect(feedControl).toHaveCount(1);
-  await expect(discoverControl).toHaveCount(1);
-  await expect(evidenceControl).toHaveCount(1);
-  await expect(feedControl).toHaveAccessibleName("Open personalized feed");
-  await expect(discoverControl).toHaveAccessibleName("Open Discover");
-  await expect(evidenceControl).toHaveAccessibleName("Open Evidence");
   expect(errors).toEqual([]);
 });
 
@@ -276,6 +267,14 @@ test("auth routes use the compact auth shell rather than the marketplace topbar"
     await expectVisibleCount(page, "main", 1);
     await expectVisibleCount(page, "footer", 1);
   }
+});
+
+test("/auth/confirm fails closed without an exchange code or verified OTP", async ({ page }) => {
+  await page.goto("/auth/confirm?next=/feed", { waitUntil: "domcontentloaded" });
+
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/login");
+  expect(new URL(page.url()).searchParams.get("error")).toBeTruthy();
+  await expect(page.getByRole("heading", { level: 1, name: "Welcome back" })).toBeVisible();
 });
 
 test("representative marketplace pages expose the current top-level navigation", async ({ page }) => {

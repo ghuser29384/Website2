@@ -4,6 +4,7 @@ import test from "node:test";
 import { gunzipSync } from "node:zlib";
 
 const proxySource = readFileSync("src/proxy.ts", "utf8");
+const rootPageSource = readFileSync("src/app/page.tsx", "utf8");
 const liveLoader = readFileSync("public/moral-trade-live.html", "utf8");
 const createRouter = readFileSync("public/moral-trade-live-create-router.js", "utf8");
 const feedIdentity = readFileSync("public/moral-trade-live-feed-identity.js", "utf8");
@@ -54,12 +55,9 @@ function escapePattern(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-test("the root route remains the Moral Trade Feed and home page", () => {
-  assert.match(
-    proxySource,
-    /function rewriteToLiveHome[\s\S]*liveUrl\.pathname = "\/moral-trade-live\.html"/,
-  );
-  assert.match(proxySource, /if \(pathname === "\/"\)[\s\S]*return rewriteToLiveHome\(request\)/);
+test("the root route is owned by persisted activation routing", () => {
+  assert.match(rootPageSource, /getRootActivationDestination/);
+  assert.doesNotMatch(proxySource, /rewriteToLiveHome|mt_walkthrough_seen/);
 });
 
 test("the live Trade entry opens the durable Create adapter without retaining a second builder", () => {
@@ -126,8 +124,5 @@ test("Create and Create Offer entries share the durable Create adapter", () => {
     proxySource,
     /searchParams\.get\("view"\) === "templates"[\s\S]*searchParams\.get\("tab"\) === "templates"[\s\S]*return rewriteToUnifiedCreate\(request\)/,
   );
-  assert.match(
-    proxySource,
-    /matcher: \["\/", "\/walkthrough", "\/create", "\/offers", "\/offers\/:path\*"\]/,
-  );
+  assert.match(proxySource, /_next\/static[\s\S]*_next\/image[\s\S]*favicon\.ico/);
 });

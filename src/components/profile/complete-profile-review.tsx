@@ -67,7 +67,6 @@ interface CompleteProfileReviewProps {
   loginHref: string;
   returnTo: string;
   signupHref: string;
-  successTo: string;
 }
 
 type IconName =
@@ -202,7 +201,6 @@ export function CompleteProfileReview({
   loginHref,
   returnTo,
   signupHref,
-  successTo,
 }: CompleteProfileReviewProps) {
   const [allocation, setAllocation] = useState<ProfilePriorityAllocation>(INITIAL_ALLOCATION);
   const [focusedPriorityId, setFocusedPriorityId] = useState<ProfilePriorityId | null>(null);
@@ -396,11 +394,6 @@ export function CompleteProfileReview({
     <section aria-labelledby="complete-profile-heading" className={styles.profilePage}>
       <form action={completeWalkthroughProfileAction} onSubmit={handleSubmit}>
         <input name="return_to" type="hidden" value={returnTo} />
-        <input
-          name="success_to"
-          type="hidden"
-          value={successTo}
-        />
         <input name="profile_source" type="hidden" value={draft.source} />
         <input name="walkthrough_cause" type="hidden" value={draft.originalCause} />
         <input name="cause_area" type="hidden" value={draft.causeArea} />

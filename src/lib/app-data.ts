@@ -448,6 +448,7 @@ function buildFallbackProfile(user: User, profile?: Partial<ProfileRow> | null) 
   return {
     id: user.id,
     email: profile?.email ?? user.email ?? `${user.id}@members.moraltrade.local`,
+    activation_stage: profile?.activation_stage ?? "walkthrough_required",
     display_name:
       profile?.display_name ??
       deriveDisplayName(

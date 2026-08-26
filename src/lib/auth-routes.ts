@@ -109,7 +109,7 @@ export function getEnabledOAuthProvidersFromSettings(
 }
 
 export function getAuthDefaultReturnTo(mode: AuthMode) {
-  return mode === "signup" ? "/onboarding" : "/dashboard";
+  return mode === "signup" ? "/walkthrough" : "/feed";
 }
 
 export function readSearchParam(
@@ -166,7 +166,10 @@ export function buildSupabaseAuthCallbackUrl(
   mode?: AuthMode,
 ) {
   const callbackUrl = new URL("/auth/confirm", origin);
-  callbackUrl.searchParams.set("next", getSafeInternalPath(returnTo, "/dashboard"));
+  callbackUrl.searchParams.set(
+    "next",
+    getSafeInternalPath(returnTo, getAuthDefaultReturnTo(mode ?? "login")),
+  );
   if (mode) {
     callbackUrl.searchParams.set("mode", mode);
   }

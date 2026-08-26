@@ -12,6 +12,12 @@ import {
 } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
+import { completeWalkthroughActivationAction } from "@/app/walkthrough/actions";
+import {
+  createWalkthroughProfileDraft,
+  type WalkthroughProfileDraft,
+  WALKTHROUGH_PROFILE_STORAGE_KEY,
+} from "@/lib/walkthrough-profile";
 
 type ConceptId = "two-moves" | "crowd" | "redirect" | "mix" | "match";
 type OfferType = "Money" | "Time" | "A pledge";
@@ -384,21 +390,145 @@ function ConversionDeck({
   );
 }
 
-export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: string }) {
-  const [conceptId, setConceptId] = useState<ConceptId>("two-moves");
-  const [step, setStep] = useState(0);
-  const [cause, setCause] = useState<string | null>(null);
+function CareerConversionDeck() {
+  const items = [
+    {
+      href: "/create?source=walkthrough&mode=back",
+      note: "For a candidate, backer, or coordinator",
+      primary: true,
+      title: "Start a career backing request",
+    },
+    {
+      href: "/discover?source=walkthrough&domain=pools&view=threshold",
+      note: "See other all-or-nothing funding",
+      primary: false,
+      title: "Explore conditional pools",
+    },
+    {
+      href: "/offers?view=live&source=walkthrough",
+      note: "Find another way to make more good happen",
+      primary: false,
+      title: "Explore more trades",
+    },
+  ];
+
+  return (
+    <div className="mtw-conversion-deck mtw-career-conversion" aria-label="Choose what to do next">
+      {items.map((item) => (
+        <Link
+          className={`mtw-conversion-link ${item.primary ? "is-primary" : ""}`}
+          href={item.href}
+          key={item.title}
+        >
+          <span><strong>{item.title}</strong><small>{item.note}</small></span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function StarterProfileCard({ draft }: { draft: WalkthroughProfileDraft }) {
+  const contents = (
+    <>
+      <span>Review &amp; refine</span>
+      <span aria-hidden="true">→</span>
+    </>
+  );
+
+  return (
+    <section
+      aria-labelledby="mtw-profile-draft-title"
+      className="mtw-profile-draft"
+      data-walkthrough-profile="created"
+    >
+      <div className="mtw-profile-draft-copy">
+        <span className="mtw-profile-draft-kicker">Starter profile created</span>
+        <h2 id="mtw-profile-draft-title">Review the carried-over choices and finish your profile.</h2>
+        <p>
+          We added your cause, offer type, and this illustrative match. Nothing is public until
+          you review and save it.
+        </p>
+        <div className="mtw-profile-draft-tags" aria-label="Starter profile contents">
+          <span>{draft.causeArea}</span>
+          <span>{draft.offerType}</span>
+          <span>{draft.matchName} match</span>
+        </div>
+      </div>
+      <form action={completeWalkthroughActivationAction}>
+        <input name="walkthrough_cause" type="hidden" value={draft.originalCause} />
+        <input name="cause_area" type="hidden" value={draft.causeArea} />
+        <input name="offer_type" type="hidden" value={draft.offerType} />
+        <input name="match_name" type="hidden" value={draft.matchName} />
+        <input name="match_get" type="hidden" value={draft.matchGet} />
+        <input name="match_give" type="hidden" value={draft.matchGive} />
+        <input name="participant_kind" type="hidden" value={draft.participantKind} />
+        <input name="primary_goal" type="hidden" value={draft.primaryGoal} />
+        <input name="first_action" type="hidden" value={draft.firstAction} />
+        <button className="mtw-profile-draft-action" type="submit">{contents}</button>
+      </form>
+    </section>
+  );
+}
+
+interface ImmersiveWalkthroughProps {
+  activationError?: string;
+  initialProfileDraft: WalkthroughProfileDraft | null;
+  tradeCreateHref: string;
+}
+
+export function ImmersiveWalkthrough({
+  activationError = "",
+  initialProfileDraft,
+  tradeCreateHref,
+}: ImmersiveWalkthroughProps) {
+  const initialMatches = initialProfileDraft
+    ? offerMatches[initialProfileDraft.offerType]
+    : [];
+  const initialMatchIndex = initialProfileDraft
+    ? initialMatches.findIndex(
+        (item) =>
+          item.name === initialProfileDraft.matchName &&
+          item.get === initialProfileDraft.matchGet &&
+          item.give === initialProfileDraft.matchGive,
+      )
+    : -1;
+  const [conceptId, setConceptId] = useState<ConceptId>(
+    initialProfileDraft ? "match" : "two-moves",
+  );
+  const [step, setStep] = useState(initialProfileDraft ? 2 : 0);
+  const [cause, setCause] = useState<string | null>(
+    initialProfileDraft?.originalCause ?? null,
+  );
+  const [profileCause, setProfileCause] = useState<string | null>(
+    initialProfileDraft?.originalCause ?? null,
+  );
   const [moves, setMoves] = useState<string[]>([]);
   const [amount, setAmount] = useState<number | null>(null);
   const [crowdGrowing, setCrowdGrowing] = useState(false);
   const [coalitionRule, setCoalitionRule] = useState<CoalitionRule | null>(null);
   const [mix, setMix] = useState<MixId | null>(null);
-  const [offer, setOffer] = useState<OfferType | null>(null);
-  const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
+  const [offer, setOffer] = useState<OfferType | null>(
+    initialProfileDraft?.offerType ?? null,
+  );
+  const [selectedMatch, setSelectedMatch] = useState<number | null>(
+    initialMatchIndex >= 0 ? initialMatchIndex : null,
+  );
+  const [profileDraft, setProfileDraft] = useState<WalkthroughProfileDraft | null>(
+    initialProfileDraft,
+  );
+  const [careerFunding, setCareerFunding] = useState(false);
   const [toast, setToast] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
+  const mixActionsRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<number | null>(null);
   const focusHeadingRef = useRef(true);
+
+  const markWalkthroughReady = useCallback((node: HTMLElement | null) => {
+    if (node) {
+      node.dataset.walkthroughReady = "true";
+    }
+  }, []);
 
   const concept = concepts.find((item) => item.id === conceptId) ?? concepts[0];
   const deal = cause ? matchData[cause] : null;
@@ -418,6 +548,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
     setMoves([]);
     setAmount(null);
     setCrowdGrowing(false);
+    setCareerFunding(false);
     setCoalitionRule(null);
     setMix(null);
     setOffer(null);
@@ -464,6 +595,12 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
   }, [toast]);
 
   useEffect(() => {
+    if (mix === "three") {
+      mixActionsRef.current?.scrollIntoView({ block: "center" });
+    }
+  }, [mix]);
+
+  useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent) {
       if (event.altKey && event.key === "ArrowRight") {
         event.preventDefault();
@@ -482,6 +619,8 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
   const tabIndex = concepts.findIndex((item) => item.id === conceptId);
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+
     let nextIndex = index;
     if (event.key === "ArrowRight") nextIndex = (index + 1) % concepts.length;
     if (event.key === "ArrowLeft") nextIndex = (index - 1 + concepts.length) % concepts.length;
@@ -515,6 +654,52 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
     );
   }
 
+  function fundCareerGap() {
+    setStep(6);
+    setCareerFunding(true);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    timerRef.current = window.setTimeout(
+      () => {
+        setCareerFunding(false);
+        setStep(7);
+        timerRef.current = null;
+      },
+      reducedMotion ? 180 : 1700,
+    );
+  }
+
+  function clearProfileDraft() {
+    setProfileDraft(null);
+    try {
+      window.localStorage.removeItem(WALKTHROUGH_PROFILE_STORAGE_KEY);
+    } catch (error) {
+      console.warn("Moral Trade could not clear the previous starter profile draft.", error);
+    }
+  }
+
+  function openSelectedMatch(selected: OfferMatch) {
+    const draft = createWalkthroughProfileDraft({
+      originalCause: profileCause ?? cause ?? "Cause prioritization",
+      offerType: offer,
+      matchName: selected.name,
+      matchGet: selected.get,
+      matchGive: selected.give,
+    });
+
+    if (!draft) {
+      setToast("Choose an offer and match before continuing");
+      return;
+    }
+
+    setProfileDraft(draft);
+    try {
+      window.localStorage.setItem(WALKTHROUGH_PROFILE_STORAGE_KEY, JSON.stringify(draft));
+    } catch (error) {
+      console.warn("Moral Trade could not save the starter profile draft locally.", error);
+    }
+    setStep(2);
+  }
+
   function renderThirdOption() {
     if (step === 0) {
       return (
@@ -532,7 +717,9 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
                 key={item.name}
                 type="button"
                 onClick={() => {
+                  clearProfileDraft();
                   setCause(item.name);
+                  setProfileCause(item.name);
                   setStep(1);
                 }}
               >
@@ -637,10 +824,16 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
   }
 
   function renderCrowd() {
+    const pledge = amount ?? 0;
+    const otherPledges = 30_000 - pledge;
+    const pledgeLabel = `$${pledge.toLocaleString("en-US")}`;
+    const otherPledgesLabel = `$${otherPledges.toLocaleString("en-US")}`;
+    const startProgress = `${((otherPledges / 30_000) * 100).toFixed(3)}%`;
+
     if (step === 0) {
       return (
         <div className="mtw-scene mtw-crowd-scene">
-          <StepMark current={0} total={3} />
+          <StepMark current={0} total={6} />
           <CrowdDots growing={false} />
           <div className="mtw-project-silhouette" aria-hidden="true" />
           <div className="mtw-scene-head">
@@ -684,7 +877,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
     if (step === 1) {
       return (
         <div className="mtw-scene mtw-crowd-scene">
-          <StepMark current={1} total={3} />
+          <StepMark current={1} total={6} />
           <CrowdDots growing={false} />
           <div className="mtw-project-silhouette" aria-hidden="true" />
           <div className="mtw-scene-head">
@@ -715,7 +908,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
     if (step === 2 && crowdGrowing) {
       return (
         <div className="mtw-scene mtw-crowd-scene mtw-crowd-success">
-          <StepMark current={2} total={3} />
+          <StepMark current={2} total={6} />
           <CrowdDots growing />
           <div className="mtw-project-silhouette" aria-hidden="true" />
           <div className="mtw-scene-head">
@@ -738,24 +931,104 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
       );
     }
 
+    if (step === 3) {
+      return (
+        <div className="mtw-scene mtw-success-scene mtw-crowd-success">
+          <StepMark current={2} total={6} />
+          <CrowdDots growing />
+          <div className="mtw-project-silhouette" aria-hidden="true" />
+          <div className="mtw-success-copy">
+            <div className="mtw-scene-prompt">Threshold reached</div>
+            <h1 className="mtw-scene-title" tabIndex={-1}>
+              Pledge a little. Make the shared good possible.
+            </h1>
+            <p className="mtw-scene-line">
+              Nobody had to care most. Everyone only had to care enough.
+            </p>
+            <PrimaryAction onClick={() => setStep(4)}>See what the crowd can unlock</PrimaryAction>
+          </div>
+        </div>
+      );
+    }
+
+    if (step === 4) {
+      return (
+        <div className="mtw-scene mtw-career-scene">
+          <StepMark current={3} total={6} />
+          <div className="mtw-scene-head">
+            <div className="mtw-scene-prompt">A second example · reuse your {pledgeLabel} maximum</div>
+            <h1 className="mtw-scene-title" tabIndex={-1}>Maya has two verified offers.</h1>
+          </div>
+          <div className="mtw-career-offers">
+            <div className="mtw-career-offer">
+              <span>Higher-paying job</span>
+              <div><strong>$115,000</strong><b>Commercial biotech</b><small>Maya would take this job if the salary gap stays open.</small></div>
+            </div>
+            <div className="mtw-career-gap"><strong>$30,000</strong><span>first-year salary gap</span></div>
+            <button className="mtw-career-offer" type="button" onClick={() => setStep(5)}>
+              <span>Higher-impact job</span>
+              <div><strong>$85,000</strong><b>Pandemic-prevention lab</b><small>Maya will take this job if the salary gap is covered.</small></div>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (step === 5) {
+      return (
+        <div className="mtw-scene mtw-career-scene">
+          <StepMark current={4} total={6} />
+          <div className="mtw-scene-head">
+            <div className="mtw-scene-prompt">Separate career pool · same {pledgeLabel} maximum</div>
+            <h1 className="mtw-scene-title" tabIndex={-1}>The crowd is only {pledgeLabel} away.</h1>
+          </div>
+          <div className="mtw-career-rule">
+            In this salary-gap pool, your {pledgeLabel} pledge activates only if the full $30,000
+            gap is funded and Maya takes the higher-impact job. Otherwise nobody is charged.
+          </div>
+          <div className="mtw-career-equation">
+            <div><strong>{otherPledgesLabel}</strong><span>already pledged</span></div>
+            <b aria-hidden="true">+</b>
+            <div><strong>{pledgeLabel}</strong><span>your pledge</span></div>
+            <b aria-hidden="true">=</b>
+            <div className="mtw-career-total"><strong>$30,000</strong><span>salary-gap threshold</span></div>
+          </div>
+          <PrimaryAction onClick={fundCareerGap}>Close the gap with {pledgeLabel}</PrimaryAction>
+        </div>
+      );
+    }
+
+    if (step === 6 && careerFunding) {
+      return (
+        <div className="mtw-scene mtw-career-scene">
+          <StepMark current={5} total={6} />
+          <div className="mtw-career-success-grid" aria-hidden="true" />
+          <div className="mtw-scene-head">
+            <div className="mtw-scene-prompt">The salary-gap threshold is crossing</div>
+            <h1 className="mtw-scene-title" tabIndex={-1}>Your {pledgeLabel} closes the last {pledgeLabel}.</h1>
+            <div className="mtw-threshold-panel mtw-career-threshold-panel is-crossing" role="progressbar" aria-label="Salary gap pledged" aria-valuemin={0} aria-valuemax={30000} aria-valuenow={30000}>
+              <div className="mtw-threshold-top"><strong>$30,000 / $30,000</strong><span>full first-year gap pledged</span></div>
+              <div className="mtw-threshold-track">
+                <span className="mtw-threshold-fill" style={{ "--start-progress": startProgress, width: "100%" } as CSSProperties} />
+                <span className="mtw-threshold-line" />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="mtw-scene mtw-success-scene mtw-crowd-success">
-        <StepMark current={2} total={3} />
-        <CrowdDots growing />
-        <div className="mtw-project-silhouette" aria-hidden="true" />
+      <div className="mtw-scene mtw-success-scene mtw-career-scene">
+        <StepMark current={5} total={6} />
+        <div className="mtw-career-success-grid" aria-hidden="true" />
         <div className="mtw-success-copy">
-          <div className="mtw-scene-prompt">Threshold reached</div>
-          <h1 className="mtw-scene-title" tabIndex={-1}>
-            Pledge a little. Make the shared good possible.
-          </h1>
+          <div className="mtw-scene-prompt">Gap funded · job start verified</div>
+          <h1 className="mtw-scene-title" tabIndex={-1}>Maya can take the higher-impact job.</h1>
           <p className="mtw-scene-line">
-            Nobody had to care most. Everyone only had to care enough.
+            Every pledge activates only after Maya starts the verified pandemic-prevention role.
           </p>
-          <ConversionDeck
-            primary="chip"
-            tradeCreateHref={tradeCreateHref}
-            onOpenCrowd={() => switchConcept("crowd")}
-          />
+          <CareerConversionDeck />
         </div>
       </div>
     );
@@ -1062,7 +1335,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
               {waiting ? "Pick a bargain." : values.verdict}
             </div>
             {mix === "three" ? (
-              <div className="mtw-mix-actions">
+              <div className="mtw-mix-actions" ref={mixActionsRef}>
                 <Link className="mtw-primary-action" href={tradeCreateHref}>
                   <span>Lock this deal</span><span aria-hidden="true">→</span>
                 </Link>
@@ -1123,7 +1396,9 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
                 key={label}
                 type="button"
                 onClick={() => {
+                  clearProfileDraft();
                   setOffer(label as OfferType);
+                  setSelectedMatch(null);
                   setStep(1);
                 }}
               >
@@ -1154,7 +1429,10 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
                 className="mtw-match-card"
                 key={`${item.name}-${item.get}`}
                 type="button"
-                onClick={() => setSelectedMatch(index)}
+                onClick={() => {
+                  clearProfileDraft();
+                  setSelectedMatch(index);
+                }}
               >
                 <span className="mtw-avatar-mini" aria-hidden="true">{item.name.charAt(0)}</span>
                 <div className="mtw-match-name">{item.name}</div>
@@ -1167,13 +1445,23 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
             ))}
           </div>
           {selectedMatch !== null ? (
-            <PrimaryAction onClick={() => setStep(2)}>Open this match</PrimaryAction>
+            <PrimaryAction onClick={() => openSelectedMatch(matches[selectedMatch])}>
+              Open this match
+            </PrimaryAction>
           ) : null}
         </div>
       );
     }
 
-    const selected = selectedMatch === null ? null : matches[selectedMatch];
+    const selected = profileDraft
+      ? {
+          name: profileDraft.matchName,
+          get: profileDraft.matchGet,
+          give: profileDraft.matchGive,
+        }
+      : selectedMatch === null
+        ? null
+        : matches[selectedMatch];
     if (!selected) return null;
 
     return (
@@ -1188,11 +1476,9 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
           <p className="mtw-scene-line">
             You get {selected.get.toLowerCase()}. You offer {selected.give.toLowerCase()}.
           </p>
-          <ConversionDeck
-            primary="join"
-            tradeCreateHref={tradeCreateHref}
-            onOpenCrowd={() => switchConcept("crowd")}
-          />
+          {profileDraft ? (
+            <StarterProfileCard draft={profileDraft} />
+          ) : null}
         </div>
       </div>
     );
@@ -1206,12 +1492,17 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
   else scene = renderMatch();
 
   return (
-    <main className="mtw-shell" id="main-content">
+    <main
+      className="mtw-shell"
+      data-walkthrough-ready="false"
+      id="main-content"
+      ref={markWalkthroughReady}
+    >
       <header className="mtw-labbar">
         <Link aria-label="Moral Trade, home" className="mtw-brand" href="/">
           <MoralTradeWordmark />
         </Link>
-        <div className="mtw-concept-switcher" role="tablist" aria-label="Interactive walkthroughs">
+        <div className="mtw-concept-switcher" role="tablist" aria-label="Interactive walkthrough concepts">
           {concepts.map((item, index) => (
             <button
               aria-controls="walkthrough-panel"
@@ -1238,6 +1529,12 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
       <div className="mtw-simulation-note">
         Interactive walkthrough · no payment or commitment is created here
       </div>
+
+      {activationError ? (
+        <div className="mtw-activation-error" role="alert">
+          {activationError}
+        </div>
+      ) : null}
 
       <section
         aria-labelledby={`walkthrough-tab-${tabIndex}`}

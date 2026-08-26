@@ -121,6 +121,7 @@ const fixtureOffers: FixtureOffer[] = Array.from({ length: FIXTURE_ROW_COUNT }, 
 
 const fixtureProfile = {
   id: VIEWER_ID,
+  activation_stage: "setup_complete",
   email: VIEWER_EMAIL,
   display_name: "Fixture Viewer",
   username: "offers-fixture-viewer",
@@ -719,7 +720,7 @@ test.describe("Offers compact hybrid", () => {
 
   test("meets three-viewport geometry and disclosure acceptance", async () => {
     const viewports = [
-      { width: 1440, height: 900 },
+      { width: 1440, height: 1000 },
       { width: 1024, height: 768 },
       { width: 390, height: 844 },
     ];
@@ -814,7 +815,7 @@ test.describe("Offers compact hybrid", () => {
   });
 
   test("preserves search, clarification, filters, sorting, pagination, and action URLs", async () => {
-    await publicPage.setViewportSize({ width: 1440, height: 900 });
+    await publicPage.setViewportSize({ width: 1440, height: 1000 });
     await gotoDirectory(publicPage);
 
     const search = publicPage.getByLabel("Search proposals", { exact: true });
@@ -999,7 +1000,7 @@ test.describe("Offers compact hybrid", () => {
     expect(ledger.savedOfferIds.size).toBe(0);
 
     for (const viewport of [
-      { width: 1440, height: 900 },
+      { width: 1440, height: 1000 },
       { width: 1024, height: 768 },
       { width: 390, height: 844 },
     ]) {

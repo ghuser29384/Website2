@@ -76,7 +76,7 @@
   min-height: 38px;
   padding: 8px 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 2px;
   background: transparent;
   color: rgba(244, 240, 232, 0.58);
   cursor: pointer;
@@ -363,17 +363,17 @@
   display: grid;
   place-items: center;
   border: 1px solid rgba(27, 27, 23, 0.14);
-  border-radius: 16px;
+  border-radius: 2px;
   color: #1c1c18;
   text-align: center;
   cursor: pointer;
-  box-shadow: 0 10px 24px rgba(23, 24, 20, 0.05);
+  box-shadow: none;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .mtw-cause-choice:hover {
   border-color: rgba(27, 27, 23, 0.42);
-  box-shadow: 0 16px 32px rgba(23, 24, 20, 0.1);
+  box-shadow: none;
   transform: translateY(-3px) rotate(-0.5deg);
 }
 
@@ -1282,6 +1282,9 @@
 
   .mtw-concept-switcher {
     order: 3;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     flex-basis: 100%;
     justify-content: flex-start;
     overflow-x: auto;
@@ -1293,6 +1296,9 @@
   }
 
   .mtw-labbar {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     flex-wrap: wrap;
   }
 
@@ -1530,6 +1536,425 @@
     min-width: 0;
     padding: 9px 12px;
     font-size: 13px;
+  }
+}
+
+/* Released static career-gap sequence, now owned by the App Router walkthrough. */
+.mtw-career-scene {
+  background: linear-gradient(118deg, #111d2f 0%, #17271f 72%);
+}
+
+.mtw-career-offers {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+  width: min(1040px, 100%);
+  margin-top: 38px;
+}
+
+.mtw-career-offer {
+  position: relative;
+  display: grid;
+  align-content: space-between;
+  min-height: 230px;
+  padding: 24px;
+  border: 1px solid rgba(242, 238, 229, 0.52);
+  background: rgba(10, 18, 14, 0.24);
+  color: inherit;
+  text-align: left;
+}
+
+button.mtw-career-offer {
+  cursor: pointer;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), background 220ms ease,
+    border-color 220ms ease;
+}
+
+button.mtw-career-offer:hover {
+  border-color: #e6cb70;
+  background: rgba(230, 203, 112, 0.12);
+  transform: translateY(-6px);
+}
+
+button.mtw-career-offer::after {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  color: #e6cb70;
+  content: "↗";
+  font-size: 22px;
+}
+
+.mtw-career-offer > span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  opacity: 0.58;
+}
+
+.mtw-career-offer strong {
+  display: block;
+  margin-top: 28px;
+  font-family: var(--mtw-serif);
+  font-size: clamp(44px, 5vw, 68px);
+  font-weight: 400;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+}
+
+.mtw-career-offer b {
+  display: block;
+  margin-top: 12px;
+  font-size: clamp(20px, 2vw, 28px);
+  letter-spacing: -0.035em;
+}
+
+.mtw-career-offer small {
+  display: block;
+  max-width: 30ch;
+  margin-top: 8px;
+  line-height: 1.35;
+  opacity: 0.62;
+}
+
+.mtw-career-gap {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 9px;
+  text-align: center;
+}
+
+.mtw-career-gap::before,
+.mtw-career-gap::after {
+  width: 1px;
+  height: 42px;
+  background: currentColor;
+  content: "";
+  opacity: 0.28;
+}
+
+.mtw-career-gap strong {
+  font-size: 24px;
+  letter-spacing: -0.04em;
+}
+
+.mtw-career-gap span {
+  max-width: 9ch;
+  font-size: 12px;
+  line-height: 1.25;
+  opacity: 0.58;
+}
+
+.mtw-career-rule {
+  position: relative;
+  z-index: 5;
+  width: min(760px, 100%);
+  margin-top: 28px;
+  padding: 17px 19px;
+  border-left: 4px solid #e6cb70;
+  background: rgba(242, 238, 229, 0.08);
+  font-size: clamp(16px, 1.6vw, 20px);
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+
+.mtw-career-equation {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 0.72fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  width: min(940px, 100%);
+  margin-top: 40px;
+}
+
+.mtw-career-equation > div {
+  display: grid;
+  align-content: center;
+  min-height: 126px;
+  padding: 18px;
+  border: 1px solid rgba(242, 238, 229, 0.46);
+  background: rgba(10, 18, 14, 0.2);
+}
+
+.mtw-career-equation strong {
+  font-size: clamp(28px, 3.6vw, 48px);
+  letter-spacing: -0.055em;
+}
+
+.mtw-career-equation span {
+  margin-top: 7px;
+  font-size: 13px;
+  opacity: 0.58;
+}
+
+.mtw-career-equation > b {
+  align-self: center;
+  color: #e6cb70;
+  font-size: 28px;
+  font-weight: 400;
+}
+
+.mtw-career-equation .mtw-career-total {
+  border-color: #e6cb70;
+  background: #e6cb70;
+  color: #17271f;
+}
+
+.mtw-career-threshold-panel {
+  width: min(760px, 100%);
+  margin-top: 42px;
+}
+
+.mtw-career-threshold-panel .mtw-threshold-fill {
+  background: #e6cb70;
+  animation: mtw-career-threshold-fill 1500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes mtw-career-threshold-fill {
+  from { width: var(--start-progress); }
+  to { width: 100%; }
+}
+
+.mtw-career-success-grid {
+  position: absolute;
+  right: 4%;
+  bottom: 0;
+  width: min(44vw, 620px);
+  height: 78%;
+  border-left: 1px solid rgba(242, 238, 229, 0.18);
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0 58px,
+    rgba(242, 238, 229, 0.08) 58px 59px
+  );
+  opacity: 0.78;
+}
+
+.mtw-career-success-grid::before {
+  position: absolute;
+  right: 7%;
+  bottom: 14%;
+  left: 12%;
+  height: 12px;
+  background: #e6cb70;
+  box-shadow: 0 0 48px rgba(230, 203, 112, 0.34);
+  content: "";
+  transform: rotate(-18deg);
+  transform-origin: left center;
+}
+
+.mtw-career-conversion .mtw-conversion-link {
+  background: #f0ebe2;
+}
+
+.mtw-career-conversion .mtw-conversion-link.is-primary {
+  background: #e6cb70;
+  color: #17271f;
+}
+
+/* Next Walkthrough starter-profile handoff. */
+.mtw-profile-draft {
+  position: relative;
+  z-index: 7;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  width: min(760px, 100%);
+  margin-top: clamp(22px, 3.5vh, 34px);
+  padding: 18px 20px;
+  border: 1px solid currentColor;
+  background: rgba(242, 238, 230, 0.96);
+  color: #132019;
+  box-shadow: 0 18px 48px rgba(19, 32, 25, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.mtw-profile-draft-copy {
+  min-width: 0;
+}
+
+.mtw-profile-draft-kicker {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.58;
+}
+
+.mtw-profile-draft h2 {
+  max-width: 27ch;
+  margin: 0;
+  font-size: clamp(20px, 2.2vw, 28px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.mtw-profile-draft p {
+  max-width: 60ch;
+  margin: 9px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  opacity: 0.72;
+}
+
+.mtw-profile-draft-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.mtw-profile-draft-tags span {
+  padding: 6px 8px;
+  border: 1px solid rgba(19, 32, 25, 0.24);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.mtw-profile-draft form {
+  margin: 0;
+}
+
+.mtw-profile-draft-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 196px;
+  min-height: 56px;
+  padding: 0 17px;
+  border: 1px solid #132019;
+  background: #132019;
+  color: #f2eee6;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.mtw-profile-draft-action:hover,
+.mtw-profile-draft-action:focus-visible {
+  background: #4f66c4;
+  transform: translateY(-2px);
+}
+
+.mtw-activation-error {
+  position: fixed;
+  top: 82px;
+  left: 50%;
+  z-index: 100;
+  width: min(620px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border: 1px solid #f1b39e;
+  border-radius: 8px;
+  background: #311d1a;
+  color: #fff4ef;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
+  font-size: 14px;
+  transform: translateX(-50%);
+}
+
+@media (min-width: 901px) {
+  .mtw-career-scene {
+    padding-block: clamp(28px, 4vh, 54px);
+  }
+
+  .mtw-career-scene .mtw-scene-title {
+    font-size: clamp(46px, min(7vw, 10.5vh), 96px);
+  }
+}
+
+@media (max-width: 900px) {
+  .mtw-career-offers {
+    grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr);
+  }
+
+  .mtw-profile-draft {
+    grid-template-columns: 1fr;
+  }
+
+  .mtw-profile-draft-action {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .mtw-career-scene .mtw-scene-title {
+    font-size: 50px;
+  }
+
+  .mtw-career-offers {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  .mtw-career-offer {
+    min-height: 154px;
+    padding: 17px;
+  }
+
+  .mtw-career-offer strong {
+    margin-top: 14px;
+    font-size: 42px;
+  }
+
+  .mtw-career-gap {
+    grid-template-columns: 1fr auto 1fr;
+    gap: 10px;
+    padding: 4px 0;
+  }
+
+  .mtw-career-gap::before,
+  .mtw-career-gap::after {
+    width: 100%;
+    height: 1px;
+  }
+
+  .mtw-career-gap span {
+    display: none;
+  }
+
+  .mtw-career-equation {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    margin-top: 24px;
+  }
+
+  .mtw-career-equation > div {
+    min-height: 92px;
+  }
+
+  .mtw-career-equation > b {
+    justify-self: center;
+    line-height: 0.7;
+  }
+
+  .mtw-career-success-grid {
+    width: 82vw;
+    height: 48%;
+    opacity: 0.46;
+  }
+
+  .mtw-profile-draft {
+    gap: 14px;
+    margin-top: 20px;
+    padding: 15px;
   }
 }
 

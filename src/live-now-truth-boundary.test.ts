@@ -4,11 +4,19 @@ import test from "node:test";
 
 const navigation = readFileSync("public/moral-trade-live-navigation.js", "utf8");
 const nowFeed = readFileSync("public/moral-trade-live-now.js", "utf8");
+const nextConfig = readFileSync("next.config.ts", "utf8");
+const appRoot = readFileSync("src/app/page.tsx", "utf8");
 const proxy = readFileSync("src/proxy.ts", "utf8");
 const truthBoundary = readFileSync("public/moral-trade-live-local-time.js", "utf8");
 
-test("the returning root stays on the live, fail-closed recommendation surface", () => {
-  assert.match(proxy, /return rewriteToLiveHome\(request\)/);
+test("App root owns activation routing and Feed stays on the live recommendation surface", () => {
+  assert.match(
+    nextConfig,
+    /source:\s*["']\/feed["'][\s\S]*?destination:\s*["']\/moral-trade-live\.html["']/,
+  );
+  assert.match(appRoot, /getRootActivationDestination/);
+  assert.match(appRoot, /redirect\(/);
+  assert.doesNotMatch(proxy, /rewriteToLiveHome/);
   assert.match(nowFeed, /data-mt-live-now-state/);
   assert.match(nowFeed, /model\.status === "ready"/);
 });
@@ -35,7 +43,7 @@ test("the live recommendation surface separates review from agreement", () => {
     assert.equal(
       `${truthBoundary}\n${nowFeed}`.includes(fabricatedClaim),
       false,
-      `live root must not contain fabricated claim: ${fabricatedClaim}`,
+      `live Feed must not contain fabricated claim: ${fabricatedClaim}`,
     );
   }
 });

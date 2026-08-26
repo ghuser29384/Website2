@@ -146,6 +146,11 @@ test("authenticated route cache headers are private no-store only on private pre
     Expires: "0",
     Pragma: "no-cache",
   });
+  assert.deepEqual(getPrivateNoStoreHeaders("/account-state-unavailable"), {
+    "Cache-Control": "private, no-store, max-age=0",
+    Expires: "0",
+    Pragma: "no-cache",
+  });
   assert.equal(getPrivateNoStoreHeaders("/background-networking"), null);
 });
 

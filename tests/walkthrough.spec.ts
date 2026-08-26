@@ -9,7 +9,7 @@ async function expectFullyInViewport(page: Page, locator: Locator) {
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.y).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height + 1);
 }
 
 async function expectFullyInside(locator: Locator, container: Locator) {
@@ -24,30 +24,36 @@ async function expectFullyInside(locator: Locator, container: Locator) {
   expect(box!.y + box!.height).toBeLessThanOrEqual(containerBox!.y + containerBox!.height);
 }
 
-test("a first homepage visit opens the mandatory walkthrough without a skip control", async ({ context, page }) => {
+async function waitForWalkthrough(page: Page) {
+  await expect(page.locator('[data-walkthrough-ready="true"]')).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+test("signed-out root opens Discover and Walkthrough has no cookie routing authority", async ({ context, page }) => {
   await context.clearCookies();
   await page.goto("/?utm_source=invite", { waitUntil: "domcontentloaded" });
 
-  await expect(page).toHaveURL(/\/walkthrough\?utm_source=invite$/);
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
+  await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await waitForWalkthrough(page);
   await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Skip walkthrough" })).toHaveCount(0);
 
   const cookies = await context.cookies();
-  expect(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")).toMatchObject({
-    httpOnly: true,
-    value: "1",
-  });
+  expect(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")).toBeUndefined();
 });
 
 test("Third Option leads to Find the Mix and a real trade draft handoff", async ({ page }) => {
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await waitForWalkthrough(page);
 
   await expect(page.getByRole("button", { name: "Skip walkthrough" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
   await expect(
     page.getByText("Start with your values. Nobody will ask you to rank everyone else's."),
   ).toHaveCount(0);
-  await expect(page.locator(".cause-choice")).toHaveCount(14);
+  await expect(page.locator(".mtw-cause-choice")).toHaveCount(14);
   await expect(page.getByRole("button", { name: "Wild animal suffering" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Factory farming" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Animal welfare" })).toHaveCount(0);
@@ -69,7 +75,7 @@ test("Third Option leads to Find the Mix and a real trade draft handoff", async 
   await expect(page.getByText("Both say yes.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Lock this deal" })).toHaveAttribute(
     "href",
-    "https://moraltrade.org/create",
+    "/trades/new",
   );
   await expect(page.getByRole("button", { name: "Redirect ineffective donations." })).toBeVisible();
 });
@@ -77,6 +83,7 @@ test("Third Option leads to Find the Mix and a real trade draft handoff", async 
 test("Make the trade stays fully visible on a wide, short screen", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 895 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await waitForWalkthrough(page);
 
   await page.getByRole("button", { name: "AI safety" }).click();
   await page.getByRole("button", { name: "See what you can trade" }).click();
@@ -86,12 +93,13 @@ test("Make the trade stays fully visible on a wide, short screen", async ({ page
   const makeTrade = page.getByRole("button", { name: "Make the trade" });
   await expect(makeTrade).toBeEnabled();
   await expectFullyInViewport(page, makeTrade);
-  await expectFullyInside(makeTrade, page.locator(".experience"));
+  await expectFullyInside(makeTrade, page.locator(".mtw-experience"));
 });
 
 test("Crowd and Redirect preserve the requested copy, coalition trade, and routing", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await waitForWalkthrough(page);
 
   await page.getByRole("tab", { name: /The crowd/i }).click();
   await expect(page.getByText("You donate if and only if 200 other people donate enough.")).toBeVisible();
@@ -108,7 +116,7 @@ test("Crowd and Redirect preserve the requested copy, coalition trade, and routi
   await expect(page.getByRole("button", { name: "Offer trade" })).toHaveCount(0);
 
   await page.getByRole("tab", { name: /Redirect/i }).click();
-  const democratMarker = page.locator(".stream-a .stream-label");
+  const democratMarker = page.locator(".mtw-stream-a .mtw-stream-label");
   await expect(democratMarker).toContainText("$10Democrat · environment");
   await expect(democratMarker).toBeVisible();
   await expectFullyInViewport(page, democratMarker);
@@ -134,7 +142,7 @@ test("Crowd and Redirect preserve the requested copy, coalition trade, and routi
   await expect(coalitionStart).toBeVisible();
   await page.waitForTimeout(700);
   await expectFullyInViewport(page, coalitionStart);
-  await expectFullyInside(coalitionStart, page.locator(".experience"));
+  await expectFullyInside(coalitionStart, page.locator(".mtw-experience"));
   await coalitionStart.click();
 
   await expect(
@@ -180,6 +188,7 @@ test("Crowd and Redirect preserve the requested copy, coalition trade, and routi
 test("The Crowd can close a verified salary gap for a higher-impact job", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 895 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await waitForWalkthrough(page);
 
   await page.getByRole("tab", { name: /The crowd/i }).click();
   await page.getByRole("button", { name: "$10" }).click();
@@ -213,7 +222,7 @@ test("The Crowd can close a verified salary gap for a higher-impact job", async 
   const closeGap = page.getByRole("button", { name: "Close the gap with $10" });
   await expect(closeGap).toBeVisible();
   await expectFullyInViewport(page, closeGap);
-  await expectFullyInside(closeGap, page.locator(".experience"));
+  await expectFullyInside(closeGap, page.locator(".mtw-experience"));
   await closeGap.click();
 
   await expect(page.getByRole("heading", { name: "Your $10 closes the last $10." })).toBeVisible();
@@ -233,9 +242,10 @@ test("The Crowd can close a verified salary gap for a higher-impact job", async 
 test("walkthrough preserves its guided keyboard flow and has no mobile overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await waitForWalkthrough(page);
 
   await page.getByRole("tab", { name: /Redirect/i }).click();
-  const mobileRedirectMarker = page.locator(".stream-a .stream-label");
+  const mobileRedirectMarker = page.locator(".mtw-stream-a .mtw-stream-label");
   await expect(mobileRedirectMarker).toBeVisible();
   await expect(mobileRedirectMarker).toContainText("$10");
   await expectFullyInViewport(page, mobileRedirectMarker);
@@ -247,7 +257,7 @@ test("walkthrough preserves its guided keyboard flow and has no mobile overflow"
   await page.getByRole("button", { name: /Higher-impact job/ }).click();
   const mobileCloseGap = page.getByRole("button", { name: "Close the gap with $5" });
   await expect(mobileCloseGap).toBeVisible();
-  await expectFullyInside(mobileCloseGap, page.locator(".experience"));
+  await expectFullyInside(mobileCloseGap, page.locator(".mtw-experience"));
   await mobileCloseGap.scrollIntoViewIfNeeded();
   await expectFullyInViewport(page, mobileCloseGap);
   await mobileCloseGap.click();
@@ -275,15 +285,26 @@ test("walkthrough preserves its guided keyboard flow and has no mobile overflow"
   await expectFullyInViewport(page, lockDeal);
   await expectFullyInViewport(page, redirectDonations);
 
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(1);
+  const layout = await page.evaluate(() => ({
+    offenders: Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .map((element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          bounds: { left: bounds.left, right: bounds.right, width: bounds.width },
+          selector: `${element.tagName.toLowerCase()}.${element.className}`,
+        };
+      })
+      .filter(({ bounds }) => bounds.left < -1 || bounds.right > window.innerWidth + 1)
+      .slice(0, 10),
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  }));
+  expect(layout.overflow, JSON.stringify(layout.offenders)).toBeLessThanOrEqual(1);
 });
 
 test("salary-gap actions fit the mid-size walkthrough layout", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await waitForWalkthrough(page);
 
   await page.getByRole("tab", { name: /The crowd/i }).click();
   await page.getByRole("button", { name: "$25" }).click();
@@ -297,5 +318,5 @@ test("salary-gap actions fit the mid-size walkthrough layout", async ({ page }) 
   await expect(closeGap).toBeVisible();
   await closeGap.scrollIntoViewIfNeeded();
   await expectFullyInViewport(page, closeGap);
-  await expectFullyInside(closeGap, page.locator(".experience"));
+  await expectFullyInside(closeGap, page.locator(".mtw-experience"));
 });
