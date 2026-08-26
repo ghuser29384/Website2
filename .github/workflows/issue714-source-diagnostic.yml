@@ -14,10 +14,18 @@ jobs:
         with:
           ref: fd38e9c6f3738abd89d88222c520ba799143a6ab
           fetch-depth: 1
-      - name: Print bounded activation-routing source context
+      - name: Print activation-routing call sites and bounded context
         shell: bash
         run: |
           set -euo pipefail
+          printf '\n===== all getPostAuthActivationDestination call sites =====\n'
+          grep -R -n --exclude='*.test.*' --exclude='*.spec.*' 'getPostAuthActivationDestination' src || true
+          printf '\n===== all profileNeedsUsername call sites =====\n'
+          grep -R -n --exclude='*.test.*' --exclude='*.spec.*' 'profileNeedsUsername' src || true
+          printf '\n===== auth-related route files =====\n'
+          find src/app -type f | grep -E '/auth|login|signup|confirm|callback' | sort || true
+          printf '\n===== pages using requireViewer/getViewer =====\n'
+          grep -R -n --include='page.tsx' -E 'requireViewer|getViewer' src/app | sort || true
           print_context() {
             file="$1"; pattern="$2"; before="${3:-35}"; after="${4:-80}"
             printf '\n===== %s :: %s =====\n' "$file" "$pattern"
@@ -26,10 +34,7 @@ jobs:
             start=$(( line > before ? line - before : 1 )); end=$(( line + after ))
             sed -n "${start},${end}p" "$file"
           }
-          print_context src/app/actions.ts 'export async function signInAction|async function signInAction' 30 150
-          print_context src/app/actions.ts 'profileNeedsUsername' 40 100
-          print_context src/app/actions.ts 'getPostAuthActivationDestination' 40 100
-          print_context src/app/auth/callback/route.ts 'getPostAuthActivationDestination|profileNeedsUsername' 40 100
-          print_context src/app/feed/page.tsx 'export default' 20 100
-          print_context src/app/dashboard/page.tsx 'export default' 20 100
-          print_context src/app/trades/new/page.tsx 'export default' 20 100
+          print_context src/app/actions.ts 'export async function signInAction' 25 100
+          for file in $(grep -R -l --exclude='*.test.*' --exclude='*.spec.*' 'getPostAuthActivationDestination' src/app | sort); do
+            print_context "$file" 'getPostAuthActivationDestination' 45 120
+          done
