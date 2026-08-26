@@ -781,7 +781,7 @@ jobs:
           fi
           robots_header="$(awk 'BEGIN{IGNORECASE=1} /^x-robots-tag:/ {sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "$headers_file")"
           if [[ "${robots_header,,}" != *noindex* ]] \
-            && ! grep -Eiq '<meta[^>]+name=["'"']robots["'"'][^>]+content=["'"'][^"'"']*noindex' "$body_file"; then
+            && ! grep -Eiq "<meta[^>]+name=['\"]robots['\"][^>]+content=['\"][^'\"]*noindex" "$body_file"; then
             echo 'Preview noindex protection was not proved.' >&2
             exit 1
           fi
