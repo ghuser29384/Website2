@@ -18,9 +18,11 @@ import {
   type TestInfo,
 } from "@playwright/test";
 
-const BASE_URL = process.env.EVALUATOR_CORE_LOOP_BASE_URL ?? "http://127.0.0.1:3210";
+const BASE_URL =
+  process.env.EVALUATOR_CORE_LOOP_BASE_URL ?? "http://127.0.0.1:3210";
 const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://hvmxfjjbdcgjjudmthdz.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??
+  "https://hvmxfjjbdcgjjudmthdz.supabase.co";
 const SUPABASE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   "sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8";
@@ -28,28 +30,36 @@ const QA_PASSWORD = process.env.EVALUATOR_CORE_LOOP_QA_PASSWORD ?? "";
 const QA_DATABASE_URL = process.env.QA_SUPABASE_DB_URL ?? "";
 const execFileAsync = promisify(execFile);
 
+function requiredEnv(name: string) {
+  const value = process.env[name];
+  if (!value)
+    throw new Error(`${name} is required for run-owned evaluator QA.`);
+  return value;
+}
+
 const IDS = {
-  admin: "81000000-0000-4000-8000-000000000005",
-  offer: "82000000-0000-4000-8000-000000000001",
-  outsider: "81000000-0000-4000-8000-000000000003",
-  owner: "81000000-0000-4000-8000-000000000001",
-  responder: "81000000-0000-4000-8000-000000000002",
-  reviewer: "81000000-0000-4000-8000-000000000004",
+  admin: requiredEnv("EVIDENCE_PAYMENT_QA_ADMIN_ID"),
+  appealReviewer: requiredEnv("EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_ID"),
+  offer: requiredEnv("EVIDENCE_PAYMENT_QA_OFFER_ID"),
+  outsider: requiredEnv("EVIDENCE_PAYMENT_QA_OUTSIDER_ID"),
+  owner: requiredEnv("EVIDENCE_PAYMENT_QA_PAYER_ID"),
+  responder: requiredEnv("EVIDENCE_PAYMENT_QA_PAYEE_ID"),
+  reviewer: requiredEnv("EVIDENCE_PAYMENT_QA_REVIEWER_ID"),
 } as const;
 
 const EMAILS = {
-  admin: "evaluator-core-loop-admin@qa.invalid",
-  outsider: "evaluator-core-loop-outsider@qa.invalid",
-  owner: "evaluator-core-loop-owner@qa.invalid",
-  responder: "evaluator-core-loop-responder@qa.invalid",
-  reviewer: "evaluator-core-loop-reviewer@qa.invalid",
+  admin: requiredEnv("EVIDENCE_PAYMENT_QA_ADMIN_EMAIL"),
+  appealReviewer: requiredEnv("EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_EMAIL"),
+  outsider: requiredEnv("EVIDENCE_PAYMENT_QA_OUTSIDER_EMAIL"),
+  owner: requiredEnv("EVIDENCE_PAYMENT_QA_PAYER_EMAIL"),
+  responder: requiredEnv("EVIDENCE_PAYMENT_QA_PAYEE_EMAIL"),
+  reviewer: requiredEnv("EVIDENCE_PAYMENT_QA_REVIEWER_EMAIL"),
 } as const;
 
 const COPY = {
   evidence:
     "QA-only attestation: the single synthetic evaluator checkpoint was completed in the isolated QA project. No external file, production record, or payment is involved.",
-  exit:
-    "Using the frozen unilateral rule after the QA review so every future synthetic obligation ends while the completed QA record remains.",
+  exit: "Using the frozen unilateral rule after the QA review so every future synthetic obligation ends while the completed QA record remains.",
   outsiderResponse:
     "QA competing response from the designated outsider; this must be declined atomically and must never expose the selected response.",
   responderResponse:
@@ -80,7 +90,9 @@ function totpCode(secret: string, offset = 0) {
   const counter = BigInt(Math.floor(Date.now() / 30_000) + offset);
   const counterBytes = Buffer.alloc(8);
   counterBytes.writeBigUInt64BE(counter);
-  const digest = createHmac("sha1", decodeBase32(secret)).update(counterBytes).digest();
+  const digest = createHmac("sha1", decodeBase32(secret))
+    .update(counterBytes)
+    .digest();
   const position = digest[digest.length - 1] & 0x0f;
   const binary =
     ((digest[position] & 0x7f) << 24) |
@@ -115,10 +127,11 @@ async function signIn(email: string) {
 }
 
 async function elevateWithTotp(client: SupabaseClient, aal1Session: Session) {
-  const { data: enrollment, error: enrollmentError } = await client.auth.mfa.enroll({
-    factorType: "totp",
-    friendlyName: `evaluator-core-loop-${Date.now()}`,
-  });
+  const { data: enrollment, error: enrollmentError } =
+    await client.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: `evaluator-core-loop-${Date.now()}`,
+    });
   if (enrollmentError || !enrollment?.totp?.secret) {
     throw new Error(
       `TOTP enrollment failed: ${enrollmentError?.message ?? "missing secret"}`,
@@ -132,7 +145,8 @@ async function elevateWithTotp(client: SupabaseClient, aal1Session: Session) {
       code: totpCode(enrollment.totp.secret, offset),
     });
     if (data && !error) {
-      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      const { data: sessionData, error: sessionError } =
+        await client.auth.getSession();
       if (!sessionError && sessionData.session) return sessionData.session;
     }
     lastError = error?.message ?? "missing AAL2 session";
@@ -205,7 +219,9 @@ async function gotoReady(page: Page, path: string) {
 }
 
 async function expectSuccess(page: Page, message: string) {
-  await expect(page.getByText(message, { exact: true })).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByText(message, { exact: true })).toBeVisible({
+    timeout: 25_000,
+  });
 }
 
 function formWithButton(page: Page, buttonName: string) {
@@ -216,9 +232,12 @@ function formWithButton(page: Page, buttonName: string) {
 
 function monitorPage(page: Page, label: string, failures: string[]) {
   page.on("console", (message) => {
-    if (message.type() === "error") failures.push(`${label}: console: ${message.text()}`);
+    if (message.type() === "error")
+      failures.push(`${label}: console: ${message.text()}`);
   });
-  page.on("pageerror", (error) => failures.push(`${label}: pageerror: ${error.message}`));
+  page.on("pageerror", (error) =>
+    failures.push(`${label}: pageerror: ${error.message}`),
+  );
 }
 
 async function expectHealthyPage(page: Page) {
@@ -226,7 +245,9 @@ async function expectHealthyPage(page: Page) {
   await expect(page.locator("nextjs-portal")).toHaveCount(0);
   expect(await page.title()).not.toBe("");
   expect(
-    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+    ),
   ).toBe(true);
   expect(await page.locator("body").innerText()).not.toMatch(
     /Application error|Unhandled Runtime Error|Internal Server Error/i,
@@ -241,7 +262,9 @@ async function screenshot(page: Page, testInfo: TestInfo, name: string) {
 
 function validatedQaDatabase() {
   if (!QA_DATABASE_URL) {
-    throw new Error("QA_SUPABASE_DB_URL is required for isolated-QA database checks.");
+    throw new Error(
+      "QA_SUPABASE_DB_URL is required for isolated-QA database checks.",
+    );
   }
 
   const database = new URL(QA_DATABASE_URL);
@@ -312,7 +335,9 @@ async function setReviewerGrantActive(active: boolean) {
 
 async function captureExitDatabaseBoundary(agreementId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(agreementId)) {
-    throw new Error("Refusing an invalid agreement id in the isolated-QA boundary query.");
+    throw new Error(
+      "Refusing an invalid agreement id in the isolated-QA boundary query.",
+    );
   }
 
   const database = validatedQaDatabase();
@@ -409,12 +434,14 @@ async function captureExitDatabaseBoundary(agreementId: string) {
     },
   );
   const payload = stdout.trim();
-  if (!payload) throw new Error("The isolated-QA exit boundary query returned no JSON.");
+  if (!payload)
+    throw new Error("The isolated-QA exit boundary query returned no JSON.");
   return JSON.parse(payload) as Record<string, unknown>;
 }
 
 async function expectAal(client: SupabaseClient, expected: "aal1" | "aal2") {
-  const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  const { data, error } =
+    await client.auth.mfa.getAuthenticatorAssuranceLevel();
   expect(error).toBeNull();
   expect(data?.currentLevel).toBe(expected);
 }
@@ -465,10 +492,13 @@ async function cleanupQaFixtures() {
     },
   );
   const residueJson = stdout.match(/\{[^\n]+\}/)?.[0];
-  if (!residueJson) throw new Error("Cleanup did not return a machine-readable residue count.");
+  if (!residueJson)
+    throw new Error("Cleanup did not return a machine-readable residue count.");
   const residue = JSON.parse(residueJson) as Record<string, number>;
   if (Object.values(residue).some((count) => count !== 0)) {
-    throw new Error(`Isolated-QA cleanup left residue: ${JSON.stringify(residue)}`);
+    throw new Error(
+      `Isolated-QA cleanup left residue: ${JSON.stringify(residue)}`,
+    );
   }
   return residue;
 }
@@ -477,7 +507,9 @@ async function submitResponse(page: Page, message: string) {
   const form = formWithButton(page, "Express interest");
   await expect(form).toHaveCount(1);
   await form.locator('textarea[name="message"]').fill(message);
-  await form.getByRole("button", { exact: true, name: "Express interest" }).click();
+  await form
+    .getByRole("button", { exact: true, name: "Express interest" })
+    .click();
   await expectSuccess(page, "Interest recorded.");
 }
 
@@ -485,7 +517,9 @@ async function confirmVersion(page: Page) {
   const form = formWithButton(page, "Confirm version 1");
   await expect(form).toHaveCount(1);
   await form.locator('input[name="terms_reviewed"]').check();
-  await form.getByRole("button", { exact: true, name: "Confirm version 1" }).click();
+  await form
+    .getByRole("button", { exact: true, name: "Confirm version 1" })
+    .click();
 }
 
 async function nominateReviewer(page: Page) {
@@ -547,7 +581,11 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await expectHealthyPage(anonymousPage);
       await evaluatorOfferCard.scrollIntoViewIfNeeded();
       await expect(evaluatorOfferCard).toBeInViewport({ ratio: 0.9 });
-      await screenshot(anonymousPage, testInfo, "01-anonymous-directory-desktop");
+      await screenshot(
+        anonymousPage,
+        testInfo,
+        "01-anonymous-directory-desktop",
+      );
 
       await evaluatorOfferCard
         .getByText("Exact terms & more actions", { exact: true })
@@ -555,7 +593,10 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await evaluatorOfferCard
         .getByRole("link", { exact: true, name: "Open full terms" })
         .click();
-      const evaluatorOfferUrl = new URL(`/offers/${IDS.offer}`, BASE_URL).toString();
+      const evaluatorOfferUrl = new URL(
+        `/offers/${IDS.offer}`,
+        BASE_URL,
+      ).toString();
       await anonymousPage.waitForURL(evaluatorOfferUrl);
       await expect(anonymousPage).toHaveURL(evaluatorOfferUrl);
       const evaluatorTerms = anonymousPage.getByRole("article", {
@@ -581,13 +622,16 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         `/login?returnTo=${encodeURIComponent(`/offers/${IDS.offer}#respond`)}`,
       );
       await signInLink.click();
-      await expect(anonymousPage).toHaveURL((url) =>
-        url.pathname === "/login" &&
-        url.searchParams.get("returnTo") === `/offers/${IDS.offer}#respond`,
+      await expect(anonymousPage).toHaveURL(
+        (url) =>
+          url.pathname === "/login" &&
+          url.searchParams.get("returnTo") === `/offers/${IDS.offer}#respond`,
       );
       const loginUrl = new URL(anonymousPage.url());
       expect(loginUrl.pathname).toBe("/login");
-      expect(loginUrl.searchParams.get("returnTo")).toBe(`/offers/${IDS.offer}#respond`);
+      expect(loginUrl.searchParams.get("returnTo")).toBe(
+        `/offers/${IDS.offer}#respond`,
+      );
       qaCheckpoint("proved anonymous discovery and exact sign-in return path");
 
       const ownerAuth = await signIn(EMAILS.owner);
@@ -595,10 +639,15 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       const outsiderAuth = await signIn(EMAILS.outsider);
       const reviewerAal1Auth = await signIn(EMAILS.reviewer);
       const reviewerAuth = await signIn(EMAILS.reviewer);
+      const appealReviewerAuth = await signIn(EMAILS.appealReviewer);
       const adminAuth = await signIn(EMAILS.admin);
       const reviewerAal2Session = await elevateWithTotp(
         reviewerAuth.client,
         reviewerAuth.session,
+      );
+      const appealReviewerAal2Session = await elevateWithTotp(
+        appealReviewerAuth.client,
+        appealReviewerAuth.session,
       );
       const adminAal2Session = await elevateWithTotp(
         adminAuth.client,
@@ -607,10 +656,13 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await expectAal(ownerAuth.client, "aal1");
       await expectAal(reviewerAal1Auth.client, "aal1");
       await expectAal(reviewerAuth.client, "aal2");
+      await expectAal(appealReviewerAuth.client, "aal2");
       await expectAal(adminAuth.client, "aal2");
+      expect(appealReviewerAal2Session.user.id).toBe(IDS.appealReviewer);
+      expect(IDS.appealReviewer).not.toBe(IDS.reviewer);
       expect(adminAal2Session.user.id).toBe(IDS.admin);
       qaCheckpoint(
-        "signed in three participant roles plus independent AAL1/AAL2 reviewer sessions and an AAL2 administrator",
+        "signed in three participant roles plus distinct initial/appeal AAL2 reviewers and an AAL2 administrator",
       );
 
       const createContext = async (
@@ -657,21 +709,36 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await expectHealthyPage(responderPage);
       await pendingResponseReceipt.scrollIntoViewIfNeeded();
       await expect(pendingResponseReceipt).toBeInViewport({ ratio: 0.9 });
-      await screenshot(responderPage, testInfo, "03-responder-private-response-mobile");
+      await screenshot(
+        responderPage,
+        testInfo,
+        "03-responder-private-response-mobile",
+      );
 
       await gotoReady(outsiderPage, `/offers/${IDS.offer}#respond`);
-      await expect(outsiderPage.getByText(COPY.responderResponse, { exact: true })).toHaveCount(0);
       await expect(
-        outsiderPage.getByRole("heading", { exact: true, name: "Responses to this offer" }),
+        outsiderPage.getByText(COPY.responderResponse, { exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        outsiderPage.getByRole("heading", {
+          exact: true,
+          name: "Responses to this offer",
+        }),
       ).toHaveCount(0);
       await submitResponse(outsiderPage, COPY.outsiderResponse);
-      await expect(outsiderPage.getByText("Your response is pending", { exact: true })).toBeVisible();
+      await expect(
+        outsiderPage.getByText("Your response is pending", { exact: true }),
+      ).toBeVisible();
       await expectHealthyPage(outsiderPage);
       qaCheckpoint("proved non-owner response privacy before acceptance");
 
       await gotoReady(ownerPage, `/offers/${IDS.offer}`);
-      await expect(ownerPage.getByText(COPY.responderResponse, { exact: true })).toBeVisible();
-      await expect(ownerPage.getByText(COPY.outsiderResponse, { exact: true })).toBeVisible();
+      await expect(
+        ownerPage.getByText(COPY.responderResponse, { exact: true }),
+      ).toBeVisible();
+      await expect(
+        ownerPage.getByText(COPY.outsiderResponse, { exact: true }),
+      ).toBeVisible();
       const selectedResponseCard = ownerPage.locator("article").filter({
         hasText: COPY.responderResponse,
       });
@@ -684,9 +751,14 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       });
       await acceptanceForm
         .locator('textarea[name="notes"]')
-        .fill("QA-only acceptance; agreement remains proposed until both users confirm.");
+        .fill(
+          "QA-only acceptance; agreement remains proposed until both users confirm.",
+        );
       await acceptanceForm
-        .getByRole("button", { exact: true, name: "Accept and create agreement" })
+        .getByRole("button", {
+          exact: true,
+          name: "Accept and create agreement",
+        })
         .click();
 
       // This is the first demonstrated product gate: acceptance must land on the
@@ -696,14 +768,19 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         /\/trade-agreements\/[0-9a-f-]{36}(?:\?.*)?$/i,
         { timeout: 25_000 },
       );
-      await expectSuccess(ownerPage, "Interest accepted and agreement created.");
+      await expectSuccess(
+        ownerPage,
+        "Interest accepted and agreement created.",
+      );
       const agreementMatch = new URL(ownerPage.url()).pathname.match(
         /^\/trade-agreements\/([0-9a-f-]{36})$/i,
       );
       expect(agreementMatch).not.toBeNull();
       const agreementId = agreementMatch?.[1] ?? "";
       summary.agreementId = agreementId;
-      qaCheckpoint(`accepted selected response into canonical agreement ${agreementId}`);
+      qaCheckpoint(
+        `accepted selected response into canonical agreement ${agreementId}`,
+      );
 
       const { data: interests, error: interestsError } = await ownerAuth.client
         .from("interests")
@@ -712,15 +789,20 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         .order("user_id", { ascending: true });
       expect(interestsError).toBeNull();
       expect(interests).toHaveLength(2);
-      const selectedInterest = interests?.find((row) => row.user_id === IDS.responder);
-      const competingInterest = interests?.find((row) => row.user_id === IDS.outsider);
+      const selectedInterest = interests?.find(
+        (row) => row.user_id === IDS.responder,
+      );
+      const competingInterest = interests?.find(
+        (row) => row.user_id === IDS.outsider,
+      );
       expect(selectedInterest?.status).toBe("accepted");
       expect(competingInterest?.status).toBe("declined");
 
-      const { data: agreements, error: agreementsError } = await ownerAuth.client
-        .from("agreements")
-        .select("*")
-        .eq("offer_id", IDS.offer);
+      const { data: agreements, error: agreementsError } =
+        await ownerAuth.client
+          .from("agreements")
+          .select("*")
+          .eq("offer_id", IDS.offer);
       expect(agreementsError).toBeNull();
       expect(agreements).toHaveLength(1);
       expect(agreements?.[0]?.id).toBe(agreementId);
@@ -740,7 +822,9 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         .select("id")
         .eq("offer_id", IDS.offer);
       expect(agreementsAfterDuplicate).toHaveLength(1);
-      qaCheckpoint("proved atomic competing-response decline and idempotent acceptance");
+      qaCheckpoint(
+        "proved atomic competing-response decline and idempotent acceptance",
+      );
 
       const { data: versions, error: versionsError } = await ownerAuth.client
         .from("trade_agreement_versions")
@@ -762,12 +846,15 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       );
       expect(staleConfirmationError).not.toBeNull();
 
-      const { data: tamperResult, error: tamperError } = await responderAuth.client
-        .from("trade_agreement_versions")
-        .update({ privacy_scope: "tampered" })
-        .eq("id", version?.id)
-        .select("id");
-      expect(Boolean(tamperError) || (tamperResult ?? []).length === 0).toBe(true);
+      const { data: tamperResult, error: tamperError } =
+        await responderAuth.client
+          .from("trade_agreement_versions")
+          .update({ privacy_scope: "tampered" })
+          .eq("id", version?.id)
+          .select("id");
+      expect(Boolean(tamperError) || (tamperResult ?? []).length === 0).toBe(
+        true,
+      );
       const { data: unchangedVersion } = await ownerAuth.client
         .from("trade_agreement_versions")
         .select("privacy_scope")
@@ -775,25 +862,33 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         .single();
       expect(unchangedVersion?.privacy_scope).toBe(version?.privacy_scope);
 
-      const { data: acceptedThreads, error: acceptedThreadsError } = await ownerAuth.client
-        .from("trade_threads")
-        .select("id")
-        .eq("agreement_id", agreementId);
+      const { data: acceptedThreads, error: acceptedThreadsError } =
+        await ownerAuth.client
+          .from("trade_threads")
+          .select("id")
+          .eq("agreement_id", agreementId);
       expect(acceptedThreadsError).toBeNull();
       expect(acceptedThreads).toHaveLength(1);
-      const { data: systemMessages, error: systemMessagesError } = await ownerAuth.client
-        .from("trade_messages")
-        .select("body,message_type")
-        .eq("thread_id", acceptedThreads?.[0]?.id)
-        .eq("message_type", "system");
+      const { data: systemMessages, error: systemMessagesError } =
+        await ownerAuth.client
+          .from("trade_messages")
+          .select("body,message_type")
+          .eq("thread_id", acceptedThreads?.[0]?.id)
+          .eq("message_type", "system");
       expect(systemMessagesError).toBeNull();
       expect((systemMessages ?? []).length).toBeGreaterThanOrEqual(2);
 
       await gotoReady(responderPage, `/trade-agreements/${agreementId}`);
       const termsHashPrefix = String(version?.terms_hash).slice(0, 16);
-      await expect(ownerPage.getByText(`Terms hash: ${termsHashPrefix}…`, { exact: false })).toBeVisible();
       await expect(
-        responderPage.getByText(`Terms hash: ${termsHashPrefix}…`, { exact: false }),
+        ownerPage.getByText(`Terms hash: ${termsHashPrefix}…`, {
+          exact: false,
+        }),
+      ).toBeVisible();
+      await expect(
+        responderPage.getByText(`Terms hash: ${termsHashPrefix}…`, {
+          exact: false,
+        }),
       ).toBeVisible();
       await expectHealthyPage(ownerPage);
       await expectHealthyPage(responderPage);
@@ -803,7 +898,10 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         outsiderPage.getByRole("heading", { exact: true, name: "Unavailable" }),
       ).toBeVisible();
       const { data: outsiderAgreements, error: outsiderAgreementsError } =
-        await outsiderAuth.client.from("agreements").select("id").eq("id", agreementId);
+        await outsiderAuth.client
+          .from("agreements")
+          .select("id")
+          .eq("id", agreementId);
       expect(outsiderAgreementsError).toBeNull();
       expect(outsiderAgreements).toEqual([]);
       const { data: outsiderInterests, error: outsiderInterestsError } =
@@ -819,25 +917,50 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
           user_id: IDS.outsider,
         },
       ]);
-      await screenshot(outsiderPage, testInfo, "04-outsider-agreement-denied-mobile");
-      qaCheckpoint("proved frozen-version identity, stale-write denial, and outsider RLS denial");
+      await screenshot(
+        outsiderPage,
+        testInfo,
+        "04-outsider-agreement-denied-mobile",
+      );
+      qaCheckpoint(
+        "proved frozen-version identity, stale-write denial, and outsider RLS denial",
+      );
 
       await gotoReady(ownerPage, `/trade-agreements/${agreementId}`);
-      const milestoneForm = formWithButton(ownerPage, "Add milestone to version");
-      await ownerPage.getByText("Add a milestone before confirmation", { exact: true }).click();
-      await milestoneForm.locator('select[name="action_category"]').selectOption("other");
-      await milestoneForm.locator('select[name="completion_kind"]').selectOption("indivisible");
+      const milestoneForm = formWithButton(
+        ownerPage,
+        "Add milestone to version",
+      );
+      await ownerPage
+        .getByText("Add a milestone before confirmation", { exact: true })
+        .click();
+      await milestoneForm
+        .locator('select[name="action_category"]')
+        .selectOption("other");
+      await milestoneForm
+        .locator('select[name="completion_kind"]')
+        .selectOption("indivisible");
       await milestoneForm
         .locator('textarea[name="private_description"]')
-        .fill("Complete the single synthetic evaluator checkpoint in isolated QA.");
-      await milestoneForm.locator('select[name="performer_id"]').selectOption(IDS.responder);
-      await milestoneForm.locator('select[name="payer_id"]').selectOption(IDS.owner);
-      await milestoneForm.locator('input[name="unit_label"]').fill("checkpoint");
+        .fill(
+          "Complete the single synthetic evaluator checkpoint in isolated QA.",
+        );
+      await milestoneForm
+        .locator('select[name="performer_id"]')
+        .selectOption(IDS.responder);
+      await milestoneForm
+        .locator('select[name="payer_id"]')
+        .selectOption(IDS.owner);
+      await milestoneForm
+        .locator('input[name="unit_label"]')
+        .fill("checkpoint");
       await milestoneForm.locator('input[name="maximum_amount"]').fill("0");
       await milestoneForm.locator('input[name="currency"]').fill("USD");
       await milestoneForm
         .locator('textarea[name="evidence_rule"]')
-        .fill("One private QA-only attestation; no file, external link, or production data.");
+        .fill(
+          "One private QA-only attestation; no file, external link, or production data.",
+        );
       await milestoneForm
         .getByRole("button", { exact: true, name: "Add milestone to version" })
         .click();
@@ -846,17 +969,21 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         "Milestone added to the proposed version. Finalize the manifest before either participant confirms it.",
       );
 
-      const { data: milestones, error: milestonesError } = await ownerAuth.client
-        .from("trade_agreement_milestones")
-        .select("*")
-        .eq("agreement_id", agreementId);
+      const { data: milestones, error: milestonesError } =
+        await ownerAuth.client
+          .from("trade_agreement_milestones")
+          .select("*")
+          .eq("agreement_id", agreementId);
       expect(milestonesError).toBeNull();
       expect(milestones).toHaveLength(1);
       const milestone = milestones?.[0];
       expect(Number(milestone?.maximum_amount_cents)).toBe(0);
 
       await formWithButton(ownerPage, "Finalize milestone manifest")
-        .getByRole("button", { exact: true, name: "Finalize milestone manifest" })
+        .getByRole("button", {
+          exact: true,
+          name: "Finalize milestone manifest",
+        })
         .click();
       await expectSuccess(
         ownerPage,
@@ -869,7 +996,11 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         .single();
       expect(frozenVersion?.milestone_manifest_hash).toMatch(/^[a-f0-9]{64}$/);
       expect(frozenVersion?.complete_terms_hash).toMatch(/^[a-f0-9]{64}$/);
-      await screenshot(ownerPage, testInfo, "05-owner-frozen-zero-dollar-milestone-desktop");
+      await screenshot(
+        ownerPage,
+        testInfo,
+        "05-owner-frozen-zero-dollar-milestone-desktop",
+      );
 
       await confirmVersion(ownerPage);
       await expectSuccess(
@@ -889,19 +1020,27 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         .single();
       expect(activatedAgreement?.lifecycle_status).toBe("active");
       expect(activatedAgreement?.status).toBe("active");
-      const { data: confirmations, error: confirmationsError } = await ownerAuth.client
-        .from("trade_agreement_confirmations")
-        .select("user_id")
-        .eq("agreement_version_id", version?.id);
+      const { data: confirmations, error: confirmationsError } =
+        await ownerAuth.client
+          .from("trade_agreement_confirmations")
+          .select("user_id")
+          .eq("agreement_version_id", version?.id);
       expect(confirmationsError).toBeNull();
       expect(new Set((confirmations ?? []).map((row) => row.user_id))).toEqual(
         new Set([IDS.owner, IDS.responder]),
       );
-      qaCheckpoint("proved complete manifest and bilateral activation of one frozen version");
+      qaCheckpoint(
+        "proved complete manifest and bilateral activation of one frozen version",
+      );
 
       await gotoReady(responderPage, `/trade-agreements/${agreementId}`);
-      const evidenceForm = formWithButton(responderPage, "Submit evidence bundle");
-      await evidenceForm.locator('textarea[name="attestation"]').fill(COPY.evidence);
+      const evidenceForm = formWithButton(
+        responderPage,
+        "Submit evidence bundle",
+      );
+      await evidenceForm
+        .locator('textarea[name="attestation"]')
+        .fill(COPY.evidence);
       await evidenceForm.locator('input[name="bundle_complete"]').check();
       await evidenceForm
         .getByRole("button", { exact: true, name: "Submit evidence bundle" })
@@ -916,7 +1055,8 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await gotoReady(responderPage, `/trade-agreements/${agreementId}`);
       await nominateReviewer(responderPage);
 
-      if (!milestone?.id) throw new Error("The accepted agreement has no QA milestone.");
+      if (!milestone?.id)
+        throw new Error("The accepted agreement has no QA milestone.");
       const { data: participantBundles, error: participantBundlesError } =
         await ownerAuth.client
           .from("trade_evidence_bundles")
@@ -926,7 +1066,8 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       expect(participantBundles).toHaveLength(1);
       expect(participantBundles?.[0]?.status).toBe("submitted");
       const reviewerBundleId = participantBundles?.[0]?.id;
-      if (!reviewerBundleId) throw new Error("The submitted QA evidence bundle has no ID.");
+      if (!reviewerBundleId)
+        throw new Error("The submitted QA evidence bundle has no ID.");
 
       const participantAal1Access = await readPrivateEvidence(
         ownerAuth.client,
@@ -1007,11 +1148,19 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
           name: "Grade the promised result, not the submission’s polish.",
         }),
       ).toBeVisible();
-      await expect(reviewerPage.getByText(COPY.evidence, { exact: true })).toBeVisible();
+      await expect(
+        reviewerPage.getByText(COPY.evidence, { exact: true }),
+      ).toBeVisible();
       const reviewForm = formWithButton(reviewerPage, "Record neutral review");
-      await reviewForm.locator('select[name="completed_units"]').selectOption("1");
-      await reviewForm.locator('select[name="confidence_band"]').selectOption("100");
-      await reviewForm.locator('textarea[name="review_rationale"]').fill(COPY.review);
+      await reviewForm
+        .locator('select[name="completed_units"]')
+        .selectOption("1");
+      await reviewForm
+        .locator('select[name="confidence_band"]')
+        .selectOption("100");
+      await reviewForm
+        .locator('textarea[name="review_rationale"]')
+        .fill(COPY.review);
       await reviewForm
         .getByRole("button", { exact: true, name: "Record neutral review" })
         .click();
@@ -1020,7 +1169,11 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         "Neutral review recorded with the fixed confidence band. The result remains provisional during the appeal window.",
       );
       await expectHealthyPage(reviewerPage);
-      await screenshot(reviewerPage, testInfo, "06-reviewer-private-evidence-desktop");
+      await screenshot(
+        reviewerPage,
+        testInfo,
+        "06-reviewer-private-evidence-desktop",
+      );
 
       const reviewerAal2AfterReview = await readPrivateEvidence(
         reviewerAuth.client,
@@ -1061,10 +1214,11 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       expect(bundlesError).toBeNull();
       expect(bundles).toHaveLength(1);
       expect(bundles?.[0]?.status).toBe("accepted");
-      const { data: bundleItems, error: bundleItemsError } = await ownerAuth.client
-        .from("trade_evidence_bundle_items")
-        .select("attestation,evidence_type,evidence_url,storage_path")
-        .eq("bundle_id", bundles?.[0]?.id);
+      const { data: bundleItems, error: bundleItemsError } =
+        await ownerAuth.client
+          .from("trade_evidence_bundle_items")
+          .select("attestation,evidence_type,evidence_url,storage_path")
+          .eq("bundle_id", bundles?.[0]?.id);
       expect(bundleItemsError).toBeNull();
       expect(bundleItems).toEqual([
         {
@@ -1090,7 +1244,9 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       expect(payoutsError).toBeNull();
       expect(payouts).toHaveLength(1);
       expect(Number(payouts?.[0]?.amount_due_cents)).toBe(0);
-      qaCheckpoint("proved private attestation, mutual reviewer choice, AAL2 review, and zero amount");
+      qaCheckpoint(
+        "proved private attestation, mutual reviewer choice, AAL2 review, and zero amount",
+      );
 
       await gotoReady(ownerPage, `/trade-agreements/${agreementId}`);
       const exitForm = formWithButton(ownerPage, "End future obligations");
@@ -1109,7 +1265,9 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await exitButton.click();
       let pendingObservedTime: string | null = null;
       try {
-        await expect(exitButton).toHaveText("Recording exit...", { timeout: 2_000 });
+        await expect(exitButton).toHaveText("Recording exit...", {
+          timeout: 2_000,
+        });
         pendingObservedTime = new Date().toISOString();
       } catch {
         // A completed native navigation can replace the form before its pending label is observed.
@@ -1125,11 +1283,15 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         activeElement: document.activeElement
           ? `${document.activeElement.tagName}${document.activeElement.id ? `#${document.activeElement.id}` : ""}`
           : null,
-        bodyHasCancelledLifecycle: document.body.innerText.includes("Agreement cancelled"),
-        bodyHasPendingExit: document.body.innerText.includes("Recording exit..."),
+        bodyHasCancelledLifecycle: document.body.innerText.includes(
+          "Agreement cancelled",
+        ),
+        bodyHasPendingExit:
+          document.body.innerText.includes("Recording exit..."),
         url: window.location.href,
       }));
-      const exitDatabaseBoundary = await captureExitDatabaseBoundary(agreementId);
+      const exitDatabaseBoundary =
+        await captureExitDatabaseBoundary(agreementId);
       summary.exitSettlementTimeline = {
         browserAfterResponse,
         clickTime,
@@ -1160,9 +1322,15 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         ownerPage,
         "Unilateral exit recorded. Future obligations ended under the published rule.",
       );
-      await expect(ownerPage.getByText("Agreement cancelled", { exact: true })).toBeVisible();
+      await expect(
+        ownerPage.getByText("Agreement cancelled", { exact: true }),
+      ).toBeVisible();
       await expectHealthyPage(ownerPage);
-      await screenshot(ownerPage, testInfo, "07-owner-prospective-exit-desktop");
+      await screenshot(
+        ownerPage,
+        testInfo,
+        "07-owner-prospective-exit-desktop",
+      );
 
       const { data: cancelledAgreement } = await ownerAuth.client
         .from("agreements")
@@ -1180,7 +1348,11 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         .eq("agreement_id", agreementId);
       expect(exitsError).toBeNull();
       expect(exits).toEqual([
-        { reason: COPY.exit, request_type: "unilateral_exit", status: "executed" },
+        {
+          reason: COPY.exit,
+          request_type: "unilateral_exit",
+          status: "executed",
+        },
       ]);
       const { data: retainedVersions } = await ownerAuth.client
         .from("trade_agreement_versions")
@@ -1219,7 +1391,8 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       expect(ownerNotificationsError).toBeNull();
       expect(
         (ownerNotifications ?? []).some(
-          (notification) => notification.href === `/trade-agreements/${agreementId}`,
+          (notification) =>
+            notification.href === `/trade-agreements/${agreementId}`,
         ),
       ).toBe(true);
 
@@ -1251,7 +1424,9 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       ];
       summary.outsiderDenial = {
         agreementRows: outsiderAgreements?.length ?? -1,
-        visibleInterestUsers: (outsiderInterests ?? []).map((row) => row.user_id),
+        visibleInterestUsers: (outsiderInterests ?? []).map(
+          (row) => row.user_id,
+        ),
       };
       summary.noMoney = {
         externalReceipts: externalReceipts?.length ?? -1,
@@ -1268,11 +1443,15 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         systemMessages: systemMessages?.length ?? -1,
         versions: retainedVersions?.length ?? -1,
       };
-      summary.coreLoopEvents = (responseEvents ?? []).map((event) => event.event_type);
+      summary.coreLoopEvents = (responseEvents ?? []).map(
+        (event) => event.event_type,
+      );
       summary.consoleFailures = consoleFailures;
 
       expect(consoleFailures).toEqual([]);
-      qaCheckpoint("proved retained audit records, clean console, and no money-moving path");
+      qaCheckpoint(
+        "proved retained audit records, clean console, and no money-moving path",
+      );
     } catch (error) {
       testFailure = error;
       throw error;
@@ -1284,12 +1463,19 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       } catch (error) {
         cleanupFailure = error;
         summary.cleanup = {
-          error: error instanceof Error ? error.message : "Unknown cleanup failure",
+          error:
+            error instanceof Error ? error.message : "Unknown cleanup failure",
         };
       }
 
-      const summaryPath = testInfo.outputPath("evaluator-core-loop-summary.json");
-      await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+      const summaryPath = testInfo.outputPath(
+        "evaluator-core-loop-summary.json",
+      );
+      await writeFile(
+        summaryPath,
+        `${JSON.stringify(summary, null, 2)}\n`,
+        "utf8",
+      );
       await testInfo.attach("evaluator-core-loop-summary", {
         contentType: "application/json",
         path: summaryPath,
