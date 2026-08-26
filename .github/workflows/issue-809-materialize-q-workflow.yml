@@ -68,6 +68,8 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
+          nl -ba .github/workflows/evidence-payment-release-qa.yml \
+            | sed -n '390,430p'
           ruby -e "require 'yaml'; abort('invalid YAML') unless YAML.parse_file('.github/workflows/evidence-payment-release-qa.yml')"
           node --test \
             scripts/evidence-payment-qa-namespace.test.mjs \
