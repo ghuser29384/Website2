@@ -1,0 +1,183 @@
+name: Issue 782 canonical production Auth Create and DAC UAT
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - ".github/workflows/issue-782-canonical-production-uat-20260826.yml"
+      - ".github/scripts/issue-782-canonical-production-uat-20260826.py"
+      - ".github/scripts/issue782-payload/**"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: issue-782-canonical-production-uat
+  cancel-in-progress: false
+
+env:
+  AUTHORIZED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  AUTHORIZED_MAIN_TREE: 47fe96dfc881f1c57dea711283fc3db36a44e053
+  AUTHORIZED_BRANCH: ops/dac-production-canonical-uat-26d1fe43-20260824
+  CONTROLLER_WORKFLOW: .github/workflows/issue-782-canonical-production-uat-20260826.yml
+  CONTROLLER_SCRIPT: .github/scripts/issue-782-canonical-production-uat-20260826.py
+  CONTROLLER_PAYLOAD_PARTS: .github/scripts/issue782-payload/part-01.b64,.github/scripts/issue782-payload/part-02.b64,.github/scripts/issue782-payload/part-03.b64,.github/scripts/issue782-payload/part-04.b64,.github/scripts/issue782-payload/part-05.b64,.github/scripts/issue782-payload/part-06.b64
+  PRODUCTION_PROJECT_REF: jnpoxvalyjtdghnperyu
+  PRODUCTION_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+  PRODUCTION_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  RESTORATION_DEPLOYMENT_ID: dpl_GbKHA9YfvjEW3iqymgY4uzp7MWsX
+  BACKUP_RUN_ID: "32904854234"
+  BACKUP_ARTIFACT_ID: "9584433427"
+  BACKUP_ARTIFACT_DIGEST: sha256:773149dde3b2512b3854e48c5adf1b1b4c16a627be3ed2c21207d947d9885835
+  BACKUP_EXPIRES_AT: 2026-09-24T22:11:58Z
+  CREATE_HARNESS_SHA: b55cba71e9f299fe8fce021a0243290c0a23e0d9
+  EVIDENCE_DIR: issue-782-canonical-production-uat-evidence
+
+jobs:
+  production-uat:
+    name: Exact-state enablement, gated deployment, canonical UAT, restoration, and zero residue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL || secrets.PRODUCTION_SUPABASE_DB_URL || secrets.PROD_DATABASE_URL || secrets.SUPABASE_DB_URL || secrets.DATABASE_URL }}
+      PROD_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY || secrets.PRODUCTION_SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PROD_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY || secrets.PRODUCTION_SUPABASE_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PGSSLMODE: require
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+      MPGF_REAL_MONEY_ENABLED: "false"
+      MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+      MPGF_TEST_PAYMENT_ENABLED: "false"
+      EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+
+    steps:
+      - name: Check out the exact one-use controller branch
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Check out exact authorized main application
+        uses: actions/checkout@v4
+        with:
+          path: app
+          fetch-depth: 0
+          ref: ${{ env.AUTHORIZED_MAIN_SHA }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install exact application and browser/database clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix app ci
+          (cd app && npx playwright install --with-deps chromium)
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client jq unzip zip > /dev/null
+
+      - name: Execute fail-closed production acceptance controller
+        id: execute
+        continue-on-error: true
+        shell: bash
+        env:
+          CONTROLLER_ROOT: ${{ github.workspace }}/controller
+          APP_ROOT: ${{ github.workspace }}/app
+        run: |
+          set -euo pipefail
+          python3 controller/.github/scripts/issue-782-canonical-production-uat-20260826.py
+
+      - name: Upload immutable privacy-scanned evidence
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-782-canonical-production-uat-${{ github.run_id }}-${{ github.run_attempt }}
+          path: controller/${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove the one-use controller and restore the operations branch tree
+        id: branch_cleanup
+        if: always()
+        continue-on-error: true
+        shell: bash
+        working-directory: controller
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          IFS=',' read -r -a controller_payload_parts <<< "$CONTROLLER_PAYLOAD_PARTS"
+          git rm -f "$CONTROLLER_WORKFLOW" "$CONTROLLER_SCRIPT" "${controller_payload_parts[@]}"
+          git commit -m "Remove completed Issue 782 canonical production UAT controller"
+          git push origin "HEAD:$AUTHORIZED_BRANCH"
+          test "$(git rev-parse HEAD^{tree})" = "$AUTHORIZED_MAIN_TREE"
+
+      - name: Publish exact completion or blocker record
+        if: always()
+        shell: bash
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          status_path="controller/$EVIDENCE_DIR/status.json"
+          body_path="controller/$EVIDENCE_DIR/issue-comment.md"
+          test -s "$status_path"
+          test -s "$body_path"
+          {
+            echo
+            echo "### Immutable artifact"
+            echo
+            printf -- '- Artifact ID: `%s`\n' "$ARTIFACT_ID"
+            printf -- '- Artifact digest: `%s`\n' "$ARTIFACT_DIGEST"
+            printf -- '- Artifact: %s\n' "$ARTIFACT_URL"
+            printf -- '- Workflow run: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+          } >> "$body_path"
+          gh issue comment 782 --repo "$GITHUB_REPOSITORY" --body-file "$body_path"
+
+          conclusion="$(jq -r '.conclusion' "$status_path")"
+          branch_cleanup_outcome='${{ steps.branch_cleanup.outcome }}'
+          if [[ "$branch_cleanup_outcome" != 'success' ]]; then
+            {
+              echo
+              echo '### Controller cleanup defect'
+              echo
+              echo 'The product/database/alias cleanup result above is preserved, but the one-use operations branch did not return to the exact authorized main tree. The issue remains open.'
+            } >> "$body_path"
+          fi
+          if [[ "$conclusion" == "production_release_passed" && "$branch_cleanup_outcome" == 'success' ]]; then
+            gh issue comment 630 --repo "$GITHUB_REPOSITORY" --body-file "$body_path"
+            gh issue close 630 --repo "$GITHUB_REPOSITORY" --reason completed
+            gh issue close 782 --repo "$GITHUB_REPOSITORY" --reason completed
+          fi
+
+      - name: Propagate the controller conclusion after cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_path="controller/$EVIDENCE_DIR/status.json"
+          test -s "$status_path"
+          test '${{ steps.branch_cleanup.outcome }}' = 'success'
+          test "$(jq -r '.exitCode' "$status_path")" = "0"
