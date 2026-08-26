@@ -1,0 +1,171 @@
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      NAMESPACE: ${{ needs.execute.outputs.namespace }}
+      PREFIX: ${{ needs.execute.outputs.prefix }}
+      TEMP_DEPLOYMENT_ID: ${{ needs.execute.outputs.temporary_deployment_id }}
+      RELEASE_DISPATCH_EPOCH: ${{ needs.execute.outputs.release_dispatch_epoch }}
+
+    steps:
+      - name: Check out exact controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Independently enforce original aliases and zero ADMIN_EMAILS
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rescue-evidence .vercel
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+          original_detail="$RUNNER_TEMP/rescue-original-deployment.json"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$ORIGINAL_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" \
+            > "$original_detail"
+          jq -e --arg id "$ORIGINAL_DEPLOYMENT_ID" --arg project "$VERCEL_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+            ((.id // .uid)==$id) and ((.projectId // .project.id // "")==$project)
+            and ((.readyState // .state // "")=="READY") and (.target=="production")
+            and (.meta.githubCommitSha==$sha) and ((.aliasError // null)==null)
+          ' "$original_detail" >/dev/null
+
+          temp_id="$TEMP_DEPLOYMENT_ID"
+          if [[ -z "$temp_id" && -n "$RELEASE_DISPATCH_EPOCH" ]]; then
+            since_ms="$(((RELEASE_DISPATCH_EPOCH-5)*1000))"
+            candidates="$RUNNER_TEMP/rescue-deployments.json"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID&since=$since_ms&limit=20" \
+              > "$candidates"
+            candidate_count="$(jq --arg original "$ORIGINAL_DEPLOYMENT_ID" --arg sha "$EXPECTED_MAIN_SHA" '[.deployments[]? | select(.id!=$original and .target=="production" and .meta.githubCommitSha==$sha)] | length' "$candidates")"
+            test "$candidate_count" -le 1
+            if [[ "$candidate_count" = "1" ]]; then
+              temp_id="$(jq -r --arg original "$ORIGINAL_DEPLOYMENT_ID" --arg sha "$EXPECTED_MAIN_SHA" '.deployments[] | select(.id!=$original and .target=="production" and .meta.githubCommitSha==$sha) | .id' "$candidates")"
+            fi
+          fi
+          if [[ -n "$temp_id" && "$temp_id" != "$ORIGINAL_DEPLOYMENT_ID" ]]; then
+            temp_detail="$RUNNER_TEMP/rescue-temp-deployment.json"
+            status="$(curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" -o "$temp_detail" -w '%{http_code}' \
+              "https://api.vercel.com/v13/deployments/$temp_id?teamId=$VERCEL_TEAM_ID")"
+            if [[ "$status" = "200" ]]; then
+              jq -e --arg id "$temp_id" --arg project "$VERCEL_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+                ((.id // .uid)==$id) and ((.projectId // .project.id // "")==$project) and (.meta.githubCommitSha==$sha)
+              ' "$temp_detail" >/dev/null
+            elif [[ "$status" = "404" ]]; then
+              temp_id=""
+            else
+              echo "Could not classify the exact temporary deployment ($status)." >&2
+              exit 1
+            fi
+          fi
+
+          # Restore only from the exact temporary deployment; never overwrite unknown canonical state.
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            current="$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/$alias_name?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID")"
+            deployment="$(jq -r '.deploymentId // .deployment.id // .deployment.uid // empty' <<<"$current")"
+            if [[ "$deployment" = "$ORIGINAL_DEPLOYMENT_ID" ]]; then
+              :
+            elif [[ -n "$temp_id" && "$deployment" = "$temp_id" ]]; then
+              npx --yes "vercel@$VERCEL_CLI_VERSION" alias set \
+                "$ORIGINAL_DEPLOYMENT_URL" "$alias_name" --token="$VERCEL_TOKEN" >/dev/null
+            else
+              echo "Refusing to overwrite unknown canonical alias state for $alias_name ($deployment)." >&2
+              exit 1
+            fi
+          done
+          for attempt in $(seq 1 30); do
+            ok=true
+            for alias_name in moraltrade.org www.moraltrade.org; do
+              current="$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v4/aliases/$alias_name?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID")"
+              deployment="$(jq -r '.deploymentId // .deployment.id // .deployment.uid // empty' <<<"$current")"
+              [[ "$deployment" = "$ORIGINAL_DEPLOYMENT_ID" ]] || ok=false
+            done
+            [[ "$ok" == "true" ]] && break
+            sleep 5
+          done
+          [[ "${ok:-false}" == "true" ]]
+          nonce="$EXPECTED_MAIN_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-rescue"
+          curl -fsS -H 'Cache-Control: no-cache' \
+            "https://www.moraltrade.org/moral-trade-live-create-router.js?integrity=$nonce" \
+            -o "$RUNNER_TEMP/rescue-critical-asset.js"
+          cmp --silent public/moral-trade-live-create-router.js "$RUNNER_TEMP/rescue-critical-asset.js"
+          sha256sum public/moral-trade-live-create-router.js "$RUNNER_TEMP/rescue-critical-asset.js" \
+            > rescue-evidence/restored-critical-asset.sha256
+
+          envs="$RUNNER_TEMP/rescue-envs.json"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-rescue" \
+            > "$envs"
+          admin_count="$(jq '[.envs[]? | select(.key=="ADMIN_EMAILS" and ((.target|type)=="array" and (.target|index("production"))!=null or .target=="production"))] | length' "$envs")"
+          if [[ "$admin_count" = "1" ]]; then
+            value="$(jq -r '.envs[] | select(.key=="ADMIN_EMAILS") | .value' "$envs")"
+            expected="i782-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-"
+            [[ "$value" == "$expected"*"-reviewer@qa.moraltrade.invalid" ]]
+            env_id="$(jq -r '.envs[] | select(.key=="ADMIN_EMAILS") | .id' "$envs")"
+            curl -fsS -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/$env_id?teamId=$VERCEL_TEAM_ID" >/dev/null
+          elif [[ "$admin_count" != "0" ]]; then
+            echo "Unknown ADMIN_EMAILS state; refusing broad cleanup." >&2
+            exit 1
+          fi
+          verify="$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-rescue-verify")"
+          test "$(jq '[.envs[]? | select(.key=="ADMIN_EMAILS" and ((.target|type)=="array" and (.target|index("production"))!=null or .target=="production"))] | length' <<<"$verify")" = "0"
+
+          # Verify no authorized DAC or payment state remains. Do not delete unknown state.
+          docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<SQL \
+            > rescue-evidence/database-zero-state.raw
+          select jsonb_build_object(
+            'proposals',(select count(*) from public.mpgf_pool_proposals),
+            'reviewers',(select count(*) from public.mpgf_pool_reviewers),
+            'campaigns',(select count(*) from public.mpgf_public_goods_campaigns),
+            'pledges',(select count(*) from public.mpgf_public_goods_pledges),
+            'pledgeIntents',(select count(*) from public.mpgf_dac_pledge_intents),
+            'pledgeEvents',(select count(*) from public.mpgf_dac_pledge_events),
+            'outcomes',(select count(*) from public.mpgf_dac_campaign_outcomes),
+            'paymentReferences',(select count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null or status='captured'),
+            'ownedAuthUsers',(select count(*) from auth.users where raw_user_meta_data->>'qa_scope'='issue782_bounded_production_uat' and raw_user_meta_data->>'qa_namespace'='${NAMESPACE}'),
+            'checkedAt',clock_timestamp()
+          );
+          SQL
+          grep -E '^\{' rescue-evidence/database-zero-state.raw | tail -n 1 > rescue-evidence/database-zero-state.json
+          jq -e '([to_entries[] | select(.key!="checkedAt" and .value!=0)] | length)==0' rescue-evidence/database-zero-state.json >/dev/null
+
+          if [[ -n "$temp_id" && "$temp_id" != "$ORIGINAL_DEPLOYMENT_ID" ]]; then
+            current_detail="$RUNNER_TEMP/rescue-temp-before-delete.json"
+            status="$(curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" -o "$current_detail" -w '%{http_code}' \
+              "https://api.vercel.com/v13/deployments/$temp_id?teamId=$VERCEL_TEAM_ID")"
+            if [[ "$status" = "200" ]]; then
+              jq -e --arg id "$temp_id" --arg project "$VERCEL_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+                ((.id // .uid)==$id) and ((.projectId // .project.id // "")==$project) and (.meta.githubCommitSha==$sha)
+                and (((.alias // .aliases // []) | map(select(.=="moraltrade.org" or .=="www.moraltrade.org")) | length)==0)
+              ' "$current_detail" >/dev/null
+              curl -fsS -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v13/deployments/$temp_id?teamId=$VERCEL_TEAM_ID" >/dev/null
+            elif [[ "$status" != "404" ]]; then
+              exit 1
+            fi
+          fi
+
+          jq -n \
+            --arg originalDeploymentId "$ORIGINAL_DEPLOYMENT_ID" \
+            --arg temporaryDeploymentId "$temp_id" \
+            --arg checkedAt "$(date -u +%FT%TZ)" \
+            '{originalDeploymentId:$originalDeploymentId,temporaryDeploymentId:(if $temporaryDeploymentId=="" then null else $temporaryDeploymentId end),canonicalAliasesRestored:true,criticalAssetExact:true,productionAdminEmailsCount:0,databaseAggregateZero:true,temporaryDeploymentAbsent:true,checkedAt:$checkedAt}' \
+            > rescue-evidence/rescue-summary.json
+
+      - name: Upload independent rescue evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue782-rescue-${{ github.run_id }}-${{ github.run_attempt }}
+          path: rescue-evidence
+          if-no-files-found: warn
+          retention-days: 30
