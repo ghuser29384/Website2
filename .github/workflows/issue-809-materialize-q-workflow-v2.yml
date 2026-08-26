@@ -1,0 +1,473 @@
+name: Issue 809 materialize permanent Q workflow v2
+
+on:
+  push:
+    branches:
+      - automation/issue-809-q-workflow-20260826
+    paths:
+      - .github/workflows/issue-809-materialize-q-workflow-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-809-q-workflow-materializer-v2
+  cancel-in-progress: false
+
+jobs:
+  materialize-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      Q_BRANCH: qa/issue-809-run-owned-evaluator-harness-20260826
+      EXPECTED_Q_HEAD: 2de66239ca0daf6d36040027ec4615d2b025cb4e
+    steps:
+      - name: Check out automation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: automation/issue-809-q-workflow-20260826
+
+      - name: Fetch exact Q candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$Q_BRANCH:refs/remotes/origin/issue-809-q"
+          test "$(git rev-parse refs/remotes/origin/issue-809-q)" = "$EXPECTED_Q_HEAD"
+          git switch -c "$Q_BRANCH" refs/remotes/origin/issue-809-q
+
+      - name: Add permanent source and integration evaluator gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/evidence-payment-release-qa.yml')
+          text = path.read_text()
+          if '\n  evaluator-core-loop-gate:\n' in text:
+              raise SystemExit('Permanent evaluator job already exists; refusing duplicate append.')
+
+          marker = '      - "tests/evidence-weighted-payment-authenticated.spec.ts"\n'
+          if marker not in text:
+              raise SystemExit('Unable to find exact pull-request path marker.')
+          additions = (
+              '      - "scripts/evaluator-core-loop-qa-run-ownership.test.mjs"\n'
+              '      - "docs/evaluator-core-loop-audit.md"\n'
+              '      - "src/app/actions.ts"\n'
+              '      - "src/app/api/live-now/feedback/**"\n'
+              '      - "src/components/core-trade/full-navigation-action-form.tsx"\n'
+              '      - "src/components/core-trade/trade-agreement-stage-base.tsx"\n'
+              '      - "src/components/marketplace/participant-offer-group.tsx"\n'
+              '      - "src/lib/evidence-weighted-payment-lifecycle.test.ts"\n'
+              '      - "src/lib/marketplace-delta-contract.test.ts"\n'
+              '      - "src/lib/trade-evidence-reviewer-rls-contract.test.ts"\n'
+              '      - "supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql"\n'
+              '      - "supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql"\n'
+              '      - "supabase/tests/evaluator_core_loop_*.sql"\n'
+              '      - "tests/evaluator-core-loop-authenticated.spec.ts"\n'
+          )
+          text = text.replace(marker, marker + additions, 1)
+
+          job = r'''
+  evaluator-core-loop-gate:
+    needs: exact-head-release-gate
+    if: >-
+      always() &&
+      needs.exact-head-release-gate.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EVALUATOR_CORE_LOOP_BASE_URL: http://127.0.0.1:3211
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Check out the exact evaluator candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Record exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
+          git diff --check "$EXPECTED_BASE_SHA" HEAD
+          {
+            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } | tee evaluator-core-loop-exact-head.txt
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Derive immutable run-owned evaluator namespace
+        id: evaluator_namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/evidence-payment-qa-namespace.mjs \
+            --manifest evaluator-core-loop-namespace.json \
+            --github-env "$GITHUB_ENV" \
+            2>&1 | tee evaluator-core-loop-namespace.log
+          python3 - <<'PY2' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('evaluator-core-loop-namespace.json').read_text())
+          print(f"handle={manifest['namespace']['handle']}")
+          PY2
+
+      - name: Run permanent Q source and ownership gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e "require 'yaml'; abort('invalid workflow YAML') unless YAML.parse_file('.github/workflows/evidence-payment-release-qa.yml')"
+          node --check scripts/evidence-payment-qa-namespace.mjs
+          node --check scripts/evidence-payment-qa-namespace.test.mjs
+          node --check scripts/evaluator-core-loop-qa-run-ownership.test.mjs
+          node --test \
+            scripts/evidence-payment-qa-namespace.test.mjs \
+            scripts/evaluator-core-loop-qa-run-ownership.test.mjs \
+            2>&1 | tee evaluator-core-loop-run-ownership.log
+          npx eslint tests/evaluator-core-loop-authenticated.spec.ts \
+            2>&1 | tee evaluator-core-loop-eslint.log
+          npx tsc --noEmit --pretty false \
+            2>&1 | tee evaluator-core-loop-types.log
+
+      - name: Determine whether exact initial R is present
+        id: integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            'src/app/actions.ts'
+            'src/app/api/live-now/feedback/route.ts'
+            'src/app/api/live-now/feedback/route.test.ts'
+            'src/app/trade-review/[milestoneId]/page.tsx'
+            'src/components/core-trade/full-navigation-action-form.tsx'
+            'src/components/core-trade/trade-agreement-stage-base.tsx'
+            'src/components/core-trade/trade-milestone-workflow.tsx'
+            'src/components/marketplace/participant-offer-group.tsx'
+            'src/lib/evidence-weighted-payment-lifecycle.test.ts'
+            'src/lib/marketplace-delta-contract.test.ts'
+            'src/lib/trade-evidence-reviewer-rls-contract.test.ts'
+            'supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql'
+            'supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql'
+          )
+          git diff --name-only "$EXPECTED_BASE_SHA" HEAD | sort > /tmp/evaluator-changed-paths.txt
+          missing=0
+          for path in "${required[@]}"; do
+            if ! grep -Fxq "$path" /tmp/evaluator-changed-paths.txt; then
+              missing=$((missing + 1))
+            fi
+          done
+          if [[ "$missing" = 0 ]]; then
+            echo 'has_r=true' >> "$GITHUB_OUTPUT"
+            echo 'Exact initial-R path set detected; full isolated-QA proof will run.'
+          else
+            echo 'has_r=false' >> "$GITHUB_OUTPUT"
+            echo "Q-only candidate detected; $missing initial-R paths absent. Source gates only."
+          fi
+
+      - name: Verify exact isolated-QA target and secrets
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in QA_SUPABASE_DB_URL SUPABASE_SERVICE_ROLE_KEY; do
+            test -n "${!name:-}" || { echo "Missing isolated-QA secret $name" >&2; exit 1; }
+          done
+          python3 - <<'PY2'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          ssl_modes = parse_qs(parsed.query).get('sslmode', ['require'])
+          valid = (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and os.environ['EXPECTED_QA_REF'] in (parsed.username or '')
+              and parsed.hostname == os.environ['EXPECTED_QA_POOLER_HOST']
+              and parsed.port == 5432
+              and parsed.path == '/postgres'
+              and ssl_modes == ['require']
+              and bool(parsed.password)
+              and os.environ['NEXT_PUBLIC_SUPABASE_URL']
+                  == 'https://hvmxfjjbdcgjjudmthdz.supabase.co'
+          )
+          if not valid:
+              raise SystemExit('Refusing credentials outside the exact TLS-only Moral Trade isolated-QA target.')
+          PY2
+
+      - name: Install PostgreSQL client
+        if: steps.integration.outputs.has_r == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Apply exact additive RLS migrations to isolated QA once
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apply_once() {
+            local version="$1"
+            local name="$2"
+            local path="$3"
+            local conflict recorded
+            conflict="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+              --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and coalesce(name, '') <> '$name';" | tr -d '[:space:]')"
+            test "$conflict" = 0
+            recorded="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+              --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and name = '$name';" | tr -d '[:space:]')"
+            if [[ "$recorded" = 0 ]]; then
+              psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL
+          begin;
+          \i $path
+          insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+          values ('$version', array['Applied from exact issue #809 repository migration $path'], '$name', 'github-actions:evaluator-core-loop');
+          commit;
+          SQL
+            else
+              printf 'Migration %s (%s) already recorded.\n' "$version" "$name"
+            fi
+          }
+          apply_once 20260814050000 trade_evidence_assigned_reviewer_rls \
+            supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql
+          apply_once 20260815010000 trade_evidence_reviewer_role_aal2 \
+            supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql
+
+      - name: Read-only exact-namespace preflight
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_browser_preflight.sql \
+            | tee evaluator-core-loop-preflight.json
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const text = await readFile('evaluator-core-loop-preflight.json', 'utf8');
+          const payloads = text.match(/\{[^\n]+\}/g) ?? [];
+          if (!payloads.length) throw new Error('Preflight returned no residue object.');
+          const residue = JSON.parse(payloads.at(-1));
+          const nonzero = Object.entries(residue)
+            .filter(([key]) => key !== 'namespaceHandle')
+            .filter(([, value]) => Number(value) !== 0);
+          if (nonzero.length) throw new Error(`Run-owned preflight found residue: ${JSON.stringify(residue)}`);
+          console.log(JSON.stringify({ status: 'preflight_zero', residue }));
+          NODE
+
+      - name: Create exact run-owned evaluator fixture
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          printf 'EVALUATOR_CORE_LOOP_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          export EVALUATOR_CORE_LOOP_QA_PASSWORD="$qa_password"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_browser_fixture.sql \
+            2>&1 | tee evaluator-core-loop-fixture.log
+
+      - name: Verify six run-owned Auth identities
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' 2>&1 | tee evaluator-core-loop-auth.log
+          import { createClient } from '@supabase/supabase-js';
+          const roles = [
+            ['owner', process.env.EVIDENCE_PAYMENT_QA_PAYER_EMAIL],
+            ['responder', process.env.EVIDENCE_PAYMENT_QA_PAYEE_EMAIL],
+            ['initial-reviewer', process.env.EVIDENCE_PAYMENT_QA_REVIEWER_EMAIL],
+            ['appeal-reviewer', process.env.EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_EMAIL],
+            ['outsider', process.env.EVIDENCE_PAYMENT_QA_OUTSIDER_EMAIL],
+            ['administrator', process.env.EVIDENCE_PAYMENT_QA_ADMIN_EMAIL],
+          ];
+          const emails = roles.map(([, email]) => email);
+          if (new Set(emails).size !== 6) throw new Error('Run-owned evaluator emails are not unique.');
+          for (const [role, email] of roles) {
+            const client = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL,
+              process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+              { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } },
+            );
+            const { data, error } = await client.auth.signInWithPassword({
+              email,
+              password: process.env.EVALUATOR_CORE_LOOP_QA_PASSWORD,
+            });
+            if (error || !data.session) throw new Error(`Auth sign-in failed for ${role}: ${error?.message ?? 'no session'}`);
+            if (data.user?.user_metadata?.qa_namespace !== process.env.EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE) {
+              throw new Error(`Namespace ownership mismatch for ${role}.`);
+            }
+            await client.auth.signOut({ scope: 'local' });
+          }
+          console.log(JSON.stringify({ status: 'ok', roleCount: roles.length }));
+          NODE
+
+      - name: Prove private-evidence AAL and reviewer-role matrix
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_evidence_authorization.sql \
+            2>&1 | tee evaluator-core-loop-evidence-authorization.log
+
+      - name: Build exact integration candidate
+        if: steps.integration.outputs.has_r == 'true'
+        run: npm run build 2>&1 | tee evaluator-core-loop-build.log
+
+      - name: Install Chromium
+        if: steps.integration.outputs.has_r == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact production build
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          npm run start -- -H 127.0.0.1 -p 3211 > evaluator-core-loop-server.log 2>&1 &
+          echo "$!" > evaluator-core-loop-server.pid
+          for attempt in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:3211/login >/dev/null && exit 0
+            sleep 1
+          done
+          tail -n 200 evaluator-core-loop-server.log
+          exit 1
+
+      - name: Run evaluator desktop, mobile, and authorization loop
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test tests/evaluator-core-loop-authenticated.spec.ts \
+            --reporter=line --trace=retain-on-failure --workers=1 \
+            2>&1 | tee evaluator-core-loop-browser.log
+
+      - name: Capture exact no-money database boundary
+        if: always() && steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 --set offer_id="$EVIDENCE_PAYMENT_QA_OFFER_ID" <<'SQL' \
+            | tee evaluator-core-loop-no-money.json
+          select json_build_object(
+            'maximumFinancialAmountMinor', 0,
+            'performanceBonds', (
+              select count(*) from public.performance_bonds
+              where offer_id = :'offer_id'::uuid
+            ),
+            'externalPaymentReceipts', (
+              select count(*)
+              from public.trade_external_payment_receipts receipt
+              join public.trade_milestone_payouts payout on payout.id = receipt.payout_id
+              join public.trade_agreement_milestones milestone on milestone.id = payout.milestone_id
+              join public.agreements agreement on agreement.id = milestone.agreement_id
+              where agreement.offer_id = :'offer_id'::uuid
+            ),
+            'providerRequests', 0,
+            'custodyBalances', 0,
+            'payouts', (
+              select count(*)
+              from public.trade_milestone_payouts payout
+              join public.trade_agreement_milestones milestone on milestone.id = payout.milestone_id
+              join public.agreements agreement on agreement.id = milestone.agreement_id
+              where agreement.offer_id = :'offer_id'::uuid
+            )
+          );
+          SQL
+
+      - name: Stop evaluator server
+        if: always() && steps.integration.outputs.has_r == 'true'
+        run: |
+          if [[ -f evaluator-core-loop-server.pid ]]; then
+            kill "$(cat evaluator-core-loop-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Exact cleanup and repeated zero-residue proof
+        if: always() && steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pass in 1 2; do
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+              --file supabase/tests/evaluator_core_loop_browser_cleanup.sql \
+              | tee "evaluator-core-loop-cleanup-${pass}.json"
+            CLEANUP_PASS="$pass" node --input-type=module <<'NODE'
+            import { readFile } from 'node:fs/promises';
+            const pass = process.env.CLEANUP_PASS;
+            const text = await readFile(`evaluator-core-loop-cleanup-${pass}.json`, 'utf8');
+            const payloads = text.match(/\{[^\n]+\}/g) ?? [];
+            if (!payloads.length) throw new Error(`Cleanup pass ${pass} returned no residue object.`);
+            const residue = JSON.parse(payloads.at(-1));
+            const nonzero = Object.entries(residue)
+              .filter(([key]) => key !== 'namespaceHandle')
+              .filter(([, value]) => Number(value) !== 0);
+            if (nonzero.length) throw new Error(`Cleanup pass ${pass} left residue: ${JSON.stringify(residue)}`);
+            console.log(JSON.stringify({ status: 'cleanup_zero', pass, residue }));
+            NODE
+          done
+
+      - name: Upload evaluator Q/I evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluator-core-loop-qa-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.evaluator_namespace.outputs.handle }}-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            evaluator-core-loop-*.json
+            evaluator-core-loop-*.log
+            evaluator-core-loop-exact-head.txt
+            evaluator-core-loop-namespace.json
+            playwright-report
+            test-results
+'''
+          text = text.rstrip() + '\n' + job.strip('\n') + '\n'
+          path.write_text(text)
+          PY
+
+      - name: Validate permanent workflow and source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          ruby -e "require 'yaml'; abort('invalid YAML') unless YAML.parse_file('.github/workflows/evidence-payment-release-qa.yml')"
+          node --test \
+            scripts/evidence-payment-qa-namespace.test.mjs \
+            scripts/evaluator-core-loop-qa-run-ownership.test.mjs
+          npx eslint tests/evaluator-core-loop-authenticated.spec.ts
+          npx tsc --noEmit --pretty false
+          git diff --check
+          test "$(git diff --name-only | tr -d '\r')" = '.github/workflows/evidence-payment-release-qa.yml'
+
+      - name: Commit permanent workflow to Q branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/evidence-payment-release-qa.yml
+          git commit -m "qa: add permanent issue #809 evaluator integration gate"
+          git push origin "HEAD:refs/heads/$Q_BRANCH"
