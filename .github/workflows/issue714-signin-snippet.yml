@@ -1,0 +1,23 @@
+name: Issue 714 sign-in snippet diagnostic
+on:
+  push:
+    branches: [ops/issue714-hosted-uat-20260826]
+    paths: [.github/workflows/issue714-signin-snippet.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fd38e9c6f3738abd89d88222c520ba799143a6ab
+          fetch-depth: 1
+      - name: Print exact bounded snippets
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -n -B12 -A30 'completedDestination' src/app/actions.ts
+          printf '\n===== confirm =====\n'
+          grep -n -B12 -A24 'getCompletedAccountDestination' src/app/auth/confirm/route.ts
