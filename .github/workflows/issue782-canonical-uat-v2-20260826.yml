@@ -1,0 +1,132 @@
+name: Issue 782 canonical production UAT v2 20260826
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - ".github/workflows/issue782-canonical-uat-v2-20260826.yml"
+      - "ops/issue782-v2/**"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: moraltrade-issue782-canonical-production-uat-v2
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 260
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      EXPECTED_PROD_REF: jnpoxvalyjtdghnperyu
+      EXPECTED_PROD_HOST: aws-1-us-west-2.pooler.supabase.com
+      EXPECTED_PROD_USER: postgres.jnpoxvalyjtdghnperyu
+
+    steps:
+      - name: Check out exact v2 controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Check out exact authorized main separately
+        uses: actions/checkout@v4
+        with:
+          ref: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+          fetch-depth: 0
+          path: source
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+
+      - name: Install exact dependencies and validate controller syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix source ci
+          ln -sfn source/node_modules node_modules
+          bash -n ops/issue782-v2/run.sh
+          node --check controller/issue782/namespace.mjs
+          node --check controller/issue782/auth-users.mjs
+          node --check controller/issue782/transform-fixtures-v2.mjs
+          node --check controller/issue782/auth-uat-v2.mjs
+
+      - name: Execute or safely skip after an already-successful v1 run
+        id: execute
+        shell: bash
+        run: bash ops/issue782-v2/run.sh execute
+
+      - name: Finalize an already-successful v1 run without repeating production mutation
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$RUNNER_TEMP/issue782-v2-state/state.env"
+          test -f "$state" || exit 0
+          source "$state"
+          test -n "${PREVIOUS_SUCCESS:-}" || exit 0
+          body=$(cat <<EOF
+          ## Existing successful bounded production-UAT run accepted without repetition
+
+          - successful run: \`$PREVIOUS_SUCCESS\`
+          - v2 verifier run: \`$GITHUB_RUN_ID\`
+          - exact main: \`26d1fe436dbf9a4440bfafd501ddf8db944a1127\`
+          - reexecution: skipped
+
+          The v2 controller found an already-successful exact-state run with an unexpired artifact and therefore performed no additional environment, deployment, alias, identity, database, provider, or payment mutation.
+          EOF
+          )
+          gh issue comment 782 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 783 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue close 782 --repo "$GITHUB_REPOSITORY" --reason completed
+          gh issue close 783 --repo "$GITHUB_REPOSITORY" --reason completed
+
+      - name: Execute unconditional restoration after any failure
+        if: failure()
+        shell: bash
+        run: bash ops/issue782-v2/run.sh cleanup
+
+      - name: Post fail-closed failure record
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$RUNNER_TEMP/issue782-v2-state/state.env"
+          stage=unknown
+          if test -f "$state"; then source "$state"; stage="${STAGE:-unknown}"; fi
+          cleanup_summary=unavailable
+          if test -f issue782-v2-evidence/cleanup-summary.json; then cleanup_summary="$(jq -c . issue782-v2-evidence/cleanup-summary.json)"; fi
+          body=$(cat <<EOF
+          ## Issue 782 v2 sequence stopped fail-closed
+
+          - run: \`$GITHUB_RUN_ID\`
+          - first bounded stage at failure: \`$stage\`
+          - cleanup summary: \`$cleanup_summary\`
+
+          No completion claim is made. The controller attempted unconditional alias, environment, exact-owned fixture, Auth, temporary-deployment, and zero-payment restoration before this record.
+          EOF
+          )
+          gh issue comment 782 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 783 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Upload retained evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue782-canonical-production-uat-v2-${{ github.run_id }}
+          path: issue782-v2-evidence
+          if-no-files-found: warn
+          retention-days: 30
