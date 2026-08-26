@@ -1,0 +1,430 @@
+name: Issue 714 isolated hosted lifecycle UAT
+
+on:
+  push:
+    branches:
+      - ops/issue714-hosted-uat-20260826
+    paths:
+      - .github/workflows/issue714-hosted-lifecycle-uat.yml
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_CANDIDATE_SHA: fd38e9c6f3738abd89d88222c520ba799143a6ab
+  EXPECTED_CANDIDATE_TREE: 3bfcfc52524dcc5392fb6cbc914d62ebae423ebb
+  PREVIEW_URL: https://moraltrade-site-e3n1m0jpl-ellen-s.vercel.app
+  CONTROL_URL: https://msuvwouzyempbavtqhva.supabase.co/functions/v1/issue714-uat-control
+  EVIDENCE_DIR: issue714-hosted-evidence
+
+jobs:
+  hosted-lifecycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: fd38e9c6f3738abd89d88222c520ba799143a6ab
+          fetch-depth: 1
+
+      - name: Guard exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_CANDIDATE_TREE"
+          mkdir -p "$EVIDENCE_DIR"
+          printf 'candidate=%s\ntree=%s\npreview_target=protected_unaliased\n' \
+            "$EXPECTED_CANDIDATE_SHA" "$EXPECTED_CANDIDATE_TREE" \
+            > "$EVIDENCE_DIR/identity.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Derive and mask disposable synthetic password
+        shell: bash
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          digest="$(printf '%s|issue714-hosted-uat-password-v1' "$VERCEL_TOKEN_VALUE" | sha256sum | awk '{print $1}')"
+          password="Q4!${digest:0:28}z9"
+          echo "::add-mask::$password"
+          printf 'ISSUE714_QA_PASSWORD=%s\n' "$password" >> "$GITHUB_ENV"
+
+      - name: Prepare branch-local synthetic accounts
+        shell: bash
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/control-setup.json"
+          status="$(curl -fsS --max-time 60 -o "$response" -w '%{http_code}' \
+            -X POST "$CONTROL_URL" \
+            -H "x-issue714-control: $VERCEL_TOKEN_VALUE" \
+            -H 'content-type: application/json' \
+            --data '{"command":"setup"}')"
+          test "$status" = '200'
+          jq -e '.ok == true and .legacy_updated == 1 and .managed_created == 3' "$response" >/dev/null
+          jq '{ok, legacy_updated, managed_created}' "$response" > "$EVIDENCE_DIR/account-setup.json"
+          rm -f "$response"
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install non-committed hosted UAT specification
+        shell: bash
+        run: |
+          cat > playwright.issue714-hosted.config.ts <<'TS'
+          import { defineConfig } from "@playwright/test";
+
+          const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "";
+          if (!bypass) throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required");
+
+          export default defineConfig({
+            testDir: "./tests",
+            testMatch: "issue714-hosted-lifecycle.spec.ts",
+            fullyParallel: false,
+            workers: 1,
+            retries: 0,
+            timeout: 90_000,
+            expect: { timeout: 25_000 },
+            reporter: [
+              ["line"],
+              ["json", { outputFile: "issue714-hosted-evidence/hosted-playwright.json" }],
+            ],
+            use: {
+              baseURL: process.env.PREVIEW_URL,
+              extraHTTPHeaders: {
+                "x-vercel-protection-bypass": bypass,
+                "x-vercel-set-bypass-cookie": "true",
+              },
+              screenshot: "only-on-failure",
+              trace: "off",
+              video: "off",
+            },
+            projects: [
+              { name: "desktop-1440x1000", use: { viewport: { width: 1440, height: 1000 } } },
+              { name: "tablet-1024x768", use: { viewport: { width: 1024, height: 768 } } },
+              { name: "mobile-390x844", use: { viewport: { width: 390, height: 844 } } },
+            ],
+          });
+          TS
+
+          cat > tests/issue714-hosted-lifecycle.spec.ts <<'TS'
+          import { expect, test, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
+
+          const legacyEmail = "issue714-legacy-20260825@example.invalid";
+          const newEmail = "issue714-browser-new-20260826@example.invalid";
+          const adversarialEmail = "issue714-browser-adversarial-20260826@example.invalid";
+          const failureEmail = "issue714-browser-failure-20260826@example.invalid";
+          const password = process.env.ISSUE714_QA_PASSWORD ?? "";
+          const controlUrl = process.env.CONTROL_URL ?? "";
+          const controlToken = process.env.VERCEL_TOKEN_VALUE ?? "";
+          const previewUrl = process.env.PREVIEW_URL ?? "";
+          const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "";
+          const privateKeys = [
+            "cause_area", "walkthrough_cause", "offer_type", "match_name", "match_get",
+            "match_give", "participant_kind", "primary_goal", "first_action",
+          ];
+
+          function assertRuntimeInputs() {
+            expect(password).not.toBe("");
+            expect(controlUrl).toMatch(/^https:\/\//);
+            expect(controlToken).not.toBe("");
+            expect(previewUrl).toMatch(/^https:\/\//);
+            expect(bypass).not.toBe("");
+          }
+
+          function headers() {
+            return {
+              "x-vercel-protection-bypass": bypass,
+              "x-vercel-set-bypass-cookie": "true",
+            };
+          }
+
+          async function control(command: string, extra: Record<string, unknown> = {}) {
+            const response = await fetch(controlUrl, {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-issue714-control": controlToken,
+              },
+              body: JSON.stringify({ command, ...extra }),
+            });
+            expect(response.status).toBe(200);
+            const body = await response.json() as Record<string, unknown>;
+            expect(body.ok).toBe(true);
+            return body;
+          }
+
+          async function signIn(page: Page, email: string, returnTo = "/") {
+            await page.goto(`/login?method=email&next=${encodeURIComponent(returnTo)}`);
+            await page.getByLabel("Email").fill(email);
+            await page.getByLabel("Password").fill(password);
+            await page.getByRole("button", { name: "Log in" }).click();
+            await expect.poll(() => new URL(page.url()).pathname, { timeout: 35_000 })
+              .not.toBe("/login");
+          }
+
+          function assertCleanActivationUrl(rawUrl: string) {
+            const url = new URL(rawUrl);
+            for (const key of privateKeys) expect(url.searchParams.has(key)).toBe(false);
+            expect(rawUrl).not.toContain("private-sentinel");
+            expect(rawUrl).not.toContain("returnTo=%2Fcomplete-profile%3F");
+          }
+
+          async function chooseMatchAndContinue(page: Page) {
+            await page.goto("/walkthrough");
+            await expect(page.locator('[data-walkthrough-ready="true"]')).toBeVisible();
+            await page.getByRole("tab", { name: /Your match/ }).click();
+            await page.getByRole("button", { name: /Money/ }).click();
+            await page.locator(".mtw-match-card").first().click();
+            await page.getByRole("button", { name: "Open this match" }).click();
+            await page.getByRole("button", { name: /Review & refine/ }).click();
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/complete-profile");
+            assertCleanActivationUrl(page.url());
+            expect(await page.evaluate(() => document.referrer)).not.toContain("match_name");
+          }
+
+          async function saveProfile(page: Page, username: string, role: string) {
+            await page.getByRole("button", { name: "Save profile", exact: true }).click();
+            const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
+            await expect(dialog).toBeVisible();
+            const displayName = dialog.getByLabel("Display name");
+            if (!(await displayName.inputValue()).trim()) await displayName.fill("Issue 714 Synthetic User");
+            await dialog.getByLabel("Username").fill(username);
+            await dialog.getByLabel("Role or short descriptor").fill(role);
+            await dialog.getByRole("button", { name: "Save profile & explore" }).click();
+          }
+
+          async function safeScreenshot(page: Page, testInfo: TestInfo, name: string) {
+            await page.addStyleTag({ content: `
+              input, textarea, [data-mt-account-avatar="true"], [data-account-email] {
+                visibility: hidden !important;
+              }
+            ` });
+            await page.screenshot({
+              path: testInfo.outputPath(`${name}.png`),
+              fullPage: true,
+              animations: "disabled",
+            });
+          }
+
+          async function expectNoHorizontalOverflow(page: Page) {
+            const widths = await page.evaluate(() => ({
+              client: document.documentElement.clientWidth,
+              scroll: document.documentElement.scrollWidth,
+            }));
+            expect(widths.scroll).toBeLessThanOrEqual(widths.client + 1);
+          }
+
+          async function freshContext(browser: any, viewport: { width: number; height: number }) {
+            return browser.newContext({ viewport, extraHTTPHeaders: headers() }) as Promise<BrowserContext>;
+          }
+
+          test.beforeEach(() => assertRuntimeInputs());
+
+          test("signed-out routing and private activation boundaries", async ({ context, page }, testInfo) => {
+            await context.clearCookies();
+            await page.goto("/");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
+            await expectNoHorizontalOverflow(page);
+            await page.goto("/walkthrough");
+            await expect(page.locator('[data-walkthrough-ready="true"]')).toBeVisible();
+            await expectNoHorizontalOverflow(page);
+            await page.goto("/complete-profile");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/walkthrough");
+            await safeScreenshot(page, testInfo, `${testInfo.project.name}-signed-out-walkthrough`);
+          });
+
+          test("legacy account is grandfathered and never reclassified as new", async ({ context, page }, testInfo) => {
+            await context.clearCookies();
+            await signIn(page, legacyEmail, "/");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/feed");
+            await expect(page.getByText("Current opportunities and next actions", { exact: true })).toBeVisible();
+            await page.goto("/walkthrough");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/feed");
+            await page.goto("/complete-profile");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/feed");
+            const cookies = await context.cookies();
+            expect(cookies.some((cookie) => cookie.name === "mt_walkthrough_seen")).toBe(false);
+            await expectNoHorizontalOverflow(page);
+            await safeScreenshot(page, testInfo, `${testInfo.project.name}-legacy-feed`);
+          });
+
+          test("bounded unavailable surface is private, noindex, truthful, and loop-free", async ({ page }, testInfo) => {
+            const response = await page.goto("/account-state-unavailable");
+            expect(response).not.toBeNull();
+            expect(response?.headers()["cache-control"] ?? "").toMatch(/private.*no-store|no-store.*private/i);
+            await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/i);
+            await expect(page.getByText("We couldn't confirm your setup status.", { exact: true })).toBeVisible();
+            const actions = page.locator(".hero-actions a[href]");
+            await expect(actions).toHaveCount(2);
+            const paths = await actions.evaluateAll((links) => links.map((link) => new URL((link as HTMLAnchorElement).href).pathname));
+            expect(new Set(paths)).toEqual(new Set(["/", "/discover"]));
+            await safeScreenshot(page, testInfo, `${testInfo.project.name}-unavailable`);
+          });
+
+          test("desktop new-account lifecycle persists Walkthrough, Complete Profile, retry safety, and fresh-session Feed", async ({ browser, context, page }, testInfo) => {
+            test.skip(testInfo.project.name !== "desktop-1440x1000", "desktop lifecycle owner");
+            await context.clearCookies();
+            await signIn(page, newEmail, "/feed");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/walkthrough");
+            await page.goto("/create");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/walkthrough");
+            await chooseMatchAndContinue(page);
+            const afterWalkthrough = await control("state");
+            expect(afterWalkthrough.browser_new).toBe("sparks_required");
+            await safeScreenshot(page, testInfo, "desktop-complete-profile-clean-handoff");
+            await saveProfile(page, "issue714-new-user", "Synthetic QA researcher");
+            await expect.poll(() => new URL(page.url()).pathname, { timeout: 35_000 }).toBe("/feed");
+            assertCleanActivationUrl(page.url());
+            const afterCompletion = await control("state");
+            expect(afterCompletion.browser_new).toBe("setup_complete");
+            await expect(page.getByText("Current opportunities and next actions", { exact: true })).toBeVisible();
+            await expect(page.getByRole("note", { name: "Recommendation status" })).toContainText("not agreements, commitments, payments, or verified outcomes");
+            await safeScreenshot(page, testInfo, "desktop-new-user-feed");
+
+            const second = await freshContext(browser, { width: 1440, height: 1000 });
+            const secondPage = await second.newPage();
+            await signIn(secondPage, newEmail, "/");
+            await expect.poll(() => new URL(secondPage.url()).pathname).toBe("/feed");
+            await second.close();
+          });
+
+          test("tablet persisted activation defeats target and cookie bypass attempts", async ({ context, page }, testInfo) => {
+            test.skip(testInfo.project.name !== "tablet-1024x768", "tablet adversarial owner");
+            await context.addCookies([{
+              name: "mt_walkthrough_seen", value: "1", domain: new URL(previewUrl).hostname,
+              path: "/", httpOnly: true, secure: true, sameSite: "Lax",
+            }]);
+            await signIn(page, adversarialEmail, "/offers");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/walkthrough");
+            for (const path of ["/feed", "/dashboard", "/create", "/offers"]) {
+              await page.goto(path);
+              await expect.poll(() => new URL(page.url()).pathname).toBe("/walkthrough");
+            }
+            const state = await control("state");
+            expect(state.adversarial).toBe("walkthrough_required");
+            await expectNoHorizontalOverflow(page);
+            await safeScreenshot(page, testInfo, "tablet-bypass-blocked");
+          });
+
+          test("mobile partial failure remains sparks-required and succeeds idempotently on retry", async ({ context, page }, testInfo) => {
+            test.skip(testInfo.project.name !== "mobile-390x844", "mobile failure owner");
+            await context.clearCookies();
+            await signIn(page, failureEmail, "/");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/walkthrough");
+            await chooseMatchAndContinue(page);
+            let state = await control("state");
+            expect(state.failure_retry).toBe("sparks_required");
+
+            await control("toggle_final_transition", { enabled: false });
+            await saveProfile(page, "issue714-failure-retry", "Synthetic failure-injection user");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/complete-profile");
+            await expect(page.getByRole("alert")).toContainText("profile data was saved, but setup completion was not");
+            state = await control("state");
+            expect(state.failure_retry).toBe("sparks_required");
+            assertCleanActivationUrl(page.url());
+            await safeScreenshot(page, testInfo, "mobile-truthful-partial-failure");
+
+            await control("toggle_final_transition", { enabled: true });
+            await saveProfile(page, "issue714-failure-retry", "Synthetic failure-injection user");
+            await expect.poll(() => new URL(page.url()).pathname, { timeout: 35_000 }).toBe("/feed");
+            state = await control("state");
+            expect(state.failure_retry).toBe("setup_complete");
+            await expectNoHorizontalOverflow(page);
+            await safeScreenshot(page, testInfo, "mobile-retry-complete");
+          });
+          TS
+
+      - name: Run protected hosted lifecycle acceptance
+        shell: bash
+        env:
+          CI: "true"
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+          npx playwright test --config=playwright.issue714-hosted.config.ts \
+            2>&1 | tee "$EVIDENCE_DIR/hosted-playwright.log"
+
+      - name: Record privacy-safe terminal state
+        if: always()
+        shell: bash
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/control-state.json"
+          if curl -fsS --max-time 60 -o "$response" \
+            -X POST "$CONTROL_URL" \
+            -H "x-issue714-control: $VERCEL_TOKEN_VALUE" \
+            -H 'content-type: application/json' \
+            --data '{"command":"state"}'; then
+            jq '{ok, legacy, browser_new, adversarial, failure_retry}' "$response" \
+              > "$EVIDENCE_DIR/terminal-stages.json"
+          fi
+          rm -f "$response"
+
+      - name: Clean managed synthetic accounts and restore transition grant
+        if: always()
+        shell: bash
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/control-cleanup.json"
+          status="$(curl -fsS --max-time 60 -o "$response" -w '%{http_code}' \
+            -X POST "$CONTROL_URL" \
+            -H "x-issue714-control: $VERCEL_TOKEN_VALUE" \
+            -H 'content-type: application/json' \
+            --data '{"command":"cleanup"}')"
+          test "$status" = '200'
+          jq -e '.ok == true' "$response" >/dev/null
+          jq '{ok, deleted}' "$response" > "$EVIDENCE_DIR/account-cleanup.json"
+          rm -f "$response"
+
+      - name: Build privacy and screenshot manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/screenshots"
+          if [ -d test-results ]; then
+            find test-results -type f -name '*.png' -print0 | while IFS= read -r -d '' file; do
+              cp "$file" "$EVIDENCE_DIR/screenshots/$(basename "$(dirname "$file")")--$(basename "$file")"
+            done
+          fi
+          find "$EVIDENCE_DIR/screenshots" -type f -name '*.png' -print0 \
+            | sort -z | xargs -0 -r sha256sum > "$EVIDENCE_DIR/screenshot-sha256.txt"
+          find "$EVIDENCE_DIR" -type f ! -name '*.png' -print0 \
+            | xargs -0 -r grep -IlE \
+              'eyJ[A-Za-z0-9_-]{20,}\.|refresh_token|access_token|Q4![A-Za-z0-9]|private-sentinel|match_get=|match_give=|walkthrough_cause=' \
+              > "$EVIDENCE_DIR/privacy-scan-matches.txt" || true
+          test ! -s "$EVIDENCE_DIR/privacy-scan-matches.txt"
+          printf 'screenshot_count=%s\nprivacy_scan=passed\n' \
+            "$(find "$EVIDENCE_DIR/screenshots" -type f -name '*.png' | wc -l | tr -d ' ')" \
+            > "$EVIDENCE_DIR/manifest.txt"
+
+      - name: Upload privacy-safe hosted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-hosted-lifecycle-uat
+          path: |
+            issue714-hosted-evidence
+            test-results
+          if-no-files-found: error
+          retention-days: 21
