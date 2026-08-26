@@ -181,11 +181,12 @@ jobs:
           set -euo pipefail
           npm ci
           npx prettier --write tests/evaluator-core-loop-authenticated.spec.ts
-          node scripts/evaluator-core-loop-qa-run-ownership.test.mjs 2>/dev/null || true
           npx eslint tests/evaluator-core-loop-authenticated.spec.ts
           npx tsc --noEmit --pretty false
           git diff --check
-          if git diff | grep -E '81000000-|82000000-|83000000-|evaluator-core-loop-[a-z-]+@qa\.invalid'; then
+          if grep -En \
+            '81000000-|82000000-|83000000-|evaluator-core-loop-[a-z-]+@qa\.invalid' \
+            tests/evaluator-core-loop-authenticated.spec.ts; then
             echo "Static evaluator identity survived transformation." >&2
             exit 1
           fi
