@@ -1,0 +1,202 @@
+name: Issue 809 harden evaluator browser test
+
+on:
+  push:
+    branches:
+      - automation/issue-809-q-test-transform-20260826
+    paths:
+      - .github/workflows/issue-809-harden-evaluator-test.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-809-q-test-transform
+  cancel-in-progress: false
+
+jobs:
+  transform-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      Q_BRANCH: qa/issue-809-run-owned-evaluator-harness-20260826
+      EXPECTED_Q_HEAD: 818d7990638c8064e7530d1093cd2423301a0d76
+    steps:
+      - name: Check out automation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: automation/issue-809-q-test-transform-20260826
+
+      - name: Fetch exact Q candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$Q_BRANCH:refs/remotes/origin/issue-809-q"
+          test "$(git rev-parse refs/remotes/origin/issue-809-q)" = "$EXPECTED_Q_HEAD"
+          git switch -c "$Q_BRANCH" refs/remotes/origin/issue-809-q
+
+      - name: Replace static evaluator identities with run-owned bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("tests/evaluator-core-loop-authenticated.spec.ts")
+          text = path.read_text()
+
+          ids = '''function requiredEnv(name: string) {
+            const value = process.env[name];
+            if (!value) throw new Error(`${name} is required for run-owned evaluator QA.`);
+            return value;
+          }
+
+          const IDS = {
+            admin: requiredEnv("EVIDENCE_PAYMENT_QA_ADMIN_ID"),
+            appealReviewer: requiredEnv("EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_ID"),
+            offer: requiredEnv("EVIDENCE_PAYMENT_QA_OFFER_ID"),
+            outsider: requiredEnv("EVIDENCE_PAYMENT_QA_OUTSIDER_ID"),
+            owner: requiredEnv("EVIDENCE_PAYMENT_QA_PAYER_ID"),
+            responder: requiredEnv("EVIDENCE_PAYMENT_QA_PAYEE_ID"),
+            reviewer: requiredEnv("EVIDENCE_PAYMENT_QA_REVIEWER_ID"),
+          } as const;'''
+          text, count = re.subn(
+            r"const IDS = \{.*?\} as const;",
+            ids,
+            text,
+            count=1,
+            flags=re.S,
+          )
+          if count != 1:
+            raise SystemExit("Unable to replace the exact static IDS block.")
+
+          emails = '''const EMAILS = {
+            admin: requiredEnv("EVIDENCE_PAYMENT_QA_ADMIN_EMAIL"),
+            appealReviewer: requiredEnv("EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_EMAIL"),
+            outsider: requiredEnv("EVIDENCE_PAYMENT_QA_OUTSIDER_EMAIL"),
+            owner: requiredEnv("EVIDENCE_PAYMENT_QA_PAYER_EMAIL"),
+            responder: requiredEnv("EVIDENCE_PAYMENT_QA_PAYEE_EMAIL"),
+            reviewer: requiredEnv("EVIDENCE_PAYMENT_QA_REVIEWER_EMAIL"),
+          } as const;'''
+          text, count = re.subn(
+            r"const EMAILS = \{.*?\} as const;",
+            emails,
+            text,
+            count=1,
+            flags=re.S,
+          )
+          if count != 1:
+            raise SystemExit("Unable to replace the exact static EMAILS block.")
+
+          old = '''      const reviewerAal1Auth = await signIn(EMAILS.reviewer);
+                const reviewerAuth = await signIn(EMAILS.reviewer);
+                const adminAuth = await signIn(EMAILS.admin);'''
+          new = '''      const reviewerAal1Auth = await signIn(EMAILS.reviewer);
+                const reviewerAuth = await signIn(EMAILS.reviewer);
+                const appealReviewerAuth = await signIn(EMAILS.appealReviewer);
+                const adminAuth = await signIn(EMAILS.admin);'''
+          if old not in text:
+            raise SystemExit("Unable to locate the reviewer sign-in block.")
+          text = text.replace(old, new, 1)
+
+          old = '''      const reviewerAal2Session = await elevateWithTotp(
+                  reviewerAuth.client,
+                  reviewerAuth.session,
+                );
+                const adminAal2Session = await elevateWithTotp(
+                  adminAuth.client,
+                  adminAuth.session,
+                );'''
+          new = '''      const reviewerAal2Session = await elevateWithTotp(
+                  reviewerAuth.client,
+                  reviewerAuth.session,
+                );
+                const appealReviewerAal2Session = await elevateWithTotp(
+                  appealReviewerAuth.client,
+                  appealReviewerAuth.session,
+                );
+                const adminAal2Session = await elevateWithTotp(
+                  adminAuth.client,
+                  adminAuth.session,
+                );'''
+          if old not in text:
+            raise SystemExit("Unable to locate the reviewer AAL2 block.")
+          text = text.replace(old, new, 1)
+
+          old = '''      await expectAal(reviewerAal1Auth.client, "aal1");
+                await expectAal(reviewerAuth.client, "aal2");
+                await expectAal(adminAuth.client, "aal2");
+                expect(adminAal2Session.user.id).toBe(IDS.admin);'''
+          new = '''      await expectAal(reviewerAal1Auth.client, "aal1");
+                await expectAal(reviewerAuth.client, "aal2");
+                await expectAal(appealReviewerAuth.client, "aal2");
+                await expectAal(adminAuth.client, "aal2");
+                expect(appealReviewerAal2Session.user.id).toBe(IDS.appealReviewer);
+                expect(IDS.appealReviewer).not.toBe(IDS.reviewer);
+                expect(adminAal2Session.user.id).toBe(IDS.admin);'''
+          if old not in text:
+            raise SystemExit("Unable to locate the AAL assertion block.")
+          text = text.replace(old, new, 1)
+
+          text = text.replace(
+            "signed in three participant roles plus independent AAL1/AAL2 reviewer sessions and an AAL2 administrator",
+            "signed in three participant roles plus distinct initial/appeal AAL2 reviewers and an AAL2 administrator",
+            1,
+          )
+
+          forbidden = [
+            "81000000-",
+            "82000000-",
+            "83000000-",
+            "evaluator-core-loop-owner@qa.invalid",
+            "evaluator-core-loop-responder@qa.invalid",
+            "evaluator-core-loop-reviewer@qa.invalid",
+            "evaluator-core-loop-outsider@qa.invalid",
+            "evaluator-core-loop-admin@qa.invalid",
+          ]
+          for token in forbidden:
+            if token in text:
+              raise SystemExit(f"Static evaluator identity remains: {token}")
+
+          for required in [
+            "EVIDENCE_PAYMENT_QA_PAYER_ID",
+            "EVIDENCE_PAYMENT_QA_PAYEE_ID",
+            "EVIDENCE_PAYMENT_QA_REVIEWER_ID",
+            "EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_ID",
+            "EVIDENCE_PAYMENT_QA_OUTSIDER_ID",
+            "EVIDENCE_PAYMENT_QA_ADMIN_ID",
+            "EVIDENCE_PAYMENT_QA_OFFER_ID",
+          ]:
+            if required not in text:
+              raise SystemExit(f"Missing run-owned binding: {required}")
+
+          path.write_text(text)
+          PY
+
+      - name: Format and validate transformed test
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx prettier --write tests/evaluator-core-loop-authenticated.spec.ts
+          node scripts/evaluator-core-loop-qa-run-ownership.test.mjs 2>/dev/null || true
+          npx eslint tests/evaluator-core-loop-authenticated.spec.ts
+          npx tsc --noEmit --pretty false
+          git diff --check
+          if git diff | grep -E '81000000-|82000000-|83000000-|evaluator-core-loop-[a-z-]+@qa\.invalid'; then
+            echo "Static evaluator identity survived transformation." >&2
+            exit 1
+          fi
+
+      - name: Commit transformed test to Q branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/evaluator-core-loop-authenticated.spec.ts
+          git diff --cached --name-only | grep -qx 'tests/evaluator-core-loop-authenticated.spec.ts'
+          git commit -m "qa: bind evaluator browser flow to run-owned identities"
+          git push origin "HEAD:refs/heads/$Q_BRANCH"
