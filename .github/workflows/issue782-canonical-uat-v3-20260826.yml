@@ -1,0 +1,277 @@
+name: Issue 782 canonical production UAT v3 20260826
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - ".github/workflows/issue782-canonical-uat-v3-20260826.yml"
+      - "ops/issue782-v3/**"
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: moraltrade-issue782-canonical-production-uat-v3
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  EXPECTED_MAIN_TREE: 47fe96dfc881f1c57dea711283fc3db36a44e053
+  CONTROLLER_BRANCH: ops/dac-production-canonical-uat-26d1fe43-20260824
+  EVIDENCE_DIR: issue782-v2-evidence
+
+jobs:
+  execute:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      EXPECTED_PROD_REF: jnpoxvalyjtdghnperyu
+      EXPECTED_PROD_HOST: aws-1-us-west-2.pooler.supabase.com
+      EXPECTED_PROD_USER: postgres.jnpoxvalyjtdghnperyu
+
+    steps:
+      - name: Check out exact v3 controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Check out exact authorized main separately
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 0
+          path: source
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+
+      - name: Install exact dependencies and validate the hardened controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git -C source rev-parse HEAD^{tree})" = "$EXPECTED_MAIN_TREE"
+          test "$(git -C source ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          npm --prefix source ci
+          ln -sfn source/node_modules node_modules
+          bash -n ops/issue782-v2/run.sh
+          node --check controller/issue782/namespace.mjs
+          node --check controller/issue782/auth-users.mjs
+          node --check controller/issue782/transform-fixtures-v2.mjs
+          node --check ops/issue782-v3/transform.mjs
+          node --check ops/issue782-v3/auth-uat-v4.mjs
+
+      - name: Wait for all earlier issue 782 controllers and reporters
+        id: prior
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_names='^(Issue 782 bounded canonical production UAT 20260826|Issue 782 canonical production UAT v2 20260826|Issue 782 production UAT run reporter 20260826)$'
+          for attempt in $(seq 1 180); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$CONTROLLER_BRANCH&per_page=100" > "$RUNNER_TEMP/issue782-runs.json"
+            active="$(jq --arg regex "$target_names" --argjson current "$GITHUB_RUN_ID" '[.workflow_runs[] | select(.id!=$current) | select((.name//"")|test($regex)) | select(.status!="completed")] | length' "$RUNNER_TEMP/issue782-runs.json")"
+            test "$active" = 0 && break
+            sleep 60
+          done
+          test "$(jq --arg regex "$target_names" --argjson current "$GITHUB_RUN_ID" '[.workflow_runs[] | select(.id!=$current) | select((.name//"")|test($regex)) | select(.status!="completed")] | length' "$RUNNER_TEMP/issue782-runs.json")" = 0
+
+          successful="$(jq -r '[.workflow_runs[] | select((.name=="Issue 782 bounded canonical production UAT 20260826" or .name=="Issue 782 canonical production UAT v2 20260826") and .conclusion=="success")] | sort_by(.created_at) | last | .id // empty' "$RUNNER_TEMP/issue782-runs.json")"
+          if test -n "$successful"; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$successful" > "$RUNNER_TEMP/prior-success-run.json"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$successful/artifacts" > "$RUNNER_TEMP/prior-success-artifacts.json"
+            jq -e '.status=="completed" and .conclusion=="success"' "$RUNNER_TEMP/prior-success-run.json" >/dev/null
+            jq -e '.total_count>=1 and ([.artifacts[] | select(.expired==false and (.digest|startswith("sha256:")))] | length)>=1' "$RUNNER_TEMP/prior-success-artifacts.json" >/dev/null
+            artifact_id="$(jq -r '[.artifacts[] | select(.expired==false)] | first | .id' "$RUNNER_TEMP/prior-success-artifacts.json")"
+            artifact_digest="$(jq -r '[.artifacts[] | select(.expired==false)] | first | .digest' "$RUNNER_TEMP/prior-success-artifacts.json")"
+            mkdir -p "$EVIDENCE_DIR"
+            jq -n --argjson run "$successful" --argjson artifact "$artifact_id" --arg digest "$artifact_digest" --arg checkedAt "$(date -u +%FT%TZ)" '{priorSuccessfulRun:$run,artifactId:$artifact,artifactDigest:$digest,reexecutionSkipped:true,checkedAt:$checkedAt}' > "$EVIDENCE_DIR/prior-success.json"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "successful_run=$successful" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install v3 runtime hardening without changing authorized source
+        if: steps.prior.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/controller/issue782
+          cp controller/issue782/transform-fixtures-v2.mjs source/controller/issue782/transform-fixtures-v2-original.mjs
+          cp ops/issue782-v3/transform.mjs controller/issue782/transform-fixtures-v2.mjs
+          cp ops/issue782-v3/auth-uat-v4.mjs controller/issue782/auth-uat-v2.mjs
+          node --check controller/issue782/transform-fixtures-v2.mjs
+          node --check controller/issue782/auth-uat-v2.mjs
+
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('ops/issue782-v2/run.sh')
+          text = path.read_text()
+          old = '''  if test -n "${TEMP_URL:-}"; then cd "$SOURCE_DIR"; vercel remove "$TEMP_URL" --yes --token="$VERCEL_TOKEN" > "$EVIDENCE_DIR/temp-delete.log" 2>&1 || true; fi
+          zero_ok=false
+          '''
+          new = '''  temp_delete_ok=true
+          if test -n "${TEMP_URL:-}" || test -n "${TEMP_ID:-}"; then
+            temp_delete_ok=false
+            if test -n "${TEMP_URL:-}"; then
+              cd "$SOURCE_DIR"
+              vercel remove "$TEMP_URL" --yes --token="$VERCEL_TOKEN" > "$EVIDENCE_DIR/temp-delete.log" 2>&1 || true
+            fi
+            if test -n "${TEMP_ID:-}"; then
+              set +e
+              delete_status="$(curl -sS -o "$STATE_DIR/temp-after-delete.json" -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$TEMP_ID?teamId=$VERCEL_TEAM_ID")"
+              set -e
+              test "$delete_status" = 404 && temp_delete_ok=true
+            fi
+          fi
+          zero_ok=false
+          '''
+          if old not in text:
+              raise SystemExit('Could not locate temporary-deployment cleanup boundary')
+          text = text.replace(old, new, 1)
+          old_summary = '''  jq -n --argjson aliases "$alias_ok" --argjson env "$env_ok" --argjson zero "$zero_ok" --arg pay "$global_pay" --argjson seconds "$duration" '{aliasesRestored:$aliases,adminEnvironmentRestored:$env,exactOwnedZeroResidue:$zero,globalPaymentReferences:($pay|tonumber),aliasIntervalSeconds:$seconds,withinNinetyMinutes:($seconds<=5400)}' > "$EVIDENCE_DIR/cleanup-summary.json"
+          '''
+          new_summary = '''  jq -n --argjson aliases "$alias_ok" --argjson env "$env_ok" --argjson zero "$zero_ok" --argjson tempDeleted "$temp_delete_ok" --arg pay "$global_pay" --argjson seconds "$duration" '{aliasesRestored:$aliases,adminEnvironmentRestored:$env,exactOwnedZeroResidue:$zero,temporaryDeploymentDeleted:$tempDeleted,globalPaymentReferences:($pay|tonumber),aliasIntervalSeconds:$seconds,withinNinetyMinutes:($seconds<=5400)}' > "$EVIDENCE_DIR/cleanup-summary.json"
+          '''
+          if old_summary not in text:
+              raise SystemExit('Could not locate cleanup-summary boundary')
+          text = text.replace(old_summary, new_summary, 1)
+          old_condition = '''  if $alias_ok && $env_ok && { $zero_ok || test ! -f "$STATE_DIR/zero.sql"; } && test "$global_pay" = 0 && test "$duration" -le 5400; then return 0; else return 1; fi
+          '''
+          new_condition = '''  if $alias_ok && $env_ok && $temp_delete_ok && { $zero_ok || test ! -f "$STATE_DIR/zero.sql"; } && test "$global_pay" = 0 && test "$duration" -le 5400; then return 0; else return 1; fi
+          '''
+          if old_condition not in text:
+              raise SystemExit('Could not locate cleanup acceptance boundary')
+          path.write_text(text.replace(old_condition, new_condition, 1))
+          PY
+          bash -n ops/issue782-v2/run.sh
+
+      - name: Execute the exact-state bounded production sequence
+        if: steps.prior.outputs.skip != 'true'
+        shell: bash
+        run: bash ops/issue782-v2/run.sh execute
+
+      - name: Unconditionally restore after an execution failure
+        if: failure() && steps.prior.outputs.skip != 'true'
+        shell: bash
+        run: bash ops/issue782-v2/run.sh cleanup
+
+      - name: Record an already-successful prior sequence without repeating mutation
+        if: success() && steps.prior.outputs.skip == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="${{ steps.prior.outputs.successful_run }}"
+          body=$(cat <<EOF
+          ## Existing successful bounded production-UAT run accepted without repetition
+
+          - successful run: \`$run_id\`
+          - independent v3 verifier run: \`$GITHUB_RUN_ID\`
+          - exact main: \`$EXPECTED_MAIN_SHA\`
+          - exact tree: \`$EXPECTED_MAIN_TREE\`
+          - additional production mutation: none
+
+          The verifier found a completed successful exact-state run with an unexpired SHA-256-bound artifact. It therefore performed no additional environment, deployment, alias, identity, database, provider, or payment mutation.
+          EOF
+          )
+          gh issue comment 782 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 783 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue close 782 --repo "$GITHUB_REPOSITORY" --reason completed || true
+          gh issue close 783 --repo "$GITHUB_REPOSITORY" --reason completed || true
+
+      - name: Record a fail-closed result
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage=unknown
+          state="$RUNNER_TEMP/issue782-v2-state/state.env"
+          if test -f "$state"; then source "$state"; stage="${STAGE:-unknown}"; fi
+          cleanup=unavailable
+          if test -f "$EVIDENCE_DIR/cleanup-summary.json"; then cleanup="$(jq -c . "$EVIDENCE_DIR/cleanup-summary.json")"; fi
+          body=$(cat <<EOF
+          ## Issue 782 hardened v3 sequence stopped fail-closed
+
+          - workflow run: \`$GITHUB_RUN_ID\`
+          - first bounded stage at failure: \`$stage\`
+          - cleanup summary: \`$cleanup\`
+
+          No completion claim is made. The controller executed the unconditional alias, environment, exact-owned application/Auth, temporary-deployment, and zero-payment restoration path before posting this record.
+          EOF
+          )
+          gh issue comment 782 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 783 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Upload immutable evidence before controller removal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue782-canonical-production-uat-v3-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record scoped completion on related PRs and Auth issue
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(cat <<EOF
+          ## Canonical production acceptance completed
+
+          - exact main: \`$EXPECTED_MAIN_SHA\`
+          - exact tree: \`$EXPECTED_MAIN_TREE\`
+          - verifier run: \`$GITHUB_RUN_ID\`
+          - temporary admin/deployment/aliases: bounded and restored
+          - exact-owned synthetic residue: zero
+          - payment/provider effects: zero
+
+          This evidence establishes software release and synthetic acceptance only. It does not establish adoption, causal impact, additionality, liquidity, pivotality, or resolution of free-riding.
+          EOF
+          )
+          gh pr comment 743 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment 757 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment 758 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 630 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue close 630 --repo "$GITHUB_REPOSITORY" --reason completed || true
+
+      - name: Remove every one-use controller and return branch tree to exact main
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD | sort -u)
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in
+              .github/workflows/issue782-*|controller/issue782/*|ops/issue782-v2/*|ops/issue782-v3/*) ;;
+              *) echo "Unexpected operations-branch file prevents cleanup: $path" >&2; exit 1 ;;
+            esac
+          done
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm -f --ignore-unmatch -- "${changed[@]}"
+          git commit -m 'ops: remove issue 782 one-use production controllers after evidence'
+          git push origin "HEAD:$CONTROLLER_BRANCH"
+          test -z "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)"
+          for ref in ops/status-issue782-success ops/status-issue782-failure; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$ref" >/dev/null 2>&1 || true
+          done
+          gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/heads/ops/status-issue782-failure-step-" > "$RUNNER_TEMP/status-refs.json" || true
+          jq -r '.[].ref // empty' "$RUNNER_TEMP/status-refs.json" | while read -r ref; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/${ref#refs/}" >/dev/null 2>&1 || true
+          done
