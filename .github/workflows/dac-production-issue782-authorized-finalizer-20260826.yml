@@ -1,0 +1,266 @@
+name: Issue 782 authorized production UAT finalizer
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - .github/workflows/dac-production-issue782-authorized-finalizer-20260826.yml
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue782-authorized-production-uat-finalizer
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/dac-production-canonical-uat-26d1fe43-20260824
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  EXPECTED_MAIN_TREE: 47fe96dfc881f1c57dea711283fc3db36a44e053
+  ORIGINAL_DEPLOYMENT_ID: dpl_GbKHA9YfvjEW3iqymgY4uzp7MWsX
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  PROD_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+  PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+  SUPERVISOR_WORKFLOW: dac-production-issue782-authorized-supervisor-20260826.yml
+  AUTHORIZATION_COMMENT_ID: "5420203746"
+  ISSUE_NUMBER: "782"
+  AUTH_ISSUE_NUMBER: "630"
+  POSTGRES_IMAGE: postgres:17
+  EVIDENCE_DIR: issue782-finalizer-evidence
+
+jobs:
+  finalize:
+    name: Verify terminal result, restoration, zero residue, and issue disposition
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact finalizer
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact state and owner authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse "$EXPECTED_MAIN_SHA^{tree}")" = "$EXPECTED_MAIN_TREE"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$AUTHORIZATION_COMMENT_ID" > "$RUNNER_TEMP/authorization.json"
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '.author_association=="OWNER" and (.body|contains($sha)) and (.body|contains("bounded one-use canonical production reviewer UAT enablement"))' "$RUNNER_TEMP/authorization.json" >/dev/null
+          mkdir -p "$EVIDENCE_DIR"
+
+      - name: Wait for the supervisor and its controller to reach terminal state
+        id: terminal
+        shell: bash
+        run: |
+          set -euo pipefail
+          supervisor_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$SUPERVISOR_WORKFLOW/runs?branch=$CONTROLLER_BRANCH&per_page=20" \
+            | jq -r '[.workflow_runs[]] | sort_by(.created_at) | last | .id // empty')"
+          [[ "$supervisor_id" =~ ^[0-9]+$ ]]
+          gh run watch "$supervisor_id" --interval 15 || true
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$supervisor_id" > "$EVIDENCE_DIR/supervisor-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$supervisor_id/jobs?per_page=100" > "$EVIDENCE_DIR/supervisor-jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$supervisor_id/artifacts" > "$EVIDENCE_DIR/supervisor-artifacts.json"
+
+          controller_run_id=""
+          for attempt in $(seq 1 120); do
+            gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" > "$RUNNER_TEMP/comments.json"
+            controller_run_id="$(jq -r '
+              [ .[]
+                | select(.created_at >= "2026-08-26T03:32:56Z")
+                | select(.body | contains("Authorized issue #782 controller supervision"))
+                | (.body | capture("controller run: `(?<id>[0-9]+)`").id)
+              ] | last // empty
+            ' "$RUNNER_TEMP/comments.json")"
+            [[ "$controller_run_id" =~ ^[0-9]+$ ]] && break
+            sleep 5
+          done
+          [[ "$controller_run_id" =~ ^[0-9]+$ ]]
+          gh run watch "$controller_run_id" --interval 15 || true
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$controller_run_id" > "$EVIDENCE_DIR/controller-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$controller_run_id/jobs?per_page=100" > "$EVIDENCE_DIR/controller-jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$controller_run_id/artifacts" > "$EVIDENCE_DIR/controller-artifacts.json"
+          echo "controller_run_id=$controller_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Re-prove aliases, production allowlist removal, and exact deployment restoration
+        id: restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$ORIGINAL_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" \
+            > "$RUNNER_TEMP/original-deployment.json"
+          jq -e --arg id "$ORIGINAL_DEPLOYMENT_ID" --arg project "$VERCEL_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+            ((.id // .uid)==$id)
+            and ((.projectId // .project.id // "")==$project)
+            and ((.readyState // .state // "")=="READY")
+            and (.target=="production")
+            and (.meta.githubCommitSha==$sha)
+            and ((.aliasError // null)==null)
+          ' "$RUNNER_TEMP/original-deployment.json" >/dev/null
+          mkdir -p "$EVIDENCE_DIR/aliases"
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/$alias_name?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID" \
+              > "$RUNNER_TEMP/alias-$key.json"
+            jq -e --arg alias "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$ORIGINAL_DEPLOYMENT_ID" '
+              (.alias==$alias) and (.projectId==$project) and ((.deploymentId // .deployment.id // .deployment.uid // "")==$deployment)
+            ' "$RUNNER_TEMP/alias-$key.json" >/dev/null
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' "$RUNNER_TEMP/alias-$key.json" > "$EVIDENCE_DIR/aliases/$key.json"
+          done
+
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-finalizer" \
+            > "$RUNNER_TEMP/env.json"
+          jq -e '[.envs[]? | select(.key=="ADMIN_EMAILS") | select((.target|type)=="string" and .target=="production" or ((.target|type)=="array" and (.target|index("production"))))] | length == 0' "$RUNNER_TEMP/env.json" >/dev/null
+          jq -n --arg deployment "$ORIGINAL_DEPLOYMENT_ID" --arg sha "$EXPECTED_MAIN_SHA" --arg checkedAt "$(date -u +%FT%TZ)" '{restored:true,deploymentId:$deployment,mainSha:$sha,aliases:["moraltrade.org","www.moraltrade.org"],productionAdminEmailsCount:0,checkedAt:$checkedAt}' > "$EVIDENCE_DIR/restoration.json"
+          echo 'restored=true' >> "$GITHUB_OUTPUT"
+
+      - name: Re-prove exact production database zero state and zero payment references
+        id: database
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          URL_TO_CHECK="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          if (!["postgres:","postgresql:"].includes(url.protocol)
+              || decodeURIComponent(url.username) !== process.env.PROD_POOLER_USER
+              || url.hostname !== process.env.PROD_POOLER_HOST
+              || url.port !== "5432"
+              || url.pathname !== "/postgres"
+              || url.searchParams.get("sslmode") !== "require"
+              || !url.password) throw new Error("Unexpected production database target");
+          NODE
+          docker pull "$POSTGRES_IMAGE" >/dev/null
+          cat > "$RUNNER_TEMP/zero.sql" <<'SQL'
+          \set ON_ERROR_STOP on
+          set statement_timeout='60s';
+          begin transaction read only;
+          with aggregate_counts as (
+            select
+              (select count(*) from public.mpgf_pool_proposals) as proposals,
+              (select count(*) from public.mpgf_pool_reviewers) as reviewers,
+              (select count(*) from public.mpgf_pool_proposal_versions) as versions,
+              (select count(*) from public.mpgf_pool_lifecycle_events) as lifecycle_events,
+              (select count(*) from public.mpgf_public_goods_match_pools) as match_pools,
+              (select count(*) from public.mpgf_public_goods_rounds) as rounds,
+              (select count(*) from public.mpgf_public_goods_campaigns) as campaigns,
+              (select count(*) from public.mpgf_public_goods_pledges) as pledges,
+              (select count(*) from public.mpgf_dac_pledge_intents) as pledge_intents,
+              (select count(*) from public.mpgf_dac_pledge_events) as pledge_events,
+              (select count(*) from public.mpgf_dac_campaign_outcomes) as outcomes,
+              (select count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null or status='captured') as payment_refs
+          )
+          select jsonb_build_object(
+            'aggregateRows', proposals+reviewers+versions+lifecycle_events+match_pools+rounds+campaigns+pledges+pledge_intents+pledge_events+outcomes,
+            'paymentReferences',payment_refs,
+            'checkedAt',clock_timestamp()
+          ) from aggregate_counts;
+          rollback;
+          SQL
+          docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align < "$RUNNER_TEMP/zero.sql" \
+            | grep -E '^\{' | tail -n1 > "$EVIDENCE_DIR/database-zero-state.json"
+          jq -e '.aggregateRows==0 and .paymentReferences==0' "$EVIDENCE_DIR/database-zero-state.json" >/dev/null
+          echo 'zero=true' >> "$GITHUB_OUTPUT"
+
+      - name: Classify the terminal controller result and finalize scoped issues
+        id: disposition
+        shell: bash
+        env:
+          CONTROLLER_RUN_ID: ${{ steps.terminal.outputs.controller_run_id }}
+        run: |
+          set -euo pipefail
+          controller_conclusion="$(jq -r '.conclusion // "unknown"' "$EVIDENCE_DIR/controller-run.json")"
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" > "$RUNNER_TEMP/comments.json"
+          terminal="$(jq -r '
+            [ .[]
+              | select(.created_at >= "2026-08-26T03:32:56Z")
+              | .body
+              | select(test("production_release_passed|rolled_back|blocked_before_release"))
+              | capture("(?<value>production_release_passed|rolled_back|blocked_before_release)").value
+            ] | last // empty
+          ' "$RUNNER_TEMP/comments.json")"
+          if [[ -z "$terminal" ]]; then
+            if [[ "$controller_conclusion" == 'success' ]]; then
+              terminal='production_release_passed'
+            else
+              terminal='blocked_before_release'
+            fi
+          fi
+
+          if [[ "$terminal" == 'production_release_passed' && "$controller_conclusion" == 'success' ]]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" -f state=closed -f state_reason=completed >/dev/null
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/$AUTH_ISSUE_NUMBER" -f state=closed -f state_reason=completed >/dev/null
+          fi
+
+          jq -n --arg terminal "$terminal" --arg controllerConclusion "$controller_conclusion" --argjson controllerRunId "$CONTROLLER_RUN_ID" --arg checkedAt "$(date -u +%FT%TZ)" '{terminal:$terminal,controllerConclusion:$controllerConclusion,controllerRunId:$controllerRunId,restorationVerified:true,databaseZeroVerified:true,checkedAt:$checkedAt}' > "$EVIDENCE_DIR/disposition.json"
+          echo "terminal=$terminal" >> "$GITHUB_OUTPUT"
+
+          body="$RUNNER_TEMP/final-comment.md"
+          {
+            echo '## Issue #782 independently finalized'
+            echo
+            echo "- terminal disposition: \`$terminal\`"
+            echo "- controller run: \`$CONTROLLER_RUN_ID\`"
+            echo "- controller conclusion: \`$controller_conclusion\`"
+            echo "- canonical aliases restored to: \`$ORIGINAL_DEPLOYMENT_ID\`"
+            echo '- production `ADMIN_EMAILS`: absent'
+            echo '- authorized DAC aggregate rows: `0`'
+            echo '- payment references: `0`'
+            echo
+            echo 'This finalizer performed no migration, deployment, alias movement, synthetic fixture creation, provider action, or payment action. It independently verified the controller terminal state and restored production boundary.'
+          } > "$body"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$(cat "$body")" >/dev/null
+
+      - name: Scan and upload finalizer evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "$EVIDENCE_DIR/privacy-scan.json"
+          from pathlib import Path
+          import json,re
+          root=Path('issue782-finalizer-evidence')
+          patterns={
+            'database_url':re.compile(rb'postgres(?:ql)?://[^\s"\']+',re.I),
+            'jwt':re.compile(rb'eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}'),
+            'bearer':re.compile(rb'Bearer\s+[A-Za-z0-9._~+/-]{20,}',re.I),
+            'private_key':re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+            'provider_secret':re.compile(rb'(?:sk_(?:live|test)_|whsec_)[A-Za-z0-9_-]{8,}',re.I),
+          }
+          findings=[]
+          for path in root.rglob('*'):
+            if not path.is_file(): continue
+            data=path.read_bytes()
+            for label,pattern in patterns.items():
+              if pattern.search(data): findings.append({'type':label,'file':str(path)})
+          print(json.dumps({'filesScanned':sum(1 for p in root.rglob('*') if p.is_file()),'findings':findings},sort_keys=True))
+          if findings: raise SystemExit('Sensitive material found')
+          PY
+          jq -e '.findings==[]' "$EVIDENCE_DIR/privacy-scan.json" >/dev/null
+
+      - name: Upload immutable finalizer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue782-authorized-finalizer-${{ github.run_id }}-${{ github.sha }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
