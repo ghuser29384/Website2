@@ -1,0 +1,175 @@
+          [[ "$deployment_id" =~ ^dpl_[A-Za-z0-9]+$ ]]
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app$ ]]
+          test "$deployment_id" != "$ORIGINAL_DEPLOYMENT_ID"
+          jq -e --arg id "$deployment_id" --arg project "$VERCEL_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+            ((.id // .uid)==$id)
+            and ((.projectId // .project.id // "")==$project)
+            and ((.readyState // .state // "")=="READY")
+            and (.target=="production")
+            and ((.aliasError // null)==null)
+            and (.meta.githubCommitSha==$sha)
+          ' "$detail" >/dev/null
+          file_count="$(jq -r '.fileCount' "$integrity")"
+          test "$file_count" -gt 0
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ISSUE782_RELEASE_RUN_ID/artifacts" \
+            | jq '{total_count,artifacts:[.artifacts[]|{id,name,size_in_bytes,digest,expires_at,expired}]}' \
+            > "$EVIDENCE_DIR/permanent-release-artifacts.json"
+          alias_started_epoch="$(jq -r '((.createdAt // .created // 0) / 1000 | floor)' "$detail")"
+          test "$alias_started_epoch" -gt 0
+          printf '%s' "$deployment_id" > "$RUNNER_TEMP/issue782-temp-deployment-id"
+          printf '%s' "$deployment_url" > "$RUNNER_TEMP/issue782-temp-deployment-url"
+          printf '%s' "$alias_started_epoch" > "$RUNNER_TEMP/issue782-alias-started-epoch"
+          echo "ISSUE782_TEMP_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
+          echo "ISSUE782_TEMP_DEPLOYMENT_URL=$deployment_url" >> "$GITHUB_ENV"
+          echo "ISSUE782_ALIAS_STARTED_EPOCH=$alias_started_epoch" >> "$GITHUB_ENV"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "alias_started_epoch=$alias_started_epoch" >> "$GITHUB_OUTPUT"
+          jq -n \
+            --arg deploymentId "$deployment_id" \
+            --arg deploymentUrl "$deployment_url" \
+            --arg mainSha "$EXPECTED_MAIN_SHA" \
+            --argjson fileCount "$file_count" \
+            --argjson aliasStartedEpoch "$alias_started_epoch" \
+            '{deploymentId:$deploymentId,deploymentUrl:$deploymentUrl,mainSha:$mainSha,target:"production",ready:true,canonicalAliasesAcquired:true,publicAssetCount:$fileCount,aliasStartedEpoch:$aliasStartedEpoch}' \
+            > "$EVIDENCE_DIR/temporary-deployment.json"
+          mkdir -p "$EVIDENCE_DIR/permanent-release-redacted/aliases"
+          jq '{id:(.id // .uid),url,projectId:(.projectId // .project.id),readyState:(.readyState // .state),target,aliasError:(.aliasError // null),githubCommitOrg:.meta.githubCommitOrg,githubCommitRepo:.meta.githubCommitRepo,githubCommitSha:.meta.githubCommitSha,createdAt:(.createdAt // .created)}' \
+            "$detail" > "$EVIDENCE_DIR/permanent-release-redacted/deployment-summary.json"
+          cp "$integrity" "$EVIDENCE_DIR/permanent-release-redacted/static-artifact-integrity.json"
+          for evidence_name in public-source.sha256 public-prebuilt.sha256 published-critical-asset.sha256; do
+            evidence_path="$(find "$EVIDENCE_DIR/permanent-release" -name "$evidence_name" -type f -print -quit)"
+            test -f "$evidence_path"
+            cp "$evidence_path" "$EVIDENCE_DIR/permanent-release-redacted/$evidence_name"
+          done
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"
+            alias_path="$(find "$EVIDENCE_DIR/permanent-release" -path "*/aliases/$key.json" -type f -print -quit)"
+            test -f "$alias_path"
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' \
+              "$alias_path" > "$EVIDENCE_DIR/permanent-release-redacted/aliases/$key.json"
+          done
+          rm -rf "$EVIDENCE_DIR/permanent-release"
+
+      - name: Create exact run-owned synthetic Auth identities through the admin API
+        id: users
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/issue782-production-secrets.env"
+          password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$password"
+          printf '%s' "$password" > "$RUNNER_TEMP/issue782-password"
+          for role in creator reviewer pledger outsider; do
+            email="$(jq -r --arg role "$role" '.users[$role].email' "$ISSUE782_MANIFEST_PATH")"
+            echo "::add-mask::$email"
+            display="Issue 782 synthetic ${role} ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+            body="$(jq -nc \
+              --arg email "$email" --arg password "$password" --arg display "$display" \
+              --arg role "$role" --arg namespace "$ISSUE782_NAMESPACE" \
+              '{email:$email,password:$password,email_confirm:true,user_metadata:{display_name:$display,full_name:$display,qa_scope:"issue782_bounded_production_uat",qa_namespace:$namespace,qa_role:$role}}')"
+            response="$RUNNER_TEMP/user-$role.json"
+            status="$(curl -sS -X POST \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Content-Type: application/json" \
+              -o "$response" -w '%{http_code}' \
+              --data "$body" \
+              "$NEXT_PUBLIC_SUPABASE_URL/auth/v1/admin/users")"
+            test "$status" = "200" -o "$status" = "201"
+            user_id="$(jq -r '.id // empty' "$response")"
+            [[ "$user_id" =~ ^[0-9a-f-]{36}$ ]]
+            jq -e --arg id "$user_id" --arg email "$email" --arg role "$role" --arg namespace "$ISSUE782_NAMESPACE" '
+              .id==$id
+              and ((.email // "")|ascii_downcase)==($email|ascii_downcase)
+              and .email_confirmed_at!=null
+              and ((.user_metadata // .raw_user_meta_data).qa_scope=="issue782_bounded_production_uat")
+              and ((.user_metadata // .raw_user_meta_data).qa_namespace==$namespace)
+              and ((.user_metadata // .raw_user_meta_data).qa_role==$role)
+            ' "$response" >/dev/null
+            tmp="$RUNNER_TEMP/manifest-next.json"
+            jq --arg role "$role" --arg id "$user_id" '.users[$role].id=$id' "$ISSUE782_MANIFEST_PATH" > "$tmp"
+            mv "$tmp" "$ISSUE782_MANIFEST_PATH"
+            rm -f "$response"
+          done
+          jq -e '[.users[].id | select(type=="string" and length==36)] | length==4' "$ISSUE782_MANIFEST_PATH" >/dev/null
+          for role in creator reviewer pledger outsider; do
+            email="$(jq -r --arg role "$role" '.users[$role].email' "$ISSUE782_MANIFEST_PATH")"
+            user_id="$(jq -r --arg role "$role" '.users[$role].id' "$ISSUE782_MANIFEST_PATH")"
+            for attempt in $(seq 1 30); do
+              count="$(docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" \
+                --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
+                -c "select count(*) from auth.users where id='$user_id'::uuid and lower(email)=lower('$email') and raw_user_meta_data->>'qa_namespace'='$ISSUE782_NAMESPACE';" \
+                | tr -d '[:space:]')"
+              [[ "$count" = "1" ]] && break
+              sleep 1
+            done
+            test "$count" = "1"
+          done
+          jq -n \
+            --arg namespace "$ISSUE782_NAMESPACE" \
+            --argjson users 4 \
+            --arg createdAt "$(date -u +%FT%TZ)" \
+            '{namespace:$namespace,userCount:$users,createdThroughAdminApi:true,emailConfirmedWithoutDelivery:true,ownerAccountUsed:false,createdAt:$createdAt}' \
+            > "$EVIDENCE_DIR/auth-fixture-summary.json"
+          echo "exit_code=0" >> "$GITHUB_OUTPUT"
+
+      - name: Render run-owned rollback contract, production fixture, cleanup, and browser spec
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ISSUE782_GENERATED_DIR="$GENERATED_DIR"
+          node "$RENDERER_PATH" | tee "$EVIDENCE_DIR/render.log"
+          jq -e '.status=="passed" and .directAuthCreationRemoved==true and .directAuthCleanupRemoved==true and .fixedMarkersAbsent==true' \
+            "$GENERATED_DIR/render-summary.json" >/dev/null
+
+      - name: Execute rollback-only rejection and denial contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
+            < "$GENERATED_DIR/issue782-rejection-and-denial-contract.sql" \
+            | tee "$EVIDENCE_DIR/rejection-and-denial-contract.raw"
+          grep -E '^\{' "$EVIDENCE_DIR/rejection-and-denial-contract.raw" | tail -n 1 \
+            > "$EVIDENCE_DIR/rejection-and-denial-contract.json"
+          jq -e '.status=="passed" and .creatorSelfReviewDenied and .outsiderReviewDenied and .authorizedRejectionRecorded and .productionMutationRetained==false' \
+            "$EVIDENCE_DIR/rejection-and-denial-contract.json" >/dev/null
+
+      - name: Create exact run-owned open, success, and lapse production fixtures
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MPGF_DAC_PRODUCT_QA_PASSWORD="$(cat "$RUNNER_TEMP/issue782-password")"
+          echo "::add-mask::$MPGF_DAC_PRODUCT_QA_PASSWORD"
+          docker run --rm -i -e MPGF_DAC_PRODUCT_QA_PASSWORD "$POSTGRES_IMAGE" \
+            psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 \
+            < "$GENERATED_DIR/issue782-fixture.sql" \
+            > "$EVIDENCE_DIR/fixture.log" 2>&1
+          proposals="$(jq -r '[.proposals[] | "'\''" + . + "'\''::uuid"] | join(",")' "$ISSUE782_MANIFEST_PATH")"
+          campaigns="$(jq -r '[.proposals[] | "campaign-" + gsub("-";"")] | map("'"'"'" + . + "'"'"'") | join(",")' "$ISSUE782_MANIFEST_PATH")"
+          docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<SQL \
+            | tee "$EVIDENCE_DIR/fixture-counts.raw"
+          select jsonb_build_object(
+            'proposals',(select count(*) from public.mpgf_pool_proposals where id in ($proposals)),
+            'campaigns',(select count(*) from public.mpgf_public_goods_campaigns where id in ($campaigns)),
+            'paymentReferences',(select count(*) from public.mpgf_public_goods_pledges where campaign_id in ($campaigns) and (payment_intent_ref is not null or status='captured')),
+            'providerReferences',(select count(*) from public.mpgf_public_goods_pledges where campaign_id in ($campaigns) and payment_intent_ref is not null),
+            'checkedAt',clock_timestamp()
+          );
+          SQL
+          grep -E '^\{' "$EVIDENCE_DIR/fixture-counts.raw" | tail -n 1 > "$EVIDENCE_DIR/fixture-counts.json"
+          jq -e '.proposals==3 and .campaigns==3 and .paymentReferences==0 and .providerReferences==0' \
+            "$EVIDENCE_DIR/fixture-counts.json" >/dev/null
+          echo "exit_code=0" >> "$GITHUB_OUTPUT"
+
+      - name: Run canonical Auth, Create, reviewer-AAL2, viewport, privacy, and fail-closed diagnostics
+        id: auth_create
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/issue782-production-secrets.env"
+          export ISSUE782_PASSWORD="$(cat "$RUNNER_TEMP/issue782-password")"
