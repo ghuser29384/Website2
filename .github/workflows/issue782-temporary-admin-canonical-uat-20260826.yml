@@ -1,0 +1,703 @@
+name: Issue 782 bounded canonical production UAT 20260826
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - ".github/workflows/issue782-temporary-admin-canonical-uat-20260826.yml"
+      - "controller/issue782/**"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: moraltrade-issue782-canonical-production-uat
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/dac-production-canonical-uat-26d1fe43-20260824
+  CONTROLLER_PATH: .github/workflows/issue782-temporary-admin-canonical-uat-20260826.yml
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  EXPECTED_MAIN_TREE: 47fe96dfc881f1c57dea711283fc3db36a44e053
+  EXPECTED_PROD_REF: jnpoxvalyjtdghnperyu
+  EXPECTED_PROD_HOST: aws-1-us-west-2.pooler.supabase.com
+  EXPECTED_PROD_USER: postgres.jnpoxvalyjtdghnperyu
+  EXPECTED_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  RESTORE_DEPLOYMENT_ID: dpl_GbKHA9YfvjEW3iqymgY4uzp7MWsX
+  BACKUP_RUN_ID: "32904854234"
+  BACKUP_ARTIFACT_ID: "9584433427"
+  BACKUP_DIGEST: sha256:773149dde3b2512b3854e48c5adf1b1b4c16a627be3ed2c21207d947d9885835
+  VERCEL_CLI_VERSION: 50.38.1
+  POSTGRES_IMAGE: postgres:17
+  SOURCE_DIR: source
+  EVIDENCE_DIR: issue782-canonical-production-uat-evidence
+
+jobs:
+  production-uat:
+    name: Exact-SHA aliasless staging, canonical UAT, restoration, and zero residue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Check out exact one-use controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Check out exact authorized main separately
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 0
+          path: ${{ env.SOURCE_DIR }}
+
+      - name: Guard exact source, controller-only scope, and no concurrent release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C "$SOURCE_DIR" rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git -C "$SOURCE_DIR" rev-parse HEAD^{tree})" = "$EXPECTED_MAIN_TREE"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git merge-base HEAD "$EXPECTED_MAIN_SHA")" = "$EXPECTED_MAIN_SHA"
+          mapfile -t changed < <(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD | sort)
+          printf '%s\n' "${changed[@]}" > "$RUNNER_TEMP/controller-files.txt"
+          cat > "$RUNNER_TEMP/expected-controller-files.txt" <<'EOF'
+          .github/workflows/issue782-temporary-admin-canonical-uat-20260826.yml
+          controller/issue782/auth-uat.mjs
+          controller/issue782/auth-users.mjs
+          controller/issue782/namespace.mjs
+          controller/issue782/transform-fixtures-v2.mjs
+          controller/issue782/transform-fixtures.mjs
+          EOF
+          sort -o "$RUNNER_TEMP/expected-controller-files.txt" "$RUNNER_TEMP/expected-controller-files.txt"
+          diff -u "$RUNNER_TEMP/expected-controller-files.txt" "$RUNNER_TEMP/controller-files.txt"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+
+          mkdir -p "$EVIDENCE_DIR" "$RUNNER_TEMP/issue782-state"
+          chmod 0700 "$RUNNER_TEMP/issue782-state"
+          echo "I782_STATE_DIR=$RUNNER_TEMP/issue782-state" >> "$GITHUB_ENV"
+          echo "I782_SOURCE_ROOT=$GITHUB_WORKSPACE/$SOURCE_DIR" >> "$GITHUB_ENV"
+
+          for state in in_progress queued; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=$state&per_page=100" > "$RUNNER_TEMP/runs-$state.json"
+            jq -e --argjson current "$GITHUB_RUN_ID" '[.workflow_runs[] | select(.id != $current) | select((.name // "") | test("(production|vercel|canonical.*uat|alias)";"i"))] | length == 0' "$RUNNER_TEMP/runs-$state.json" >/dev/null
+          done
+          jq -n \
+            --arg controllerSha "$GITHUB_SHA" \
+            --arg mainSha "$EXPECTED_MAIN_SHA" \
+            --arg mainTree "$EXPECTED_MAIN_TREE" \
+            --arg checkedAt "$(date -u +%FT%TZ)" \
+            '{controllerSha:$controllerSha,mainSha:$mainSha,mainTree:$mainTree,controllerOnly:true,concurrentProductionRuns:0,checkedAt:$checkedAt}' \
+            > "$EVIDENCE_DIR/source-and-concurrency.json"
+
+      - name: Set up Node.js and exact dependencies
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+
+      - name: Install exact source dependencies and stage controller scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix "$SOURCE_DIR" ci
+          rm -rf "$SOURCE_DIR/.issue782-controller"
+          cp -R controller/issue782 "$SOURCE_DIR/.issue782-controller"
+          node --check "$SOURCE_DIR/.issue782-controller/namespace.mjs"
+          node --check "$SOURCE_DIR/.issue782-controller/auth-users.mjs"
+          node --check "$SOURCE_DIR/.issue782-controller/transform-fixtures-v2.mjs"
+          node --check "$SOURCE_DIR/.issue782-controller/auth-uat.mjs"
+
+      - name: Materialize deterministic run-owned ownership manifest before mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$SOURCE_DIR/.issue782-controller/namespace.mjs" | tee "$EVIDENCE_DIR/namespace.log"
+          cp "$I782_STATE_DIR/ownership-redacted.json" "$EVIDENCE_DIR/ownership-redacted.json"
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          test -n "$qa_password"
+          echo "::add-mask::$qa_password"
+          printf 'I782_QA_PASSWORD<<__I782_PASSWORD__\n%s\n__I782_PASSWORD__\n' "$qa_password" >> "$GITHUB_ENV"
+          printf '%s' "$qa_password" > "$I782_STATE_DIR/password"
+          chmod 0600 "$I782_STATE_DIR/password"
+
+      - name: Re-prove backup, deployment, aliases, empty admin allowlist, database, and zero-money state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${VERCEL_TOKEN:-}"
+          test -n "${VERCEL_ORG_ID:-}"
+          test -n "${VERCEL_PROJECT_ID:-}"
+          test "$VERCEL_PROJECT_ID" = "$EXPECTED_PROJECT_ID"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$VERCEL_TOKEN"
+          echo "::add-mask::$VERCEL_ORG_ID"
+          echo "::add-mask::$VERCEL_PROJECT_ID"
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID" > "$RUNNER_TEMP/backup-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$BACKUP_ARTIFACT_ID" > "$RUNNER_TEMP/backup-artifact.json"
+          jq -e --arg sha '9b176aa10fd377a9357b944a701eb0911dc1b9fd' '.status=="completed" and .conclusion=="success" and .head_sha==$sha' "$RUNNER_TEMP/backup-run.json" >/dev/null
+          jq -e --argjson id "$BACKUP_ARTIFACT_ID" --arg digest "$BACKUP_DIGEST" '.id==$id and .expired==false and .digest==$digest and (.expires_at|fromdateiso8601)>now' "$RUNNER_TEMP/backup-artifact.json" >/dev/null
+
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$RESTORE_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" \
+            > "$RUNNER_TEMP/restore-deployment.json"
+          jq -e --arg id "$RESTORE_DEPLOYMENT_ID" --arg project "$EXPECTED_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+            ((.id//.uid)==$id) and ((.projectId//.project.id//"")==$project)
+            and ((.readyState//.state//"")=="READY") and .target=="production"
+            and .meta.githubCommitSha==$sha and ((.aliasError//null)==null)
+            and ((.alias//.aliases//[])|any(.=="moraltrade.org"))
+            and ((.alias//.aliases//[])|any(.=="www.moraltrade.org"))
+          ' "$RUNNER_TEMP/restore-deployment.json" >/dev/null
+          restore_url="https://$(jq -r .url "$RUNNER_TEMP/restore-deployment.json")"
+          echo "I782_RESTORE_URL=$restore_url" >> "$GITHUB_ENV"
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/$alias_name?projectId=$EXPECTED_PROJECT_ID&teamId=$VERCEL_TEAM_ID" \
+              > "$RUNNER_TEMP/alias-$key.json"
+            jq -e --arg alias "$alias_name" --arg project "$EXPECTED_PROJECT_ID" --arg deployment "$RESTORE_DEPLOYMENT_ID" '
+              .alias==$alias and .projectId==$project and ((.deploymentId//.deployment.id//.deployment.uid//"")==$deployment)
+            ' "$RUNNER_TEMP/alias-$key.json" >/dev/null
+          done
+
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$EXPECTED_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-authorized-uat" \
+            > "$RUNNER_TEMP/env-before.json"
+          jq -e '[.envs[]? | select(.key=="ADMIN_EMAILS") | select((.target|type)=="array" and (.target|index("production"))!=null)] | length == 0' "$RUNNER_TEMP/env-before.json" >/dev/null
+          rm -f "$RUNNER_TEMP/env-before.json"
+
+          URL_TO_CHECK="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid = ["postgres:","postgresql:"].includes(url.protocol)
+            && decodeURIComponent(url.username)===process.env.EXPECTED_PROD_USER
+            && url.hostname===process.env.EXPECTED_PROD_HOST
+            && url.port==="5432" && url.pathname==="/postgres"
+            && url.searchParams.get("sslmode")==="require" && Boolean(url.password)
+            && !url.href.includes("hvmxfjjbdcgjjudmthdz");
+          if (!valid) throw new Error("Refusing database URL outside exact production target");
+          NODE
+          docker pull "$POSTGRES_IMAGE" >/dev/null
+          cat > "$RUNNER_TEMP/preflight.sql" <<'SQL'
+          \set ON_ERROR_STOP on
+          \pset tuples_only on
+          \pset format unaligned
+          set statement_timeout='60s';
+          begin transaction read only;
+          do $guard$
+          declare
+            expected jsonb := '[
+              {"version":"20260806110000","name":"mpgf_pool_review_freeze","hash":"0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c"},
+              {"version":"20260806143000","name":"mpgf_pool_publication_materialization","hash":"ee8ab4a2c52893ff9f2d8dfcbf7dc25370768af80e5401978f7c4b09e8cab9e8"},
+              {"version":"20260806173000","name":"mpgf_dac_pledge_intent_ledger","hash":"36f558549361a1c0747dab5ecd545c74efbd42be14f6d634cb28e8b01f7c1e9c"},
+              {"version":"20260807050000","name":"mpgf_dac_success_lapse","hash":"83d9432f90fb808302249b5b572029d68bfc9aa2be32afbaba710f8e341d0948"},
+              {"version":"20260807100000","name":"mpgf_dac_public_terms_api","hash":"356d220c009dd6213b761712a30ce0124d95f075d5fdab5c44da3398a6265a0f"},
+              {"version":"20260812073000","name":"mpgf_dac_terminal_event_constraint_reconciliation","hash":"a19653e57a20dff8d01e1dd54b4b77304fe0712fe3356820953945e7b9999cd2"},
+              {"version":"20260812074500","name":"mpgf_dac_terminal_schema_reconciliation","hash":"d8dc2a55840425357c8859b87d26fba0415bb1a50c8e739518a88b9686142cbb"},
+              {"version":"20260815010000","name":"mpgf_pool_lifecycle_event_ordering","hash":"1d60c1abc73c8842cdcd9694c77d0e29dac4fe1de98a496714c0f2f2f5619766"},
+              {"version":"20260815011000","name":"mpgf_dac_terminal_guard_reconciliation","hash":"c64d521c6adb7a865d9ec5e2f25e70adb09f08f91e0f1bc0ec0610977aafd108"},
+              {"version":"20260818173000","name":"mpgf_dac_public_goods_foundation_reconciliation","hash":"e89a199cbdbb767d88a03585764bce774f533449519b67d04c082683f0638aa0"},
+              {"version":"20260818174000","name":"mpgf_dac_public_aggregate_column_privacy","hash":"0c3e7596f5f6b0d69d9438347f82ad79b6d0663511d3aec7cf333681fef9f581"}
+            ]'::jsonb;
+            item jsonb; observed_name text; observed_hash text; total_rows bigint;
+          begin
+            for item in select value from jsonb_array_elements(expected) loop
+              select name, encode(extensions.digest(convert_to(statements[1],'UTF8'),'sha256'),'hex')
+                into observed_name, observed_hash
+                from supabase_migrations.schema_migrations where version=item->>'version';
+              if not found or observed_name is distinct from item->>'name' or observed_hash is distinct from item->>'hash' then
+                raise exception 'Migration registry drift for %',item->>'version';
+              end if;
+            end loop;
+            if (select count(*) from supabase_migrations.schema_migrations where version in (select value->>'version' from jsonb_array_elements(expected))) <> 11 then
+              raise exception 'Unexpected DAC migration count';
+            end if;
+            if to_regprocedure('public.mpgf_review_dac_pledge_eligibility(uuid,uuid,text,integer,text)') is null
+               or to_regprocedure('public.mpgf_finalize_dac_campaign(text,uuid,text)') is null
+               or to_regprocedure('public.mpgf_public_dac_campaign_terms(text)') is null then
+              raise exception 'Required DAC function missing';
+            end if;
+            if has_table_privilege('anon','public.mpgf_public_goods_campaigns','SELECT')
+               or has_column_privilege('anon','public.mpgf_public_goods_campaigns','published_by','SELECT')
+               or has_column_privilege('authenticated','public.mpgf_dac_campaign_outcomes','outcome_json','SELECT') then
+              raise exception 'Public privacy contract drift';
+            end if;
+            select
+              (select count(*) from public.mpgf_pool_proposals)
+              +(select count(*) from public.mpgf_pool_reviewers)
+              +(select count(*) from public.mpgf_pool_proposal_versions)
+              +(select count(*) from public.mpgf_pool_lifecycle_events)
+              +(select count(*) from public.mpgf_public_goods_match_pools)
+              +(select count(*) from public.mpgf_public_goods_rounds)
+              +(select count(*) from public.mpgf_public_goods_campaigns)
+              +(select count(*) from public.mpgf_public_goods_pledges)
+              +(select count(*) from public.mpgf_dac_pledge_intents)
+              +(select count(*) from public.mpgf_dac_pledge_events)
+              +(select count(*) from public.mpgf_dac_campaign_outcomes)
+              into total_rows;
+            if total_rows<>0 then raise exception 'Unexpected DAC/public-goods rows: %',total_rows; end if;
+            if (select count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null or status='captured')<>0 then
+              raise exception 'Unexpected payment references';
+            end if;
+          end;
+          $guard$;
+          select json_build_object('migrationRows',11,'dacPublicGoodsRows',0,'paymentReferences',0,'privacy',true);
+          rollback;
+          SQL
+          docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            < "$RUNNER_TEMP/preflight.sql" | grep -E '^\{' | tail -n 1 > "$EVIDENCE_DIR/database-preflight.json"
+          jq -e '.migrationRows==11 and .dacPublicGoodsRows==0 and .paymentReferences==0 and .privacy==true' "$EVIDENCE_DIR/database-preflight.json" >/dev/null
+
+          EMAILS="'$I782_CREATOR_EMAIL','$I782_REVIEWER_EMAIL','$I782_PLEDGER_EMAIL','$I782_OUTSIDER_EMAIL','$I782_PROBE_PRE_EMAIL','$I782_PROBE_CANONICAL_EMAIL'"
+          exact_email_count="$(docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 --command "select count(*) from auth.users where email in ($EMAILS);")"
+          test "$exact_email_count" = "0"
+
+          jq -n \
+            --argjson backupRun "$BACKUP_RUN_ID" --argjson backupArtifact "$BACKUP_ARTIFACT_ID" \
+            --arg backupDigest "$BACKUP_DIGEST" --arg restoreDeployment "$RESTORE_DEPLOYMENT_ID" \
+            --arg mainSha "$EXPECTED_MAIN_SHA" --arg mainTree "$EXPECTED_MAIN_TREE" \
+            --arg checkedAt "$(date -u +%FT%TZ)" \
+            '{backupRun:$backupRun,backupArtifact:$backupArtifact,backupDigest:$backupDigest,restoreDeployment:$restoreDeployment,mainSha:$mainSha,mainTree:$mainTree,adminAllowlistEntries:0,exactSyntheticEmailCollisions:0,checkedAt:$checkedAt}' \
+            > "$EVIDENCE_DIR/preconditions.json"
+
+      - name: Run all permanent release source, repository, build, and rendered gates before mutation
+        shell: bash
+        working-directory: source
+        env:
+          ADMIN_EMAILS: ${{ env.I782_REVIEWER_EMAIL }}
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: production
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          MPGF_REAL_MONEY_ENABLED: "false"
+          MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+          MPGF_TEST_PAYMENT_ENABLED: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npm test | tee "../$EVIDENCE_DIR/repository-tests.log"
+          npm run lint -- --quiet | tee "../$EVIDENCE_DIR/lint.log"
+          npx tsc --noEmit | tee "../$EVIDENCE_DIR/typecheck.log"
+          npm run build | tee "../$EVIDENCE_DIR/repository-build.log"
+          npx playwright install --with-deps chromium
+          npm run test:e2e:release -- --reporter=line | tee "../$EVIDENCE_DIR/release-browser.log"
+          git diff --check
+
+      - name: Add exactly one temporary production-only synthetic admin allowlist entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n --arg value "$I782_REVIEWER_EMAIL" '{key:"ADMIN_EMAILS",value:$value,type:"plain",target:["production"]}' > "$RUNNER_TEMP/create-env.json"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' \
+            "https://api.vercel.com/v10/projects/$EXPECTED_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID" \
+            --data-binary @"$RUNNER_TEMP/create-env.json" > "$RUNNER_TEMP/create-env-response.json"
+          env_id="$(jq -r '.id // .created[0].id // empty' "$RUNNER_TEMP/create-env-response.json")"
+          test -n "$env_id"
+          echo "I782_ADMIN_ENV_ID=$env_id" >> "$GITHUB_ENV"
+          echo "I782_ADMIN_ENV_CREATED=true" >> "$GITHUB_ENV"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$EXPECTED_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-authorized-uat" > "$RUNNER_TEMP/env-after.json"
+          jq -e --arg id "$env_id" --arg value "$I782_REVIEWER_EMAIL" '[.envs[]? | select(.id==$id and .key=="ADMIN_EMAILS" and .value==$value) | select((.target|type)=="array" and (.target|length)==1 and .target[0]=="production")] | length == 1' "$RUNNER_TEMP/env-after.json" >/dev/null
+          rm -f "$RUNNER_TEMP/create-env.json" "$RUNNER_TEMP/create-env-response.json" "$RUNNER_TEMP/env-after.json"
+          jq -n --arg envId "$env_id" --arg namespace "$I782_NAMESPACE" --arg createdAt "$(date -u +%FT%TZ)" '{envId:$envId,key:"ADMIN_EMAILS",target:["production"],entryCount:1,syntheticInvalidDomain:true,namespace:$namespace,createdAt:$createdAt}' > "$EVIDENCE_DIR/admin-env-created.json"
+
+      - name: Pull audited production environment and build one exact prebuilt artifact
+        shell: bash
+        working-directory: source
+        env:
+          VERCEL_GIT_PROVIDER: github
+          VERCEL_GIT_REPO_OWNER: ghuser29384
+          VERCEL_GIT_REPO_SLUG: Website2
+          VERCEL_GIT_COMMIT_REF: main
+          VERCEL_GIT_COMMIT_SHA: ${{ env.EXPECTED_MAIN_SHA }}
+          VERCEL_GIT_COMMIT_MESSAGE: Issue 782 bounded synthetic-admin UAT
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          jq -n --arg orgId "$VERCEL_ORG_ID" --arg projectId "$EXPECTED_PROJECT_ID" '{orgId:$orgId,projectId:$projectId}' > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN" > "$RUNNER_TEMP/vercel-pull.log" 2>&1
+          test -f .vercel/.env.production.local
+          ENV_FILE=.vercel/.env.production.local node <<'NODE'
+          const fs=require('node:fs');
+          const text=fs.readFileSync(process.env.ENV_FILE,'utf8');
+          const env={};
+          for(const raw of text.split(/\r?\n/)){
+            if(!raw || raw.startsWith('#') || !raw.includes('=')) continue;
+            const i=raw.indexOf('='); let value=raw.slice(i+1); const key=raw.slice(0,i);
+            if(value.startsWith('"')&&value.endsWith('"')){try{value=JSON.parse(value)}catch{value=value.slice(1,-1)}}
+            else if(value.startsWith("'")&&value.endsWith("'")) value=value.slice(1,-1);
+            env[key]=value;
+          }
+          if(env.ADMIN_EMAILS!==process.env.I782_REVIEWER_EMAIL) throw new Error('Temporary production admin allowlist is not exact');
+          const disabled={CONDITIONAL_PAYMENTS_MODE:'disabled',TRADE_DONATION_POOL_ENABLED:'false',TRADE_DONATION_POOL_MODE:'disabled',DIRECT_DONATION_UPGRADES_ENABLED:'false',DIRECT_DONATION_UPGRADE_MODE:'disabled'};
+          for(const [key,value] of Object.entries(disabled)) if(env[key]!==value) throw new Error(`${key} is not ${value}`);
+          for(const key of ['MPGF_REAL_MONEY_ENABLED','MPGF_REAL_MONEY_ACCEPTANCE_ENABLED','MPGF_TEST_PAYMENT_ENABLED','EVERY_ORG_PLEDGE_DONATIONS_ENABLED']) if(key in env && !['false','disabled',''].includes(String(env[key]).toLowerCase())) throw new Error(`${key} is enabled`);
+          const supabase=env.NEXT_PUBLIC_SUPABASE_URL||env.SUPABASE_URL||'';
+          if(!supabase.includes(process.env.EXPECTED_PROD_REF)||supabase.includes('hvmxfjjbdcgjjudmthdz')) throw new Error('Wrong Supabase project');
+          const exportKeys=['NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY','SUPABASE_SERVICE_ROLE_KEY'];
+          let out='';
+          for(const key of exportKeys){if(!env[key]) throw new Error(`Missing ${key}`); console.log(`::add-mask::${env[key]}`); out+=`${key}<<__I782_ENV__\n${env[key]}\n__I782_ENV__\n`;}
+          fs.appendFileSync(process.env.GITHUB_ENV,out);
+          fs.writeFileSync(`../${process.env.EVIDENCE_DIR}/production-env-contract.json`,JSON.stringify({productionProjectBound:true,qaProjectExcluded:true,temporaryAdminEntryCount:1,paymentModes:'disabled',checkedAt:new Date().toISOString()},null,2)+'\n');
+          NODE
+          rm -rf .next .vercel/output
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN" > "../$EVIDENCE_DIR/vercel-build.log" 2>&1
+          node scripts/vercel-static-artifact-integrity.mjs > "../$EVIDENCE_DIR/static-integrity.log"
+          test -f "../$EVIDENCE_DIR/static-artifact-integrity.json"
+          jq -e '.fileCount>0 and (.critical.sha256|length)==64' "../$EVIDENCE_DIR/static-artifact-integrity.json" >/dev/null
+          find .vercel/output -type f -print0 | sort -z | xargs -0 sha256sum > "../$EVIDENCE_DIR/prebuilt-files.sha256"
+          sha256sum "../$EVIDENCE_DIR/prebuilt-files.sha256" | awk '{print $1}' > "../$EVIDENCE_DIR/prebuilt-tree.sha256"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+
+      - name: Deploy exact production artifact without assigning any domain
+        shell: bash
+        working-directory: source
+        env:
+          VERCEL_GIT_PROVIDER: github
+          VERCEL_GIT_REPO_OWNER: ghuser29384
+          VERCEL_GIT_REPO_SLUG: Website2
+          VERCEL_GIT_COMMIT_REF: main
+          VERCEL_GIT_COMMIT_SHA: ${{ env.EXPECTED_MAIN_SHA }}
+          VERCEL_GIT_COMMIT_MESSAGE: Issue 782 bounded synthetic-admin UAT
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" deploy --help | grep -q -- '--skip-domain'
+          output="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --skip-domain --yes --token="$VERCEL_TOKEN" 2>"$RUNNER_TEMP/deploy.stderr")"
+          temp_url="$(printf '%s\n' "$output" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)"
+          [[ "$temp_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app$ ]]
+          host="${temp_url#https://}"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID" > "$RUNNER_TEMP/temp-deployment.json"
+          temp_id="$(jq -r '.id//.uid//empty' "$RUNNER_TEMP/temp-deployment.json")"
+          jq -e --arg id "$temp_id" --arg project "$EXPECTED_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+            ((.id//.uid)==$id) and ((.projectId//.project.id//"")==$project)
+            and ((.readyState//.state//"")=="READY") and .target=="production"
+            and .meta.githubCommitSha==$sha and ((.aliasError//null)==null)
+            and ((.alias//.aliases//[])|length)==0
+          ' "$RUNNER_TEMP/temp-deployment.json" >/dev/null
+          echo "I782_TEMP_DEPLOYMENT_ID=$temp_id" >> "$GITHUB_ENV"
+          echo "I782_TEMP_DEPLOYMENT_URL=$temp_url" >> "$GITHUB_ENV"
+          echo "I782_TEMP_DEPLOYMENT_CREATED=true" >> "$GITHUB_ENV"
+          curl -fsS -H 'Cache-Control: no-cache' "$temp_url/moral-trade-live-create-router.js?i782=$GITHUB_RUN_ID" -o "$RUNNER_TEMP/published-router.js"
+          cmp --silent public/moral-trade-live-create-router.js "$RUNNER_TEMP/published-router.js"
+          jq -n --arg id "$temp_id" --arg url "$temp_url" --arg sha "$EXPECTED_MAIN_SHA" --arg createdAt "$(date -u +%FT%TZ)" '{deploymentId:$id,deploymentUrl:$url,sourceSha:$sha,target:"production",ready:true,aliases:[],criticalAssetExact:true,createdAt:$createdAt}' > "../$EVIDENCE_DIR/temporary-deployment.json"
+
+      - name: Create exact-owned synthetic Auth identities through the administrative API
+        shell: bash
+        working-directory: source
+        env:
+          I782_AUTH_MODE: create
+          I782_AUTH_STATE: ${{ env.I782_STATE_DIR }}/auth-state.json
+          I782_AUTH_EVIDENCE: ${{ env.I782_STATE_DIR }}/auth-created-redacted.json
+        run: |
+          set -euo pipefail
+          node .issue782-controller/auth-users.mjs | tee "../$EVIDENCE_DIR/auth-create.log"
+          cp "$I782_AUTH_EVIDENCE" "../$EVIDENCE_DIR/auth-created-redacted.json"
+          node .issue782-controller/transform-fixtures-v2.mjs | tee "../$EVIDENCE_DIR/fixture-transform.log"
+          cp "$I782_STATE_DIR/transform-evidence.json" "../$EVIDENCE_DIR/transform-evidence.json"
+
+      - name: Verify exact app-object namespace is collision-free and create pre-alias fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 < "$I782_STATE_DIR/collision.sql" | grep -E '^\{' | tail -n1 > "$EVIDENCE_DIR/collision-preflight.json"
+          jq -e '[.[]] | add == 0' "$EVIDENCE_DIR/collision-preflight.json" >/dev/null
+          docker run --rm -i -v "$I782_STATE_DIR:/state:ro" "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file /state/fixture.sql > "$EVIDENCE_DIR/prealias-fixture.log" 2>&1
+          echo "I782_APP_FIXTURE_ACTIVE=true" >> "$GITHUB_ENV"
+
+      - name: Run complete pre-alias Auth, Create, and strictly non-payment DAC acceptance
+        shell: bash
+        working-directory: source
+        env:
+          I782_BASE_URLS: ${{ env.I782_TEMP_DEPLOYMENT_URL }}
+          I782_PROBE_ROLE: probe_pre
+          I782_AUTH_STATE: ${{ env.I782_STATE_DIR }}/auth-state.json
+          I782_AUTH_UAT_DIR: ${{ github.workspace }}/issue782-canonical-production-uat-evidence/prealias-auth
+          I782_SCREENSHOT_DIR: ${{ github.workspace }}/issue782-canonical-production-uat-evidence/prealias-dac
+          MPGF_DAC_PRODUCT_BASE_URL: ${{ env.I782_TEMP_DEPLOYMENT_URL }}
+          PLAYWRIGHT_BASE_URL: ${{ env.I782_TEMP_DEPLOYMENT_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ env.I782_TEMP_DEPLOYMENT_URL }}
+          ADMIN_EMAILS: ${{ env.I782_REVIEWER_EMAIL }}
+          MPGF_DAC_PRODUCT_QA_PASSWORD: ${{ env.I782_QA_PASSWORD }}
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          date -u +%s > "../$EVIDENCE_DIR/prealias-start-epoch.txt"
+          date -u +%FT%TZ > "../$EVIDENCE_DIR/prealias-start.txt"
+          node .issue782-controller/auth-uat.mjs | tee "../$EVIDENCE_DIR/prealias-auth.log"
+          create_specs=(tests/create-entry-routing.spec.ts tests/create-route-ui-regression.spec.ts)
+          for spec in "${create_specs[@]}"; do test -f "$spec"; done
+          printf '%s\n' "${create_specs[@]}" > "../$EVIDENCE_DIR/create-specs.txt"
+          npx playwright test "${create_specs[@]}" --project=chromium --reporter=line | tee "../$EVIDENCE_DIR/prealias-create.log"
+          npx playwright test tests/issue782-runtime-dac.spec.ts --project=chromium --reporter=line | tee "../$EVIDENCE_DIR/prealias-dac.log"
+          date -u +%s > "../$EVIDENCE_DIR/prealias-end-epoch.txt"
+          date -u +%FT%TZ > "../$EVIDENCE_DIR/prealias-end.txt"
+
+      - name: Clean pre-alias app fixtures while retaining exact-owned Auth identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -i -v "$I782_STATE_DIR:/state:ro" "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file /state/app-cleanup.sql > "$EVIDENCE_DIR/prealias-app-cleanup.log" 2>&1
+          echo "I782_APP_FIXTURE_ACTIVE=false" >> "$GITHUB_ENV"
+          docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 < "$I782_STATE_DIR/collision.sql" | grep -E '^\{' | tail -n1 > "$EVIDENCE_DIR/prealias-app-zero.json"
+          jq -e '[.[]] | add == 0' "$EVIDENCE_DIR/prealias-app-zero.json" >/dev/null
+
+      - name: Recheck immutable boundary immediately before canonical alias movement
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C "$SOURCE_DIR" ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$I782_TEMP_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" > "$RUNNER_TEMP/temp-before-alias.json"
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '.readyState=="READY" and .target=="production" and .meta.githubCommitSha==$sha and ((.alias//[])|length)==0' "$RUNNER_TEMP/temp-before-alias.json" >/dev/null
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$alias_name?projectId=$EXPECTED_PROJECT_ID&teamId=$VERCEL_TEAM_ID" \
+              | jq -e --arg restore "$RESTORE_DEPLOYMENT_ID" '(.deploymentId//.deployment.id//.deployment.uid)==$restore' >/dev/null
+          done
+
+      - name: Temporarily bind both canonical aliases to the accepted deployment
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          alias_start="$(date -u +%s)"
+          echo "I782_ALIAS_START_EPOCH=$alias_start" >> "$GITHUB_ENV"
+          echo "I782_ALIAS_MUTATION_STARTED=true" >> "$GITHUB_ENV"
+          npx --yes "vercel@$VERCEL_CLI_VERSION" alias set "$I782_TEMP_DEPLOYMENT_URL" moraltrade.org --token="$VERCEL_TOKEN" > "../$EVIDENCE_DIR/alias-moraltrade.log" 2>&1
+          npx --yes "vercel@$VERCEL_CLI_VERSION" alias set "$I782_TEMP_DEPLOYMENT_URL" www.moraltrade.org --token="$VERCEL_TOKEN" > "../$EVIDENCE_DIR/alias-www.log" 2>&1
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$alias_name?projectId=$EXPECTED_PROJECT_ID&teamId=$VERCEL_TEAM_ID" \
+              | jq -e --arg temp "$I782_TEMP_DEPLOYMENT_ID" '(.deploymentId//.deployment.id//.deployment.uid)==$temp' >/dev/null
+          done
+          echo "I782_ALIASES_ON_TEMP=true" >> "$GITHUB_ENV"
+
+      - name: Recreate exact-owned canonical fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -i -v "$I782_STATE_DIR:/state:ro" "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file /state/fixture.sql > "$EVIDENCE_DIR/canonical-fixture.log" 2>&1
+          echo "I782_APP_FIXTURE_ACTIVE=true" >> "$GITHUB_ENV"
+
+      - name: Run complete canonical-origin Auth, Create, and strictly non-payment DAC acceptance
+        shell: bash
+        working-directory: source
+        env:
+          I782_BASE_URLS: https://www.moraltrade.org,https://moraltrade.org
+          I782_PROBE_ROLE: probe_canonical
+          I782_AUTH_STATE: ${{ env.I782_STATE_DIR }}/auth-state.json
+          I782_AUTH_UAT_DIR: ${{ github.workspace }}/issue782-canonical-production-uat-evidence/canonical-auth
+          I782_SCREENSHOT_DIR: ${{ github.workspace }}/issue782-canonical-production-uat-evidence/canonical-dac
+          MPGF_DAC_PRODUCT_BASE_URL: https://www.moraltrade.org
+          PLAYWRIGHT_BASE_URL: https://www.moraltrade.org
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          ADMIN_EMAILS: ${{ env.I782_REVIEWER_EMAIL }}
+          MPGF_DAC_PRODUCT_QA_PASSWORD: ${{ env.I782_QA_PASSWORD }}
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          date -u +%s > "../$EVIDENCE_DIR/canonical-start-epoch.txt"
+          date -u +%FT%TZ > "../$EVIDENCE_DIR/canonical-start.txt"
+          node .issue782-controller/auth-uat.mjs | tee "../$EVIDENCE_DIR/canonical-auth.log"
+          create_specs=(tests/create-entry-routing.spec.ts tests/create-route-ui-regression.spec.ts)
+          npx playwright test "${create_specs[@]}" --project=chromium --reporter=line | tee "../$EVIDENCE_DIR/canonical-create-www.log"
+          PLAYWRIGHT_BASE_URL=https://moraltrade.org NEXT_PUBLIC_SITE_URL=https://moraltrade.org npx playwright test "${create_specs[@]}" --project=chromium --reporter=line | tee "../$EVIDENCE_DIR/canonical-create-apex.log"
+          npx playwright test tests/issue782-runtime-dac.spec.ts --project=chromium --reporter=line | tee "../$EVIDENCE_DIR/canonical-dac.log"
+          date -u +%s > "../$EVIDENCE_DIR/canonical-end-epoch.txt"
+          date -u +%FT%TZ > "../$EVIDENCE_DIR/canonical-end.txt"
+          elapsed="$(( $(date -u +%s) - I782_ALIAS_START_EPOCH ))"
+          test "$elapsed" -lt 4800
+
+      - name: Inspect and aggregate exact temporary-deployment runtime logs
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          start="$(cat "../$EVIDENCE_DIR/prealias-start-epoch.txt")"
+          end="$(cat "../$EVIDENCE_DIR/canonical-end-epoch.txt")"
+          npx --yes "vercel@$VERCEL_CLI_VERSION" logs "$I782_TEMP_DEPLOYMENT_URL" --since "$start" --until "$end" --json --token="$VERCEL_TOKEN" > "$RUNNER_TEMP/runtime.jsonl"
+          RAW_LOG="$RUNNER_TEMP/runtime.jsonl" SUMMARY="../$EVIDENCE_DIR/runtime-log-summary.json" node <<'NODE'
+          const fs=require('node:fs'); const raw=fs.readFileSync(process.env.RAW_LOG,'utf8').split(/\r?\n/); let entries=0,errors=0,payment=0,secrets=0;
+          const provider=/(paymentintent|setupintent|checkout session|stripe|every\.org|charge created|capture succeeded|payout created)/i;
+          const secret=/(service_role|postgres(?:ql)?:\/\/|sk_(live|test)_|whsec_|private key|bearer\s+[a-z0-9._-]{20,})/i;
+          for(const line of raw){if(!line.trim())continue;let row;try{row=JSON.parse(line)}catch{continue}entries++;const text=JSON.stringify(row);const level=String(row.level||'').toLowerCase();const status=Number(row.statusCode||row.status||0);if(level==='error'||level==='fatal'||status>=500)errors++;if(provider.test(text))payment++;if(secret.test(text))secrets++;}
+          const result={entries,errorsOr5xx:errors,paymentProviderSignals:payment,secretLeakSignals:secrets,inspectedAt:new Date().toISOString()};fs.writeFileSync(process.env.SUMMARY,JSON.stringify(result,null,2)+'\n');if(errors||payment||secrets)throw new Error(JSON.stringify(result));
+          NODE
+          rm -f "$RUNNER_TEMP/runtime.jsonl"
+
+      - name: Restore both canonical aliases unconditionally
+        if: always()
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" alias set "$I782_RESTORE_URL" moraltrade.org --token="$VERCEL_TOKEN" > "../$EVIDENCE_DIR/restore-moraltrade.log" 2>&1
+          npx --yes "vercel@$VERCEL_CLI_VERSION" alias set "$I782_RESTORE_URL" www.moraltrade.org --token="$VERCEL_TOKEN" > "../$EVIDENCE_DIR/restore-www.log" 2>&1
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$alias_name?projectId=$EXPECTED_PROJECT_ID&teamId=$VERCEL_TEAM_ID" \
+              | jq -e --arg restore "$RESTORE_DEPLOYMENT_ID" '(.deploymentId//.deployment.id//.deployment.uid)==$restore' >/dev/null
+          done
+          echo "I782_ALIASES_RESTORED=true" >> "$GITHUB_ENV"
+          if test -n "${I782_ALIAS_START_EPOCH:-}"; then
+            elapsed="$(( $(date -u +%s) - I782_ALIAS_START_EPOCH ))"
+            jq -n --argjson seconds "$elapsed" --arg restoredAt "$(date -u +%FT%TZ)" '{aliasIntervalSeconds:$seconds,withinNinetyMinutes:($seconds<=5400),restoredAt:$restoredAt}' > "../$EVIDENCE_DIR/alias-restoration.json"
+            test "$elapsed" -le 5400
+          fi
+
+      - name: Remove exact app fixtures and profiles unconditionally
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "$I782_STATE_DIR/app-cleanup.sql"; then
+            docker run --rm -i -v "$I782_STATE_DIR:/state:ro" "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file /state/app-cleanup.sql > "$EVIDENCE_DIR/final-app-cleanup.log" 2>&1
+          fi
+          if test -f "$I782_STATE_DIR/profile-cleanup.sql"; then
+            docker run --rm -i -v "$I782_STATE_DIR:/state:ro" "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file /state/profile-cleanup.sql > "$EVIDENCE_DIR/final-profile-cleanup.log" 2>&1
+          fi
+          echo "I782_APP_FIXTURE_ACTIVE=false" >> "$GITHUB_ENV"
+
+      - name: Delete exact-owned synthetic Auth identities through the administrative API
+        if: always()
+        shell: bash
+        working-directory: source
+        env:
+          I782_AUTH_MODE: cleanup
+          I782_AUTH_STATE: ${{ env.I782_STATE_DIR }}/auth-state.json
+          I782_AUTH_EVIDENCE: ${{ env.I782_STATE_DIR }}/auth-cleanup-redacted.json
+        run: |
+          set -euo pipefail
+          if test -f "$I782_AUTH_STATE" && test -n "${NEXT_PUBLIC_SUPABASE_URL:-}" && test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"; then
+            node .issue782-controller/auth-users.mjs | tee "../$EVIDENCE_DIR/auth-cleanup.log"
+            cp "$I782_AUTH_EVIDENCE" "../$EVIDENCE_DIR/auth-cleanup-redacted.json"
+          fi
+
+      - name: Remove temporary production admin environment entry exactly
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          env_id="${I782_ADMIN_ENV_ID:-}"
+          if test -z "$env_id"; then
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v10/projects/$EXPECTED_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-cleanup" > "$RUNNER_TEMP/env-cleanup-lookup.json"
+            mapfile -t ids < <(jq -r --arg value "${I782_REVIEWER_EMAIL:-}" '.envs[]? | select(.key=="ADMIN_EMAILS" and .value==$value) | select((.target|type)=="array" and (.target|length)==1 and .target[0]=="production") | .id' "$RUNNER_TEMP/env-cleanup-lookup.json")
+            test "${#ids[@]}" -le 1
+            if test "${#ids[@]}" -eq 1; then env_id="${ids[0]}"; fi
+          fi
+          if test -n "$env_id"; then
+            curl -fsS -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$EXPECTED_PROJECT_ID/env/$env_id?teamId=$VERCEL_TEAM_ID" > "$RUNNER_TEMP/delete-env.json"
+          fi
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v10/projects/$EXPECTED_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-cleanup-proof" > "$RUNNER_TEMP/env-final.json"
+          jq -e '[.envs[]? | select(.key=="ADMIN_EMAILS") | select((.target|type)=="array" and (.target|index("production"))!=null)] | length == 0' "$RUNNER_TEMP/env-final.json" >/dev/null
+          rm -f "$RUNNER_TEMP/env-cleanup-lookup.json" "$RUNNER_TEMP/delete-env.json" "$RUNNER_TEMP/env-final.json"
+          jq -n --arg removedAt "$(date -u +%FT%TZ)" '{productionAdminEmailsEntries:0,temporaryEntryRemoved:true,removedAt:$removedAt}' > "$EVIDENCE_DIR/admin-env-restored.json"
+
+      - name: Prove exact-owned zero residue and zero payment/provider references
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "$I782_STATE_DIR/zero.sql"; then
+            docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 < "$I782_STATE_DIR/zero.sql" | grep -E '^\{' | tail -n1 > "$EVIDENCE_DIR/zero-residue.json"
+            jq -e '.authUsers==0 and .profiles==0 and .personAccounts==0 and .proposals==0 and .campaigns==0 and .pledges==0 and .paymentReferences==0' "$EVIDENCE_DIR/zero-residue.json" >/dev/null
+          fi
+          global_payment_refs="$(docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 --command "select count(*) from public.mpgf_public_goods_pledges where payment_intent_ref is not null or status='captured';")"
+          test "$global_payment_refs" = "0"
+
+      - name: Delete the temporary deployment after restoration
+        if: always()
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          if test -n "${I782_TEMP_DEPLOYMENT_URL:-}"; then
+            npx --yes "vercel@$VERCEL_CLI_VERSION" remove "$I782_TEMP_DEPLOYMENT_URL" --yes --token="$VERCEL_TOKEN" > "../$EVIDENCE_DIR/temp-deployment-delete.log" 2>&1
+            set +e
+            status="$(curl -sS -o "$RUNNER_TEMP/deployment-after-delete.json" -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/${I782_TEMP_DEPLOYMENT_ID:-missing}?teamId=$VERCEL_TEAM_ID")"
+            set -e
+            test "$status" = "404"
+          fi
+          jq -n --arg deletedAt "$(date -u +%FT%TZ)" '{temporaryDeploymentDeleted:true,deletedAt:$deletedAt}' > "../$EVIDENCE_DIR/temp-deployment-deleted.json"
+
+      - name: Final exact-state, privacy, and evidence-integrity proof
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C "$SOURCE_DIR" ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$RESTORE_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" > "$RUNNER_TEMP/final-restore.json"
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '.readyState=="READY" and .target=="production" and .meta.githubCommitSha==$sha' "$RUNNER_TEMP/final-restore.json" >/dev/null
+          rm -rf "$SOURCE_DIR/.vercel" "$SOURCE_DIR/.issue782-controller" "$SOURCE_DIR/tests/issue782-runtime-dac.spec.ts" "$I782_STATE_DIR/password" "$RUNNER_TEMP"/env-*.json "$RUNNER_TEMP"/*deployment*.json "$RUNNER_TEMP"/*.stderr
+          python3 - <<'PY' > "$EVIDENCE_DIR/privacy-scan.json"
+          from pathlib import Path
+          import json,re
+          root=Path('issue782-canonical-production-uat-evidence')
+          patterns={
+            'database_url':re.compile(rb'postgres(?:ql)?://[^\s"\']+',re.I),
+            'jwt':re.compile(rb'eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}'),
+            'bearer':re.compile(rb'Bearer\s+[A-Za-z0-9._~+/-]{20,}',re.I),
+            'private_key':re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+            'provider_secret':re.compile(rb'(?:sk_(?:live|test)_|whsec_)[A-Za-z0-9_-]{8,}',re.I),
+          }
+          findings=[]; files=[]
+          for path in root.rglob('*'):
+            if not path.is_file() or path.suffix.lower() in {'.png','.jpg','.jpeg','.webp'}: continue
+            files.append(path); data=path.read_bytes()
+            for label,pattern in patterns.items():
+              if pattern.search(data): findings.append({'type':label,'path':str(path)})
+          result={'textFilesScanned':len(files),'imageFilesRetained':len([p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in {'.png','.jpg','.jpeg','.webp'}]),'findings':findings}
+          print(json.dumps(result,sort_keys=True))
+          if findings: raise SystemExit('Credential-like material in retained evidence')
+          PY
+          jq -e '.findings==[]' "$EVIDENCE_DIR/privacy-scan.json" >/dev/null
+          find "$EVIDENCE_DIR" -type f -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE_DIR/files.sha256"
+          sha256sum "$EVIDENCE_DIR/files.sha256" | awk '{print $1}' > "$EVIDENCE_DIR/evidence-tree.sha256"
+          echo "I782_PRIVACY_SAFE=true" >> "$GITHUB_ENV"
+
+      - name: Upload immutable privacy-scanned completion evidence
+        if: always() && env.I782_PRIVACY_SAFE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue782-canonical-production-uat-${{ github.run_id }}-${{ env.EXPECTED_MAIN_SHA }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record successful bounded sequence
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Issue 782 bounded canonical production UAT passed'
+            echo
+            echo "- exact main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- temporary deployment: \`$I782_TEMP_DEPLOYMENT_ID\` (deleted after UAT)"
+            echo "- restoration deployment: \`$RESTORE_DEPLOYMENT_ID\`"
+            echo '- pre-alias Auth/Create/non-payment-DAC acceptance: passed'
+            echo '- canonical Auth/Create/non-payment-DAC acceptance: passed'
+            echo '- canonical aliases restored: yes'
+            echo '- temporary ADMIN_EMAILS removed: yes'
+            echo '- exact-owned synthetic residue: 0'
+            echo '- payment/provider references and signals: 0'
+          } >> "$GITHUB_STEP_SUMMARY"
