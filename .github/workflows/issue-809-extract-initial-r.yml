@@ -1,0 +1,157 @@
+name: Issue 809 initial-R extractor
+
+on:
+  push:
+    branches:
+      - automation/issue-809-r-extract-20260826
+    paths:
+      - .github/workflows/issue-809-extract-initial-r.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-809-initial-r-extractor
+  cancel-in-progress: false
+
+jobs:
+  extract-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPECTED_BASE_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+      PRESERVED_SOURCE_SHA: 1a52f46d5d877e155dba697300296be32ed87d43
+      OUTPUT_BRANCH: feature/issue-809-zero-dollar-core-loop-initial-r-20260826
+    steps:
+      - name: Check out automation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: automation/issue-809-r-extract-20260826
+
+      - name: Verify immutable inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE_SHA"
+          git fetch --no-tags origin \
+            "$PRESERVED_SOURCE_SHA:refs/remotes/origin/issue-809-preserved-r-source"
+          test "$(git rev-parse refs/remotes/origin/issue-809-preserved-r-source)" = \
+            "$PRESERVED_SOURCE_SHA"
+          if git ls-remote --exit-code --heads origin "$OUTPUT_BRANCH" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing output branch $OUTPUT_BRANCH." >&2
+            exit 1
+          fi
+
+      - name: Extract only the accepted initial-R differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths=(
+            'src/app/actions.ts'
+            'src/app/api/live-now/feedback/route.ts'
+            'src/app/api/live-now/feedback/route.test.ts'
+            'src/app/trade-review/[milestoneId]/page.tsx'
+            'src/components/core-trade/full-navigation-action-form.tsx'
+            'src/components/core-trade/trade-agreement-stage-base.tsx'
+            'src/components/core-trade/trade-milestone-workflow.tsx'
+            'src/components/marketplace/participant-offer-group.tsx'
+            'src/lib/evidence-weighted-payment-lifecycle.test.ts'
+            'src/lib/marketplace-delta-contract.test.ts'
+            'src/lib/trade-evidence-reviewer-rls-contract.test.ts'
+            'supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql'
+            'supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql'
+          )
+          source_ref=refs/remotes/origin/issue-809-preserved-r-source
+          source_base="$(git merge-base "$EXPECTED_BASE_SHA" "$source_ref")"
+          git diff --binary "$source_base" "$source_ref" -- "${paths[@]}" \
+            > /tmp/issue-809-initial-r.patch
+          test -s /tmp/issue-809-initial-r.patch
+
+          git switch --detach "$EXPECTED_BASE_SHA"
+          git switch -c "$OUTPUT_BRANCH"
+          git apply --3way --index /tmp/issue-809-initial-r.patch
+
+          printf '%s\n' "${paths[@]}" | sort > /tmp/expected-paths.txt
+          git diff --cached --name-only | sort > /tmp/actual-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          git diff --cached --check
+
+          if git diff --cached | grep -E \
+            'evaluator-core-loop-|81000000-|82000000-|83000000-|@qa\.invalid' >/dev/null; then
+            echo "Initial R unexpectedly contains evaluator fixture or static QA identity material." >&2
+            exit 1
+          fi
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused zero-dollar runtime contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/app/api/live-now/feedback/route.test.ts \
+            src/lib/evidence-weighted-payment-lifecycle.test.ts \
+            src/lib/marketplace-delta-contract.test.ts \
+            src/lib/trade-evidence-reviewer-rls-contract.test.ts
+
+      - name: Run exact-scope lint and type gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/app/actions.ts \
+            src/app/api/live-now/feedback/route.ts \
+            src/app/api/live-now/feedback/route.test.ts \
+            'src/app/trade-review/[milestoneId]/page.tsx' \
+            src/components/core-trade/full-navigation-action-form.tsx \
+            src/components/core-trade/trade-agreement-stage-base.tsx \
+            src/components/core-trade/trade-milestone-workflow.tsx \
+            src/components/marketplace/participant-offer-group.tsx \
+            src/lib/evidence-weighted-payment-lifecycle.test.ts \
+            src/lib/marketplace-delta-contract.test.ts \
+            src/lib/trade-evidence-reviewer-rls-contract.test.ts
+          npx tsc --noEmit --pretty false
+
+      - name: Build exact initial-R candidate
+        run: npm run build
+
+      - name: Commit and push exact output branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Implement issue #809 initial R zero-dollar core loop"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE_SHA"
+          git push origin "HEAD:refs/heads/$OUTPUT_BRANCH"
+          {
+            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
+            printf 'source=%s\n' "$PRESERVED_SOURCE_SHA"
+            printf 'head=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'scope_count=%s\n' "$(git diff --name-only "$EXPECTED_BASE_SHA" HEAD | wc -l | tr -d ' ')"
+          } | tee /tmp/issue-809-initial-r-result.txt
+
+      - name: Upload extractor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-809-initial-r-extractor-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            /tmp/issue-809-initial-r.patch
+            /tmp/expected-paths.txt
+            /tmp/actual-paths.txt
+            /tmp/issue-809-initial-r-result.txt
