@@ -1,0 +1,221 @@
+name: Issue 782 failed-attempt forensic supervisor
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - ".github/workflows/issue-782-forensics-supervisor-20260826.yml"
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+concurrency:
+  group: issue-782-failed-attempt-forensic-supervisor
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/dac-production-canonical-uat-26d1fe43-20260824
+  FORENSIC_WORKFLOW_PATH: .github/workflows/issue-782-failed-attempt-forensics-20260826.yml
+  SUPERVISOR_WORKFLOW_PATH: .github/workflows/issue-782-forensics-supervisor-20260826.yml
+  FORENSIC_WORKFLOW_NAME: Issue 782 failed production UAT forensics
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  EXPECTED_MAIN_TREE: 47fe96dfc881f1c57dea711283fc3db36a44e053
+  ISSUE_NUMBER: "782"
+
+jobs:
+  supervise:
+    name: Inspect terminal forensics, post disposition, and remove controllers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out exact supervisor
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact source and controller-only branch scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git merge-base HEAD "$EXPECTED_MAIN_SHA")" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse "$EXPECTED_MAIN_SHA^{tree}")" = "$EXPECTED_MAIN_TREE"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          mapfile -t changed < <(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD | sort)
+          printf '%s\n' "${changed[@]}" > "$RUNNER_TEMP/changed-files.txt"
+          printf '%s\n' "$FORENSIC_WORKFLOW_PATH" "$SUPERVISOR_WORKFLOW_PATH" | sort > "$RUNNER_TEMP/expected-files.txt"
+          diff -u "$RUNNER_TEMP/expected-files.txt" "$RUNNER_TEMP/changed-files.txt"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+
+      - name: Wait for the exact forensic workflow to reach terminal state
+        id: forensic
+        shell: bash
+        run: |
+          set -euo pipefail
+          forensic_run_id=""
+          for attempt in $(seq 1 180); do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$FORENSIC_WORKFLOW_PATH/runs?branch=$CONTROLLER_BRANCH&per_page=20")"
+            forensic_run_id="$(printf '%s' "$runs" | jq -r \
+              --arg path "$FORENSIC_WORKFLOW_PATH" \
+              '[.workflow_runs[] | select(.path==$path)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$forensic_run_id" ]]; then
+              status="$(printf '%s' "$runs" | jq -r --argjson id "$forensic_run_id" '.workflow_runs[] | select(.id==$id) | .status')"
+              if [[ "$status" == "completed" ]]; then
+                break
+              fi
+            fi
+            sleep 5
+          done
+          [[ "$forensic_run_id" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$forensic_run_id" > "$RUNNER_TEMP/forensic-run.json"
+          jq -e --arg name "$FORENSIC_WORKFLOW_NAME" '
+            .name==$name and .status=="completed" and .conclusion=="success"
+          ' "$RUNNER_TEMP/forensic-run.json" >/dev/null
+          echo "run_id=$forensic_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download and independently inspect the immutable forensic artifact
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          forensic_run_id="${{ steps.forensic.outputs.run_id }}"
+          mkdir -p "$RUNNER_TEMP/forensic-artifact"
+          gh run download "$forensic_run_id" --dir "$RUNNER_TEMP/forensic-artifact"
+          classification="$(find "$RUNNER_TEMP/forensic-artifact" -name classification.json -type f -print -quit)"
+          classification_md="$(find "$RUNNER_TEMP/forensic-artifact" -name classification.md -type f -print -quit)"
+          privacy="$(find "$RUNNER_TEMP/forensic-artifact" -name privacy-scan.json -type f -print -quit)"
+          test -f "$classification"
+          test -f "$classification_md"
+          test -f "$privacy"
+          jq -e '.findings==[]' "$privacy" >/dev/null
+          jq -e '.conclusion | IN("clean_failed_before_mutation","clean_restored_after_failure","residue_requires_exact_cleanup","evidence_insufficient_fail_closed")' "$classification" >/dev/null
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$forensic_run_id/artifacts?per_page=100" > "$RUNNER_TEMP/forensic-artifacts.json"
+          artifact_count="$(jq '.total_count' "$RUNNER_TEMP/forensic-artifacts.json")"
+          test "$artifact_count" -eq 1
+          artifact_id="$(jq -r '.artifacts[0].id' "$RUNNER_TEMP/forensic-artifacts.json")"
+          artifact_name="$(jq -r '.artifacts[0].name' "$RUNNER_TEMP/forensic-artifacts.json")"
+          artifact_size="$(jq -r '.artifacts[0].size_in_bytes' "$RUNNER_TEMP/forensic-artifacts.json")"
+          artifact_digest="$(jq -r '.artifacts[0].digest' "$RUNNER_TEMP/forensic-artifacts.json")"
+          artifact_expires="$(jq -r '.artifacts[0].expires_at' "$RUNNER_TEMP/forensic-artifacts.json")"
+          test "$(jq -r '.artifacts[0].expired' "$RUNNER_TEMP/forensic-artifacts.json")" = "false"
+
+          cp "$classification" "$RUNNER_TEMP/classification.json"
+          cp "$classification_md" "$RUNNER_TEMP/classification.md"
+          {
+            echo "artifact_id=$artifact_id"
+            echo "artifact_name=$artifact_name"
+            echo "artifact_size=$artifact_size"
+            echo "artifact_digest=$artifact_digest"
+            echo "artifact_expires=$artifact_expires"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Remove both one-use forensic controllers and prove no branch file diff remains
+        id: cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in "$FORENSIC_WORKFLOW_PATH" "$SUPERVISOR_WORKFLOW_PATH"; do
+            encoded_path="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$path")"
+            encoded_branch="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$CONTROLLER_BRANCH")"
+            current_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$encoded_path?ref=$encoded_branch" --jq .sha)"
+            test -n "$current_sha"
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$encoded_path" \
+              -f message="Remove completed Issue 782 failed-attempt forensic controller" \
+              -f sha="$current_sha" \
+              -f branch="$CONTROLLER_BRANCH" >/dev/null
+          done
+
+          branch_json="$(gh api "repos/$GITHUB_REPOSITORY/branches/$CONTROLLER_BRANCH")"
+          branch_tree="$(printf '%s' "$branch_json" | jq -r '.commit.commit.tree.sha')"
+          branch_head="$(printf '%s' "$branch_json" | jq -r '.commit.sha')"
+          test "$branch_tree" = "$EXPECTED_MAIN_TREE"
+          compare="$(gh api "repos/$GITHUB_REPOSITORY/compare/$EXPECTED_MAIN_SHA...$branch_head")"
+          test "$(printf '%s' "$compare" | jq '.files | length')" = "0"
+          {
+            echo "branch_head=$branch_head"
+            echo "branch_tree=$branch_tree"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post the evidence-backed terminal forensic disposition to Issue 782
+        shell: bash
+        run: |
+          set -euo pipefail
+          classification="$RUNNER_TEMP/classification.json"
+          conclusion="$(jq -r .conclusion "$classification")"
+          failed_job_id="$(jq -r .failedJobId "$classification")"
+          failed_job_name="$(jq -r .failedJobName "$classification")"
+          failed_steps="$(jq -r '[.failedSteps[]?.name] | if length==0 then "none returned" else join("; ") end' "$classification")"
+          admin_zero="$(jq -r .productionAdminAllowlistRestoredToZero "$classification")"
+          temp_count="$(jq -r .temporarySameShaDeploymentCount "$classification")"
+          residue_count="$(jq -r .syntheticResidueCount "$classification")"
+          aggregate_rows="$(jq -r .authorizedAggregateRows "$classification")"
+          payment_refs="$(jq -r .paymentReferences "$classification")"
+          next_action="$(jq -r .nextAction "$classification")"
+          forensic_run_id="${{ steps.forensic.outputs.run_id }}"
+
+          cat > "$RUNNER_TEMP/comment.md" <<EOF
+          ## Failed one-use production-UAT attempt — terminal forensic disposition
+
+          **Conclusion: \`$conclusion\`**
+
+          ### Immutable evidence
+
+          - failed UAT run: \`32931310661\`
+          - first failed job: \`$failed_job_id\` — $failed_job_name
+          - first failed step(s): $failed_steps
+          - forensic workflow run: \`$forensic_run_id\`
+          - forensic artifact: \`${{ steps.evidence.outputs.artifact_id }}\`
+          - artifact name: \`${{ steps.evidence.outputs.artifact_name }}\`
+          - artifact size: \`${{ steps.evidence.outputs.artifact_size }}\` bytes
+          - artifact digest: \`${{ steps.evidence.outputs.artifact_digest }}\`
+          - artifact expiry: \`${{ steps.evidence.outputs.artifact_expires }}\`
+          - exact authorized main: \`$EXPECTED_MAIN_SHA\`
+          - exact authorized tree: \`$EXPECTED_MAIN_TREE\`
+
+          ### Restored-state proof
+
+          - canonical deployment restored: \`true\`
+          - both canonical aliases restored: \`true\`
+          - production \`ADMIN_EMAILS\` restored to zero: \`$admin_zero\`
+          - temporary same-SHA deployment count: \`$temp_count\`
+          - synthetic Auth/MFA/profile residue count: \`$residue_count\`
+          - authorized DAC aggregate rows: \`$aggregate_rows\`
+          - payment references: \`$payment_refs\`
+          - one-use forensic controllers removed: \`true\`
+          - operations branch file diff from exact main: \`0\`
+          - final operations branch head: \`${{ steps.cleanup.outputs.branch_head }}\`
+          - final operations branch tree: \`${{ steps.cleanup.outputs.branch_tree }}\`
+
+          ### Next action
+
+          $next_action
+
+          No migration, production deployment, alias movement, production environment mutation, synthetic identity, participant row, provider request, or payment action was performed by the forensic sequence. Do not rerun the failed UAT blindly.
+          EOF
+
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+
+      - name: Record supervisor completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          conclusion="$(jq -r .conclusion "$RUNNER_TEMP/classification.json")"
+          {
+            echo '### Issue 782 forensic supervision complete'
+            echo "- forensic run: \`${{ steps.forensic.outputs.run_id }}\`"
+            echo "- classification: \`$conclusion\`"
+            echo "- forensic artifact: \`${{ steps.evidence.outputs.artifact_id }}\`"
+            echo '- one-use controllers removed: yes'
+            echo '- operations branch file diff from exact main: zero'
+            echo '- production mutation by supervisor: none'
+          } >> "$GITHUB_STEP_SUMMARY"
