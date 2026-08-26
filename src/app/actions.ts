@@ -10963,7 +10963,11 @@ export async function acceptInterestAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath(`/offers/${offerId}`);
-  redirectWithMessage(returnTo, "message", "Interest accepted and agreement created.");
+  redirectWithMessage(
+    `/trade-agreements/${agreement.id}`,
+    "message",
+    "Interest accepted and agreement created.",
+  );
 }
 
 export async function acceptGuestInterestAction(formData: FormData) {
@@ -11070,8 +11074,9 @@ export async function acceptGuestInterestAction(formData: FormData) {
   const acceptancePayload = acceptanceResult as
     | { agreement?: AgreementRow; created?: boolean }
     | null;
+  const agreement = acceptancePayload?.agreement;
 
-  if (acceptanceError || !acceptancePayload?.agreement) {
+  if (acceptanceError || !agreement) {
     logSupabaseActionError(
       "Failed to atomically accept guest response and create agreement",
       acceptanceError,
@@ -11205,7 +11210,7 @@ export async function acceptGuestInterestAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath(`/offers/${offerId}`);
   redirectWithMessage(
-    returnTo,
+    `/trade-agreements/${agreement.id}`,
     "message",
     "Guest response accepted. The linked account was used to create a formal agreement.",
   );
