@@ -1,0 +1,320 @@
+name: Issue 714 final exact-head repository and rendered gates v2
+
+on:
+  push:
+    branches:
+      - ops/issue714-final-gates-d530643-20260826-v2
+    paths:
+      - .github/workflows/issue714-final-exact-head-gates-v2.yml
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HEAD: d530643c30275606f92d83a0ae07d76ea487cf27
+  EXPECTED_TREE: 7fbb51cd25df2284b3415d995ae4700cd7b9c2c1
+  EXPECTED_MAIN: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  TARGET_BRANCH: agent/issue-675-activation-routing-canonical-walkthrough
+  EVIDENCE_DIR: issue714-final-exact-head-evidence-v2
+
+jobs:
+  exact-head:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: Check out immutable PR candidate
+        uses: actions/checkout@v4
+        with:
+          ref: d530643c30275606f92d83a0ae07d76ea487cf27
+          fetch-depth: 0
+
+      - name: Guard exact identity, synchronization, and clean remote state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          git fetch --no-tags origin main "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse origin/$TARGET_BRANCH)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          behind="$(git rev-list --count HEAD..origin/main)"
+          ahead="$(git rev-list --count origin/main..HEAD)"
+          test "$behind" = '0'
+          test "$ahead" -gt 0
+          {
+            printf 'head=%s\n' "$EXPECTED_HEAD"
+            printf 'tree=%s\n' "$EXPECTED_TREE"
+            printf 'selected_main=%s\n' "$EXPECTED_MAIN"
+            printf 'remote_target=%s\n' "$(git rev-parse origin/$TARGET_BRANCH)"
+            printf 'ahead_by=%s\nbehind_by=%s\n' "$ahead" "$behind"
+            printf 'worktree=clean\n'
+          } > "$EVIDENCE_DIR/identity.txt"
+          git show -s --format='commit=%H%ntree=%T%nparents=%P%nsubject=%s' HEAD \
+            > "$EVIDENCE_DIR/head-commit.txt"
+          git show -s --format='commit=%H%ntree=%T%nparents=%P%nsubject=%s' fd38e9c6f3738abd89d88222c520ba799143a6ab \
+            > "$EVIDENCE_DIR/synchronization-merge.txt"
+          git log --graph --decorate --oneline --boundary "$EXPECTED_MAIN"..HEAD \
+            > "$EVIDENCE_DIR/commit-graph.txt"
+          git diff --name-status "$EXPECTED_MAIN"...HEAD \
+            > "$EVIDENCE_DIR/changed-files.txt"
+          printf 'changed_file_count=%s\n' "$(wc -l < "$EVIDENCE_DIR/changed-files.txt" | tr -d ' ')" \
+            > "$EVIDENCE_DIR/changed-file-count.txt"
+          sha256sum supabase/migrations/20260814042516_account_activation_stage.sql \
+            > "$EVIDENCE_DIR/activation-migration.sha256"
+          git diff --check "$EXPECTED_MAIN"...HEAD
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependency lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+
+      - name: Run complete repository test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/npm-test.log"
+
+      - name: Run focused Issue 714 activation and integration contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          focused=(
+            src/account-activation-routing-contract.test.ts
+            src/account-activation-schema-contract.test.ts
+            src/lib/account-activation.test.ts
+            src/lib/auth-routes.test.ts
+            src/lib/background-privacy-controls.test.ts
+            src/lib/create-interface/unified-entry-routes.test.ts
+            src/lib/public-route-smoke.test.ts
+            src/lib/release-browser-gate-contract.test.ts
+            src/lib/supabase/proxy.test.ts
+            src/lib/walkthrough-profile.test.ts
+            src/live-now-truth-boundary.test.ts
+            src/offers-density-viewport-contract.test.ts
+            src/proxy.test.ts
+            src/walkthrough-next-canonical.test.ts
+            src/walkthrough-private-handoff.test.ts
+          )
+          for path in "${focused[@]}"; do test -f "$path"; done
+          printf '%s\n' "${focused[@]}" > "$EVIDENCE_DIR/focused-tests.txt"
+          node --import tsx --test "${focused[@]}" 2>&1 \
+            | tee "$EVIDENCE_DIR/focused-tests.log"
+          npm run test:vercel-controls 2>&1 \
+            | tee "$EVIDENCE_DIR/release-controls.log"
+
+      - name: Run ESLint, standalone TypeScript, and production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+          npx tsc --noEmit --pretty false 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/build.log"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium 2>&1 \
+            | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Run complete credential-free release browser suite
+        shell: bash
+        env:
+          CI: 'true'
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 \
+            | tee "$EVIDENCE_DIR/playwright-release.log"
+
+      - name: Install exact-candidate visual and keyboard inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > playwright.issue714-final-visual-v2.config.ts <<'TS'
+          import { defineConfig } from "@playwright/test";
+
+          export default defineConfig({
+            testDir: "./tests",
+            testMatch: "issue714-final-visual-v2.spec.ts",
+            fullyParallel: false,
+            workers: 1,
+            retries: 0,
+            timeout: 90_000,
+            expect: { timeout: 15_000 },
+            reporter: [
+              ["line"],
+              ["json", { outputFile: "issue714-final-exact-head-evidence-v2/visual-playwright.json" }],
+            ],
+            webServer: {
+              command: "npm run start -- -H 127.0.0.1 -p 3210",
+              reuseExistingServer: true,
+              timeout: 120_000,
+              url: "http://127.0.0.1:3210",
+            },
+            use: {
+              baseURL: "http://127.0.0.1:3210",
+              screenshot: "off",
+              trace: "off",
+              video: "off",
+            },
+            projects: [
+              { name: "desktop-1440x1000", use: { viewport: { width: 1440, height: 1000 } } },
+              { name: "tablet-1024x768", use: { viewport: { width: 1024, height: 768 } } },
+              { name: "mobile-390x844", use: { viewport: { width: 390, height: 844 } } },
+            ],
+          });
+          TS
+
+          cat > tests/issue714-final-visual-v2.spec.ts <<'TS'
+          import { mkdirSync, writeFileSync } from "node:fs";
+          import { expect, test, type Page, type TestInfo } from "@playwright/test";
+
+          const evidenceDir = "issue714-final-exact-head-evidence-v2";
+          const screenshotDir = `${evidenceDir}/screenshots`;
+          mkdirSync(screenshotDir, { recursive: true });
+
+          async function inspectPage(page: Page, testInfo: TestInfo, slug: string) {
+            const pageErrors: string[] = [];
+            const consoleErrors: string[] = [];
+            page.on("pageerror", (error) => pageErrors.push(error.message));
+            page.on("console", (message) => {
+              if (message.type() === "error") consoleErrors.push(message.text());
+            });
+
+            await page.waitForLoadState("networkidle").catch(() => undefined);
+            const bodyText = await page.locator("body").innerText();
+            expect(bodyText).not.toMatch(
+              /Application error|Unhandled Runtime Error|Internal Server Error|This page could not be found/i,
+            );
+            const widths = await page.evaluate(() => ({
+              client: document.documentElement.clientWidth,
+              scroll: document.documentElement.scrollWidth,
+            }));
+            expect(widths.scroll, `${slug} horizontal overflow`).toBeLessThanOrEqual(widths.client + 1);
+
+            const focused: string[] = [];
+            for (let i = 0; i < 12; i += 1) {
+              await page.keyboard.press("Tab");
+              const descriptor = await page.evaluate(() => {
+                const element = document.activeElement as HTMLElement | null;
+                if (!element || element === document.body) return "";
+                return [
+                  element.tagName,
+                  element.getAttribute("href") ?? "",
+                  element.getAttribute("aria-label") ?? "",
+                  element.textContent?.trim().slice(0, 80) ?? "",
+                ].join("|");
+              });
+              if (descriptor) focused.push(descriptor);
+            }
+            expect(new Set(focused).size, `${slug} keyboard path`).toBeGreaterThanOrEqual(2);
+
+            expect(pageErrors, `${slug} page errors`).toEqual([]);
+            expect(consoleErrors, `${slug} console errors`).toEqual([]);
+            const screenshotPath = `${screenshotDir}/${testInfo.project.name}--${slug}.png`;
+            await page.screenshot({ path: screenshotPath, fullPage: true, animations: "disabled" });
+            writeFileSync(
+              `${evidenceDir}/${testInfo.project.name}--${slug}.json`,
+              JSON.stringify(
+                { url: page.url(), widths, focused: [...new Set(focused)], pageErrors, consoleErrors },
+                null,
+                2,
+              ),
+            );
+          }
+
+          test("signed-out root is Discover, not the Feed workspace", async ({ page }, testInfo) => {
+            await page.goto("/");
+            await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
+            await expect(page.getByText("Current opportunities and next actions", { exact: true })).toHaveCount(0);
+            await inspectPage(page, testInfo, "signed-out-root-discover");
+          });
+
+          test("voluntary Walkthrough is rendered and keyboard reachable", async ({ page }, testInfo) => {
+            await page.goto("/walkthrough");
+            await expect(page.locator('[data-walkthrough-ready="true"]')).toBeVisible();
+            await inspectPage(page, testInfo, "walkthrough");
+          });
+
+          test("Feed retains the exact review-only truth boundary", async ({ page }, testInfo) => {
+            await page.goto("/feed");
+            await expect(page.getByText("Current opportunities and next actions", { exact: true })).toBeVisible();
+            await expect(page.getByRole("note", { name: "Recommendation status" })).toContainText(
+              "Recommendations to review — not agreements, commitments, payments, or verified outcomes.",
+            );
+            const text = await page.locator("body").innerText();
+            expect(text).not.toMatch(/payment completed|agreement verified|verified outcome achieved/i);
+            await inspectPage(page, testInfo, "feed-review-boundary");
+          });
+
+          test("unavailable account-state page is truthful and loop-free", async ({ page }, testInfo) => {
+            const response = await page.goto("/account-state-unavailable");
+            expect(response).not.toBeNull();
+            expect(response?.headers()["cache-control"] ?? "").toMatch(/private.*no-store|no-store.*private/i);
+            await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/i);
+            await expect(page.getByText("We couldn't confirm your setup status.", { exact: true })).toBeVisible();
+            const actions = page.locator(".hero-actions a[href]");
+            await expect(actions).toHaveCount(2);
+            const paths = await actions.evaluateAll((links) =>
+              links.map((link) => new URL((link as HTMLAnchorElement).href).pathname),
+            );
+            expect(new Set(paths)).toEqual(new Set(["/", "/discover"]));
+            await inspectPage(page, testInfo, "account-state-unavailable");
+          });
+          TS
+
+      - name: Run exact viewport visual, overflow, console, and keyboard gates
+        shell: bash
+        env:
+          CI: 'true'
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.issue714-final-visual-v2.config.ts 2>&1 \
+            | tee "$EVIDENCE_DIR/playwright-visual.log"
+
+      - name: Build privacy-safe evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/screenshots"
+          find "$EVIDENCE_DIR/screenshots" -type f -name '*.png' -print0 \
+            | sort -z | xargs -0 -r sha256sum > "$EVIDENCE_DIR/screenshot-sha256.txt"
+          screenshot_count="$(find "$EVIDENCE_DIR/screenshots" -type f -name '*.png' | wc -l | tr -d ' ')"
+          printf 'screenshot_count=%s\n' "$screenshot_count" > "$EVIDENCE_DIR/manifest.txt"
+          find "$EVIDENCE_DIR" -type f ! -name '*.png' -print0 \
+            | xargs -0 -r grep -IlE \
+              'eyJ[A-Za-z0-9_-]{20,}\.|refresh_token|access_token|SUPABASE_SERVICE_ROLE_KEY|VERCEL_TOKEN|private-sentinel|match_get=|match_give=|walkthrough_cause=' \
+              > "$EVIDENCE_DIR/privacy-scan-matches.txt" || true
+          test ! -s "$EVIDENCE_DIR/privacy-scan-matches.txt"
+          test "$screenshot_count" -eq 12
+          find "$EVIDENCE_DIR" -maxdepth 1 -type f -print0 \
+            | sort -z | xargs -0 -r sha256sum > "$EVIDENCE_DIR/evidence-sha256.txt"
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue714-final-exact-head-d530643-v2
+          path: issue714-final-exact-head-evidence-v2
+          if-no-files-found: error
+          retention-days: 30
