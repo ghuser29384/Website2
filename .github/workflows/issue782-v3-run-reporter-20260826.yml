@@ -1,0 +1,79 @@
+name: Issue 782 canonical UAT v3 reporter 20260826
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - ".github/workflows/issue782-v3-run-reporter-20260826.yml"
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+concurrency:
+  group: issue782-v3-run-reporter
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 320
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: Issue 782 canonical production UAT v3 20260826
+    steps:
+      - name: Wait for target v3 run and publish machine-readable status refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_id=""
+          for attempt in $(seq 1 300); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=ops/dac-production-canonical-uat-26d1fe43-20260824&per_page=100" > "$RUNNER_TEMP/runs.json"
+            target_id="$(jq -r --arg name "$TARGET_WORKFLOW" --argjson current "$GITHUB_RUN_ID" '[.workflow_runs[] | select(.name==$name and .id!=$current)] | sort_by(.created_at) | last | .id // empty' "$RUNNER_TEMP/runs.json")"
+            if test -n "$target_id"; then
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$target_id" > "$RUNNER_TEMP/target.json"
+              test "$(jq -r .status "$RUNNER_TEMP/target.json")" = completed && break
+            fi
+            sleep 60
+          done
+          test -n "$target_id"
+          test "$(jq -r .status "$RUNNER_TEMP/target.json")" = completed
+          conclusion="$(jq -r .conclusion "$RUNNER_TEMP/target.json")"
+          head_sha="$(jq -r .head_sha "$RUNNER_TEMP/target.json")"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$target_id/jobs?per_page=100" > "$RUNNER_TEMP/jobs.json"
+          failed_step="$(jq -r '[.jobs[].steps[] | select(.conclusion=="failure")] | first | .number // 0' "$RUNNER_TEMP/jobs.json")"
+          failed_name="$(jq -r '[.jobs[].steps[] | select(.conclusion=="failure")] | first | .name // "none"' "$RUNNER_TEMP/jobs.json")"
+          artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$target_id/artifacts")"
+          artifact_id="$(jq -r '.artifacts[0].id // 0' <<<"$artifacts")"
+          artifact_digest="$(jq -r '.artifacts[0].digest // "none"' <<<"$artifacts")"
+
+          for ref in ops/status-issue782-v3-success ops/status-issue782-v3-failure; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$ref" >/dev/null 2>&1 || true
+          done
+          if test "$conclusion" = success; then status_ref=refs/heads/ops/status-issue782-v3-success; else status_ref=refs/heads/ops/status-issue782-v3-failure; fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="$status_ref" -f sha="$head_sha" >/dev/null
+          if test "$conclusion" != success; then
+            step_ref="refs/heads/ops/status-issue782-v3-failure-step-$failed_step"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/${step_ref#refs/}" >/dev/null 2>&1 || true
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="$step_ref" -f sha="$head_sha" >/dev/null
+          fi
+
+          body=$(cat <<EOF
+          ## Automated issue 782 v3 run classification
+
+          - run: \`$target_id\`
+          - conclusion: \`$conclusion\`
+          - controller head: \`$head_sha\`
+          - first failed step number: \`$failed_step\`
+          - first failed step: \`$failed_name\`
+          - artifact: \`$artifact_id\`
+          - artifact digest: \`$artifact_digest\`
+
+          This reporter performed no production, database, environment, deployment, alias, identity, provider, or payment mutation.
+          EOF
+          )
+          gh issue comment 782 --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment 783 --repo "$GITHUB_REPOSITORY" --body "$body"
+          printf '%s\n' "$body" >> "$GITHUB_STEP_SUMMARY"
