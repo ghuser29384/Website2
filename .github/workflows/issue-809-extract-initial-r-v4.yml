@@ -1,0 +1,313 @@
+name: Issue 809 initial-R extractor v4
+
+on:
+  push:
+    branches:
+      - automation/issue-809-r-extract-20260826
+    paths:
+      - .github/workflows/issue-809-extract-initial-r-v4.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-809-initial-r-extractor-v4
+  cancel-in-progress: false
+
+jobs:
+  extract-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPECTED_BASE_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+      PRESERVED_SOURCE_SHA: 1a52f46d5d877e155dba697300296be32ed87d43
+      OUTPUT_BRANCH: feature/issue-809-zero-dollar-core-loop-initial-r-v4-20260826
+    steps:
+      - name: Check out automation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: automation/issue-809-r-extract-20260826
+
+      - name: Verify immutable inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE_SHA"
+          git fetch --no-tags origin \
+            "$PRESERVED_SOURCE_SHA:refs/remotes/origin/issue-809-preserved-r-source"
+          test "$(git rev-parse refs/remotes/origin/issue-809-preserved-r-source)" = \
+            "$PRESERVED_SOURCE_SHA"
+          if git ls-remote --exit-code --heads origin "$OUTPUT_BRANCH" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing output branch $OUTPUT_BRANCH." >&2
+            exit 1
+          fi
+
+      - name: Extract exact initial-R differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths=(
+            'src/app/actions.ts'
+            'src/app/api/live-now/feedback/route.ts'
+            'src/app/api/live-now/feedback/route.test.ts'
+            'src/app/trade-review/[milestoneId]/page.tsx'
+            'src/components/core-trade/full-navigation-action-form.tsx'
+            'src/components/core-trade/trade-agreement-stage-base.tsx'
+            'src/components/core-trade/trade-milestone-workflow.tsx'
+            'src/components/marketplace/participant-offer-group.tsx'
+            'src/lib/evidence-weighted-payment-lifecycle.test.ts'
+            'src/lib/marketplace-delta-contract.test.ts'
+            'src/lib/trade-evidence-reviewer-rls-contract.test.ts'
+            'supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql'
+            'supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql'
+          )
+          source_ref=refs/remotes/origin/issue-809-preserved-r-source
+          source_base="$(git merge-base "$EXPECTED_BASE_SHA" "$source_ref")"
+          git diff --binary "$source_base" "$source_ref" -- "${paths[@]}" \
+            > /tmp/issue-809-initial-r.patch
+          test -s /tmp/issue-809-initial-r.patch
+
+          git switch --detach "$EXPECTED_BASE_SHA"
+          git switch -c "$OUTPUT_BRANCH"
+          git apply --3way --index /tmp/issue-809-initial-r.patch
+
+          # Keep R independently executable: its RLS contract validates the two
+          # migrations now and validates Q workflow/fixtures only when exact Q
+          # is conventionally present in proof-only I.
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/lib/trade-evidence-reviewer-rls-contract.test.ts')
+          text = path.read_text()
+          text = text.replace(
+            'import { readFileSync } from "node:fs";',
+            'import { existsSync, readFileSync } from "node:fs";',
+            1,
+          )
+          old = '''const evaluatorFixture = readFileSync(
+            join(process.cwd(), "supabase/tests/evaluator_core_loop_browser_fixture.sql"),
+            "utf8",
+          );
+
+          const evaluatorCleanup = readFileSync(
+            join(process.cwd(), "supabase/tests/evaluator_core_loop_browser_cleanup.sql"),
+            "utf8",
+          );'''
+          new = '''const evaluatorFixturePath = join(
+            process.cwd(),
+            "supabase/tests/evaluator_core_loop_browser_fixture.sql",
+          );
+          const evaluatorCleanupPath = join(
+            process.cwd(),
+            "supabase/tests/evaluator_core_loop_browser_cleanup.sql",
+          );
+          const evaluatorHarnessPresent =
+            existsSync(evaluatorFixturePath) &&
+            existsSync(evaluatorCleanupPath) &&
+            evaluatorWorkflow.includes("evaluator-core-loop-gate:");
+          const evaluatorFixture = evaluatorHarnessPresent
+            ? readFileSync(evaluatorFixturePath, "utf8")
+            : "";
+          const evaluatorCleanup = evaluatorHarnessPresent
+            ? readFileSync(evaluatorCleanupPath, "utf8")
+            : "";'''
+          if old not in text:
+            raise SystemExit('Unable to make evaluator fixture reads conditional.')
+          text = text.replace(old, new, 1)
+
+          start = text.index('test("the evaluator is branch-independent')
+          replacement = '''test(
+            "the evaluator is branch-independent, run-owned, and serializes every isolated-QA writer",
+            { skip: !evaluatorHarnessPresent },
+            () => {
+              assert.match(
+                evaluatorWorkflow,
+                /group: evidence-payment-release-qa-\\$\\{\\{ github\\.repository \\}\\}/,
+              );
+              assert.match(evaluatorWorkflow, /cancel-in-progress: false/);
+              assert.match(
+                evaluatorWorkflow,
+                /evaluator-core-loop-gate:\\s+needs: exact-head-release-gate\\s+if: >-\\s+always\\(\\)[\\s\\S]*needs\\.exact-head-release-gate\\.result == 'success'/,
+              );
+              assert.match(
+                evaluatorWorkflow,
+                /github\\.event\\.pull_request\\.head\\.repo\\.full_name == github\\.repository/,
+              );
+              assert.match(
+                evaluatorWorkflow,
+                /EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz/,
+              );
+              assert.match(
+                evaluatorWorkflow,
+                /evaluator_core_loop_evidence_authorization\\.sql/,
+              );
+              assert.match(
+                evaluatorWorkflow,
+                /scripts\\/evaluator-core-loop-qa-run-ownership\\.test\\.mjs/,
+              );
+              assert.doesNotMatch(
+                evaluatorWorkflow,
+                /codex\\/evaluator-core-loop-authenticated-20260813/,
+              );
+            },
+          );
+
+          test(
+            "the evaluator uses six exact run-owned roles and exact cleanup",
+            { skip: !evaluatorHarnessPresent },
+            () => {
+              for (const source of [evaluatorFixture, evaluatorCleanup]) {
+                for (const binding of [
+                  "EVIDENCE_PAYMENT_QA_PAYER_ID",
+                  "EVIDENCE_PAYMENT_QA_PAYEE_ID",
+                  "EVIDENCE_PAYMENT_QA_REVIEWER_ID",
+                  "EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_ID",
+                  "EVIDENCE_PAYMENT_QA_OUTSIDER_ID",
+                  "EVIDENCE_PAYMENT_QA_ADMIN_ID",
+                  "EVIDENCE_PAYMENT_QA_OFFER_ID",
+                ]) {
+                  assert.match(source, new RegExp(binding));
+                }
+                assert.doesNotMatch(
+                  source,
+                  /81000000-|82000000-|83000000-|evaluator-core-loop-[a-z-]+@qa\\.invalid/i,
+                );
+              }
+              assert.match(
+                evaluatorFixture,
+                /EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_EMAIL/,
+              );
+              assert.match(
+                evaluatorFixture,
+                /qa_namespace/,
+              );
+              assert.doesNotMatch(
+                evaluatorCleanup,
+                /\\blike\\b|\\bilike\\b|\\border\\s+by\\b|\\blimit\\b/i,
+              );
+              assert.match(evaluatorCleanup, /'reviewRoles'/);
+              assert.match(evaluatorCleanup, /'authMfaFactors'/);
+              assert.match(evaluatorCleanup, /'performanceBonds'/);
+              assert.match(evaluatorCleanup, /'externalPaymentReceipts'/);
+            },
+          );'''
+          text = text[:start] + replacement + '\n'
+          path.write_text(text)
+          PY
+
+          git add src/lib/trade-evidence-reviewer-rls-contract.test.ts
+          printf '%s\n' "${paths[@]}" | sort > /tmp/expected-paths.txt
+          git diff --cached --name-only | sort > /tmp/actual-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          git diff --cached --check
+
+          runtime_paths=(
+            'src/app/actions.ts'
+            'src/app/api/live-now/feedback/route.ts'
+            'src/app/trade-review/[milestoneId]/page.tsx'
+            'src/components/core-trade/full-navigation-action-form.tsx'
+            'src/components/core-trade/trade-agreement-stage-base.tsx'
+            'src/components/core-trade/trade-milestone-workflow.tsx'
+            'src/components/marketplace/participant-offer-group.tsx'
+            'supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql'
+            'supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql'
+          )
+          if git grep -n -E \
+            '81000000-|82000000-|83000000-|evaluator-core-loop-[a-z-]+@qa\.invalid' \
+            -- "${runtime_paths[@]}"; then
+            echo "Initial R runtime contains a fixed evaluator UUID or QA email." >&2
+            exit 1
+          fi
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused zero-dollar runtime contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/app/api/live-now/feedback/route.test.ts \
+            src/lib/evidence-weighted-payment-lifecycle.test.ts \
+            src/lib/marketplace-delta-contract.test.ts \
+            src/lib/trade-evidence-reviewer-rls-contract.test.ts
+
+      - name: Run exact-scope lint and type gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx prettier --write src/lib/trade-evidence-reviewer-rls-contract.test.ts
+          git add src/lib/trade-evidence-reviewer-rls-contract.test.ts
+          npx eslint \
+            src/app/actions.ts \
+            src/app/api/live-now/feedback/route.ts \
+            src/app/api/live-now/feedback/route.test.ts \
+            'src/app/trade-review/[milestoneId]/page.tsx' \
+            src/components/core-trade/full-navigation-action-form.tsx \
+            src/components/core-trade/trade-agreement-stage-base.tsx \
+            src/components/core-trade/trade-milestone-workflow.tsx \
+            src/components/marketplace/participant-offer-group.tsx \
+            src/lib/evidence-weighted-payment-lifecycle.test.ts \
+            src/lib/marketplace-delta-contract.test.ts \
+            src/lib/trade-evidence-reviewer-rls-contract.test.ts
+          npx tsc --noEmit --pretty false
+          git diff --cached --check
+
+      - name: Build exact initial-R candidate
+        run: npm run build
+
+      - name: Commit and push exact output branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'src/app/actions.ts' \
+            'src/app/api/live-now/feedback/route.ts' \
+            'src/app/api/live-now/feedback/route.test.ts' \
+            'src/app/trade-review/[milestoneId]/page.tsx' \
+            'src/components/core-trade/full-navigation-action-form.tsx' \
+            'src/components/core-trade/trade-agreement-stage-base.tsx' \
+            'src/components/core-trade/trade-milestone-workflow.tsx' \
+            'src/components/marketplace/participant-offer-group.tsx' \
+            'src/lib/evidence-weighted-payment-lifecycle.test.ts' \
+            'src/lib/marketplace-delta-contract.test.ts' \
+            'src/lib/trade-evidence-reviewer-rls-contract.test.ts' \
+            'supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql' \
+            'supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql' \
+            | sort > /tmp/expected-paths-final.txt
+          git diff --cached --name-only | sort > /tmp/actual-paths-final.txt
+          diff -u /tmp/expected-paths-final.txt /tmp/actual-paths-final.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Implement issue #809 initial R zero-dollar core loop"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE_SHA"
+          git push origin "HEAD:refs/heads/$OUTPUT_BRANCH"
+          {
+            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
+            printf 'source=%s\n' "$PRESERVED_SOURCE_SHA"
+            printf 'head=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'scope_count=%s\n' "$(git diff --name-only "$EXPECTED_BASE_SHA" HEAD | wc -l | tr -d ' ')"
+          } | tee /tmp/issue-809-initial-r-result.txt
+
+      - name: Upload extractor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-809-initial-r-extractor-v4-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            /tmp/issue-809-initial-r.patch
+            /tmp/expected-paths.txt
+            /tmp/actual-paths.txt
+            /tmp/expected-paths-final.txt
+            /tmp/actual-paths-final.txt
+            /tmp/issue-809-initial-r-result.txt
