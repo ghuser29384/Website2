@@ -1,0 +1,670 @@
+name: Issue 782 failed production UAT forensics
+
+on:
+  push:
+    branches:
+      - ops/dac-production-canonical-uat-26d1fe43-20260824
+    paths:
+      - ".github/workflows/issue-782-failed-attempt-forensics-20260826.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: issue-782-failed-production-uat-forensics
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/dac-production-canonical-uat-26d1fe43-20260824
+  CONTROLLER_PATH: .github/workflows/issue-782-failed-attempt-forensics-20260826.yml
+  EXPECTED_MAIN_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+  EXPECTED_MAIN_TREE: 47fe96dfc881f1c57dea711283fc3db36a44e053
+  EXPECTED_PRODUCTION_REF: jnpoxvalyjtdghnperyu
+  EXPECTED_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+  EXPECTED_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+  EXPECTED_DEPLOYMENT_ID: dpl_GbKHA9YfvjEW3iqymgY4uzp7MWsX
+  EXPECTED_VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  FAILED_RUN_ID: "32931310661"
+  FAILED_RUN_HEAD: 556751869b2af34684ba4cf6c997e1dcb5143446
+  AUTHORIZATION_COMMENT_ID: "5420203746"
+  BACKUP_RUN_ID: "32904854234"
+  BACKUP_ARTIFACT_ID: "9584433427"
+  BACKUP_ARTIFACT_DIGEST: sha256:773149dde3b2512b3854e48c5adf1b1b4c16a627be3ed2c21207d947d9885835
+  POSTGRES_IMAGE: postgres:17
+  EVIDENCE_DIR: issue782-failed-attempt-forensics
+
+jobs:
+  forensics:
+    name: Exact first-cause, restoration, and zero-residue classification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact forensic controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact source, authorization, backup, and release concurrency
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git merge-base HEAD "$EXPECTED_MAIN_SHA")" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse "$EXPECTED_MAIN_SHA^{tree}")" = "$EXPECTED_MAIN_TREE"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+          test "$(git diff --name-only "$EXPECTED_MAIN_SHA" HEAD)" = "$CONTROLLER_PATH"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+
+          mkdir -p "$EVIDENCE_DIR"
+
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$AUTHORIZATION_COMMENT_ID" > "$RUNNER_TEMP/authorization.json"
+          jq -e '
+            .author_association == "OWNER"
+            and (.body | contains("bounded one-use canonical production reviewer UAT enablement"))
+            and (.body | contains("26d1fe436dbf9a4440bfafd501ddf8db944a1127"))
+          ' "$RUNNER_TEMP/authorization.json" >/dev/null
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BACKUP_RUN_ID" > "$RUNNER_TEMP/backup-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$BACKUP_ARTIFACT_ID" > "$RUNNER_TEMP/backup-artifact.json"
+          jq -e --arg sha "9b176aa10fd377a9357b944a701eb0911dc1b9fd" '
+            .status == "completed" and .conclusion == "success" and .head_sha == $sha
+          ' "$RUNNER_TEMP/backup-run.json" >/dev/null
+          jq -e --argjson id "$BACKUP_ARTIFACT_ID" --arg digest "$BACKUP_ARTIFACT_DIGEST" '
+            .id == $id
+            and .expired == false
+            and .digest == $digest
+            and (.expires_at | fromdateiso8601) > now
+          ' "$RUNNER_TEMP/backup-artifact.json" >/dev/null
+
+          active_release_count="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?per_page=100" \
+            | jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+          test "$active_release_count" = "0"
+
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg controllerSha "$GITHUB_SHA" \
+            --arg mainSha "$EXPECTED_MAIN_SHA" \
+            --arg mainTree "$EXPECTED_MAIN_TREE" \
+            --arg remoteMain "$remote_main" \
+            --argjson authorizationCommentId "$AUTHORIZATION_COMMENT_ID" \
+            --argjson backupRunId "$BACKUP_RUN_ID" \
+            --argjson backupArtifactId "$BACKUP_ARTIFACT_ID" \
+            --arg backupDigest "$BACKUP_ARTIFACT_DIGEST" \
+            --arg backupExpiresAt "$(jq -r .expires_at "$RUNNER_TEMP/backup-artifact.json")" \
+            --argjson activeReleaseCount "$active_release_count" \
+            --arg checkedAt "$(date -u +%FT%TZ)" '
+              {
+                repository:$repository,
+                controllerSha:$controllerSha,
+                mainSha:$mainSha,
+                mainTree:$mainTree,
+                remoteMain:$remoteMain,
+                controllerOnlyDiff:true,
+                authorizationCommentId:$authorizationCommentId,
+                backup:{
+                  runId:$backupRunId,
+                  artifactId:$backupArtifactId,
+                  digest:$backupDigest,
+                  expired:false,
+                  expiresAt:$backupExpiresAt
+                },
+                activeReleaseCount:$activeReleaseCount,
+                checkedAt:$checkedAt
+              }
+            ' > "$EVIDENCE_DIR/source-and-authorization.json"
+
+      - name: Retrieve and redact the first causal failed-run evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$FAILED_RUN_ID" > "$RUNNER_TEMP/failed-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$FAILED_RUN_ID/jobs?filter=all&per_page=100" > "$RUNNER_TEMP/failed-jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$FAILED_RUN_ID/artifacts?per_page=100" > "$RUNNER_TEMP/failed-artifacts.json"
+
+          jq -e --arg sha "$FAILED_RUN_HEAD" '
+            .id == 32931310661
+            and .status == "completed"
+            and .conclusion == "failure"
+            and .head_sha == $sha
+          ' "$RUNNER_TEMP/failed-run.json" >/dev/null
+
+          jq '{
+            run:{
+              id:.id,
+              name:.name,
+              event:.event,
+              status:.status,
+              conclusion:.conclusion,
+              headBranch:.head_branch,
+              headSha:.head_sha,
+              runAttempt:.run_attempt,
+              createdAt:.created_at,
+              runStartedAt:.run_started_at,
+              updatedAt:.updated_at,
+              htmlUrl:.html_url
+            }
+          }' "$RUNNER_TEMP/failed-run.json" > "$RUNNER_TEMP/failed-run-base.json"
+
+          jq '[.jobs[] | {
+            id,
+            name,
+            status,
+            conclusion,
+            startedAt:.started_at,
+            completedAt:.completed_at,
+            htmlUrl:.html_url,
+            steps:[.steps[] | {
+              number,
+              name,
+              status,
+              conclusion,
+              startedAt:.started_at,
+              completedAt:.completed_at
+            }]
+          }]' "$RUNNER_TEMP/failed-jobs.json" > "$EVIDENCE_DIR/job-and-step-timeline.json"
+
+          jq '{
+            totalCount:.total_count,
+            artifacts:[.artifacts[] | {
+              id,
+              name,
+              sizeInBytes:.size_in_bytes,
+              digest,
+              expired,
+              createdAt:.created_at,
+              expiresAt:.expires_at
+            }]
+          }' "$RUNNER_TEMP/failed-artifacts.json" > "$EVIDENCE_DIR/failed-run-artifacts.json"
+
+          failed_job_id="$(jq -r '[.jobs[] | select(.conclusion=="failure")] | sort_by(.started_at) | .[0].id // empty' "$RUNNER_TEMP/failed-jobs.json")"
+          failed_job_name="$(jq -r --argjson id "${failed_job_id:-0}" '.jobs[] | select(.id==$id) | .name' "$RUNNER_TEMP/failed-jobs.json")"
+          test -n "$failed_job_id"
+
+          logs_retrieved=false
+          if gh run view "$FAILED_RUN_ID" --job "$failed_job_id" --log > "$RUNNER_TEMP/failed-job.raw.log" 2> "$RUNNER_TEMP/failed-job-log.stderr"; then
+            logs_retrieved=true
+          fi
+
+          FAILED_JOB_ID="$failed_job_id" \
+          FAILED_JOB_NAME="$failed_job_name" \
+          LOGS_RETRIEVED="$logs_retrieved" \
+          RAW_LOG="$RUNNER_TEMP/failed-job.raw.log" \
+          JOBS_JSON="$RUNNER_TEMP/failed-jobs.json" \
+          OUTPUT_JSON="$EVIDENCE_DIR/first-cause.json" \
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const jobs = JSON.parse(fs.readFileSync(process.env.JOBS_JSON, 'utf8'));
+          const jobId = Number(process.env.FAILED_JOB_ID);
+          const job = jobs.jobs.find((entry) => entry.id === jobId);
+          const failedSteps = (job?.steps ?? [])
+            .filter((step) => step.conclusion === 'failure')
+            .map((step) => ({ number: step.number, name: step.name }));
+
+          const redact = (value) => value
+            .replace(/postgres(?:ql)?:\/\/[^\s'"`]+/gi, '[redacted-database-url]')
+            .replace(/Bearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, 'Bearer [redacted]')
+            .replace(/eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}/g, '[redacted-jwt]')
+            .replace(/(?:set-cookie|cookie):\s*[^\r\n]+/gi, '[redacted-cookie-header]')
+            .replace(/(?:password|secret|token|totp|refresh[_-]?token)\s*[=:]\s*[^\s'"`]+/gi, '$1=[redacted]')
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+            .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '[redacted-uuid]');
+
+          let excerpt = [];
+          const logsRetrieved = process.env.LOGS_RETRIEVED === 'true';
+          if (logsRetrieved && fs.existsSync(process.env.RAW_LOG)) {
+            const lines = fs.readFileSync(process.env.RAW_LOG, 'utf8').split(/\r?\n/);
+            const marker = lines.findIndex((line) =>
+              /##\[error\]|Process completed with exit code|AssertionError|Error:|FAILED|failure/i.test(line),
+            );
+            const start = marker >= 0 ? Math.max(0, marker - 16) : Math.max(0, lines.length - 100);
+            const end = marker >= 0 ? Math.min(lines.length, marker + 40) : lines.length;
+            excerpt = lines.slice(start, end).map(redact).filter(Boolean).slice(0, 120);
+          }
+
+          const result = {
+            schemaVersion: 1,
+            failedRunId: 32931310661,
+            failedJobId: jobId,
+            failedJobName: process.env.FAILED_JOB_NAME,
+            failedSteps,
+            logsRetrieved,
+            redactedExcerpt: excerpt,
+            rawLogsRetained: false,
+            classifiedAt: new Date().toISOString(),
+          };
+          fs.writeFileSync(process.env.OUTPUT_JSON, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
+          NODE
+
+          jq -s '.[0] + {jobs:.[1]}' \
+            "$RUNNER_TEMP/failed-run-base.json" \
+            "$EVIDENCE_DIR/job-and-step-timeline.json" \
+            > "$EVIDENCE_DIR/failed-run-state.json"
+
+          rm -f \
+            "$RUNNER_TEMP/failed-job.raw.log" \
+            "$RUNNER_TEMP/failed-job-log.stderr" \
+            "$RUNNER_TEMP/failed-run.json" \
+            "$RUNNER_TEMP/failed-jobs.json" \
+            "$RUNNER_TEMP/failed-artifacts.json" \
+            "$RUNNER_TEMP/failed-run-base.json"
+
+      - name: Verify canonical deployment, aliases, environment restoration, and temporary-deployment residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          echo "::add-mask::$VERCEL_TOKEN"
+
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$EXPECTED_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" \
+            > "$RUNNER_TEMP/canonical-deployment.json"
+          jq -e --arg id "$EXPECTED_DEPLOYMENT_ID" --arg project "$EXPECTED_VERCEL_PROJECT_ID" --arg sha "$EXPECTED_MAIN_SHA" '
+            ((.id // .uid)==$id)
+            and ((.projectId // .project.id // "")==$project)
+            and ((.readyState // .state // "")=="READY")
+            and (.target=="production")
+            and (.meta.githubCommitSha==$sha)
+            and ((.aliasError // null)==null)
+            and ((.alias // .aliases // []) | any(.=="moraltrade.org"))
+            and ((.alias // .aliases // []) | any(.=="www.moraltrade.org"))
+          ' "$RUNNER_TEMP/canonical-deployment.json" >/dev/null
+
+          mkdir -p "$EVIDENCE_DIR/aliases"
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/$alias_name?projectId=$EXPECTED_VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID" \
+              > "$RUNNER_TEMP/alias-${key}.json"
+            jq -e --arg alias "$alias_name" --arg project "$EXPECTED_VERCEL_PROJECT_ID" --arg deployment "$EXPECTED_DEPLOYMENT_ID" '
+              (.alias==$alias)
+              and (.projectId==$project)
+              and ((.deploymentId // .deployment.id // .deployment.uid // "")==$deployment)
+            ' "$RUNNER_TEMP/alias-${key}.json" >/dev/null
+            jq '{alias,projectId,deploymentId:(.deploymentId // .deployment.id // .deployment.uid)}' \
+              "$RUNNER_TEMP/alias-${key}.json" > "$EVIDENCE_DIR/aliases/${key}.json"
+          done
+
+          jq '{
+            deploymentId:(.id // .uid),
+            projectId:(.projectId // .project.id),
+            mainSha:.meta.githubCommitSha,
+            readyState:(.readyState // .state),
+            target,
+            aliasError:(.aliasError // null),
+            aliases:(.alias // .aliases // [])
+          }' "$RUNNER_TEMP/canonical-deployment.json" > "$EVIDENCE_DIR/canonical-deployment.json"
+
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$EXPECTED_VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=true&source=issue782-failed-attempt-forensics" \
+            > "$RUNNER_TEMP/project-envs.json"
+          RAW_ENV_FILE="$RUNNER_TEMP/project-envs.json" \
+          OUTPUT_FILE="$EVIDENCE_DIR/admin-environment-state.json" \
+          node <<'NODE'
+          const fs = require('node:fs');
+          const raw = JSON.parse(fs.readFileSync(process.env.RAW_ENV_FILE, 'utf8'));
+          const envs = Array.isArray(raw.envs) ? raw.envs : [];
+          const productionTarget = (entry) => Array.isArray(entry.target)
+            ? entry.target.includes('production')
+            : entry.target === 'production';
+          const matches = envs.filter((entry) => entry?.key === 'ADMIN_EMAILS' && productionTarget(entry));
+          const normalizedEntries = matches
+            .flatMap((entry) => typeof entry.value === 'string' ? entry.value.split(',') : [])
+            .map((value) => value.trim().toLowerCase())
+            .filter(Boolean);
+          const result = {
+            schemaVersion: 1,
+            productionAdminEmailsVariableCount: matches.length,
+            normalizedAllowlistEntryCount: new Set(normalizedEntries).size,
+            valuesRetained: false,
+            restoredToZero: matches.length === 0 && normalizedEntries.length === 0,
+            checkedAt: new Date().toISOString(),
+          };
+          fs.writeFileSync(process.env.OUTPUT_FILE, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
+          NODE
+          rm -f "$RUNNER_TEMP/project-envs.json"
+
+          run_created="$(jq -r .run.createdAt "$EVIDENCE_DIR/failed-run-state.json")"
+          run_updated="$(jq -r .run.updatedAt "$EVIDENCE_DIR/failed-run-state.json")"
+          since_ms="$(date -u -d "$run_created - 15 minutes" +%s%3N)"
+          until_ms="$(date -u -d "$run_updated + 15 minutes" +%s%3N)"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$EXPECTED_VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID&since=$since_ms&until=$until_ms&limit=100" \
+            > "$RUNNER_TEMP/deployments-window.json"
+          jq --arg sha "$EXPECTED_MAIN_SHA" --arg canonical "$EXPECTED_DEPLOYMENT_ID" '
+            {
+              inspectedWindow:{sinceMs:'"$since_ms"',untilMs:'"$until_ms"'},
+              sameShaNoncanonical:[
+                (.deployments // [])[]
+                | select(.meta.githubCommitSha==$sha and .id!=$canonical)
+                | {
+                    id,
+                    url,
+                    state,
+                    target,
+                    created,
+                    githubCommitSha:.meta.githubCommitSha
+                  }
+              ]
+            }
+          ' "$RUNNER_TEMP/deployments-window.json" > "$EVIDENCE_DIR/temporary-deployments.json"
+
+          rm -f "$RUNNER_TEMP/canonical-deployment.json" "$RUNNER_TEMP"/alias-*.json "$RUNNER_TEMP/deployments-window.json"
+
+      - name: Execute exact read-only production database residue and zero-payment proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          URL_TO_CHECK="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid =
+            ['postgres:', 'postgresql:'].includes(url.protocol) &&
+            decodeURIComponent(url.username) === process.env.EXPECTED_POOLER_USER &&
+            url.hostname === process.env.EXPECTED_POOLER_HOST &&
+            url.port === '5432' &&
+            url.pathname === '/postgres' &&
+            url.searchParams.get('sslmode') === 'require' &&
+            Boolean(url.password) &&
+            !url.href.includes('hvmxfjjbdcgjjudmthdz');
+          if (!valid) throw new Error('Refusing a database URL outside the exact TLS-only production target.');
+          NODE
+
+          docker pull "$POSTGRES_IMAGE" >/dev/null
+          cat > "$RUNNER_TEMP/forensics.sql" <<'SQL'
+          \set ON_ERROR_STOP on
+          set statement_timeout = '60s';
+          begin transaction read only;
+
+          do $guard$
+          declare
+            expected jsonb := '[
+              {"version":"20260806110000","name":"mpgf_pool_review_freeze","hash":"0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c"},
+              {"version":"20260806143000","name":"mpgf_pool_publication_materialization","hash":"ee8ab4a2c52893ff9f2d8dfcbf7dc25370768af80e5401978f7c4b09e8cab9e8"},
+              {"version":"20260806173000","name":"mpgf_dac_pledge_intent_ledger","hash":"36f558549361a1c0747dab5ecd545c74efbd42be14f6d634cb28e8b01f7c1e9c"},
+              {"version":"20260807050000","name":"mpgf_dac_success_lapse","hash":"83d9432f90fb808302249b5b572029d68bfc9aa2be32afbaba710f8e341d0948"},
+              {"version":"20260807100000","name":"mpgf_dac_public_terms_api","hash":"356d220c009dd6213b761712a30ce0124d95f075d5fdab5c44da3398a6265a0f"},
+              {"version":"20260812073000","name":"mpgf_dac_terminal_event_constraint_reconciliation","hash":"a19653e57a20dff8d01e1dd54b4b77304fe0712fe3356820953945e7b9999cd2"},
+              {"version":"20260812074500","name":"mpgf_dac_terminal_schema_reconciliation","hash":"d8dc2a55840425357c8859b87d26fba0415bb1a50c8e739518a88b9686142cbb"},
+              {"version":"20260815010000","name":"mpgf_pool_lifecycle_event_ordering","hash":"1d60c1abc73c8842cdcd9694c77d0e29dac4fe1de98a496714c0f2f2f5619766"},
+              {"version":"20260815011000","name":"mpgf_dac_terminal_guard_reconciliation","hash":"c64d521c6adb7a865d9ec5e2f25e70adb09f08f91e0f1bc0ec0610977aafd108"},
+              {"version":"20260818173000","name":"mpgf_dac_public_goods_foundation_reconciliation","hash":"e89a199cbdbb767d88a03585764bce774f533449519b67d04c082683f0638aa0"},
+              {"version":"20260818174000","name":"mpgf_dac_public_aggregate_column_privacy","hash":"0c3e7596f5f6b0d69d9438347f82ad79b6d0663511d3aec7cf333681fef9f581"}
+            ]'::jsonb;
+            item jsonb;
+            observed_name text;
+            observed_hash text;
+            relation_name text;
+          begin
+            for item in select value from jsonb_array_elements(expected)
+            loop
+              select name,
+                     case when statements is null or array_length(statements,1) is null then null
+                          else encode(extensions.digest(convert_to(statements[1], 'UTF8'), 'sha256'),'hex') end
+                into observed_name, observed_hash
+              from supabase_migrations.schema_migrations
+              where version = item->>'version';
+              if not found or observed_name is distinct from item->>'name' or observed_hash is distinct from item->>'hash' then
+                raise exception 'migration registry drift for %', item->>'version';
+              end if;
+            end loop;
+            if (select count(*) from supabase_migrations.schema_migrations where version in (select value->>'version' from jsonb_array_elements(expected))) <> 11 then
+              raise exception 'expected exactly eleven DAC registry rows';
+            end if;
+            foreach relation_name in array array[
+              'mpgf_pool_proposals','mpgf_pool_reviewers','mpgf_pool_proposal_versions','mpgf_pool_lifecycle_events',
+              'mpgf_public_goods_match_pools','mpgf_public_goods_rounds','mpgf_public_goods_campaigns','mpgf_public_goods_pledges',
+              'mpgf_dac_pledge_intents','mpgf_dac_pledge_events','mpgf_dac_campaign_outcomes'
+            ] loop
+              if to_regclass('public.'||relation_name) is null then
+                raise exception 'missing relation %', relation_name;
+              end if;
+              if not exists (
+                select 1
+                from pg_class c
+                join pg_namespace n on n.oid=c.relnamespace
+                where n.nspname='public' and c.relname=relation_name and c.relrowsecurity
+              ) then
+                raise exception 'RLS disabled on %', relation_name;
+              end if;
+            end loop;
+          end
+          $guard$;
+
+          with synthetic_users as (
+            select id
+            from auth.users
+            where lower(coalesce(email,'')) like '%@qa.moraltrade.invalid'
+               or coalesce(raw_user_meta_data::text,'') ilike '%issue782%'
+               or coalesce(raw_app_meta_data::text,'') ilike '%issue782%'
+               or coalesce(raw_user_meta_data::text,'') like '%32931310661%'
+               or coalesce(raw_app_meta_data::text,'') like '%32931310661%'
+          ),
+          synthetic_sessions as (
+            select id from auth.sessions where user_id in (select id from synthetic_users)
+          ),
+          synthetic_factors as (
+            select id from auth.mfa_factors where user_id in (select id from synthetic_users)
+          )
+          select jsonb_build_object(
+            'migrationRows', 11,
+            'dacTableCounts', jsonb_build_object(
+              'mpgf_pool_proposals',(select count(*) from public.mpgf_pool_proposals),
+              'mpgf_pool_reviewers',(select count(*) from public.mpgf_pool_reviewers),
+              'mpgf_pool_proposal_versions',(select count(*) from public.mpgf_pool_proposal_versions),
+              'mpgf_pool_lifecycle_events',(select count(*) from public.mpgf_pool_lifecycle_events),
+              'mpgf_public_goods_match_pools',(select count(*) from public.mpgf_public_goods_match_pools),
+              'mpgf_public_goods_rounds',(select count(*) from public.mpgf_public_goods_rounds),
+              'mpgf_public_goods_campaigns',(select count(*) from public.mpgf_public_goods_campaigns),
+              'mpgf_public_goods_pledges',(select count(*) from public.mpgf_public_goods_pledges),
+              'mpgf_dac_pledge_intents',(select count(*) from public.mpgf_dac_pledge_intents),
+              'mpgf_dac_pledge_events',(select count(*) from public.mpgf_dac_pledge_events),
+              'mpgf_dac_campaign_outcomes',(select count(*) from public.mpgf_dac_campaign_outcomes)
+            ),
+            'authorizedAggregateRows',
+              (select count(*) from public.mpgf_pool_proposals)
+              + (select count(*) from public.mpgf_pool_reviewers)
+              + (select count(*) from public.mpgf_pool_proposal_versions)
+              + (select count(*) from public.mpgf_pool_lifecycle_events)
+              + (select count(*) from public.mpgf_public_goods_match_pools)
+              + (select count(*) from public.mpgf_public_goods_rounds)
+              + (select count(*) from public.mpgf_public_goods_campaigns)
+              + (select count(*) from public.mpgf_public_goods_pledges)
+              + (select count(*) from public.mpgf_dac_pledge_intents)
+              + (select count(*) from public.mpgf_dac_pledge_events)
+              + (select count(*) from public.mpgf_dac_campaign_outcomes),
+            'paymentReferences',(
+              select count(*)
+              from public.mpgf_public_goods_pledges
+              where payment_intent_ref is not null or status='captured'
+            ),
+            'syntheticResidue', jsonb_build_object(
+              'authUsers',(select count(*) from synthetic_users),
+              'authIdentities',(select count(*) from auth.identities where user_id in (select id from synthetic_users)),
+              'authSessions',(select count(*) from auth.sessions where user_id in (select id from synthetic_users)),
+              'refreshTokens',(select count(*) from auth.refresh_tokens where user_id in (select id::text from synthetic_users)),
+              'mfaFactors',(select count(*) from auth.mfa_factors where user_id in (select id from synthetic_users)),
+              'mfaChallenges',(select count(*) from auth.mfa_challenges where factor_id in (select id from synthetic_factors)),
+              'mfaAmrClaims',(select count(*) from auth.mfa_amr_claims where session_id in (select id from synthetic_sessions)),
+              'profiles',(select count(*) from public.profiles where id in (select id from synthetic_users)),
+              'personAccounts',(select count(*) from moral_trade_private.person_accounts where profile_id in (select id from synthetic_users))
+            ),
+            'checkedAt', clock_timestamp()
+          );
+          rollback;
+          SQL
+
+          docker run --rm -i "$POSTGRES_IMAGE" psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
+            < "$RUNNER_TEMP/forensics.sql" > "$RUNNER_TEMP/database.raw"
+          grep -E '^\{' "$RUNNER_TEMP/database.raw" | tail -n 1 > "$EVIDENCE_DIR/database-state.json"
+          jq -e '.migrationRows==11 and .paymentReferences>=0 and .authorizedAggregateRows>=0' "$EVIDENCE_DIR/database-state.json" >/dev/null
+          rm -f "$RUNNER_TEMP/forensics.sql" "$RUNNER_TEMP/database.raw"
+
+      - name: Classify the failed attempt and determine the only valid next action
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIRST_CAUSE="$EVIDENCE_DIR/first-cause.json" \
+          FAILED_STATE="$EVIDENCE_DIR/failed-run-state.json" \
+          DB_STATE="$EVIDENCE_DIR/database-state.json" \
+          ADMIN_STATE="$EVIDENCE_DIR/admin-environment-state.json" \
+          DEPLOYMENT_STATE="$EVIDENCE_DIR/temporary-deployments.json" \
+          OUTPUT_JSON="$EVIDENCE_DIR/classification.json" \
+          OUTPUT_MD="$EVIDENCE_DIR/classification.md" \
+          node <<'NODE'
+          const fs = require('node:fs');
+          const read = (name) => JSON.parse(fs.readFileSync(name, 'utf8'));
+
+          const cause = read(process.env.FIRST_CAUSE);
+          const failed = read(process.env.FAILED_STATE);
+          const db = read(process.env.DB_STATE);
+          const admin = read(process.env.ADMIN_STATE);
+          const deployments = read(process.env.DEPLOYMENT_STATE);
+          const steps = failed.jobs.flatMap((job) => job.steps.map((step) => ({ ...step, jobName: job.name })));
+          const succeededMutationSteps = steps.filter((step) =>
+            step.conclusion === 'success' &&
+            /ADMIN_EMAILS|synthetic (?:identity|fixture|user)|create.*Auth|dispatch.*release|canonical aliases?|move.*aliases?|production UAT|run.*UAT/i.test(step.name),
+          );
+          const syntheticResidue = Object.values(db.syntheticResidue ?? {}).reduce((sum, value) => sum + Number(value || 0), 0);
+          const tempDeployments = deployments.sameShaNoncanonical?.length ?? 0;
+          const residue =
+            admin.productionAdminEmailsVariableCount > 0 ||
+            admin.normalizedAllowlistEntryCount > 0 ||
+            tempDeployments > 0 ||
+            syntheticResidue > 0 ||
+            Number(db.authorizedAggregateRows || 0) > 0 ||
+            Number(db.paymentReferences || 0) > 0;
+
+          let conclusion;
+          let nextAction;
+          if (!cause.logsRetrieved) {
+            conclusion = 'evidence_insufficient_fail_closed';
+            nextAction = 'Retrieve the exact first failing job log before any retry or cleanup decision.';
+          } else if (residue) {
+            conclusion = 'residue_requires_exact_cleanup';
+            nextAction = 'Use only exact run-owned identifiers and deployment IDs from this evidence for a bounded cleanup; do not broaden selection.';
+          } else if (succeededMutationSteps.length > 0) {
+            conclusion = 'clean_restored_after_failure';
+            nextAction = 'The failed one-use authorization is consumed; obtain a refreshed exact-state one-use authorization before another production UAT cycle.';
+          } else {
+            conclusion = 'clean_failed_before_mutation';
+            nextAction = 'The failed one-use authorization is consumed; repair the first causal controller defect and obtain a refreshed exact-state authorization before retrying.';
+          }
+
+          const result = {
+            schemaVersion: 1,
+            conclusion,
+            failedRunId: 32931310661,
+            failedJobId: cause.failedJobId,
+            failedJobName: cause.failedJobName,
+            failedSteps: cause.failedSteps,
+            redactedFirstCause: cause.redactedExcerpt,
+            logsRetrieved: cause.logsRetrieved,
+            succeededMutationSteps: succeededMutationSteps.map((step) => ({ jobName: step.jobName, number: step.number, name: step.name })),
+            canonicalDeploymentRestored: true,
+            canonicalAliasesRestored: true,
+            productionAdminAllowlistRestoredToZero: admin.restoredToZero,
+            temporarySameShaDeploymentCount: tempDeployments,
+            syntheticResidueCount: syntheticResidue,
+            authorizedAggregateRows: Number(db.authorizedAggregateRows || 0),
+            paymentReferences: Number(db.paymentReferences || 0),
+            nextAction,
+            classifiedAt: new Date().toISOString(),
+          };
+          fs.writeFileSync(process.env.OUTPUT_JSON, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
+
+          const lines = [
+            '# Issue #782 failed production-UAT forensic classification',
+            '',
+            `**Conclusion: \`${conclusion}\`**`,
+            '',
+            `- Failed run: \`32931310661\``,
+            `- Failed job: \`${cause.failedJobId}\` — ${cause.failedJobName}`,
+            `- Logs retrieved: \`${cause.logsRetrieved}\``,
+            `- Canonical deployment restored: \`true\``,
+            `- Canonical aliases restored: \`true\``,
+            `- ADMIN_EMAILS restored to zero: \`${admin.restoredToZero}\``,
+            `- Temporary same-SHA deployment count: \`${tempDeployments}\``,
+            `- Synthetic residue count: \`${syntheticResidue}\``,
+            `- Authorized DAC aggregate rows: \`${db.authorizedAggregateRows}\``,
+            `- Payment references: \`${db.paymentReferences}\``,
+            '',
+            '## First failing step',
+            '',
+            ...(cause.failedSteps.length ? cause.failedSteps.map((step) => `- Step ${step.number}: ${step.name}`) : ['- No failed step summary was returned.']),
+            '',
+            '## Only valid next action',
+            '',
+            nextAction,
+          ];
+          fs.writeFileSync(process.env.OUTPUT_MD, lines.join('\n') + '\n', { mode: 0o600 });
+          NODE
+
+      - name: Privacy-scan retained forensic evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "$EVIDENCE_DIR/privacy-scan.json"
+          from pathlib import Path
+          import json
+          import re
+
+          root = Path('issue782-failed-attempt-forensics')
+          files = [p for p in root.rglob('*') if p.is_file()]
+          patterns = {
+              'email': re.compile(rb'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}', re.I),
+              'database_url': re.compile(rb'postgres(?:ql)?://[^\s"\']+', re.I),
+              'jwt': re.compile(rb'eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}'),
+              'bearer': re.compile(rb'Bearer\s+[A-Za-z0-9._~+/-]{20,}', re.I),
+              'private_key': re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+              'provider_secret': re.compile(rb'(?:sk_(?:live|test)_|whsec_)[A-Za-z0-9_-]{8,}', re.I),
+              'cookie': re.compile(rb'(?:set-cookie|cookie):\s*[^\r\n]+', re.I),
+          }
+          findings=[]
+          for file in files:
+              data=file.read_bytes()
+              for label, pattern in patterns.items():
+                  if pattern.search(data): findings.append({'type':label,'file':str(file)})
+          result={'filesScanned':len(files),'findings':findings}
+          print(json.dumps(result,sort_keys=True))
+          if findings: raise SystemExit('Sensitive pattern found in retained forensic evidence.')
+          PY
+          jq -e '.findings==[]' "$EVIDENCE_DIR/privacy-scan.json" >/dev/null
+          rm -f "$RUNNER_TEMP/authorization.json" "$RUNNER_TEMP/backup-run.json" "$RUNNER_TEMP/backup-artifact.json"
+
+      - name: Upload immutable forensic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue782-failed-attempt-forensics-${{ github.run_id }}-${{ github.sha }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record forensic disposition
+        shell: bash
+        run: |
+          set -euo pipefail
+          conclusion="$(jq -r .conclusion "$EVIDENCE_DIR/classification.json")"
+          next_action="$(jq -r .nextAction "$EVIDENCE_DIR/classification.json")"
+          {
+            echo '### Issue 782 failed production-UAT forensics'
+            echo "- failed run: \`$FAILED_RUN_ID\`"
+            echo "- exact main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- conclusion: \`$conclusion\`"
+            echo "- canonical deployment and aliases: restored"
+            echo "- next action: $next_action"
+            echo '- production mutation by this forensic controller: none'
+          } >> "$GITHUB_STEP_SUMMARY"
