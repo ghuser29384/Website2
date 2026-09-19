@@ -1,0 +1,134 @@
+name: Cleanup 813 production preflight
+on:
+  push:
+    branches: [ops/release-cleanup-813-20260919]
+    paths: [.github/workflows/release-cleanup-813-preflight.yml]
+permissions:
+  contents: read
+concurrency:
+  group: cleanup-813-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      EXPECTED_SHA: 5c30aafcc2e57f87773598f8e40d8320b148fc02
+      BASE_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5c30aafcc2e57f87773598f8e40d8320b148fc02
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce reviewed scope and retirement
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git ls-remote origin refs/heads/cleanup/remove-obsolete-mock-home-20260919 | cut -f1)" = "$EXPECTED_SHA"
+          mkdir -p release-813-evidence
+          python - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          expected = {
+            'src/app/page.tsx', 'src/components/home/home-page.tsx',
+            'src/components/home/local-date-greeting.tsx', 'src/components/home/returning-home.module.css',
+            'src/lib/action-first-positioning.test.ts', 'src/lib/public-route-smoke.test.ts',
+            'src/lib/retired-home-contract.test.ts', 'src/sitewide-canonical-visual-system.test.ts',
+            'src/lib/background-candidate-exposure.test.ts',
+          }
+          changed = subprocess.check_output(['git','diff','--name-only',os.environ['BASE_SHA'],'HEAD'], text=True).splitlines()
+          assert set(changed) == expected, changed
+          for path in ['src/components/home/home-page.tsx','src/components/home/local-date-greeting.tsx','src/components/home/returning-home.module.css']:
+            assert not Path(path).exists(), path
+          delta = subprocess.check_output(['git','diff','--numstat','a83c7d8a65d42a72c2ba53ee14cf97a8e020d1c9','HEAD'], text=True)
+          assert delta.strip() == '5\t0\tsrc/lib/background-candidate-exposure.test.ts', delta
+          PY
+          git diff --check "$BASE_SHA"
+          git diff --stat "$BASE_SHA" | tee release-813-evidence/diff-stat.txt
+          git rev-parse HEAD > release-813-evidence/candidate-sha.txt
+          git rev-parse HEAD^{tree} > release-813-evidence/candidate-tree.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Complete source quality gates
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          npm test | tee release-813-evidence/tests.txt
+          npm run lint -- --quiet | tee release-813-evidence/lint.txt
+          npx tsc --noEmit | tee release-813-evidence/types.txt
+          npm run build | tee release-813-evidence/build.txt
+      - name: Complete existing release browser gate
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e:release -- --reporter=line | tee release-813-evidence/browser.txt
+      - name: Capture local desktop and mobile release surfaces
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3210 > release-813-evidence/server.txt 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3210/feed -o /dev/null; then break; fi
+            sleep 1
+          done
+          node --input-type=module <<'JS'
+          import { chromium } from '@playwright/test';
+          import assert from 'node:assert/strict';
+          import { writeFileSync } from 'node:fs';
+          const browser = await chromium.launch();
+          const results = [];
+          try {
+            for (const [name, width, height] of [['desktop',1440,1000],['mobile',390,844]]) {
+              const context = await browser.newContext({viewport:{width,height}});
+              await context.route('**/*', route => {
+                const url = new URL(route.request().url());
+                return url.hostname === '127.0.0.1' ? route.continue() : route.abort();
+              });
+              const page = await context.newPage();
+              const errors = [];
+              page.on('pageerror', error => errors.push(error.message));
+              await page.goto('http://127.0.0.1:3210/', {waitUntil:'networkidle'});
+              assert.equal(new URL(page.url()).pathname, '/walkthrough');
+              await page.screenshot({path:`release-813-evidence/${name}-first-visit.png`,fullPage:true});
+              await page.goto('http://127.0.0.1:3210/', {waitUntil:'networkidle'});
+              assert.equal(new URL(page.url()).pathname, '/');
+              const text = await page.locator('body').innerText();
+              assert.ok(text.trim().length > 200);
+              assert.ok(!text.includes('96% on-time verification'));
+              await page.screenshot({path:`release-813-evidence/${name}-returning-home.png`,fullPage:true});
+              results.push({viewport:name,url:page.url(),bodyTextLength:text.length,pageErrors:errors});
+              assert.deepEqual(errors, []);
+              await context.close();
+            }
+            writeFileSync('release-813-evidence/rendered.json', JSON.stringify(results,null,2));
+          } finally { await browser.close(); }
+          JS
+      - name: Preserve read-only preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-813-preflight-${{ github.run_id }}
+          path: |
+            release-813-evidence/
+            test-results/
+          retention-days: 7
