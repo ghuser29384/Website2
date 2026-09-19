@@ -20,7 +20,6 @@ function pageFiles(directory: string): string[] {
 function isCoveredPage(source: string) {
   return [
     /className=["'][^"']*page-shell/,
-    /<HomePage\b/,
     /<AuthPage\b/,
     /permanentRedirect\(/,
     /\bredirect\(/,
@@ -41,12 +40,10 @@ function isCoveredPage(source: string) {
   ].some((pattern) => pattern.test(source));
 }
 
-test("the canonical Home tokens drive every shared Next.js route", () => {
+test("the canonical shared tokens drive every shared Next.js route", () => {
   const layout = read("src/app/layout.tsx");
   const canonical = read("src/app/canonical-visual-system.css");
   const remediation = read("src/app/canonical-visual-system-remediation.css");
-  const home = read("src/components/home/returning-home.module.css");
-  const homePage = read("src/components/home/home-page.tsx");
 
   assert.match(layout, /import "\.\/canonical-visual-system\.css";/);
   assert.match(layout, /import "\.\/canonical-visual-system-remediation\.css";/);
@@ -71,9 +68,6 @@ test("the canonical Home tokens drive every shared Next.js route", () => {
     assert.match(canonical, new RegExp(`--mt-${token[0]}:\\s*${token[1]}`, "i"));
   }
 
-  assert.match(home, /--paper:\s*#f3eee9|--paper:\s*#f5f2e9/);
-  assert.match(home, /--black:\s*#030303|--black:\s*#050505/);
-  assert.match(home, /--blue:\s*#2450ff/);
   assert.match(canonical, /\.mt-site-topbar\s*\{[\s\S]*background:\s*var\(--mt-black\)/);
   assert.match(canonical, /\.hero\s*>\s*\.hero-grid\s+\.hero-copy\s*\{[\s\S]*background:\s*var\(--mt-black\)/);
   assert.match(canonical, /\.mt-site-footer\s*\{[\s\S]*background:\s*var\(--mt-black\)/);
@@ -81,7 +75,7 @@ test("the canonical Home tokens drive every shared Next.js route", () => {
   assert.match(canonical, /border-radius:\s*0\s*!important/);
   assert.equal(canonical.includes('[class*="card" i]'), false);
   assert.equal(canonical.includes('[class*="receipt" i]'), false);
-  assert.match(homePage, /data-mt-canonical-home="true"/);
+  assert.equal(existsSync(join(root, "src/components/home/home-page.tsx")), false);
   const authExclusion = /body:not\(:has\(\[data-mt-canonical-home="true"\]\)\):not\(:has\(\.mtw-shell\)\):not\(:has\(\[data-mt-surface="auth"\]\)\)/;
   assert.match(canonical, authExclusion);
   assert.match(remediation, authExclusion);

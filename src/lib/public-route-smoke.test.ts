@@ -431,7 +431,7 @@ test("public copy does not claim escrow-backed payment protection", () => {
     "src/app/offers/[offerId]/page.tsx",
     "src/app/offers/new/page.tsx",
     "src/app/terms/page.tsx",
-    "src/components/home/home-page.tsx",
+    "src/app/page.tsx",
     "src/components/home/offer-board.tsx",
     "src/components/home/offer-composer.tsx",
     "src/components/offers/offer-create-form.tsx",
@@ -445,19 +445,15 @@ test("public copy does not claim escrow-backed payment protection", () => {
   assert.match(publicSources, /not legal escrow/i);
 });
 
-test("returning home page exposes the screenshot navigation contract", () => {
-  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+test("returning home fallback delegates to the canonical live feed", () => {
+  const pageSource = readRepoFile("src/app/page.tsx");
+  const proxySource = readRepoFile("src/proxy.ts");
+  const nextConfig = readRepoFile("next.config.ts");
 
-  assert.match(homeSource, /aria-label="Primary"/);
-  assert.match(homeSource, /href="\/feed">Feed/);
-  assert.match(homeSource, />\s*Now\s*</);
-  assert.match(homeSource, /href="\/offers">Discover/);
-  assert.match(homeSource, /href="\/commitments">Activity/);
-  assert.match(homeSource, /href="\/evidence">Evidence/);
-  assert.match(homeSource, /href="\/profile">Account/);
-  assert.match(homeSource, /href="\/offers\?view=templates"/);
-  assert.match(homeSource, /Offer a trade/);
-  assert.doesNotMatch(homeSource, /SiteTopbar/);
+  assert.match(pageSource, /redirect\("\/feed"\)/);
+  assert.match(proxySource, /return rewriteToLiveHome\(request\)/);
+  assert.match(proxySource, /liveUrl\.pathname = "\/moral-trade-live\.html"/);
+  assert.match(nextConfig, /source: "\/feed",\s*destination: "\/moral-trade-live\.html"/);
 });
 
 test("global search and offers search expose real marketplace discovery", () => {
@@ -496,33 +492,12 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
-test("returning home page matches the recommended-trade decision screen", () => {
-  const homeSource = readRepoFile("src/components/home/home-page.tsx");
-  const greetingSource = readRepoFile("src/components/home/local-date-greeting.tsx");
+test("returning home fallback does not invent matches or completed actions", () => {
   const pageSource = readRepoFile("src/app/page.tsx");
 
-  assert.match(pageSource, /<HomePage displayName=\{viewer\?\.displayName \?\? null\} \/>/);
-  assert.match(homeSource, /Your best match right now, based on your commitments and priorities\./);
-  assert.match(greetingSource, /Good afternoon/);
-  assert.match(homeSource, /Replace eight/);
-  assert.match(homeSource, /car trips with transit\./);
-  assert.match(homeSource, /Fund \$20 of open/);
-  assert.match(homeSource, /civic infrastructure\./);
-  assert.match(homeSource, /You could offer/);
-  assert.match(homeSource, /Mina would offer/);
-  assert.match(homeSource, /Both say yes/);
-  assert.match(homeSource, /Complementary priorities/);
-  assert.match(homeSource, /96% on-time verification/);
-  assert.match(homeSource, /Proof method/);
-  assert.match(homeSource, /Offer this trade/);
-  assert.match(homeSource, /Counter this trade/);
-  assert.match(homeSource, /saved \? "Saved" : "Save"/);
-  assert.match(homeSource, /<span>Pass<\/span>/);
-  assert.match(homeSource, /useState\(14\)/);
-  assert.match(homeSource, /\{remainingMatches\} more matches/);
-  assert.match(homeSource, /Focus areas/);
-  assert.match(homeSource, /Commitment types/);
-  assert.doesNotMatch(homeSource, /founding cohort|Pilot inventory/);
+  assert.doesNotMatch(pageSource, /HomePage|useState|hasSupabaseAuthCookie|getViewer/);
+  assert.doesNotMatch(pageSource, /Mina|96% on-time verification|Both say yes|remainingMatches/);
+  assert.match(pageSource, /canonical: "\/"/);
 });
 
 test("visitor router exposes four live action paths before deeper marketplace mechanics", () => {
@@ -594,19 +569,13 @@ test("moral trade animation typology remains accessible as a reference surface",
   assert.match(globalCss, /--mt-purple/);
 });
 
-test("returning homepage keeps the screenshot match facts explicit and bounded", () => {
+test("retired homepage cannot reintroduce invented track records or urgency", () => {
   const pageSource = readRepoFile("src/app/page.tsx");
-  const homeSource = readRepoFile("src/components/home/home-page.tsx");
 
+  assert.match(pageSource, /redirect\("\/feed"\)/);
   assert.doesNotMatch(pageSource, /getMarketplaceOverview|buildMarketplaceSurface|listOpenOffersPage/);
-  assert.match(homeSource, /11 completed/);
-  assert.match(homeSource, /96% on-time verification/);
-  assert.match(homeSource, /Jul 23, 2026/);
-  assert.match(homeSource, /7 days left/);
-  assert.match(homeSource, /setRemainingMatches/);
-  assert.match(homeSource, /Math\.max\(0, count - 1\)/);
-  assert.equal(homeSource.includes("total value traded"), false);
-  assert.equal(homeSource.includes("registered users"), false);
+  assert.doesNotMatch(pageSource, /11 completed|96% on-time verification|Jul 23, 2026|7 days left/);
+  assert.doesNotMatch(pageSource, /setRemainingMatches|total value traded|registered users/);
 });
 
 test("people directory avoids popularity leaderboards and keeps trust signals evidence-bound", () => {
