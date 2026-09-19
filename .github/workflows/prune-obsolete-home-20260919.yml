@@ -1,34 +1,128 @@
-name: Inspect obsolete homepage dependencies
+name: Validate obsolete mock homepage removal
 on:
   push:
     branches: [cleanup/remove-obsolete-mock-home-20260919]
     paths: [.github/workflows/prune-obsolete-home-20260919.yml]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: prune-obsolete-mock-home-20260919
+  cancel-in-progress: false
 jobs:
-  inspect:
+  prune:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      BASE_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+      TARGET_BRANCH: cleanup/remove-obsolete-mock-home-20260919
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
-          persist-credentials: false
-      - name: Print exact retired-module references
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Enforce exact source and branch
         run: |
           set -euo pipefail
-          git grep -n -C 5 -E 'home-page.tsx|local-date-greeting|returning-home.module.css' -- src/lib/public-route-smoke.test.ts src/sitewide-canonical-visual-system.test.ts src/lib/action-first-positioning.test.ts
-      - uses: actions/upload-artifact@v4
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = "refs/heads/$TARGET_BRANCH"
+          test "$(git rev-parse HEAD^)" = 8642ff8ad6ef648aa9e6bc35c3a44d024cebabeb
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" HEAD)" = .github/workflows/prune-obsolete-home-20260919.yml
+          mkdir -p "$RUNNER_TEMP/prune-evidence"
+      - name: Apply reviewed removal with exact old and new blob checks
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess, textwrap, hashlib
+          controller = subprocess.check_output([
+              'git', 'show', 'af54f6ac795e15951b29d3c7a14a05a03e4a6200:.github/workflows/prune-obsolete-home-20260919.yml'
+          ], text=True)
+          start = '      - name: Remove mock and replace obsolete contracts\n        shell: python\n        run: |\n'
+          end = '      - name: Remove transient controller and freeze exact eight-file scope\n'
+          assert controller.count(start) == 1 and controller.count(end) == 1
+          code = textwrap.dedent(controller.split(start, 1)[1].split(end, 1)[0])
+          anchor = "if 'src/components/home/home-page.tsx' in smoke or 'local-date-greeting.tsx' in smoke:\n"
+          injection = '''smoke = replace_test(smoke, 'returning homepage keeps the screenshot match facts explicit and bounded', r"""
+          test("retired homepage cannot reintroduce invented track records or urgency", () => {
+            const pageSource = readRepoFile("src/app/page.tsx");
+
+            assert.match(pageSource, /redirect\\("\\/feed"\\)/);
+            assert.doesNotMatch(pageSource, /getMarketplaceOverview|buildMarketplaceSurface|listOpenOffersPage/);
+            assert.doesNotMatch(pageSource, /11 completed|96% on-time verification|Jul 23, 2026|7 days left/);
+            assert.doesNotMatch(pageSource, /setRemainingMatches|total value traded|registered users/);
+          });
+          """)
+          '''
+          assert code.count(anchor) == 1
+          code = code.replace(anchor, injection + anchor, 1)
+          exec(compile(code, '<reviewed-obsolete-home-removal>', 'exec'), {})
+          expected = {
+              'src/app/page.tsx': 'e160d664c21ffca1a58d519fef54176e6449140d',
+              'src/lib/public-route-smoke.test.ts': '6abec9dc7e4201fbc7b32e79b49687026ed2f963',
+              'src/lib/action-first-positioning.test.ts': 'a80bdc4dcd772c20f98285152167087743237a3c',
+              'src/sitewide-canonical-visual-system.test.ts': 'af5a7677e979d1812a749fc79d0409218db98a56',
+              'src/lib/retired-home-contract.test.ts': '1b599727c3516eefe36115752c481a0b90ec5ce5',
+          }
+          for path, digest in expected.items():
+              data = Path(path).read_bytes()
+              actual = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
+              assert actual == digest, (path, actual, digest)
+          for path in ['src/components/home/home-page.tsx', 'src/components/home/local-date-greeting.tsx', 'src/components/home/returning-home.module.css']:
+              assert not Path(path).exists(), path
+          print('Exact reviewed product blobs and all three deletions verified.')
+      - name: Remove controller and freeze exact product scope
+        run: |
+          set -euo pipefail
+          rm .github/workflows/prune-obsolete-home-20260919.yml
+          git add -- src/app/page.tsx src/components/home/home-page.tsx src/components/home/local-date-greeting.tsx src/components/home/returning-home.module.css src/lib/public-route-smoke.test.ts src/lib/action-first-positioning.test.ts src/sitewide-canonical-visual-system.test.ts src/lib/retired-home-contract.test.ts .github/workflows/prune-obsolete-home-20260919.yml
+          git diff --check "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" | wc -l)" -eq 8
+          git diff --stat "$BASE_SHA" | tee "$RUNNER_TEMP/prune-evidence/diff-stat.txt"
+          git diff --binary "$BASE_SHA" > "$RUNNER_TEMP/prune-evidence/cleanup.patch"
+          git diff --name-status "$BASE_SHA" > "$RUNNER_TEMP/prune-evidence/paths.txt"
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Focused source contracts
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/retired-home-contract.test.ts src/lib/action-first-positioning.test.ts src/sitewide-canonical-visual-system.test.ts | tee "$RUNNER_TEMP/prune-evidence/focused-tests.txt"
+      - name: Repository tests
+        run: |
+          set -euo pipefail
+          npm test | tee "$RUNNER_TEMP/prune-evidence/repository-tests.txt"
+      - name: Repository lint
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet | tee "$RUNNER_TEMP/prune-evidence/lint.txt"
+      - name: TypeScript
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --pretty false | tee "$RUNNER_TEMP/prune-evidence/typecheck.txt"
+      - name: Build without provider configuration
+        run: |
+          set -euo pipefail
+          npm run build | tee "$RUNNER_TEMP/prune-evidence/build.txt"
+          git diff --check "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" | wc -l)" -eq 8
+      - name: Publish validated removal to cleanup branch only
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$GITHUB_SHA"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Remove obsolete mock homepage and fake interactions"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          git rev-parse HEAD | tee "$RUNNER_TEMP/prune-evidence/product-head.txt"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/prune-evidence/product-tree.txt"
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: obsolete-home-source-26d1fe4
-          retention-days: 1
-          path: |
-            src/app/page.tsx
-            src/proxy.ts
-            next.config.ts
-            src/components/home/home-page.tsx
-            src/components/home/local-date-greeting.tsx
-            src/components/home/returning-home.module.css
-            src/lib/public-route-smoke.test.ts
-            src/lib/action-first-positioning.test.ts
-            src/sitewide-canonical-visual-system.test.ts
+          name: obsolete-home-cleanup-${{ github.run_id }}
+          path: ${{ runner.temp }}/prune-evidence/
+          retention-days: 7
+          if-no-files-found: warn
