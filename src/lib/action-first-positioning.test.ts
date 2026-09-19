@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const home = readFileSync("src/components/home/home-page.tsx", "utf8");
+const home = readFileSync("src/app/page.tsx", "utf8");
 const start = readFileSync("src/app/start/page.tsx", "utf8");
 const offers = readFileSync("src/app/offers/page.tsx", "utf8");
 const status = readFileSync("src/app/status/page.tsx", "utf8");
@@ -68,13 +68,11 @@ test("the financial action has a real external payment handoff and explicit boun
   assert.match(start, /No platform custody/);
 });
 
-test("the returning homepage keeps the action-first screenshot contract", () => {
-  assert.doesNotMatch(home, /A trade worth considering\./);
-  assert.match(home, /href="\/offers\?view=templates"/);
-  assert.match(home, /Offer a trade/);
-  assert.match(home, /Offer this trade/);
-  assert.match(home, /Verifiable financial contribution/);
-  assert.match(home, /Proof method/);
+test("the returning homepage delegates to real feed actions rather than a mock", () => {
+  assert.match(home, /redirect\("\/feed"\)/);
+  assert.doesNotMatch(home, /HomePage|useState|remainingMatches/);
+  assert.match(marketplaceProxy, /return rewriteToLiveHome\(request\)/);
+  assert.match(marketplaceProxy, /liveUrl\.pathname = "\/moral-trade-live\.html"/);
 });
 
 test("examples remain available only as a secondary learning resource", () => {
