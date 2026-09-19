@@ -1,0 +1,62 @@
+name: Dispatch cleanup 813 production release
+on:
+  push:
+    branches: [ops/release-cleanup-813-20260919]
+    paths: [.github/workflows/release-cleanup-813-dispatch.yml]
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: cleanup-813-production-dispatch
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify approved source and dispatch existing gated workflow once
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const {owner, repo} = context.repo;
+            const sha = '53ca525c314ad01892e45842bfea6c5c4269fcfd';
+            const candidate = '5c30aafcc2e57f87773598f8e40d8320b148fc02';
+            const tree = 'c27fef65ba659dc18fe100381e21d14fe51908d7';
+            const workflow_id = 'vercel-release.yml';
+            assert.equal(`${owner}/${repo}`, 'ghuser29384/Website2');
+            assert.equal(context.ref, 'refs/heads/ops/release-cleanup-813-20260919');
+            const trigger = (await github.rest.repos.getCommit({owner,repo,ref:context.sha})).data;
+            assert.equal(trigger.parents[0].sha, '48e116bbdad26109b1521e471aef224260a8284a');
+            assert.deepEqual(trigger.files.map(file => file.filename), ['.github/workflows/release-cleanup-813-dispatch.yml']);
+            const pr = (await github.rest.pulls.get({owner,repo,pull_number:813})).data;
+            assert.equal(pr.merged, true);
+            assert.equal(pr.merge_commit_sha, sha);
+            assert.equal(pr.head.sha, candidate);
+            const main = (await github.rest.repos.getBranch({owner,repo,branch:'main'})).data;
+            assert.equal(main.commit.sha, sha);
+            const merged = (await github.rest.git.getCommit({owner,repo,commit_sha:sha})).data;
+            assert.equal(merged.tree.sha, tree);
+            assert.deepEqual(merged.parents.map(parent => parent.sha), ['26d1fe436dbf9a4440bfafd501ddf8db944a1127']);
+            const proof = (await github.rest.actions.getWorkflowRun({owner,repo,run_id:35421542367})).data;
+            assert.equal(proof.conclusion, 'success');
+            assert.equal(proof.head_sha, '48e116bbdad26109b1521e471aef224260a8284a');
+            assert.equal(proof.path, '.github/workflows/release-cleanup-813-preflight.yml');
+            const workflow = (await github.rest.actions.getWorkflow({owner,repo,workflow_id})).data;
+            assert.equal(workflow.state, 'active');
+            const findRun = async () => {
+              const data = (await github.rest.actions.listWorkflowRuns({owner,repo,workflow_id,event:'workflow_dispatch',head_sha:sha,per_page:20})).data;
+              return data.workflow_runs.find(run => run.head_sha === sha && run.head_branch === 'main');
+            };
+            let run = await findRun();
+            if (!run) {
+              await github.rest.actions.createWorkflowDispatch({owner,repo,workflow_id,ref:'main',inputs:{target:'production',ref:'main',expected_sha:sha,synthetic_auth_fixture_url:''}});
+              for (let attempt=0; attempt<30 && !run; attempt++) {
+                await new Promise(resolve => setTimeout(resolve,2000));
+                run = await findRun();
+              }
+            }
+            assert.ok(run, 'The dispatched production workflow must be located before reporting success');
+            core.info(JSON.stringify({release_run_id:run.id,release_url:run.html_url,sha,tree,status:run.status,conclusion:run.conclusion}));
+            await core.summary.addHeading('Owner-authorized cleanup release dispatched').addRaw(`Exact merged SHA: ${sha}\n\nRelease: ${run.html_url}\n\nThis dispatch is not proof of deployment; all existing release gates and canonical verification must finish.`).write();
