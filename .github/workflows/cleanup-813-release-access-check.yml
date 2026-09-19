@@ -1,0 +1,66 @@
+name: Cleanup 813 release access check
+
+on:
+  push:
+    branches:
+      - ops/cleanup-813-release-access-check-20260919
+    paths:
+      - .github/workflows/cleanup-813-release-access-check.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cleanup-813-release-access-check
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/cleanup-813-release-access-check-20260919'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check existing release-token access without printing credentials or response bodies
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import { appendFileSync } from 'node:fs';
+          const token = process.env.VERCEL_TOKEN;
+          if (!token) throw new Error('Release token is absent. No deployment was attempted.');
+          const team = 'team_ySu6sF3Uho1E1GnJtCQPVEuJ';
+          const project = 'prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7';
+          const probes = [
+            ['team_read', `https://api.vercel.com/teams/${team}`],
+            ['project_read', `https://api.vercel.com/v9/projects/${project}?teamId=${team}`],
+          ];
+          const results = [];
+          for (const [check, url] of probes) {
+            try {
+              const response = await fetch(url, {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${token}` },
+                redirect: 'error',
+                signal: AbortSignal.timeout(20000),
+              });
+              const result = { check, status: response.status };
+              if (response.ok && check === 'project_read') {
+                const body = await response.json();
+                result.exactProject = body.id === project && body.name === 'moraltrade-site';
+                result.exactOwner = body.accountId === team;
+              } else {
+                await response.body?.cancel();
+              }
+              results.push(result);
+            } catch {
+              results.push({ check, status: 'request_failed' });
+            }
+          }
+          console.log(JSON.stringify({ purpose: 'Read-only diagnosis for PR 813', results, productionMutations: 0 }));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, '# Cleanup 813 release access check\n\nRead-only requests with the existing release token. No credentials, environment values, or raw API responses were retained. No deployment or production mutation was performed.\n\n```json\n' + JSON.stringify(results, null, 2) + '\n```\n');
+          if (results.some(result => result.status !== 200 || result.exactProject === false || result.exactOwner === false)) {
+            process.exitCode = 1;
+          }
+          JS
