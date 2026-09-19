@@ -1,279 +1,34 @@
-name: Prune obsolete mock homepage (isolated branch only)
+name: Inspect obsolete homepage dependencies
 on:
   push:
     branches: [cleanup/remove-obsolete-mock-home-20260919]
     paths: [.github/workflows/prune-obsolete-home-20260919.yml]
 permissions:
-  contents: write
-concurrency:
-  group: prune-obsolete-mock-home-20260919
-  cancel-in-progress: false
+  contents: read
 jobs:
-  prune:
+  inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      CI: "true"
-      NEXT_TELEMETRY_DISABLED: "1"
-      BASE_SHA: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
-      TARGET_BRANCH: cleanup/remove-obsolete-mock-home-20260919
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-      - uses: actions/setup-node@v4
+          ref: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+          persist-credentials: false
+      - name: Print exact retired-module references
+        run: |
+          set -euo pipefail
+          git grep -n -C 5 -E 'home-page.tsx|local-date-greeting|returning-home.module.css' -- src/lib/public-route-smoke.test.ts src/sitewide-canonical-visual-system.test.ts src/lib/action-first-positioning.test.ts
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-      - name: Enforce exact source and isolated branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          test "$GITHUB_REF" = "refs/heads/$TARGET_BRANCH"
-          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
-          test "$(git diff --name-only "$BASE_SHA" HEAD)" = .github/workflows/prune-obsolete-home-20260919.yml
-          mkdir -p "$RUNNER_TEMP/prune-evidence"
-      - name: Remove mock and replace obsolete contracts
-        shell: python
-        run: |
-          from pathlib import Path
-          import hashlib
-
-          EXPECTED = {
-              'src/app/page.tsx': '9964fdc3e463d444c0e01e758a10cc1c9ebe7ddc',
-              'src/components/home/home-page.tsx': '693667d07addbb1f166595b19613945092b04acd',
-              'src/components/home/local-date-greeting.tsx': 'af368227b61ab90c8e1689f4aa8a27effb405ea2',
-              'src/components/home/returning-home.module.css': '981566df4135815769bb99c7128946aa1b784f10',
-              'src/lib/public-route-smoke.test.ts': 'dcc790e01a43c5270ae3543d13517b8e311f53b0',
-              'src/lib/action-first-positioning.test.ts': 'b7dc55a1c3bc14de9aca33ff380ec6c7392f1308',
-              'src/sitewide-canonical-visual-system.test.ts': '9425656337b99e71043275c06268248473d610ad',
-          }
-          REMOVED = [
-              'src/components/home/home-page.tsx',
-              'src/components/home/local-date-greeting.tsx',
-              'src/components/home/returning-home.module.css',
-          ]
-          NEW_TEST = 'src/lib/retired-home-contract.test.ts'
-
-          def once(source, old, new):
-              count = source.count(old)
-              if count != 1:
-                  raise RuntimeError(f'Expected one occurrence, found {count}: {old[:100]!r}')
-              return source.replace(old, new, 1)
-
-          def replace_test(source, title, replacement):
-              start_marker = f'test("{title}", () => {{\n'
-              if source.count(start_marker) != 1:
-                  raise RuntimeError(f'Unexpected test identity: {title}')
-              start = source.index(start_marker)
-              end = source.index('\n});', start) + len('\n});')
-              old = source[start:end]
-              if '\ntest(' in old:
-                  raise RuntimeError(f'Test boundary crossed: {title}')
-              return once(source, old, replacement.strip())
-
-          original = {}
-          for path, expected in EXPECTED.items():
-              data = Path(path).read_bytes()
-              actual = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
-              if actual != expected:
-                  raise RuntimeError(f'Source drift: {path}: {actual} != {expected}')
-              original[path] = data.decode('utf-8')
-          if Path(NEW_TEST).exists():
-              raise RuntimeError('Regression path already exists')
-          edits = {}
-          page = original['src/app/page.tsx']
-          page = once(page, 'import { cookies } from "next/headers";', 'import { redirect } from "next/navigation";')
-          for line in [
-              'import { HomePage } from "@/components/home/home-page";\n',
-              'import { getViewer } from "@/lib/app-data";\n',
-              'import { hasSupabaseEnv } from "@/lib/supabase/config";\n',
-          ]:
-              page = once(page, line, '')
-          page = once(page,
-              'Moral Trade is a marketplace and coordination mechanism for completing real donations through reviewed payment routes, swapping commitments, redirecting offsets, and joining conditional funding pools.',
-              'Moral Trade helps people propose reciprocal commitments, review their terms, and track evidence.')
-          boundary = 'function hasSupabaseAuthCookie('
-          if page.count(boundary) != 1:
-              raise RuntimeError('Unexpected root-page boundary')
-          page = page[:page.index(boundary)] + '''// The proxy owns first-visit routing and the live homepage rewrite.
-          // A direct App Router fallback must not revive the retired mock experience.
-          export default function Page() {
-            redirect("/feed");
-          }
-          '''
-          edits['src/app/page.tsx'] = page
-          smoke = original['src/lib/public-route-smoke.test.ts']
-          smoke = replace_test(smoke, 'returning home page exposes the screenshot navigation contract', r'''
-          test("returning home fallback delegates to the canonical live feed", () => {
-            const pageSource = readRepoFile("src/app/page.tsx");
-            const proxySource = readRepoFile("src/proxy.ts");
-            const nextConfig = readRepoFile("next.config.ts");
-
-            assert.match(pageSource, /redirect\("\/feed"\)/);
-            assert.match(proxySource, /return rewriteToLiveHome\(request\)/);
-            assert.match(proxySource, /liveUrl\.pathname = "\/moral-trade-live\.html"/);
-            assert.match(nextConfig, /source: "\/feed",\s*destination: "\/moral-trade-live\.html"/);
-          });
-          ''')
-          smoke = replace_test(smoke, 'returning home page matches the recommended-trade decision screen', r'''
-          test("returning home fallback does not invent matches or completed actions", () => {
-            const pageSource = readRepoFile("src/app/page.tsx");
-
-            assert.doesNotMatch(pageSource, /HomePage|useState|hasSupabaseAuthCookie|getViewer/);
-            assert.doesNotMatch(pageSource, /Mina|96% on-time verification|Both say yes|remainingMatches/);
-            assert.match(pageSource, /canonical: "\/"/);
-          });
-          ''')
-          smoke = once(smoke, '    "src/components/home/home-page.tsx",\n', '    "src/app/page.tsx",\n')
-          if 'src/components/home/home-page.tsx' in smoke or 'local-date-greeting.tsx' in smoke:
-              raise RuntimeError('Unreconciled retired-home smoke reference')
-          edits['src/lib/public-route-smoke.test.ts'] = smoke
-          positioning = original['src/lib/action-first-positioning.test.ts']
-          positioning = once(positioning, 'readFileSync("src/components/home/home-page.tsx", "utf8")', 'readFileSync("src/app/page.tsx", "utf8")')
-          positioning = replace_test(positioning, 'the returning homepage keeps the action-first screenshot contract', r'''
-          test("the returning homepage delegates to real feed actions rather than a mock", () => {
-            assert.match(home, /redirect\("\/feed"\)/);
-            assert.doesNotMatch(home, /HomePage|useState|remainingMatches/);
-            assert.match(marketplaceProxy, /return rewriteToLiveHome\(request\)/);
-            assert.match(marketplaceProxy, /liveUrl\.pathname = "\/moral-trade-live\.html"/);
-          });
-          ''')
-          edits['src/lib/action-first-positioning.test.ts'] = positioning
-          visual = original['src/sitewide-canonical-visual-system.test.ts']
-          for line in [
-              '    /<HomePage\\b/,\n',
-              '  const home = read("src/components/home/returning-home.module.css");\n',
-              '  const homePage = read("src/components/home/home-page.tsx");\n',
-              r'  assert.match(home, /--paper:\s*#f3eee9|--paper:\s*#f5f2e9/);' + '\n',
-              r'  assert.match(home, /--black:\s*#030303|--black:\s*#050505/);' + '\n',
-              r'  assert.match(home, /--blue:\s*#2450ff/);' + '\n',
-          ]:
-              visual = once(visual, line, '')
-          visual = once(visual,
-              'test("the canonical Home tokens drive every shared Next.js route", () => {',
-              'test("the canonical shared tokens drive every shared Next.js route", () => {')
-          visual = once(visual, '  assert.match(homePage, /data-mt-canonical-home="true"/);',
-              '  assert.equal(existsSync(join(root, "src/components/home/home-page.tsx")), false);')
-          edits['src/sitewide-canonical-visual-system.test.ts'] = visual
-          edits[NEW_TEST] = r'''import assert from "node:assert/strict";
-          import { existsSync, readFileSync, readdirSync } from "node:fs";
-          import { join, relative } from "node:path";
-          import test from "node:test";
-
-          const root = process.cwd();
-          const retiredFiles = [
-            "src/components/home/home-page.tsx",
-            "src/components/home/local-date-greeting.tsx",
-            "src/components/home/returning-home.module.css",
-          ];
-          const read = (path: string) => readFileSync(join(root, path), "utf8");
-
-          function productionSources(directory: string): string[] {
-            return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-              const path = join(directory, entry.name);
-              if (entry.isDirectory()) return productionSources(path);
-              if (!entry.isFile() || !/\.(?:ts|tsx|js|jsx|css)$/.test(entry.name)) return [];
-              if (/\.(?:test|spec)\.[^.]+$/.test(entry.name)) return [];
-              return [path];
-            });
-          }
-
-          test("the obsolete hard-coded homepage and its exclusive assets are removed", () => {
-            for (const path of retiredFiles) {
-              assert.equal(existsSync(join(root, path)), false, `${path} must stay retired`);
-            }
-          });
-
-          test("the root fallback redirects to the existing feed without profile reads", () => {
-            const page = read("src/app/page.tsx");
-            assert.match(page, /import \{ redirect \} from "next\/navigation"/);
-            assert.match(page, /redirect\("\/feed"\)/);
-            assert.doesNotMatch(page, /HomePage|useState|hasSupabaseAuthCookie|getViewer|next\/headers/);
-            assert.match(page, /canonical: "\/"/);
-          });
-
-          test("retiring the mock preserves first-visit routing and live-feed ownership", () => {
-            const proxy = read("src/proxy.ts");
-            const config = read("next.config.ts");
-            assert.match(proxy, /if \(pathname === "\/"\)/);
-            assert.match(proxy, /walkthroughUrl\.pathname = "\/walkthrough"/);
-            assert.match(proxy, /return rewriteToLiveHome\(request\)/);
-            assert.match(proxy, /liveUrl\.pathname = "\/moral-trade-live\.html"/);
-            assert.match(config, /source: "\/feed",\s*destination: "\/moral-trade-live\.html"/);
-            assert.ok(existsSync(join(root, "public/moral-trade-live.html")));
-          });
-
-          test("production source does not import retired homepage modules", () => {
-            const references = productionSources(join(root, "src")).filter((path) =>
-              /(?:from\s*|import\s*(?:\(\s*)?)["'][^"']*(?:home-page|local-date-greeting|returning-home\.module\.css)["']/.test(
-                readFileSync(path, "utf8"),
-              ),
-            );
-            assert.deepEqual(references.map((path) => relative(root, path)), []);
-          });
-
-          test("the root fallback contains no fabricated counterparties or match statistics", () => {
-            assert.doesNotMatch(
-              read("src/app/page.tsx"),
-              /Mina|96% on-time verification|11 completed|Both say yes|remainingMatches|Jul 23, 2026/,
-            );
-          });
-          '''
-          for path, content in edits.items():
-              Path(path).write_text(content, encoding='utf-8', newline='\n')
-          for path in REMOVED:
-              Path(path).unlink()
-          print('Transformed exactly 5 text files and deleted 3 exclusive mock files.')
-      - name: Remove transient controller and freeze exact eight-file scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm .github/workflows/prune-obsolete-home-20260919.yml
-          git add -- src/app/page.tsx src/components/home/home-page.tsx src/components/home/local-date-greeting.tsx src/components/home/returning-home.module.css src/lib/public-route-smoke.test.ts src/lib/action-first-positioning.test.ts src/sitewide-canonical-visual-system.test.ts src/lib/retired-home-contract.test.ts .github/workflows/prune-obsolete-home-20260919.yml
-          git diff --check "$BASE_SHA"
-          test "$(git diff --name-only "$BASE_SHA" | wc -l)" -eq 8
-          git diff --stat "$BASE_SHA" | tee "$RUNNER_TEMP/prune-evidence/diff-stat.txt"
-          git diff --binary "$BASE_SHA" > "$RUNNER_TEMP/prune-evidence/cleanup.patch"
-          git diff --name-status "$BASE_SHA" > "$RUNNER_TEMP/prune-evidence/paths.txt"
-      - name: Install locked dependencies
-        run: npm ci
-      - name: Focused source contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --import tsx --test src/lib/retired-home-contract.test.ts src/lib/action-first-positioning.test.ts src/sitewide-canonical-visual-system.test.ts | tee "$RUNNER_TEMP/prune-evidence/focused-tests.txt"
-      - name: Repository tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm test | tee "$RUNNER_TEMP/prune-evidence/repository-tests.txt"
-      - name: Lint, types and disabled-provider build
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run lint -- --quiet | tee "$RUNNER_TEMP/prune-evidence/lint.txt"
-          npx tsc --noEmit --pretty false | tee "$RUNNER_TEMP/prune-evidence/typecheck.txt"
-          npm run build | tee "$RUNNER_TEMP/prune-evidence/build.txt"
-          git diff --check "$BASE_SHA"
-          test "$(git diff --name-only "$BASE_SHA" | wc -l)" -eq 8
-      - name: Publish only validated product changes to cleanup branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
-          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$GITHUB_SHA"
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Remove obsolete mock homepage and fake interactions"
-          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
-          git rev-parse HEAD | tee "$RUNNER_TEMP/prune-evidence/product-head.txt"
-          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/prune-evidence/product-tree.txt"
-      - name: Preserve exact evidence (no credentials or runtime data)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: obsolete-home-cleanup-${{ github.run_id }}
-          path: ${{ runner.temp }}/prune-evidence/
-          retention-days: 7
-          if-no-files-found: warn
+          name: obsolete-home-source-26d1fe4
+          retention-days: 1
+          path: |
+            src/app/page.tsx
+            src/proxy.ts
+            next.config.ts
+            src/components/home/home-page.tsx
+            src/components/home/local-date-greeting.tsx
+            src/components/home/returning-home.module.css
+            src/lib/public-route-smoke.test.ts
+            src/lib/action-first-positioning.test.ts
+            src/sitewide-canonical-visual-system.test.ts
