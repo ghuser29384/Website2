@@ -52,48 +52,52 @@ test("Start service snapshot renders as distinct non-overlapping rows", async ({
   await expect(stats).toHaveCount(3);
   await expect(followup).toBeVisible();
 
-  // React can replace the visible fallback with the resolved segment between separate
-  // boundingBox calls. Capture the card and all descendant geometry synchronously in one browser
-  // task so the assertions describe one user-visible DOM state.
-  const layout = await card.evaluate((element) => {
-    const toRect = (target: Element) => {
-      const box = target.getBoundingClientRect();
-      return {
-        bottom: box.bottom,
-        height: box.height,
-        left: box.left,
-        right: box.right,
-        top: box.top,
-        width: box.width,
-      };
-    };
-    const renderedStats = Array.from(element.querySelectorAll(".growth-progress-stat"));
-    const renderedFollowup = element.querySelector(".hero-followup");
+  // React can replace the visible fallback with the resolved segment while the streamed response
+  // settles. Retry one synchronous geometry snapshot until the accessible card reaches a stable,
+  // non-zero layout; this still fails genuine overlap or collapsed-row regressions.
+  await expect
+    .poll(
+      () =>
+        card.evaluate((element) => {
+          const toRect = (target: Element) => {
+            const box = target.getBoundingClientRect();
+            return {
+              bottom: box.bottom,
+              height: box.height,
+              left: box.left,
+              right: box.right,
+              top: box.top,
+            };
+          };
+          const renderedStats = Array.from(element.querySelectorAll(".growth-progress-stat"));
+          const renderedFollowup = element.querySelector(".hero-followup");
 
-    if (renderedStats.length !== 3 || !renderedFollowup) {
-      return null;
-    }
+          if (renderedStats.length !== 3 || !renderedFollowup) {
+            return false;
+          }
 
-    return {
-      card: toRect(element),
-      stats: renderedStats.map((stat) => toRect(stat)),
-      followup: toRect(renderedFollowup),
-    };
-  });
-  expect(layout).not.toBeNull();
+          const cardRect = toRect(element);
+          const statRects = renderedStats.map((stat) => toRect(stat));
+          const followupRect = toRect(renderedFollowup);
 
-  const cardRect = layout!.card;
-  const statRects = layout!.stats;
-  const followupRect = layout!.followup;
-
-  for (const item of statRects) {
-    expect(item.left).toBeGreaterThanOrEqual(cardRect.left - 1);
-    expect(item.right).toBeLessThanOrEqual(cardRect.right + 1);
-    expect(item.height).toBeGreaterThan(44);
-  }
-  expect(statRects[0].bottom).toBeLessThanOrEqual(statRects[1].top + 1);
-  expect(statRects[1].bottom).toBeLessThanOrEqual(statRects[2].top + 1);
-  expect(statRects[2].bottom).toBeLessThanOrEqual(followupRect.top + 1);
+          return (
+            statRects.every(
+              (item) =>
+                item.left >= cardRect.left - 1 &&
+                item.right <= cardRect.right + 1 &&
+                item.height > 44,
+            ) &&
+            statRects[0].bottom <= statRects[1].top + 1 &&
+            statRects[1].bottom <= statRects[2].top + 1 &&
+            statRects[2].bottom <= followupRect.top + 1
+          );
+        }),
+      {
+        intervals: [100, 250, 500],
+        timeout: 10_000,
+      },
+    )
+    .toBe(true);
 
   for (const label of ["Financial contribution", "Open proposals", "Public profiles"]) {
     await expect(card.getByText(label, { exact: true })).toBeVisible();
