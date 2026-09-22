@@ -19,11 +19,8 @@ jobs:
     if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/cleanup-813-release-access-check-20260919'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    outputs:
-      access_denied: ${{ steps.access.outputs.denied }}
     steps:
-      - name: Check existing release-token access without printing credentials or response bodies
-        id: access
+      - name: Verify release token can read the exact Vercel project
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -31,36 +28,38 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'JS'
           import { appendFileSync } from 'node:fs';
+
           const token = process.env.VERCEL_TOKEN;
           if (!token) throw new Error('Release token is absent. No deployment was attempted.');
+
           const team = 'team_ySu6sF3Uho1E1GnJtCQPVEuJ';
           const project = 'prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7';
+          const expectedName = 'moraltrade-site';
           const probes = [
-            ['team_read', `https://api.vercel.com/teams/${team}`],
-            ['project_read', `https://api.vercel.com/v9/projects/${project}?teamId=${team}`],
+            ['project_scoped', 'https://api.vercel.com/v9/projects/' + project],
+            ['project_team_param', 'https://api.vercel.com/v9/projects/' + project + '?teamId=' + team],
           ];
-          const knownCodes = new Set(['forbidden', 'token_expired', 'invalid_token', 'not_authorized', 'unauthorized', 'missing_scope', 'insufficient_scope', 'not_found']);
+
           const results = [];
+          let authorized = false;
+
           for (const [check, url] of probes) {
             try {
               const response = await fetch(url, {
                 method: 'GET',
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: 'Bearer ' + token },
                 redirect: 'error',
                 signal: AbortSignal.timeout(20000),
               });
+
               const result = { check, status: response.status };
-              if (response.ok && check === 'project_read') {
+              if (response.ok) {
                 const body = await response.json();
-                result.exactProject = body.id === project && body.name === 'moraltrade-site';
-                result.exactOwner = body.accountId === team;
-              } else if (!response.ok) {
-                const body = await response.json().catch(() => null);
-                result.errorCode = knownCodes.has(body?.error?.code) ? body.error.code : 'other';
-                const message = typeof body?.error?.message === 'string' ? body.error.message : '';
-                result.expiryIndicated = /expired|expiration/i.test(message);
-                result.scopeOrAccessIndicated = /scope|permission|access/i.test(message);
-                result.invalidOrRevokedIndicated = /invalid|not valid|revoked/i.test(message);
+                result.exactProject = body.id === project && body.name === expectedName;
+                result.exactOwner = body.accountId == null ? 'not_returned' : body.accountId === team;
+                if (result.exactProject && (result.exactOwner === true || result.exactOwner === 'not_returned')) {
+                  authorized = true;
+                }
               } else {
                 await response.body?.cancel();
               }
@@ -69,40 +68,16 @@ jobs:
               results.push({ check, status: 'request_failed' });
             }
           }
-          console.log(JSON.stringify({ purpose: 'Read-only diagnosis for PR 813', results, productionMutations: 0 }));
-          appendFileSync(process.env.GITHUB_STEP_SUMMARY, '# Cleanup 813 release access check\n\nRead-only requests with the existing release token. Only HTTP status, allowlisted error codes, and classification booleans are retained. No credentials, environment values, or raw API responses are retained.\n\n```json\n' + JSON.stringify(results, null, 2) + '\n```\n');
-          const denied = results.length === 2 && results.every(result => result.status === 401 || result.status === 403);
-          appendFileSync(process.env.GITHUB_OUTPUT, `denied=${denied}\n`);
-          if (results.some(result => result.status !== 200 || result.exactProject === false || result.exactOwner === false)) process.exitCode = 1;
-          JS
 
-  stop_blocked_retry:
-    needs: inspect
-    if: always() && needs.inspect.outputs.access_denied == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 3
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Cancel only our exact cleanup retry when the credential is denied
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'JS'
-          const url = 'https://api.github.com/repos/ghuser29384/Website2/actions/runs/35422163689';
-          const options = { headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: 'application/vnd.github+json' }, redirect: 'error', signal: AbortSignal.timeout(20000) };
-          const response = await fetch(url, options);
-          if (!response.ok) throw new Error(`Release lookup HTTP ${response.status}`);
-          const run = await response.json();
-          if (run.head_sha !== '53ca525c314ad01892e45842bfea6c5c4269fcfd' || run.run_attempt !== 3 || run.path !== '.github/workflows/vercel-release.yml') throw new Error('Release identity changed; no cancellation performed.');
-          if (!['queued', 'in_progress', 'waiting', 'pending'].includes(run.status)) {
-            console.log('The exact retry is already terminal; no action performed.');
-          } else {
-            const stopped = await fetch(url + '/cancel', { ...options, method: 'POST', signal: AbortSignal.timeout(20000) });
-            if (stopped.status !== 202 && stopped.status !== 409) throw new Error(`Cancellation HTTP ${stopped.status}`);
-            console.log(JSON.stringify({ runId: 35422163689, attempt: 3, cancellationStatus: stopped.status, reason: 'Existing deployment credential denied by both Vercel read probes.' }));
-          }
+          const safe = { purpose: 'Read-only credential verification for PR 813', authorized, results, productionMutations: 0 };
+          console.log(JSON.stringify(safe));
+          appendFileSync(
+            process.env.GITHUB_STEP_SUMMARY,
+            '# Cleanup 813 release credential check\n\n' +
+            'Read-only project probes using the repository Actions secret. No credential value, environment value, or raw response body is retained. ' +
+            'The unscoped probe supports current Vercel scoped tokens, while the second probe preserves the legacy team-parameter check.\n\n' +
+            'JSON: ' + JSON.stringify(safe) + '\n'
+          );
+
+          if (!authorized) process.exitCode = 1;
           JS
