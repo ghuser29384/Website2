@@ -36,7 +36,7 @@ jobs:
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
           set +e
-          npx --yes "vercel@$VERCEL_CLI_VERSION" pull             --yes             --environment=production             --token="$VERCEL_TOKEN"             > pull.stdout 2> pull.stderr
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN" > pull.stdout 2> pull.stderr
           status=$?
           set -e
 
@@ -56,3 +56,5 @@ jobs:
           printf '{"purpose":"exact non-deploying Vercel pull","authorized":false,"reason":"%s","exitCode":%s,"productionMutations":0}\n' "$safe_reason" "$status"
           rm -rf .vercel .env* pull.stdout pull.stderr
           exit 1
+
+# Retriggered after the owner updated VERCEL_TOKEN on 2026-09-22.
