@@ -1,4 +1,4 @@
-name: Cleanup 813 Vercel scope diagnosis
+name: Cleanup 813 Vercel token-shape diagnosis
 
 on:
   push:
@@ -10,21 +10,13 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cleanup-813-release-access-check
-  cancel-in-progress: false
-
-env:
-  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
-  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
-
 jobs:
   inspect:
     if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/cleanup-813-release-access-check-20260919'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 3
     steps:
-      - name: Diagnose token scope without deploying
+      - name: Classify token shape without exposing it
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -32,49 +24,17 @@ jobs:
           set -euo pipefail
           test -n "$VERCEL_TOKEN"
           node --input-type=module <<'JS'
-          const token = process.env.VERCEL_TOKEN;
-          const team = process.env.VERCEL_ORG_ID;
-          const project = process.env.VERCEL_PROJECT_ID;
-          const headers = { Authorization: `Bearer ${token}` };
-          const safe = {};
-
-          async function get(name, url, inspect) {
-            try {
-              const r = await fetch(url, { headers, redirect: 'error', signal: AbortSignal.timeout(20000) });
-              const out = { status: r.status };
-              let body = null;
-              try { body = await r.json(); } catch {}
-              if (r.ok && inspect) Object.assign(out, inspect(body));
-              if (!r.ok) {
-                const code = body?.error?.code;
-                out.errorCode = typeof code === 'string' && /^[a-z0-9_-]{1,80}$/i.test(code) ? code : 'unclassified';
-                const message = typeof body?.error?.message === 'string' ? body.error.message : '';
-                out.notFound = /not found|could not find|does not exist/i.test(message);
-                out.permission = /permission|access|scope|forbidden/i.test(message);
-                out.invalid = /invalid|expired|revoked/i.test(message);
-              }
-              safe[name] = out;
-            } catch {
-              safe[name] = { status: 'request_failed' };
-            }
-          }
-
-          await get('user', 'https://api.vercel.com/v2/user');
-          await get('teams', 'https://api.vercel.com/v2/teams', body => ({
-            seesExpectedTeam: Array.isArray(body?.teams) && body.teams.some(t => t?.id === team)
-          }));
-          await get('projectScoped', `https://api.vercel.com/v9/projects/${project}?teamId=${team}`, body => ({
-            exactProject: body?.id === project,
-            exactTeam: body?.accountId === team
-          }));
-          await get('projectUnscoped', `https://api.vercel.com/v9/projects/${project}`, body => ({
-            exactProject: body?.id === project,
-            exactTeam: body?.accountId === team
-          }));
-
-          console.log(JSON.stringify({ purpose: 'safe Vercel scope diagnosis', results: safe, productionMutations: 0 }));
-          const ok = safe.user?.status === 200 &&
-            safe.teams?.status === 200 && safe.teams?.seesExpectedTeam === true &&
-            safe.projectScoped?.status === 200 && safe.projectScoped?.exactProject === true && safe.projectScoped?.exactTeam === true;
-          if (!ok) process.exitCode = 1;
+          const t = process.env.VERCEL_TOKEN || '';
+          const shape = {
+            present: t.length > 0,
+            beginsWithVcp: t.startsWith('vcp'),
+            beginsWithVci: t.startsWith('vci'),
+            beginsWithVca: t.startsWith('vca'),
+            beginsWithVck: t.startsWith('vck'),
+            hasWhitespaceAtEnds: t.trim() !== t,
+            containsWhitespace: /\s/.test(t),
+            lengthBucket: t.length < 20 ? '<20' : t.length < 40 ? '20-39' : t.length < 80 ? '40-79' : '80+',
+            productionMutations: 0
+          };
+          console.log(JSON.stringify(shape));
           JS
