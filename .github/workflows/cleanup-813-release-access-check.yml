@@ -1,4 +1,4 @@
-name: Cleanup 813 release access check
+name: Cleanup 813 exact Vercel pull check
 
 on:
   push:
@@ -14,70 +14,45 @@ concurrency:
   group: cleanup-813-release-access-check
   cancel-in-progress: false
 
+env:
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+
 jobs:
   inspect:
     if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/cleanup-813-release-access-check-20260919'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Verify release token can read the exact Vercel project
+      - name: Verify exact release pull without deploying
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          node --input-type=module <<'JS'
-          import { appendFileSync } from 'node:fs';
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
-          const token = process.env.VERCEL_TOKEN;
-          if (!token) throw new Error('Release token is absent. No deployment was attempted.');
+          set +e
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull             --yes             --environment=production             --token="$VERCEL_TOKEN"             > pull.stdout 2> pull.stderr
+          status=$?
+          set -e
 
-          const team = 'team_ySu6sF3Uho1E1GnJtCQPVEuJ';
-          const project = 'prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7';
-          const expectedName = 'moraltrade-site';
-          const probes = [
-            ['project_scoped', 'https://api.vercel.com/v9/projects/' + project],
-            ['project_team_param', 'https://api.vercel.com/v9/projects/' + project + '?teamId=' + team],
-          ];
+          # Preserve only a safe classification, never the token, env values, or pulled files.
+          if [[ $status -eq 0 ]]; then
+            echo '{"purpose":"exact non-deploying Vercel pull","authorized":true,"productionMutations":0}'
+            rm -rf .vercel .env* pull.stdout pull.stderr
+            exit 0
+          fi
 
-          const results = [];
-          let authorized = false;
-
-          for (const [check, url] of probes) {
-            try {
-              const response = await fetch(url, {
-                method: 'GET',
-                headers: { Authorization: 'Bearer ' + token },
-                redirect: 'error',
-                signal: AbortSignal.timeout(20000),
-              });
-
-              const result = { check, status: response.status };
-              if (response.ok) {
-                const body = await response.json();
-                result.exactProject = body.id === project && body.name === expectedName;
-                result.exactOwner = body.accountId == null ? 'not_returned' : body.accountId === team;
-                if (result.exactProject && (result.exactOwner === true || result.exactOwner === 'not_returned')) {
-                  authorized = true;
-                }
-              } else {
-                await response.body?.cancel();
-              }
-              results.push(result);
-            } catch {
-              results.push({ check, status: 'request_failed' });
-            }
-          }
-
-          const safe = { purpose: 'Read-only credential verification for PR 813', authorized, results, productionMutations: 0 };
-          console.log(JSON.stringify(safe));
-          appendFileSync(
-            process.env.GITHUB_STEP_SUMMARY,
-            '# Cleanup 813 release credential check\n\n' +
-            'Read-only project probes using the repository Actions secret. No credential value, environment value, or raw response body is retained. ' +
-            'The unscoped probe supports current Vercel scoped tokens, while the second probe preserves the legacy team-parameter check.\n\n' +
-            'JSON: ' + JSON.stringify(safe) + '\n'
-          );
-
-          if (!authorized) process.exitCode = 1;
-          JS
+          safe_reason=other
+          if grep -Eqi 'forbidden|permission|access|scope|unauthorized|invalid token|token.*invalid|expired' pull.stderr; then
+            safe_reason=credential_or_scope
+          elif grep -Eqi 'project|team|not found' pull.stderr; then
+            safe_reason=project_or_team_resolution
+          fi
+          printf '{"purpose":"exact non-deploying Vercel pull","authorized":false,"reason":"%s","exitCode":%s,"productionMutations":0}\n' "$safe_reason" "$status"
+          rm -rf .vercel .env* pull.stdout pull.stderr
+          exit 1
