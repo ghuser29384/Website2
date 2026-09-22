@@ -1,4 +1,4 @@
-name: Cleanup 813 exact Vercel pull check
+name: Cleanup 813 Vercel scope diagnosis
 
 on:
   push:
@@ -17,44 +17,64 @@ concurrency:
 env:
   VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
   VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
-  VERCEL_CLI_VERSION: 50.38.1
 
 jobs:
   inspect:
     if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/cleanup-813-release-access-check-20260919'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Verify exact release pull without deploying
+      - name: Diagnose token scope without deploying
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN"
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          node --input-type=module <<'JS'
+          const token = process.env.VERCEL_TOKEN;
+          const team = process.env.VERCEL_ORG_ID;
+          const project = process.env.VERCEL_PROJECT_ID;
+          const headers = { Authorization: `Bearer ${token}` };
+          const safe = {};
 
-          set +e
-          npx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN" > pull.stdout 2> pull.stderr
-          status=$?
-          set -e
+          async function get(name, url, inspect) {
+            try {
+              const r = await fetch(url, { headers, redirect: 'error', signal: AbortSignal.timeout(20000) });
+              const out = { status: r.status };
+              let body = null;
+              try { body = await r.json(); } catch {}
+              if (r.ok && inspect) Object.assign(out, inspect(body));
+              if (!r.ok) {
+                const code = body?.error?.code;
+                out.errorCode = typeof code === 'string' && /^[a-z0-9_-]{1,80}$/i.test(code) ? code : 'unclassified';
+                const message = typeof body?.error?.message === 'string' ? body.error.message : '';
+                out.notFound = /not found|could not find|does not exist/i.test(message);
+                out.permission = /permission|access|scope|forbidden/i.test(message);
+                out.invalid = /invalid|expired|revoked/i.test(message);
+              }
+              safe[name] = out;
+            } catch {
+              safe[name] = { status: 'request_failed' };
+            }
+          }
 
-          # Preserve only a safe classification, never the token, env values, or pulled files.
-          if [[ $status -eq 0 ]]; then
-            echo '{"purpose":"exact non-deploying Vercel pull","authorized":true,"productionMutations":0}'
-            rm -rf .vercel .env* pull.stdout pull.stderr
-            exit 0
-          fi
+          await get('user', 'https://api.vercel.com/v2/user');
+          await get('teams', 'https://api.vercel.com/v2/teams', body => ({
+            seesExpectedTeam: Array.isArray(body?.teams) && body.teams.some(t => t?.id === team)
+          }));
+          await get('projectScoped', `https://api.vercel.com/v9/projects/${project}?teamId=${team}`, body => ({
+            exactProject: body?.id === project,
+            exactTeam: body?.accountId === team
+          }));
+          await get('projectUnscoped', `https://api.vercel.com/v9/projects/${project}`, body => ({
+            exactProject: body?.id === project,
+            exactTeam: body?.accountId === team
+          }));
 
-          safe_reason=other
-          if grep -Eqi 'forbidden|permission|access|scope|unauthorized|invalid token|token.*invalid|expired' pull.stderr; then
-            safe_reason=credential_or_scope
-          elif grep -Eqi 'project|team|not found' pull.stderr; then
-            safe_reason=project_or_team_resolution
-          fi
-          printf '{"purpose":"exact non-deploying Vercel pull","authorized":false,"reason":"%s","exitCode":%s,"productionMutations":0}\n' "$safe_reason" "$status"
-          rm -rf .vercel .env* pull.stdout pull.stderr
-          exit 1
-
-# Retriggered after the owner updated VERCEL_TOKEN on 2026-09-22.
+          console.log(JSON.stringify({ purpose: 'safe Vercel scope diagnosis', results: safe, productionMutations: 0 }));
+          const ok = safe.user?.status === 200 &&
+            safe.teams?.status === 200 && safe.teams?.seesExpectedTeam === true &&
+            safe.projectScoped?.status === 200 && safe.projectScoped?.exactProject === true && safe.projectScoped?.exactTeam === true;
+          if (!ok) process.exitCode = 1;
+          JS
