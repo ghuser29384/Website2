@@ -1,0 +1,46 @@
+name: Validate Start Suspense layout test fix
+
+on:
+  push:
+    branches:
+      - test/stabilize-start-suspense-layout-20260922
+    paths:
+      - .github/workflows/stabilize-start-layout-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/stabilize-start-suspense-layout-20260922
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Repository quality gates
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+      - name: Reproduce the affected browser surface repeatedly
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e:release -- tests/sitewide-canonical-visual-fidelity.spec.ts --repeat-each=5 --reporter=line
