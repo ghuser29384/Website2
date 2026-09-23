@@ -1,0 +1,38 @@
+name: Discover cleanup source snapshot
+on:
+  push:
+    branches: [cleanup/discover-live-only-20260923]
+    paths: [.github/workflows/discover-cleanup-validation.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ded28e1024b98dcd800249e36e9787378f7802d4
+          persist-credentials: false
+      - name: Export only tracked application source and test configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ded28e1024b98dcd800249e36e9787378f7802d4
+          python - <<'PY'
+          import subprocess, zipfile, pathlib
+          paths = subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
+          roots = ('src/','public/','scripts/','tests/','docs/')
+          with zipfile.ZipFile('discover-source.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for name in paths:
+                  if not name: continue
+                  if name.startswith(roots) or ('/' not in name and pathlib.Path(name).suffix in ['.json','.ts','.mjs','.js']) or name in ['AGENTS.md','.vercelignore','.github/workflows/vercel-release.yml']:
+                      z.write(name)
+              z.writestr('SOURCE_COMMIT','ded28e1024b98dcd800249e36e9787378f7802d4\n')
+          PY
+          ls -lh discover-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: discover-source-ded28e1
+          path: discover-source.zip
+          retention-days: 1
