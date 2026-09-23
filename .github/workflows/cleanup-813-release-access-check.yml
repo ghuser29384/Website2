@@ -1,4 +1,4 @@
-name: Cleanup 813 exact Vercel pull check
+name: Cleanup 813 Vercel scope diagnosis
 
 on:
   push:
@@ -10,48 +10,51 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cleanup-813-release-access-check
-  cancel-in-progress: false
-
 env:
   VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
   VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
-  VERCEL_CLI_VERSION: 50.38.1
 
 jobs:
   inspect:
     if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/cleanup-813-release-access-check-20260919'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Verify exact release pull without deploying
+      - name: Diagnose token access without exposing it
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN"
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-
-          set +e
-          npx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN" > pull.stdout 2> pull.stderr
-          status=$?
-          set -e
-
-          if [[ $status -eq 0 ]]; then
-            echo '{"purpose":"exact non-deploying Vercel pull","authorized":true,"productionMutations":0}'
-            rm -rf .vercel .env* pull.stdout pull.stderr
-            exit 0
-          fi
-
-          safe_reason=other
-          if grep -Eqi 'forbidden|permission|access|scope|unauthorized|invalid token|token.*invalid|expired' pull.stderr; then
-            safe_reason=credential_or_scope
-          elif grep -Eqi 'project|team|not found' pull.stderr; then
-            safe_reason=project_or_team_resolution
-          fi
-          printf '{"purpose":"exact non-deploying Vercel pull","authorized":false,"reason":"%s","exitCode":%s,"productionMutations":0}\n' "$safe_reason" "$status"
-          rm -rf .vercel .env* pull.stdout pull.stderr
-          exit 1
+          node --input-type=module <<'JS'
+          const token=process.env.VERCEL_TOKEN;
+          const team=process.env.VERCEL_ORG_ID;
+          const project=process.env.VERCEL_PROJECT_ID;
+          const headers={Authorization:`Bearer ${token}`};
+          const safe={};
+          async function get(name,url,inspect){
+            try{
+              const r=await fetch(url,{headers,redirect:'error',signal:AbortSignal.timeout(20000)});
+              let body=null; try{body=await r.json();}catch{}
+              const out={status:r.status};
+              if(r.ok&&inspect) Object.assign(out,inspect(body));
+              if(!r.ok){
+                const code=body?.error?.code;
+                out.errorCode=typeof code==='string'&&/^[a-z0-9_-]{1,80}$/i.test(code)?code:'unclassified';
+                const m=typeof body?.error?.message==='string'?body.error.message:'';
+                out.notFound=/not found|could not find|does not exist/i.test(m);
+                out.permission=/permission|access|scope|forbidden/i.test(m);
+                out.invalid=/invalid|expired|revoked/i.test(m);
+              }
+              safe[name]=out;
+            }catch{safe[name]={status:'request_failed'};}
+          }
+          await get('user','https://api.vercel.com/v2/user',body=>({hasUserId:typeof body?.user?.id==='string'||typeof body?.id==='string'}));
+          await get('teams','https://api.vercel.com/v2/teams',body=>({seesExpectedTeam:Array.isArray(body?.teams)&&body.teams.some(t=>t?.id===team),teamCount:Array.isArray(body?.teams)?body.teams.length:null}));
+          await get('projectScoped',`https://api.vercel.com/v9/projects/${project}?teamId=${team}`,body=>({exactProject:body?.id===project,exactTeam:body?.accountId===team}));
+          await get('projectUnscoped',`https://api.vercel.com/v9/projects/${project}`,body=>({exactProject:body?.id===project,exactTeam:body?.accountId===team}));
+          console.log(JSON.stringify({purpose:'safe Vercel token access diagnosis',results:safe,productionMutations:0}));
+          const ok=safe.user?.status===200&&safe.teams?.status===200&&safe.teams?.seesExpectedTeam===true&&safe.projectScoped?.status===200&&safe.projectScoped?.exactProject===true;
+          if(!ok) process.exitCode=1;
+          JS
