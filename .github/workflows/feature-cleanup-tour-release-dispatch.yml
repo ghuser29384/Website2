@@ -1,0 +1,32 @@
+name: Dispatch feature cleanup tour completion release
+on:
+  push:
+    branches: [ops/feature-cleanup-tour-release-20260923]
+    paths: [.github/workflows/feature-cleanup-tour-release-dispatch.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/feature-cleanup-tour-release-20260923'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard exact merged tree and dispatch unchanged production gates
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const expected = '80892b66b897e5b74d73c27f6d318cf96defad79';
+            const tree = 'e96df70ce4af8d528f79f6e8e2de51c58be73ef4';
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            if (branch.commit.sha !== expected || branch.commit.commit.tree.sha !== tree) {
+              core.setFailed('Current main is not the exact validated product tree.');
+              return;
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              owner, repo, workflow_id: 'vercel-release.yml', ref: 'main',
+              inputs: { target: 'production', ref: 'main', expected_sha: expected, synthetic_auth_fixture_url: '' }
+            });
+            core.info(`Dispatched unchanged gated production release for ${expected}.`);
