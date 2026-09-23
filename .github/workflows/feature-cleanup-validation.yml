@@ -21,47 +21,76 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Replay immutable guarded cleanup then apply reviewed repairs
+      - name: Resume exact guarded cleanup and reconcile public recovery regression
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD^)" = 580a596c38145057eef317d41a3a526ff28abc09
           python - <<'PY'
           import subprocess,textwrap
-          old=subprocess.check_output(['git','show','b00b629e77dc26e76e09abc634acc7f0ac409274:.github/workflows/feature-cleanup-validation.yml'],text=True)
+          old=subprocess.check_output(['git','show','580a596c38145057eef317d41a3a526ff28abc09:.github/workflows/feature-cleanup-validation.yml'],text=True)
           start='        run: |\n'; end='      - uses: actions/setup-node@v4\n'
           code=textwrap.dedent(old.split(start,1)[1].split(end,1)[0])
-          assert 'Exact 31-path cleanup applied' in code
+          assert '9a48ad5900bc0fc86a9babe1df8f5149fd1964b3' in code
           subprocess.run(['bash','-euo','pipefail','-c',code],check=True)
           PY
-          gh api repos/ghuser29384/Website2/git/blobs/9a48ad5900bc0fc86a9babe1df8f5149fd1964b3 > "$RUNNER_TEMP/repair-blob.json"
           python - <<'PY'
-          import os,json,gzip,base64,hashlib,subprocess
+          import os,json,hashlib,subprocess
           from pathlib import Path
-          root=Path.cwd();temp=Path(os.environ['RUNNER_TEMP'])
-          data=base64.b64decode(json.loads((temp/'repair-blob.json').read_text())['content'])
-          assert hashlib.sha256(data).hexdigest()=='07785018717fbb727ec22ec021bf57122ce1a32d299dfc8e64c5677bc62cfcf7'
-          repair=json.loads(gzip.decompress(data))
-          def blob(p):
-              b=(root/p).read_bytes();return hashlib.sha1(f'blob {len(b)}\0'.encode()+b).hexdigest()
-          for p,want in repair['before'].items(): assert blob(p)==want,(p,blob(p),want)
-          exec(compile(repair['script'].replace('/mnt/data/moraltrade-cleanup',str(root)),'<reviewed-render-and-unavailable-repair>','exec'),{})
-          for p,want in repair['after'].items(): assert blob(p)==want,(p,blob(p),want)
-          scope=json.loads((temp/'feature-evidence'/'scope.json').read_text())
-          assert set(repair['after']).issubset(scope['after'])
-          scope['after'].update(repair['after'])
-          (temp/'feature-evidence'/'scope.json').write_text(json.dumps(scope,indent=2))
-          subprocess.run(['git','add','--',*repair['after']],check=True)
+          p=Path('tests/public-routes.spec.ts')
+          def blob(path):
+              b=path.read_bytes();return hashlib.sha1(f'blob {len(b)}\0'.encode()+b).hexdigest()
+          before='b9d9cd3714c5add778a8701ebbbb0cf65d82f18f'
+          after='0fe61ccd70cbaea022869193c990643d31ca7a98'
+          assert blob(p)==before
+          source=p.read_text()
+          old='/Redirect a fixed share of recent money|Live priority-fund data is temporarily unavailable/i'
+          assert source.count(old)==1
+          source=source.replace(old,r'/^A separate allocation experiment\.$/')
+          anchor='''    await expect(page.getByText("No action taken", { exact: true })).toHaveCount(
+                isRecovery ? 1 : 0,
+              );'''
+          addition='''
+
+              if (route === "/priority-correction-fund") {
+                await expect(page.locator("#experiment-terms")).toContainText("not consent to contribute");
+                await expect(page.locator("#experiment-terms")).toContainText("does not certify");
+                if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+                  const unavailable = page.getByRole("status", { name: "Experiment records unavailable" });
+                  await expect(unavailable).toBeVisible();
+                  await expect(unavailable).toContainText("No balance, contribution, allocation, or review status");
+                  await expect(unavailable).toContainText("is inferred from this unavailable data");
+                  await expect(unavailable.getByRole("link", { name: "Retry record lookup" })).toHaveAttribute(
+                    "href", "/priority-correction-fund",
+                  );
+                  await expect(page.getByRole("heading", { name: "Monthly cycles publish the calculation and the selection rule" })).toHaveCount(0);
+                  await expect(page.locator("main form")).toHaveCount(0);
+                }
+              }'''
+          # YAML removes ten spaces from every embedded line; restore only TypeScript's intended indent.
+          anchor=anchor.replace('\n          ','\n')
+          addition=addition.replace('\n          ','\n')
+          assert source.count(anchor)==1
+          p.write_text(source.replace(anchor,anchor+addition))
+          assert blob(p)==after,(blob(p),after)
+          evidence=Path(os.environ['RUNNER_TEMP'])/'feature-evidence'
+          scope=json.loads((evidence/'scope.json').read_text())
+          assert str(p) not in scope['after']
+          scope['before'][str(p)]=before;scope['after'][str(p)]=after
+          (evidence/'scope.json').write_text(json.dumps(scope,indent=2))
+          subprocess.run(['git','add','--',str(p)],check=True)
           paths=subprocess.check_output(['git','diff','--cached','--name-only',os.environ['BASE_SHA']],text=True).splitlines()
-          assert sorted(paths)==sorted(scope['after']) and len(paths)==31
+          assert sorted(paths)==sorted(scope['after']) and len(paths)==32
+          print('Recovered 31 reviewed product paths; one outdated public-route test reconciled with stronger unavailable-data assertions.')
           PY
           git diff --check "$BASE_SHA"
           git diff --stat "$BASE_SHA" | tee "$RUNNER_TEMP/feature-evidence/diff-stat.txt"
           git diff --binary "$BASE_SHA" > "$RUNNER_TEMP/feature-evidence/feature-cleanup.patch"
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - name: Install locked dependencies
         run: npm ci
@@ -91,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium
-          npx playwright test --config=playwright.release.config.ts tests/production-feature-cleanup.spec.ts tests/returning-homepage.spec.ts tests/walkthrough.spec.ts tests/discover-home-visual-alignment.spec.ts --reporter=line --max-failures=5 2>&1 | tee "$RUNNER_TEMP/feature-evidence/focused-browser.txt"
+          npx playwright test --config=playwright.release.config.ts tests/production-feature-cleanup.spec.ts tests/public-routes.spec.ts tests/returning-homepage.spec.ts tests/walkthrough.spec.ts tests/discover-home-visual-alignment.spec.ts --reporter=line --max-failures=5 2>&1 | tee "$RUNNER_TEMP/feature-evidence/focused-browser.txt"
           cp -r test-results "$RUNNER_TEMP/feature-evidence/focused-browser-results"
       - name: Complete configured browser release gate
         shell: bash
@@ -106,7 +135,7 @@ jobs:
           git diff --exit-code
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
           test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$GITHUB_SHA"
-          test "$(git diff --cached --name-only "$BASE_SHA" | wc -l)" -eq 31
+          test "$(git diff --cached --name-only "$BASE_SHA" | wc -l)" -eq 32
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Retire prototype controls and preserve real trade actions"
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"
           git rev-parse HEAD > "$RUNNER_TEMP/feature-evidence/product-head.txt"
