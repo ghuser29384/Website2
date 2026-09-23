@@ -1,0 +1,89 @@
+name: Verify completed feature cleanup in production
+on:
+  push:
+    branches: [ops/feature-cleanup-tour-release-20260923]
+    paths: [.github/workflows/feature-cleanup-818-public-verification.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/feature-cleanup-tour-release-20260923'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EXPECTED_SHA: 80892b66b897e5b74d73c27f6d318cf96defad79
+      RELEASE_RUN: "35859274338"
+    steps:
+      - name: Require successful exact gated production release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 100); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN" > "$RUNNER_TEMP/expected-release.json"
+            test "$(jq -r .head_sha "$RUNNER_TEMP/expected-release.json")" = "$EXPECTED_SHA"
+            test "$(jq -r .path "$RUNNER_TEMP/expected-release.json")" = .github/workflows/vercel-release.yml
+            if [[ "$(jq -r .status "$RUNNER_TEMP/expected-release.json")" == completed ]]; then
+              test "$(jq -r .conclusion "$RUNNER_TEMP/expected-release.json")" = success
+              echo 'Exact gated release succeeded; independent verification may proceed.'
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'Release is not complete; no production success claimed.' >&2
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: 80892b66b897e5b74d73c27f6d318cf96defad79
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Prepare existing anonymous browser tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD^{tree})" = e96df70ce4af8d528f79f6e8e2de51c58be73ef4
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Retrieve original strict verifier and include CSS hash readback
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/feature-production-evidence"
+          gh api "repos/$GITHUB_REPOSITORY/git/blobs/f07053cce49cb0b67fe778ff93da18b4fac5b8e3" --jq .content | base64 --decode > "$RUNNER_TEMP/feature-cleanup-live-check.mjs"
+          printf '%s  %s\n' 63fb971f1a8383a1d9908654a487ea5de2472c1d02e4c45dd8fc36bcbd895bd2 "$RUNNER_TEMP/feature-cleanup-live-check.mjs" | sha256sum --check
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'feature-cleanup-live-check.mjs'
+          source = path.read_text()
+          old = "['moral-trade-live-navigation.js', 'moral-trade-discover.html']"
+          new = "['moral-trade-live-navigation.js', 'moral-trade-discover.html', 'moral-trade-live-home-offer.css']"
+          assert source.count(old) == 1
+          path.write_text(source.replace(old, new, 1))
+          PY
+          node --check "$RUNNER_TEMP/feature-cleanup-live-check.mjs"
+          cp "$RUNNER_TEMP/feature-cleanup-live-check.mjs" "$RUNNER_TEMP/feature-production-evidence/verifier.mjs"
+          sha256sum "$RUNNER_TEMP/feature-cleanup-live-check.mjs" > "$RUNNER_TEMP/feature-production-evidence/verifier-sha256.txt"
+      - name: Exercise all six real public flows at 1440, 390 and 320 pixels
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FEATURE_EVIDENCE_DIR="$RUNNER_TEMP/feature-production-evidence"
+          node "$RUNNER_TEMP/feature-cleanup-live-check.mjs" 2>&1 | tee "$FEATURE_EVIDENCE_DIR/run.log"
+          git diff --exit-code
+      - name: Preserve final public report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-cleanup-completed-live-${{ github.run_id }}
+          path: ${{ runner.temp }}/feature-production-evidence/
+          retention-days: 7
+          if-no-files-found: warn
