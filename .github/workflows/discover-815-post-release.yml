@@ -1,0 +1,83 @@
+name: Verify public Discover 815 after release
+on:
+  push:
+    branches: [ops/discover-815-release-20260923]
+    paths: [.github/workflows/discover-815-post-release.yml]
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: discover-815-post-release
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/discover-815-release-20260923'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EXPECTED_SHA: bd69409104378993037d577e264b61ae2da1059a
+      EVIDENCE: /tmp/discover-production-evidence
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Require successful completion of the exact production release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            let ready = false;
+            for (let attempt = 0; attempt < 90; attempt += 1) {
+              const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: 35811352941 });
+              if (run.head_sha !== process.env.EXPECTED_SHA || run.head_branch !== 'main' || run.path !== '.github/workflows/vercel-release.yml') throw new Error('Release identity mismatch');
+              if (run.status === 'completed') {
+                if (run.conclusion !== 'success') throw new Error(`Exact release did not pass: ${run.conclusion}`);
+                ready = true;
+                break;
+              }
+              core.info(`Waiting for exact gated release: ${run.status}`);
+              await new Promise(resolve => setTimeout(resolve, 20000));
+            }
+            if (!ready) throw new Error('Release did not finish within the bounded wait');
+            const { data: main } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            if (main.commit.sha !== process.env.EXPECTED_SHA) throw new Error('Main moved; re-evaluate before verifying');
+      - uses: actions/checkout@v4
+        with:
+          ref: bd69409104378993037d577e264b61ae2da1059a
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Prepare existing browser tooling
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Retrieve reviewed read-only verification script
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data } = await github.rest.git.getBlob({ ...context.repo, file_sha: '4aea8053f1a4caedae1ded13b708f590b36e6be9' });
+            const bytes = Buffer.from(data.content, 'base64');
+            const crypto = require('node:crypto');
+            const digest = crypto.createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+            if (digest !== '4aea8053f1a4caedae1ded13b708f590b36e6be9') throw new Error('Verification source identity mismatch');
+            require('node:fs').writeFileSync('/tmp/discover-production-check.cjs', bytes);
+      - name: Check published bytes, removed assets and real anonymous desktop/mobile interactions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/discover-production-check.cjs | tee "$EVIDENCE/verification.log"
+          git diff --exit-code
+      - name: Preserve public verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-production-${{ github.run_id }}
+          path: /tmp/discover-production-evidence/
+          retention-days: 7
+          if-no-files-found: warn
