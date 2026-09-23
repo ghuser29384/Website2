@@ -1,0 +1,64 @@
+name: Validate optional tour navigation access
+on:
+  push:
+    branches: [ops/optional-tour-access-validation-20260923]
+    paths: [.github/workflows/optional-tour-access-validation.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      EXPECTED_SHA: 69ef674d1cfca7f87df77c42959344364b1d35a8
+      BASE_SHA: fb1d4df06bc4cb55b6ea198ccfc96bc72dbfc94b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 69ef674d1cfca7f87df77c42959344364b1d35a8
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Guard exact two-file repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" HEAD)" = "$(printf '%s\n' public/moral-trade-live-home-offer.css tests/homepage-narrow-header.spec.ts)"
+          git diff --check "$BASE_SHA" HEAD
+          mkdir -p "$RUNNER_TEMP/tour-evidence"
+          git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/tour-evidence/repair.patch"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/tour-evidence/tree.txt"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Complete repository tests, lint, types and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/tour-evidence/unit-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/tour-evidence/lint.log"
+          npx tsc --noEmit --pretty false 2>&1 | tee "$RUNNER_TEMP/tour-evidence/types.log"
+          npm run build 2>&1 | tee "$RUNNER_TEMP/tour-evidence/build.log"
+      - name: Rendered navigation and six-feature regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npx playwright test --config=playwright.release.config.ts tests/homepage-narrow-header.spec.ts tests/production-feature-cleanup.spec.ts tests/returning-homepage.spec.ts --reporter=line --output="$RUNNER_TEMP/tour-evidence/browser" 2>&1 | tee "$RUNNER_TEMP/tour-evidence/browser.log"
+          git diff --exit-code
+          git diff --check "$BASE_SHA" HEAD
+      - name: Preserve exact evidence and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optional-tour-access-${{ github.run_id }}
+          path: ${{ runner.temp }}/tour-evidence/
+          retention-days: 7
+          if-no-files-found: warn
