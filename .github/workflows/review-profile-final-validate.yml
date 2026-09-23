@@ -1,0 +1,181 @@
+name: Final review-profile validation
+on:
+  push:
+    branches: [ops/review-profile-cleanup-20260923]
+    paths: [.github/workflows/review-profile-final-validate.yml]
+permissions:
+  contents: write
+concurrency:
+  group: review-profile-cleanup-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      BASE_SHA: 80892b66b897e5b74d73c27f6d318cf96defad79
+      CANDIDATE_TREE: 62902322b38deef33f96e20b4f776d6f2529c8be
+      TARGET_BRANCH: cleanup/review-profile-boundaries-final-20260923
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 80892b66b897e5b74d73c27f6d318cf96defad79
+          fetch-depth: 0
+      - name: Retrieve exact base bundle and reviewed repair delta
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs'), crypto = require('node:crypto'), zlib = require('node:zlib');
+            const bundles = [
+              {name:'base',digest:'91369bb5a9e6bb7df47c43c2e69d46b58490131ab4bc57b2d0c6633ca989fec2',shas:['58557c30f9ce0af3b4d93d0ad5856834f38f9ae1','cb0560e2878cd74af1347a7be08c69aa59328658','c709f121e28fb3cc8b829b21ebe57a1e435e1a5c','b39c339793362c6c69b3a75c7f9ca92480cd1d61','bdfc0792a6aea47759f1780e00ae42009eb8856f','255d11b6f89c63693671e12059a7e9a60cad5043','590c6d05ac891d58a77b5e801bf5398985d5feb4','5831bef2e085a8dfb673b34e35fc4b8f37572b7d','31b545298611c2089297c4825bf5baddb63f0e07','ac3be34d58f445685f7f8ab860cb8c3ea0cfe2dc','92f207f45ac856f32532d907559cd1e18f8c4731','906e43031d4675ea1773520fd9d0c1a253f6eac0','5da783bb9c138862ae66152dcb21567f73f1b70d']},
+              {name:'delta',digest:'13b869d100deedc53fed7f4faa7b81cc1b21c4a4eec79750a513f21164025872',shas:['677af397425dae0ae7e59fbfe1abceb6cc149a83','fc28ea41403e928555b14becf80f10c31465f7b7','30a4c6b93ce4f98c1665676851fce61909001f1d']}
+            ];
+            for (const bundle of bundles) {
+              let encoded = '';
+              for (const sha of bundle.shas) {
+                const {data} = await github.rest.git.getBlob({...context.repo,file_sha:sha});
+                if (data.sha !== sha || data.encoding !== 'base64') throw new Error('Blob identity mismatch');
+                encoded += Buffer.from(data.content,'base64').toString('utf8');
+              }
+              const archive = Buffer.from(encoded,'base64');
+              if (crypto.createHash('sha256').update(archive).digest('hex') !== bundle.digest) throw new Error('Bundle digest mismatch');
+              fs.writeFileSync(process.env.RUNNER_TEMP+'/rp-'+bundle.name+'.json',zlib.gunzipSync(archive));
+            }
+      - name: Reproduce exact 36-file candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          mkdir -p "$RUNNER_TEMP/rp-evidence"
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          temp=Path(os.environ['RUNNER_TEMP'])
+          bundle=json.loads((temp/'rp-base.json').read_text())
+          assert bundle['base']==os.environ['BASE_SHA']
+          assert bundle['sourceTree']==subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip()
+          assert len(bundle['changes'])==34
+          for row in bundle['changes']:
+              path=Path(row['path'])
+              assert not path.is_absolute() and '..' not in path.parts and path.parts[0] in ['src','tests']
+              if row['old'] is None: assert not path.exists(),path
+              else: assert subprocess.check_output(['git','hash-object',str(path)],text=True).strip()==row['old'],path
+              if row.get('delete'): subprocess.run(['git','rm','--',str(path)],check=True)
+              elif 'patch' in row: subprocess.run(['git','apply','--index','-'],input=row['patch'],text=True,check=True)
+              else:
+                  path.parent.mkdir(parents=True,exist_ok=True)
+                  path.write_text(row['content'],encoding='utf8',newline='\n')
+                  subprocess.run(['git','add','--',str(path)],check=True)
+          assert subprocess.check_output(['git','write-tree'],text=True).strip()==bundle['expectedTree']
+          delta=json.loads((temp/'rp-delta.json').read_text())
+          assert delta['previousTree']==bundle['expectedTree']
+          subprocess.run(['git','apply','--index','-'],input=delta['patch'],text=True,check=True)
+          assert subprocess.check_output(['git','write-tree'],text=True).strip()==delta['expectedTree']==os.environ['CANDIDATE_TREE']
+          assert len(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines())==delta['productPaths']==36
+          (temp/'rp-harness.tsx').write_text(delta['harness'])
+          (temp/'rp-harness.spec.ts').write_text(delta['harnessTest'])
+          PY
+          git diff --cached --check
+          git diff --exit-code
+          git diff --cached --stat | tee "$RUNNER_TEMP/rp-evidence/diff-stat.txt"
+          git diff --cached --name-status > "$RUNNER_TEMP/rp-evidence/paths.txt"
+          git write-tree > "$RUNNER_TEMP/rp-evidence/candidate-tree.txt"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Actual action tests, repository tests, lint, types and build
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/profile-setup-action.test.ts src/lib/profile-setup-draft.test.ts src/lib/profile-setup.test.ts src/lib/review-assessment-semantics.test.ts src/lib/proposal-review.test.ts src/offers-walkthrough-density.test.ts src/profile-priority-routing.test.ts src/lib/public-route-smoke.test.ts > "$RUNNER_TEMP/rp-evidence/focused.log" 2>&1
+          npm test > "$RUNNER_TEMP/rp-evidence/unit.log" 2>&1
+          npm run lint -- --quiet > "$RUNNER_TEMP/rp-evidence/lint.log" 2>&1
+          npx tsc --noEmit --pretty false > "$RUNNER_TEMP/rp-evidence/types.log" 2>&1
+          npm run build > "$RUNNER_TEMP/rp-evidence/build.log" 2>&1
+          tail -n 12 "$RUNNER_TEMP/rp-evidence/unit.log"
+      - name: Focused rendered checks
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          set +e
+          npx playwright test --config=playwright.release.config.ts tests/review-assessment-retirement.spec.ts tests/complete-profile-review.spec.ts tests/complete-profile-connections.spec.ts tests/sitewide-canonical-visual-fidelity.spec.ts tests/offers-density.spec.ts --reporter=line > "$RUNNER_TEMP/rp-evidence/focused-browser.log" 2>&1
+          status=$?
+          set -e
+          cp -r test-results "$RUNNER_TEMP/rp-evidence/focused-browser"
+          tail -n 65 "$RUNNER_TEMP/rp-evidence/focused-browser.log"
+          exit "$status"
+      - name: Full unchanged configured browser gate
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          set +e
+          npm run test:e2e:release -- --reporter=line > "$RUNNER_TEMP/rp-evidence/full-browser.log" 2>&1
+          status=$?
+          set -e
+          cp -r test-results "$RUNNER_TEMP/rp-evidence/full-browser"
+          tail -n 35 "$RUNNER_TEMP/rp-evidence/full-browser.log"
+          exit "$status"
+      - name: Synthetic A-B-guest browser boundary using the actual editor
+        env:
+          CI: 'false'
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          NEXT_PUBLIC_SUPABASE_URL: ''
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+          MORAL_TRADE_DISABLE_SUPABASE: 'true'
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: '0'
+        run: |
+          set -euo pipefail
+          test ! -e src/app/qa-profile-draft-boundary
+          test ! -e tests/qa-profile-draft-boundary.spec.ts
+          rm -rf .next
+          mkdir -p src/app/qa-profile-draft-boundary
+          cp "$RUNNER_TEMP/rp-harness.tsx" src/app/qa-profile-draft-boundary/page.tsx
+          cp "$RUNNER_TEMP/rp-harness.spec.ts" tests/qa-profile-draft-boundary.spec.ts
+          trap 'rm -rf src/app/qa-profile-draft-boundary tests/qa-profile-draft-boundary.spec.ts' EXIT
+          set +e
+          npx playwright test --config=playwright.release.config.ts tests/qa-profile-draft-boundary.spec.ts --reporter=line > "$RUNNER_TEMP/rp-evidence/synthetic-boundary.log" 2>&1
+          status=$?
+          set -e
+          cp -r test-results "$RUNNER_TEMP/rp-evidence/synthetic-boundary"
+          tail -n 50 "$RUNNER_TEMP/rp-evidence/synthetic-boundary.log"
+          exit "$status"
+      - name: Publish exact fully validated candidate branch only
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote origin "refs/heads/$TARGET_BRANCH")"
+          test ! -e src/app/qa-profile-draft-boundary
+          test ! -e tests/qa-profile-draft-boundary.spec.ts
+          test "$(git write-tree)" = "$CANDIDATE_TREE"
+          git diff --exit-code
+          git diff --cached --check
+          git checkout -b "$TARGET_BRANCH"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Correct review labels and simplify account-bound profile setup'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/rp-evidence/product-identity.txt"
+      - name: Preserve precise verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-profile-final-${{ github.run_id }}
+          path: ${{ runner.temp }}/rp-evidence/
+          retention-days: 7
+          if-no-files-found: warn
