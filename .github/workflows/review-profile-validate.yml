@@ -1,0 +1,161 @@
+name: Validate review and profile cleanup
+on:
+  push:
+    branches: [ops/review-profile-cleanup-20260923]
+    paths: [.github/workflows/review-profile-validate.yml]
+permissions:
+  contents: write
+concurrency:
+  group: review-profile-cleanup-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      BASE_SHA: 80892b66b897e5b74d73c27f6d318cf96defad79
+      CANDIDATE_TREE: d8827c061e5a50aa5888147a577b8cd343008823
+      TARGET_BRANCH: cleanup/review-profile-boundaries-20260923
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 80892b66b897e5b74d73c27f6d318cf96defad79
+          fetch-depth: 0
+      - name: Retrieve exact reviewed patch bundle
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const crypto = require('node:crypto');
+            const zlib = require('node:zlib');
+            const shas = ['58557c30f9ce0af3b4d93d0ad5856834f38f9ae1','cb0560e2878cd74af1347a7be08c69aa59328658','c709f121e28fb3cc8b829b21ebe57a1e435e1a5c','b39c339793362c6c69b3a75c7f9ca92480cd1d61','bdfc0792a6aea47759f1780e00ae42009eb8856f','255d11b6f89c63693671e12059a7e9a60cad5043','590c6d05ac891d58a77b5e801bf5398985d5feb4','5831bef2e085a8dfb673b34e35fc4b8f37572b7d','31b545298611c2089297c4825bf5baddb63f0e07','ac3be34d58f445685f7f8ab860cb8c3ea0cfe2dc','92f207f45ac856f32532d907559cd1e18f8c4731','906e43031d4675ea1773520fd9d0c1a253f6eac0','5da783bb9c138862ae66152dcb21567f73f1b70d'];
+            let encoded = '';
+            for (const sha of shas) {
+              const {data} = await github.rest.git.getBlob({...context.repo, file_sha:sha});
+              if (data.sha !== sha || data.encoding !== 'base64') throw new Error('Blob identity mismatch');
+              encoded += Buffer.from(data.content, 'base64').toString('utf8');
+            }
+            const archive = Buffer.from(encoded, 'base64');
+            if (crypto.createHash('sha256').update(archive).digest('hex') !== '91369bb5a9e6bb7df47c43c2e69d46b58490131ab4bc57b2d0c6633ca989fec2') throw new Error('Bundle digest mismatch');
+            fs.writeFileSync(process.env.RUNNER_TEMP + '/review-profile-bundle.json', zlib.gunzipSync(archive));
+      - name: Apply exact base-bound product changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          mkdir -p "$RUNNER_TEMP/review-profile-evidence"
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          bundle = json.loads((Path(os.environ['RUNNER_TEMP'])/'review-profile-bundle.json').read_text())
+          assert bundle['base'] == os.environ['BASE_SHA']
+          assert bundle['sourceTree'] == subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip()
+          assert len(bundle['changes']) == 34
+          for row in bundle['changes']:
+              path=Path(row['path'])
+              assert not path.is_absolute() and '..' not in path.parts and path.parts[0] in ['src','tests']
+              if row['old'] is None:
+                  assert not path.exists(), path
+              else:
+                  assert subprocess.check_output(['git','hash-object',str(path)],text=True).strip() == row['old'], path
+              if row.get('delete'):
+                  subprocess.run(['git','rm','--',str(path)],check=True)
+              elif 'patch' in row:
+                  subprocess.run(['git','apply','--index','-'],input=row['patch'],text=True,check=True)
+              else:
+                  path.parent.mkdir(parents=True,exist_ok=True)
+                  path.write_text(row['content'],encoding='utf8',newline='\n')
+                  subprocess.run(['git','add','--',str(path)],check=True)
+          actual=subprocess.check_output(['git','write-tree'],text=True).strip()
+          assert actual == bundle['expectedTree'] == os.environ['CANDIDATE_TREE'], actual
+          PY
+          git diff --cached --check
+          git diff --exit-code
+          git diff --cached --stat | tee "$RUNNER_TEMP/review-profile-evidence/diff-stat.txt"
+          git diff --cached --name-status > "$RUNNER_TEMP/review-profile-evidence/paths.txt"
+          git write-tree > "$RUNNER_TEMP/review-profile-evidence/candidate-tree.txt"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Run focused and repository quality checks
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          record() {
+            label="$1"; shift
+            set +e
+            "$@" > "$RUNNER_TEMP/review-profile-evidence/$label.log" 2>&1
+            result=$?
+            set -e
+            printf '%s=%s\n' "$label" "$result" | tee -a "$RUNNER_TEMP/review-profile-evidence/status.txt"
+            tail -n 35 "$RUNNER_TEMP/review-profile-evidence/$label.log"
+          }
+          record focused node --import tsx --test src/lib/profile-setup-draft.test.ts src/lib/profile-setup.test.ts src/lib/review-assessment-semantics.test.ts src/lib/proposal-review.test.ts src/offers-walkthrough-density.test.ts src/profile-priority-routing.test.ts src/lib/public-route-smoke.test.ts
+          record unit npm test
+          record lint npm run lint -- --quiet
+          record types npx tsc --noEmit --pretty false
+          record build npm run build
+      - name: Run focused and full configured browser checks
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          if ! grep -qx build=0 "$RUNNER_TEMP/review-profile-evidence/status.txt"; then
+            echo browser=build_failed >> "$RUNNER_TEMP/review-profile-evidence/status.txt"
+            exit 0
+          fi
+          npx playwright install --with-deps chromium
+          set +e
+          npx playwright test --config=playwright.release.config.ts tests/review-assessment-retirement.spec.ts tests/complete-profile-review.spec.ts tests/complete-profile-connections.spec.ts tests/sitewide-canonical-visual-fidelity.spec.ts tests/offers-density.spec.ts --reporter=line > "$RUNNER_TEMP/review-profile-evidence/focused-browser.log" 2>&1
+          result=$?
+          set -e
+          echo "focused-browser=$result" >> "$RUNNER_TEMP/review-profile-evidence/status.txt"
+          cp -r test-results "$RUNNER_TEMP/review-profile-evidence/focused-browser" || true
+          tail -n 65 "$RUNNER_TEMP/review-profile-evidence/focused-browser.log"
+          set +e
+          npm run test:e2e:release -- --reporter=line > "$RUNNER_TEMP/review-profile-evidence/full-browser.log" 2>&1
+          result=$?
+          set -e
+          echo "full-browser=$result" >> "$RUNNER_TEMP/review-profile-evidence/status.txt"
+          cp -r test-results "$RUNNER_TEMP/review-profile-evidence/full-browser" || true
+          tail -n 65 "$RUNNER_TEMP/review-profile-evidence/full-browser.log"
+      - name: Publish only fully validated exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat "$RUNNER_TEMP/review-profile-evidence/status.txt"
+          for label in focused unit lint types build focused-browser full-browser; do
+            grep -qx "$label=0" "$RUNNER_TEMP/review-profile-evidence/status.txt"
+          done
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote origin "refs/heads/$TARGET_BRANCH")"
+          test "$(git write-tree)" = "$CANDIDATE_TREE"
+          git diff --exit-code
+          git diff --cached --check
+          git checkout -b "$TARGET_BRANCH"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Correct review labels and simplify private profile setup'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/review-profile-evidence/product-identity.txt"
+      - name: Preserve exact verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-profile-validation-${{ github.run_id }}
+          path: ${{ runner.temp }}/review-profile-evidence/
+          retention-days: 7
+          if-no-files-found: warn
