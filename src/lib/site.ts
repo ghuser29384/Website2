@@ -63,7 +63,6 @@ export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
       { href: "/evidence", label: "Public evidence" },
       { href: "/status", label: "Service status" },
       { href: "/safety", label: "Safety and anti-threat rules" },
-      { href: "/trade-controls", label: "Trade controls" },
       { href: "/transparency", label: "Transparency" },
     ],
   },
@@ -76,6 +75,9 @@ export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
       { href: "/bottleneck-atlas", label: "Bottleneck Atlas" },
       { href: "/moral-trade/technical-spec", label: "Technical specification" },
       { href: "/worked-examples", label: "Worked examples" },
+      { href: "/reasoning-center", label: "Worked-example review notes" },
+      { href: "/trade-controls", label: "Safeguard demonstrations" },
+      { href: "/priority-correction-fund", label: "Allocation experiment" },
     ],
   },
   {

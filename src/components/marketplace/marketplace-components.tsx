@@ -1140,9 +1140,11 @@ function TemplateMiniTile({ template }: { template: PublicReviewedSeedTemplateSu
 export function DealDetailObject({
   deal,
   headingId = "marketplace-detail-object-heading",
+  actions,
 }: {
   deal: MarketplaceDeal;
   headingId?: string;
+  actions?: ReactNode;
 }) {
   const receipt = getDealReceiptAtom(deal);
   const recipientDisplay = getMarketplaceRecipientDisplay(deal);
@@ -1206,17 +1208,7 @@ export function DealDetailObject({
             <dd>{receipt.protection}</dd>
           </div>
         </dl>
-        <div className="mt-v75-detail-actions">
-          <Link className="button button-primary" href={`${deal.href}#commitment-sheet`}>
-            Add to planner
-          </Link>
-          <Link className="button button-secondary" href={`${deal.href}#commitment-sheet`}>
-            Compare
-          </Link>
-          <Link className="button button-secondary" href="/saved-offers">
-            Save
-          </Link>
-        </div>
+        {actions ? <div className="mt-v75-detail-actions">{actions}</div> : null}
       </div>
       <div className="mt-v75-detail-info">
         <section>
@@ -1407,154 +1399,6 @@ function MacAskillQuote({ mobile = false }: { mobile?: boolean }) {
         <strong>William MacAskill</strong>
       </figcaption>
     </figure>
-  );
-}
-
-function PlannerTray({ deals }: { deals: readonly MarketplaceDeal[] }) {
-  const selectedDeals = deals.slice(0, 3);
-  const exposureTotal = selectedDeals.reduce((sum, deal) => sum + (deal.userMaxExposureCents ?? 0), 0);
-
-  return (
-    <section className="mt-v75-planner-tray" aria-labelledby="mt-v75-planner-heading">
-      <div className="mt-v75-tray-head">
-        <div>
-          <h2 id="mt-v75-planner-heading">
-            {selectedDeals.length ? `${selectedDeals.length} in planner preview` : "Planner preview"}
-          </h2>
-          <p>Compare exposure, timing, and terms before confirming.</p>
-        </div>
-        <Link href="/saved-offers">View planner</Link>
-      </div>
-      <div className="mt-v75-planner-list">
-        {selectedDeals.length ? (
-          selectedDeals.map((deal) => {
-            const receipt = getDealReceiptAtom(deal);
-
-            return (
-              <div className="mt-v75-planner-row" key={deal.id}>
-                <DealSemanticVisual deal={deal} />
-                <div>
-                  <strong>{deal.title}</strong>
-                  <span>{receipt.state} · {receipt.conditionOrProtection}</span>
-                </div>
-                <em>{getDealAmountLabel(deal)}</em>
-              </div>
-            );
-          })
-        ) : (
-          <p>No planner rows. Browse offers to select reviewable items.</p>
-        )}
-      </div>
-      <dl className="mt-v75-planner-summary">
-        <div>
-          <dt>Total exposure</dt>
-          <dd>{exposureTotal ? centsToV72Exposure(exposureTotal).replace("Max ", "") : "$0.00"}</dd>
-        </div>
-        <div>
-          <dt>Charged now</dt>
-          <dd>$0.00</dd>
-        </div>
-        <div>
-          <dt>Next step</dt>
-          <dd>Review details, add evidence preferences, then confirm.</dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
-export function ReviewPlanPanel({ deal }: { deal: MarketplaceDeal }) {
-  const receipt = getDealReceiptAtom(deal);
-  const amountLabel = getDealAmountLabel(deal);
-
-  return (
-    <aside className="mt-v75-review-panel" aria-labelledby="mt-v75-review-heading">
-      <div className="mt-v75-review-head">
-        <h2 id="mt-v75-review-heading">Review your plan</h2>
-        <Link aria-label="Back to offers" href="/offers">x</Link>
-      </div>
-      <div className="mt-v75-review-summary">
-        <DealSemanticVisual deal={deal} />
-        <div>
-          <strong>{deal.title}</strong>
-          <span>{receipt.exposure} · No charge now</span>
-        </div>
-      </div>
-      <section className="mt-v75-amount-stepper" aria-label="Amount preview">
-        <span>Amount (preview)</span>
-        <div>
-          <button aria-label="Decrease preview amount" type="button">-</button>
-          <strong>{amountLabel}</strong>
-          <button aria-label="Increase preview amount" type="button">+</button>
-        </div>
-      </section>
-      <section className="mt-v75-review-card">
-        <h3>What happens</h3>
-        <ul>
-          <li>Review current terms</li>
-          <li>Upload evidence only if required</li>
-          <li>Human review runs where backed</li>
-          <li>No commitment was created in this preview</li>
-        </ul>
-      </section>
-      {deal.fallbackLivestreamEvidence ? (
-        <section className="mt-v75-review-card">
-          <h3>{deal.fallbackLivestreamEvidence.title}</h3>
-          <dl>
-            <div>
-              <dt>Branch</dt>
-              <dd>{deal.fallbackLivestreamEvidence.branchLabel}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{deal.fallbackLivestreamEvidence.statusLabel}</dd>
-            </div>
-            <div>
-              <dt>Window</dt>
-              <dd>{deal.fallbackLivestreamEvidence.scheduleLabel}</dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
-      <section className="mt-v75-review-card">
-        <h3>Price & exposure</h3>
-        <dl>
-          <div>
-            <dt>You commit</dt>
-            <dd>{amountLabel}</dd>
-          </div>
-          <div>
-            <dt>Potential max exposure</dt>
-            <dd>{receipt.exposure}</dd>
-          </div>
-          <div>
-            <dt>Charged now</dt>
-            <dd>$0.00</dd>
-          </div>
-          <div>
-            <dt>Moves if cleared</dt>
-            <dd>{receipt.state === "Live" ? "Review required" : "No"}</dd>
-          </div>
-        </dl>
-      </section>
-      <section className="mt-v75-review-card">
-        <h3>Your methods</h3>
-        <dl>
-          <div>
-            <dt>Pay-in authorization</dt>
-            <dd>Not connected</dd>
-          </div>
-          <div>
-            <dt>Payout (if any)</dt>
-            <dd>Not needed for this preview</dd>
-          </div>
-        </dl>
-      </section>
-      <Link className="button button-primary" href={deal.href}>
-        {receipt.primaryCta}
-        <span>No commitment created yet</span>
-      </Link>
-    </aside>
   );
 }
 
@@ -2079,61 +1923,6 @@ export function MoralDealCard({
         {receipt.primaryCta}
       </Link>
     </article>
-  );
-}
-
-export function CommitmentSheet({
-  commitHref,
-  deal,
-  paymentSupportAvailable,
-}: {
-  commitHref: string;
-  deal: MarketplaceDeal;
-  paymentSupportAvailable: boolean;
-}) {
-  void commitHref;
-  void paymentSupportAvailable;
-  const receipt = getDealReceiptAtom(deal);
-  const sheetCta = receipt.primaryCta === "View details" ? "Preview budget" : receipt.primaryCta;
-
-  return (
-    <details className="commitment-sheet" id="commitment-sheet">
-      <summary>{sheetCta}</summary>
-      <div className="commitment-sheet-body" role="group" aria-label="Conditional commitment preview">
-        <div className="commitment-sheet-handle" aria-hidden="true" />
-        <div className="commitment-sheet-header">
-          <p className="detail-kicker">
-            {receipt.source} · {receipt.state}
-          </p>
-          <p>{deal.title}</p>
-        </div>
-        <dl className="v72-receipt-facts">
-          <div>
-            <dt>Exposure</dt>
-            <dd>{receipt.exposure}</dd>
-          </div>
-          <div>
-            <dt>Condition</dt>
-            <dd>{receipt.conditionOrProtection}</dd>
-          </div>
-          <div>
-            <dt>Release</dt>
-            <dd>{receipt.protection}</dd>
-          </div>
-        </dl>
-        <p className="v72-sheet-result" role="status">
-          No commitment was created.
-        </p>
-        <div className="v72-sheet-footer">
-          <span>
-            {receipt.state} · {receipt.exposure} · {receipt.conditionOrProtection}
-          </span>
-          <Link className="button button-primary" href={deal.href}>
-            {sheetCta}
-          </Link>
-        </div>
-      </div>
-    </details>
   );
 }
 

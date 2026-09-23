@@ -44,9 +44,8 @@ test.describe("Adaptive homepage", () => {
     await expect(primary.getByRole("button", { name: "Open Discover" })).toHaveText(
       "Discover",
     );
-    await expect(primary.getByRole("button", { name: "Open Trade controls" })).toHaveText(
-      "Controls",
-    );
+    await expect(primary.getByRole("button", { name: "Open Trade controls" })).toHaveCount(0);
+    await expect(primary.getByRole("link", { name: "Open optional walkthrough" })).toBeVisible();
     await expect(primary.getByRole("button", { name: "Trade", exact: true })).toBeVisible();
     await expect(primary.getByRole("button", { name: "Commitments", exact: true })).toBeVisible();
     await expect(primary.getByRole("button", { name: "Open Evidence" })).toHaveText("Evidence");

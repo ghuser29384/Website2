@@ -588,10 +588,10 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(navigation.locator("button, a")).toHaveText([
       "Feed",
       "Discover",
-      "Controls",
       "Trade",
       "Commitments",
       "Evidence",
+      "Tour",
     ]);
 
     const evidence = navigation.getByRole("button", { name: "Open Evidence" });

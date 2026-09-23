@@ -4,10 +4,8 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
-  CommitmentSheet,
   DealDetailObject,
   MarketplaceBottomNav,
-  ReviewPlanPanel,
 } from "@/components/marketplace/marketplace-components";
 import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
@@ -206,20 +204,18 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
               Back to offers
             </Link>
           </div>
-          <div className="marketplace-detail-grid">
-            <DealDetailObject deal={marketplaceDeal} headingId="worked-example-decision-heading" />
-            <div className="marketplace-detail-side">
-              <ReviewPlanPanel deal={marketplaceDeal} />
-            </div>
-          </div>
-          <div className="v72-sticky-footer panel">
-            <span>Example · Preview only · No commitment</span>
-            <CommitmentSheet
-              commitHref={createHref}
+          <div className="marketplace-detail-grid marketplace-detail-single">
+            <DealDetailObject
               deal={marketplaceDeal}
-              paymentSupportAvailable={false}
+              headingId="worked-example-decision-heading"
+              actions={
+                <Link className="button button-primary" href={createHref}>
+                  Create a draft from this example
+                </Link>
+              }
             />
           </div>
+          <p className="route-text">Example · Preview only · No commitment</p>
           <details className="v72-explain-row">
             <summary>Requirements & rules</summary>
             <p>

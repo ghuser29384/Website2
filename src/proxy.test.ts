@@ -18,16 +18,12 @@ function makeRequest(path: string, headers: Record<string, string> = {}) {
   });
 }
 
-test("a first human homepage visit redirects to the mandatory walkthrough", () => {
+test("a first human homepage visit opens the product without consuming the optional tour", () => {
   const response = proxy(makeRequest("/?utm_source=invite"));
-
-  assert.equal(response.status, 307);
-  assert.equal(
-    response.headers.get("location"),
-    "https://moraltrade.org/walkthrough?utm_source=invite",
-  );
-  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE)?.value, "1");
-  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("location"), null);
+  assert.equal(response.headers.get("x-middleware-rewrite"), "https://moraltrade.org/moral-trade-live.html?utm_source=invite");
+  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
 });
 
 test("a returning visitor receives the live personalized homepage", () => {

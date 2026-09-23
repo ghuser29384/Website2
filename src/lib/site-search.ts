@@ -67,8 +67,8 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/trade-controls",
-    label: "Trade controls",
-    summary: "Review counterfactual integrity, multi-party clearing, dispute resolution, pool and threshold-failure governance, verifier governance, private preferences, evidence integrations, affected-party safeguards, and organizational authority.",
+    label: "Safeguard demonstrations",
+    summary: "Learning examples of integrity, coordination, review, privacy, evidence, and authority. No real trade settings are changed here.",
     kind: "learn",
     keywords: [
       "trade controls",
