@@ -41,6 +41,16 @@ jobs:
           section=source.split(name,1)[1].split(end,1)[0]
           code=textwrap.dedent(section.split('        run: |\n',1)[1])
           exec(compile(code,'<sha-verified-discover-transformation>','exec'))
+          path=Path('public/moral-trade-discover.html')
+          text=path.read_text()
+          css='  <link rel="stylesheet" href="/moral-trade-discover.css?v=20260923">'
+          js='  <script defer src="/moral-trade-discover-search.js?v=20260923"></script>'
+          assert text.count(css)==text.count(js)==1
+          text=text.replace(css,css+'\n  <link rel="stylesheet" href="/moral-trade-input-assist.css?v=20260923">')
+          text=text.replace(js,js+'\n  <script defer src="/moral-trade-input-assist.js?v=20260923"></script>')
+          assert blob(text.encode())=='ee9a827fb8685b573da402a2cef57b194759f690'
+          path.write_text(text)
+          subprocess.run(['git','add','--',str(path)],check=True)
           PY
           git diff --check "$BASE_SHA"
           git diff --name-only "$BASE_SHA" | sort > "$EVIDENCE/actual-paths.txt"
