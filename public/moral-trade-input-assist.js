@@ -949,6 +949,11 @@
     updateWebsitePreview(control);
   }
 
+  function searchSubmitsOnEnter(control) {
+    return control instanceof HTMLInputElement && control.type === "search" &&
+      control.dataset.mtSubmitSearch === "true";
+  }
+
   function renderSuggestions(control) {
     const context = inferContext(control);
     const panel = ensureSuggestionPanel();
@@ -964,7 +969,7 @@
       control.value,
       contextOptionsForElement(control, context),
     );
-    activeIndex = activeResults.length ? 0 : -1;
+    activeIndex = activeResults.length && !searchSubmitsOnEnter(control) ? 0 : -1;
     panel.replaceChildren();
 
     const heading = document.createElement("div");
@@ -972,7 +977,9 @@
     const title = document.createElement("strong");
     title.textContent = "Suggested completions";
     const hint = document.createElement("span");
-    hint.textContent = "↑↓ choose · Enter use · Esc close";
+    hint.textContent = searchSubmitsOnEnter(control)
+      ? "↑↓ choose · Enter search · Esc close"
+      : "↑↓ choose · Enter use · Esc close";
     heading.append(title, hint);
     panel.appendChild(heading);
 
@@ -1006,7 +1013,8 @@
     control.setAttribute("aria-controls", "mt-input-assist-listbox");
     control.setAttribute("aria-expanded", "true");
     panel.id = "mt-input-assist-listbox";
-    setActiveIndex(activeIndex);
+    if (activeIndex >= 0) setActiveIndex(activeIndex);
+    else control.removeAttribute("aria-activedescendant");
     positionFloatingElement(panel, control);
   }
 
@@ -1254,14 +1262,20 @@
       }
     });
     control.addEventListener("keydown", (event) => {
-      if (activeControl !== control || !suggestionPanel || suggestionPanel.hidden) return;
+      if (event.isComposing || activeControl !== control || !suggestionPanel || suggestionPanel.hidden) return;
 
       if (event.key === "ArrowDown" && activeResults.length) {
         event.preventDefault();
         setActiveIndex(activeIndex + 1);
       } else if (event.key === "ArrowUp" && activeResults.length) {
         event.preventDefault();
-        setActiveIndex(activeIndex - 1);
+        setActiveIndex(activeIndex < 0 ? activeResults.length - 1 : activeIndex - 1);
+      } else if (event.key === "Enter" && searchSubmitsOnEnter(control)) {
+        event.preventDefault();
+        if (event.repeat) return;
+        if (activeIndex >= 0) selectSuggestion(activeIndex);
+        else closeSuggestions();
+        control.form?.requestSubmit();
       } else if (event.key === "Enter" && activeIndex >= 0) {
         event.preventDefault();
         selectSuggestion(activeIndex);

@@ -1,49 +1,31 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const root = new URL("../", import.meta.url);
+const shell = readFileSync("public/moral-trade-discover.html", "utf8");
+const styles = readFileSync("public/moral-trade-discover.css", "utf8");
 
-async function read(path: string) {
-  return readFile(new URL(path, root), "utf8");
-}
-
-test("Discover reuses the canonical home navigation and hard-edged visual language", async () => {
-  const [navigation, styles] = await Promise.all([
-    read("public/moral-trade-discover-navigation.js"),
-    read("public/moral-trade-discover-home-alignment.css"),
-  ]);
-
-  for (const [label, path] of [
-    ["Feed", "/feed"],
-    ["Discover", "/discover"],
-    ["Controls", "/trade-controls"],
-    ["Trade", "/trades/new"],
-    ["Commitments", "/commitments"],
-    ["Evidence", "/evidence"],
-  ]) {
-    assert.match(
-      navigation,
-      new RegExp(`label: \\"${label}\\", path: \\"${path.replaceAll("/", "\\/")}\\"`),
-    );
+test("Discover keeps the canonical masthead and accessible two-sided list", () => {
+  for (const path of ["/feed", "/discover", "/trade-controls", "/trades/new", "/commitments", "/evidence"]) {
+    assert.ok(shell.includes(`href="${path}"`));
   }
-
-  assert.match(navigation, /moral-trade-discover-home-alignment\.css\?v=20260810/);
-  assert.match(navigation, /Focus Discover command/);
-  assert.match(navigation, /document\.getElementById\("command-input"\)/);
-  assert.match(navigation, /MutationObserver\(schedulePatch\)/);
-
+  assert.match(shell, /aria-current="page">Discover/);
+  assert.match(shell, /Skip to trades/);
+  assert.match(shell, /role="search"/);
+  assert.match(shell, /aria-live="polite"/);
   assert.match(styles, /--paper:\s*#f5f2e9/);
   assert.match(styles, /--blue:\s*#154cff/);
   assert.match(styles, /\.app-header\s*\{[^}]*background:\s*#050505/);
-  assert.match(styles, /\.top-nav a\.active,[\s\S]*background:\s*var\(--paper-strong\)/);
-  assert.match(styles, /\.left-rail\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
-  assert.match(styles, /\.full-rail\s*\{[^}]*display:\s*flex/);
-  assert.match(
-    styles,
-    /\.rail-tab\[aria-selected="true"\]::after\s*\{[^}]*background:\s*var\(--blue\)/,
-  );
-  assert.match(styles, /\.command-form\s*\{[^}]*border:\s*1px solid var\(--ink\)/);
-  assert.match(styles, /border-radius:\s*0\s*!important/);
-  assert.match(styles, /Preserve circles only when they encode a graph/);
+  assert.match(styles, /grid-template-columns: 1fr 1fr/);
+  assert.match(styles, /@media\(max-width:600px\)/);
+  assert.match(styles, /\.exchange-grid \{ grid-template-columns: 1fr;/);
+  assert.match(styles, /\[hidden\] \{ display: none !important;/);
+});
+
+test("search and real destinations remain usable without a prototype overlay", () => {
+  assert.match(shell, /id="command-input"/);
+  assert.match(shell, /href="\/trades\/new">Post a trade/);
+  assert.match(shell, /href="\/invite"/);
+  assert.match(shell, /<noscript>[\s\S]*href="\/offers\?view=live"/);
+  assert.doesNotMatch(shell, /overlay-root|inspector|lasso|data-action="pledge"/);
 });

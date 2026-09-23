@@ -1,41 +1,29 @@
 # Co-Funds in Discover
 
-## Product invariant
+Discover is a live-backed trade directory at `/discover`. Initial browsing, searches,
+filters, reset, bookmarked URLs and pagination use `POST /api/discover/search`.
+There is no embedded example inventory or simulated pledge/messaging action.
 
-A **Co-Fund** is a reciprocal moral-trade offer whose contribution side is fulfilled by multiple contributors. A **Pool** is a standalone threshold-funded moral public good with no separate reciprocal counterparty obligation.
+Co-Funds remain under **Trade type**, not under a standalone Pools tab. They are
+reciprocal trades whose contribution side is filled collectively. Their published
+contribution, counterparty outcome, evidence, timing and status are shown without
+inventing funding progress, contributors, trust edges or impact scores. **Review
+trade** links to the existing canonical route; its normal commitment, authorization
+and payment gates still apply. Browsing never creates a payment or an agreement.
 
-Discover therefore uses this taxonomy:
+Individual offers come from the same public-offer listing pipeline used by the
+marketplace. Only `source=live`, `status=live`, non-worked-example listings qualify.
+Co-Funds come from `loadLiveGroupBuyingSnapshot`, only when its source is live.
+Unavailable sources are not confused with a successful zero-result search. Partial
+coverage is labeled, including when one source returns no results.
 
-- `Offers` contains ordinary reciprocal offers and Co-Funds.
-- `Pools` contains standalone threshold campaigns, including assurance-contract and dominant-assurance-contract mechanisms.
-- `People` contains potential counterparties and participant profiles.
+Standalone Pools and prototype People/network views are not offered here. Legacy
+view URLs open the list with an explicit retirement notice. Searches interpreted
+as people or standalone pools ask the visitor to search for an exchange instead;
+those records are not relabeled as trades.
 
-A threshold is not sufficient to classify an opportunity as a Pool. The decisive question is whether a contributor group is collectively satisfying one side of a reciprocal trade.
-
-## Discover behavior
-
-Co-Funds are public, searchable Offer records after the normal publication checks pass. They:
-
-- appear in ordinary Offer results by default;
-- can be isolated with `offerKind=co-fund`;
-- use one canonical Offer listing rather than a duplicate Offer and Pool listing;
-- display the contributor-group obligation and the counterparty obligation at a glance;
-- display threshold, committed funding, contributor count, minimum contribution, deadline, failure terms, authorization expiry, and verification conditions;
-- use `Join Co-Fund` as the primary action;
-- do not expose a counteroffer action in the current fixed-term model.
-
-The current static Discover prototype stages the join interaction for review only. It does not create a charge or payment authorization.
-
-## URL and migration contract
-
-Canonical Co-Fund URLs use:
-
-```text
-/discover?domain=offers&view=list&offerKind=co-fund
-```
-
-Legacy links for `pool-bio-salary` and `pool-factory-transition` are migrated to the corresponding canonical Offer records. The old records no longer appear in the standalone Pools inventory.
-
-## Search interpretation
-
-Natural-language searches containing `Co-Fund`, `cofund`, or `group-buying` route to `Offers` with `offerKind=co-fund`. Searches for `threshold pool`, `conditional funding`, or `dominant assurance contract` continue to route to standalone `Pools` unless the query explicitly asks for a Co-Fund.
+Genuine instructional examples stay at `/worked-examples`, clearly separate from
+current opportunities. Old source/payload/demo assets and their exclusive graph,
+radar, lasso, simulated pledge and synthetic-date tests have been removed. Their
+production safety, search, two-sided terms, history, empty/error state and mobile
+contracts are covered by the live-only unit, source and browser tests instead.

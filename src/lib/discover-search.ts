@@ -723,6 +723,7 @@ export function filterAndRankDiscoverCoFunds(
 
   return routes
     .flatMap((route): DiscoverOfferSearchItem[] => {
+      if ((maximumOffer !== null || minimumOffer !== null) && route.currency !== "USD") return [];
       const offerText = [
         `Contribute from ${formatMoney(route.minimumFundingCents, route.currency)}`,
         `Published target: ${formatMoney(route.targetFundingCents, route.currency)}`,

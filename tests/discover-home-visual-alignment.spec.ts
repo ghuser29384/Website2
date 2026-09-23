@@ -1,124 +1,44 @@
-import { expect, test, type ConsoleMessage, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { mockInventory } from "./helpers/discover";
 
-async function openDiscover(page: Page, width: number, height: number) {
-  await page.setViewportSize({ width, height });
-  await page.goto("/discover?domain=offers&view=list", { waitUntil: "domcontentloaded" });
-  await expect(page.locator(".app-header")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("#command-input")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("#mt-discover-home-alignment")).toHaveAttribute(
-    "href",
-    /moral-trade-discover-home-alignment\.css\?v=20260810/,
-  );
-}
-
-async function expectNoHorizontalOverflow(page: Page) {
-  const dimensions = await page.evaluate(() => ({
-    innerWidth: window.innerWidth,
-    clientWidth: document.documentElement.clientWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-  }));
-  expect(dimensions.clientWidth).toBe(dimensions.innerWidth);
-  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1);
-}
-
-async function relevantConsoleErrors(page: Page, run: () => Promise<void>) {
-  const errors: string[] = [];
-  const handler = (message: ConsoleMessage) => {
-    if (message.type() === "error") errors.push(message.text());
-  };
-  page.on("console", handler);
-  try {
-    await run();
-  } finally {
-    page.off("console", handler);
-  }
-  return errors.filter((message) => !message.includes("favicon"));
-}
-
-test.describe("Discover visual alignment with Home", () => {
-  test("uses the canonical masthead, horizontal workspace navigation, and command handoff", async ({ page }, testInfo) => {
-    const errors = await relevantConsoleErrors(page, async () => {
-      await openDiscover(page, 1487, 1058);
-
-      const nav = page.locator(".app-header .top-nav");
-      await expect(nav.locator("a")).toHaveText([
-        "Feed",
-        "Discover",
-        "Controls",
-        "Trade",
-        "Commitments",
-        "Evidence",
-      ]);
-
-      const active = nav.getByRole("link", { name: "Discover", exact: true });
-      await expect(active).toHaveAttribute("aria-current", "page");
-      await expect(active).toHaveCSS("background-color", "rgb(255, 253, 248)");
-      await expect(active).toHaveCSS("color", "rgb(17, 17, 17)");
-      await expect(page.locator(".app-header")).toHaveCSS("background-color", "rgb(5, 5, 5)");
-
-      const rail = page.locator(".left-rail");
-      const main = page.locator(".discover-main");
-      const railBox = await rail.boundingBox();
-      const mainBox = await main.boundingBox();
-      expect(railBox).not.toBeNull();
-      expect(mainBox).not.toBeNull();
-      expect(railBox!.y + railBox!.height).toBeLessThanOrEqual(mainBox!.y + 1);
-      await expect(page.locator(".full-rail")).toHaveCSS("display", "flex");
-      await expect(rail).toHaveCSS("border-right-width", "0px");
-
-      const command = page.getByRole("button", { name: "Focus Discover command" });
-      await command.click();
-      await expect(page.locator("#command-input")).toBeFocused();
-
-      await page.getByRole("tab", { name: "Pools", exact: true }).click();
-      await expect(page.getByRole("tab", { name: "Pools", exact: true })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
-      await expect(page).toHaveURL(/view=threshold/);
-      await expect(
-        page.getByRole("heading", { name: "Standalone threshold radar", exact: true }),
-      ).toBeVisible();
-      await expect(page.locator(".app-header .top-nav a")).toHaveText([
-        "Feed",
-        "Discover",
-        "Controls",
-        "Trade",
-        "Commitments",
-        "Evidence",
-      ]);
-
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({
-        path: testInfo.outputPath("discover-home-alignment-desktop.png"),
-        fullPage: false,
-      });
-    });
+for (const [width, height] of [[1440, 1000], [390, 844], [320, 568]]) {
+  test(`live-only Discover preserves the canonical design and readable terms at ${width}x${height}`, async ({ page }, testInfo) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+    const requests = await mockInventory(page);
+    await page.setViewportSize({ width, height });
+    await page.goto("/discover");
+    await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+    await expect(page).toHaveTitle("Browse trades · Moral Trade");
+    await expect(page.locator(".app-header")).toHaveCSS("background-color", "rgb(5, 5, 5)");
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(245, 242, 233)");
+    await expect(page.locator(".top-nav a")).toHaveText(["Feed", "Discover", "Controls", "Trade", "Commitments", "Evidence"]);
+    await expect(page.locator('.top-nav a[aria-current="page"]')).toHaveText("Discover");
+    const geometry = await page.evaluate(() => ({ width: innerWidth, document: document.documentElement.scrollWidth }));
+    expect(geometry.document).toBeLessThanOrEqual(geometry.width + 1);
+    const provided = await page.locator('[data-exchange-side="offer"]').boundingBox();
+    const received = await page.locator('[data-exchange-side="return"]').boundingBox();
+    expect(provided).not.toBeNull();
+    expect(received).not.toBeNull();
+    if (width < 600) expect(provided!.y + provided!.height).toBeLessThanOrEqual(received!.y + 1);
+    else expect(provided!.x + provided!.width).toBeLessThanOrEqual(received!.x + 1);
+    await page.locator("#command-input").fill("research");
+    await page.locator("#command-input").press("Enter");
+    await expect.poll(() => requests.at(-1)?.query).toBe("research");
+    await expect(page.locator("#command-input")).toHaveValue("research");
+    await expect(page.locator("#results")).toHaveAttribute("aria-busy", "false");
+    await expect(page.locator('nextjs-portal')).toHaveCount(0);
     expect(errors).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`discover-${width}.png`), fullPage: true });
   });
+}
 
-  test("preserves the visual system and usable controls on mobile", async ({ page }, testInfo) => {
-    const errors = await relevantConsoleErrors(page, async () => {
-      await openDiscover(page, 390, 844);
-
-      await expect(page.locator(".app-header")).toHaveCSS("background-color", "rgb(5, 5, 5)");
-      await expect(page.locator(".app-header .top-nav")).toHaveCSS("display", "none");
-      await expect(page.locator(".mobile-tabs")).toBeVisible();
-      const offersTab = page.getByRole("tab", { name: "Offers", exact: true });
-      await expect(offersTab).toHaveAttribute("aria-selected", "true");
-      await expect(offersTab).toHaveCSS("border-bottom-color", "rgb(21, 76, 255)");
-
-      const command = page.getByRole("button", { name: "Focus Discover command" });
-      await expect(command).toHaveCSS("font-size", "0px");
-      await command.click();
-      await expect(page.locator("#command-input")).toBeFocused();
-
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({
-        path: testInfo.outputPath("discover-home-alignment-mobile.png"),
-        fullPage: false,
-      });
-    });
-    expect(errors).toEqual([]);
-  });
+test("a visitor without JavaScript has a direct live-directory fallback", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, baseURL });
+  const page = await context.newPage();
+  await page.goto("/discover");
+  await expect(page.locator('noscript a[href="/offers?view=live"]')).toBeVisible();
+  await expect(page.locator(".trade-row")).toHaveCount(0);
+  await context.close();
 });
