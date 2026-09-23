@@ -170,7 +170,7 @@ test("every standalone HTML shell is canonical or explicitly enhanced", () => {
   }
 
   assert.match(read("public/moral-trade-live.html"), /moral-trade-live-navigation\.js/);
-  assert.match(read("public/moral-trade-discover.html"), /moral-trade-discover-navigation\.js/);
+  assert.match(read("public/moral-trade-discover.html"), /moral-trade-discover\.css/);
   assert.match(read("public/moral-trade-production.html"), /moral-trade-interactive-walkthroughs\.html|Interactive Walkthrough/);
 });
 

@@ -176,3 +176,19 @@ test("people search never substitutes hard-coded examples", () => {
     ["person-1"],
   );
 });
+
+test("initial empty-query browsing uses only the same live inventory as search", () => {
+  const archived = { ...wildOffer, id: "archived", status: "archived" as const };
+  const draft = { ...wildOffer, id: "draft", status: "draft" as const };
+  const input = [wildOffer, aiOffer, exampleOffer, archived, draft];
+  const browse = filterAndRankDiscoverOffers(input, buildDiscoverSearchPlan({ query: "", domain: "offers" }));
+  assert.deepEqual(new Set(browse.map((item) => item.id)), new Set([wildOffer.id, aiOffer.id]));
+  const search = filterAndRankDiscoverOffers(input, buildDiscoverSearchPlan({ query: "Wild animal suffering", domain: "offers" }));
+  assert.ok(search.every((item) => browse.some((entry) => entry.id === item.id)));
+});
+
+test("a USD filter cannot imply a conversion for a differently denominated Co-Fund", () => {
+  const plan = buildDiscoverSearchPlan({ query: "", domain: "offers", offerKind: "co-fund", manual: { maximumOfferAmountCents: 5000 } });
+  assert.equal(filterAndRankDiscoverCoFunds([{ ...coFundRoute, currency: "EUR" }], plan).length, 0);
+  assert.equal(filterAndRankDiscoverCoFunds([coFundRoute], plan).length, 1);
+});

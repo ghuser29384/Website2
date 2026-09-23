@@ -24,13 +24,17 @@ import {
   getPublicOffersLiveModeFromSearchParams,
   type PublicOfferListing,
 } from "@/lib/public-offers";
+import {
+  discoverOffersAvailability,
+  discoverResultPage,
+  type DiscoverSourceStatus,
+} from "@/lib/discover-live-directory";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 32_000;
-const MAX_RESULT_ITEMS = 50;
 const MAX_PUBLIC_PROFILES = 1_000;
 
 function noStoreJson(body: unknown, status = 200) {
@@ -91,7 +95,11 @@ async function readJsonBody(request: Request) {
     return { error: "Search request is too large." } as const;
   }
   try {
-    return { value: await request.json() } as const;
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) {
+      return { error: "Search request is too large." } as const;
+    }
+    return { value: JSON.parse(text) as unknown } as const;
   } catch {
     return { error: "Search request must be valid JSON." } as const;
   }
@@ -154,10 +162,10 @@ function activeItems(
   offers: readonly DiscoverOfferSearchItem[],
   pools: readonly DiscoverPoolSearchItem[],
   people: readonly DiscoverPersonSearchItem[],
-): DiscoverSearchItem[] {
-  if (domain === "pools") return pools.slice(0, MAX_RESULT_ITEMS);
-  if (domain === "people") return people.slice(0, MAX_RESULT_ITEMS);
-  return offers.slice(0, MAX_RESULT_ITEMS);
+): readonly DiscoverSearchItem[] {
+  if (domain === "pools") return pools;
+  if (domain === "people") return people;
+  return offers;
 }
 
 export async function POST(request: Request) {
@@ -214,19 +222,32 @@ export async function POST(request: Request) {
   }
 
   try {
+    const needsIndividuals = plan.domain === "offers" && plan.offerKind !== "co-fund";
+    const needsCoFunds = plan.domain === "offers" && plan.offerKind !== "individual";
+    const needsPeople = plan.domain === "people";
+    let individualStatus: DiscoverSourceStatus = needsIndividuals ? "unavailable" : "not_requested";
+    let peopleStatus: DiscoverSourceStatus = needsPeople ? "unavailable" : "not_requested";
     const [offerListings, coFundSnapshot, profilesPage] = await Promise.all([
-      listAllLiveOfferListings(),
-      loadLiveGroupBuyingSnapshot(),
-      hasSupabaseEnv()
-        ? listPublicProfilesPage("reviewed", 1, MAX_PUBLIC_PROFILES, null)
-        : Promise.resolve({
-            items: [],
-            page: 1,
-            pageSize: MAX_PUBLIC_PROFILES,
-            hasNextPage: false,
-            hasPreviousPage: false,
-          }),
+      needsIndividuals && hasSupabaseEnv()
+        ? listAllLiveOfferListings().then((items) => {
+            individualStatus = "live";
+            return items;
+          }).catch(() => {
+            console.warn("Discover individual-offer source unavailable");
+            return [];
+          })
+        : Promise.resolve([]),
+      needsCoFunds
+        ? loadLiveGroupBuyingSnapshot().catch(() => ({ sourceStatus: "unavailable" as const, routes: [] }))
+        : Promise.resolve({ sourceStatus: "unavailable" as const, routes: [] }),
+      needsPeople && hasSupabaseEnv()
+        ? listPublicProfilesPage("reviewed", 1, MAX_PUBLIC_PROFILES, null).then((result) => {
+            peopleStatus = "live";
+            return result;
+          }).catch(() => ({ items: [] }))
+        : Promise.resolve({ items: [] }),
     ]);
+    const coFundStatus: DiscoverSourceStatus = needsCoFunds ? coFundSnapshot.sourceStatus : "not_requested";
     const individualOffers = filterAndRankDiscoverOffers(offerListings, plan);
     const coFunds =
       coFundSnapshot.sourceStatus === "live"
@@ -248,9 +269,10 @@ export async function POST(request: Request) {
       pools: pools.length,
       people: people.length,
     };
-    const items = activeItems(plan.domain, offers, pools, people);
-    const offersLive =
-      hasSupabaseEnv() || coFundSnapshot.sourceStatus === "live";
+    const resultPage = discoverResultPage(
+      activeItems(plan.domain, offers, pools, people),
+      isRecord(body.value) ? body.value.page : undefined,
+    );
 
     return noStoreJson({
       ok: true,
@@ -264,13 +286,12 @@ export async function POST(request: Request) {
       clarification: null,
       constraints: plan.constraints,
       counts,
-      total: counts[plan.domain],
-      items,
-      truncated: counts[plan.domain] > items.length,
+      ...resultPage,
+      sources: { individualOffers: individualStatus, coFunds: coFundStatus },
       sourceStatus: {
-        offers: offersLive ? "live" : "unavailable",
+        offers: discoverOffersAvailability(individualStatus, coFundStatus, plan.offerKind),
         pools: "unavailable",
-        people: hasSupabaseEnv() ? "live" : "unavailable",
+        people: peopleStatus,
       },
     });
   } catch (error) {
@@ -281,7 +302,7 @@ export async function POST(request: Request) {
         error: {
           kind: "marketplace_retrieval_failed",
           message:
-            "Current marketplace records could not be retrieved. Your query and previous results were preserved.",
+            "Current marketplace records could not be retrieved. Your query was preserved; retry to check current availability.",
         },
       },
       503,

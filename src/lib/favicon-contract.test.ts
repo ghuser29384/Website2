@@ -44,7 +44,6 @@ test("every document-writing static shell installs the canonical favicon before 
   for (const path of [
     "public/moral-trade-live.html",
     "public/moral-trade-production.html",
-    "public/moral-trade-discover.html",
   ]) {
     const html = source(path);
     const occurrences = html.split(CANONICAL_FAVICON_HREF).length - 1;
@@ -76,4 +75,10 @@ test("the raw Create implementation document redirects to the canonical Create p
     nextConfig,
     /source: "\/moral-trade-create\/index\.html"[\s\S]*destination: "\/trades\/new"/,
   );
+});
+
+test("Discover's single document has canonical icons without a replacement loader", () => {
+  const html = source("public/moral-trade-discover.html");
+  assert.equal(html.split(CANONICAL_FAVICON_HREF).length - 1, 3);
+  assert.doesNotMatch(html, /document\.write|document\.open/);
 });

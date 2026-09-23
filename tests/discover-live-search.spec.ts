@@ -1,337 +1,286 @@
-import { mkdir } from "node:fs/promises";
+import { expect, test } from "@playwright/test";
+import { fulfill, liveOffer, mockAccount, mockInventory, responseFor, type BrowseRequest } from "./helpers/discover";
 
-import { expect, test, type Page, type Route } from "@playwright/test";
+test("initial no-query browsing fetches real records with no prototype payload", async ({ page }) => {
+  const requests = await mockInventory(page);
+  const resources: string[] = [];
+  page.on("request", (request) => resources.push(request.url()));
+  await page.goto("/discover");
+  await expect(page.getByRole("heading", { name: "Browse trades", exact: true })).toBeVisible();
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  expect(requests).toHaveLength(1);
+  expect(requests[0].query).toBe("");
+  expect(requests[0].domain).toBe("offers");
+  expect(requests[0].manual.maximumOfferAmountCents).toBeNull();
+  expect(resources.some((url) => /discover\/payload|discover-navigation|discover-value-hover/.test(url))).toBe(false);
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(page.locator(".result-count")).toHaveText("1 matching trade");
+  await expect(page.locator("body")).not.toContainText("Mina Park");
+});
 
-interface SearchRequest {
-  query: string;
-  normalizedQuery?: string;
-  domain?: "offers" | "pools" | "people";
-  excludedConstraints?: string[];
-}
-
-function liveOffer(id: string, cause: string, title = "Wild-animal welfare exchange") {
-  return {
-    kind: "offer",
-    offerKind: "individual",
-    id,
-    title,
-    cause,
-    status: "Manual review required",
-    youOffer: ["Donate $10 to Wild Animal Initiative", "Complete within 30 days"],
-    youGet: ["Read one paper and provide a one-page summary"],
-    offerFlexibility: "Fixed",
-    returnFlexibility: "Fixed",
-    providerName: "Ellen",
-    providerRole: "Offer maker",
-    evidenceLabel: "Receipt or public link",
-    completionLabel: "Complete within 30 days",
-    href: `/offers/${id}`,
-    exactMatchLabel: "Request exact match",
-    counteroffersAllowed: true,
-    createdAt: "2026-07-31T08:00:00.000Z",
-    score: 100,
-  };
-}
-
-function livePool(id = "pool-1") {
-  return {
-    kind: "pool",
-    id,
-    title: "Wild-animal welfare research pool",
-    cause: "Wild animal suffering",
-    status: "Near threshold",
-    youOffer: ["Make a conditional pledge from $5", "No charge if the threshold is missed"],
-    youGet: ["Fund one research tranche", "Research begins after activation"],
-    providerName: "Wild Animal Initiative",
-    evidenceLabel: "Reviewed milestone plan",
-    completionLabel: "Deadline 2026-08-15",
-    href: `/pools/${id}`,
-    targetFundingCents: 100_000,
-    score: 100,
-  };
-}
-
-function searchResponse({
-  query,
-  domain = "offers",
-  items = [liveOffer("wild-1", "Wild animal suffering")],
-  counts = { offers: 1, pools: 1, people: 0 },
-}: {
-  query: string;
-  domain?: "offers" | "pools" | "people";
-  items?: unknown[];
-  counts?: { offers: number; pools: number; people: number };
-}) {
-  return {
-    ok: true,
-    checkedAt: "2026-07-31T09:30:00.000Z",
-    query,
-    normalizedQuery: query,
-    domain,
-    offerKind: "all",
-    sort: "best-fit",
-    requiresSharedInterpretation: false,
-    clarification: null,
-    constraints: [
-      { key: "domain", label: `Domain: ${domain[0].toUpperCase()}${domain.slice(1)}`, source: "query" },
-      { key: "cause:wild-animal-suffering", label: "Cause: Wild animal suffering", source: "query" },
-    ],
-    counts,
-    total: items.length,
-    items,
-    truncated: false,
-    sourceStatus: { offers: "live", pools: "live", people: "live" },
-  };
-}
-
-async function openDiscover(page: Page) {
-  await page.goto("/discover?domain=offers&view=list", { waitUntil: "networkidle" });
-  await expect(page.locator("body")).not.toContainText("Loading Discover…");
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        Boolean(
-          (window as Window & { __moralTradeSmartQueryLoaded?: boolean })
-            .__moralTradeSmartQueryLoaded,
-        ),
-      ),
-    )
-    .toBe(true);
-  await expect(page.locator("#command-form")).toBeVisible();
-  await expect(page.locator('#command-form button[type="submit"]')).toHaveText("Search");
-}
-
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-}
-
-test("clear cause search updates live results in place without document navigation", async ({ page }) => {
-  const searchRequests: SearchRequest[] = [];
-  let interpreterCalls = 0;
-  await page.route("**/api/query/interpret", async (route) => {
-    interpreterCalls += 1;
-    await route.abort();
-  });
-  await page.route("**/api/discover/search", async (route) => {
-    const body = route.request().postDataJSON() as SearchRequest;
-    searchRequests.push(body);
-    await fulfillJson(route, searchResponse({ query: body.query }));
-  });
-
-  await openDiscover(page);
-  await page.evaluate(() => {
-    (window as Window & { __discoverDocumentSentinel?: object }).__discoverDocumentSentinel = {};
-  });
-  const input = page.locator("#command-input");
-  await input.fill("Wild animal suffering");
+test("Search and Enter update the same list without replacing the document", async ({ page }) => {
+  const requests = await mockInventory(page, (body) => responseFor(body, { items: [liveOffer("current", body.query || "Initial trade")] }));
+  await page.goto("/discover");
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  await page.evaluate(() => { document.body.dataset.documentSentinel = "same"; });
+  await page.locator("#command-input").fill("Animal welfare");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-
-  await expect(page.locator('.transaction-list [data-live-record="true"]')).toHaveCount(1);
-  await expect(page.locator('[data-exchange-side="offer"]')).toContainText("Donate $10");
-  await expect(page.locator('[data-exchange-side="return"]')).toContainText("Read one paper");
-  await expect(page.locator(".result-count")).toContainText("1 matching offer");
-  await expect(page.locator(".match-reason")).toHaveCount(0);
-  await expect(page.getByTestId("discover-live-search-state")).toContainText(
-    "Cause: Wild animal suffering",
-  );
-  expect(new URL(page.url()).searchParams.get("q")).toBe("Wild animal suffering");
-  expect(await page.evaluate(() => Boolean((window as Window & { __discoverDocumentSentinel?: object }).__discoverDocumentSentinel))).toBe(true);
-  expect(interpreterCalls).toBe(0);
-  expect(searchRequests).toHaveLength(1);
-  await mkdir("test-results", { recursive: true });
-  await page.screenshot({ path: "test-results/discover-live-search-desktop.png", fullPage: true });
+  await expect(page.locator(".trade-row h3")).toHaveText("Animal welfare");
+  await page.locator("#command-input").fill("research");
+  await page.locator("#command-input").press("Enter");
+  await expect(page.locator(".trade-row h3")).toHaveText("research");
+  expect(requests.map((request) => request.query)).toEqual(["", "Animal welfare", "research"]);
+  await expect(page.locator("body")).toHaveAttribute("data-document-sentinel", "same");
+  expect(new URL(page.url()).searchParams.get("q")).toBe("research");
 });
 
-test("Enter and Search use the same in-place submission path", async ({ page }) => {
-  const queries: string[] = [];
+test("type and amount filters compose in one request, and clear fetches the same directory", async ({ page }) => {
+  const requests = await mockInventory(page);
+  await page.goto("/discover");
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  await page.locator("#maximum-offer").fill("25");
+  await page.locator("#offer-kind").selectOption("co-fund");
+  await expect.poll(() => requests.at(-1)?.offerKind).toBe("co-fund");
+  await expect.poll(() => requests.at(-1)?.manual.maximumOfferAmountCents).toBe(2500);
+  await page.getByRole("button", { name: "Clear all" }).click();
+  await expect.poll(() => requests.at(-1)?.offerKind).toBe("all");
+  expect(requests.at(-1)?.query).toBe("");
+  expect(requests.at(-1)?.manual.maximumOfferAmountCents).toBeNull();
+  await expect(page.locator("#maximum-offer")).toHaveValue("");
+});
+
+test("a zero-dollar cap remains distinct from an absent cap", async ({ page }) => {
+  const requests = await mockInventory(page);
+  await page.goto("/discover?max=0");
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  expect(requests[0].manual.maximumOfferAmountCents).toBe(0);
+  await expect(page.locator("#maximum-offer")).toHaveValue("0");
+  await page.locator("#maximum-offer").fill("");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect.poll(() => requests.at(-1)?.manual.maximumOfferAmountCents).toBeNull();
+});
+
+test("deep links, refresh and back preserve search and manual constraints", async ({ page }) => {
+  const requests = await mockInventory(page);
+  await page.goto("/discover?q=research&max=20&offerKind=individual&causeFilter=ai-safety");
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  expect(requests[0]).toMatchObject({ query: "research", offerKind: "individual", manual: { maximumOfferAmountCents: 2000, causes: ["ai-safety"] } });
+  await page.reload();
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  expect(requests.at(-1)?.manual.causes).toEqual(["ai-safety"]);
+  await page.locator("#command-input").fill("changed");
+  await page.locator("#command-input").press("Enter");
+  await expect.poll(() => requests.at(-1)?.query).toBe("changed");
+  await page.goBack();
+  await expect.poll(() => requests.at(-1)?.query).toBe("research");
+  await expect(page.locator("#command-input")).toHaveValue("research");
+});
+
+test("applied hard constraints can be removed without relaxing other filters", async ({ page }) => {
+  const requests = await mockInventory(page, (body) => responseFor(body, {
+    constraints: body.manual.maximumOfferAmountCents === null ? [] : [{ key: "manual-offer-max", label: "You offer ≤ $20", source: "manual" }],
+  }));
+  await page.goto("/discover?q=research&max=20");
+  await page.getByRole("button", { name: "Remove You offer ≤ $20" }).click();
+  await expect.poll(() => requests.at(-1)?.manual.maximumOfferAmountCents).toBeNull();
+  expect(requests.at(-1)?.query).toBe("research");
+});
+
+test("pagination returns current rows and preserves the filter state", async ({ page }) => {
+  const requests = await mockInventory(page, (body) => responseFor(body, {
+    items: [liveOffer(`page-${body.page}`, `Page ${body.page} trade`)], total: 51, hasMore: body.page === 1,
+  }));
+  await page.goto("/discover?q=research&max=50");
+  await expect(page.locator(".trade-row h3")).toHaveText("Page 1 trade");
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(page.locator(".trade-row h3")).toHaveText("Page 2 trade");
+  expect(requests.at(-1)).toMatchObject({ page: 2, query: "research", manual: { maximumOfferAmountCents: 5000 } });
+  await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
+  await page.getByRole("button", { name: "Previous page" }).click();
+  await expect(page.locator(".trade-row h3")).toHaveText("Page 1 trade");
+});
+
+test("a slower previous search cannot overwrite a newer result", async ({ page }) => {
+  await mockAccount(page);
   await page.route("**/api/discover/search", async (route) => {
-    const body = route.request().postDataJSON() as SearchRequest;
-    queries.push(body.query);
-    await fulfillJson(route, searchResponse({ query: body.query }));
+    const body = route.request().postDataJSON() as BrowseRequest;
+    if (body.query === "first") await new Promise((resolve) => setTimeout(resolve, 700));
+    await fulfill(route, responseFor(body, { items: [liveOffer("current", body.query || "Initial")] }));
   });
-  await openDiscover(page);
-  const input = page.locator("#command-input");
-  await input.fill("Wild animal suffering");
-  await input.press("Enter");
-  await expect(page.locator('.transaction-list [data-live-record="true"]')).toHaveCount(1);
-  expect(queries).toEqual(["Wild animal suffering"]);
+  await page.goto("/discover");
+  await expect(page.locator(".trade-row h3")).toHaveText("Initial");
+  await page.locator("#command-input").fill("first");
+  await page.locator("#command-input").press("Enter");
+  await page.locator("#command-input").fill("second");
+  await page.locator("#command-input").press("Enter");
+  await expect(page.locator(".trade-row h3")).toHaveText("second");
+  await page.waitForTimeout(850);
+  await expect(page.locator(".trade-row h3")).toHaveText("second");
 });
 
-test("a newer query cannot be overwritten by a slower stale response", async ({ page }) => {
+test("failed retrieval removes stale action links, preserves the query and retries", async ({ page }) => {
+  let fails = false;
+  await mockAccount(page);
   await page.route("**/api/discover/search", async (route) => {
-    const body = route.request().postDataJSON() as SearchRequest;
-    if (body.query === "first query") {
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      await fulfillJson(route, searchResponse({
-        query: body.query,
-        items: [liveOffer("first", "Civic infrastructure", "First stale result")],
-      }));
-      return;
+    const body = route.request().postDataJSON() as BrowseRequest;
+    await fulfill(route, fails ? { ok: false } : responseFor(body), fails ? 503 : 200);
+  });
+  await page.goto("/discover");
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  fails = true;
+  await page.locator("#command-input").fill("research");
+  await page.locator("#command-input").press("Enter");
+  await expect(page.getByRole("heading", { name: "Unable to check current trades" })).toBeVisible();
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(0);
+  await expect(page.locator(".result-count")).toBeEmpty();
+  await expect(page.locator("#command-input")).toHaveValue("research");
+  fails = false;
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+});
+
+for (const availability of ["live", "partial", "unavailable"]) {
+  test(`${availability} empty state does not invent inventory or conflate a failed source with zero matches`, async ({ page }) => {
+    await mockInventory(page, (body) => responseFor(body, { items: [], total: 0, sourceStatus: { offers: availability } }));
+    await page.goto("/discover");
+    await expect(page.locator('[data-live-record="true"]')).toHaveCount(0);
+    if (availability === "unavailable") {
+      await expect(page.getByRole("heading", { name: "Listings are temporarily unavailable" })).toBeVisible();
+      await expect(page.locator(".result-count")).toBeEmpty();
+      await expect(page.locator("body")).toContainText("This is not a zero-result search");
+    } else if (availability === "partial") {
+      await expect(page.locator(".result-count")).toHaveText("No matches in the available source");
+      await expect(page.locator("#search-status")).toContainText("other listings may be missing");
+    } else {
+      await expect(page.locator(".result-count")).toHaveText("0 matching trades");
+      await expect(page.getByRole("heading", { name: "No current trades to show" })).toBeVisible();
     }
-    await fulfillJson(route, searchResponse({
-      query: body.query,
-      items: [liveOffer("second", "AI safety", "Second current result")],
-    }));
   });
-  await openDiscover(page);
-  const input = page.locator("#command-input");
-  await input.fill("first query");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await input.fill("second query");
-  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator(".transaction-list")).toContainText("Second current result");
-  await page.waitForTimeout(800);
-  await expect(page.locator(".transaction-list")).not.toContainText("First stale result");
+}
+
+test("partial nonempty results identify incomplete coverage", async ({ page }) => {
+  await mockInventory(page, (body) => responseFor(body, { sourceStatus: { offers: "partial" } }));
+  await page.goto("/discover");
+  await expect(page.locator(".result-count")).toContainText("partial directory");
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
 });
 
-test("ambiguous money asks one inline clarification and preserves the original query", async ({ page }) => {
-  let interpretationCall = 0;
-  await page.route("**/api/query/interpret", async (route) => {
-    interpretationCall += 1;
-    const body = route.request().postDataJSON() as { query: string; clarification?: { answer: string } };
-    if (!body.clarification) {
-      await fulfillJson(route, {
-        interpretation: {
-          originalQuery: body.query,
-          normalizedQuery: "animal welfare for $50",
-          parsedConstraintCount: 1,
-          confidence: 0.72,
-          needsClarification: true,
-          clarification: {
-            field: "amount",
-            question: "Should the stated amount be a maximum, a minimum, or an exact amount?",
-            options: ["Maximum", "Minimum", "Exact amount"],
-          },
-        },
-        target: "/discover",
-      });
-      return;
+test("ambiguous amounts require an explicit answer while keeping the original search", async ({ page }) => {
+  const requests = await mockInventory(page, (body) => responseFor(body, body.query && !body.normalizedQuery ? {
+    items: [], total: 0, clarification: { field: "amount", question: "Should $50 be a maximum, minimum, or exact amount?", options: ["Maximum", "Minimum", "Exact amount"] },
+  } : {}));
+  await page.goto("/discover?q=animal%20welfare%20for%20%2450");
+  await page.getByRole("button", { name: "Maximum", exact: true }).click();
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  expect(requests.at(-1)?.normalizedQuery).toBe("animal welfare under $50");
+  await expect(page.locator("#command-input")).toHaveValue("animal welfare for $50");
+});
+
+test("Co-Funds show two-sided terms and link to real review instead of a simulated pledge", async ({ page }) => {
+  await mockInventory(page, (body) => responseFor(body, { items: [{ ...liveOffer(), offerKind: "co-fund", href: "/moral-goods-group-buying?pool=test-fund" }] }));
+  await page.goto("/discover?offerKind=co-fund");
+  await expect(page.locator('[data-exchange-side="offer"]')).toContainText("You provide");
+  await expect(page.locator('[data-exchange-side="return"]')).toContainText("Counterparty provides");
+  await expect(page.locator(".trade-facts")).toContainText("Manual review required");
+  await expect(page.locator('[data-discover-result-link]')).toHaveAttribute("href", "/moral-goods-group-buying?pool=test-fund");
+  await expect(page.getByRole("button", { name: /pledge|accept|message/i })).toHaveCount(0);
+});
+
+test("review follows the canonical offer route and back rechecks the same query", async ({ page }) => {
+  const requests = await mockInventory(page);
+  await page.route("**/offers/test-trade", (route) => route.fulfill({ contentType: "text/html", body: "<h1>Published terms for the test trade</h1>" }));
+  await page.goto("/discover?q=research");
+  await page.locator('[data-discover-result-link]').click();
+  await expect(page).toHaveURL(/\/offers\/test-trade$/);
+  await expect(page.getByRole("heading", { name: "Published terms for the test trade" })).toBeVisible();
+  await page.goBack();
+  await expect(page.locator("#command-input")).toHaveValue("research");
+  await expect.poll(() => requests.length).toBeGreaterThanOrEqual(2);
+});
+
+for (const href of ["javascript:alert(1)", "https://example.org/steal", "/offers/examples/demo"]) {
+  test(`unsafe or worked-example destination is not rendered: ${href}`, async ({ page }) => {
+    await mockInventory(page, (body) => responseFor(body, { items: [{ ...liveOffer(), href }] }));
+    await page.goto("/discover");
+    await expect(page.getByRole("heading", { name: "Unable to check current trades" })).toBeVisible();
+    await expect(page.locator('[data-live-record="true"]')).toHaveCount(0);
+  });
+}
+
+test("listing text is escaped rather than interpreted as markup", async ({ page }) => {
+  const title = '<img src=x onerror="window.injected=true">';
+  await mockInventory(page, (body) => responseFor(body, { items: [liveOffer("safe-id", title)] }));
+  await page.goto("/discover");
+  await expect(page.locator(".trade-row h3")).toHaveText(title);
+  await expect(page.locator(".trade-row img")).toHaveCount(0);
+  expect(await page.evaluate(() => Object.hasOwn(window, "injected"))).toBe(false);
+});
+
+test("retired graph URLs open the live list with an explicit notice", async ({ page }) => {
+  const requests = await mockInventory(page);
+  await page.goto("/discover?domain=pools&view=threshold");
+  await expect(page.locator("#legacy-notice")).toBeVisible();
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  expect(requests[0].domain).toBe("offers");
+  expect(new URL(page.url()).searchParams.get("view")).toBe("list");
+  await expect(page.getByRole("tab")).toHaveCount(0);
+});
+
+test("people and standalone-pool query results are not relabeled as trades", async ({ page }) => {
+  await mockInventory(page, (body) => responseFor(body, { domain: "people", items: [], total: 0 }));
+  await page.goto("/discover?q=people");
+  await expect(page.getByRole("heading", { name: "Search for an exchange" })).toBeVisible();
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(0);
+  await expect(page.locator(".result-count")).toBeEmpty();
+});
+
+test("examples stay outside the directory and browsing has no transaction-write requests", async ({ page }) => {
+  await mockInventory(page);
+  const writes: string[] = [];
+  page.on("request", (request) => {
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) writes.push(new URL(request.url()).pathname);
+  });
+  await page.goto("/discover");
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  await expect(page.locator('.discover-footer a[href="/worked-examples"]')).toBeVisible();
+  await expect(page.locator(".discover-footer")).toContainText("illustrations, not available listings");
+  expect(writes).toEqual(["/api/discover/search"]);
+});
+
+
+test("an out-of-range saved page does not claim zero matching trades", async ({ page }) => {
+  const requests = await mockInventory(page, (body) => responseFor(body, {
+    items: body.page === 1 ? [liveOffer()] : [], total: 1, hasMore: false,
+  }));
+  await page.goto("/discover?q=research&max=50&page=3");
+  await expect(page.locator(".result-count")).toHaveText("1 matching trade");
+  await expect(page.getByRole("heading", { name: "No trades on this page" })).toBeVisible();
+  await page.getByRole("button", { name: "First page", exact: true }).click();
+  await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+  expect(requests.at(-1)).toMatchObject({ page: 1, query: "research", manual: { maximumOfferAmountCents: 5000 } });
+});
+
+
+for (const chooseSuggestion of [false, true]) {
+  test(`Enter submits the query with assistance visible; explicit suggestion: ${chooseSuggestion}`, async ({ page }) => {
+    const requests = await mockInventory(page);
+    await page.route("**/moral-trade-input-standards.json", (route) => fulfill(route, {
+      priorities: [{ label: "Research support", description: "Test search completion", aliases: ["research"] }],
+    }));
+    await page.goto("/discover");
+    await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
+    const input = page.locator("#command-input");
+    await expect(input).toHaveAttribute("data-mt-autocomplete-ready", "true");
+    await input.fill("research");
+    await expect(page.locator("#mt-input-assist-listbox")).toBeVisible();
+    await expect(input).not.toHaveAttribute("aria-activedescendant", /.+/);
+    if (chooseSuggestion) {
+      await input.press("ArrowDown");
+      await expect(page.locator('[role="option"][aria-selected="true"] strong')).toHaveText("Research support");
     }
-    await fulfillJson(route, {
-      interpretation: {
-        originalQuery: body.query,
-        normalizedQuery: "animal welfare under $50",
-        parsedConstraintCount: 2,
-        confidence: 0.98,
-        needsClarification: false,
-        clarification: null,
-      },
-      target: "/discover",
-    });
-  });
-  await page.route("**/api/discover/search", async (route) => {
-    const body = route.request().postDataJSON() as SearchRequest;
-    await fulfillJson(route, searchResponse({ query: body.query }));
-  });
-  await openDiscover(page);
-  const input = page.locator("#command-input");
-  await input.fill("Animal welfare for $50");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  const clarification = page.getByTestId("discover-live-search-state");
-  await expect(clarification).toContainText("One detail changes the results.");
-  await clarification.getByRole("button", { name: "Maximum" }).click();
-  await expect(page.locator('.transaction-list [data-live-record="true"]')).toHaveCount(1);
-  await expect(input).toHaveValue("Animal welfare for $50");
-  expect(interpretationCall).toBe(2);
-});
-
-test("domain routing updates counts and renders the live pool directory in place", async ({ page }) => {
-  await page.route("**/api/query/interpret", async (route) => {
-    const body = route.request().postDataJSON() as { query: string };
-    await fulfillJson(route, {
-      interpretation: {
-        originalQuery: body.query,
-        normalizedQuery: body.query.toLowerCase(),
-        parsedConstraintCount: 2,
-        confidence: 0.98,
-        needsClarification: false,
-        clarification: null,
-      },
-      target: "/discover?domain=pools",
-    });
-  });
-  await page.route("**/api/discover/search", async (route) => {
-    const body = route.request().postDataJSON() as SearchRequest;
-    await fulfillJson(route, searchResponse({
-      query: body.query,
-      domain: "pools",
-      items: [livePool()],
-      counts: { offers: 4, pools: 1, people: 2 },
-    }));
-  });
-  await openDiscover(page);
-  await page.locator("#command-input").fill("Pools near threshold for wild animal suffering");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator('.transaction-list [data-live-record="true"]')).toHaveCount(1);
-  await expect(page.locator(".transaction-list")).toContainText("Wild-animal welfare research pool");
-  await expect(page.locator('[data-domain="offers"]').first()).toContainText("4");
-  await expect(page.locator('[data-domain="pools"]').first()).toContainText("1");
-  await expect(page.locator('[data-domain="people"]').first()).toContainText("2");
-  expect(await page.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(1);
-});
-
-test("zero and retrieval-failure states are explicit and never relabel unrelated rows as matches", async ({ page }) => {
-  let fail = false;
-  await page.route("**/api/discover/search", async (route) => {
-    const body = route.request().postDataJSON() as SearchRequest;
-    if (fail) {
-      await fulfillJson(route, {
-        ok: false,
-        error: {
-          kind: "marketplace_retrieval_failed",
-          message: "Current marketplace records could not be retrieved.",
-        },
-      }, 503);
-      return;
-    }
-    await fulfillJson(route, searchResponse({ query: body.query, items: [], counts: { offers: 0, pools: 0, people: 0 } }));
-  });
-  await openDiscover(page);
-  await page.locator("#command-input").fill("No exact live result");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator(".state-panel")).toContainText("No active offers match");
-  await expect(page.locator(".result-count")).toContainText("0 matching offers");
-  fail = true;
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByTestId("discover-live-search-state")).toContainText(
-    "Marketplace retrieval failed.",
-  );
-  await expect(page.locator(".state-panel")).toContainText("No active offers match");
-});
-
-for (const viewport of [
-  { width: 390, height: 844 },
-  { width: 320, height: 568 },
-]) {
-  test(`live two-sided search results remain stacked without horizontal overflow at ${viewport.width}×${viewport.height}`, async ({ page }) => {
-    await page.setViewportSize(viewport);
-    await page.route("**/api/discover/search", async (route) => {
-      const body = route.request().postDataJSON() as SearchRequest;
-      await fulfillJson(route, searchResponse({ query: body.query }));
-    });
-    await openDiscover(page);
-    await page.locator("#command-input").fill("Wild animal suffering");
-    await page.getByRole("button", { name: "Search", exact: true }).click();
-    const liveResult = page.locator('.transaction-list [data-live-record="true"]');
-    await expect(liveResult).toHaveCount(1);
-    const offerSide = liveResult.locator('[data-exchange-side="offer"]');
-    const returnSide = liveResult.locator('[data-exchange-side="return"]');
-    await expect(offerSide).toBeVisible();
-    await expect(returnSide).toBeVisible();
-    const [offerBox, returnBox] = await Promise.all([offerSide.boundingBox(), returnSide.boundingBox()]);
-    expect(returnBox!.y).toBeGreaterThanOrEqual(offerBox!.y + offerBox!.height - 1);
-    const widths = await page.evaluate(() => ({
-      document: document.documentElement.scrollWidth,
-      body: document.body.scrollWidth,
-      viewport: window.innerWidth,
-    }));
-    expect(widths.document).toBeLessThanOrEqual(widths.viewport + 1);
-    expect(widths.body).toBeLessThanOrEqual(widths.viewport + 1);
-    await mkdir("test-results", { recursive: true });
-    await page.screenshot({
-      path: `test-results/discover-live-search-${viewport.width}x${viewport.height}.png`,
-      fullPage: true,
-    });
+    await input.press("Enter");
+    await expect.poll(() => requests.at(-1)?.query).toBe(chooseSuggestion ? "Research support" : "research");
+    await expect(input).toHaveValue(chooseSuggestion ? "Research support" : "research");
+    expect(requests).toHaveLength(2);
   });
 }
