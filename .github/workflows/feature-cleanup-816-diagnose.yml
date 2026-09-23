@@ -21,7 +21,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/35846327015" > "$RUNNER_TEMP/run.json"
           test "$(jq -r .head_sha "$RUNNER_TEMP/run.json")" = 06211a77e8e37d67cb28785f45a5f7d0fa3ba761
           test "$(jq -r .conclusion "$RUNNER_TEMP/run.json")" = failure
-          gh api "repos/$GITHUB_REPOSITORY/actions/jobs/107133275864/logs" > "$RUNNER_TEMP/job.log"
+          gh api --allow-escape-sequences "repos/$GITHUB_REPOSITORY/actions/jobs/107133275864/logs" > "$RUNNER_TEMP/job.log"
           python - <<'PY'
           import os,re
           from pathlib import Path
