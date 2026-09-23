@@ -1,0 +1,68 @@
+name: Inspect 320px flows with candidate navigation CSS
+on:
+  push:
+    branches: [ops/optional-tour-access-validation-20260923]
+    paths: [.github/workflows/optional-tour-public-style-preview.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: 69ef674d1cfca7f87df77c42959344364b1d35a8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 69ef674d1cfca7f87df77c42959344364b1d35a8
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Prepare existing browser tooling
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Prepare explicitly staged read-only style check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/git/blobs/f07053cce49cb0b67fe778ff93da18b4fac5b8e3" --jq .content | base64 --decode > "$RUNNER_TEMP/tour-style-preview.mjs"
+          printf '%s  %s\n' 63fb971f1a8383a1d9908654a487ea5de2472c1d02e4c45dd8fc36bcbd895bd2 "$RUNNER_TEMP/tour-style-preview.mjs" | sha256sum --check
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          path = Path(os.environ['RUNNER_TEMP']) / 'tour-style-preview.mjs'
+          source = path.read_text()
+          changes = [
+              ('fixtures: false, authenticated: false', 'fixtures: false, authenticated: false, cssSubstitution: true, actualProductionVerification: false'),
+              ('for (const width of [1440, 390, 320])', 'for (const width of [320])'),
+              ("      return route.continue();", "      if (new URL(r.url()).pathname === '/moral-trade-live-home-offer.css') {\n        return route.fulfill({ status: 200, contentType: 'text/css', body: readFileSync(join(process.cwd(), 'public/moral-trade-live-home-offer.css')) });\n      }\n      return route.continue();"),
+          ]
+          for old, new in changes:
+              assert source.count(old) == 1, old
+              source = source.replace(old, new, 1)
+          path.write_text(source)
+          PY
+          node --check "$RUNNER_TEMP/tour-style-preview.mjs"
+      - name: Inspect all six 320px flows without releasing or writing transactions
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FEATURE_EVIDENCE_DIR="$RUNNER_TEMP/tour-style-preview"
+          mkdir -p "$FEATURE_EVIDENCE_DIR"
+          node "$RUNNER_TEMP/tour-style-preview.mjs" 2>&1 | tee "$FEATURE_EVIDENCE_DIR/run.log"
+          git diff --exit-code
+      - name: Preserve staged evidence, not a production-verification claim
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tour-style-preview-${{ github.run_id }}
+          path: ${{ runner.temp }}/tour-style-preview/
+          retention-days: 7
+          if-no-files-found: warn
