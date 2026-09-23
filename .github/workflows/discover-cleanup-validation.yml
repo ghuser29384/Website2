@@ -1,38 +1,176 @@
-name: Discover cleanup source snapshot
+name: Validate live-only Discover cleanup
 on:
   push:
     branches: [cleanup/discover-live-only-20260923]
     paths: [.github/workflows/discover-cleanup-validation.yml]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: discover-live-only-cleanup
+  cancel-in-progress: false
 jobs:
-  snapshot:
+  validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      BASE_SHA: ded28e1024b98dcd800249e36e9787378f7802d4
+      TARGET_BRANCH: cleanup/discover-live-only-20260923
+      EVIDENCE: ${{ runner.temp }}/discover-evidence
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ded28e1024b98dcd800249e36e9787378f7802d4
-          persist-credentials: false
-      - name: Export only tracked application source and test configuration
+          fetch-depth: 0
+      - name: Guard exact source and isolated scope
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = ded28e1024b98dcd800249e36e9787378f7802d4
-          python - <<'PY'
-          import subprocess, zipfile, pathlib
-          paths = subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
-          roots = ('src/','public/','scripts/','tests/','docs/')
-          with zipfile.ZipFile('discover-source.zip','w',zipfile.ZIP_DEFLATED) as z:
-              for name in paths:
-                  if not name: continue
-                  if name.startswith(roots) or ('/' not in name and pathlib.Path(name).suffix in ['.json','.ts','.mjs','.js']) or name in ['AGENTS.md','.vercelignore','.github/workflows/vercel-release.yml']:
-                      z.write(name)
-              z.writestr('SOURCE_COMMIT','ded28e1024b98dcd800249e36e9787378f7802d4\n')
-          PY
-          ls -lh discover-source.zip
-      - uses: actions/upload-artifact@v4
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = "refs/heads/$TARGET_BRANCH"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" HEAD)" = .github/workflows/discover-cleanup-validation.yml
+          mkdir -p "$EVIDENCE"
+      - name: Apply inspected product changes with old and new blob verification
+        shell: python
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          import os, json, base64, gzip, hashlib, urllib.request, subprocess
+          from pathlib import Path
+          chunks = '''ebf77623aecaf5d43a125788461179b8109e5bff
+          7caa64f167c483926bbed0c60110aca2e7a64334
+          bb11df9516ef10a6fa992b4a6dbe0d4947c22a7a
+          4ff3b2e960d461c374281ba179ce2733e444befc
+          ce0e025af30ae1c5347faaa12588cb7f8a42405e
+          bd9e839256a55682759d3e9afa933e3ccc000fc9
+          d80d241f8646bec8a3293e9c4d7fb8cb8956f9d9
+          cc82990344226f5c6bb7bfd8d4e112fba7e1699a
+          b928ee392dc09ef278bd8f810feac9c1c4b9fd04
+          ed8d15a2a24a46b96db3eb7cb1a0a7af58992411
+          c72886c5402476256c67fe71798af10c4f7b2903
+          681a92d66ab0ed13a7ecbf1a730a1220aa468564
+          b5c86df255d9a83dd20ca123676e9db0619a744a
+          860e996ab8e6bc39c4a29b3880a6b6ca32f85438
+          3f75de0aa0aa25320b5033ad8b97e63c95bc1c03'''.split()
+          def blob(data):
+              return hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+          parts=[]
+          for sha in chunks:
+              req=urllib.request.Request(f'https://api.github.com/repos/ghuser29384/Website2/git/blobs/{sha}', headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  record=json.load(response)
+              data=base64.b64decode(record['content'])
+              assert blob(data)==sha, 'Transport blob mismatch'
+              parts.append(data)
+          packed=base64.b64decode(b''.join(parts), validate=True)
+          assert hashlib.sha256(packed).hexdigest()=='de0873776cd3ae3359a9249d2837b6f67ef37570014125a15009d0b1bcfe7091'
+          payload=json.loads(gzip.decompress(packed))
+          assert payload['base']==os.environ['BASE_SHA']
+          changes=payload['changes']
+          assert len(changes)==47 and len({c['path'] for c in changes})==47
+          edits={}
+          for change in changes:
+              name=change['path']; path=Path(name)
+              assert not path.is_absolute() and '..' not in path.parts
+              assert name=='package.json' or name.startswith(('src/','public/','tests/','scripts/','docs/'))
+              assert not path.is_symlink()
+              old=path.read_bytes() if path.exists() else None
+              assert (blob(old) if old is not None else None)==change['old'], 'Source drift: '+name
+              if 'hunks' in change:
+                  lines=old.decode().splitlines(keepends=True)
+                  for begin,end,text in reversed(change['hunks']):
+                      assert 0<=begin<=end<=len(lines)
+                      lines[begin:end]=[text]
+                  result=''.join(lines)
+              else:
+                  result=change['content']
+              data=result.encode() if result is not None else None
+              if data is not None: assert blob(data)==change['new'], 'Output mismatch: '+name
+              edits[name]=data
+          for name,data in edits.items():
+              path=Path(name)
+              if data is None: path.unlink()
+              else:
+                  path.parent.mkdir(parents=True,exist_ok=True)
+                  path.write_bytes(data)
+          controller='.github/workflows/discover-cleanup-validation.yml'
+          Path(controller).unlink()
+          subprocess.run(['git','add','--',*edits.keys(),controller],check=True)
+          Path(os.environ['EVIDENCE'],'expected-paths.txt').write_text('\n'.join(sorted(edits))+'\n')
+          print('Applied and verified exact 47-path product cleanup; transient workflow removed from final tree.')
+      - name: Freeze exact diff and preserve patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check "$BASE_SHA"
+          git diff --name-only "$BASE_SHA" | sort > "$EVIDENCE/actual-paths.txt"
+          diff -u "$EVIDENCE/expected-paths.txt" "$EVIDENCE/actual-paths.txt"
+          git diff --stat "$BASE_SHA" | tee "$EVIDENCE/diff-stat.txt"
+          git diff --binary "$BASE_SHA" > "$EVIDENCE/discover-cleanup.patch"
+      - uses: actions/setup-node@v4
         with:
-          name: discover-source-ded28e1
-          path: discover-source.zip
-          retention-days: 1
+          node-version: 24
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Focused discovery contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run verify:discover | tee "$EVIDENCE/discover-contracts.txt"
+      - name: Full repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test | tee "$EVIDENCE/unit-tests.txt"
+      - name: Repository lint and TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet | tee "$EVIDENCE/lint.txt"
+          npx tsc --noEmit --pretty false | tee "$EVIDENCE/typecheck.txt"
+      - name: Production build without provider credentials
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          npm run build | tee "$EVIDENCE/build.txt"
+      - name: Full rendered release gate and responsive screenshots
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e:release -- --reporter=line | tee "$EVIDENCE/browser-tests.txt"
+      - name: Publish validated candidate to isolated branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$GITHUB_SHA"
+          git diff --exit-code
+          git diff --cached --name-only "$BASE_SHA" | sort > "$EVIDENCE/final-paths.txt"
+          diff -u "$EVIDENCE/expected-paths.txt" "$EVIDENCE/final-paths.txt"
+          git diff --check "$BASE_SHA"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Replace prototype Discover with one live trade directory'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          git rev-parse HEAD > "$EVIDENCE/product-head.txt"
+          git rev-parse HEAD^{tree} > "$EVIDENCE/product-tree.txt"
+      - name: Preserve validation evidence and browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-live-only-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/discover-evidence/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
