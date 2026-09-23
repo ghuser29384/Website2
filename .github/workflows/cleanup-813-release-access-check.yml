@@ -1,4 +1,4 @@
-name: Cleanup 813 Vercel token-shape diagnosis
+name: Cleanup 813 exact Vercel pull check
 
 on:
   push:
@@ -10,31 +10,48 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cleanup-813-release-access-check
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+
 jobs:
   inspect:
     if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/cleanup-813-release-access-check-20260919'
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
-      - name: Classify token shape without exposing it
+      - name: Verify exact release pull without deploying
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN"
-          node --input-type=module <<'JS'
-          const t = process.env.VERCEL_TOKEN || '';
-          const shape = {
-            present: t.length > 0,
-            beginsWithVcp: t.startsWith('vcp'),
-            beginsWithVci: t.startsWith('vci'),
-            beginsWithVca: t.startsWith('vca'),
-            beginsWithVck: t.startsWith('vck'),
-            hasWhitespaceAtEnds: t.trim() !== t,
-            containsWhitespace: /\s/.test(t),
-            lengthBucket: t.length < 20 ? '<20' : t.length < 40 ? '20-39' : t.length < 80 ? '40-79' : '80+',
-            productionMutations: 0
-          };
-          console.log(JSON.stringify(shape));
-          JS
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+          set +e
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN" > pull.stdout 2> pull.stderr
+          status=$?
+          set -e
+
+          if [[ $status -eq 0 ]]; then
+            echo '{"purpose":"exact non-deploying Vercel pull","authorized":true,"productionMutations":0}'
+            rm -rf .vercel .env* pull.stdout pull.stderr
+            exit 0
+          fi
+
+          safe_reason=other
+          if grep -Eqi 'forbidden|permission|access|scope|unauthorized|invalid token|token.*invalid|expired' pull.stderr; then
+            safe_reason=credential_or_scope
+          elif grep -Eqi 'project|team|not found' pull.stderr; then
+            safe_reason=project_or_team_resolution
+          fi
+          printf '{"purpose":"exact non-deploying Vercel pull","authorized":false,"reason":"%s","exitCode":%s,"productionMutations":0}\n' "$safe_reason" "$status"
+          rm -rf .vercel .env* pull.stdout pull.stderr
+          exit 1
