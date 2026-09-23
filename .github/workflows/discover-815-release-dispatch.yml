@@ -1,0 +1,42 @@
+name: Dispatch exact Discover 815 release
+on:
+  push:
+    branches: [ops/discover-815-release-20260923]
+    paths: [.github/workflows/discover-815-release-dispatch.yml]
+permissions:
+  actions: write
+  contents: read
+concurrency:
+  group: discover-815-release-dispatch
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/discover-815-release-20260923'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard exact main and dispatch existing gated production workflow once
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_SHA: bd69409104378993037d577e264b61ae2da1059a
+          EXPECTED_TREE: ff3adae613a174d5fba2430c7cd601e598f7c95b
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const expected = process.env.EXPECTED_SHA;
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            if (branch.commit.sha !== expected) throw new Error('Main moved; no release dispatched.');
+            const { data: commit } = await github.rest.git.getCommit({ owner, repo, commit_sha: expected });
+            if (commit.tree.sha !== process.env.EXPECTED_TREE) throw new Error('Merged tree differs from validated candidate.');
+            const { data: recent } = await github.rest.actions.listWorkflowRuns({ owner, repo, workflow_id: 'vercel-release.yml', head_sha: expected, per_page: 20 });
+            if (recent.workflow_runs.length) {
+              core.info('A gated release already exists for this exact SHA; no duplicate dispatch.');
+              for (const run of recent.workflow_runs) core.info(`${run.id}: ${run.status} / ${run.conclusion}`);
+              return;
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              owner, repo, workflow_id: 'vercel-release.yml', ref: 'main',
+              inputs: { target: 'production', ref: 'main', expected_sha: expected, synthetic_auth_fixture_url: '' }
+            });
+            core.info(`Dispatched the unchanged gated production release for ${expected}.`);
