@@ -77,7 +77,7 @@ const FEATURES: readonly FeatureDefinition[] = [
     description: "Test whether the promised action existed before the trade and was not manufactured for leverage.",
     icon: Fingerprint,
     route: "/trades/new",
-    routeLabel: "Apply to a trade draft",
+    routeLabel: "Open a trade draft",
     protocolKey: "integrity",
     state: "reviewed handoff",
   },
@@ -124,8 +124,8 @@ const FEATURES: readonly FeatureDefinition[] = [
     shortTitle: "Threshold settlement",
     description: "Inspect what should happen when a threshold, authorization, or final condition changes before release.",
     icon: SlidersHorizontal,
-    route: "/pools/radar",
-    routeLabel: "Open threshold radar",
+    route: "/pools",
+    routeLabel: "Browse conditional pools",
     protocolKey: "settlement",
     state: "reviewed handoff",
   },
@@ -209,7 +209,7 @@ function PreviewNotice({ compact = false }: { compact?: boolean }) {
     <div className={classNames(styles.previewNotice, compact && styles.previewNoticeCompact)}>
       <Info aria-hidden="true" size={18} weight="bold" />
       <p>
-        <strong>Interactive workspace preview.</strong> No durable state, payment, commitment,
+        <strong>Learning demonstration only.</strong> Interactive workspace preview. No durable state, payment, commitment,
         verification, settlement, or authority change occurs here.
       </p>
     </div>
@@ -239,7 +239,7 @@ function FeatureHeader({ feature, protocol }: { feature: FeatureDefinition; prot
           <FeatureIcon aria-hidden="true" size={28} weight="regular" />
         </div>
         <div>
-          <p className={styles.eyebrow}>{feature.number} · Trade control</p>
+          <p className={styles.eyebrow}>{feature.number} · Learning example, not a trade setting</p>
           <h1>{feature.title}</h1>
           <p className={styles.featureDescription}>{feature.description}</p>
         </div>
@@ -258,8 +258,8 @@ function FeatureActions({ feature, onReset }: { feature: FeatureDefinition; onRe
   return (
     <footer className={styles.featureActions}>
       <div>
-        <p className={styles.actionLabel}>Continue in the live product</p>
-        <p>Review the actual record and permissions before creating any durable state.</p>
+        <p className={styles.actionLabel}>Related product or policy page</p>
+        <p>Example inputs are not saved or applied. Review the actual record and permissions before creating any durable state.</p>
       </div>
       <div className={styles.actionButtons}>
         {onReset ? (
@@ -803,7 +803,7 @@ export function TradeControlsWorkspace({ protocols }: { protocols: TradeControlP
           <Link href="/discover">Discover</Link>
           <Link href="/create">Offer</Link>
           <Link href="/commitments">Activity</Link>
-          <Link href="/profile">Account</Link>
+          <Link href="/worked-examples">Learn</Link>
         </nav>
         <Link className={styles.accountLink} href="/profile" aria-label="Open account">
           <UserCircle aria-hidden="true" size={31} weight="thin" />
@@ -820,8 +820,8 @@ export function TradeControlsWorkspace({ protocols }: { protocols: TradeControlP
       <div className={styles.workspace}>
         <aside className={classNames(styles.sidebar, mobileMenuOpen && styles.sidebarOpen)}>
           <div className={styles.sidebarHead}>
-            <p className={styles.eyebrow}>Trade controls</p>
-            <h2>Ten ways to make a deal safer.</h2>
+            <p className={styles.eyebrow}>Learn · safeguard demonstrations</p>
+            <h2>Explore safeguards with examples.</h2>
             <label className={styles.searchField}>
               <MagnifyingGlass aria-hidden="true" size={17} />
               <span className="sr-only">Search controls</span>
@@ -848,6 +848,10 @@ export function TradeControlsWorkspace({ protocols }: { protocols: TradeControlP
         </aside>
 
         <main className={styles.main} id="main-content" tabIndex={-1}>
+          <p className={styles.featureDescription} style={{ margin: 0, padding: "16px 18px" }}>
+            <Link href="/worked-examples">Worked examples</Link> / Safeguard demonstrations.
+            These exercises do not configure a trade or certify its safety.
+          </p>
           <FeatureHeader feature={activeFeature} protocol={protocols[activeFeature.protocolKey]} />
           <div className={styles.featureBody}>{renderFeature(activeFeature)}</div>
           <div className={styles.workspaceFooter}>

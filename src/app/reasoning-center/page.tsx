@@ -13,44 +13,26 @@ import { buildBreadcrumbJsonLd, getAbsoluteUrl, truncateDescription } from "@/li
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 const reasoningCenterDescription =
-  "A Moral Trade pilot index for public review notes, factor codes, uncertainty flags, and next-step checklists.";
+  "Worked-example review notes and methodology. These deterministic learning packets are not a live review queue or forum.";
 
 export const metadata: Metadata = {
-  title: "Reasoning Center",
+  title: "Worked-example review notes",
   description: reasoningCenterDescription,
   alternates: {
     canonical: "/reasoning-center",
   },
   openGraph: {
-    title: "Reasoning Center | Moral Trade",
+    title: "Worked-example review notes | Moral Trade",
     description: reasoningCenterDescription,
     url: getAbsoluteUrl("/reasoning-center"),
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Reasoning Center | Moral Trade",
+    title: "Worked-example review notes | Moral Trade",
     description: reasoningCenterDescription,
   },
 };
-
-const navSections = [
-  { label: "Review queue", descriptor: "public" },
-  { label: "Trade design", descriptor: "factors" },
-  { label: "Evidence gaps", descriptor: "checks" },
-  { label: "Safety review", descriptor: "gates" },
-  { label: "Public goods", descriptor: "notes" },
-  { label: "Open questions", descriptor: "drafts" },
-] as const;
-
-const topics = [
-  "Donation offsets",
-  "Pledge swaps",
-  "Anti-threat rules",
-  "Public goods fund",
-  "Evidence design",
-  "Moral uncertainty",
-] as const;
 
 const reviewNotes = [
   {
@@ -160,39 +142,24 @@ export default async function ReasoningCenterPage({
       <Breadcrumbs items={[{ href: "/reasoning-center", label: "Reasoning Center" }]} />
 
       <main className="reasoning-layout" id="main-content" tabIndex={-1}>
-        <aside className="reasoning-left-rail" aria-label="Reasoning sections">
-          <Link className="reasoning-new-post" href={isAuthenticated ? "/dashboard" : "/signup"}>
-            Draft review note
-          </Link>
-          <nav className="reasoning-side-nav" aria-label="Reasoning center navigation">
-            {navSections.map((section, index) => (
-              <Link
-                aria-current={index === 0 ? "page" : undefined}
-                href="/reasoning-center"
-                key={section.label}
-              >
-                <span>{section.label}</span>
-                <small>{section.descriptor}</small>
-              </Link>
-            ))}
+        <aside className="reasoning-left-rail" aria-label="Learning resources">
+          <nav className="reasoning-side-nav" aria-label="Learning navigation">
+            <Link href="/worked-examples">Worked examples</Link>
+            <Link href="/reasoning-standards">Review methodology</Link>
+            <Link href="/trade-controls">Safeguard demonstrations</Link>
+            <Link href="/research">Research</Link>
           </nav>
-          <section className="reasoning-rail-block" aria-labelledby="sequences-heading">
-            <h2 id="sequences-heading">Public packets</h2>
-            <Link href="/reasoning-center">Donation-offset design</Link>
-            <Link href="/reasoning-center">Anti-threat review</Link>
-            <Link href="/reasoning-center">Public-goods governance</Link>
-          </section>
         </aside>
 
         <section className="reasoning-feed" aria-labelledby="reasoning-title">
           <header className="reasoning-feed-head">
             <div>
-              <p className="eyebrow">Pilot reasoning index</p>
-              <h1 id="reasoning-title">Reasoning Center</h1>
+              <p className="eyebrow">Learn · worked examples</p>
+              <h1 id="reasoning-title">Worked-example review notes</h1>
               <p>
-                Public review records for making draft trades legible: factor codes, uncertainty
-                flags, evidence gaps, and the next human-controlled step before anyone relies on
-                them.
+                Read how example trades are reviewed: factor codes, uncertainty flags, evidence
+                gaps, and possible next steps. This is learning material, not a live review queue,
+                forum, or note editor. Real reviews remain attached to their actual records.
               </p>
               <p className="reasoning-filter-summary">
                 Showing {filteredReviewRecords.length} of {packetState.packetCount} public packet
@@ -225,14 +192,6 @@ export default async function ReasoningCenterPage({
               >
                 <span>{filter.label}</span>
                 <small>{filterCounts[filter.key]}</small>
-              </Link>
-            ))}
-          </div>
-
-          <div className="reasoning-topic-strip" aria-label="Topics">
-            {topics.map((topic) => (
-              <Link href="/reasoning-center" key={topic}>
-                {topic}
               </Link>
             ))}
           </div>
@@ -402,7 +361,6 @@ export default async function ReasoningCenterPage({
           <section className="reasoning-widget">
             <div className="reasoning-widget-head">
               <h2>Open questions</h2>
-              <Link href="/reasoning-center">Ask</Link>
             </div>
             <ol className="reasoning-question-list">
               {openQuestions.map((question) => (

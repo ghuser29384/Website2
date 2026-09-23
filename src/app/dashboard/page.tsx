@@ -667,12 +667,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white" id="payments-and-fund">
+        <details className="section section-white" id="payments-and-fund">
+          <summary>Separate experiment · Priority Correction Fund records</summary>
           <div className="section-head">
             <p className="eyebrow">Correction fund</p>
-            <h2>This month&apos;s pool</h2>
+            <h2>Published calculation</h2>
             <p>
-              Track the current fund, your share, and any arbiter role assigned to you.
+              Inspect experimental calculations and any recorded arbiter role. These are not payment authorizations or part of an ordinary trade.
             </p>
           </div>
 
@@ -695,7 +696,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     dateOnly
                   />.
                   {priorityFundSummary.viewerSnapshot
-                    ? ` Your current share this month is ${formatPaymentAmount(priorityFundSummary.viewerSnapshot.fund_share_cents, "usd")}.`
+                    ? ` Your recorded calculation this month is ${formatPaymentAmount(priorityFundSummary.viewerSnapshot.fund_share_cents, "usd")}.`
                     : " You do not have a current member snapshot yet."}
                 </p>
                 <p className="route-text">
@@ -718,7 +719,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
           </div>
-        </section>
+        </details>
 
         <section className="section section-white" id="payment-setup">
           <div className="section-head">

@@ -39,7 +39,7 @@ test("retiring the mock preserves first-visit routing and live-feed ownership", 
   const proxy = read("src/proxy.ts");
   const config = read("next.config.ts");
   assert.match(proxy, /if \(pathname === "\/"\)/);
-  assert.match(proxy, /walkthroughUrl\.pathname = "\/walkthrough"/);
+  assert.match(proxy, /if \(pathname === "\/walkthrough"\)/);
   assert.match(proxy, /return rewriteToLiveHome\(request\)/);
   assert.match(proxy, /liveUrl\.pathname = "\/moral-trade-live\.html"/);
   assert.match(config, /source: "\/feed",\s*destination: "\/moral-trade-live\.html"/);

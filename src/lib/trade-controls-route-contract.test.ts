@@ -44,7 +44,7 @@ test("Trade controls hands preview decisions to existing live workflows", () => 
     "/create",
     "/commitments",
     "/mpgf/governance",
-    "/pools/radar",
+    "/pools",
     "/validation",
     "/complete-profile",
     "/background-networking",
@@ -70,7 +70,7 @@ test("Trade controls is noindex, contract-backed, responsive, and discoverable",
   const siteSource = readRepoFile("src/lib/site.ts");
   const searchSource = readRepoFile("src/lib/site-search.ts");
   const liveNavigationSource = readRepoFile("public/moral-trade-live-navigation.js");
-  assert.match(siteSource, /href: "\/trade-controls", label: "Trade controls"/);
+  assert.match(siteSource, /href: "\/trade-controls", label: "Safeguard demonstrations"/);
   assert.match(searchSource, /href: "\/trade-controls"/);
-  assert.match(liveNavigationSource, /window\.location\.assign\("\/trade-controls"\)/);
+  assert.doesNotMatch(liveNavigationSource, /createControlsControl|prepareControlsControl/);
 });

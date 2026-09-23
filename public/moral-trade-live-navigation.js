@@ -108,12 +108,6 @@
     window.location.assign("/discover");
   }
 
-  function openControls(event) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    window.location.assign("/trade-controls");
-  }
-
   function openEvidence(event) {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -135,23 +129,6 @@
     }
 
     control.addEventListener("click", openDiscover, true);
-  }
-
-  function prepareControlsControl(control) {
-    control.setAttribute("data-mt-controls-link", "true");
-    control.removeAttribute("aria-current");
-    control.removeAttribute("data-page");
-    control.removeAttribute("data-action");
-    control.removeAttribute("data-view");
-    control.classList.remove("active");
-
-    if (control instanceof HTMLAnchorElement) {
-      control.href = "/trade-controls";
-    } else if (control instanceof HTMLButtonElement) {
-      control.type = "button";
-    }
-
-    control.addEventListener("click", openControls, true);
   }
 
   function prepareEvidenceControl(control) {
@@ -191,23 +168,6 @@
     }
 
     return control;
-  }
-
-  function createControlsControl(nav, template, discoverControl) {
-    const tagName = template instanceof HTMLAnchorElement ? "a" : "button";
-    const control = document.createElement(tagName);
-    control.className = template.className;
-    control.textContent = "Controls";
-    control.setAttribute("aria-label", "Open Trade controls");
-    prepareControlsControl(control);
-
-    if (discoverControl?.nextSibling) {
-      nav.insertBefore(control, discoverControl.nextSibling);
-    } else if (discoverControl) {
-      nav.appendChild(control);
-    } else {
-      nav.appendChild(control);
-    }
   }
 
   function createEvidenceControl(nav, template, commitmentsControl) {
@@ -252,18 +212,9 @@
         discoverControl = createDiscoverControl(nav, template);
       }
 
-      const updatedControls = [...nav.querySelectorAll("a, button")];
-      const controlsControl = updatedControls.find(
-        (control) => normalizeLabel(control) === "controls",
-      );
-
-      if (controlsControl) {
-        if (!controlsControl.hasAttribute("data-mt-controls-link")) {
-          prepareControlsControl(controlsControl);
-        }
-      } else {
-        const template = findFeedControl(nav) || updatedControls[0];
-        if (template) createControlsControl(nav, template, discoverControl);
+      // Remove legacy simulator navigation, not real safety enforcement.
+      for (const control of nav.querySelectorAll("a, button")) {
+        if (normalizeLabel(control) === "controls") control.remove();
       }
 
       const finalControls = [...nav.querySelectorAll("a, button")];
@@ -282,6 +233,17 @@
         });
         const template = commitmentsControl || findFeedControl(nav) || finalControls[0];
         if (template) createEvidenceControl(nav, template, commitmentsControl);
+      }
+
+      if (!nav.querySelector('[data-mt-optional-tour]')) {
+        const tour = document.createElement("a");
+        tour.className = (findFeedControl(nav) || finalControls[0])?.className || "";
+        tour.classList.remove("active");
+        tour.href = "/walkthrough";
+        tour.textContent = "Tour";
+        tour.setAttribute("aria-label", "Open optional walkthrough");
+        tour.setAttribute("data-mt-optional-tour", "true");
+        nav.appendChild(tour);
       }
 
       patched = true;

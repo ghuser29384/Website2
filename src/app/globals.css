@@ -19163,3 +19163,42 @@ pre,
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* A reviewable offer is not a simulated checkout or multi-offer planner. */
+.marketplace-app-shell .marketplace-detail-grid.marketplace-detail-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.mt-v75-detail-actions form { margin: 0; }
+
+/* Detail controls and glyphs must remain usable outside desktop-only board styles. */
+.marketplace-detail-single .mt-v75-detail-visuals .moral-deal-visual {
+  width: 100%; min-width: 0; min-height: 100px;
+  height: clamp(100px, 16vw, 180px); aspect-ratio: auto;
+}
+.marketplace-detail-single .mt-v75-detail-visuals .moral-deal-visual .icon-mark {
+  width: 36px; height: 36px;
+}
+.marketplace-detail-single .mt-v75-detail-visuals .mt-v75-pair-arrow {
+  position: absolute; top: 50%; left: 50%; z-index: 1;
+  display: grid; place-items: center; width: 26px; height: 26px;
+  transform: translate(-50%, -50%);
+}
+.marketplace-detail-single .mt-v75-pair-arrow .icon-mark { width: 24px; height: 24px; }
+.mt-v75-detail-object .mt-v75-status-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+}
+.mt-v75-detail-object .mt-v75-status-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 7px; font-size: 12px; line-height: 1.3; white-space: normal;
+}
+.mt-v75-detail-object .mt-v75-status-glyph {
+  display: block; flex: 0 0 12px; width: 12px; height: 12px;
+  min-width: 12px; max-width: 12px;
+}
+.mt-v75-detail-object .mt-v75-detail-info h2 { font-size: 20px; line-height: 1.3; }
+.reasoning-shell .reasoning-packet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.reasoning-shell .reasoning-packet-grid li,
+.reasoning-shell .reasoning-factor { overflow-wrap: anywhere; }
+@media (max-width: 860px) {
+  .reasoning-shell .reasoning-packet-grid { grid-template-columns: minmax(0, 1fr); }
+}

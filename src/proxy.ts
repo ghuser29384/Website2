@@ -93,13 +93,7 @@ export function proxy(request: NextRequest) {
     isHumanNavigation(request) && !request.cookies.has(WALKTHROUGH_SEEN_COOKIE);
 
   if (pathname === "/") {
-    if (shouldRecordVisit) {
-      const walkthroughUrl = request.nextUrl.clone();
-      walkthroughUrl.pathname = "/walkthrough";
-
-      return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
-    }
-
+    // The walkthrough is voluntary; a homepage visit must not pretend it was completed.
     return rewriteToLiveHome(request);
   }
 

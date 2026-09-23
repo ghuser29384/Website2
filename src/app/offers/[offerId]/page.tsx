@@ -20,12 +20,10 @@ import { LocalDateTime } from "@/components/ui/local-date-time";
 import { OfferQuestionForm } from "@/components/marketplace/offer-question-form";
 
 import {
-  CommitmentSheet,
   CommitmentTermsPanel,
   CompatibleAdditions,
   DealDetailObject,
   MarketplaceBottomNav,
-  ReviewPlanPanel,
 } from "@/components/marketplace/marketplace-components";
 import {
   getInterestForOffer,
@@ -77,7 +75,6 @@ import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
-import { hasStripeEnv } from "@/lib/stripe";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
 interface OfferPageProps {
@@ -410,6 +407,29 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     : offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool"
       ? poolJoinHref ?? respondReturnTo
       : respondReturnTo;
+  const recordActions = (
+    <>
+      {!isOwner ? (
+        <Link className="button button-primary" href={commitmentHref}>
+          {viewer ? "Review response options" : "Sign in to respond"}
+        </Link>
+      ) : (
+        <Link className="button button-primary" href={respondReturnTo}>View responses</Link>
+      )}
+      {viewer && !isOwner ? (
+        <form action={toggleCartAction}>
+          <input name="offer_id" type="hidden" value={offer.id} />
+          <input name="return_to" type="hidden" value={offerReturnTo} />
+          <button className="button button-secondary" type="submit">
+            {cartState.isInCart ? "Remove saved offer" : "Save offer"}
+          </button>
+        </form>
+      ) : !viewer ? (
+        <Link className="button button-secondary" href={signInToOfferHref}>Sign in to save</Link>
+      ) : null}
+      <Link className="button button-secondary" href="/saved-offers">View saved offers</Link>
+    </>
+  );
   const offerStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -465,15 +485,6 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               <Link className="button button-secondary" href="/offers">
                 Back to offer marketplace
               </Link>
-              {viewer && !isOwner ? (
-                <form action={toggleCartAction}>
-                  <input name="offer_id" type="hidden" value={offer.id} />
-                  <input name="return_to" type="hidden" value={offerReturnTo} />
-                  <button className="button button-primary" type="submit">
-                    {cartState.isInCart ? "Remove saved offer" : "Save offer"}
-                  </button>
-                </form>
-              ) : null}
               {!isOwner ? (
                 <Link className="button button-secondary" href={authCreateSimilarHref}>
                   Create similar
@@ -582,16 +593,12 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               gates.
             </p>
           </div>
-          <div className="marketplace-detail-grid">
-            <DealDetailObject deal={marketplaceDeal} headingId="marketplace-detail-heading" />
-            <div className="marketplace-detail-side">
-              <ReviewPlanPanel deal={marketplaceDeal} />
-              <CommitmentSheet
-                commitHref={commitmentHref}
-                deal={marketplaceDeal}
-                paymentSupportAvailable={hasStripeEnv()}
-              />
-            </div>
+          <div className="marketplace-detail-grid marketplace-detail-single">
+            <DealDetailObject
+              deal={marketplaceDeal}
+              headingId="marketplace-detail-heading"
+              actions={recordActions}
+            />
           </div>
           <div className="marketplace-detail-grid marketplace-detail-grid-secondary">
             <CommitmentTermsPanel deal={marketplaceDeal} />

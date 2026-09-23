@@ -24,19 +24,16 @@ async function expectFullyInside(locator: Locator, container: Locator) {
   expect(box!.y + box!.height).toBeLessThanOrEqual(containerBox!.y + containerBox!.height);
 }
 
-test("a first homepage visit opens the mandatory walkthrough without a skip control", async ({ context, page }) => {
+test("a first homepage visit offers a voluntary walkthrough without diverting the visitor", async ({ context, page }) => {
   await context.clearCookies();
   await page.goto("/?utm_source=invite", { waitUntil: "domcontentloaded" });
-
-  await expect(page).toHaveURL(/\/walkthrough\?utm_source=invite$/);
+  await expect(page).toHaveURL(/\/\?utm_source=invite$/);
+  await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toBeVisible();
+  expect((await context.cookies()).find((cookie) => cookie.name === "mt_walkthrough_seen")).toBeUndefined();
+  await page.getByRole("link", { name: "Open optional walkthrough" }).click();
+  await expect(page).toHaveURL(/\/walkthrough$/);
   await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Skip walkthrough" })).toHaveCount(0);
-
-  const cookies = await context.cookies();
-  expect(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")).toMatchObject({
-    httpOnly: true,
-    value: "1",
-  });
+  expect((await context.cookies()).find((cookie) => cookie.name === "mt_walkthrough_seen")).toMatchObject({ httpOnly: true, value: "1" });
 });
 
 test("Third Option leads to Find the Mix and a real trade draft handoff", async ({ page }) => {

@@ -39,7 +39,7 @@ const dataDependentPublicRoutes = [
   {
     route: "/priority-correction-fund",
     heading:
-      /Redirect a fixed share of recent money|Live priority-fund data is temporarily unavailable/i,
+      /^A separate allocation experiment\.$/,
   },
 ] as const;
 
@@ -198,6 +198,22 @@ for (const { route, heading } of dataDependentPublicRoutes) {
     await expect(page.getByText("No action taken", { exact: true })).toHaveCount(
       isRecovery ? 1 : 0,
     );
+
+    if (route === "/priority-correction-fund") {
+      await expect(page.locator("#experiment-terms")).toContainText("not consent to contribute");
+      await expect(page.locator("#experiment-terms")).toContainText("does not certify");
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const unavailable = page.getByRole("status", { name: "Experiment records unavailable" });
+        await expect(unavailable).toBeVisible();
+        await expect(unavailable).toContainText("No balance, contribution, allocation, or review status");
+        await expect(unavailable).toContainText("is inferred from this unavailable data");
+        await expect(unavailable.getByRole("link", { name: "Retry record lookup" })).toHaveAttribute(
+          "href", "/priority-correction-fund",
+        );
+        await expect(page.getByRole("heading", { name: "Monthly cycles publish the calculation and the selection rule" })).toHaveCount(0);
+        await expect(page.locator("main form")).toHaveCount(0);
+      }
+    }
   });
 }
 

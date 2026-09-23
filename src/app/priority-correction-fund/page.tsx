@@ -26,9 +26,9 @@ import {
 import { getPriorityCorrectionPageData } from "@/lib/priority-correction";
 
 export const metadata: Metadata = {
-  title: "Priority Correction Fund",
+  title: "Priority Correction Fund — allocation experiment",
   description:
-    "Monthly Moral Trade process for redirecting 10% of recent donations and member-to-member payments toward the likely best current cause area and specific actions.",
+    "A separate experimental allocation process, with published calculations, reasoning and records. Calculation is not payment authorization.",
   alternates: {
     canonical: "/priority-correction-fund",
   },
@@ -96,7 +96,10 @@ export default async function PriorityCorrectionFundPage({
   const supabaseReady = hasSupabaseEnv();
   const viewer = supabaseReady ? await getViewer() : null;
   const pageData = supabaseReady
-    ? await getPriorityCorrectionPageData(viewer?.authUser.id ?? null)
+    ? await getPriorityCorrectionPageData(viewer?.authUser.id ?? null).catch(() => {
+        console.warn("[priority-correction-fund] Experiment records are unavailable.");
+        return null;
+      })
     : null;
   const isAdmin = Boolean(viewer?.authUser.email && isAdminEmail(viewer.authUser.email));
   const adminMfaSummary = isAdmin ? await loadBackgroundAccountSecuritySummary() : null;
@@ -134,16 +137,16 @@ export default async function PriorityCorrectionFundPage({
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Priority Correction Fund</p>
-            <h1>Redirect a fixed share of recent money toward the most compelling current priority.</h1>
+            <h1>A separate allocation experiment.</h1>
             <p className="hero-text">
-              Moral Trade calculates this fund as 10% of each member&apos;s recent donations plus
-              10% of each member&apos;s recent payments to other members. Each month then moves
-              through a published two-stage reasoning process: first within cause areas, then
-              across cause areas.
+              The published model calculates 10% of recorded recent donations plus 10% of
+              recorded member-to-member payments, then uses a two-stage reasoning process within
+              and across cause areas. A calculated amount is not a payment authorization or
+              evidence that money has been collected.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href={viewer ? "/dashboard" : "/signup"}>
-                {viewer ? "Open dashboard" : "Create account"}
+              <Link className="button button-primary" href="#experiment-terms">
+                Review the experiment&apos;s boundaries
               </Link>
               <Link className="button button-secondary" href="/methodology">
                 Read methodology
@@ -181,13 +184,25 @@ export default async function PriorityCorrectionFundPage({
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        {!supabaseReady ? (
-          <div className="status-banner status-banner-error">
-            Supabase is not configured yet. Add environment variables and apply the SQL schema
-            before using the live Priority Correction Fund workflow.
-          </div>
-        ) : null}
-
+        <section className="section section-white" id="experiment-terms" aria-labelledby="experiment-heading">
+          <h2 id="experiment-heading">Separate from ordinary trading</h2>
+          <p>Browsing, opening an account, or reviewing a trade is not consent to contribute to this experiment.</p>
+          <p>Any participation or funding requires separately agreed terms. Before relying on an allocation,
+            establish the funding source, explicit consent, decision rules, conflicts, exit terms, and a
+            success criterion that accounts for review and administrative costs. Karma alone does not
+            establish allocation expertise or impact.</p>
+          <p>The records and calculations below are retained for transparency. This page does not certify
+            that these experimental requirements have been satisfied or authorize a deduction.</p>
+          <Link className="button button-secondary" href="/discover">Browse trades instead</Link>
+        </section>
+        {!pageData ? (
+          <section className="status-banner status-banner-error" role="status" aria-label="Experiment records unavailable">
+            <p>Experiment records are unavailable. No balance, contribution, allocation, or review status
+              is inferred from this unavailable data.</p>
+            <Link href="/priority-correction-fund">Retry record lookup</Link>
+          </section>
+        ) : (
+        <>
         {formMessage ? (
           <div
             className={`status-banner ${
@@ -840,6 +855,8 @@ export default async function PriorityCorrectionFundPage({
             </div>
           </section>
         ) : null}
+        </>
+        )}
       </main>
 
       <SiteFooter />
