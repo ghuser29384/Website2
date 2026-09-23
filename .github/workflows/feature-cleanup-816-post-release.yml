@@ -1,0 +1,76 @@
+name: Verify feature cleanup 816 in production
+on:
+  push:
+    branches: [ops/feature-cleanup-816-release-20260923]
+    paths: [.github/workflows/feature-cleanup-816-post-release.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/feature-cleanup-816-release-20260923'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EXPECTED_SHA: 06211a77e8e37d67cb28785f45a5f7d0fa3ba761
+      RELEASE_RUN: "35846327015"
+    steps:
+      - name: Require the exact gated production release to finish successfully
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 100); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN" > "$RUNNER_TEMP/expected-release.json"
+            test "$(jq -r .head_sha "$RUNNER_TEMP/expected-release.json")" = "$EXPECTED_SHA"
+            test "$(jq -r .path "$RUNNER_TEMP/expected-release.json")" = .github/workflows/vercel-release.yml
+            if [[ "$(jq -r .status "$RUNNER_TEMP/expected-release.json")" == completed ]]; then
+              test "$(jq -r .conclusion "$RUNNER_TEMP/expected-release.json")" = success
+              echo 'The exact gated release completed successfully.'
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'The release has not completed; no production verification claimed.' >&2
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: 06211a77e8e37d67cb28785f45a5f7d0fa3ba761
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Prepare existing browser tooling without production credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Retrieve exact reviewed public verification script
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/git/blobs/f07053cce49cb0b67fe778ff93da18b4fac5b8e3" --jq .content | base64 --decode > "$RUNNER_TEMP/feature-cleanup-live-check.mjs"
+          printf '%s  %s\n' 63fb971f1a8383a1d9908654a487ea5de2472c1d02e4c45dd8fc36bcbd895bd2 "$RUNNER_TEMP/feature-cleanup-live-check.mjs" | sha256sum --check
+          node --check "$RUNNER_TEMP/feature-cleanup-live-check.mjs"
+      - name: Verify public navigation, real offer handoffs and responsive learning surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FEATURE_EVIDENCE_DIR="$RUNNER_TEMP/feature-production-evidence"
+          mkdir -p "$FEATURE_EVIDENCE_DIR"
+          node "$RUNNER_TEMP/feature-cleanup-live-check.mjs" 2>&1 | tee "$FEATURE_EVIDENCE_DIR/run.log"
+          git diff --exit-code
+      - name: Preserve anonymous public verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-cleanup-live-${{ github.run_id }}
+          path: ${{ runner.temp }}/feature-production-evidence/
+          retention-days: 7
+          if-no-files-found: warn
