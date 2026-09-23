@@ -51,6 +51,23 @@
 
 }
 
+/* Keep both controls readable instead of clipping the long local date or CTA. */
+@media (max-width: 480px) {
+  .page > .head > .h {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+
+  .page > .head > .h > .date {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page > .head > .h > .btn {
+    max-width: 100%;
+  }
+}
+
 @media (max-width: 360px) {
   .mt-home-offer-cta-label {
     display: none;
