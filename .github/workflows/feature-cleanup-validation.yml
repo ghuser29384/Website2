@@ -1,0 +1,131 @@
+name: Validate remaining prototype retirement
+on:
+  push:
+    branches: [cleanup/retire-prototype-controls-20260923]
+    paths: [.github/workflows/feature-cleanup-validation.yml]
+permissions:
+  contents: write
+concurrency:
+  group: remaining-prototype-cleanup-20260923
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      BASE_SHA: bd69409104378993037d577e264b61ae2da1059a
+      TARGET_BRANCH: cleanup/retire-prototype-controls-20260923
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guard source and apply exact reviewed cleanup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = "refs/heads/$TARGET_BRANCH"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" HEAD)" = .github/workflows/feature-cleanup-validation.yml
+          mkdir -p "$RUNNER_TEMP/feature-evidence"
+          gh api repos/ghuser29384/Website2/git/blobs/6b3a0814dd0d52b6d6cc9e4fbde504ff2aafbe73 > "$RUNNER_TEMP/cleanup-blob.json"
+          python - <<'PY'
+          import os, json, gzip, base64, hashlib, subprocess
+          from pathlib import Path
+          root=Path.cwd(); temp=Path(os.environ['RUNNER_TEMP'])
+          raw=json.loads((temp/'cleanup-blob.json').read_text())
+          data=base64.b64decode(raw['content'])
+          assert hashlib.sha256(data).hexdigest() == 'b4db5d49b6bd4daccca6f672eafb70244b9f22f4045a093bf235a2adceee052b'
+          bundle=json.loads(gzip.decompress(data))
+          assert len(bundle['before']) == len(bundle['after']) == 31
+          def blob(path):
+              p=root/path
+              if not p.exists(): return None
+              b=p.read_bytes()
+              return hashlib.sha1(f'blob {len(b)}\0'.encode()+b).hexdigest()
+          for p,want in bundle['before'].items():
+              assert blob(p)==want, ('Source drift',p,blob(p),want)
+          for script in bundle['scripts']:
+              script=script.replace('/mnt/data/moraltrade-cleanup',str(root))
+              exec(compile(script,'<reviewed-scoped-transformation>','exec'),{})
+          for p,content in bundle['newFiles'].items():
+              path=root/p; path.parent.mkdir(parents=True,exist_ok=True); path.write_text(content)
+          for p,want in bundle['after'].items():
+              assert blob(p)==want, ('Product mismatch',p,blob(p),want)
+          controller='.github/workflows/feature-cleanup-validation.yml'
+          (root/controller).unlink()
+          subprocess.run(['git','add','--',*bundle['after'],controller],check=True)
+          paths=subprocess.check_output(['git','diff','--cached','--name-only',os.environ['BASE_SHA']],text=True).splitlines()
+          assert sorted(paths)==sorted(bundle['after']),paths
+          (temp/'feature-evidence'/'scope.json').write_text(json.dumps({'base':os.environ['BASE_SHA'],'before':bundle['before'],'after':bundle['after']},indent=2))
+          print('Exact 31-path cleanup applied; no database, payment, auth action or provider setting modified.')
+          PY
+          git diff --check "$BASE_SHA"
+          git diff --stat "$BASE_SHA" | tee "$RUNNER_TEMP/feature-evidence/diff-stat.txt"
+          git diff --binary "$BASE_SHA" > "$RUNNER_TEMP/feature-evidence/feature-cleanup.patch"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Focused behavior and source tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/proxy.test.ts src/lib/marketplace-deals.test.ts src/lib/production-feature-cleanup.test.ts src/lib/site.test.ts src/lib/threshold-radar-route-contract.test.ts src/lib/trade-controls-route-contract.test.ts src/lib/live-discover-navigation.test.ts src/lib/retired-home-contract.test.ts 2>&1 | tee "$RUNNER_TEMP/feature-evidence/focused-tests.txt"
+      - name: Full repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/feature-evidence/unit-tests.txt"
+      - name: Repository lint and TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/feature-evidence/lint.txt"
+          npx tsc --noEmit --pretty false 2>&1 | tee "$RUNNER_TEMP/feature-evidence/typecheck.txt"
+      - name: Production build without provider credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee "$RUNNER_TEMP/feature-evidence/build.txt"
+      - name: Focused rendered checks and screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npx playwright test --config=playwright.release.config.ts tests/production-feature-cleanup.spec.ts tests/returning-homepage.spec.ts tests/walkthrough.spec.ts tests/discover-home-visual-alignment.spec.ts --reporter=line --max-failures=5 2>&1 | tee "$RUNNER_TEMP/feature-evidence/focused-browser.txt"
+          cp -r test-results "$RUNNER_TEMP/feature-evidence/focused-browser-results"
+      - name: Complete configured browser release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/feature-evidence/full-browser.txt"
+      - name: Publish validated product only to cleanup branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check "$BASE_SHA"
+          git diff --exit-code
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$GITHUB_SHA"
+          test "$(git diff --cached --name-only "$BASE_SHA" | wc -l)" -eq 31
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Retire prototype controls and preserve real trade actions"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          git rev-parse HEAD > "$RUNNER_TEMP/feature-evidence/product-head.txt"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/feature-evidence/product-tree.txt"
+      - name: Preserve checks and rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prototype-cleanup-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/feature-evidence/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
