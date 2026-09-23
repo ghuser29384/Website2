@@ -1,0 +1,30 @@
+name: Export review-profile source
+on:
+  push:
+    branches: [ops/review-profile-cleanup-20260923]
+    paths: [.github/workflows/review-profile-source.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 80892b66b897e5b74d73c27f6d318cf96defad79
+          persist-credentials: false
+      - name: Export only tracked public source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 80892b66b897e5b74d73c27f6d318cf96defad79
+          mkdir -p "$RUNNER_TEMP/review-profile-source"
+          git archive HEAD | gzip > "$RUNNER_TEMP/review-profile-source/source.tar.gz"
+          git ls-tree -r HEAD > "$RUNNER_TEMP/review-profile-source/tree.txt"
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/review-profile-source/identity.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: review-profile-source-80892b6
+          path: ${{ runner.temp }}/review-profile-source/
+          retention-days: 2
