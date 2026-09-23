@@ -1,0 +1,69 @@
+name: Validate narrow homepage header
+on:
+  push:
+    branches: [ops/homepage-narrow-header-validation-20260923]
+    paths: [.github/workflows/homepage-narrow-header-validation.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      EXPECTED_SHA: 81bf8449d6298f1ef304c9fd6bc651126839bd45
+      BASE_SHA: 06211a77e8e37d67cb28785f45a5f7d0fa3ba761
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 81bf8449d6298f1ef304c9fd6bc651126839bd45
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Guard exact two-file repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" HEAD)" = "$(printf '%s\n' public/moral-trade-live-home-offer.css tests/homepage-narrow-header.spec.ts)"
+          git diff --check "$BASE_SHA" HEAD
+          mkdir -p "$RUNNER_TEMP/header-evidence"
+          git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/header-evidence/repair.patch"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/header-evidence/tree.txt"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Repository quality gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/header-evidence/unit-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/header-evidence/lint.log"
+          npx tsc --noEmit --pretty false 2>&1 | tee "$RUNNER_TEMP/header-evidence/types.log"
+          npm run build 2>&1 | tee "$RUNNER_TEMP/header-evidence/build.log"
+      - name: Focused browser checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npx playwright test --config=playwright.release.config.ts tests/homepage-narrow-header.spec.ts tests/production-feature-cleanup.spec.ts tests/returning-homepage.spec.ts --reporter=line --output="$RUNNER_TEMP/header-evidence/focused-browser" 2>&1 | tee "$RUNNER_TEMP/header-evidence/focused-browser.log"
+      - name: Complete configured browser release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/header-evidence/release-browser.log"
+          git diff --exit-code
+          git diff --check "$BASE_SHA" HEAD
+      - name: Preserve results and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: narrow-header-${{ github.run_id }}
+          path: ${{ runner.temp }}/header-evidence/
+          retention-days: 7
+          if-no-files-found: warn
