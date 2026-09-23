@@ -35,22 +35,40 @@ jobs:
           mkdir -p "$EVIDENCE"
           python - <<'PY'
           import subprocess,textwrap
-          source=subprocess.check_output(['git','show','41425b762a28c4561e9608260888655f8418f421:.github/workflows/discover-cleanup-validation.yml'],text=True)
-          name='      - name: Apply inspected product changes with old and new blob verification\n'
-          end='      - name: Freeze exact diff and preserve patch\n'
-          section=source.split(name,1)[1].split(end,1)[0]
-          code=textwrap.dedent(section.split('        run: |\n',1)[1])
-          exec(compile(code,'<sha-verified-discover-transformation>','exec'))
-          path=Path('public/moral-trade-discover.html')
-          text=path.read_text()
-          css='  <link rel="stylesheet" href="/moral-trade-discover.css?v=20260923">'
-          js='  <script defer src="/moral-trade-discover-search.js?v=20260923"></script>'
-          assert text.count(css)==text.count(js)==1
-          text=text.replace(css,css+'\n  <link rel="stylesheet" href="/moral-trade-input-assist.css?v=20260923">')
-          text=text.replace(js,js+'\n  <script defer src="/moral-trade-input-assist.js?v=20260923"></script>')
-          assert blob(text.encode())=='ee9a827fb8685b573da402a2cef57b194759f690'
-          path.write_text(text)
-          subprocess.run(['git','add','--',str(path)],check=True)
+          controller=subprocess.check_output(['git','show','f47341d332a085b9e80b272ccea0f9d0059873c0:.github/workflows/discover-cleanup-validation.yml'],text=True)
+          begin="          python - <<'PY'\n"
+          end="\n          PY\n"
+          assert controller.count(begin)==1 and controller.count(end)==1
+          code=textwrap.dedent(controller.split(begin,1)[1].split(end,1)[0])
+          exec(compile(code,'<sha-verified-discover-foundation>','exec'))
+          sha='fe8afb03c1fa0ebbc0b974344b48e3840c86bf37'
+          req=urllib.request.Request(f'https://api.github.com/repos/ghuser29384/Website2/git/blobs/{sha}',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req,timeout=30) as response:
+              record=json.load(response)
+          data=base64.b64decode(record['content'])
+          assert blob(data)==sha
+          repairs=json.loads(data)
+          assert len(repairs)==5
+          outputs={}
+          for change in repairs:
+              name=change['path']
+              assert name in ['public/moral-trade-discover.html','public/moral-trade-discover-search.js','public/moral-trade-input-assist.js','tests/discover-live-search.spec.ts','tests/discover-home-visual-alignment.spec.ts']
+              old=Path(name).read_bytes()
+              assert blob(old)==change['old'], 'Repair source drift: '+name
+              lines=old.decode().splitlines(keepends=True)
+              for begin,end,text in reversed(change['hunks']):
+                  assert 0<=begin<=end<=len(lines)
+                  lines[begin:end]=[text]
+              output=''.join(lines).encode()
+              assert blob(output)==change['new'], 'Repair output mismatch: '+name
+              outputs[name]=output
+          for name,data in outputs.items(): Path(name).write_bytes(data)
+          subprocess.run(['git','add','--',*outputs.keys()],check=True)
+          expected=Path(os.environ['EVIDENCE'],'expected-paths.txt')
+          names=set(expected.read_text().splitlines())|{'public/moral-trade-input-assist.js'}
+          assert len(names)==48
+          expected.write_text('\n'.join(sorted(names))+'\n')
+          print('Verified 48-path candidate, including opt-in Enter handling and page-range recovery.')
           PY
           git diff --check "$BASE_SHA"
           git diff --name-only "$BASE_SHA" | sort > "$EVIDENCE/actual-paths.txt"
@@ -89,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run build | tee "$EVIDENCE/build.txt"
-      - name: Full rendered release gate and responsive screenshots
+      - name: Focused browser regression gate
         shell: bash
         env:
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
@@ -98,6 +116,15 @@ jobs:
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium
+          npx playwright test --config=playwright.release.config.ts tests/discover-live-search.spec.ts tests/discover-home-visual-alignment.spec.ts --reporter=line --max-failures=2 | tee "$EVIDENCE/focused-browser.txt"
+      - name: Full rendered release gate and responsive screenshots
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
           npm run test:e2e:release -- --reporter=line | tee "$EVIDENCE/browser-tests.txt"
       - name: Publish validated candidate to isolated branch only
         shell: bash
