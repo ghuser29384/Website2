@@ -1,0 +1,104 @@
+name: Reconcile profile canary with approved setup
+on:
+  push:
+    branches: [ops/review-profile-cleanup-20260923]
+    paths: [.github/workflows/review-profile-monitor.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  reconcile:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TARGET_BRANCH: cleanup/review-profile-boundaries-final-20260923
+      BASE_SHA: 80892b66b897e5b74d73c27f6d318cf96defad79
+      RUNTIME_TREE: 62902322b38deef33f96e20b4f776d6f2529c8be
+      FINAL_TREE: 9d15cf25f5bcbe80d86652107439b4eaf45f41b1
+    steps:
+      - name: Require the full runtime and synthetic-boundary proof
+        uses: actions/github-script@v7
+        with:
+          script: |
+            for (let attempt=0;attempt<70;attempt++) {
+              const {data} = await github.rest.actions.getWorkflowRun({...context.repo,run_id:35927342292});
+              if (data.head_sha !== '6b9273563433307e16326ff15de3834cac3e35c0') throw new Error('Wrong validation controller');
+              if (data.status === 'completed') {
+                if (data.conclusion !== 'success') throw new Error('Runtime validation did not pass');
+                return;
+              }
+              await new Promise(resolve=>setTimeout(resolve,15000));
+            }
+            throw new Error('Runtime validation did not finish');
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup/review-profile-boundaries-final-20260923
+          fetch-depth: 0
+      - name: Guard exact validated runtime and current main
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^{tree})" = "$RUNTIME_TREE"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          echo "SOURCE_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/monitor-evidence"
+      - name: Retrieve checksum-verified monitor-only delta
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs'),crypto=require('node:crypto'),zlib=require('node:zlib');
+            const {data}=await github.rest.git.getBlob({...context.repo,file_sha:'88c7b22c20e42e44c268cb1077f1ad45531ae306'});
+            const transport=Buffer.from(data.content,'base64').toString('utf8');
+            if (transport.split('q9er1/YdChqk').length !== 2) throw new Error('Unexpected transport fragment');
+            const encoded=transport.replace('q9er1/YdChqk','q9er1f1/YdChqk');
+            const blobHash=crypto.createHash('sha1').update(Buffer.from('blob '+Buffer.byteLength(encoded)+'\0')).update(encoded).digest('hex');
+            if (blobHash !== '40212d6b8a1c4b26c26395b774bf4d795083bd4e') throw new Error('Exact encoded source mismatch');
+            const archive=Buffer.from(encoded,'base64');
+            if (crypto.createHash('sha256').update(archive).digest('hex') !== '79caa01f419aa52eec15537316cc30dff7fee434fc5dfbe1fe9b3ad5118e3dfc') throw new Error('Delta digest mismatch');
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/monitor-delta.json',zlib.gunzipSync(archive));
+      - name: Apply only three monitoring files
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,subprocess,os
+          from pathlib import Path
+          data=json.loads((Path(os.environ['RUNNER_TEMP'])/'monitor-delta.json').read_text())
+          assert data['previousTree']==os.environ['RUNTIME_TREE']
+          subprocess.run(['git','apply','--index','-'],input=data['patch'],text=True,check=True)
+          paths=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
+          assert sorted(paths)==sorted(data['scope'])
+          assert subprocess.check_output(['git','write-tree'],text=True).strip()==data['expectedTree']==os.environ['FINAL_TREE']
+          PY
+          git diff --cached --check
+          git diff --exit-code
+          git diff --cached --stat | tee "$RUNNER_TEMP/monitor-evidence/diff-stat.txt"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Test permanent canary without touching production
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/complete-profile-canary-diagnostics.mjs
+          node --check .github/scripts/complete-profile-production-canary.mjs
+          node --test scripts/complete-profile-canary-diagnostics.test.mjs scripts/vercel-release-workflow.test.mjs > "$RUNNER_TEMP/monitor-evidence/source-tests.log" 2>&1
+          ruby -e 'require "yaml"; YAML.parse_file(ARGV.fetch(0)) or abort("invalid YAML")' .github/workflows/complete-profile-production-canary.yml
+          tail -n 15 "$RUNNER_TEMP/monitor-evidence/source-tests.log"
+      - name: Fast-forward only the validated candidate branch
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$SOURCE_HEAD"
+          test "$(git write-tree)" = "$FINAL_TREE"
+          git diff --exit-code
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Align profile production canary with optional setup and explicit recovery'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/monitor-evidence/product-identity.txt"
+      - name: Preserve monitor-only proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-profile-monitor-${{ github.run_id }}
+          path: ${{ runner.temp }}/monitor-evidence/
+          retention-days: 7
+          if-no-files-found: warn
