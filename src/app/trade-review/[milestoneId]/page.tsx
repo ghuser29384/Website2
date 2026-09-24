@@ -175,12 +175,15 @@ export default async function TradeReviewPage({
     }),
   );
 
+  const isAppealViewer =
+    String(appeal?.assigned_reviewer_id ?? "") === viewer.authUser.id;
   const isAppealReview =
-    appeal?.status === "assigned" &&
-    String(appeal.assigned_reviewer_id) === viewer.authUser.id;
+    isAppealViewer && appeal?.status === "assigned";
+  const isInitialReviewer =
+    !isAppealViewer &&
+    String(milestone.assigned_reviewer_id) === viewer.authUser.id;
   const isInitialReview =
-    !isAppealReview &&
-    String(milestone.assigned_reviewer_id) === viewer.authUser.id &&
+    isInitialReviewer &&
     milestone.status === "under_review";
   const isPaymentAppealViewer =
     String(paymentAppeal?.assigned_reviewer_id ?? "") === viewer.authUser.id;
@@ -190,15 +193,15 @@ export default async function TradeReviewPage({
     !isPaymentAppealViewer &&
     String(paymentCase?.assigned_reviewer_id ?? "") === viewer.authUser.id;
   if (
-    !isAppealReview &&
-    !isInitialReview &&
+    !isAppealViewer &&
+    !isInitialReviewer &&
     !isPaymentAppealViewer &&
     !isPaymentReview
   ) {
     notFound();
   }
 
-  const action = isAppealReview
+  const action = isAppealViewer
     ? resolveTradeMilestoneAppealAction
     : submitNeutralTradeMilestoneReviewAction;
   const formMessage = getFormMessage(resolvedSearchParams);
@@ -492,7 +495,7 @@ export default async function TradeReviewPage({
         <section className="section section-white" aria-labelledby="review-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">
-              {isAppealReview ? "Independent appeal review" : "Assigned neutral review"}
+              {isAppealViewer ? "Independent appeal review" : "Assigned neutral review"}
             </p>
             <h1 id="review-heading">Grade the promised result, not the submission’s polish.</h1>
             <p>
@@ -520,7 +523,7 @@ export default async function TradeReviewPage({
                 <p className="detail-kicker">{String(milestone.action_category)}</p>
                 <h2>{String(milestone.description)}</h2>
               </div>
-              <span className="badge">{isAppealReview ? "Appeal" : "Initial review"}</span>
+              <span className="badge">{isAppealViewer ? "Appeal" : "Initial review"}</span>
             </div>
             <dl className="detail-grid">
               <div>
@@ -572,91 +575,101 @@ export default async function TradeReviewPage({
             </div>
           ) : null}
 
-          <form action={action} className="panel stack-form">
-            <input name="agreement_id" type="hidden" value={String(milestone.agreement_id)} />
-            <input name="milestone_id" type="hidden" value={milestoneId} />
-            <input name="return_to" type="hidden" value={returnTo} />
-            {isAppealReview ? (
-              <>
-                <input name="appeal_id" type="hidden" value={String(appeal.id)} />
+          {isAppealReview || isInitialReview ? (
+            <form action={action} className="panel stack-form">
+              <input name="agreement_id" type="hidden" value={String(milestone.agreement_id)} />
+              <input name="milestone_id" type="hidden" value={milestoneId} />
+              <input name="return_to" type="hidden" value={returnTo} />
+              {isAppealReview ? (
+                <>
+                  <input name="appeal_id" type="hidden" value={String(appeal.id)} />
+                  <label className="field">
+                    <span>Appeal resolution</span>
+                    <select name="appeal_resolution" required>
+                      <option value="upheld">Uphold the prior decision</option>
+                      <option value="regraded">Replace it with a new grade</option>
+                    </select>
+                  </label>
+                </>
+              ) : null}
+              <div className="field-grid">
                 <label className="field">
-                  <span>Appeal resolution</span>
-                  <select name="appeal_resolution" required>
-                    <option value="upheld">Uphold the prior decision</option>
-                    <option value="regraded">Replace it with a new grade</option>
-                  </select>
+                  <span>Completed {String(milestone.unit_label)}</span>
+                  {milestone.indivisible ? (
+                    <select
+                      defaultValue={
+                        isAppealReview && reviews?.[0]?.completion_units != null
+                          ? String(reviews[0].completion_units)
+                          : ""
+                      }
+                      name="completed_units"
+                      required
+                    >
+                      <option value="">Choose completion</option>
+                      <option value="1">1 — completed</option>
+                      <option value="0">0 — not completed</option>
+                    </select>
+                  ) : (
+                    <input
+                      defaultValue={
+                        isAppealReview ? Number(reviews?.[0]?.completion_units ?? 0) : undefined
+                      }
+                      max={Number(milestone.units_total)}
+                      min="0"
+                      name="completed_units"
+                      required
+                      step="1"
+                      type="number"
+                    />
+                  )}
                 </label>
-              </>
-            ) : null}
-            <div className="field-grid">
-              <label className="field">
-                <span>Completed {String(milestone.unit_label)}</span>
-                {milestone.indivisible ? (
+                <label className="field">
+                  <span>Evidence confidence</span>
                   <select
                     defaultValue={
-                      isAppealReview && reviews?.[0]?.completion_units != null
-                        ? String(reviews[0].completion_units)
+                      isAppealReview && reviews?.[0]?.confidence_band != null
+                        ? String(reviews[0].confidence_band)
                         : ""
                     }
-                    name="completed_units"
+                    name="confidence_band"
                     required
                   >
-                    <option value="">Choose completion</option>
-                    <option value="1">1 — completed</option>
-                    <option value="0">0 — not completed</option>
+                    <option value="">Choose a fixed band</option>
+                    {[100, 75, 50, 25, 0].map((band) => (
+                      <option key={band} value={band}>
+                        {band}%
+                      </option>
+                    ))}
                   </select>
-                ) : (
-                  <input
-                    defaultValue={
-                      isAppealReview ? Number(reviews?.[0]?.completion_units ?? 0) : undefined
-                    }
-                    max={Number(milestone.units_total)}
-                    min="0"
-                    name="completed_units"
-                    required
-                    step="1"
-                    type="number"
-                  />
-                )}
-              </label>
+                </label>
+              </div>
               <label className="field">
-                <span>Evidence confidence</span>
-                <select
-                  defaultValue={
-                    isAppealReview && reviews?.[0]?.confidence_band != null
-                      ? String(reviews[0].confidence_band)
-                      : ""
-                  }
-                  name="confidence_band"
+                <span>Private rationale visible to the participants</span>
+                <textarea
+                  name="review_rationale"
+                  placeholder="Explain the completion finding and why this fixed confidence band applies."
                   required
-                >
-                  <option value="">Choose a fixed band</option>
-                  {[100, 75, 50, 25, 0].map((band) => (
-                    <option key={band} value={band}>
-                      {band}%
-                    </option>
-                  ))}
-                </select>
+                  rows={5}
+                />
               </label>
+              <p className="panel-note">
+                A 0% band rejects the packet and returns the milestone to replacement evidence under
+                the approved timing rule. Moral Trade calculates the resulting amount but does not
+                move money.
+              </p>
+              <PendingSubmitButton pendingLabel="Recording decision…">
+                {isAppealReview ? "Record final appeal decision" : "Record neutral review"}
+              </PendingSubmitButton>
+            </form>
+          ) : (
+            <div className="status-banner">
+              <strong>This assigned review is recorded.</strong>
+              <p>
+                Private evidence and the retained audit record remain readable,
+                but no further decision is available in this state.
+              </p>
             </div>
-            <label className="field">
-              <span>Private rationale visible to the participants</span>
-              <textarea
-                name="review_rationale"
-                placeholder="Explain the completion finding and why this fixed confidence band applies."
-                required
-                rows={5}
-              />
-            </label>
-            <p className="panel-note">
-              A 0% band rejects the packet and returns the milestone to replacement evidence under
-              the approved timing rule. Moral Trade calculates the resulting amount but does not
-              move money.
-            </p>
-            <PendingSubmitButton pendingLabel="Recording decision…">
-              {isAppealReview ? "Record final appeal decision" : "Record neutral review"}
-            </PendingSubmitButton>
-          </form>
+          )}
 
           <Link className="button button-secondary" href="/dashboard">
             Back to account

@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
+import {
+  getRedirectTypeFromError,
+  getURLFromRedirectError,
+} from "next/dist/client/components/redirect";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { redirect } from "next/navigation";
 
 function source(path: string) {
   return readFileSync(resolve(process.cwd(), path), "utf8");
@@ -201,9 +207,6 @@ test("participant, reviewer, and administrator surfaces expose every payment tra
   const paymentResponseForm = source(
     "src/components/core-trade/external-payment-response-form.tsx",
   );
-  const fullNavigationForm = source(
-    "src/components/core-trade/full-navigation-action-form.tsx",
-  );
   const reviewerPage = source("src/app/trade-review/[milestoneId]/page.tsx");
   const administratorPage = source("src/app/admin/trade-review/page.tsx");
 
@@ -224,9 +227,6 @@ test("participant, reviewer, and administrator surfaces expose every payment tra
   assert.match(reviewerPage, /confirm_paid/i);
   assert.match(reviewerPage, /still_due/i);
   assert.match(paymentResponseForm, /FullNavigationActionForm/);
-  assert.match(fullNavigationForm, /event\.preventDefault\(\)/);
-  assert.match(fullNavigationForm, /HTMLFormElement\.prototype\.submit\.call\(form\)/);
-  assert.match(fullNavigationForm, /submitter\.name/);
   assert.match(
     administratorPage,
     /adminAssignTradePaymentReviewerAction/,
@@ -235,6 +235,127 @@ test("participant, reviewer, and administrator surfaces expose every payment tra
     administratorPage,
     /adminAssignTradePaymentAppealReviewerAction/,
   );
+});
+
+test("full-navigation actions keep React form semantics and hard-navigate validated redirects", () => {
+  const fullNavigationForm = source(
+    "src/components/core-trade/full-navigation-action-form.tsx",
+  );
+
+  assert.match(
+    fullNavigationForm,
+    /async function submitWithFullNavigation\(formData: FormData\)/,
+  );
+  assert.match(fullNavigationForm, /await action\(formData\)/);
+  assert.match(
+    fullNavigationForm,
+    /if \(!isRedirectError\(error\)\) \{\s*throw error;/,
+  );
+  assert.match(fullNavigationForm, /getURLFromRedirectError\(error\)/);
+  assert.match(fullNavigationForm, /getRedirectTypeFromError\(error\)/);
+  assert.match(fullNavigationForm, /window\.location\.replace\(target\)/);
+  assert.match(fullNavigationForm, /window\.location\.assign\(target\)/);
+  assert.match(
+    fullNavigationForm,
+    /<form action=\{submitWithFullNavigation\} \{\.\.\.props\}>/,
+  );
+
+  for (const forbidden of [
+    /FormEvent/,
+    /onSubmit=/,
+    /preventDefault/,
+    /HTMLFormElement\.prototype\.submit/,
+    /requestSubmit/,
+    /submitter/,
+    /document\.createElement/,
+    /form\.append/,
+  ]) {
+    assert.doesNotMatch(fullNavigationForm, forbidden);
+  }
+});
+
+test("the locked Next runtime still exposes the validated redirect parser contract", () => {
+  const target = "/trade-agreements/upgrade-contract?message=ok";
+  let redirectSignal: unknown;
+
+  try {
+    redirect(target);
+  } catch (error) {
+    redirectSignal = error;
+  }
+
+  assert.ok(isRedirectError(redirectSignal));
+  assert.equal(getURLFromRedirectError(redirectSignal), target);
+  assert.equal(getRedirectTypeFromError(redirectSignal), "replace");
+});
+
+test("reviewer nomination uses full navigation when matching nominations remove the form", () => {
+  const workflow = source(
+    "src/components/core-trade/trade-milestone-workflow.tsx",
+  );
+  const reviewerNominationForm = workflow.match(
+    /function ReviewerNominationForm\([\s\S]*?(?=\nfunction NeutralReviewForm\()/,
+  )?.[0];
+
+  assert.ok(reviewerNominationForm);
+  assert.match(
+    reviewerNominationForm,
+    /<FullNavigationActionForm action=\{action\} className="panel stack-form">/,
+  );
+  assert.match(reviewerNominationForm, /<\/FullNavigationActionForm>/);
+});
+
+test("private evidence submission uses full navigation after the server action redirects", () => {
+  const workflow = source(
+    "src/components/core-trade/trade-milestone-workflow.tsx",
+  );
+  const evidenceBundleForm = workflow.match(
+    /function EvidenceBundleForm\([\s\S]*?(?=\nfunction ReviewerNominationForm\()/,
+  )?.[0];
+
+  assert.ok(evidenceBundleForm);
+  assert.match(
+    evidenceBundleForm,
+    /<FullNavigationActionForm\s+action=\{action\}\s+className="panel stack-form"\s+encType="multipart\/form-data"/,
+  );
+  assert.match(evidenceBundleForm, /<\/FullNavigationActionForm>/);
+  assert.doesNotMatch(evidenceBundleForm, /<form\s+action=\{action\}/);
+});
+
+test("agreement confirmation uses full navigation when activation changes the rendered stage", () => {
+  const stage = source(
+    "src/components/core-trade/trade-agreement-stage-base.tsx",
+  );
+  const confirmationForm = stage.match(
+    /\{props\.canConfirm \? \([\s\S]*?(?=\) : props\.viewerConfirmed)/,
+  )?.[0];
+
+  assert.ok(confirmationForm);
+  assert.match(
+    confirmationForm,
+    /<FullNavigationActionForm\s+action=\{props\.confirmAction\}/,
+  );
+  assert.match(confirmationForm, /name="terms_reviewed" required type="checkbox"/);
+  assert.match(confirmationForm, /pendingLabel="Recording confirmation\.\.\."/);
+  assert.match(confirmationForm, /<\/FullNavigationActionForm>/);
+});
+
+test("assigned evidence reviewers retain read-only access after recording a review", () => {
+  const reviewerPage = source("src/app/trade-review/[milestoneId]/page.tsx");
+
+  assert.match(
+    reviewerPage,
+    /const isInitialReviewer =\s*!isAppealViewer &&\s*String\(milestone\.assigned_reviewer_id\) === viewer\.authUser\.id;/,
+  );
+  assert.match(
+    reviewerPage,
+    /!isAppealViewer &&\s*!isInitialReviewer &&\s*!isPaymentAppealViewer/,
+  );
+  assert.match(
+    reviewerPage,
+    /\{isAppealReview \|\| isInitialReview \? \(\s*<form action=\{action\}/,
+  );
+  assert.match(reviewerPage, /This assigned review is recorded\./);
 });
 
 test("authenticated workflow and authorization states remain visibly rendered", () => {
