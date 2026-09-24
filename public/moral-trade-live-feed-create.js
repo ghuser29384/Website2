@@ -69,10 +69,6 @@
       reasonDetails: Array.isArray(value.reasonDetails)
         ? value.reasonDetails.map((item) => text(item, 240)).filter(Boolean).slice(0, 6)
         : [],
-      paretoSuccess:
-        Number.isFinite(Number(value.paretoPrediction?.paretoSuccess))
-          ? Math.max(0, Math.min(1, Number(value.paretoPrediction.paretoSuccess)))
-          : null,
       actionFitLabel: text(value.actionFitLabel, 40),
     };
   }
@@ -127,10 +123,6 @@
           ownerAlias: recommendation.ownerAlias,
           reason: recommendation.reason,
           reasonDetails: recommendation.reasonDetails,
-          matchPercent:
-            recommendation.paretoSuccess === null
-              ? null
-              : Math.round(recommendation.paretoSuccess * 100),
           actionFitLabel: recommendation.actionFitLabel,
         }),
       );
