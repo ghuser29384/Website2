@@ -134,6 +134,13 @@
       ),
       offsetRatio: number(metadata.offsetRatio, 1, 0, 100000),
       saved: value.saved === true,
+      mechanism: string(metadata.mechanism, 80),
+      bookmarkable:
+        origin === "published" && metadata.mechanism === "published_offer",
+      feedbackSupported:
+        !["donation_upgrade", "dominant_assurance_contract", "threshold_pool"].includes(
+          metadata.mechanism,
+        ),
       updatedAt: string(value.updatedAt, 40),
     };
   }
@@ -205,7 +212,7 @@
       openToPledges:
         typeof profileValue.openToPledges === "boolean" ? profileValue.openToPledges : null,
       signalSources: uniqueStrings(profileValue.signalSources, 8),
-      learningEnabled: profileValue.learningEnabled !== false,
+      learningEnabled: profileValue.learningEnabled === true,
       explorationPercent: Math.round(number(profileValue.explorationPercent, 12, 0, 30)),
       browsingSignalCount: Math.max(
         0,
@@ -261,7 +268,7 @@
     if (source === "explicit_priority") return "explicit priority";
     if (source === "profile_priority") return "profile priority";
     if (source === "saved_search") return "saved search";
-    if (source === "browsing") return "recent browsing";
+    if (source === "browsing") return "optional viewing activity";
     return "profile signal";
   }
 
@@ -355,6 +362,9 @@
     const requestedAction = recommendation.requestAction || recommendation.requestedCause;
     const unlockedOutcome = recommendation.offerAction || recommendation.offeredCause;
     const savedLabel = recommendation.saved ? "Saved" : "Save";
+    const bookmarkControl = recommendation.bookmarkable
+      ? `<button class="mt-feed-bookmark${recommendation.saved ? " is-active" : ""}" type="button" data-action="save" aria-pressed="${recommendation.saved ? "true" : "false"}" aria-label="${recommendation.saved ? "Remove saved offer" : "Save offer"}" title="${escapeHtml(savedLabel)}">${recommendation.saved ? "★" : "☆"}</button>`
+      : "";
     const threshold = formatCurrencyFromCents(recommendation.assuranceMinimumCents);
     const publicGoodsNote =
       recommendation.opportunityType === "donation_pool"
@@ -411,13 +421,7 @@
           )} · ${escapeHtml(
             recommendation.reason || `Matches ${recommendation.matchCause}`,
           )}</span>
-          <button class="mt-feed-bookmark${
-            recommendation.saved ? " is-active" : ""
-          }" type="button" data-action="save" aria-pressed="${
-            recommendation.saved ? "true" : "false"
-          }" aria-label="${
-            recommendation.saved ? "Remove saved opportunity" : "Save opportunity"
-          }" title="${escapeHtml(savedLabel)}">${recommendation.saved ? "★" : "☆"}</button>
+          ${bookmarkControl}
         </div>
         <h3>${escapeHtml(recommendation.offeredCause)}</h3>
         <div class="mt-feed-mechanism" aria-label="${escapeHtml(
@@ -436,7 +440,7 @@
         ${publicGoodsNote}
         <div class="mt-feed-signal-row">${visibleSignals}</div>
         <details class="mt-feed-details">
-          <summary>Why this match <span aria-hidden="true">＋</span></summary>
+          <summary>Why this appears <span aria-hidden="true">＋</span></summary>
           <div class="mt-feed-details-grid">
             <div class="mt-feed-why"><strong>Why it fits</strong><ul>${whyList(
               recommendation,
@@ -456,15 +460,15 @@
         <span class="mt-feed-fit-label">${fitMeter(recommendation)}${escapeHtml(
           recommendation.actionFitLabel,
         )}</span>
-        <details class="mt-feed-overflow">
+        ${recommendation.feedbackSupported ? `<details class="mt-feed-overflow">
           <summary aria-label="Tune this recommendation">•••</summary>
           <div>
-            <strong>Help the feed learn</strong>
+            <strong>Explicit feedback</strong>
             <button class="mt-feed-feedback" type="button" data-action="easy" aria-pressed="false">Easy for me</button>
             <button class="mt-feed-feedback" type="button" data-action="hard" aria-pressed="false">Hard for me</button>
-            <button class="mt-feed-feedback is-muted" type="button" data-action="not_for_me">Less like this</button>
+            <button class="mt-feed-feedback is-muted" type="button" data-action="not_for_me">Show fewer like this</button>
           </div>
-        </details>
+        </details>` : ""}
       </div>
     </article>`;
   }
@@ -573,9 +577,9 @@
     if (model.status === "profile_incomplete") {
       return {
         eyebrow: "Profile needs priorities",
-        title: "Set your moral priorities to personalize the feed.",
+        title: "Add priorities if you want personalized suggestions.",
         copy:
-          "Rank cause areas, set the trade formats you are open to, and the platform will begin learning which actions are realistic for you.",
+          "State outcomes or trade formats explicitly. Optional viewing activity can refine relevance only if you turn it on.",
         facts: ["Signed in", "No cause priorities saved"],
         primaryHref: "/complete-profile",
         primaryLabel: "Set priorities →",
@@ -652,7 +656,7 @@
       <section class="panel attention">
         <div class="iconbox bluebg">◎</div>
         <div class="lead"><div class="eyebrow blue">How matching works</div><h3>Your priorities select the benefit. Your action model estimates the burden.</h3></div>
-        <div><b>Explicit preferences outrank inferred signals.</b><p class="muted" style="font-size:11px">Browsing can refine the feed only when learning is on. Easy/hard feedback corrects action estimates directly.</p></div>
+        <div><b>Explicit choices remain authoritative.</b><p class="muted" style="font-size:11px">Optional viewing activity can suggest relevance, but it does not become a stated priority or willingness signal. Easy/hard feedback is explicit action feedback.</p></div>
         <a class="btn" href="/complete-profile">Review profile →</a>
       </section>
     </main><aside class="stack">
@@ -754,10 +758,10 @@
             <div><strong>Your priorities</strong><div class="mt-feed-priority-row" aria-label="Priority signals used">${weightedPriorityChips()}</div></div>
             <div class="mt-feed-header-controls"><button class="mt-feed-control" type="button" data-feed-control="learning" aria-pressed="${
               model.profile.learningEnabled ? "true" : "false"
-            }">Learn from browsing: ${
+            }">Use viewing activity: ${
               model.profile.learningEnabled ? "on" : "off"
-            }</button><button class="mt-feed-control" type="button" data-feed-control="clear">Clear learned signals</button></div>
-            <p class="mt-feed-privacy-note">The feed stores typed in-product signals, not raw browsing URLs or page content.</p>
+            }</button><button class="mt-feed-control" type="button" data-feed-control="clear">Clear browsing inferences</button></div>
+            <p class="mt-feed-privacy-note">Viewing activity is optional and is used only as a tentative relevance hint. It does not change your stated priorities or declare willingness to take an action.</p>
             <div class="mt-feed-settings-links"><a href="/complete-profile">Edit priorities</a><a href="/dashboard#wish-profile">Participation settings</a></div>
           </div>
         </details>
@@ -793,6 +797,22 @@
 
   function feedbackEventAccepted(result) {
     return Boolean(result && Number(result.acceptedEventCount) >= 1);
+  }
+
+  function postBookmark(offerId, saved) {
+    if (typeof fetch !== "function") return Promise.resolve(null);
+    return fetch("/api/saved-offers", {
+      method: saved ? "DELETE" : "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offerId }),
+    })
+      .then((response) => {
+        if (!response.ok) return null;
+        return response.json().catch(() => null);
+      })
+      .catch(() => null);
   }
 
   function showToast(root, message) {
@@ -885,19 +905,14 @@
         const saved = target.getAttribute("aria-pressed") === "true";
         setSaveState(target, !saved);
         setPreferencePending(card, true);
-        void postFeedback({
-          events: [eventForCard(card, saved ? "unsave" : "save")],
-        }).then((result) => {
+        void postBookmark(card.dataset.opportunityId || "", saved).then((result) => {
           setPreferencePending(card, false);
-          if (!feedbackEventAccepted(result)) {
+          if (!result || result.saved !== !saved) {
             setSaveState(target, saved);
-            showToast(root, "Could not save that change. Your feed was not updated.");
+            showToast(root, "Could not update saved offers.");
             return;
           }
-          showToast(
-            root,
-            saved ? "Removed from saved signals." : "Saved. The feed will learn from this.",
-          );
+          showToast(root, saved ? "Removed from saved offers." : "Saved to your offers.");
         });
         return;
       }
@@ -966,14 +981,14 @@
         const wasEnabled = control.getAttribute("aria-pressed") === "true";
         const enabled = control.getAttribute("aria-pressed") !== "true";
         control.setAttribute("aria-pressed", enabled ? "true" : "false");
-        control.textContent = `Learn from browsing: ${enabled ? "on" : "off"}`;
+        control.textContent = `Use viewing activity: ${enabled ? "on" : "off"}`;
         model.profile.learningEnabled = enabled;
         control.setAttribute("disabled", "disabled");
         void postFeedback({ learningEnabled: enabled }).then((result) => {
           control.removeAttribute("disabled");
           if (!result) {
             control.setAttribute("aria-pressed", wasEnabled ? "true" : "false");
-            control.textContent = `Learn from browsing: ${wasEnabled ? "on" : "off"}`;
+            control.textContent = `Use viewing activity: ${wasEnabled ? "on" : "off"}`;
             model.profile.learningEnabled = wasEnabled;
             showToast(root, "Could not change learning. Your feed was not updated.");
             return;
@@ -981,8 +996,8 @@
           showToast(
             root,
             enabled
-              ? "Browsing learning is on. Only typed in-product signals are stored."
-              : "Browsing learning is paused. Explicit feedback still applies.",
+              ? "Viewing activity is on as a tentative relevance hint."
+              : "Viewing activity is off. Explicit feedback still applies.",
           );
         });
       }
@@ -997,7 +1012,7 @@
         })
           .then((response) => {
             if (!response.ok) throw new Error("clear");
-            showToast(root, "Learned browsing and action signals cleared.");
+            showToast(root, "Browsing inferences cleared. Saved offers and explicit choices were kept.");
             if (typeof location !== "undefined" && typeof location.reload === "function") {
               setTimeout(() => location.reload(), 450);
             }
