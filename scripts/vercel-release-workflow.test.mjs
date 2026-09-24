@@ -500,7 +500,7 @@ test("the Complete Profile canary proves current ownership from both alias recor
 test("route behavior remains an independent canary gate", async () => {
   const source = await completeProfileCanary();
 
-  assert.match(source, /grep -Fq 'Spend 100 sparks of attention\.'/);
+  assert.match(source, /grep -Fq 'Set up your profile\.'/);
   assert.match(source, /grep -Fqx 'x-matched-path: \/complete-profile'/);
   assert.match(source, /\[\[ "\$apex_status" == '308' \]\]/);
   assert.match(
@@ -560,4 +560,15 @@ test("pull-request checks cannot cancel a production monitor", async () => {
     source,
     /group: complete-profile-production-canary-\$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.number \|\| 'production' \}\}/,
   );
+});
+
+
+test("the profile canary follows independent setup and explicit draft recovery without simulated account writes", async () => {
+  const source = await readFile(new URL("../.github/scripts/complete-profile-production-canary.mjs", import.meta.url), "utf8");
+  assert.match(source, /Set up your profile/);
+  assert.match(source, /Direct setup must not require or mark the optional tour/);
+  assert.match(source, /Device drafts must never restore automatically/);
+  assert.match(source, /Clear device draft and reset edits/);
+  assert.match(source, /Optional private matching preferences/);
+  assert.doesNotMatch(source, /Spend 100 sparks|Assign one spark|isExpectedFirstTimeStandardsAbort/);
 });

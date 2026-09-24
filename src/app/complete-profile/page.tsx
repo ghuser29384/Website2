@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 
 import {
   CompleteProfileConnections,
@@ -11,23 +10,17 @@ import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { getSafeInternalPath } from "@/lib/paths";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { WALKTHROUGH_SEEN_COOKIE_NAME } from "@/lib/walkthrough-state";
 import {
   getDisconnectedXProfileConnectorStatus,
   getXProfileConnectorStatus,
 } from "@/lib/x-profile-connector";
-import {
-  getCompleteProfileDraft,
-  type WalkthroughProfileDraft,
-  WALKTHROUGH_PROFILE_COOKIE_NAME,
-} from "@/lib/walkthrough-profile";
 
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
   title: "Complete your profile",
   description:
-    "Rank your priorities with a private, coarse 100-spark mosaic before saving your Moral Trade profile.",
+    "Set up an account independently, with optional private matching notes and priority preferences.",
   robots: {
     index: false,
     follow: false,
@@ -36,22 +29,6 @@ export const metadata: Metadata = {
 
 interface CompleteProfilePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function buildCompleteProfilePath(draft: WalkthroughProfileDraft) {
-  if (draft.source === "direct") return "/complete-profile";
-
-  const query = new URLSearchParams({
-    source: "walkthrough",
-    cause_area: draft.causeArea,
-    walkthrough_cause: draft.originalCause,
-    offer_type: draft.offerType,
-    match_name: draft.matchName,
-    match_get: draft.matchGet,
-    match_give: draft.matchGive,
-  });
-
-  return `/complete-profile?${query.toString()}`;
 }
 
 function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
@@ -69,18 +46,6 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   const cookieStore = await cookies();
   const usernamePromptRequested =
     readSearchParam(resolvedSearchParams.username_required) === "1";
-  const profileDraft = getCompleteProfileDraft({
-    allowDirect:
-      usernamePromptRequested ||
-      cookieStore.get(WALKTHROUGH_SEEN_COOKIE_NAME)?.value === "1",
-    cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
-    searchParams: resolvedSearchParams,
-  });
-
-  if (!profileDraft) {
-    redirect("/walkthrough");
-  }
-
   const supabaseReady = hasSupabaseEnv();
   const viewer =
     supabaseReady && hasSupabaseAuthCookie(cookieStore) ? await getViewer() : null;
@@ -102,15 +67,13 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   };
   const requestedSuccessTo = getSafeInternalPath(
     readSearchParam(resolvedSearchParams.next),
-    "/discover?source=profile-complete&domain=offers&view=constellation",
+    "/discover",
   );
-  const baseReturnTo = buildCompleteProfilePath(profileDraft);
-  const returnTo = usernamePromptRequested
-    ? `${baseReturnTo}${baseReturnTo.includes("?") ? "&" : "?"}${new URLSearchParams({
-        username_required: "1",
-        next: requestedSuccessTo,
-      }).toString()}`
-    : baseReturnTo;
+  const baseReturnTo = "/complete-profile";
+  const returnParams = new URLSearchParams();
+  if (usernamePromptRequested) returnParams.set("username_required", "1");
+  if (usernamePromptRequested || readSearchParam(resolvedSearchParams.next)) returnParams.set("next", requestedSuccessTo);
+  const returnTo = returnParams.size ? `${baseReturnTo}?${returnParams}` : baseReturnTo;
   const signupHref = `/signup?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const loginHref = `/login?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const initialConnectionsOpen =
@@ -119,7 +82,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
 
   return (
     <div className={styles.pageShell} data-mt-surface="complete-profile">
-      <CompleteProfileConnections
+      <div className={styles.sourcesBar}><CompleteProfileConnections
         feedback={formMessage}
         initialOpen={initialConnectionsOpen}
         isAuthenticated={Boolean(viewer)}
@@ -129,7 +92,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
         xAvailabilityReason={xConnectorStatus.availability.reason}
         xConnection={xConnection}
         xEnabled={xConnectorStatus.availability.enabled}
-      />
+      /></div>
 
       <main id="main-content" tabIndex={-1}>
         {!supabaseReady ? (
@@ -157,13 +120,14 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
 
         <CompleteProfileReview
           accountEmail={viewer?.profile.email ?? ""}
-          draft={profileDraft}
+          accountId={viewer?.authUser.id ?? null}
+          key={viewer?.authUser.id ?? "guest"}
+          initialBio={viewer?.profile.bio ?? ""}
+          storageAvailable={supabaseReady && viewer?.profileStatus !== "fallback"}
           initialAffiliation={initialAffiliation}
           initialDisplayName={viewer?.displayName ?? ""}
           initialUsername={initialUsername}
           initialPublicInvitationMentionsEnabled={initialPublicInvitationMentionsEnabled}
-          initialDetailsOpen={usernamePromptRequested && Boolean(viewer) && !initialUsername}
-          isAuthenticated={Boolean(viewer)}
           loginHref={loginHref}
           returnTo={returnTo}
           signupHref={signupHref}

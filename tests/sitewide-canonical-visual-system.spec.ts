@@ -52,6 +52,25 @@ const accountAndStandaloneRoutes = [
 test.describe.configure({ mode: "serial" });
 test.setTimeout(90_000);
 
+// These are layout/interaction checks, not analytics-load tests. Exercise the real
+// supported opt-out so visiting many routes cannot exhaust analytics rate limits.
+// Keep all console-error assertions and the production rate limiter unchanged.
+test.beforeEach(async ({ context, baseURL }) => {
+  if (!baseURL) throw new Error("Visual checks require the configured app origin.");
+  await context.addCookies([{ name: "mt_analytics_opt_out", value: "1", url: baseURL, sameSite: "Lax" }]);
+});
+
+test("visual browser contexts use the real analytics opt-out boundary", async ({ context, baseURL }) => {
+  if (!baseURL) throw new Error("Visual checks require the configured app origin.");
+  expect((await context.cookies(baseURL)).find((cookie) => cookie.name === "mt_analytics_opt_out")?.value).toBe("1");
+  const response = await context.request.post(new URL("/api/funnel-events", baseURL).href, {
+    data: { eventType: "page_view", path: "/about" },
+  });
+  expect(response.status()).toBe(204);
+  expect(await response.text()).toBe("");
+  expect(response.headers()["cache-control"]).toContain("no-store");
+});
+
 function safeName(route: string) {
   return route.replace(/^\//, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "home";
 }

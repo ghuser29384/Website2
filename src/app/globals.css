@@ -7437,6 +7437,11 @@ output {
   grid-column: 1 / -1;
 }
 
+/* Review context stays available on demand rather than hidden with legacy detail sections. */
+.review-assessment-disclosure { margin: 1rem auto; width: min(100%, 90rem); }
+.review-assessment-disclosure .review-workflow-card-head { flex-wrap: wrap; }
+.review-assessment-disclosure .review-workflow-status { overflow-wrap: anywhere; }
+
 .review-workflow-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
