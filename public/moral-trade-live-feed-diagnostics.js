@@ -7,14 +7,16 @@
   const classOrder = ["direct", "near", "adjacent", "discovery"];
   const classCopy = {
     direct: {
-      label: "Direct match",
-      title: "Direct matches",
-      description: "Clear the current reciprocal, feasibility, and substantive-fit thresholds.",
+      label: "Strong terms fit",
+      title: "Strong terms-fit opportunities",
+      description:
+        "The stated terms clear current relevance thresholds. Counterparty acceptance and completion are not established.",
     },
     near: {
-      label: "Near-match",
-      title: "Promising near-matches",
-      description: "Relevant and potentially workable, but at least one direct-match estimate remains uncertain.",
+      label: "Potential terms fit",
+      title: "Potential terms-fit opportunities",
+      description:
+        "The opportunity is relevant, but reciprocal feasibility has not been established.",
     },
     adjacent: {
       label: "Adjacent",
@@ -24,7 +26,8 @@
     discovery: {
       label: "Discovery",
       title: "Discovery",
-      description: "Deliberate exploration used to learn your preferences; these are not presented as matches.",
+      description:
+        "Optional exploration outside your strongest stated matches; these are suggestions to inspect, not predictions of agreement.",
     },
   };
   const blockerLabels = {
@@ -34,9 +37,9 @@
     incomplete_public_terms: "Incomplete public terms",
     outside_retrieval_pool: "Outside this retrieval batch",
     low_substantive_compatibility: "Low substantive compatibility",
-    low_user_acceptance: "Requested action may not work for you",
-    low_counterparty_acceptance: "Counterparty acceptance uncertain",
-    low_completion_confidence: "Completion confidence too low",
+    low_user_acceptance: "Requested-action fit not established",
+    low_counterparty_acceptance: "Counterparty response not established",
+    low_completion_confidence: "Completion evidence not established",
     not_executable: "Not executable",
     route_format: "Route format excluded",
     money_budget: "Above money limit",
@@ -106,8 +109,8 @@
         ["Hard-eligible", finiteCount(data.eligibleCount)],
         ["Semantic retrieval pool", finiteCount(data.retrievalPoolCount)],
         ["Semantically relevant", finiteCount(data.semanticCandidateCount)],
-        ["Direct matches", finiteCount(data.directCount)],
-        ["Near-matches", finiteCount(data.nearMatchCount)],
+        ["Strong terms-fit candidates", finiteCount(data.directCount)],
+        ["Potential terms-fit candidates", finiteCount(data.nearMatchCount)],
         ["Adjacent", finiteCount(data.adjacentCount)],
         ["Discovery", finiteCount(data.discoveryCount)],
         ["Shown in this batch", finiteCount(data.selectedCount)],
@@ -118,8 +121,8 @@
       ["Hard-eligible", finiteCount(data.eligibleCount)],
       ["Semantic retrieval pool", finiteCount(data.retrievalPoolCount)],
       ["Semantically relevant", finiteCount(data.semanticCandidateCount)],
-      ["Direct matches", finiteCount(data.directCount)],
-      ["Near-matches", finiteCount(data.nearMatchCount)],
+      ["Strong terms-fit candidates", finiteCount(data.directCount)],
+      ["Potential terms-fit candidates", finiteCount(data.nearMatchCount)],
       ["Adjacent", finiteCount(data.adjacentCount)],
       ["Discovery", finiteCount(data.discoveryCount)],
       ["Shown in this batch", finiteCount(data.selectedCount)],
@@ -202,7 +205,7 @@
       const detailsSummary = card.querySelector(".mt-feed-details > summary");
       if (detailsSummary) {
         const suffix = detailsSummary.querySelector("span")?.outerHTML || '<span aria-hidden="true">＋</span>';
-        detailsSummary.innerHTML = `${matchClass === "discovery" ? "Why this is shown" : `Why this ${copy.label.toLowerCase()}`} ${suffix}`;
+        detailsSummary.innerHTML = `Why this appears ${suffix}`;
       }
       if (!shown.has(matchClass)) {
         shown.add(matchClass);
@@ -228,7 +231,7 @@
     const toolbarTitle = toolbar.querySelector(".mt-feed-toolbar-title h2");
     if (toolbarTitle && !toolbarTitle.dataset.reciprocalTitle) {
       toolbarTitle.dataset.reciprocalTitle = "true";
-      toolbarTitle.innerHTML = `Matches and discovery <span>${escapeHtml(finiteCount(data.selectedCount))}</span>`;
+      toolbarTitle.innerHTML = `Recommendations and discovery <span>${escapeHtml(finiteCount(data.selectedCount))}</span>`;
     }
     const cards = [...feed.querySelectorAll(".mt-feed-card[data-opportunity-id]:not([hidden])")];
     addClassHeadings(feed, cards, recommendationsById());

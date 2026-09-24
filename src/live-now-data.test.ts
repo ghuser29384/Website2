@@ -347,7 +347,7 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
   assert.match(context.rendered, /Your contribution joins the group route/);
   assert.doesNotMatch(context.rendered, /the shared threshold/);
   assert.match(context.rendered, /<details class="mt-feed-details">/);
-  assert.match(context.rendered, /Why this match/);
+  assert.match(context.rendered, /Why this appears/);
   assert.match(context.rendered, /Meal photo or counterparty confirmation/);
   assert.match(context.rendered, /Your live routes/);
   assert.match(context.rendered, /Shown here as your own listing, not as a match/);
@@ -389,8 +389,8 @@ test("the mixed visual feed is compact, truthful, reversible, private, and mobil
   assert.match(bridge, /Number\(result\.acceptedEventCount\) >= 1/);
   assert.match(bridge, /Easy for me/);
   assert.match(bridge, /Hard for me/);
-  assert.match(bridge, /Less like this/);
-  assert.match(bridge, /Could not save that change/);
+  assert.match(bridge, /Show fewer like this/);
+  assert.match(bridge, /Could not update saved offers/);
   assert.match(bridge, /Could not save that rating/);
   assert.match(bridge, /Could not hide that opportunity/);
   assert.match(bridge, /card\.hidden = false/);

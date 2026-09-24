@@ -4,6 +4,13 @@ import { GET as getReciprocalLiveNow } from "@/app/api/live-now/route";
 import { getViewer } from "@/lib/app-data";
 import { buildHybridLiveNowFeed } from "@/lib/live-now-hybrid-feed";
 import { loadAdditionalPublicMechanisms } from "@/lib/live-now-additional-mechanisms";
+import {
+  buildLearnedActionPreferences,
+  buildOpportunityFeedbackState,
+  type RecommendationEventType,
+  type RecommendationInteractionSignal,
+  type RecommendationOpportunityType,
+} from "@/lib/recommendation-learning";
 import type {
   LiveNowCauseSignal,
   LiveNowCauseSignalSource,
@@ -53,6 +60,71 @@ function classPriority(value: unknown) {
   return value === "direct" ? 4 : value === "near" ? 3 : value === "adjacent" ? 2 : 1;
 }
 
+function stringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string").slice(0, 12)
+    : [];
+}
+
+function normalizeInteraction(row: Record<string, unknown>): RecommendationInteractionSignal {
+  const inferredDifficulty = Number(row.inferred_difficulty);
+  return {
+    opportunityType: String(row.opportunity_type ?? "offer") as RecommendationOpportunityType,
+    opportunityId: String(row.opportunity_id ?? "").slice(0, 160),
+    eventType: String(row.event_type ?? "open") as RecommendationEventType,
+    benefitCauses: stringArray(row.benefit_causes),
+    actionCauses: stringArray(row.action_causes),
+    actionKey: String(row.action_key ?? "").slice(0, 120),
+    actionLabel: String(row.action_label ?? "").slice(0, 160),
+    inferredDifficulty: Number.isFinite(inferredDifficulty) ? inferredDifficulty : null,
+    dwellMs: Math.max(0, Number(row.dwell_ms) || 0),
+    occurredAt: String(row.occurred_at ?? ""),
+  };
+}
+
+async function loadAdditionalPreferenceState(service: any, profileId: string) {
+  const select =
+    "opportunity_type,opportunity_id,event_type,benefit_causes,action_causes,action_key,action_label,inferred_difficulty,dwell_ms,occurred_at";
+  const [explicitResult, exclusionsResult] = await Promise.all([
+    service
+      .from("recommendation_interactions")
+      .select(select)
+      .eq("profile_id", profileId)
+      .in("event_type", ["easy", "hard", "hide", "not_for_me", "propose", "accept", "complete"])
+      .order("occurred_at", { ascending: false })
+      .limit(500),
+    service
+      .from("recommendation_interactions")
+      .select(select)
+      .eq("profile_id", profileId)
+      .in("event_type", ["hide", "not_for_me"])
+      .order("occurred_at", { ascending: false })
+      .limit(1_000),
+  ]);
+
+  if (exclusionsResult.error) {
+    return {
+      available: false as const,
+      actionPreferences: new Map(),
+      hiddenOpportunityKeys: new Set<string>(),
+      error: exclusionsResult.error.message,
+    };
+  }
+
+  const explicitSignals = explicitResult.error
+    ? []
+    : ((explicitResult.data ?? []) as Record<string, unknown>[]).map(normalizeInteraction);
+  const exclusionSignals = ((exclusionsResult.data ?? []) as Record<string, unknown>[]).map(
+    normalizeInteraction,
+  );
+  return {
+    available: true as const,
+    actionPreferences: buildLearnedActionPreferences(explicitSignals),
+    hiddenOpportunityKeys: buildOpportunityFeedbackState(exclusionSignals).hiddenOpportunityKeys,
+    error: explicitResult.error ? explicitResult.error.message : null,
+  };
+}
+
 async function augmentWithAdditionalMechanisms({
   payload,
   profileId,
@@ -62,7 +134,24 @@ async function augmentWithAdditionalMechanisms({
   profileId: string;
   service: any;
 }): Promise<ParetoRuntimePayload> {
-  const additional = await loadAdditionalPublicMechanisms({ service, profileId });
+  const [additional, preferenceState] = await Promise.all([
+    loadAdditionalPublicMechanisms({ service, profileId }),
+    loadAdditionalPreferenceState(service, profileId),
+  ]);
+  if (!preferenceState.available) {
+    const diagnostics = record(payload.feedDiagnostics);
+    return {
+      ...payload,
+      feedDiagnostics: {
+        ...diagnostics,
+        additionalMechanismCounts: additional.counts,
+        mechanismIngestionErrors: [
+          ...additional.errors,
+          `explicit_exclusions:${preferenceState.error ?? "unavailable"}`,
+        ],
+      },
+    };
+  }
   if (!additional.candidates.length) {
     const diagnostics = record(payload.feedDiagnostics);
     return {
@@ -70,7 +159,10 @@ async function augmentWithAdditionalMechanisms({
       feedDiagnostics: {
         ...diagnostics,
         additionalMechanismCounts: additional.counts,
-        mechanismIngestionErrors: additional.errors,
+        mechanismIngestionErrors: [
+        ...additional.errors,
+        ...(preferenceState.error ? [`explicit_feedback:${preferenceState.error}`] : []),
+      ],
       },
     };
   }
@@ -107,8 +199,11 @@ async function augmentWithAdditionalMechanisms({
         typeof profileValue.openToPayment === "boolean" ? profileValue.openToPayment : null,
       openToPledges:
         typeof profileValue.openToPledges === "boolean" ? profileValue.openToPledges : null,
-      actionPreferences: new Map(),
-      hiddenOpportunityKeys: new Set(),
+      actionPreferences: preferenceState.actionPreferences,
+      hiddenOpportunityKeys: preferenceState.hiddenOpportunityKeys,
+      // Additional mechanism types do not share the canonical offer bookmark
+      // store. Their cards omit Save until a real mechanism-specific bookmark
+      // path exists.
       savedOpportunityKeys: new Set(),
       explorationPercent: safeCount(profileValue.explorationPercent || 12),
     },
