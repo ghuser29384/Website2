@@ -395,13 +395,12 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     const feed = page.locator('[data-mt-live-now="adaptive"]');
     await expect(feed).toHaveAttribute("data-bound", "true");
     const card = feed.locator('[data-opportunity-id="rollback-offer"]');
-    const save = card.getByRole("button", { name: "Save offer" });
+    const save = card.locator('button[data-action="save"]');
 
+    await expect(save).toHaveAttribute("aria-label", "Save offer");
     await save.click();
-    await expect(card.getByRole("button", { name: "Save offer" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    await expect(save).toHaveAttribute("aria-pressed", "false");
+    await expect(save).toHaveAttribute("aria-label", "Save offer");
     await expect(feed.getByRole("status")).toContainText("Could not update saved offers.");
 
     await card.locator('summary[aria-label="Tune this recommendation"]').click();
@@ -456,11 +455,11 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await page.goto("/feed", { waitUntil: "domcontentloaded" });
     const card = page.locator('[data-opportunity-id="saved-offer"]');
-    await card.getByRole("button", { name: "Save offer" }).click();
-    await expect(card.getByRole("button", { name: "Remove saved offer" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    const save = card.locator('button[data-action="save"]');
+    await expect(save).toHaveAttribute("aria-label", "Save offer");
+    await save.click();
+    await expect(save).toHaveAttribute("aria-pressed", "true");
+    await expect(save).toHaveAttribute("aria-label", "Remove saved offer");
     await expect(page.getByRole("status")).toContainText("Saved to your offers.");
     expect(bookmarkRequests).toEqual([
       { method: "POST", body: JSON.stringify({ offerId: "saved-offer" }) },
