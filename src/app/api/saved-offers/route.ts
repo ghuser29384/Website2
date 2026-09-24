@@ -43,19 +43,12 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: offer, error: offerError } = await supabase
     .from("offers")
-    .select("id,owner_id,status,workflow_status,published_at,closed_at,deleted_at")
+    .select("*")
     .eq("id", offerId)
     .maybeSingle();
 
   if (offerError) return privateJson({ error: "The offer could not be checked." }, 503);
-  if (
-    !offer ||
-    offer.status !== "open" ||
-    offer.workflow_status !== "published" ||
-    !offer.published_at ||
-    offer.closed_at ||
-    offer.deleted_at
-  ) {
+  if (!offer || offer.status !== "open") {
     return privateJson({ error: "This offer is not currently saveable." }, 404);
   }
   if (offer.owner_id === viewer.authUser.id) {
