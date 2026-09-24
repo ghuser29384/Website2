@@ -1,0 +1,176 @@
+/*
+ * Offer-record priority corrections from the August 2026 product audit.
+ *
+ * Keep the first viewport focused on the proposed exchange, make the existing
+ * evidence-status, safeguard, and commitment surfaces directly reachable, and
+ * avoid changing authorization, evidence, payment, or agreement semantics.
+ */
+
+.offer-record-context-banner {
+  box-sizing: border-box;
+  display: flex;
+  width: min(calc(100% - 48px), var(--content-width));
+  min-height: 48px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-right: 1px solid var(--mt-line-dark);
+  border-left: 1px solid var(--mt-line-dark);
+  border-radius: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.offer-record-context-copy {
+  min-width: 0;
+}
+
+.offer-record-context-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.offer-record-context-actions .text-button {
+  white-space: nowrap;
+}
+
+.offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+}
+
+.offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy {
+  min-height: clamp(300px, 32vw, 430px);
+  padding: clamp(32px, 4vw, 58px);
+}
+
+.offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy h1 {
+  max-width: 14ch;
+  font-size: clamp(44px, 5vw, 72px);
+  line-height: 0.98;
+  overflow-wrap: anywhere;
+}
+
+.offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-panel {
+  padding: clamp(24px, 3vw, 40px);
+}
+
+.offer-record-context-banner + .offer-record-route .marketplace-app-shell #marketplace-commitment {
+  scroll-margin-top: 24px;
+}
+
+@media (max-width: 900px) {
+  .offer-record-context-banner {
+    align-items: flex-start;
+  }
+
+  .offer-record-context-actions {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .offer-record-context-banner {
+    display: grid;
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 10px 16px 11px;
+    gap: 6px;
+    border-right: 0;
+    border-left: 0;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .offer-record-context-actions {
+    display: flex;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 14px;
+  }
+
+  .offer-record-context-actions .text-button {
+    white-space: normal;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero {
+    padding-bottom: 20px;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy {
+    min-height: 0;
+    padding: 26px 20px 24px;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy h1 {
+    max-width: none;
+    margin-top: 8px;
+    font-size: clamp(36px, 11.5vw, 44px);
+    line-height: 0.98;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy .hero-text,
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy > p {
+    margin-top: 14px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy .hero-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 18px;
+    gap: 8px;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy .hero-actions > *,
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy .hero-actions form,
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy .hero-actions .button {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-panel {
+    padding: 18px 20px;
+    border-top: 1px solid var(--mt-black);
+    border-left: 0;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-panel .flow-card {
+    gap: 8px;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-panel .flow-step {
+    padding: 12px 0;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .marketplace-detail-section {
+    padding-top: 28px;
+  }
+}
+
+@media (max-width: 420px) {
+  .offer-record-context-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .offer-record-context-banner + .offer-record-route .marketplace-app-shell .hero > .hero-grid .hero-copy h1 {
+    font-size: clamp(34px, 10.8vw, 40px);
+  }
+}
