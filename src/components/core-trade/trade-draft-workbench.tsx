@@ -58,7 +58,6 @@ type ImportedReviewKey =
 
 interface TransientFeedMatchContext {
   actionFitLabel: string;
-  matchPercent: number | null;
   ownerAlias: string;
   reason: string;
   reasonDetails: string[];
@@ -277,16 +276,12 @@ export function TradeDraftWorkbench({
             .filter(Boolean)
             .slice(0, 6)
         : [];
-      const rawPercent = Number(parsed.matchPercent);
       const timeoutId = window.setTimeout(() => {
         setTransientMatchContext({
           actionFitLabel:
             typeof parsed.actionFitLabel === "string"
               ? parsed.actionFitLabel.trim().slice(0, 40)
               : "",
-          matchPercent: Number.isFinite(rawPercent)
-            ? Math.max(0, Math.min(100, Math.round(rawPercent)))
-            : null,
           ownerAlias:
             typeof parsed.ownerAlias === "string"
               ? parsed.ownerAlias.trim().slice(0, 100)
@@ -514,10 +509,10 @@ export function TradeDraftWorkbench({
                 {transientMatchContext ? (
                   <>
                     <p>
-                      {transientMatchContext.matchPercent !== null
-                        ? `${transientMatchContext.matchPercent}% match · `
-                        : ""}
-                      {transientMatchContext.actionFitLabel || transientMatchContext.reason || "Feed match"}
+                      Feed recommendation ·{" "}
+                      {transientMatchContext.actionFitLabel ||
+                        transientMatchContext.reason ||
+                        "Review the stated terms"}
                     </p>
                     {transientMatchContext.reasonDetails.length ? (
                       <ul>
@@ -531,8 +526,8 @@ export function TradeDraftWorkbench({
                   </>
                 ) : (
                   <p>
-                    This source was verified against your authenticated exposure receipt. Match
-                    scores and explanations are session-only and are not stored with the draft.
+                    This source was verified against your authenticated exposure receipt.
+                    Recommendation explanations are session-only and are not stored with the draft.
                   </p>
                 )}
               </div>
