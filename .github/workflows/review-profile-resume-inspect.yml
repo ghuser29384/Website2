@@ -1,0 +1,63 @@
+name: Inspect interrupted review-profile candidate
+on:
+  push:
+    branches: [ops/review-profile-cleanup-20260923]
+    paths: [.github/workflows/review-profile-resume-inspect.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      BASE_SHA: 80892b66b897e5b74d73c27f6d318cf96defad79
+      CANDIDATE_TREE: 63287f398a193c88855c75d1a73d709ebf5e2c9a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 83d0549ac7503519c62f5b8d1c61f460710ed283
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Extract pinned replay instructions
+        run: |
+          set -euo pipefail
+          git show 83d0549ac7503519c62f5b8d1c61f460710ed283:.github/workflows/review-profile-verified-validate.yml > "$RUNNER_TEMP/prior.yml"
+          ruby -r yaml -r json -e 'puts YAML.load_file(ARGV[0]).to_json' "$RUNNER_TEMP/prior.yml" > "$RUNNER_TEMP/prior.json"
+          git checkout --detach "$BASE_SHA"
+      - name: Fetch original hash-checked source bundles
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const spec = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/prior.json','utf8'));
+            const step=spec.jobs.validate.steps.find(s=>s.name==='Retrieve exact reviewed bundles');
+            if(!step?.with?.script)throw new Error('Missing pinned replay');
+            const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+            await new AsyncFunction('require','github','context','core','process',step.with.script)(require,github,context,core,process);
+      - name: Reproduce and export source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          t=Path(os.environ['RUNNER_TEMP'])
+          spec=json.loads((t/'prior.json').read_text())
+          step=next(s for s in spec['jobs']['validate']['steps'] if s.get('name')=='Reproduce exact 39-file candidate including restoration regression')
+          subprocess.run(['bash','-euo','pipefail','-c',step['run']],check=True)
+          PY
+          test "$(git write-tree)" = "$CANDIDATE_TREE"
+          mkdir -p "$RUNNER_TEMP/inspection"
+          git archive --format=tar.gz "$CANDIDATE_TREE" > "$RUNNER_TEMP/inspection/candidate.tar.gz"
+          git archive --format=tar.gz "$BASE_SHA" > "$RUNNER_TEMP/inspection/base.tar.gz"
+          git diff --cached --binary > "$RUNNER_TEMP/inspection/candidate.patch"
+          cp "$RUNNER_TEMP/prior.yml" "$RUNNER_TEMP/inspection/"
+          cp "$RUNNER_TEMP/rp-harness.tsx" "$RUNNER_TEMP/rp-harness.spec.ts" "$RUNNER_TEMP/inspection/"
+          git write-tree > "$RUNNER_TEMP/inspection/tree.txt"
+          sha256sum "$RUNNER_TEMP/inspection/"* > "$RUNNER_TEMP/inspection/SHA256SUMS.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: review-profile-source-inspection
+          path: ${{ runner.temp }}/inspection/
+          retention-days: 2
