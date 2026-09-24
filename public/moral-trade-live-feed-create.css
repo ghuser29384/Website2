@@ -17,3 +17,16 @@
     white-space: normal;
   }
 }
+
+.mt-feed-actions .mt-feed-create-boundary {
+  flex: 1 1 100%;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  opacity: 0.72;
+}
+
+@media (max-width: 620px) {
+  .mt-feed-actions .mt-feed-create-boundary {
+    width: 100%;
+  }
+}
