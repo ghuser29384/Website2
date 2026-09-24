@@ -159,7 +159,8 @@ test("matching context is session-only and excluded from durable proposal and an
   assert.match(feedScript, /sessionStorage\.setItem/);
   assert.match(feedScript, /sessionStorage/);
   assert.match(workbench, /sessionStorage\.removeItem/);
-  assert.match(workbench, /Match\s+scores and explanations are session-only/);
+  assert.match(workbench, /Recommendation explanations are session-only/);
+  assert.doesNotMatch(workbench, /matchPercent|% match/);
   assert.doesNotMatch(feedAction, /matchPercent|matchScore|reasonDetails|paretoSuccess/);
   assert.doesNotMatch(migration, /match_score|match_percent|match_reason|reason_details|preference_vector/i);
   assert.match(migration, /never stores match scores, match reasons/i);
