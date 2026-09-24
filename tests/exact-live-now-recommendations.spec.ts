@@ -96,7 +96,10 @@ function recommendationFixture({
         learnedActionSignalCount: 0,
         saved: false,
         score: 100,
-        metadata,
+        metadata: {
+          mechanism: opportunityType === "donation_pool" ? "donation_offset_pool" : "published_offer",
+          ...metadata,
+        },
       },
     ],
     status: "ready",
@@ -351,13 +354,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
       "aria-pressed",
       "true",
     );
-    await card.getByRole("button", { name: "Less like this" }).click();
+    await card.getByRole("button", { name: "Show fewer like this" }).click();
     await expect(card).toBeHidden();
     await expect.poll(() => payloads.join("\n")).toContain('"eventType":"hard"');
     await expect.poll(() => payloads.join("\n")).toContain('"eventType":"not_for_me"');
   });
 
-  test("rolls back Save, difficulty, and Show less when the API accepts zero events", async ({
+  test("keeps canonical bookmark failures separate from explicit feedback failures", async ({
     page,
   }) => {
     await page.route("**/api/live-now", (route) =>
@@ -374,6 +377,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
         ),
       }),
     );
+    await page.route("**/api/saved-offers", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Synthetic bookmark failure" }),
+      }),
+    );
     await page.route("**/api/live-now/feedback", (route) =>
       route.fulfill({
         contentType: "application/json",
@@ -385,16 +395,14 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     const feed = page.locator('[data-mt-live-now="adaptive"]');
     await expect(feed).toHaveAttribute("data-bound", "true");
     const card = feed.locator('[data-opportunity-id="rollback-offer"]');
-    const save = card.getByRole("button", { name: "Save opportunity" });
+    const save = card.getByRole("button", { name: "Save offer" });
 
     await save.click();
-    await expect(card.getByRole("button", { name: "Save opportunity" })).toHaveAttribute(
+    await expect(card.getByRole("button", { name: "Save offer" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
-    await expect(feed.getByRole("status")).toContainText(
-      "Could not save that change. Your feed was not updated.",
-    );
+    await expect(feed.getByRole("status")).toContainText("Could not update saved offers.");
 
     await card.locator('summary[aria-label="Tune this recommendation"]').click();
     const hard = card.getByRole("button", { name: "Hard for me" });
@@ -404,12 +412,79 @@ test.describe("adaptive moral-opportunity Now feed", () => {
       "Could not save that rating. Your feed was not updated.",
     );
 
-    await card.getByRole("button", { name: "Less like this" }).click();
+    await card.getByRole("button", { name: "Show fewer like this" }).click();
     await expect(card).toBeVisible();
     await expect(feed.locator(".mt-feed-empty-inline")).toHaveCount(0);
     await expect(feed.getByRole("status")).toContainText(
       "Could not hide that opportunity. Your feed was not updated.",
     );
+  });
+
+  test("saves a published offer through the canonical bookmark endpoint only", async ({ page }) => {
+    const bookmarkRequests: Array<{ method: string; body: string | null }> = [];
+    const feedbackPayloads: string[] = [];
+    await page.route("**/api/live-now", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(
+          recommendationFixture({
+            cause: "Animal welfare",
+            id: "saved-offer",
+            offeredCause: "Animal welfare",
+            requestedCause: "Research review",
+          }),
+        ),
+      }),
+    );
+    await page.route("**/api/saved-offers", async (route) => {
+      bookmarkRequests.push({
+        method: route.request().method(),
+        body: route.request().postData(),
+      });
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: true, offerId: "saved-offer", saved: true }),
+      });
+    });
+    await page.route("**/api/live-now/feedback", async (route) => {
+      feedbackPayloads.push(route.request().postData() ?? "");
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: true, acceptedEventCount: 1 }),
+      });
+    });
+
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
+    const card = page.locator('[data-opportunity-id="saved-offer"]');
+    await card.getByRole("button", { name: "Save offer" }).click();
+    await expect(card.getByRole("button", { name: "Remove saved offer" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByRole("status")).toContainText("Saved to your offers.");
+    expect(bookmarkRequests).toEqual([
+      { method: "POST", body: JSON.stringify({ offerId: "saved-offer" }) },
+    ]);
+    expect(feedbackPayloads.some((payload) => /"eventType":"save"/.test(payload))).toBe(false);
+  });
+
+  test("omits bookmark and feedback controls for unsupported added mechanisms", async ({ page }) => {
+    const payload = recommendationFixture({
+      cause: "Global health",
+      id: "upgrade-1",
+      opportunityType: "donation_redirect",
+      offeredCause: "Global health",
+      requestedCause: "Conditional donation",
+      metadata: { mechanism: "donation_upgrade" },
+    });
+    await page.route("**/api/live-now", (route) =>
+      route.fulfill({ contentType: "application/json", body: JSON.stringify(payload) }),
+    );
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
+    const card = page.locator('[data-opportunity-id="upgrade-1"]');
+    await expect(card.getByRole("button", { name: /Save offer/ })).toHaveCount(0);
+    await expect(card.locator('summary[aria-label="Tune this recommendation"]')).toHaveCount(0);
+    await expect(card).toContainText("Why this appears");
   });
 
   test("shows a truthful signed-out state with no demo recommendations", async ({ page }) => {
