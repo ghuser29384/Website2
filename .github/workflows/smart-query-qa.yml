@@ -126,8 +126,6 @@ jobs:
             src/app/api/discover/search/route.ts \
             src/app/layout.tsx \
             src/app/offers/layout.tsx \
-            src/app/offers/offer-plane-inline-mount.tsx \
-            src/app/offers/offer-visual-directory-mount.tsx \
             src/app/offers/page.tsx \
             src/app/people/page.tsx \
             src/app/pools/page.tsx \
