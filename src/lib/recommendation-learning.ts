@@ -245,7 +245,20 @@ export function buildLearnedActionPreferences(
     };
     const factor = recencyFactor(signal.occurredAt, now);
 
-    if (signal.inferredDifficulty !== null && Number.isFinite(signal.inferredDifficulty)) {
+    const explicitActionSignal = [
+      "easy",
+      "hard",
+      "hide",
+      "not_for_me",
+      "propose",
+      "accept",
+      "complete",
+    ].includes(signal.eventType);
+    if (
+      explicitActionSignal &&
+      signal.inferredDifficulty !== null &&
+      Number.isFinite(signal.inferredDifficulty)
+    ) {
       current.defaultDifficultySum += clamp(signal.inferredDifficulty, 1, 5);
       current.defaultDifficultyCount += 1;
     }
