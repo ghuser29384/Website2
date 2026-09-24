@@ -342,20 +342,10 @@ function browseEventStrength(signal: RecommendationInteractionSignal) {
       return 1.5;
     case "dwell":
       return Math.min(4, Math.log2(1 + clamp(signal.dwellMs, 0, MAX_DWELL_MS) / 8_000));
-    // Bookmarking is durable saved-item state, not preference training.
-    case "save":
-    case "unsave":
-      return 0;
-    case "hide":
-      return -4;
-    case "not_for_me":
-      return -6;
-    case "propose":
-      return 7;
-    case "accept":
-      return 9;
-    case "complete":
-      return 12;
+    // Browsing weights are deliberately limited to passive viewing activity.
+    // Bookmarks, exclusions, difficulty feedback, and transaction outcomes are
+    // explicit choices with their own semantics and must not become inferred
+    // moral-priority weights.
     default:
       return 0;
   }
