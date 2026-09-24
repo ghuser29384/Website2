@@ -117,16 +117,16 @@ test("Complete Profile header actions remain separated on desktop and mobile", a
     waitUntil: "domcontentloaded",
   });
   expect(response?.status() ?? 200).toBeLessThan(400);
-  await expect(page.getByRole("heading", { level: 1, name: "Spend 100 sparks of attention." })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Set up your profile." })).toBeVisible();
 
   const sources = page.getByRole("button", { name: /^Sources/ });
-  const save = page.getByRole("button", { exact: true, name: "Save profile" });
+  const save = page.getByRole("link", { exact: true, name: "Browse trades" });
   await expect(sources).toBeVisible();
   await expect(save).toBeVisible();
 
   const sourcesDesktop = await rect(sources);
   const saveDesktop = await rect(save);
-  expect(sourcesDesktop.right + 8).toBeLessThanOrEqual(saveDesktop.left);
+  expect(sourcesDesktop.bottom + 4 <= saveDesktop.top || sourcesDesktop.right + 4 <= saveDesktop.left).toBe(true);
   await expectNoHorizontalOverflow(page);
   await page.screenshot({
     path: testInfo.outputPath("complete-profile-header-1440.png"),

@@ -67,7 +67,6 @@ import {
   getBaselineConfidence,
   getBaselineEvidenceSummary,
   getExternalityReviewSummary,
-  getOfferReviewWorkflowContract,
   getOfferReviewWorkflowCards,
   getScoreConfidence,
 } from "@/lib/proposal-review";
@@ -388,8 +387,6 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const baselineEvidence = getBaselineEvidenceSummary(reviewInput);
   const externalityReview = getExternalityReviewSummary(reviewInput);
   const scoreConfidence = getScoreConfidence(reviewInput);
-  const reviewWorkflowContract = getOfferReviewWorkflowContract();
-  const participantReviewCopy = reviewWorkflowContract.participantCopyTemplates;
   const reviewWorkflowCards = getOfferReviewWorkflowCards({
     ...reviewInput,
     currentStatus: offer.status,
@@ -656,6 +653,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </section>
         ) : null}
 
+        <details className="v72-explain-row review-assessment-disclosure">
+          <summary>Screening and review context</summary>
         <section className="section section-white" aria-labelledby="review-workflow-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Review workflow</p>
@@ -668,17 +667,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           <div className="review-workflow-grid">
             {reviewWorkflowCards.map((card) => (
               <article
-                className={`panel review-workflow-card review-workflow-card-${card.status}`}
+                className={`panel review-workflow-card review-workflow-card-${card.status === "pass" ? "screening" : card.status}`}
                 key={card.key}
               >
                 <div className="review-workflow-card-head">
                   <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
-                  <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+                  <span className="review-workflow-status">{card.assessmentLabel}</span>
                 </div>
                 <h3>{card.label}</h3>
                 <p className="route-text">{card.summary}</p>
                 <p className="review-status-reason">
-                  <strong>Why this status:</strong> {card.statusReason}
+                  <strong>Why this status:</strong> {card.assessmentReason}
                 </p>
                 <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                   {card.factorCodes.map((factorCode) => (
@@ -691,38 +690,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               </article>
             ))}
           </div>
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Participant action guide</p>
-            <h3>What the review system will ask for next</h3>
+          <details className="v72-explain-row">
+            <summary>How to read these screening results</summary>
             <p>
-              These prompts are pulled from the public review-workflow contract, so the page shows
-              the same baseline, evidence, safety, score, and appeal instructions that validators
-              check.
+              These cards identify missing inputs and automatic screening results. They do not
+              certify completion, additionality, or safety. A completed review must be supported
+              by a scoped review record, not inferred from a URL, a score, or the absence of a flag.
             </p>
-          </div>
-          <div className="protocol-contract-grid" aria-label="Participant review action copy">
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Baseline helper</p>
-              <p>{participantReviewCopy.baselineHelperText}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Needs evidence status</p>
-              <p>{participantReviewCopy.needsEvidenceStatusCopy}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Safety boundary</p>
-              <p>{participantReviewCopy.safetyWarningCopy}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Participant importance</p>
-              <p>{participantReviewCopy.importanceScoreNote}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Appeal scope</p>
-              <p>{participantReviewCopy.appealCopy}</p>
-            </article>
-          </div>
+            <Link href="/reasoning-standards">Review standards and examples of review messages</Link>
+          </details>
         </section>
+        </details>
 
         <section className="section section-white">
           <div className="detail-grid detail-grid-wide">

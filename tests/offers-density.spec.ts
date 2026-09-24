@@ -785,13 +785,8 @@ test.describe("Offers compact hybrid", () => {
       await expect(spaceDisclosure).toHaveJSProperty("open", true);
       await spaceDisclosure.locator(":scope > summary").press("Space");
 
-      const explorer = publicPage.locator("details").filter({ hasText: "Optional visual explorer" });
-      await expect(explorer).toBeVisible();
-      await expect(explorer).toHaveJSProperty("open", false);
-      await explorer.locator(":scope > summary").click();
-      await expect(explorer).toHaveJSProperty("open", true);
-      await explorer.locator(":scope > summary").click();
-      await expect(explorer).toHaveJSProperty("open", false);
+      await expect(publicPage.getByText("Optional visual explorer", { exact: true })).toHaveCount(0);
+      await expect(publicPage.locator("#challenge-return-explorer")).toHaveCount(0);
 
       await expectNoHorizontalOverflow(publicPage);
       await expectNoTopbarCollision(publicPage);
@@ -1061,6 +1056,6 @@ test.describe("Offers compact hybrid", () => {
     expect(ledger.insertCount).toBe(1);
     expect(ledger.deleteCount).toBe(1);
     expect(ledger.savedOfferIds.size).toBe(0);
-    expect(planeRequestCount).toBeGreaterThan(0);
+    expect(planeRequestCount).toBe(0);
   });
 });

@@ -262,6 +262,8 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
           </div>
         </section>
 
+        <details className="v72-explain-row review-assessment-disclosure">
+          <summary>Screening and review context</summary>
         <section className="section section-subtle" aria-labelledby="review-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Review context</p>
@@ -275,17 +277,17 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
           <div className="review-workflow-grid">
             {reviewWorkflowCards.map((card) => (
               <article
-                className={`panel review-workflow-card review-workflow-card-${card.status}`}
+                className={`panel review-workflow-card review-workflow-card-${card.status === "pass" ? "screening" : card.status}`}
                 key={card.key}
               >
                 <div className="review-workflow-card-head">
                   <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
-                  <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+                  <span className="review-workflow-status">{card.assessmentLabel}</span>
                 </div>
                 <h3>{card.label}</h3>
                 <p className="route-text">{card.summary}</p>
                 <p className="review-status-reason">
-                  <strong>Why this status:</strong> {card.statusReason}
+                  <strong>Why this status:</strong> {card.assessmentReason}
                 </p>
                 <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                   {card.factorCodes.map((factorCode) => (
@@ -349,6 +351,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
             </ul>
           </div>
         </section>
+        </details>
       </main>
 
       <MarketplaceBottomNav active="browse" />

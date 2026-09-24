@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const densityStyles = readFileSync("src/app/offers/offers-density.module.css", "utf8");
-const disclosureStyles = readFileSync("src/app/offers/offer-plane-disclosure.module.css", "utf8");
-const planeMount = readFileSync("src/app/offers/offer-plane-inline-mount.tsx", "utf8");
 const offersLayout = readFileSync("src/app/offers/layout.tsx", "utf8");
 const topbarStyles = readFileSync("src/app/offers/offers-topbar.module.css", "utf8");
 const participantComponent = readFileSync("src/components/marketplace/participant-offer-group.tsx", "utf8");
@@ -139,22 +137,13 @@ test("offers defaults to an open editorial directory instead of stacked dense pa
   }
 });
 
-test("the advanced challenge-return plane is optional, lazy-loaded, and request-deduplicated", () => {
-  assert.match(planeMount, /if \(!queryState\.shouldShow \|\| !explorerOpen \|\| response\) return;/);
-  assert.match(planeMount, /const requestRef = useRef/);
-  assert.match(planeMount, /request\.attempt !== attempt/);
-  assert.match(planeMount, /promise: loadOfferPlane\(\)/);
-  assert.match(planeMount, /<details/);
-  assert.match(planeMount, /Optional visual explorer/);
-  assert.match(planeMount, /onToggle=\{\(event\) => \{/);
-  assert.match(planeMount, /const isOpen = event\.currentTarget\.open;/);
-  assert.match(planeMount, /setExplorerOpen\(isOpen\);/);
-  assert.match(disclosureStyles, /\.disclosure\[open\] \.summaryIcon/);
-  assert.equal(
-    offersLayout.includes("OfferVisualDirectoryMount"),
-    false,
-    "the obsolete eager offer-plane enhancer must not fetch before the disclosure opens",
-  );
+test("ordinary browsing no longer mounts or fetches the heuristic plane", () => {
+  assert.doesNotMatch(offersLayout, /OfferPlaneInlineMount|OfferVisualDirectoryMount/);
+  for (const path of ["src/app/offers/offer-plane-inline-mount.tsx", "src/app/offers/offer-plane-inline-client.tsx", "src/lib/offer-plane.ts"]) {
+    assert.equal(existsSync(path), false);
+  }
+  assert.match(readFileSync("src/app/api/offers/plane/route.ts", "utf8"), /status: 410/);
+  assert.match(readFileSync("src/app/offers/plane/page.tsx", "utf8"), /permanentRedirect\("\/discover"\)/);
 });
 
 test("the offers topbar stays compact after removing duplicate global search", () => {

@@ -6,7 +6,6 @@ import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
-  buildInitialProfilePriorityAllocation,
   normalizeProfilePriorityAllocation,
   PROFILE_PRIORITY_OPTIONS,
   serializeProfilePriorityAllocation,
@@ -33,12 +32,6 @@ function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function asStringArray(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
-    : [];
-}
-
 function allocationFromPersisted(value: unknown): ProfilePriorityAllocation | null {
   if (!Array.isArray(value)) return null;
 
@@ -58,15 +51,6 @@ function allocationFromPersisted(value: unknown): ProfilePriorityAllocation | nu
   return normalizeProfilePriorityAllocation(serializeProfilePriorityAllocation(allocation));
 }
 
-function fallbackAllocation(causes: readonly string[]) {
-  const causeSet = new Set(causes);
-  const prioritized = PROFILE_PRIORITY_OPTIONS.filter((priority) => causeSet.has(priority.causeArea));
-  const remaining = PROFILE_PRIORITY_OPTIONS.filter((priority) => !causeSet.has(priority.causeArea));
-  return buildInitialProfilePriorityAllocation(
-    [...prioritized, ...remaining].map((priority) => priority.id),
-  );
-}
-
 export default async function ProfilePrioritiesPage({
   searchParams,
 }: ProfilePrioritiesPageProps) {
@@ -83,41 +67,14 @@ export default async function ProfilePrioritiesPage({
 
   const supabase = await createClient();
   const typedSupabase = supabase as any;
-  const [onboardingResult, wishProfileResult, savedSearchesResult] = await Promise.all([
-    typedSupabase
-      .from("cohort_onboarding_profiles")
-      .select("priority_allocations,cause_areas")
-      .eq("profile_id", viewer.authUser.id)
-      .maybeSingle(),
-    typedSupabase
-      .from("wish_profiles")
-      .select("causes")
-      .eq("profile_id", viewer.authUser.id)
-      .maybeSingle(),
-    typedSupabase
-      .from("saved_searches")
-      .select("causes")
-      .eq("profile_id", viewer.authUser.id)
-      .eq("status", "active")
-      .order("updated_at", { ascending: false })
-      .limit(24),
-  ]);
-
-  const savedSearchCauses = savedSearchesResult.error
-    ? []
-    : (savedSearchesResult.data ?? []).flatMap((search: { causes?: unknown }) =>
-        asStringArray(search.causes),
-      );
-  const fallbackCauses = [
-    ...asStringArray(onboardingResult.data?.cause_areas),
-    ...asStringArray(wishProfileResult.data?.causes),
-    ...savedSearchCauses,
-  ];
-  const initialAllocation =
-    allocationFromPersisted(onboardingResult.data?.priority_allocations) ??
-    fallbackAllocation(fallbackCauses);
-  const loadError =
-    onboardingResult.error || wishProfileResult.error || savedSearchesResult.error;
+  const onboardingResult = await typedSupabase
+    .from("cohort_onboarding_profiles")
+    .select("priority_allocations,cause_areas")
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+  const initialAllocation = allocationFromPersisted(onboardingResult.data?.priority_allocations) ??
+    Object.fromEntries(PROFILE_PRIORITY_OPTIONS.map((priority) => [priority.id, 0])) as ProfilePriorityAllocation;
+  const loadError = onboardingResult.error;
 
   return (
     <>
@@ -133,11 +90,11 @@ export default async function ProfilePrioritiesPage({
       ) : null}
       {loadError ? (
         <div className="status-banner status-banner-error" role="alert">
-          Some existing priority data could not be loaded. Review the allocation carefully before
-          saving.
+          Existing priority data could not be loaded. Editing is unavailable until it can be read;
+          no allocation will be inferred or overwritten. Reload to retry.
         </div>
       ) : null}
-      <ProfilePriorityEditor initialAllocation={initialAllocation} returnTo={returnTo} />
+      {!loadError ? <ProfilePriorityEditor initialAllocation={initialAllocation} returnTo={returnTo} /> : null}
     </>
   );
 }

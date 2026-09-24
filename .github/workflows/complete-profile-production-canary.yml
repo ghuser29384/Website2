@@ -343,7 +343,7 @@ jobs:
               && [[ "$www_curl_status" -eq 0 ]] \
               && [[ "$apex_curl_status" -eq 0 ]] \
               && [[ "$www_status" == '200' ]] \
-              && grep -Fq 'Spend 100 sparks of attention.' "$CANARY_OUTPUT_DIR/www-returning.html" \
+              && grep -Fq 'Set up your profile.' "$CANARY_OUTPUT_DIR/www-returning.html" \
               && grep -Fqx 'x-matched-path: /complete-profile' "$CANARY_OUTPUT_DIR/www-returning.normalized.headers" \
               && [[ "$apex_status" == '308' ]] \
               && grep -Eq '^location: https://www\.moraltrade\.org/complete-profile([?].*)?$' "$CANARY_OUTPUT_DIR/apex.normalized.headers"; then

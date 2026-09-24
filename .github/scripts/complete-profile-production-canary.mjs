@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "@playwright/test";
-import { isExpectedFirstTimeStandardsAbort } from "./complete-profile-canary-diagnostics.mjs";
 
 const controlSha = process.env.CONTROL_SHA;
 const expectedSha = process.env.EXPECTED_SHA;
@@ -90,8 +89,7 @@ function attachDiagnostics(page, state) {
 
     if (isExpectedPrefetchAbort(request)) {
       state.expectedPrefetchAborts.push(record);
-    } else if (isExpectedFirstTimeStandardsAbort(record, state.flow)) {
-      state.expectedNavigationAborts.push(record);
+
     } else {
       state.failedRequests.push(record);
     }
@@ -178,20 +176,16 @@ async function runFirstTime(entry) {
     timeout: 120_000,
   });
   assert.ok(response && response.status() < 500, "First-time route returned no usable response");
-  await page.waitForURL((url) => url.pathname === "/walkthrough", { timeout: 60_000 });
-  await page
-    .getByText("Welcome to Moral Trade", { exact: true })
-    .first()
-    .waitFor({ state: "visible", timeout: 60_000 });
+  await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+  await page.getByRole("heading", { name: "Set up your profile." }).waitFor({ state: "visible", timeout: 60_000 });
   assertCanonicalFinalHost(page);
-  assert.equal(await page.getByLabel("Profile setup: priorities").count(), 0);
-
+  assert.equal(await page.getByLabel("Display name", { exact: true }).inputValue(), "");
+  assert.equal(await page.locator('input[name="priority_allocation"]').count(), 0);
+  assert.equal(await page.getByLabel(/Remember this draft/).isChecked(), false);
   const cookies = await context.cookies(canonicalOrigin);
-  assert.equal(
-    cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")?.value,
-    "1",
-    "First-time flow did not persist the Walkthrough-seen signal",
-  );
+  assert.equal(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen"), undefined,
+    "Direct setup must not require or mark the optional tour");
+  assert.equal(await page.getByRole("link", { name: "Skip setup and browse" }).getAttribute("href"), "/discover");
 
   await settleDiagnostics(page);
   await page.screenshot({
@@ -218,27 +212,24 @@ async function runReturningDesktop(entry) {
   });
   assert.ok(response && response.status() < 500, "Returning route returned no usable response");
   await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
-  await page
-    .getByRole("heading", { name: "Spend 100 sparks of attention." })
-    .waitFor({ state: "visible", timeout: 60_000 });
-  await page
-    .getByLabel("Profile setup: priorities")
-    .waitFor({ state: "visible", timeout: 60_000 });
+  await page.getByRole("heading", { name: "Set up your profile." }).waitFor({ state: "visible", timeout: 60_000 });
   assertCanonicalFinalHost(page);
-  assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
-
-  await page.screenshot({
-    path: `${outputDir}/${entry.id}-returning-desktop-page.png`,
-    fullPage: true,
-  });
-
-  await page.getByRole("button", { name: "Save profile" }).click();
-  const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
-  await dialog.waitFor({ state: "visible", timeout: 30_000 });
-  const dialogText = await dialog.textContent();
-  assert.match(dialogText ?? "", /Your 100-spark ranking/);
-  assert.match(dialogText ?? "", /Not set here/);
-  assert.match(dialogText ?? "", /Saving does not create or publish an offer\./);
+  const name = page.getByLabel("Display name", { exact: true });
+  assert.equal(await name.inputValue(), "");
+  await name.fill("Canary guest draft");
+  assert.equal(await page.evaluate(() => localStorage.getItem("mt_profile_setup_v1:guest")), null);
+  await page.getByLabel(/Remember this draft/).check();
+  await page.waitForFunction(() => Boolean(localStorage.getItem("mt_profile_setup_v1:guest")));
+  await settleDiagnostics(page);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Restore this draft", exact: true }).waitFor({ state: "visible" });
+  assert.equal(await name.inputValue(), "", "Device drafts must never restore automatically");
+  await page.getByRole("button", { name: "Restore this draft", exact: true }).click();
+  assert.equal(await name.inputValue(), "Canary guest draft");
+  await page.getByRole("button", { name: "Clear device draft and reset edits" }).click();
+  assert.equal(await name.inputValue(), "");
+  assert.equal(await page.evaluate(() => localStorage.getItem("mt_profile_setup_v1:guest")), null);
+  assert.equal(await page.getByLabel(/Remember this draft/).isChecked(), false);
 
   await settleDiagnostics(page);
   await page.screenshot({
@@ -265,15 +256,16 @@ async function runReturningMobile(entry) {
   });
   assert.ok(response && response.status() < 500, "Returning mobile route returned no usable response");
   await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
-  await page
-    .getByLabel("80 of 100 attention points assigned")
-    .waitFor({ state: "visible", timeout: 60_000 });
+  await page.getByRole("heading", { name: "Set up your profile." }).waitFor({ state: "visible", timeout: 60_000 });
   assertCanonicalFinalHost(page);
-
-  await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
-  await page
-    .getByRole("button", { name: "Decrease Space governance" })
-    .waitFor({ state: "visible", timeout: 30_000 });
+  await page.locator("summary").filter({ hasText: /^Optional private matching preferences$/ }).click();
+  for (const label of ["Outcomes I care about", "What I can offer", "Limits or exclusions"]) {
+    assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), "");
+  }
+  await page.getByLabel("Outcomes I care about", { exact: true }).fill("Canary custom outcome");
+  assert.equal(await page.getByLabel("Save the private matching notes I entered").isChecked(), false);
+  assert.equal(await page.getByRole("link", { name: "Advanced priority allocation (optional)" }).getAttribute("href"), "/profile/priorities");
+  assert.equal(await page.locator('input[name="priority_allocation"]').count(), 0);
 
   const dimensions = await page.evaluate(() => ({
     viewportWidth: window.innerWidth,
