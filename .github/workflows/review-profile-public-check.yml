@@ -1,0 +1,83 @@
+name: Verify review-profile changes on live domains
+on:
+  push:
+    branches: [ops/review-profile-release-20260924]
+    paths: [.github/workflows/review-profile-public-check.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EXPECTED_SHA: 86a3e2b0dcdbc97a21659dc3f08d12afb1fa4ee8
+      RP_PUBLIC_OUTPUT: ${{ runner.temp }}/rp-public-evidence
+    steps:
+      - name: Require the successful exact production release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const expected=process.env.EXPECTED_SHA;
+            let passed=false;
+            for(let i=0;i<100;i++){
+              const {data:run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:35940384638});
+              if(run.head_sha!==expected || run.path!=='.github/workflows/vercel-release.yml')throw new Error('Release identity mismatch');
+              if(run.status==='completed'){
+                if(run.conclusion!=='success')throw new Error('Exact release did not pass: '+run.conclusion);
+                passed=true;break;
+              }
+              await new Promise(r=>setTimeout(r,15000));
+            }
+            if(!passed)throw new Error('Exact release did not finish within this verification window');
+            const {data:branch}=await github.rest.repos.getBranch({...context.repo,branch:'main'});
+            if(branch.commit.sha!==expected)throw new Error('Main moved before verification');
+      - uses: actions/checkout@v4
+        with:
+          ref: 86a3e2b0dcdbc97a21659dc3f08d12afb1fa4ee8
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Prepare existing browser tooling
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          npm ci
+          npx playwright install --with-deps chromium
+          mkdir -p "$RP_PUBLIC_OUTPUT"
+      - name: Retrieve the exact independently reviewed public verifier
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs'),crypto=require('node:crypto');
+            const {data}=await github.rest.git.getBlob({...context.repo,file_sha:'82dee1fa950443d723d112ef41ab5d0a2246845b'});
+            const source=Buffer.from(data.content,'base64');
+            if(crypto.createHash('sha256').update(source).digest('hex')!=='8ad493ddc6f2f2a50f985159b375efbd71d7313cc58c29094fa0166996391746')throw new Error('Public verifier identity mismatch');
+            const original=source.toString('utf8');
+            const oldLine='    await expect(page.getByLabel(/Remember this draft/)).not.toBeChecked();\n';
+            if(original.split(oldLine).length!==2)throw new Error('Unexpected readiness assertion');
+            const ready=original.replace(oldLine,'    await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();\n'+oldLine);
+            if(crypto.createHash('sha256').update(ready).digest('hex')!=='72acbd3ad6c5b992ebb6200c455c25645def2e79ed194eba54f687350fe688ae')throw new Error('Readiness-checked script mismatch');
+            fs.writeFileSync('.rp-public-verify.mjs',ready);
+      - name: Verify actual public profile, drafts, retirement and review labels
+        run: |
+          set -euo pipefail
+          node .rp-public-verify.mjs > "$RP_PUBLIC_OUTPUT/verification.log" 2>&1
+          cat "$RP_PUBLIC_OUTPUT/report.json"
+      - name: Dispatch the adapted permanent profile monitor for this exact deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({...context.repo,workflow_id:'complete-profile-production-canary.yml',ref:'main',inputs:{expected_sha:process.env.EXPECTED_SHA}});
+            core.info('Dispatched the exact-SHA permanent profile canary');
+      - name: Preserve public evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-profile-public-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rp-public-evidence/
+          retention-days: 7
+          if-no-files-found: warn
