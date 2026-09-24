@@ -1249,7 +1249,7 @@ function liveOfferToPublicListing(offer: OfferRecord): PublicOfferListing {
         verification: offer.verification,
       }),
     ].join(" | "),
-    duration: parseDuration(offer.duration, offer.offerAction, offer.requestAction),
+    duration: parseDuration(offer.duration, offer.offer_action, offer.request_action),
     offeredImpactScore: offer.offer_impact,
     requestedImpactThreshold: offer.min_counterparty_impact,
     displayName: safeDisplayName(
