@@ -520,7 +520,7 @@ async function finishSourceFlow(input: {
   await noHorizontalOverflow(page);
   await action.click();
   await expect(page).toHaveURL(/\/trades\/new\?fromFeed=1/);
-  await expect(page.getByText(/match ·/)).toBeVisible();
+  await expect(page.getByText(/Feed recommendation ·/)).toBeVisible();
   await advancePrefilledDraft(page, { submit: input.submit });
   await noHorizontalOverflow(page);
   await page.screenshot({
