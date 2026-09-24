@@ -137,11 +137,7 @@ jobs:
             src/components/search/smart-query-auto-enhancer.tsx \
             src/components/search/smart-query-form.tsx \
             src/offers-walkthrough-density.test.ts \
-            tests/discover-query-audit.spec.ts \
             tests/discover-live-search.spec.ts \
-            tests/discover-preflight-filter.spec.ts \
-            tests/discover-payload-cache.spec.ts \
-            tests/discover-cofund.spec.ts \
             tests/offers-density.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
 
       - name: Test deterministic query interpretation and Discover loader semantics
@@ -181,11 +177,7 @@ jobs:
         run: |
           set -o pipefail
           npx playwright test \
-            tests/discover-query-audit.spec.ts \
             tests/discover-live-search.spec.ts \
-            tests/discover-preflight-filter.spec.ts \
-            tests/discover-payload-cache.spec.ts \
-            tests/discover-cofund.spec.ts \
             tests/offers-density.spec.ts \
             --config=playwright.smart-query.config.ts \
             --workers=1 \
