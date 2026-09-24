@@ -675,7 +675,7 @@ function longestDuration(candidates: readonly ParsedDurationCandidate[]) {
   );
 }
 
-function parseDuration(
+export function parsePublicOfferDuration(
   label: string,
   ...actionTerms: Array<string | null | undefined>
 ): PublicOfferDuration {
@@ -1173,7 +1173,7 @@ function workedExampleToPublicListing(
     baselineBondBadge: null,
     verificationMethod: offer.verification,
     verificationSummary: getActionEvidenceSummary(offer),
-    duration: parseDuration(offer.duration, offer.offerAction, offer.requestAction),
+    duration: parsePublicOfferDuration(offer.duration, offer.offerAction, offer.requestAction),
     offeredImpactScore: offer.offerImpact,
     requestedImpactThreshold: offer.minCounterpartyImpact,
     displayName: safeDisplayName(offer.alias, "Worked example participant"),
@@ -1249,7 +1249,7 @@ function liveOfferToPublicListing(offer: OfferRecord): PublicOfferListing {
         verification: offer.verification,
       }),
     ].join(" | "),
-    duration: parseDuration(offer.duration, offer.offer_action, offer.request_action),
+    duration: parsePublicOfferDuration(offer.duration, offer.offer_action, offer.request_action),
     offeredImpactScore: offer.offer_impact,
     requestedImpactThreshold: offer.min_counterparty_impact,
     displayName: safeDisplayName(
