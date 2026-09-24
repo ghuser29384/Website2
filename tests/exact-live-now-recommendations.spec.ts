@@ -128,7 +128,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(personalized.getByRole("heading", { name: "Animal welfare" })).toBeVisible();
     await expect(personalized).toContainText("Do not eat meat for one month");
     await expect(personalized).toContainText("Matches your Animal welfare priority");
-    await expect(personalized).toContainText("Why this match");
+    await expect(personalized).toContainText("Why this appears");
     await expect(personalized.locator('a[href="/offers/animal-offer"]')).toHaveCount(1);
     const tuneRecommendation = personalized.locator(
       'summary[aria-label="Tune this recommendation"]',
