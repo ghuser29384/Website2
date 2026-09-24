@@ -57,6 +57,48 @@
   display: grid;
 }
 
+.actionGroup {
+  min-width: 0;
+}
+
+.actionGroup + .actionGroup {
+  border-top: 1px solid var(--offers-rule-strong);
+}
+
+.actionGroupHeader {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.58rem 0.85rem;
+  background: color-mix(in srgb, var(--offers-surface) 92%, var(--offers-action) 8%);
+  border-bottom: 1px solid var(--offers-rule);
+}
+
+.actionGroupHeader strong {
+  display: block;
+  max-width: 72ch;
+  color: var(--offers-ink);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.actionGroupHeader > span {
+  flex: 0 0 auto;
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.actionOfferList {
+  display: grid;
+}
+
 .offer {
   display: grid;
   min-width: 0;
@@ -277,6 +319,16 @@
   .groupHeader {
     align-items: flex-end;
     padding-inline: 0;
+  }
+
+  .actionGroupHeader {
+    display: grid;
+    gap: 0.35rem;
+    padding-inline: 0;
+  }
+
+  .actionGroupHeader > span {
+    text-align: left;
   }
 
   .offer {
