@@ -1,0 +1,89 @@
+name: Publish exact tested review-profile tree
+on:
+  push:
+    branches: [ops/review-profile-cleanup-20260923]
+    paths: [.github/workflows/review-profile-publish-tested.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      BASE_SHA: 80892b66b897e5b74d73c27f6d318cf96defad79
+      CANDIDATE_TREE: 63287f398a193c88855c75d1a73d709ebf5e2c9a
+      FINAL_TREE: 6adeb4513d3b757737c47949e3093efe7ca327b5
+      TARGET_BRANCH: cleanup/review-profile-boundaries-verified-20260923
+    steps:
+      - name: Require all exact-candidate tests to have passed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs');
+            const {data:run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:35938827698});
+            if(run.head_sha!=='fea2f20ddc475d7587a3b4bdfd4946d877b1f573'||run.run_attempt!==1||run.status!=='completed')throw new Error('Validation identity changed');
+            const {data}=await github.rest.actions.listJobsForWorkflowRun({...context.repo,run_id:35938827698});
+            const job=data.jobs.find(j=>j.id===107441933820);
+            if(!job)throw new Error('Exact validation job missing');
+            const required=['Reproduce and freeze exact forty-file scope','Runtime and monitor tests, lint, types and build','Focused rendered checks and real analytics opt-out contract','Full configured browser gate without exclusions or rate-limit changes','Synthetic A-B-guest isolation without accounts or transaction writes'];
+            for(const name of required)if(!job.steps.some(s=>s.name===name&&s.conclusion==='success'))throw new Error('Missing passed gate: '+name);
+            if(!job.steps.some(s=>s.name==='Publish only the exact validated candidate'&&s.conclusion==='failure'))throw new Error('Unexpected publication state');
+            fs.mkdirSync(process.env.RUNNER_TEMP+'/publication',{recursive:true});
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/publication/test-evidence.json',JSON.stringify({runId:run.id,jobId:job.id,tree:process.env.FINAL_TREE,passed:required,priorPublicationFailure:'The dev-only synthetic harness changed next-env.d.ts in the worktree. The index remained the exact tested tree. Fresh source reconstruction below excludes that generated development path.'},null,2));
+      - uses: actions/checkout@v4
+        with:
+          ref: fea2f20ddc475d7587a3b4bdfd4946d877b1f573
+          fetch-depth: 0
+      - name: Extract exact tested source replay
+        run: |
+          set -euo pipefail
+          git show 83d0549ac7503519c62f5b8d1c61f460710ed283:.github/workflows/review-profile-verified-validate.yml > "$RUNNER_TEMP/prior.yml"
+          ruby -r yaml -r json -e 'puts YAML.load_file(ARGV[0]).to_json' "$RUNNER_TEMP/prior.yml" > "$RUNNER_TEMP/prior.json"
+          git show fea2f20ddc475d7587a3b4bdfd4946d877b1f573:.github/workflows/review-profile-final-validate.yml > "$RUNNER_TEMP/final.yml"
+          ruby -r yaml -r json -e 'puts YAML.load_file(ARGV[0]).to_json' "$RUNNER_TEMP/final.yml" > "$RUNNER_TEMP/final.json"
+          git checkout --detach "$BASE_SHA"
+      - name: Retrieve identical hash-checked bundles
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs');
+            const spec=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/final.json','utf8'));
+            const step=spec.jobs.validate.steps.find(s=>s.name==='Retrieve pinned reviewed bundles and exact test-only delta');
+            if(!step?.with?.script)throw new Error('Missing tested retrieval');
+            const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+            await new AsyncFunction('require','github','context','core','process',step.with.script)(require,github,context,core,process);
+      - name: Reconstruct only the tested tree and publish it
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          spec=json.loads((Path(os.environ['RUNNER_TEMP'])/'prior.json').read_text())
+          step=next(s for s in spec['jobs']['validate']['steps'] if s.get('name')=='Reproduce exact 39-file candidate including restoration regression')
+          subprocess.run(['bash','-euo','pipefail','-c',step['run']],check=True)
+          PY
+          test "$(git write-tree)" = "$CANDIDATE_TREE"
+          git apply --index "$RUNNER_TEMP/visual-analytics.patch"
+          test "$(git write-tree)" = "$FINAL_TREE"
+          test "$(git diff --cached --name-only | wc -l)" -eq 40
+          git diff --exit-code
+          git diff --cached --check
+          test ! -e src/app/qa-profile-draft-boundary
+          test ! -e tests/qa-profile-draft-boundary.spec.ts
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote origin "refs/heads/$TARGET_BRANCH")"
+          git checkout -b "$TARGET_BRANCH"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Correct review labels and simplify account-bound profile setup' -m 'Exact 40-file tree 6adeb451 validated by run 35938827698: 941 unit tests; monitor, lint, types and build; 21 focused browser tests; full browser suite 242 passed with 3 existing skips; actual-editor synthetic account/guest isolation passed. This fresh publication excludes only the dev harness generated next-env.d.ts residue, not a tested product change.'
+          test "$(git rev-parse HEAD^{tree})" = "$FINAL_TREE"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          git rev-parse HEAD HEAD^{tree} | tee "$RUNNER_TEMP/publication/product-identity.txt"
+          git diff --stat "$BASE_SHA" HEAD > "$RUNNER_TEMP/publication/diff-stat.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: review-profile-tested-publication-${{ github.run_id }}
+          path: ${{ runner.temp }}/publication/
+          retention-days: 7
