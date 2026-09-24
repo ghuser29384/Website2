@@ -76,7 +76,8 @@ test("Feed cards use the existing authenticated snapshot and never issue a secon
   assert.match(liveShell, /moral-trade-live-feed-create\.js/);
   assert.match(feedScript, /window\.__MT_LIVE_NOW_BOOTSTRAP__/);
   assert.match(feedScript, /diagnostics\.exposureWriteStatus !== "written"/);
-  assert.match(feedScript, /Create a trade from this/);
+  assert.match(feedScript, /Draft privately from this offer/);
+  assert.match(feedScript, /Private draft only · not sendable or convertible into an agreement/);
   assert.match(feedScript, /dataset\.feedItemKey = `offer:\$\{recommendation\.id\}`/);
   assert.match(feedScript, /dataset\.exposureRequestId = recommendation\.exposureRequestId/);
   assert.doesNotMatch(feedScript, /fetch\(["']\/api\/live-now/);
@@ -92,8 +93,8 @@ test("only complete published nonfinancial bilateral offers are eligible and nat
   assert.match(feedScript, /POSTGRES_UUID_PATTERN\.test\(exposureRequestId\)/);
   assert.match(feedScript, /!text\(value\.verification/);
   assert.match(feedScript, /!text\(value\.duration/);
-  assert.doesNotMatch(feedScript, /donation_pool[\s\S]*Create a trade from this/);
-  assert.doesNotMatch(feedScript, /donation_redirect[\s\S]*Create a trade from this/);
+  assert.doesNotMatch(feedScript, /donation_pool[\s\S]*Draft privately from this offer/);
+  assert.doesNotMatch(feedScript, /donation_redirect[\s\S]*Draft privately from this offer/);
   assert.match(liveNowRoute, /terms_version/);
   assert.match(liveNowRoute, /sourceRevision:\s*offer\.terms_version/);
   assert.match(liveNowModel, /sourceRevision\?: number/);
