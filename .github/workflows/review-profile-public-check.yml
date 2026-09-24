@@ -65,8 +65,14 @@ jobs:
       - name: Verify actual public profile, drafts, retirement and review labels
         run: |
           set -euo pipefail
+          mkdir -p "$RP_PUBLIC_OUTPUT"
+          set +e
           node .rp-public-verify.mjs > "$RP_PUBLIC_OUTPUT/verification.log" 2>&1
-          cat "$RP_PUBLIC_OUTPUT/report.json"
+          status=$?
+          set -e
+          cat "$RP_PUBLIC_OUTPUT/verification.log" || true
+          if [ -f "$RP_PUBLIC_OUTPUT/report.json" ]; then cat "$RP_PUBLIC_OUTPUT/report.json"; fi
+          exit "$status"
       - name: Dispatch the adapted permanent profile monitor for this exact deployment
         uses: actions/github-script@v7
         with:
