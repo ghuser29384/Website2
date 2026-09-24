@@ -490,7 +490,7 @@ function EvidenceBundleForm({
   returnTo?: string;
 }) {
   return (
-    <form
+    <FullNavigationActionForm
       action={action}
       className="panel stack-form"
       encType="multipart/form-data"
@@ -569,7 +569,7 @@ function EvidenceBundleForm({
       >
         {isReplacement ? "Submit replacement bundle" : "Submit evidence bundle"}
       </PendingSubmitButton>
-    </form>
+    </FullNavigationActionForm>
   );
 }
 
@@ -596,7 +596,7 @@ function ReviewerNominationForm({
     : candidates;
 
   return (
-    <form action={action} className="panel stack-form">
+    <FullNavigationActionForm action={action} className="panel stack-form">
       {hiddenWorkflowFields({
         agreementId,
         milestoneId: milestone.id,
@@ -656,7 +656,7 @@ function ReviewerNominationForm({
           </p>
         </div>
       )}
-    </form>
+    </FullNavigationActionForm>
   );
 }
 

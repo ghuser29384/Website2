@@ -80,7 +80,10 @@ export function ParticipantOfferGroup({
               <div className={styles.offerHeading}>
                 <div>
                   <p className={styles.kicker}>{formatMode(offer.mode)}</p>
-                  <h4 id={offerHeadingId}>
+                  <h4
+                    aria-label={`${offer.offered_cause} ${offer.requested_cause}`}
+                    id={offerHeadingId}
+                  >
                     {offer.offered_cause}
                     <span aria-hidden="true"> / </span>
                     {offer.requested_cause}

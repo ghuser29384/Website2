@@ -58,6 +58,25 @@ test("member and guest acceptance call atomic database boundaries", () => {
   assert.doesNotMatch(guest, /\.from\("guest_interests"\)[\s\S]*?status:\s*"accepted"/);
 });
 
+test("member and claimed-guest acceptance land on the created agreement", () => {
+  const member = between(
+    actions,
+    "export async function acceptInterestAction",
+    "export async function acceptGuestInterestAction",
+  );
+  const guest = between(
+    actions,
+    "export async function acceptGuestInterestAction",
+    "export async function rateAgreementAction",
+  );
+  const canonicalCreatedAgreementRedirect =
+    /redirectWithMessage\(\s*`\/trade-agreements\/\$\{agreement\.id\}`,\s*"message"/;
+
+  assert.match(member, canonicalCreatedAgreementRedirect);
+  assert.match(guest, /const agreement = acceptancePayload\?\.agreement/);
+  assert.match(guest, canonicalCreatedAgreementRedirect);
+});
+
 test("migration aligns with the existing core-trade schema rather than adding a second one", () => {
   assert.match(migration, /trade_agreement_versions/);
   assert.match(migration, /trade_agreement_confirmations/);
