@@ -1153,38 +1153,32 @@ export async function listOpenOffersPage(
       offerMatchesSearchQuery(offer, normalizedSearchQuery),
     );
     return buildPaginatedResult(
-      searched.slice(offset, offset + pageSize),
+      searched.slice(offset, offset + pageSize + 1),
       normalizedPage,
       pageSize,
-      searched.length,
     );
   }
 
   const supabase = await createClient();
   let query = supabase
     .from("offers")
-    .select("*", { count: "exact" })
+    .select("*")
     .eq("status", "open");
 
   if (mode !== "all") {
     query = query.eq("mode", mode);
   }
 
-  const { data, error, count } = await query
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .order("id", { ascending: true })
-    .range(offset, offset + pageSize - 1);
+    .range(offset, offset + pageSize);
 
   if (error) throw new Error(error.message);
 
   const viewer = await getViewer();
   const hydrated = await hydrateOffers((data ?? []) as OfferRow[], viewer?.authUser.id);
-  return buildPaginatedResult(
-    hydrated,
-    normalizedPage,
-    pageSize,
-    count ?? hydrated.length,
-  );
+  return buildPaginatedResult(hydrated, normalizedPage, pageSize);
 }
 
 export async function listOpenOffersPreview(limit = 120, mode: OfferRow["mode"] | "all" = "all") {
