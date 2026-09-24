@@ -856,7 +856,7 @@
     control.setAttribute("aria-pressed", saved ? "true" : "false");
     control.setAttribute(
       "aria-label",
-      saved ? "Remove saved opportunity" : "Save opportunity",
+      saved ? "Remove saved offer" : "Save offer",
     );
     control.setAttribute("title", saved ? "Saved" : "Save");
     control.classList.toggle("is-active", saved);
