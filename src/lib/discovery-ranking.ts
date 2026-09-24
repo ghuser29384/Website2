@@ -31,7 +31,6 @@ export const OFFER_ACTION_FILTER_OPTIONS = [
 
 export const PEOPLE_DISCOVERY_SORT_OPTIONS = [
   { value: "match", label: "Best match" },
-  { value: "credit", label: "Highest credit" },
   { value: "offers", label: "Most open offers" },
   { value: "newest", label: "Newest" },
 ] as const;
@@ -498,7 +497,10 @@ export function profileMatchesFilters(
   ) {
     return false;
   }
-  return matchesCreditFilter(credibility, filters.credit);
+  // The general people directory does not gate participants by a context-free
+  // credibility score. Keep the legacy field for compatibility with callers,
+  // but only the neutral "any" state is accepted here.
+  return filters.credit === "any";
 }
 
 export function collectPeopleCauseOptions(profiles: ProfileDiscoveryLike[]) {
@@ -537,22 +539,19 @@ export function rankProfiles<T extends ProfileDiscoveryLike>(
   return profiles
     .map((profile, index) => {
       const relevance = profileTextRelevance(profile, query);
-      const credit = creditRankingSignal(credibilityByProfile.get(profile.id));
       const recency = dateSignal(profile.created_at, now, 180);
       const activity = profileActivitySignal(profile);
       const offers = clamp(Math.log1p(profile.offerCount) / Math.log1p(maxOffers));
       let rankingScore: number;
 
-      if (sort === "credit") {
-        rankingScore = 0.74 * credit + 0.12 * activity + 0.08 * relevance + 0.06 * recency;
-      } else if (sort === "offers") {
-        rankingScore = 0.68 * offers + 0.12 * credit + 0.1 * relevance + 0.1 * recency;
+      if (sort === "offers") {
+        rankingScore = 0.74 * offers + 0.14 * relevance + 0.12 * recency;
       } else if (sort === "newest") {
-        rankingScore = 0.78 * recency + 0.1 * credit + 0.07 * relevance + 0.05 * activity;
+        rankingScore = 0.82 * recency + 0.1 * relevance + 0.08 * activity;
       } else if (hasQuery) {
-        rankingScore = 0.68 * relevance + 0.15 * credit + 0.1 * activity + 0.07 * recency;
+        rankingScore = 0.72 * relevance + 0.16 * activity + 0.12 * offers;
       } else {
-        rankingScore = 0.42 * activity + 0.2 * credit + 0.3 * recency + 0.08 * relevance;
+        rankingScore = 0.5 * activity + 0.32 * recency + 0.18 * offers;
       }
 
       return { profile, index, rankingScore };
