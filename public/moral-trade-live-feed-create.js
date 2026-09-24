@@ -160,12 +160,21 @@
         link.dataset.action = "create-from-feed";
         link.dataset.feedItemKey = `offer:${recommendation.id}`;
         link.dataset.exposureRequestId = recommendation.exposureRequestId;
-        link.textContent = "Create a trade from this";
+        link.textContent = "Draft privately from this offer";
+        link.setAttribute(
+          "aria-describedby",
+          `feed-create-boundary-${recommendation.id}`,
+        );
         link.addEventListener("click", () => {
           storeTransientMatchContext(recommendation);
           record("action_clicked", recommendation);
         });
+        const boundary = document.createElement("span");
+        boundary.className = "mt-feed-create-boundary";
+        boundary.id = `feed-create-boundary-${recommendation.id}`;
+        boundary.textContent = "Private draft only · not sendable or convertible into an agreement in this version.";
         actions.insertBefore(link, actions.firstChild?.nextSibling ?? null);
+        link.insertAdjacentElement("afterend", boundary);
         card.dataset.feedCreateBound = "true";
         record("action_shown", recommendation);
       });
