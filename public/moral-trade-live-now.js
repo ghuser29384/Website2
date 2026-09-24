@@ -761,7 +761,7 @@
             }">Use viewing activity: ${
               model.profile.learningEnabled ? "on" : "off"
             }</button><button class="mt-feed-control" type="button" data-feed-control="clear">Clear browsing inferences</button></div>
-            <p class="mt-feed-privacy-note">Viewing activity is optional and is used only as a tentative relevance hint. It does not change your stated priorities or declare willingness to take an action.</p>
+            <p class="mt-feed-privacy-note">Viewing activity is optional and is used only as a tentative relevance hint. It stores typed in-product signals, not raw browsing URLs or page content, and it does not change your stated priorities or declare willingness to take an action.</p>
             <div class="mt-feed-settings-links"><a href="/complete-profile">Edit priorities</a><a href="/dashboard#wish-profile">Participation settings</a></div>
           </div>
         </details>
