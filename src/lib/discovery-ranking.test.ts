@@ -156,16 +156,28 @@ test("offer filters combine cause, payment, action, and minimum credit", () => {
   );
 });
 
-test("credit modestly changes otherwise comparable people results", () => {
-  const lower = profile({ id: "lower", resolvedName: "Alex Green" });
-  const higher = profile({ id: "higher", resolvedName: "Alex Grey" });
+test("general people ranking does not let context-free credit override task relevance", () => {
+  const exact = profile({ id: "exact", resolvedName: "Alex Research" });
+  const highCreditButUnrelated = profile({
+    id: "unrelated",
+    resolvedName: "Jordan Smith",
+    bio: "Public member",
+    wishPreview: "Open to unrelated cooperation",
+    wishCauses: ["Climate"],
+  });
   const scores = new Map([
-    [lower.id, credibility(64, 12)],
-    [higher.id, credibility(90, 35)],
+    [exact.id, credibility(60, 12)],
+    [highCreditButUnrelated.id, credibility(96, 40)],
   ]);
 
-  const ranked = rankProfiles([lower, higher], scores, "Alex", "match", new Date("2026-07-15"));
-  assert.equal(ranked[0]?.id, "higher");
+  const ranked = rankProfiles(
+    [highCreditButUnrelated, exact],
+    scores,
+    "Alex",
+    "match",
+    new Date("2026-07-15"),
+  );
+  assert.equal(ranked[0]?.id, "exact");
 });
 
 test("newest sort remains primarily chronological rather than credit-dominated", () => {
