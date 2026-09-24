@@ -1,0 +1,40 @@
+name: Dispatch exact profile production canary
+
+on:
+  push:
+    branches:
+      - ops/review-profile-canary-dispatch-20260924
+    paths:
+      - .github/workflows/review-profile-canary-dispatch.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch exact released profile canary
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_SHA: 86a3e2b0dcdbc97a21659dc3f08d12afb1fa4ee8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner=context.repo.owner, repo=context.repo.repo;
+            const expected=process.env.EXPECTED_SHA;
+            const {data:branch}=await github.rest.repos.getBranch({owner,repo,branch:'main'});
+            if(branch.commit.sha!==expected){
+              core.setFailed(`main moved: expected ${expected}, got ${branch.commit.sha}`);
+              return;
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              owner, repo,
+              workflow_id:'complete-profile-production-canary.yml',
+              ref:'main',
+              inputs:{expected_sha:expected}
+            });
+            core.info(`Dispatched production profile canary for ${expected}`);
