@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 40
     env:
       EXPECTED_SHA: 86a3e2b0dcdbc97a21659dc3f08d12afb1fa4ee8
-      RP_PUBLIC_OUTPUT: ${{ runner.temp }}/rp-public-evidence
+      RP_PUBLIC_OUTPUT: /tmp/rp-public-evidence
     steps:
       - name: Require the successful exact production release
         uses: actions/github-script@v7
@@ -81,4 +81,4 @@ jobs:
           path: ${{ runner.temp }}/rp-public-evidence/
           retention-days: 7
           if-no-files-found: warn
-# Retrigger after production release completed.
+# Retrigger after production release completed; runner context fixed at job scope.
