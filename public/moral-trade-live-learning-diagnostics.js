@@ -84,13 +84,12 @@
       if (!model || typeof model !== "object" || !prediction || typeof prediction !== "object") return;
       const details = card.querySelector(".mt-feed-details-grid");
       if (!details) return;
-      const estimate = Number(prediction.paretoSuccess);
-      const estimateText = Number.isFinite(estimate)
-        ? `${Math.round(Math.max(0, Math.min(1, estimate)) * 100)}/100 composite estimate`
-        : "Composite estimate unavailable";
       const note = document.createElement("p");
       note.className = "mt-pareto-note";
-      note.textContent = `${model.mode === "active" ? "Learned" : "Heuristic/shadow"} Pareto-safe layer · ${estimateText}. This is a prediction, not a guarantee or an intertheoretical moral-value score.`;
+      note.textContent =
+        model.mode === "active"
+          ? "Learned ranking layer active. Numerical outcome probabilities are not shown here; review the concrete terms, evidence, and counterparty response before relying on a recommendation."
+          : "Heuristic/shadow ranking layer active. Its internal scores are ranking aids, not estimates of acceptance, completion, additionality, safety, or moral value.";
       details.appendChild(note);
     });
   }
