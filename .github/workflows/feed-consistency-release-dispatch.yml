@@ -1,0 +1,47 @@
+name: Dispatch feed consistency production release
+
+on:
+  push:
+    branches:
+      - ops/feed-consistency-release-dispatch-20260924
+    paths:
+      - .github/workflows/feed-consistency-release-dispatch.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard exact merged main and dispatch gated production release
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_SHA: c6baf49d52cb089254e857081de982a6f0449283
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const expected = process.env.EXPECTED_SHA;
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            if (branch.commit.sha !== expected) {
+              core.setFailed(`main moved: expected ${expected}, got ${branch.commit.sha}`);
+              return;
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: 'vercel-release.yml',
+              ref: 'main',
+              inputs: {
+                target: 'production',
+                ref: 'main',
+                expected_sha: expected,
+                synthetic_auth_fixture_url: ''
+              }
+            });
+            core.info(`Dispatched gated production release for ${expected}`);
