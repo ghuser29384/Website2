@@ -182,7 +182,16 @@ async function requireFeedbackViewer() {
 
 export async function POST(request: Request) {
   const viewer = await requireFeedbackViewer();
-  if (!viewer) return privateJson({ authenticated: false }, 401);
+  // Passive feed instrumentation is allowed to render for signed-out visitors,
+  // but no preference record exists to mutate. Treat it as a quiet no-op rather
+  // than generating an expected 401 in the browser console.
+  if (!viewer) {
+    return privateJson({
+      authenticated: false,
+      acceptedEventCount: 0,
+      learningEnabled: false,
+    });
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -236,14 +245,18 @@ export async function POST(request: Request) {
       profileId,
     });
   }
+  // Opt in only. Missing/unreadable preference state fails closed.
   const learningEnabled =
-    requestedLearningEnabled ?? preferenceData?.learn_from_browsing ?? true;
+    requestedLearningEnabled ?? (preferenceData?.learn_from_browsing === true);
 
   const rawEvents = Array.isArray(body.events) ? body.events.slice(0, MAX_EVENTS_PER_REQUEST) : [];
   const normalizedEvents = rawEvents
     .filter((event): event is FeedbackEventInput => Boolean(event) && typeof event === "object")
     .map(normalizeEvent)
     .filter((event): event is NormalizedFeedbackEvent => Boolean(event))
+    // Saving is handled by the canonical saved-offer store, not by learning
+    // history. Ignore legacy save/unsave feedback if an old client sends it.
+    .filter((event) => !["save", "unsave"].includes(event.eventType))
     .filter((event) => learningEnabled || !PASSIVE_EVENT_TYPES.has(event.eventType));
 
   if (!normalizedEvents.length) {
@@ -504,7 +517,8 @@ export async function DELETE() {
   const { error } = await (supabase as any)
     .from("recommendation_interactions")
     .delete()
-    .eq("profile_id", viewer.authUser.id);
+    .eq("profile_id", viewer.authUser.id)
+    .in("event_type", ["impression", "open", "dwell", "cause_view", "save", "unsave"]);
 
   if (error) {
     console.error("[live-now-feedback] Failed to clear learned signals", {
@@ -514,5 +528,10 @@ export async function DELETE() {
     return privateJson({ error: "Learned signals could not be cleared." }, 503);
   }
 
-  return privateJson({ authenticated: true, cleared: true });
+  return privateJson({
+    authenticated: true,
+    clearedBrowsingInferences: true,
+    preservedExplicitFeedback: true,
+    preservedExclusions: true,
+  });
 }
