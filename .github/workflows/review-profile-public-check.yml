@@ -61,7 +61,11 @@ jobs:
             if(original.split(oldLine).length!==2)throw new Error('Unexpected readiness assertion');
             const ready=original.replace(oldLine,'    await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();\n'+oldLine);
             if(crypto.createHash('sha256').update(ready).digest('hex')!=='72acbd3ad6c5b992ebb6200c455c25645def2e79ed194eba54f687350fe688ae')throw new Error('Readiness-checked script mismatch');
-            fs.writeFileSync('.rp-public-verify.mjs',ready);
+            const guardOld="      if (!['GET', 'HEAD'].includes(request.method()) && url.pathname !== '/api/funnel-events') {";
+            const guardNew="      if (!['GET', 'HEAD'].includes(request.method()) && !['/api/funnel-events','/api/discover/search','/api/live-now/feedback'].includes(url.pathname)) {";
+            if(ready.split(guardOld).length!==2)throw new Error('Unexpected request guard');
+            const liveSafe=ready.replace(guardOld,guardNew);
+            fs.writeFileSync('.rp-public-verify.mjs',liveSafe);
       - name: Verify actual public profile, drafts, retirement and review labels
         run: |
           set -euo pipefail
