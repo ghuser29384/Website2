@@ -1,0 +1,25 @@
+name: Dispatch exact review-profile production release
+on:
+  push:
+    branches: [ops/review-profile-release-20260924]
+    paths: [.github/workflows/review-profile-release-dispatch.yml]
+permissions:
+  actions: write
+  contents: read
+jobs:
+  dispatch:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/review-profile-release-20260924'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard main and dispatch the existing exact-SHA gated release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const expected='86a3e2b0dcdbc97a21659dc3f08d12afb1fa4ee8';
+            const {data:branch}=await github.rest.repos.getBranch({...context.repo,branch:'main'});
+            if(branch.commit.sha!==expected)throw new Error('Main moved; refuse unrelated release');
+            const {data:commit}=await github.rest.git.getCommit({...context.repo,commit_sha:expected});
+            if(commit.tree.sha!=='6adeb4513d3b757737c47949e3093efe7ca327b5')throw new Error('Merged tree differs from tested tree');
+            await github.rest.actions.createWorkflowDispatch({...context.repo,workflow_id:'vercel-release.yml',ref:'main',inputs:{target:'production',ref:'main',expected_sha:expected,synthetic_auth_fixture_url:''}});
+            core.info('Dispatched the exact owner-approved review-profile production release: '+expected);
