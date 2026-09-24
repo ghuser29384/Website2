@@ -511,9 +511,15 @@ async function finishSourceFlow(input: {
 
   await page.goto("/feed", { waitUntil: "domcontentloaded" });
   await waitForFeedTerminalState(page, "ready");
-  const action = page.getByRole("link", { name: "Create a trade from this", exact: true });
+  const action = page.getByRole("link", { name: "Draft privately from this offer", exact: true });
   await expect(action).toBeVisible({ timeout: 25_000 });
   await expect(action).toHaveCount(1);
+  await expect(
+    page.getByText(
+      "Private draft only · not sendable or convertible into an agreement in this version.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   const actionBox = await action.boundingBox();
   expect(actionBox).not.toBeNull();
   expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(input.viewport.width + 1);
