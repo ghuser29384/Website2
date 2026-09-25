@@ -19,16 +19,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ef87fca2940280d0c8a78cc3512c0f09928038a2
+          ref: 0172419d18da94fe60a915f3823351e0eb6336f4
           fetch-depth: 100
           persist-credentials: false
       - name: Verify exact implementation revision
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = ef87fca2940280d0c8a78cc3512c0f09928038a2
+          test "$(git rev-parse HEAD)" = 0172419d18da94fe60a915f3823351e0eb6336f4
           mkdir -p validation-evidence
           git rev-parse HEAD HEAD^{tree} > validation-evidence/identity.txt
-          git diff --check 9e075241e0e997a99d49a0d024f5da6b11cf1d4b HEAD
+          git diff --check 98723f7f7c45407d8303cf72acf38e9a35a0904c HEAD
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -81,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ef87fca2940280d0c8a78cc3512c0f09928038a2
+          ref: 0172419d18da94fe60a915f3823351e0eb6336f4
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
