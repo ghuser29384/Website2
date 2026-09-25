@@ -108,7 +108,7 @@ const feedFixture = {
   },
 };
 
-test.describe("Bottleneck Atlas and generated feed", () => {
+test.describe("Bottleneck Atlas and live inventory feed", () => {
   test("works as a compact match finder with evidence available on demand", async ({ page }) => {
     await page.goto("/bottleneck-atlas", { waitUntil: "domcontentloaded" });
 
@@ -187,7 +187,7 @@ test.describe("Bottleneck Atlas and generated feed", () => {
     await expect(page.getByText("Sign in to build a trade").first()).toBeVisible();
   });
 
-  test("visually and semantically separates generated possibilities from live inventory", async ({
+  test("excludes legacy Atlas suggestions and counts only live inventory on desktop and mobile", async ({
     page,
   }) => {
     const pageErrors: string[] = [];
@@ -206,20 +206,58 @@ test.describe("Bottleneck Atlas and generated feed", () => {
 
     const generated = page.locator('.mt-feed-card[data-generated="true"]');
     const published = page.locator('.mt-feed-card[data-generated="false"]');
-    await expect(generated).toHaveCount(1);
+    await expect(generated).toHaveCount(0);
     await expect(published).toHaveCount(1);
-    await expect(generated).toContainText("Potential trade");
-    await expect(generated).toContainText("No counterparty confirmed");
-    const generatedLink = generated.getByRole("link", { name: "Review possibility" });
-    await expect(generatedLink).toBeVisible();
-    await expect(generatedLink).not.toHaveAttribute("href", /[?&]cause=/);
-    await expect(page.getByText(/1 live opportunity · 1 generated possibility/)).toBeVisible();
+    await expect(page.locator(".mt-feed-card")).toHaveCount(1);
+    await expect(published).toContainText("Fund a bounded policy brief");
+    await expect(published.getByRole("link", { name: /Review proposal/ })).toHaveAttribute(
+      "href", "/offers/published-opportunity-1",
+    );
+    await expect(page.getByText(/1 live opportunity/)).toBeVisible();
+    await expect(page.getByText("Stronger AI-governance execution")).toHaveCount(0);
+    await expect(page.getByText(/1 generated possibility/)).toHaveCount(0);
+    await published.locator("details.mt-feed-details > summary").click();
+    await expect(published).toContainText("Receipt and counterparty confirmation");
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator('.mt-feed-card[data-generated="true"]')).toBeVisible();
+    await expect(generated).toHaveCount(0);
+    await expect(published).toBeVisible();
+    await expect(page.locator(".mt-feed-card")).toHaveCount(1);
+    await expect(page.getByText(/1 live opportunity/)).toBeVisible();
     await expectNoHorizontalOverflow(page);
     expect(pageErrors).toEqual([]);
   });
+
+  for (const legacyOnly of [false, true]) {
+    test(legacyOnly ? "rejects a template-only legacy feed" : "keeps empty live inventory empty", async ({ page }) => {
+      await page.route("**/api/live-account**", (route) =>
+        route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({ authenticated: true, account: { displayName: "Feed user" } }),
+        }),
+      );
+      await page.route("**/api/live-now**", (route) =>
+        route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({
+            ...feedFixture,
+            status: legacyOnly ? "ready" : "no_matches",
+            recommendations: legacyOnly ? feedFixture.recommendations.slice(1) : [],
+            matchingOpportunityCount: 0,
+            feedOpportunityCount: legacyOnly ? 1 : 0,
+          }),
+        }),
+      );
+      await page.goto("/feed", { waitUntil: "domcontentloaded" });
+      const feed = page.locator('[data-mt-live-now="adaptive"]');
+      await expect(feed).toHaveAttribute("data-mt-live-now-state", legacyOnly ? "unavailable" : "no_matches");
+      await expect(feed).toContainText(legacyOnly
+        ? "Your recommendation feed could not load."
+        : "No open opportunity currently matches your profile.");
+      await expect(page.locator(".mt-feed-card")).toHaveCount(0);
+      await expect(page.getByText("Stronger AI-governance execution")).toHaveCount(0);
+    });
+  }
 });

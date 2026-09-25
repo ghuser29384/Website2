@@ -416,12 +416,6 @@ function buildRecommendation(
   };
 }
 
-export function isOpportunitySynthesisEnabled(
-  environment: Record<string, string | undefined> = process.env,
-) {
-  return environment.OPPORTUNITY_SYNTHESIS_ENABLED?.trim().toLowerCase() !== "false";
-}
-
 export function synthesizeBottleneckAtlasRecommendations({
   profile,
   now = new Date(),

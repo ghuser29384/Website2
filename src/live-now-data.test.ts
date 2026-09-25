@@ -328,6 +328,76 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
   assert.doesNotMatch(context.rendered, /<script>alert\(1\)<\/script>/);
 });
 
+function renderFeedSnapshot(recommendations: unknown[], status = "ready") {
+  const window = {
+    __MT_LIVE_NOW_BOOTSTRAP__: {
+      authenticated: true,
+      status,
+      profile: { causes: ["Animal welfare"] },
+      recommendations,
+    },
+    location: { pathname: "/feed" },
+    dispatchEvent() {},
+    nowFocus: () => "",
+  };
+  runInNewContext(bridge, {
+    window,
+    document: { documentElement: { setAttribute() {} } },
+    CustomEvent: class {},
+    URLSearchParams,
+  });
+  return window.nowFocus();
+}
+
+const publishedFixture = {
+  id: "participant-offer",
+  offeredCause: "Participant supplied animal welfare opportunity",
+  requestedCause: "Research feedback",
+  offerAction: "Publish the participant's research brief",
+  requestAction: "Review a bounded research question",
+  metadata: { mechanism: "published_offer" },
+};
+const atlasFixture = {
+  ...publishedFixture,
+  id: "synth:digital-minds-animal-welfare-science:animal-welfare",
+  offeredCause: "Digital-mind welfare research",
+  metadata: { origin: "platform_generated" },
+};
+
+test("mixed snapshots render only participant inventory and count only those cards", () => {
+  const rendered = renderFeedSnapshot([
+    atlasFixture,
+    publishedFixture,
+    { ...atlasFixture, id: "legacy-generated-id", offeredCause: "Better high-stakes decisions" },
+    { ...atlasFixture, metadata: {} },
+  ]);
+  assert.match(rendered, /data-mt-live-now-state="ready"/);
+  assert.match(rendered, /1 live opportunity/);
+  assert.match(rendered, /Participant supplied animal welfare opportunity/);
+  assert.match(rendered, /Publish the participant&#39;s research brief/);
+  assert.equal((rendered.match(/data-mt-live-now-recommendation=/g) ?? []).length, 1);
+  assert.doesNotMatch(rendered, /Digital-mind welfare research|Better high-stakes decisions|Potential trade|generated possibilit/);
+});
+
+test("legacy template-only snapshots cannot become feed inventory", () => {
+  const rendered = renderFeedSnapshot([atlasFixture]);
+  assert.match(rendered, /Your recommendation feed could not load/);
+  assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=|Digital-mind welfare research/);
+});
+
+test("empty inventory displays no matches without substituting Atlas templates", () => {
+  const rendered = renderFeedSnapshot([], "no_matches");
+  assert.match(rendered, /No open opportunity currently matches your profile/);
+  assert.match(rendered, /No filler suggestions were added/);
+  assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=/);
+});
+
+test("unavailable inventory stays unavailable even with legacy suggestions", () => {
+  const rendered = renderFeedSnapshot([atlasFixture], "unavailable");
+  assert.match(rendered, /Your recommendation feed could not load/);
+  assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=|Digital-mind welfare research/);
+});
+
 test("the mixed visual feed is compact, truthful, reversible, private, and mobile-safe", () => {
   assert.match(feedStyles, /\.mt-social-feed/);
   assert.match(feedStyles, /\.mt-feed-card/);
