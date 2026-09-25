@@ -13,13 +13,14 @@ for (const width of [1440, 390, 320]) {
     await expect(page.locator('input[name="priority_allocation"]')).toHaveCount(0);
     await expect(page.getByLabel(/Remember this draft/)).not.toBeChecked();
     expect((await context.cookies()).find((cookie) => cookie.name === "mt_walkthrough_seen")).toBeUndefined();
+    await expect(page.getByTestId("profile-priorities-card").getByRole("link", { name: "Adjust priorities", exact: true })).toBeVisible();
     await page.getByText("Optional private matching preferences", { exact: true }).click();
     for (const label of ["Outcomes I care about", "What I can offer", "Limits or exclusions"]) {
       await expect(page.getByLabel(label, { exact: true })).toHaveValue("");
     }
     await expect(page.getByLabel("Save the private matching notes I entered")).not.toBeChecked();
     await page.getByLabel("Outcomes I care about", { exact: true }).fill("A priority outside the suggested categories");
-    await expect(page.getByRole("link", { name: "Advanced priority allocation (optional)" })).toHaveAttribute("href", "/profile/priorities");
+    await expect(page.getByRole("link", { name: "Adjust priorities", exact: true })).toHaveAttribute("href", "/profile/priorities?returnTo=%2Fcomplete-profile");
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath(`profile-setup-${width}.png`), fullPage: true });
     await page.getByRole("link", { name: "Skip setup and browse" }).click();
