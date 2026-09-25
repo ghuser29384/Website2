@@ -1,0 +1,97 @@
+name: Operational retirement validation 20260925
+on:
+  push:
+    branches: [ops/feature-pruning-audit-20260925]
+    paths: [.github/workflows/operational-retirement-validation-20260925.yml]
+permissions:
+  contents: write
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: candidate
+        shell: bash
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 155e8e0c03b972fbb290abd9124ef821a0a1bfb4
+          path: recipe
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: c6baf49d52cb089254e857081de982a6f0449283
+          path: candidate
+          fetch-depth: 1
+      - name: Materialize reviewed tree and publish only the new cleanup branch
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = c6baf49d52cb089254e857081de982a6f0449283
+          test "$(git rev-parse HEAD^{tree})" = 704b4223b615ce19b1ac321ce568c8fc9badc6a6
+          mkdir -p ../audit-quality
+          python ../recipe/.github/scripts/prune-operational-demos.py
+          cp ../recipe/.github/pruning-tests/live-operational-retirement.test.ts src/
+          cp ../recipe/.github/pruning-tests/operational-retirement.spec.ts tests/
+          git add --all
+          git diff --cached --check
+          git diff --cached --stat | tee ../audit-quality/change-stat.txt
+          git diff --cached --binary > ../audit-quality/cleanup.patch
+          candidate_tree="$(git write-tree)"
+          printf '%s\n' "$candidate_tree" > ../audit-quality/tree.txt
+          test "$candidate_tree" = 1e55f62193fc46ffc75a271ab890aa9655c3f1d5
+          branch=cleanup/remove-simulated-operations-20260925
+          test -z "$(git ls-remote --heads origin "refs/heads/$branch")"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Remove simulated operations, fictional history, and verification demo'
+          git push origin "HEAD:refs/heads/$branch"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git rev-parse HEAD HEAD^{tree} > ../audit-quality/identity.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Full unit and source regression suite
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee ../audit-quality/unit-tests.log
+      - name: Lint
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee ../audit-quality/lint.log
+      - name: Typecheck
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee ../audit-quality/typecheck.log
+      - name: Production build
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee ../audit-quality/build.log
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Targeted rendered retirement and real-account regression
+        run: |
+          set -euo pipefail
+          npx playwright test tests/operational-retirement.spec.ts tests/exact-live-verification.spec.ts tests/exact-live-account.spec.ts tests/exact-live-command-center.spec.ts tests/exact-live-custom-route.spec.ts tests/exact-live-route-recommendations.spec.ts --workers=1 --reporter=line --output=pruning-targeted-results 2>&1 | tee ../audit-quality/targeted-browser.log
+      - name: Full unchanged release browser gate
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee ../audit-quality/release-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: operational-retirement-validation-${{ github.run_id }}
+          path: |
+            audit-quality/
+            candidate/pruning-targeted-results/
+            candidate/test-results/
+          retention-days: 14
+          if-no-files-found: error
