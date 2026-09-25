@@ -454,3 +454,35 @@
   .mt-feed-context-body > .terms { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .mt-feed-empty-layout .urgent > .stack { align-items: stretch; flex-direction: column; }
 }
+
+/* The static masthead has fixed side columns. Between mobile and desktop,
+   give navigation its own row instead of letting its min-content width push
+   the account controls beyond the viewport. Keep every destination visible. */
+@media (min-width: 821px) and (max-width: 1180px) {
+  body:has(.mt-feed-empty-layout) > .topbar {
+    height: auto;
+    min-height: var(--head);
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 16px;
+    padding: 12px 22px 8px;
+  }
+  body:has(.mt-feed-empty-layout) > .topbar > .brand {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  body:has(.mt-feed-empty-layout) > .topbar > .top-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  body:has(.mt-feed-empty-layout) > .topbar > nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  body:has(.mt-feed-empty-layout) > .topbar > nav > :is(a, button) {
+    min-height: 44px;
+  }
+}
