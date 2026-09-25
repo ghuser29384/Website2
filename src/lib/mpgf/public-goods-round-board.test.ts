@@ -51,14 +51,16 @@ test("MPGF round board exposes threshold, match, choice, maximum, and action fie
   assert.equal(nearThreshold.projectedAllocationCents, 500);
 });
 
-test("MPGF hub renders the moraltrade60 round board surface", () => {
+test("MPGF hub keeps round-board mechanics out of the default current-state entry", () => {
   const page = readFileSync("src/app/mpgf/page.tsx", "utf8");
   const component = readFileSync("src/components/mpgf/mpgf-round-board.tsx", "utf8");
   const helper = readFileSync("src/lib/mpgf/public-goods-round-board.ts", "utf8");
 
-  assert.match(page, /MpgfRoundBoard/);
-  assert.match(page, /buildMpgfRoundBoardCards/);
-  assert.match(page, /href="#round-board"/);
+  assert.doesNotMatch(page, /MpgfRoundBoard/);
+  assert.doesNotMatch(page, /buildMpgfRoundBoardCards/);
+  assert.doesNotMatch(page, /href="#round-board"/);
+  assert.match(page, /Browse candidate pools/);
+  assert.match(page, /Open worked demonstration/);
   assert.match(component, /Round board/);
   assert.match(component, /Round board and budget router/);
   assert.doesNotMatch(component, /Current round/);

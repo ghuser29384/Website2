@@ -163,7 +163,7 @@ export interface PublicMarketplaceBrowseLaneSummary {
 }
 
 export interface PublicGoodsEntryAction {
-  key: "preview-common-ground-budget" | "view-current-round" | "learn-how-it-works";
+  key: "preview-common-ground-budget" | "view-worked-demonstration" | "learn-how-it-works";
   label: string;
   href: string;
   method: "GET";
@@ -1924,7 +1924,7 @@ function publicGoodsEntryPreservesBoundaries(
       entry.primaryCta.key === "preview-common-ground-budget" &&
       entry.primaryCta.rank === 1 &&
       entry.secondaryCtas.map((action) => action.rank).join(",") === "2,3" &&
-      entry.secondaryCtas[0]?.key === "view-current-round" &&
+      entry.secondaryCtas[0]?.key === "view-worked-demonstration" &&
       entry.secondaryCtas[1]?.key === "learn-how-it-works" &&
       entry.countsAsLiveOffer === false &&
       entry.countsAsOrdinaryListing === false &&

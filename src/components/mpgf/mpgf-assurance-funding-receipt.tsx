@@ -59,6 +59,7 @@ export function MpgfAssuranceFundingReceipt() {
     pledgeCents: pledgeCents ?? Number.NaN,
     decisiveProbabilityBasisPoints: decisiveProbabilityBasisPoints ?? Number.NaN,
   });
+  const resultError = result.ok ? null : result.error;
 
   return (
     <div className={styles.calculator} aria-label="Assurance funding estimate">
@@ -148,7 +149,7 @@ export function MpgfAssuranceFundingReceipt() {
         </div>
       ) : hasInputs ? (
         <p className={styles.error} role="alert">
-          {result.error}
+          {resultError}
         </p>
       ) : (
         <p className={styles.boundary}>Enter both values to see an educational estimate. No probability is assumed for you.</p>

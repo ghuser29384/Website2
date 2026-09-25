@@ -472,7 +472,7 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(topbarSource, /topbar-search-results/);
   assert.match(offersPage, /SmartQueryForm/);
   assert.match(offersPage, /queryName="search"/);
-  assert.match(offersPage, /Hard constraints are applied before semantic and trust-aware ranking/);
+  assert.match(offersPage, /Hard constraints are applied before ranking/);\n  assert.match(offersPage, /Free-text evidence-method terms are/);
   assert.match(offersPage, /Search proposals/);
   assert.match(offersPage, /MODE_OPTIONS/);
   assert.match(offersPage, /SORT_OPTIONS/);
@@ -811,7 +811,7 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(actionsSource, /buildPrivacySafeFunnelEventRecord/);
   assert.match(actionsSource, /isAnalyticsOptedOut/);
   assert.doesNotMatch(onboardingPage, /COHORT_CAUSES\.slice\(0, 2\)/);
-  assert.match(onboardingPage, /Cause areas.*optional/s);
+  assert.match(onboardingPage, /Cause areas[^]*optional/);
   assert.match(onboardingPage, /name="email_updates"/);
   assert.match(actionsSource, /readOptional\(formData, "email_updates"\) === "1"/);
   assert.match(actionsSource, /source: "onboarding_opt_in"/);

@@ -46,7 +46,7 @@ test("onboarding has no invented moral defaults and marketing email is explicit 
 
   assert.doesNotMatch(page, /COHORT_CAUSES\.slice\(0, 2\)/);
   assert.match(page, /walkthroughDraft \? \[walkthroughDraft\.causeArea\] : \[\]/);
-  assert.match(page, /Cause areas.*optional/s);
+  assert.match(page, /Cause areas[^]*optional/);
   assert.match(page, /name="email_updates"/);
   assert.match(actions, /readOptional\(formData, "email_updates"\) === "1"/);
   assert.match(actions, /source: "onboarding_opt_in"/);
