@@ -3,8 +3,13 @@ name: Discover home visual alignment
 on:
   pull_request:
     paths:
-      - "public/moral-trade-discover-home-alignment.css"
-      - "public/moral-trade-discover-navigation.js"
+      - "public/moral-trade-discover.html"
+      - "public/moral-trade-discover.css"
+      - "public/moral-trade-discover-search.js"
+      - "public/moral-trade-live-navigation.js"
+      - "public/moral-trade-site-navigation.css"
+      - "src/components/layout/site-topbar.tsx"
+      - "src/lib/site-navigation*"
       - "src/discover-home-visual-contract.test.ts"
       - "src/lib/live-discover-navigation.test.ts"
       - "tests/discover-home-visual-alignment.spec.ts"
@@ -13,8 +18,13 @@ on:
     branches:
       - main
     paths:
-      - "public/moral-trade-discover-home-alignment.css"
-      - "public/moral-trade-discover-navigation.js"
+      - "public/moral-trade-discover.html"
+      - "public/moral-trade-discover.css"
+      - "public/moral-trade-discover-search.js"
+      - "public/moral-trade-live-navigation.js"
+      - "public/moral-trade-site-navigation.css"
+      - "src/components/layout/site-topbar.tsx"
+      - "src/lib/site-navigation*"
       - "src/discover-home-visual-contract.test.ts"
       - "src/lib/live-discover-navigation.test.ts"
       - "tests/discover-home-visual-alignment.spec.ts"
@@ -30,13 +40,34 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
 
     steps:
-      - name: Check out candidate
+      - name: Check out exact candidate
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record exact source and diff
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          mkdir -p navigation-qa
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'base=%s\nhead=%s\ntree=%s\n' "$BASE_SHA" "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee navigation-qa/source.txt
+          git diff --check "$BASE_SHA" HEAD
+          git diff --stat "$BASE_SHA" HEAD | tee navigation-qa/diff-stat.txt
+          git diff "$BASE_SHA" HEAD > navigation-qa/candidate.patch
+          node --check public/moral-trade-discover-search.js
+          node --check public/moral-trade-live-navigation.js
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -45,53 +76,87 @@ jobs:
           cache: npm
 
       - name: Install exact dependencies
+        id: install
         run: npm ci
 
-      - name: Check exact scope and JavaScript syntax
+      - name: Run focused visual and navigation contracts
+        id: focused
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
-          git diff --check "${{ github.event.pull_request.base.sha || github.event.before }}" HEAD
-          node --check public/moral-trade-discover-navigation.js
+          node --import tsx --test src/discover-home-visual-contract.test.ts src/lib/live-discover-navigation.test.ts src/lib/site-navigation.test.ts | tee navigation-qa/focused.log
+          npm run verify:discover | tee navigation-qa/discover.log
 
-      - name: Run focused visual contracts
-        shell: bash
+      # Each gate retains its own failure, while later independent gates collect
+      # diagnostics. No continue-on-error, baseline allowance or status override.
+      - name: Run repository tests
+        id: tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
-          set -euo pipefail
-          node --import tsx --test src/discover-home-visual-contract.test.ts src/lib/live-discover-navigation.test.ts
-          npm run verify:discover
+          set -o pipefail
+          npm test 2>&1 | tee navigation-qa/tests.log
 
-      - name: Run repository quality gates
-        shell: bash
+      - name: Run ESLint
+        id: lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee navigation-qa/lint.log
+
+      - name: Run TypeScript
+        id: typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee navigation-qa/typescript.log
+
+      - name: Build production application
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-          SITE_URL: http://127.0.0.1:3210
+          VERCEL: '1'
+          NODE_OPTIONS: --max-old-space-size=6144
         run: |
-          set -euo pipefail
-          npm test
-          npm run lint -- --quiet
-          npx tsc --noEmit
-          npm run build
+          set -o pipefail
+          npm run build 2>&1 | tee navigation-qa/build.log
 
       - name: Install Chromium
+        id: browser
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npx playwright install --with-deps chromium
 
-      - name: Verify desktop and mobile rendering
-        shell: bash
+      - name: Verify actual desktop and mobile pages
+        id: rendered
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         env:
-          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
         run: |
-          set -euo pipefail
-          npx playwright test tests/discover-home-visual-alignment.spec.ts --reporter=line
+          set -o pipefail
+          npx playwright test tests/discover-home-visual-alignment.spec.ts --workers=1 --reporter=line 2>&1 | tee navigation-qa/rendered.log
 
-      - name: Upload rendered evidence
+      - name: Summarize actual gate outcomes
+        if: always()
+        env:
+          FOCUSED: ${{ steps.focused.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          RENDERED: ${{ steps.rendered.outcome }}
+        run: |
+          mkdir -p navigation-qa
+          printf 'focused=%s\ntests=%s\nlint=%s\ntypecheck=%s\nbuild=%s\nrendered=%s\n' "$FOCUSED" "$TESTS" "$LINT" "$TYPECHECK" "$BUILD" "$RENDERED" | tee navigation-qa/outcomes.txt
+          cat navigation-qa/outcomes.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload source-bound evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: discover-home-visual-alignment-${{ github.run_id }}-${{ github.sha }}
+          name: discover-home-visual-alignment-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            test-results/discover-home-visual-alignment-*/discover-home-alignment-*.png
+            navigation-qa
             playwright-report
             test-results
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14

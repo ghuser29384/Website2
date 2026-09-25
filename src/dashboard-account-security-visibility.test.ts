@@ -53,17 +53,15 @@ test("the exposed card contains the complete authenticator enrollment flow", () 
   assert.match(accountSecurityPanel, /autoComplete="one-time-code"/);
 });
 
-test("an optional priority summary cannot block the Account security surface", () => {
-  assert.ok(
-    dashboard.includes(
-      [
-        "  const priorityFundSummary =",
-        "    viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY",
-        "      ? await getPriorityCorrectionSummary(viewer.authUser.id)",
-        "      : null;",
-      ].join("\n"),
-    ),
-  );
+test("the optional priority summary stays gated by authenticated service-role availability", () => {
+  // The load may be sequential or part of Promise.all. Assert its authorization
+  // and missing-configuration behavior, not one obsolete assignment spelling.
+  const guardedLoad = /viewer\s*&&\s*supabaseReady\s*&&\s*process\.env\.SUPABASE_SERVICE_ROLE_KEY\s*\?\s*(?:await\s+)?getPriorityCorrectionSummary\(viewer\.authUser\.id\)\s*:\s*null/;
+  assert.match(dashboard, guardedLoad);
+  assert.equal((dashboard.match(/getPriorityCorrectionSummary\(/g) ?? []).length, 1);
+  const authentication = dashboard.indexOf('await requireViewer("/dashboard")');
+  const priorityRead = dashboard.search(guardedLoad);
+  assert.ok(authentication >= 0 && priorityRead > authentication);
 });
 
 test("authenticator code inputs use a browser-valid pattern", () => {

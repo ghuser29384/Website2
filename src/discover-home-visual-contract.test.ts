@@ -6,10 +6,10 @@ const shell = readFileSync("public/moral-trade-discover.html", "utf8");
 const styles = readFileSync("public/moral-trade-discover.css", "utf8");
 
 test("Discover keeps the canonical masthead and accessible two-sided list", () => {
-  for (const path of ["/feed", "/discover", "/trade-controls", "/trades/new", "/commitments", "/evidence"]) {
-    assert.ok(shell.includes(`href="${path}"`));
+  for (const path of ["/feed", "/discover", "/safety", "/trades/new", "/commitments", "/evidence"]) {
+    assert.ok(shell.includes(`href="${path}"`), `Missing canonical destination: ${path}`);
   }
-  assert.match(shell, /aria-current="page">Discover/);
+  assert.match(shell, /<a\b[^>]*href="\/discover"[^>]*aria-current="page"[^>]*>Discover<\/a>/);
   assert.match(shell, /Skip to trades/);
   assert.match(shell, /role="search"/);
   assert.match(shell, /aria-live="polite"/);
