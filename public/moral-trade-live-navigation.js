@@ -184,6 +184,75 @@
     }
   }
 
+  function groupSecondaryNavigation(nav) {
+    // Move the existing controls, keeping their route handlers and accessible labels.
+    const controls = [...nav.querySelectorAll(
+      "[data-mt-evidence-link], [data-mt-optional-tour]",
+    )];
+    if (!controls.length) return;
+
+    let menu = nav.querySelector("[data-mt-secondary-navigation]");
+    if (!menu) {
+      menu = document.createElement("details");
+      menu.dataset.mtSecondaryNavigation = "true";
+      const summary = document.createElement("summary");
+      summary.textContent = "More";
+      const panel = document.createElement("div");
+      panel.dataset.mtSecondaryLinks = "true";
+      menu.append(summary, panel);
+      menu.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        menu.open = false;
+        summary.focus();
+      });
+      // Capture also sees route controls whose own handlers stop propagation.
+      menu.addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest("a, button")) {
+          menu.open = false;
+        }
+      }, true);
+      document.addEventListener("pointerdown", (event) => {
+        if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+      });
+      nav.appendChild(menu);
+    }
+    const panel = menu.querySelector("[data-mt-secondary-links]");
+    for (const control of controls) {
+      if (control.parentElement !== panel) panel.appendChild(control);
+    }
+
+    if (document.getElementById("mt-secondary-navigation-styles")) return;
+    const style = document.createElement("style");
+    style.id = "mt-secondary-navigation-styles";
+    style.textContent = `
+      [data-mt-secondary-navigation] { position: relative; }
+      [data-mt-secondary-navigation] > summary {
+        cursor: pointer; padding: 11px 14px; min-height: 44px;
+        font: inherit; color: inherit; white-space: nowrap;
+      }
+      [data-mt-secondary-navigation] > summary:focus-visible {
+        outline: 2px solid currentColor; outline-offset: 2px;
+      }
+      [data-mt-secondary-navigation] [data-mt-secondary-links] {
+        position: absolute; right: 0; top: 100%; z-index: 60;
+        width: 180px; max-width: calc(100vw - 24px); padding: 6px;
+        border: 1px solid var(--line, #b9b4aa);
+        background: var(--paper2, #fbfaf6); color: var(--ink, #0a0a0a);
+      }
+      .topbar nav [data-mt-secondary-links] > :is(a, button) {
+        display: block; box-sizing: border-box; width: 100%; min-height: 44px;
+        padding: 12px; border: 0; color: inherit; background: transparent;
+        text-align: left; font: inherit; text-decoration: none;
+      }
+      .topbar nav [data-mt-secondary-links] > :is(a, button):hover,
+      .topbar nav [data-mt-secondary-links] > :is(a, button):focus-visible {
+        background: var(--paper, #f5f2e9); color: var(--ink, #0a0a0a);
+        outline: 2px solid currentColor; outline-offset: -2px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function patchNavigation() {
     const navs = [
       ...new Set(
@@ -246,6 +315,7 @@
         nav.appendChild(tour);
       }
 
+      groupSecondaryNavigation(nav);
       patched = true;
     }
 
