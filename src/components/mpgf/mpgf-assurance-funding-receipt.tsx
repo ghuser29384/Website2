@@ -45,19 +45,26 @@ function formatPerDollar(value: number) {
 }
 
 export function MpgfAssuranceFundingReceipt() {
-  const [pledgeInput, setPledgeInput] = useState("100");
-  const [probabilityInput, setProbabilityInput] = useState("20");
+  const [pledgeInput, setPledgeInput] = useState("");
+  const [probabilityInput, setProbabilityInput] = useState("");
+  const pledgeEmpty = pledgeInput.trim() === "";
+  const probabilityEmpty = probabilityInput.trim() === "";
   const pledgeCents = parseAssurancePledgeDollars(pledgeInput);
   const decisiveProbabilityBasisPoints = parseAssuranceProbabilityPercent(probabilityInput);
   const pledgeInvalid =
-    pledgeCents === null ||
-    pledgeCents < 100 ||
-    pledgeCents > ASSURANCE_FUNDING_SCENARIO_TARGET_CENTS;
-  const probabilityInvalid = decisiveProbabilityBasisPoints === null;
-  const result = calculateAssuranceFundingReceipt({
-    pledgeCents: pledgeCents ?? Number.NaN,
-    decisiveProbabilityBasisPoints: decisiveProbabilityBasisPoints ?? Number.NaN,
-  });
+    !pledgeEmpty &&
+    (pledgeCents === null ||
+      pledgeCents < 100 ||
+      pledgeCents > ASSURANCE_FUNDING_SCENARIO_TARGET_CENTS);
+  const probabilityInvalid =
+    !probabilityEmpty && decisiveProbabilityBasisPoints === null;
+  const result =
+    pledgeEmpty || probabilityEmpty
+      ? null
+      : calculateAssuranceFundingReceipt({
+          pledgeCents: pledgeCents ?? Number.NaN,
+          decisiveProbabilityBasisPoints: decisiveProbabilityBasisPoints ?? Number.NaN,
+        });
 
   return (
     <div className={styles.calculator} aria-label="Assurance funding estimate">
@@ -68,7 +75,7 @@ export function MpgfAssuranceFundingReceipt() {
             <span aria-hidden="true">$</span>
             <input
               aria-describedby="assurance-pledge-help"
-              aria-invalid={pledgeInvalid}
+              aria-invalid={pledgeInvalid || undefined}
               inputMode="decimal"
               max="1000"
               min="1"
@@ -86,7 +93,7 @@ export function MpgfAssuranceFundingReceipt() {
           <span className={styles.inputShell}>
             <input
               aria-describedby="assurance-probability-help"
-              aria-invalid={probabilityInvalid}
+              aria-invalid={probabilityInvalid || undefined}
               inputMode="decimal"
               max="100"
               min="0"
@@ -106,7 +113,7 @@ export function MpgfAssuranceFundingReceipt() {
         <p>Decisive means the pool would clear with this pledge and would not clear without it.</p>
       </div>
 
-      {result.ok ? (
+      {result?.ok ? (
         <div className={styles.result} aria-live="polite">
           <div className={styles.metrics}>
             <article className={`${styles.metric} ${styles.metricPrimary}`}>
@@ -143,9 +150,14 @@ export function MpgfAssuranceFundingReceipt() {
             <p>Funding estimate, not an impact guarantee.</p>
           </div>
         </div>
-      ) : (
+      ) : result ? (
         <p className={styles.error} role="alert">
           {result.error}
+        </p>
+      ) : (
+        <p className={styles.boundary} aria-live="polite">
+          Enter both values to calculate an educational scenario. No pledge amount or decisive
+          probability is assumed for you.
         </p>
       )}
 
