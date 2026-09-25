@@ -34,7 +34,9 @@ test("People directory no longer exposes general credit sorting or filters", () 
   assert.match(peoplePage, /does not rank people by a general credibility score/);
   assert.doesNotMatch(peoplePage, /name="credit"/);
   assert.doesNotMatch(peoplePage, /Highest credit/);
+  assert.doesNotMatch(peoplePage, /Most open offers/);
   assert.doesNotMatch(peoplePage, /Credit score/);
+  assert.doesNotMatch(peoplePage, /\{profile\.offerCount\} open offer/);
 });
 
 test("offer directory groups exact alternatives by participant and offered action", () => {
