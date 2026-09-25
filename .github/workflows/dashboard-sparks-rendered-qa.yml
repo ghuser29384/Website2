@@ -1,0 +1,92 @@
+name: Dashboard Sparks rendered QA
+on:
+  push:
+    branches: [ops/dashboard-sparks-default-20260925]
+    paths: [.github/workflows/dashboard-sparks-rendered-qa.yml]
+permissions:
+  contents: read
+concurrency:
+  group: dashboard-sparks-rendered-20260925
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: dashboard-local-fixture-key
+      DASHBOARD_SPARKS_FIXTURE: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dbdcc1d87d77cacf89fe1f36787c7a6921826cc0
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify exact scope
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/dashboard-sparks-evidence/source
+          test "$(git rev-parse HEAD)" = dbdcc1d87d77cacf89fe1f36787c7a6921826cc0
+          git diff --check 079d5bbc6224bc6e9770d33622f6cab7e4baac01
+          git diff --name-only 079d5bbc6224bc6e9770d33622f6cab7e4baac01 > /tmp/dashboard-sparks-evidence/changed-files.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          actual = set(Path('/tmp/dashboard-sparks-evidence/changed-files.txt').read_text().splitlines())
+          expected = {'src/app/dashboard/page.tsx', 'src/app/profile/priorities/page.tsx', 'src/components/profile/profile-priorities-view.tsx', 'src/components/profile/profile-priority-editor.tsx', 'src/components/dashboard/dashboard-tools.tsx', 'src/components/dashboard/dashboard-tools.module.css', 'src/lib/dashboard-view.ts', 'src/lib/dashboard-view.test.ts', 'src/lib/dashboard-loading.test.ts', 'tests/dashboard-sparks.spec.ts'}
+          assert actual == expected, actual ^ expected
+          PY
+          git rev-parse HEAD > /tmp/dashboard-sparks-evidence/commit.txt
+          git diff 079d5bbc6224bc6e9770d33622f6cab7e4baac01 > /tmp/dashboard-sparks-evidence/source.patch
+          while IFS= read -r file; do cp --parents "$file" /tmp/dashboard-sparks-evidence/source/; done < /tmp/dashboard-sparks-evidence/changed-files.txt
+      - run: npm ci
+      - name: Focused regressions
+        run: node --import tsx --test src/lib/dashboard-view.test.ts src/lib/dashboard-loading.test.ts src/lib/profile-priorities.test.ts | tee /tmp/dashboard-sparks-evidence/focused-tests.log
+      - name: Full repository tests
+        run: npm test > /tmp/dashboard-sparks-evidence/full-tests.log 2>&1
+      - name: Lint
+        run: npm run lint -- --quiet > /tmp/dashboard-sparks-evidence/lint.log 2>&1
+      - name: Typecheck
+        run: npx tsc --noEmit > /tmp/dashboard-sparks-evidence/typecheck.log 2>&1
+      - name: Production build
+        run: npm run build > /tmp/dashboard-sparks-evidence/build.log 2>&1
+      - name: Rendered Dashboard flow with isolated local account data
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium > /tmp/dashboard-sparks-evidence/browser-install.log 2>&1
+          cat > /tmp/dashboard-sparks-qa.config.mjs <<'JS'
+          export default {
+            testDir: `${process.env.GITHUB_WORKSPACE}/tests`,
+            testMatch: 'dashboard-sparks.spec.ts',
+            timeout: 60000,
+            expect: { timeout: 15000 },
+            retries: 0,
+            workers: 1,
+            use: { baseURL: 'http://127.0.0.1:3210', headless: true, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+            outputDir: '/tmp/dashboard-sparks-evidence/playwright',
+          };
+          JS
+          npm run start -- --hostname 127.0.0.1 --port 3210 > /tmp/dashboard-sparks-evidence/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3210/manifest.webmanifest >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3210/manifest.webmanifest >/dev/null
+          npx playwright test --config=/tmp/dashboard-sparks-qa.config.mjs --reporter=line > /tmp/dashboard-sparks-evidence/browser.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-sparks-rendered-qa
+          path: /tmp/dashboard-sparks-evidence
+          retention-days: 14
