@@ -342,7 +342,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
 
   const { round } = roundResult;
   const sealedProgressActive =
-    ecmRulebook.donorDisclosure.sealedProgressDisclosureRequired && round.countdownSeconds > 0;
+    ecmRulebook.donorDisclosure.sealedProgressDisclosureRequired && (round.countdownSeconds ?? 0) > 0;
   const payableCampaigns = allocation.rows.filter((row) => row.status === "payable");
   const sponsorPoolCents = round.sponsorPool.baseMatchBudgetCents + round.sponsorPool.qfBonusBudgetCents;
   const perDonorCapCents = Number(round.sponsorPool.perDonorQfCapCents);
