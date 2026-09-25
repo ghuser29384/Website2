@@ -38,17 +38,12 @@ test.describe("Adaptive homepage", () => {
 
     const primary = page.locator("header.topbar nav");
     await expect(primary).toBeVisible();
-    await expect(primary.getByRole("button", { name: "Open personalized feed" })).toHaveText(
-      "Feed",
-    );
-    await expect(primary.getByRole("button", { name: "Open Discover" })).toHaveText(
-      "Discover",
-    );
-    await expect(primary.getByRole("button", { name: "Open Trade controls" })).toHaveCount(0);
-    await expect(primary.getByRole("link", { name: "Open optional walkthrough" })).toBeVisible();
-    await expect(primary.getByRole("button", { name: "Trade", exact: true })).toBeVisible();
-    await expect(primary.getByRole("button", { name: "Commitments", exact: true })).toBeVisible();
-    await expect(primary.getByRole("button", { name: "Open Evidence" })).toHaveText("Evidence");
+    await expect(primary.getByRole("link")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
+    await expect(primary.getByRole("link", { name: "Home", exact: true })).toHaveAttribute("href", "/feed");
+    await expect(primary.getByRole("link", { name: "Trades", exact: true })).toHaveAttribute("href", "/discover");
+    await expect(primary.getByRole("link", { name: "Profile", exact: true })).toHaveAttribute("href", "/profile");
+    await expect(primary.getByText("100 Sparks")).toHaveCount(0);
+    await expect(page.locator(".header-start")).toHaveText("Get Started");
 
     await expect(page.locator('button[data-action="command"]')).toBeVisible();
     await expect(page.locator('button[data-action="profile"]')).toHaveAccessibleName("Account");

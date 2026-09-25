@@ -14,15 +14,15 @@ for (const width of [1440, 320, 360, 390]) {
     await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible({ timeout: 30_000 });
     const date = page.locator(".head .date");
     const create = page.locator('.head button[data-action="create"]');
-    const tour = page.getByRole("link", { name: "Open optional walkthrough" });
+    const tour = page.locator(".header-more").getByRole("link", { name: "How it works", exact: true });
     await expect(date.locator("time")).toHaveText("Wednesday, September 23, 2026");
     await expect(create).toContainText("Create offer");
     await expect(create).toBeVisible();
-    await expect(tour).toBeVisible();
+    await expect(tour).toHaveCount(1);
     await page.evaluate(() => document.fonts.ready);
 
     const navigation = page.locator("header.topbar nav > button, header.topbar nav > a");
-    await expect(navigation).toHaveCount(6);
+    await expect(navigation).toHaveCount(4);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     for (const control of [date, create, ...await navigation.all()]) {
       const bounds = await control.boundingBox();
@@ -32,10 +32,13 @@ for (const width of [1440, 320, 360, 390]) {
       expect(bounds!.width).toBeGreaterThan(0);
       expect(await control.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
     }
-    expect(await tour.evaluate((element) => getComputedStyle(element).fontSize)).toBe(width <= 820 ? "11px" : "15px");
+
     await page.screenshot({ path: testInfo.outputPath(`home-${width}.png`), fullPage: true });
     expect(errors).toEqual([]);
 
+    await page.locator(".header-more > summary").click();
+    await expect(tour).toBeVisible();
+    await expect(tour).toHaveCSS("font-size", "14px");
     await tour.click();
     await expect(page).toHaveURL(/\/walkthrough$/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();

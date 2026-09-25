@@ -44,16 +44,7 @@ const dataDependentPublicRoutes = [
 ] as const;
 
 const protectedRoutes = ["/dashboard"] as const;
-const standardNavLabels = [
-  "Feed",
-  "Discover",
-  "Create",
-  "Invite",
-  "Messages",
-  "Commitments",
-  "Evidence",
-  "Safety",
-] as const;
+const standardNavLabels = ["Home", "Trades", "Commitments", "Profile"] as const;
 
 function isExpectedLocalSupabaseDiagnostic(message: string) {
   return (

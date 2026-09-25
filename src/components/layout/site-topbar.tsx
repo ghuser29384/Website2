@@ -19,6 +19,7 @@ import {
   getSmartSiteSearchTarget,
 } from "@/lib/site-search-smart";
 import { createClient } from "@/lib/supabase/browser";
+import { HEADER_UTILITY_LINKS, REFINED_HEADER_LINKS, usesDefaultHeader } from "@/lib/refined-header";
 
 interface NavRouteItem {
   href: string;
@@ -67,10 +68,10 @@ function isHrefActive(pathname: string | null, href: string) {
 
 function NavItem({ href, label, className }: { href: string; label: string; className?: string }) {
   const pathname = usePathname();
-  const isActive = isHrefActive(pathname, href);
+  const isActive = isHrefActive(pathname, href) || (href === "/feed" && pathname === "/");
 
   return (
-    <Link prefetch={false} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
+    <Link prefetch={false} aria-current={isActive ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
       {label}
     </Link>
   );
@@ -99,7 +100,11 @@ function NavMenu({
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           onOpenChange(false);
+          event.currentTarget.querySelector("summary")?.focus();
         }
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onOpenChange(false);
       }}
       onToggle={(event) => onOpenChange(event.currentTarget.open)}
     >
@@ -151,6 +156,8 @@ export function SiteTopbar({
   logoutRedirectTo = "/",
 }: SiteTopbarProps) {
   const router = useRouter();
+  const refinedHeader = usesDefaultHeader(links);
+  const headerLinks = refinedHeader ? REFINED_HEADER_LINKS : links;
   const searchInputId = useId();
   const searchResultsId = useId();
   const clarificationInputId = useId();
@@ -248,13 +255,13 @@ export function SiteTopbar({
   return (
     <nav
       aria-label="Primary"
-      className={showSearch ? "topbar mt-site-topbar topbar-with-search" : "topbar mt-site-topbar"}
+      className={["topbar mt-site-topbar", showSearch ? "topbar-with-search" : "", refinedHeader ? "mt-refined-header" : ""].filter(Boolean).join(" ")}
     >
       <Link prefetch={false} aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
         <MoralTradeWordmark />
       </Link>
-      <div className="topbar-links">
-        {links.map((link) =>
+      <div className="topbar-links" data-mt-primary-links={refinedHeader ? "true" : undefined}>
+        {headerLinks.map((link) =>
           link.items?.length ? (
             <NavMenu
               isOpen={openMenuKey === `primary-${link.label}`}
@@ -393,12 +400,21 @@ export function SiteTopbar({
           ) : null}
         </form>
       ) : null}
-      {showLogout || authLink || primaryAction ? (
+      {refinedHeader || showLogout || authLink || primaryAction ? (
         <div className="topbar-actions">
+          {refinedHeader && !showLogout ? (
+            <NavMenu
+              isOpen={openMenuKey === "utilities"}
+              items={HEADER_UTILITY_LINKS}
+              label="More"
+              onOpenChange={(isOpen) => handleMenuOpenChange("utilities", isOpen)}
+            />
+          ) : null}
           {showLogout ? (
             <NavMenu
               isOpen={openMenuKey === "account"}
               items={[
+                ...(refinedHeader ? HEADER_UTILITY_LINKS : []),
                 { href: "/dashboard#my-trades", label: "My trades", description: "Review owned and engaged offers." },
                 { href: "/dashboard#data-portability", label: "Profile data", description: "Export or import account data." },
                 { href: "/cart", label: "Favourites", description: "Watch offers for later review." },

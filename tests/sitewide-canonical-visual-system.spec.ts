@@ -219,7 +219,7 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
   } else {
     const topbar = page.locator(".mt-site-topbar").first();
     if (await topbar.isVisible().catch(() => false)) {
-      await expect(topbar).toHaveCSS("background-color", BLACK);
+      await expect(topbar).toHaveCSS("background-color", await topbar.evaluate((el) => el.classList.contains("mt-refined-header")) ? "rgb(17, 18, 20)" : BLACK);
       await expect(topbar).toHaveCSS("border-radius", "0px");
     }
   }
