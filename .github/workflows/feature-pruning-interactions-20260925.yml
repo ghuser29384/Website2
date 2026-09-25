@@ -1,0 +1,75 @@
+name: Feature-pruning interaction evidence 20260925
+on:
+  push:
+    branches: [ops/feature-pruning-audit-20260925]
+    paths: [.github/workflows/feature-pruning-interactions-20260925.yml]
+permissions:
+  contents: read
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: c6baf49d52cb089254e857081de982a6f0449283
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Read-only production interactions
+        run: |
+          mkdir -p audit-interactions
+          cat > audit-interactions/capture.mjs <<'JS'
+          import { chromium } from '@playwright/test';
+          import { writeFile } from 'node:fs/promises';
+          const browser = await chromium.launch();
+          const results = [];
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 1000 }, serviceWorkers: 'block' });
+              await context.route('**/*', route => ['GET', 'HEAD'].includes(route.request().method()) ? route.continue() : route.abort('blockedbyclient'));
+              const page = await context.newPage();
+              const errors = [];
+              page.on('pageerror', e => errors.push(e.message));
+              async function home() {
+                await page.goto('https://www.moraltrade.org/', { waitUntil: 'domcontentloaded' });
+                await page.locator('[data-mt-live-now="adaptive"]').waitFor({ timeout: 30000 });
+              }
+              async function capture(name) {
+                await page.screenshot({ path: `audit-interactions/${width}-${name}.png`, fullPage: true });
+                const text = await page.locator('body').innerText();
+                await writeFile(`audit-interactions/${width}-${name}.txt`, text);
+                results.push({ width, name, url: page.url(), errors: [...errors], text });
+              }
+              await home();
+              await page.locator('[data-now="rules"]').click();
+              await capture('standing-rules');
+              await home();
+              await page.locator('[data-action="command"]').click();
+              await capture('command-history');
+              await home();
+              await page.locator('[data-page="activity"]').click();
+              await capture('commitments-portfolio');
+              for (const tab of ['ledger', 'outcomes', 'calendar']) {
+                await page.locator(`[data-activity="${tab}"]`).click();
+                await capture(`activity-${tab}`);
+              }
+              await page.goto('https://www.moraltrade.org/complete-verification.html?record=wild-animal-research&from=calendar', { waitUntil: 'networkidle' });
+              await capture('legacy-verification');
+              await context.close();
+            }
+          } finally { await browser.close(); }
+          await writeFile('audit-interactions/results.json', JSON.stringify({ anonymous: true, readOnly: true, blockedNonReadRequests: true, results }, null, 2));
+          JS
+          node audit-interactions/capture.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feature-pruning-interactions-${{ github.run_id }}
+          path: audit-interactions/
+          retention-days: 7
+          if-no-files-found: error
