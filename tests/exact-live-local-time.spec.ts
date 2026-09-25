@@ -43,26 +43,30 @@ async function expectLocalHeader(
   );
 }
 
-async function expectHeaderAcrossPrimaryPages(
+async function expectHeaderAcrossLiveViews(
   page: Page,
   expected: { dateTime: string; dateLabel: string; greeting: string },
 ) {
-  for (const pageName of ["now", "activity"]) {
-    await page.locator(`.topbar nav button[data-page="${pageName}"]`).click();
+  for (const section of ["focus", "plan", "focus"]) {
+    await page.locator(`[data-now="${section}"]`).click();
     await expectLocalHeader(page, expected);
   }
+  await page.locator('.topbar nav button[data-page="activity"]').click();
+  await expect(page).toHaveURL(/\/commitments$/);
+  await expect(page.locator("#commitments-heading")).toBeVisible();
+  await expect(page.locator(".head .date")).toHaveCount(0);
 }
 
 test.describe("exact live interface local time", () => {
   test.describe("America/Los_Angeles", () => {
     test.use({ timezoneId: "America/Los_Angeles" });
 
-    test("uses the visitor's previous local day across Now and Activity", async ({ page }) => {
+    test("uses the visitor's previous local day across Focus and Plan, then opens real Commitments", async ({ page }) => {
       await page.clock.setFixedTime(fixedInstant);
       await installAccountFixture(page);
       await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
 
-      await expectHeaderAcrossPrimaryPages(page, {
+      await expectHeaderAcrossLiveViews(page, {
         dateTime: "2026-07-16",
         dateLabel: "Thursday, July 16, 2026",
         greeting: "Good evening, Riley.",
@@ -73,12 +77,12 @@ test.describe("exact live interface local time", () => {
   test.describe("Asia/Tokyo", () => {
     test.use({ timezoneId: "Asia/Tokyo" });
 
-    test("uses the visitor's next local day across Now and Activity", async ({ page }) => {
+    test("uses the visitor's next local day across Focus and Plan, then opens real Commitments", async ({ page }) => {
       await page.clock.setFixedTime(fixedInstant);
       await installAccountFixture(page);
       await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
 
-      await expectHeaderAcrossPrimaryPages(page, {
+      await expectHeaderAcrossLiveViews(page, {
         dateTime: "2026-07-17",
         dateLabel: "Friday, July 17, 2026",
         greeting: "Good morning, Riley.",

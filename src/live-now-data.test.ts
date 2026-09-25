@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
-import { gunzipSync } from "node:zlib";
 
 const loader = readFileSync("public/moral-trade-live.html", "utf8");
+const core = readFileSync("public/moral-trade-live-core.txt", "utf8");
 const bridge = readFileSync("public/moral-trade-live-now.js", "utf8");
 const feedStyles = readFileSync("public/moral-trade-live-feed.css", "utf8");
 const routeBridge = readFileSync("public/moral-trade-live-route-recommendations.js", "utf8");
@@ -25,13 +25,13 @@ test("the live shell fetches private profile recommendations before rendering", 
   assert.match(loader, /moral-trade-live-feed\.css/);
   assert.match(loader, /moral-trade-live-route-recommendations\.js/);
   assert.match(loader, /moral-trade-live-route-recommendations\.css/);
-  assert.match(loader, /stripLegacyNowFocus/);
-  assert.match(loader, /No generic or demo suggestions are shown/);
+  assert.match(loader, /moral-trade-live-core\.txt/);
+  assert.match(core, /No generic or demo suggestions are shown/);
   assert.match(loader, /unavailableLiveNow/);
   assert.match(loader, /routePlanner:[\s\S]*status: 'unavailable'/);
   assert.match(
-    loader,
-    /loadingPlan[\s\S]*class="plan-grid"[\s\S]*class="panel plan-control"[\s\S]*class="panel route"[\s\S]*class="stack"/,
+    core,
+    /function nowPlan[\s\S]*class="plan-grid"[\s\S]*class="panel plan-control"[\s\S]*class="panel route"[\s\S]*class="stack"/,
     "the fail-closed Plan shell must retain every mount point used by the recommendation UI",
   );
 });
@@ -142,44 +142,14 @@ test("fallback states explicitly refuse generic or fabricated suggestions", () =
   }
 });
 
-test("the loader removes legacy feed and route suggestions before first render", () => {
-  const names = [
-    "0a",
-    "0b",
-    "0c",
-    "0d",
-    "1",
-    "2",
-    "3",
-    "4a",
-    "4b",
-    "4c",
-    "4d",
-    "5a",
-    "5b",
-    "5c",
-    "5d",
-  ];
-  const encoded = names
-    .map((name) => readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, "utf8"))
-    .join("");
-  const legacySource = gunzipSync(Buffer.from(encoded, "base64")).toString("utf8");
-  const start = legacySource.indexOf("function nowFocus(){");
-  const end = legacySource.indexOf("\nfunction story(", start);
-
-  assert.ok(start >= 0 && end > start, "legacy nowFocus boundaries should remain identifiable");
-  assert.match(legacySource.slice(start, end), /Counteroffer from Mina/);
-
-  const withoutFocus = `${legacySource.slice(0, start)}function nowFocus(){return "Loading profile";}${legacySource.slice(end)}`;
-  const planStart = withoutFocus.indexOf("function nowPlan(){");
-  const planEnd = withoutFocus.indexOf("\nfunction field(", planStart);
-  assert.ok(planStart >= 0 && planEnd > planStart, "legacy nowPlan boundaries should remain identifiable");
-  assert.match(withoutFocus.slice(planStart, planEnd), /Recommended mixed route/);
-  const deliveredSource = `${withoutFocus.slice(0, planStart)}function nowPlan(){return "Loading routes";}${withoutFocus.slice(planEnd)}`;
-  assert.doesNotMatch(deliveredSource, /Counteroffer from Mina|AI-safety research under \$100/);
-  assert.doesNotMatch(deliveredSource, /Recommended mixed route|Redirect \$20 of political donations/);
-  assert.match(deliveredSource, /function story\(/);
-  assert.match(deliveredSource, /function field\(/);
+test("the delivered core contains only loading states, never legacy feed or route suggestions", () => {
+  assert.match(core, /function nowFocus\(/);
+  assert.match(core, /function nowPlan\(/);
+  assert.match(core, /data-mt-live-now-state="loading"/);
+  assert.match(core, /data-mt-live-route-planner="loading"/);
+  assert.doesNotMatch(core, /Counteroffer from Mina|AI-safety research under \$100/);
+  assert.doesNotMatch(core, /Recommended mixed route|Redirect \$20 of political donations/);
+  assert.doesNotMatch(core, /function nowRules|function activityPage|function exportCSV/);
 });
 
 test("the browser bridge renders only fixture profile data and escapes opportunity fields", () => {
