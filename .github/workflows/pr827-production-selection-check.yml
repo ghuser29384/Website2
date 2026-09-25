@@ -1,0 +1,148 @@
+name: PR 827 production selection verification
+on:
+  push:
+    branches: [ops/pr827-selection-validation-20260925]
+    paths: [.github/workflows/pr827-production-selection-check.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Wait for the exact canonical release to succeed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/pr827-selection-validation-20260925
+          for attempt in $(seq 1 170); do
+            gh api repos/ghuser29384/Website2/actions/runs/36198444649 > "$RUNNER_TEMP/release-status.json"
+            jq -e '.head_sha == "deff62e0877e014bee49edab96c996aae448cbc8" and .path == ".github/workflows/vercel-release.yml" and .event == "workflow_dispatch"' "$RUNNER_TEMP/release-status.json" >/dev/null
+            if [[ "$(jq -r .status "$RUNNER_TEMP/release-status.json")" == completed ]]; then
+              jq -e '.conclusion == "success"' "$RUNNER_TEMP/release-status.json" >/dev/null
+              exit 0
+            fi
+            sleep 30
+          done
+          echo 'Canonical release did not finish within the verification window.' >&2
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: deff62e0877e014bee49edab96c996aae448cbc8
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect real production offer rows without changing production data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr827-production"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium } from '@playwright/test';
+          const directory = `${process.env.RUNNER_TEMP}/pr827-production`;
+          const evidence = { expectedSha: 'deff62e0877e014bee49edab96c996aae448cbc8', releaseRun: 36198444649, startedAt: new Date().toISOString(), results: [], passed: false };
+          const browser = await chromium.launch();
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 1000 }, deviceScaleFactor: 1 });
+              await context.addCookies([
+                { name: 'mt_analytics_opt_out', value: '1', url: 'https://www.moraltrade.org', sameSite: 'Lax' },
+                { name: 'mt_walkthrough_seen', value: '1', url: 'https://www.moraltrade.org', sameSite: 'Lax' },
+              ]);
+              const page = await context.newPage();
+              const result = { width, pageErrors: [], consoleErrors: [] };
+              evidence.results.push(result);
+              page.on('pageerror', error => result.pageErrors.push(error.message));
+              page.on('console', message => { if (message.type() === 'error') result.consoleErrors.push(message.text()); });
+              try {
+                const response = await page.goto('https://www.moraltrade.org/offers?view=live', { waitUntil: 'domcontentloaded', timeout: 60000 });
+                result.status = response.status();
+                result.url = page.url();
+                assert.equal(result.status, 200);
+                assert.equal(new URL(result.url).pathname, '/offers');
+                const heading = page.locator('[data-participant-offer] h4').filter({ hasText: 'Counterparty-selected learning or attention' }).filter({ hasText: /existential/i }).first();
+                await heading.waitFor({ state: 'visible', timeout: 45000 });
+                await page.evaluate(() => document.fonts.ready);
+                await heading.scrollIntoViewIfNeeded();
+                const row = heading.locator('xpath=ancestor::section[@data-participant-offer][1]');
+                result.offerId = await row.getAttribute('data-offer-id');
+                result.headingId = await heading.getAttribute('id');
+                result.heading = await heading.innerText();
+                const measure = element => {
+                  const rect = element.getBoundingClientRect();
+                  const style = getComputedStyle(element);
+                  return { x: rect.x + window.scrollX, y: rect.y + window.scrollY, width: rect.width, height: rect.height, background: style.backgroundColor, color: style.color };
+                };
+                result.before = await heading.evaluate(measure);
+                await row.screenshot({ path: `${directory}/offers-${width}-ordinary.png` });
+                result.selected = await heading.evaluate(element => {
+                  const selection = window.getSelection();
+                  selection.removeAllRanges();
+                  const range = document.createRange();
+                  range.selectNodeContents(element);
+                  selection.addRange(range);
+                  const style = getComputedStyle(element, '::selection');
+                  return { text: selection.toString(), heading: element.textContent, background: style.backgroundColor, color: style.color };
+                });
+                assert.equal(result.selected.background, 'rgb(228, 234, 255)');
+                assert.equal(result.selected.color, 'rgb(17, 17, 17)');
+                assert.equal(result.selected.text, result.selected.heading);
+                assert.ok(result.selected.text.includes('Counterparty-selected'));
+                assert.deepEqual(await heading.evaluate(measure), result.before);
+                await row.screenshot({ path: `${directory}/offers-${width}-selected.png` });
+                await heading.screenshot({ path: `${directory}/title-${width}-selected.png` });
+                await heading.click();
+                assert.equal(await page.evaluate(() => window.getSelection().toString()), '');
+                assert.equal(page.url(), result.url);
+                result.after = await heading.evaluate(measure);
+                assert.deepEqual(result.after, result.before);
+                const details = row.locator('[data-proposal-disclosure]');
+                const summary = details.locator('summary');
+                assert.equal(await details.evaluate(element => element.open), false);
+                await summary.focus();
+                await page.keyboard.press('Enter');
+                assert.equal(await details.evaluate(element => element.open), true);
+                await page.keyboard.press('Enter');
+                assert.equal(await details.evaluate(element => element.open), false);
+                result.focus = await summary.evaluate(element => {
+                  const style = getComputedStyle(element);
+                  return { focused: document.activeElement === element, focusVisible: element.matches(':focus-visible'), outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, outlineColor: style.outlineColor, boxShadow: style.boxShadow };
+                });
+                assert.equal(result.focus.focused, true);
+                assert.equal(result.focus.focusVisible, true);
+                await row.screenshot({ path: `${directory}/offers-${width}-keyboard-focus.png` });
+                assert.deepEqual(result.pageErrors, []);
+                result.checkedAt = new Date().toISOString();
+                result.passed = true;
+              } catch (error) {
+                result.error = String(error.stack || error);
+                await page.screenshot({ path: `${directory}/failure-${width}.png`, fullPage: true }).catch(() => {});
+                throw error;
+              } finally {
+                await context.close();
+              }
+            }
+            evidence.passed = true;
+          } finally {
+            evidence.finishedAt = new Date().toISOString();
+            await writeFile(`${directory}/production-selection.json`, JSON.stringify(evidence, null, 2));
+            await browser.close();
+          }
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr827-production-selection-${{ github.run_id }}
+          path: ${{ runner.temp }}/pr827-production
+          if-no-files-found: warn
+          retention-days: 7
