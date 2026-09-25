@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
-  listOpenOffersPreview,
+  listOpenOffersDirectory,
   listPublicProfilesPage,
 } from "@/lib/app-data";
 import {
@@ -113,7 +113,7 @@ async function listAllLiveOfferListings(): Promise<PublicOfferListing[]> {
     sort: "newest",
   });
   const liveMode = getPublicOffersLiveModeFromSearchParams(baseParams);
-  const liveOffers = await listOpenOffersPreview(500, liveMode);
+  const liveOffers = await listOpenOffersDirectory(liveMode);
   const first = buildPublicOffersCollectionPayload({
     liveOffers,
     searchParams: new URLSearchParams(baseParams),

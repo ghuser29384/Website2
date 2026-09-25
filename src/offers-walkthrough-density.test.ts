@@ -81,10 +81,12 @@ test("offers defaults to an open editorial directory instead of stacked dense pa
   assert.match(participantComponent, /aria-labelledby=\{offerHeadingId\}/);
   assert.match(participantComponent, /aria-describedby=\{`\$\{offerDescriptionId\} \$\{truthNoteId\}`\}/);
 
-  const offersMapIndex = participantComponent.indexOf("offers.map");
+  const offersMapIndex = participantComponent.indexOf("actionGroup.offers.map");
+  const actionGroupsMapIndex = participantComponent.indexOf("actionGroups.map");
   const truthNoteIndex = participantComponent.indexOf("data-participant-exact-terms-note");
   const truthCopy = "These are the owner&apos;s exact published terms";
-  assert.ok(offersMapIndex >= 0, "the participant component must render its proposal list");
+  assert.ok(actionGroupsMapIndex >= 0, "the participant component must group underlying offered actions");
+  assert.ok(offersMapIndex > actionGroupsMapIndex, "each action group must render its exact proposal alternatives");
   assert.ok(truthNoteIndex > offersMapIndex, "the participant truth note must follow the proposal list");
   assert.equal(
     participantComponent.match(/data-participant-exact-terms-note/g)?.length,
@@ -96,9 +98,10 @@ test("offers defaults to an open editorial directory instead of stacked dense pa
     1,
     "the participant truth-note copy must occur exactly once",
   );
-  assert.match(
-    participantComponent,
-    /\}\)\}\s*<\/div>\s*<p className=\{styles\.truthNote\} data-participant-exact-terms-note/,
+  const truthNoteTail = participantComponent.slice(truthNoteIndex);
+  assert.doesNotMatch(
+    truthNoteTail,
+    /data-participant-offer\b/,
     "the participant truth note must sit outside the mapped proposal rows",
   );
 
