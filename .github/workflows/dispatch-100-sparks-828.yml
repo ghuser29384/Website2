@@ -1,0 +1,90 @@
+name: Dispatch approved 100 Sparks release once
+
+on:
+  push:
+    branches: [ops/release-100-sparks-828-20260925]
+    paths: [.github/workflows/dispatch-100-sparks-828.yml]
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+
+concurrency:
+  group: dispatch-100-sparks-828-20260925
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/release-100-sparks-828-20260925' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify immutable approval and invoke unchanged production release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          REPO = 'ghuser29384/Website2'
+          MERGED = '079d5bbc6224bc6e9770d33622f6cab7e4baac01'
+          TESTED = 'b7bc80795464f06061e45187bc89dd0a52b24c09'
+          TREE = 'f78c8f496436c23c5d479b34436ade9e44298b7d'
+          RELEASE_BLOB = 'e219e99d25279161b89eee80fc410912c3561a19'
+          DISPATCH_PATH = '.github/workflows/dispatch-100-sparks-828.yml'
+
+          def api(path, data=None):
+              payload = None if data is None else json.dumps(data).encode()
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/' + REPO + '/' + path,
+                  data=payload,
+                  headers={
+                      'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'Content-Type': 'application/json',
+                  },
+                  method='GET' if data is None else 'POST',
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          assert os.environ['GITHUB_REPOSITORY'] == REPO
+          pr = api('pulls/828')
+          assert pr['merged'] and pr['base']['ref'] == 'main'
+          assert pr['merge_commit_sha'] == MERGED and pr['head']['sha'] == TESTED
+          assert api('git/ref/heads/main')['object']['sha'] == MERGED
+          assert api('git/commits/' + MERGED)['tree']['sha'] == TREE
+          assert api('git/commits/' + TESTED)['tree']['sha'] == TREE
+
+          trigger = api('commits/' + os.environ['GITHUB_SHA'])
+          assert [p['sha'] for p in trigger['parents']] == [MERGED]
+          assert len(trigger['files']) == 1
+          assert trigger['files'][0]['filename'] == DISPATCH_PATH
+          assert trigger['files'][0]['status'] == 'added'
+          workflow = api('contents/.github/workflows/vercel-release.yml?ref=' + MERGED)
+          assert workflow['sha'] == RELEASE_BLOB
+
+          for run_id in (36195498873, 36195498834):
+              run = api('actions/runs/' + str(run_id))
+              assert run['head_sha'] == TESTED
+              assert run['status'] == 'completed' and run['conclusion'] == 'success'
+
+          runs = api('actions/workflows/325045339/runs?event=workflow_dispatch&per_page=100')['workflow_runs']
+          if any(run['head_sha'] == MERGED for run in runs):
+              raise SystemExit('An exact-commit release already exists; no duplicate dispatched.')
+
+          # This only invokes the existing release. It neither deploys directly nor
+          # changes required checks, branch rules, environments, or release guards.
+          api('actions/workflows/vercel-release.yml/dispatches', {
+              'ref': 'main',
+              'inputs': {'target': 'production', 'ref': 'main', 'expected_sha': MERGED},
+          })
+          print('Existing gated production release requested for ' + MERGED)
+          PY
