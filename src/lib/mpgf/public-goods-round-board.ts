@@ -11,7 +11,7 @@ export const MPGF_ROUND_BOARD_SCHEMA_VERSION = "mpgf-round-board-v1";
 export type MpgfRoundBoardStatus = "cleared" | "near_threshold" | "needs_review" | "failed";
 export type MpgfSealedProgressLabel =
   | "Needs more support"
-  | "Likely near threshold"
+  | "Progress not disclosed"
   | "Review pending"
   | "Closed; final audit available";
 
@@ -82,7 +82,7 @@ export function sealedProgressLabelForBoardStatus(status: MpgfRoundBoardStatus):
     return "Needs more support";
   }
 
-  return "Likely near threshold";
+  return "Progress not disclosed";
 }
 
 function choiceLabelForBoardStatus(status: MpgfRoundBoardStatus, viewerPresent: boolean) {
