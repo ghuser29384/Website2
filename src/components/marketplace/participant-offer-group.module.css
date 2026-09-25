@@ -73,13 +73,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem 1.5rem;
-  padding: 0.8rem 1rem;
+  padding: 0.55rem 0.85rem;
   border-bottom: 1px solid var(--offers-rule);
   background: color-mix(in srgb, var(--offers-surface) 96%, var(--offers-ink) 4%);
 }
 
 .actionGroupHeader > div {
+  display: flex;
   min-width: 0;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+
+.actionGroupHeader .kicker {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .actionGroupHeader strong {
@@ -315,6 +323,31 @@
   line-height: 1.5;
 }
 
+@media (min-width: 681px) {
+  .offer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .offerHeading {
+    grid-column: 1 / -1;
+  }
+
+  .meta {
+    grid-column: 1;
+  }
+
+  .disclosure {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .disclosure[open] {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
 @media (max-width: 680px) {
   .groupHeader,
   .actionGroupHeader {
@@ -322,6 +355,11 @@
     align-items: flex-start;
     gap: 0.5rem;
     padding: 0.85rem;
+  }
+
+  .actionGroupHeader > div {
+    flex-direction: column;
+    gap: 0.25rem;
   }
 
   .proposalCount,
