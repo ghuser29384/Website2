@@ -61,11 +61,27 @@ jobs:
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium
+          # Render the real static loading component with production CSS. This
+          # preview exists only on the ephemeral test runner, never in the PR
+          # or a production deployment. No auth or user-data mocking is added.
+          node --import tsx --input-type=commonjs <<'JS'
+          const fs = require('node:fs');
+          const React = require('react');
+          globalThis.React = React;
+          const { renderToStaticMarkup } = require('react-dom/server');
+          const { default: DashboardLoading } = require('./src/app/dashboard/loading.tsx');
+          const styles = fs.readdirSync('.next/static/css', { recursive: true })
+            .filter(name => name.endsWith('.css'))
+            .map(name => `<link rel="stylesheet" href="/_next/static/css/${name}">`).join('');
+          const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard loading component QA</title>${styles}</head><body>${renderToStaticMarkup(React.createElement(DashboardLoading))}</body></html>`;
+          fs.writeFileSync('public/__dashboard-loading-qa.html', html);
+          fs.writeFileSync('/tmp/dashboard-qa/loading-preview.html', html);
+          JS
           npx next start -p 3210 > /tmp/dashboard-qa/server.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:3210/dashboard >/dev/null; then break; fi
+            if curl -fsS http://127.0.0.1:3210/login >/dev/null; then break; fi
             sleep 1
           done
           node --input-type=module <<'JS'
@@ -79,18 +95,35 @@ jobs:
               const page = await browser.newPage({ viewport: { width, height } });
               const errors = [];
               page.on('pageerror', error => errors.push(error.message));
-              const response = await page.goto('http://127.0.0.1:3210/dashboard');
-              await page.getByRole('heading', { name: 'Account', exact: true }).waitFor();
-              const title = await page.title();
-              assert.match(title, /Dashboard/);
-              assert.equal(response.status(), 200);
+              await page.goto('http://127.0.0.1:3210/dashboard');
+              await page.waitForURL(url => url.pathname === '/login');
+              assert.equal(new URL(page.url()).searchParams.get('returnTo'), '/dashboard');
+              await page.getByRole('heading', { name: 'Welcome back', exact: true }).waitFor();
+              assert.match(await page.title(), /Log in/);
+              assert.equal(await page.getByRole('heading', { name: 'Account', exact: true }).count(), 0);
               assert.equal(await page.locator('nextjs-portal').count(), 0);
-              await page.screenshot({ path: `/tmp/dashboard-qa/dashboard-${name}.png`, fullPage: false });
+              await page.screenshot({ path: `/tmp/dashboard-qa/dashboard-login-${name}.png`, fullPage: false });
+              const signupLinks = page.locator('a[href^="/signup"]');
+              let clicked = false;
+              for (let i = 0; i < await signupLinks.count(); i += 1) {
+                if (await signupLinks.nth(i).isVisible()) {
+                  await signupLinks.nth(i).click();
+                  clicked = true;
+                  break;
+                }
+              }
+              assert.ok(clicked, 'Visible sign-up navigation must remain usable');
+              await page.waitForURL(url => url.pathname === '/signup');
+              await page.getByRole('heading', { name: 'Create your account', exact: true }).waitFor();
+              const preview = await page.goto('http://127.0.0.1:3210/__dashboard-loading-qa.html');
+              assert.equal(preview.status(), 200);
+              await page.getByRole('heading', { name: 'Account', exact: true }).waitFor();
+              assert.equal(await page.getByRole('status').innerText(), 'Loading your dashboard…');
+              assert.equal(await page.getByRole('main').getAttribute('aria-busy'), 'true');
               const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
               assert.equal(overflow, false);
-              await page.locator('nav[aria-label="Account shortcuts"] a[href="/contact"]').click();
-              await page.waitForURL('**/contact');
-              results.push({ viewport: name, title, status: response.status(), nonblank: true, frameworkOverlay: false, overflow, interaction: 'Dashboard -> Contact -> /contact', errors });
+              await page.screenshot({ path: `/tmp/dashboard-qa/dashboard-loading-${name}.png`, fullPage: false });
+              results.push({ viewport: name, protectedRoute: '/dashboard -> /login?returnTo=%2Fdashboard', privateContentExposed: false, interaction: 'Login -> Create your account (no form submission)', loadingComponent: 'actual DashboardLoading rendered with production CSS in isolated local preview', overflow, errors });
               await page.close();
             }
           } finally {
