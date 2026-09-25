@@ -1,0 +1,97 @@
+name: PR 737 adjacent QA repair candidate object
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/pr737-adjacent-qa-repair-r2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr737-adjacent-qa-repair-candidate-object
+  cancel-in-progress: true
+
+env:
+  EXPECTED_HEAD: 32c4d35346eb5588424c9ce5d09ceca22d3a519e
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+  TARGET_PATH: .github/workflows/mpgf-public-goods-compacts-qa.yml
+  TEMP_CONTROLLER_PATH: .github/workflows/pr737-adjacent-qa-repair-once.yml
+
+jobs:
+  build-candidate-object:
+    if: github.event.pull_request.head.ref == 'ops/pr737-adjacent-qa-repair-r2-20260821'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact PR 737 candidate
+        uses: actions/checkout@v4
+        with:
+          repository: ghuser29384/Website2
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Build exact bounded candidate commit
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -f "$TEMP_CONTROLLER_PATH"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['TARGET_PATH'])
+          text = path.read_text()
+          old = '      - name: Run genuinely concurrent readiness freeze before ledger authority hardening\n'
+          new = '      - name: Run genuinely concurrent readiness freeze test before ledger authority hardening\n'
+          if text.count(old) != 1 or text.count(new) != 0:
+              raise SystemExit(f'unexpected marker counts: old={text.count(old)}, new={text.count(new)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          rm "$TEMP_CONTROLLER_PATH"
+          git diff --check
+          test "$(git diff --name-status | sort)" = $'D\t.github/workflows/pr737-adjacent-qa-repair-once.yml\nM\t.github/workflows/mpgf-public-goods-compacts-qa.yml'
+          test "$(grep -Fc -- 'Run genuinely concurrent readiness freeze test before ledger authority hardening' "$TARGET_PATH")" -eq 1
+          test "$(grep -Fc -- 'Run genuinely concurrent readiness freeze before ledger authority hardening' "$TARGET_PATH")" -eq 0
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$TARGET_PATH" "$TEMP_CONTROLLER_PATH"
+          git diff --cached --check
+          git commit -m 'ci: align concurrent readiness source contract'
+          candidate_sha="$(git rev-parse HEAD)"
+          candidate_tree="$(git rev-parse HEAD^{tree})"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_HEAD"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "candidate_tree=$candidate_tree" >> "$GITHUB_OUTPUT"
+
+          set +e
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_HEAD" origin "HEAD:refs/heads/$TARGET_BRANCH"
+          push_status=$?
+          set -e
+          echo "push_status=$push_status" >> "$GITHUB_OUTPUT"
+
+          mkdir -p candidate-metadata
+          printf '%s\n' "$candidate_sha" > candidate-metadata/candidate-sha.txt
+          printf '%s\n' "$candidate_tree" > candidate-metadata/candidate-tree.txt
+          printf '%s\n' "$EXPECTED_HEAD" > candidate-metadata/parent-sha.txt
+          printf '%s\n' "$push_status" > candidate-metadata/push-status.txt
+
+      - name: Upload candidate metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr737-adjacent-qa-candidate-object-${{ steps.candidate.outputs.candidate_sha }}
+          path: candidate-metadata
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Report candidate object
+        shell: bash
+        run: |
+          echo "candidate_sha=${{ steps.candidate.outputs.candidate_sha }}"
+          echo "candidate_tree=${{ steps.candidate.outputs.candidate_tree }}"
+          echo "push_status=${{ steps.candidate.outputs.push_status }}"
