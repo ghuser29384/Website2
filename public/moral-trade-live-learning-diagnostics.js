@@ -50,14 +50,22 @@
       : experiment.stoppedByGuardrail
         ? "Causal holdout stopped by guardrail"
         : "Causal holdout disabled";
-    return `<aside class="mt-learning-diagnostics" aria-label="Recommendation-ranking status">
-      <div><span>Recommendation ranking</span><strong>${escapeHtml(copy.label)}</strong><p>${escapeHtml(copy.detail)}</p></div>
-      <dl>
-        <div><dt>Role</dt><dd>Ranking aid under separate evidence and safety review</dd></div>
-        <div><dt>Experiment</dt><dd>${escapeHtml(experimentLabel)}</dd></div>
-        <div><dt>Audit</dt><dd>${escapeHtml(receipt)}</dd></div>
-        <div><dt>Privacy</dt><dd>No raw private profile prose or sensitive demographic features</dd></div>
-      </dl>
+    return `<aside class="mt-learning-diagnostics" aria-label="Why these recommendations are ordered this way">
+      <div>
+        <span>Why these recommendations</span>
+        <strong>Preference-based ordering</strong>
+        <p>Ordering uses your explicit preferences and public opportunity terms. Internal ranking scores are not factual outcome, safety, impact, or moral-value claims.</p>
+      </div>
+      <details>
+        <summary>Technical ranking details</summary>
+        <p><strong>${escapeHtml(copy.label)}</strong> — ${escapeHtml(copy.detail)}</p>
+        <dl>
+          <div><dt>Role</dt><dd>Ranking aid under separate evidence and safety review</dd></div>
+          <div><dt>Experiment</dt><dd>${escapeHtml(experimentLabel)}</dd></div>
+          <div><dt>Audit</dt><dd>${escapeHtml(receipt)}</dd></div>
+          <div><dt>Privacy</dt><dd>No raw private profile prose or sensitive demographic features</dd></div>
+        </dl>
+      </details>
     </aside>`;
   }
 
@@ -87,9 +95,7 @@
       const note = document.createElement("p");
       note.className = "mt-pareto-note";
       note.textContent =
-        model.mode === "active"
-          ? "Learned ranking layer active. Numerical outcome probabilities are not shown here; review the concrete terms, evidence, and counterparty response before relying on a recommendation."
-          : "Heuristic/shadow ranking layer active. Its internal scores are ranking aids, not estimates of acceptance, completion, additionality, safety, or moral value.";
+        "Why shown: ranked using explicit preferences and public opportunity terms. Internal ranking scores are not estimates of acceptance, completion, additionality, safety, impact, or moral value.";
       details.appendChild(note);
     });
   }
