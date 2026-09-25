@@ -153,7 +153,6 @@ function rankSmartProfiles<T extends ProfileDiscoveryLike>(
   personalPriorities: readonly string[],
   sort: PeopleDiscoverySort,
 ) {
-  const maximumOffers = Math.max(1, ...profiles.map((profile) => profile.offerCount));
   const signals = profiles.map((profile): SmartProfileSignals => {
     const credibility = credibilityByProfile.get(profile.id);
     const fields = profileTextFields(profile);
@@ -161,9 +160,7 @@ function rankSmartProfiles<T extends ProfileDiscoveryLike>(
     const semanticRelevance = smartInterpretationScore(interpretation, fields);
     const evidenceQuality = profileEvidenceQuality(profile, credibility);
     const personalPriorityFit = smartPersonalPriorityScore(causeIds, personalPriorities);
-    const offerAvailability = clamp(
-      Math.log1p(profile.offerCount) / Math.log1p(maximumOffers),
-    );
+    const offerAvailability = profile.offerCount > 0 ? 1 : 0;
     const score = clamp(
       0.56 * semanticRelevance +
         0.22 * evidenceQuality +
@@ -175,12 +172,6 @@ function rankSmartProfiles<T extends ProfileDiscoveryLike>(
 
   return signals
     .sort((left, right) => {
-      if (sort === "offers") {
-        const leftOffers = Math.log1p(left.profile.offerCount) / Math.log1p(maximumOffers);
-        const rightOffers = Math.log1p(right.profile.offerCount) / Math.log1p(maximumOffers);
-        return rightOffers - leftOffers || right.score - left.score ||
-          left.profile.id.localeCompare(right.profile.id);
-      }
       if (sort === "newest") {
         return Date.parse(right.profile.created_at) - Date.parse(left.profile.created_at) ||
           right.score - left.score || left.profile.id.localeCompare(right.profile.id);
