@@ -7,15 +7,15 @@ type Node = { type: unknown; props: Record<string, unknown> };
 function loadBoundary() {
   const source = readFileSync("src/app/commitments/loading.tsx", "utf8");
   const { outputText } = transpileModule(source, {
-    compilerOptions: { jsx: JsxEmit.ReactJSX, module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    compilerOptions: { esModuleInterop: true, jsx: JsxEmit.ReactJSX, module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
     fileName: "loading.tsx",
   });
   const jsx = (type: unknown, props: Record<string, unknown>): Node => ({ type, props });
   const module = { exports: {} };
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx, jsxs: jsx },
-    "next/link": { default: "a" },
-    "./loading.module.css": { default: new Proxy({}, { get: (_, key) => String(key) }) },
+    "next/link": { __esModule: true, default: "a" },
+    "./loading.module.css": { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) },
   };
   new Function("require", "module", "exports", outputText)((name: string) => {
     assert.ok(Object.hasOwn(dependencies, name), `loading boundary must not import data: ${name}`);
