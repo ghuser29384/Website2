@@ -1,0 +1,41 @@
+name: Integrate current main into recommendation cleanup 20260925
+
+on:
+  push:
+    branches: [ops/recommendation-followthrough-validation-20260925]
+    paths: [.github/workflows/recommendation-followthrough-integrate-main-20260925.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e143fe1117f55c0e7c33317c61410484eb177dd1
+          fetch-depth: 100
+      - name: Merge exact current main without overwriting cleanup
+        run: |
+          set -euo pipefail
+          branch=cleanup/recommendation-followthrough-20260925
+          test "$(git rev-parse HEAD)" = e143fe1117f55c0e7c33317c61410484eb177dd1
+          test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = e143fe1117f55c0e7c33317c61410484eb177dd1
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 98723f7f7c45407d8303cf72acf38e9a35a0904c
+          git fetch --no-tags --depth=100 origin 98723f7f7c45407d8303cf72acf38e9a35a0904c
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-ff --no-edit 98723f7f7c45407d8303cf72acf38e9a35a0904c
+          git diff --check 98723f7f7c45407d8303cf72acf38e9a35a0904c HEAD
+          git push origin "HEAD:refs/heads/$branch"
+          mkdir -p integration-evidence
+          git rev-parse HEAD HEAD^{tree} > integration-evidence/identity.txt
+          git diff --stat 98723f7f7c45407d8303cf72acf38e9a35a0904c HEAD > integration-evidence/stat.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recommendation-followthrough-integration-${{ github.run_id }}
+          path: integration-evidence/
+          retention-days: 14
