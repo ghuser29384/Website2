@@ -251,9 +251,11 @@
   // priority of a task. Move the existing nodes, preserving links and listeners.
   function arrangeEmptyLayout(root) {
     if (root.classList.contains("mt-feed-empty-layout")) return;
-    const main = root.querySelector(":scope > main");
-    const urgent = main?.querySelector(".panel.black.urgent");
-    if (!main || !urgent) return;
+    const urgent = root.querySelector(".panel.black.urgent");
+    // The navigation enhancer normalizes nested <main> landmarks to <div>.
+    // Follow the existing content container, not a tag that changes on tab return.
+    const main = urgent?.parentElement;
+    if (!main || main.parentElement !== root) return;
 
     const context = document.createElement("details");
     context.className = "mt-feed-context";

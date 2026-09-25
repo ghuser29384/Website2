@@ -58,6 +58,7 @@ function fixture(status = "no_matches", external = 0, evaluated = 0) {
 }
 
 async function loadFeed(page: Page, data = fixture(), baseline = false) {
+  await page.route("**/*", (route) => route.abort());
   await page.goto("about:blank");
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -110,7 +111,7 @@ for (const width of [320, 375, 390, 480, 768, 1024, 1440, 1652]) {
     await expect(root.locator(".urgent .terms")).toHaveCount(0);
     await expect(root.locator(".mt-feed-context")).not.toHaveAttribute("open", "");
     await expect(root.getByRole("link", { name: "Browse all opportunities" })).toHaveAttribute("href", /\/offers\?/);
-    await expect(root.getByRole("link", { name: "Adjust priorities" })).toHaveAttribute("href", "/complete-profile");
+    await expect(root.getByRole("link", { name: "Adjust priorities" })).toHaveAttribute("href", "/profile/priorities?returnTo=%2Fmoral-trade-live.html%23now");
     await expect(root.locator(".mt-owned-card")).toHaveCount(2);
     await noOverflow(page);
     if (width === 1440 || width === 390) {
