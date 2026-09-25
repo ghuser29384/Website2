@@ -1,0 +1,44 @@
+name: Dispatch verified account-controls production release
+on:
+  push:
+    branches: [ops/account-controls-production-dispatch-20260925]
+    paths: [.github/workflows/account-controls-production-dispatch-20260925.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard exact merge, evidence and release workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGED_SHA: 1a397cceb83fd51f26c69cd06209b297d881c0ca
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$MERGED_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/833" | jq -e --arg merged "$MERGED_SHA" '.merged == true and .merge_commit_sha == $merged and .head.sha == "004120b20ccf4c551dc2120ea01a015f568743b4"' >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36195878571" | jq -e '.conclusion == "success" and .head_sha == "9aa038afb7a45bc548a7f6c2a2e1fe77d4c82f2f" and .path == ".github/workflows/account-controls-release-qa-20260925.yml"' >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36197361181" | jq -e '.conclusion == "success" and .head_sha == "2028af046d4d637c3ec3c7e0eba20856c7155ec7"' >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36196475791" | jq -e '.conclusion == "success" and .head_sha == "b94178dd60525f1e751bebbc90509f49eb7a2714"' >/dev/null
+          test "$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/vercel-release.yml?ref=$MERGED_SHA" --jq .sha)" = 'e219e99d25279161b89eee80fc410912c3561a19'
+          started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run vercel-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f target=production -f ref=main -f expected_sha="$MERGED_SHA"
+          echo "Dispatched the existing gated release once for $MERGED_SHA. No gate, environment or deployment configuration changed."
+          for i in $(seq 1 30); do
+            result="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&branch=main&per_page=20" | jq -c --arg sha "$MERGED_SHA" --arg started "$started" '[.workflow_runs[] | select(.head_sha == $sha and .created_at >= $started)]')"
+            count="$(jq length <<<"$result")"
+            if [[ "$count" == 1 ]]; then
+              jq '.[0] | {id,html_url,head_sha,status,conclusion}' <<<"$result"
+              jq -r '.[0].html_url' <<<"$result" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            test "$count" = 0 || { echo 'Ambiguous release run selection'; exit 1; }
+            sleep 5
+          done
+          echo 'Dispatch accepted, but run identifier did not appear within the bounded wait. Do not redispatch without inspecting state.'
+          exit 1
