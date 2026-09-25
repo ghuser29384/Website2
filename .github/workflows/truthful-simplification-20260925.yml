@@ -38,10 +38,19 @@ jobs:
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = 9e075241e0e997a99d49a0d024f5da6b11cf1d4b
           test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = 9e075241e0e997a99d49a0d024f5da6b11cf1d4b
 
-          base64 -d ../recipe/.github/patches/truthful-simplification-20260925.patch.gz.b64 | gzip -dc > /tmp/change.patch
-          actual_patch_sha="$(sha256sum /tmp/change.patch | cut -d' ' -f1)"
-          echo "decoded patch sha256=$actual_patch_sha"
-          test "$actual_patch_sha" = d1841ab932a9e2dbbe58574ee67c6b1f03d793dfac68663b6166d05526c6044c
+          python - <<'PY'
+          import base64, gzip, hashlib
+          from pathlib import Path
+          encoded = Path("../recipe/.github/patches/truthful-simplification-20260925.patch.gz.b64").read_text().strip()
+          print(f"encoded bytes={len(encoded)}")
+          compressed = base64.b64decode(encoded, validate=True)
+          print(f"compressed bytes={len(compressed)} magic={compressed[:4].hex()}")
+          raw = gzip.decompress(compressed)
+          digest = hashlib.sha256(raw).hexdigest()
+          print(f"decoded patch sha256={digest} bytes={len(raw)}")
+          assert digest == "d1841ab932a9e2dbbe58574ee67c6b1f03d793dfac68663b6166d05526c6044c"
+          Path("/tmp/change.patch").write_bytes(raw)
+          PY
           git apply --check /tmp/change.patch
           git apply --index /tmp/change.patch
           git diff --cached --check
