@@ -615,9 +615,10 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await page.goto("/feed", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/feed$/);
-    await expect(page.getByRole("button", { name: "Open personalized feed" })).toHaveText(
-      "Feed",
-    );
+    const home = page.locator('[data-mt-primary-links] a[data-mt-feed-link="true"]');
+    await expect(home).toHaveText("Home");
+    await expect(home).toHaveAttribute("href", "/feed");
+    await expect(home).toHaveAttribute("aria-current", "page");
     const feed = page.locator('[data-mt-live-now="adaptive"]');
     await expect(feed).toHaveAttribute("data-mt-live-now-state", "no_matches");
     const owned = feed.getByRole("region", { name: "Your live listings" });

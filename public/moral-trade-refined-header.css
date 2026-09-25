@@ -110,19 +110,19 @@ body .mt-refined-header.mt-refined-header :is(.header-start, .button-nav:not(.bu
   min-height: 44px;
   height: 44px;
   padding: 0 24px;
-  border: 1px solid #fff;
+  border: 1px solid #fff !important;
   border-radius: 999px !important;
-  background: #fff;
-  color: #111214;
+  background: #fff !important;
+  color: #111214 !important;
   box-shadow: none;
   font: 400 15px/1 Arial, Helvetica, system-ui, sans-serif;
   text-decoration: none;
   white-space: nowrap;
 }
 body .mt-refined-header.mt-refined-header :is(.header-start, .button-nav:not(.button-secondary)):hover {
-  background: #e7e9ee;
-  border-color: #e7e9ee;
-  color: #111214;
+  background: #e7e9ee !important;
+  border-color: #e7e9ee !important;
+  color: #111214 !important;
 }
 .mt-refined-header.mt-refined-header :is(.topbar-menu-trigger, .topbar-utility, .button-secondary, .text-btn) {
   min-height: 44px;
@@ -166,7 +166,12 @@ body .mt-refined-header.mt-refined-header :is(.header-start, .button-nav:not(.bu
   margin: 0 auto 18px;
 }
 .mt-refined-header .header-more { position: relative; }
-.mt-refined-header .header-more > summary { cursor: pointer; list-style: none; }
+.mt-refined-header.mt-refined-header .header-more > summary {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
 .mt-refined-header .header-more > summary::-webkit-details-marker { display: none; }
 .mt-refined-header .header-more-links {
   position: absolute;
@@ -245,4 +250,10 @@ body .mt-refined-header.mt-refined-header :is(.header-start, .button-nav:not(.bu
     border-top: 1px solid #30333a;
     background: #111214;
   }
+}
+
+/* Older marketplace shells hide their entire native header on desktop.
+ * A refined masthead remains visible without changing the workspace below it. */
+.marketplace-app-shell > .v72-route-header:has(> .mt-refined-header) {
+  display: block;
 }
