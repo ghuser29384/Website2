@@ -1,0 +1,55 @@
+name: PR 827 integrated source proof
+on:
+  push:
+    branches: [ops/pr827-selection-validation-20260925]
+    paths: [.github/workflows/pr827-integration-proof.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5b7e1db21b337208eaded8748458ec8d2f1b7fdd
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard integrated tree and unchanged fix blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/pr827-selection-validation-20260925
+          test "$(git rev-parse HEAD)" = 5b7e1db21b337208eaded8748458ec8d2f1b7fdd
+          test "$(git rev-parse HEAD^{tree})" = 27992866c81bc691146366cfe69d7e95b2fb563e
+          git merge-base --is-ancestor 1a397cceb83fd51f26c69cd06209b297d881c0ca HEAD
+          test "$(git rev-parse HEAD:src/app/readability-cleanup.css)" = bc2e8acdf9bbfda54ddc0b78de28aa3687cdeb74
+          test "$(git rev-parse HEAD:src/lib/text-selection-style.test.ts)" = b2d55103dcc724d3443b17667b400ff04496ca10
+          expected=$'src/app/readability-cleanup.css\nsrc/lib/text-selection-style.test.ts'
+          test "$(git diff --name-only 1a397cceb83fd51f26c69cd06209b297d881c0ca HEAD)" = "$expected"
+          git diff --check 1a397cceb83fd51f26c69cd06209b297d881c0ca HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify integrated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr827-integration"
+          node --import tsx --test src/lib/text-selection-style.test.ts | tee "$RUNNER_TEMP/pr827-integration/focused.log"
+          npm test | tee "$RUNNER_TEMP/pr827-integration/tests.log"
+          npm run lint -- --quiet | tee "$RUNNER_TEMP/pr827-integration/lint.log"
+          npx tsc --noEmit | tee "$RUNNER_TEMP/pr827-integration/typecheck.log"
+          npm run build | tee "$RUNNER_TEMP/pr827-integration/build.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr827-integration-${{ github.run_id }}
+          path: ${{ runner.temp }}/pr827-integration
+          retention-days: 7
