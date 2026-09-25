@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ef87fca2940280d0c8a78cc3512c0f09928038a2
+          fetch-depth: 100
           persist-credentials: false
       - name: Verify exact implementation revision
         run: |
