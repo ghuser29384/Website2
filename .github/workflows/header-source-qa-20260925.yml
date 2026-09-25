@@ -1,4 +1,4 @@
-name: Final masthead production-mode verification
+name: Native masthead disclosure verification
 on:
   push:
     branches: [ops/header-source-qa-20260925]
@@ -18,43 +18,40 @@ jobs:
         with:
           path: transport
           persist-credentials: false
-      - name: Validate the exact reviewed patches
+      - name: Validate the exact reviewed disclosure patch
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          base64 --decode transport/.github/header-final-polish.patch.gz.b64 | gzip -d > /tmp/header-polish.patch
-          base64 --decode transport/.github/header-nav-regressions.patch.gz.b64 | gzip -d > /tmp/header-regressions.patch
-          echo 'c36e922cd22aecc2eb75418a66d20577044b0dc79cc8cbc79d25b1d9b29e5729  /tmp/header-polish.patch' | sha256sum -c -
-          echo '84c5c28611ec0d4315b2ce2cba971ff0beccd598affc79a2ca234e4700161ef4  /tmp/header-regressions.patch' | sha256sum -c -
+          base64 --decode transport/.github/header-native-disclosure.patch.gz.b64 | gzip -d > /tmp/header-disclosure.patch
+          echo '350bf45f784b1a700cfafa969ff1d282b0722d6e535a9124c56b9cd35e7904d4  /tmp/header-disclosure.patch' | sha256sum -c -
       - uses: actions/checkout@v4
         with:
           ref: fix/refined-masthead-20260925
           path: candidate
           fetch-depth: 0
-      - name: Publish only five scoped candidate files
+      - name: Publish only three scoped candidate files
         id: stage
         working-directory: candidate
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = bcfa87725d08ea229a9bc27bf03a659594169ac2
-          test "$(git ls-remote origin refs/heads/fix/refined-masthead-20260925 | cut -f1)" = bcfa87725d08ea229a9bc27bf03a659594169ac2
-          git apply --check /tmp/header-polish.patch /tmp/header-regressions.patch
-          git apply /tmp/header-polish.patch /tmp/header-regressions.patch
+          test "$(git rev-parse HEAD)" = 61b028ad770c5776f14fd53379085822ab75f3ba
+          test "$(git ls-remote origin refs/heads/fix/refined-masthead-20260925 | cut -f1)" = 61b028ad770c5776f14fd53379085822ab75f3ba
+          git apply --check /tmp/header-disclosure.patch
+          git apply /tmp/header-disclosure.patch
           git diff --check
-          git add public/moral-trade-refined-header.css src/components/layout/site-topbar.tsx tests/refined-header.spec.ts tests/contact-page-layout.spec.ts tests/walkthrough.spec.ts
-          test "$(git diff --cached --name-only | wc -l)" -eq 5
+          git add public/moral-trade-refined-header.css src/components/layout/site-topbar.tsx tests/refined-header.spec.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 3
           git diff --cached --check
-          git diff --cached --stat
           git config user.name ghuser29384
           git config user.email 262476329+ghuser29384@users.noreply.github.com
-          git commit -m 'Polish native header styling and stabilize keyboard disclosure'
+          git commit -m 'Preserve native disclosure and expose refined utility menus on mobile'
           git push origin HEAD:refs/heads/fix/refined-masthead-20260925
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           git config --local --unset-all http.https://github.com/.extraheader || true
   quality:
     needs: stage
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 40
     env:
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -92,11 +89,11 @@ jobs:
       - name: Focused affected behavior in real production build
         run: |
           set -euo pipefail
-          npx playwright test --config=playwright.release.config.ts tests/refined-header.spec.ts tests/homepage-narrow-header.spec.ts tests/contact-page-layout.spec.ts tests/walkthrough.spec.ts tests/sitewide-canonical-visual-system.spec.ts --reporter=line 2>&1 | tee header-evidence/focused-browser.log
+          npx playwright test --config=playwright.release.config.ts tests/refined-header.spec.ts tests/homepage-narrow-header.spec.ts tests/contact-page-layout.spec.ts --reporter=line 2>&1 | tee header-evidence/focused-browser.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: masthead-focused-final-${{ needs.stage.outputs.sha }}
+          name: masthead-disclosure-focused-${{ needs.stage.outputs.sha }}
           path: |
             header-evidence
             test-results
@@ -109,7 +106,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: masthead-complete-final-${{ needs.stage.outputs.sha }}
+          name: masthead-disclosure-complete-${{ needs.stage.outputs.sha }}
           path: |
             header-evidence
             test-results
