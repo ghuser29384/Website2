@@ -1,0 +1,38 @@
+name: Focused recommendation cleanup validation 20260925
+on:
+  push:
+    branches: [ops/recommendation-followthrough-validation-20260925]
+    paths: [.github/workflows/recommendation-followthrough-focused-20260925.yml]
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bbdda5a6df7f5d0cdb2c518159d85857282ba3ed
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Run focused tests
+        run: |
+          set -o pipefail
+          mkdir -p validation-evidence
+          node --import tsx --test             src/recommendation-followthrough.test.ts             src/lib/mpgf/public-goods-round-board.test.ts             src/lib/discover-search.test.ts             2>&1 | tee validation-evidence/focused.log
+      - name: Typecheck
+        if: always()
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee validation-evidence/typecheck.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recommendation-followthrough-focused-${{ github.run_id }}
+          path: validation-evidence/
+          retention-days: 14
+          if-no-files-found: error
