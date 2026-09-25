@@ -16,19 +16,12 @@
   ].join(",");
   const DEALROOM_TRIGGER_SELECTOR = '[data-action="dealroom"], [data-trade="dealroom"]';
 
-  let allowDealroomHashOnce = false;
-
   function openCreate() {
     window.location.assign(CREATE_HREF);
   }
 
   function replaceLegacyTradeHash() {
     if (window.location.hash !== "#trade") return;
-    if (allowDealroomHashOnce) {
-      allowDealroomHashOnce = false;
-      return;
-    }
-
     window.location.replace(CREATE_HREF);
   }
 
@@ -39,7 +32,9 @@
       if (!target) return;
 
       if (target.closest(DEALROOM_TRIGGER_SELECTOR)) {
-        allowDealroomHashOnce = true;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        window.location.assign("/commitments");
         return;
       }
 

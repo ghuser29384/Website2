@@ -56,7 +56,7 @@ test.describe("Adaptive homepage", () => {
 
     await expect(page.locator('button[data-now="focus"]')).toHaveClass(/active/);
     await expect(page.locator('button[data-now="plan"]')).toHaveText("Plan resources");
-    await expect(page.locator('button[data-now="rules"]')).toHaveText("Standing rules");
+    await expect(page.locator('button[data-now="rules"]')).toHaveCount(0);
 
     const date = page.locator(".head .date");
     await expect(date).toHaveAttribute("data-mt-local-date-time", "2026-07-16");

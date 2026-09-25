@@ -129,7 +129,8 @@ async function waitForMeaningfulSurface(page: Page, route: string) {
   const pathname = routePath(route);
 
   if (pathname === "/complete-verification.html") {
-    await expect(page.locator(".mt-verify-appbar")).toBeVisible({ timeout: 45_000 });
+    await expect(page).toHaveURL(/\/evidence$/, { timeout: 45_000 });
+    await expect(page.locator(".mt-site-topbar").first()).toBeVisible();
     await waitForTextLength(page, 80);
     return;
   }
@@ -208,9 +209,7 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
   expect(finalPathname).not.toBe("/_not-found");
   expect((await page.title()).trim().length, `${route} document title`).toBeGreaterThan(0);
 
-  if (route.startsWith("/complete-verification")) {
-    await expect(page.locator(".mt-verify-appbar")).toHaveCSS("background-color", BLACK);
-  } else if (isCreateFrameRoute(routePath(route))) {
+  if (isCreateFrameRoute(routePath(route))) {
     const frame = page.locator("iframe").first();
     await expect(frame.contentFrame().locator(".topbar")).toHaveCSS("background-color", BLACK);
   } else {
