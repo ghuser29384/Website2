@@ -1,0 +1,195 @@
+name: Truthful simplification candidate 20260925
+on:
+  push:
+    branches: [ops/feature-pruning-audit-20260925]
+    paths: [.github/workflows/truthful-simplification-20260925.yml]
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f128c0120e555312babebed36844b331d419ad95
+          path: recipe
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 9e075241e0e997a99d49a0d024f5da6b11cf1d4b
+          path: candidate
+          fetch-depth: 2
+      - name: Materialize the reviewed patch on the exact merged cleanup base
+        id: commit
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch=cleanup/truthful-defaults-and-simplification-20260925
+          test "$(git rev-parse HEAD)" = 9e075241e0e997a99d49a0d024f5da6b11cf1d4b
+          test "$(git rev-parse HEAD^{tree})" = cb5411e3157b7b4bb3e99c9be40f7d870bd12d36
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 9e075241e0e997a99d49a0d024f5da6b11cf1d4b
+          test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = 9e075241e0e997a99d49a0d024f5da6b11cf1d4b
+
+          base64 -d ../recipe/.github/patches/truthful-simplification-20260925.patch.gz.b64 | gzip -dc > /tmp/change.patch
+          test "$(sha256sum /tmp/change.patch | cut -d' ' -f1)" = d1841ab932a9e2dbbe58574ee67c6b1f03d793dfac68663b6166d05526c6044c
+          git apply --check /tmp/change.patch
+          git apply --index /tmp/change.patch
+          git diff --cached --check
+
+          mkdir -p ../truthful-evidence
+          git diff --cached --stat > ../truthful-evidence/change-stat.txt
+          git diff --cached --binary > ../truthful-evidence/change.patch
+          git diff --cached --name-only > ../truthful-evidence/changed-files.txt
+
+          # This is intentionally application/UI-only. No schema, payment, auth,
+          # dependency, or release-workflow changes belong in this product cleanup.
+          test -z "$(git diff --cached --name-only -- supabase package.json package-lock.json .github/workflows src/app/api/auth src/lib/supabase)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Make evidence, onboarding, and funding states explicit'
+          git push origin "HEAD:refs/heads/$branch"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git rev-parse HEAD HEAD^{tree} > ../truthful-evidence/identity.txt
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: truthful-simplification-materialized-${{ github.run_id }}
+          path: truthful-evidence/
+          retention-days: 14
+          if-no-files-found: error
+
+  quality:
+    needs: materialize
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.materialize.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Focused truthfulness and control contracts
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/truthful-quality
+          git rev-parse HEAD HEAD^{tree} > /tmp/truthful-quality/identity.txt
+          node --import tsx --test             src/lib/truthful-product-defaults.test.ts             src/lib/trade-input-assist.test.ts             src/lib/public-route-smoke.test.ts             src/lib/public-offers.test.ts             src/lib/mpgf.test.ts             src/lib/mpgf/assurance-funding-receipt.test.ts             src/lib/mpgf/public-goods-round-board.test.ts             src/lib/mpgf/public-goods-pivotality.test.ts             2>&1 | tee /tmp/truthful-quality/focused.log
+      - name: Full repository unit suite
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee /tmp/truthful-quality/unit.log
+      - name: Lint and typecheck
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee /tmp/truthful-quality/lint.log
+          npx tsc --noEmit 2>&1 | tee /tmp/truthful-quality/types.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: truthful-simplification-quality-${{ github.run_id }}
+          path: /tmp/truthful-quality/
+          retention-days: 14
+
+  rendered:
+    needs: materialize
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.materialize.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Production build
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/truthful-rendered
+          git rev-parse HEAD HEAD^{tree} > /tmp/truthful-rendered/identity.txt
+          npm run build 2>&1 | tee /tmp/truthful-rendered/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Add non-committed rendered audit contract
+        shell: bash
+        run: |
+          cat > tests/__truthful-product-audit.spec.ts <<'EOF'
+          import { expect, test } from "@playwright/test";
+
+          test("MPGF entry separates examples from current live state", async ({ page, request }) => {
+            await page.goto("/mpgf");
+            await expect(page.getByRole("link", { name: "Browse candidate pools" })).toBeVisible();
+            await expect(page.getByRole("link", { name: "Open worked demonstration" })).toBeVisible();
+            await expect(page.getByText("View current round", { exact: true })).toHaveCount(0);
+            await expect(page.getByLabel("Your possible net pledge")).toHaveValue("");
+            await expect(page.getByLabel("Your estimated chance this pledge would be decisive (%)")).toHaveValue("");
+            await expect(page.getByText("No probability is assumed for you.", { exact: false })).toBeVisible();
+            await expect(page.getByText(/Your 20% estimate/)).toHaveCount(0);
+
+            const response = await request.get("/api/mpgf/rounds");
+            expect(response.ok()).toBeTruthy();
+            const payload = await response.json();
+            expect(payload.rounds).toEqual([]);
+            expect(payload.examples).toHaveLength(1);
+            expect(payload.examples[0]).toMatchObject({
+              status: "demonstration",
+              isDemonstration: true,
+              countdownSeconds: null,
+            });
+          });
+
+          test("old MPGF round is unmistakably non-live", async ({ page }) => {
+            await page.goto("/mpgf/rounds/mpgf-assurance-round-demo-2026-05");
+            await expect(page.getByText("Worked demonstration only.", { exact: false })).toBeVisible();
+            await expect(page.getByText("Worked demonstration · not live", { exact: true })).toBeVisible();
+            await expect(page.getByText("Likely near threshold", { exact: true })).toHaveCount(0);
+          });
+
+          test("ordinary creation hides expert failure-formula mechanics", async ({ page }) => {
+            await page.goto("/moral-trade-create/index.html");
+            await expect(page.getByText("Simple templates only in ordinary creation.", { exact: false })).toBeVisible();
+            await expect(page.locator("#failureTimingPanel")).toBeHidden();
+            await expect(page.locator('input[name="poolFailureBonusType"][value="function"]')).toBeDisabled();
+          });
+          EOF
+      - name: Targeted rendered audit
+        run: |
+          set -euo pipefail
+          npx playwright test tests/__truthful-product-audit.spec.ts --workers=1 --reporter=line --output=truthful-targeted-results 2>&1 | tee /tmp/truthful-rendered/targeted.log
+      - name: Full unchanged release browser gate
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          rm tests/__truthful-product-audit.spec.ts
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee /tmp/truthful-rendered/release.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: truthful-simplification-rendered-${{ github.run_id }}
+          path: |
+            /tmp/truthful-rendered/
+            truthful-targeted-results/
+            test-results/
+          retention-days: 14
