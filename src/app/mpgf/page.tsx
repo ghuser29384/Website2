@@ -116,8 +116,8 @@ export default async function MpgfPage() {
     <MpgfPageFrame
       actions={
         <>
-          <Link className="button button-primary" href={`${roundHref}#common-ground-budget-preview`}>
-            Build a Common Ground Budget
+          <Link className="button button-primary" href="/mpgf/pools">
+            Browse candidate pools
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             Review example round
@@ -135,7 +135,7 @@ export default async function MpgfPage() {
     >
       <nav className="hub-tabs" aria-label="Public Goods Fund sections">
         <a href="#how-it-works">How it works</a>
-        <a href="#assurance-funding">Assurance funding estimate</a>
+        <a href="#assurance-funding">Educational calculator</a>
         <a href="#routes">Service routes</a>
         <a href="#boundaries">Operating boundaries</a>
         <Link href={roundHref}>Example round</Link>
@@ -171,15 +171,17 @@ export default async function MpgfPage() {
         aria-labelledby="assurance-funding-heading"
       >
         <div className="section-head section-head-compact">
-          <p className="eyebrow">Assurance funding</p>
-          <h2 id="assurance-funding-heading">Estimate the funding beyond your own pledge.</h2>
+          <p className="eyebrow">Educational scenario</p>
+          <h2 id="assurance-funding-heading">Explore pivotality only when you want the model.</h2>
           <p>
-            Enter a possible pledge and your own estimate of the chance it would be decisive. The
-            receipt shows the expected funding from everyone else per proposed pledge dollar in a
-            simplified exact-fill scenario.
+            This calculator is not part of the default contribution path. It uses assumptions you
+            enter yourself and does not estimate the actual chance that a live pledge is decisive.
           </p>
         </div>
-        <MpgfAssuranceFundingReceipt />
+        <details className="panel data-card data-card-wide">
+          <summary className="inline-link">Open educational assurance calculator</summary>
+          <MpgfAssuranceFundingReceipt />
+        </details>
       </section>
 
       <section className="section section-white" id="routes" aria-labelledby="mpgf-routes-heading">
@@ -215,8 +217,8 @@ export default async function MpgfPage() {
           </ul>
         </div>
         <div className="hero-actions">
-          <Link className="button button-primary" href={roundHref}>
-            Open current round
+          <Link className="button button-primary" href="/mpgf/pools">
+            Browse candidate pools
           </Link>
           <Link className="button button-secondary" href="/mpgf/real-money-terms">
             Review funding terms
