@@ -1,0 +1,139 @@
+name: Integrated operational retirement 20260925
+on:
+  push:
+    branches: [ops/feature-pruning-audit-20260925]
+    paths: [.github/workflows/operational-retirement-integrated-20260925.yml]
+permissions:
+  contents: read
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.integrate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 54875afb46e3f21deac362cde1945de2242c3597
+          fetch-depth: 10
+      - name: Merge exact current main without overwriting either branch
+        id: integrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch=cleanup/remove-simulated-operations-20260925
+          test "$(git rev-parse HEAD)" = 54875afb46e3f21deac362cde1945de2242c3597
+          test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = 54875afb46e3f21deac362cde1945de2242c3597
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 3c606844d5c3369f64c43ea2ed6e70e4d687ae38
+          git fetch --no-tags --depth=10 origin 3c606844d5c3369f64c43ea2ed6e70e4d687ae38
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-ff --no-edit 3c606844d5c3369f64c43ea2ed6e70e4d687ae38
+          git diff --check 3c606844d5c3369f64c43ea2ed6e70e4d687ae38 HEAD
+          test -z "$(git diff --name-only 3c606844d5c3369f64c43ea2ed6e70e4d687ae38 HEAD -- supabase src/app/api .github/workflows package.json package-lock.json playwright.release.config.ts)"
+          test -z "$(git status --porcelain)"
+          git push origin "HEAD:refs/heads/$branch"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          mkdir -p integration-evidence
+          git rev-parse HEAD HEAD^{tree} > integration-evidence/identity.txt
+          git diff --stat 3c606844d5c3369f64c43ea2ed6e70e4d687ae38 HEAD > integration-evidence/stat.txt
+          git diff --binary 3c606844d5c3369f64c43ea2ed6e70e4d687ae38 HEAD > integration-evidence/cleanup.patch
+          git archive --format=tar.gz -o integration-evidence/source.tar.gz HEAD
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retirement-integration-${{ github.run_id }}
+          path: integration-evidence/
+          retention-days: 14
+  quality:
+    needs: integrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.integrate.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Full unit suite
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/retirement-quality
+          git rev-parse HEAD HEAD^{tree} > /tmp/retirement-quality/identity.txt
+          npm test 2>&1 | tee /tmp/retirement-quality/unit.log
+      - name: Explicit affected source contracts
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/live-operational-retirement.test.ts src/live-account-data.test.ts src/live-now-data.test.ts src/lib/create-interface/unified-entry-routes.test.ts src/sitewide-canonical-visual-system.test.ts src/sitewide-canonical-visual-fidelity.test.ts 2>&1 | tee /tmp/retirement-quality/affected.log
+      - name: Full lint
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee /tmp/retirement-quality/lint.log
+      - name: Typecheck
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee /tmp/retirement-quality/types.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retirement-quality-${{ github.run_id }}
+          path: /tmp/retirement-quality/
+          retention-days: 14
+  rendered:
+    needs: integrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.integrate.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Production build
+        id: build
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/retirement-browser
+          git rev-parse HEAD HEAD^{tree} > /tmp/retirement-browser/identity.txt
+          npm run build 2>&1 | tee /tmp/retirement-browser/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Affected rendered routes and genuine account-command-planner contracts
+        run: |
+          set -euo pipefail
+          npx playwright test tests/operational-retirement.spec.ts tests/exact-live-verification.spec.ts tests/exact-live-account.spec.ts tests/exact-live-command-center.spec.ts tests/exact-live-custom-route.spec.ts tests/exact-live-route-recommendations.spec.ts --workers=1 --reporter=line --output=pruning-targeted-results 2>&1 | tee /tmp/retirement-browser/targeted.log
+      - name: Full unchanged release browser gate
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee /tmp/retirement-browser/release.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retirement-rendered-${{ github.run_id }}
+          path: |
+            /tmp/retirement-browser/
+            pruning-targeted-results/
+            test-results/
+          retention-days: 14
