@@ -31,7 +31,6 @@ export const OFFER_ACTION_FILTER_OPTIONS = [
 
 export const PEOPLE_DISCOVERY_SORT_OPTIONS = [
   { value: "match", label: "Best match" },
-  { value: "offers", label: "Most open offers" },
   { value: "newest", label: "Newest" },
 ] as const;
 
@@ -534,24 +533,21 @@ export function rankProfiles<T extends ProfileDiscoveryLike>(
   now = new Date(),
 ) {
   const hasQuery = tokenize(query).length > 0;
-  const maxOffers = Math.max(1, ...profiles.map((profile) => profile.offerCount));
 
   return profiles
     .map((profile, index) => {
       const relevance = profileTextRelevance(profile, query);
       const recency = dateSignal(profile.created_at, now, 180);
       const activity = profileActivitySignal(profile);
-      const offers = clamp(Math.log1p(profile.offerCount) / Math.log1p(maxOffers));
+      const hasCurrentOffers = profile.offerCount > 0 ? 1 : 0;
       let rankingScore: number;
 
-      if (sort === "offers") {
-        rankingScore = 0.74 * offers + 0.14 * relevance + 0.12 * recency;
-      } else if (sort === "newest") {
+      if (sort === "newest") {
         rankingScore = 0.82 * recency + 0.1 * relevance + 0.08 * activity;
       } else if (hasQuery) {
-        rankingScore = 0.72 * relevance + 0.16 * activity + 0.12 * offers;
+        rankingScore = 0.72 * relevance + 0.16 * activity + 0.12 * hasCurrentOffers;
       } else {
-        rankingScore = 0.5 * activity + 0.32 * recency + 0.18 * offers;
+        rankingScore = 0.5 * activity + 0.32 * recency + 0.18 * hasCurrentOffers;
       }
 
       return { profile, index, rankingScore };
