@@ -1,0 +1,129 @@
+# One authorized release for PR #829. This controller is NOT merged into main.
+name: Release approved contact fix 829
+on:
+  push:
+    branches: [ops/contact-release-829-20260925]
+    paths: [.github/workflows/contact-release-829-20260925.yml]
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: authorized-contact-release-829
+  cancel-in-progress: false
+env:
+  EXPECTED_SHA: d13ef669f002f44fb32c2a08909142f272f4cad9
+  EXPECTED_TREE: 6add89105f7bc64e8b95ef178fc16e33a3e3c6cd
+  EXPECTED_PR_HEAD: b663fae4da8f647644b180a26909ce86c82dcc5b
+jobs:
+  release-and-verify:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/ops/contact-release-829-20260925'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Guard the authorized merged commit and dispatch existing gated release
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p "$RUNNER_TEMP/contact-live-evidence"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/829" > "$RUNNER_TEMP/contact-live-evidence/pr.json"
+          jq -e --arg sha "$EXPECTED_SHA" --arg head "$EXPECTED_PR_HEAD" '
+            .merged == true and .merge_commit_sha == $sha and .head.sha == $head and .base.ref == "main"
+          ' "$RUNNER_TEMP/contact-live-evidence/pr.json" >/dev/null
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_SHA" --jq .tree.sha)" = "$EXPECTED_TREE"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/36196466085" --jq .conclusion)" = success
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$EXPECTED_SHA&event=workflow_dispatch&per_page=100" > "$RUNNER_TEMP/contact-live-evidence/existing-runs.json"
+          count="$(jq '[.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml")] | length' "$RUNNER_TEMP/contact-live-evidence/existing-runs.json")"
+          test "$count" -le 1
+          if [[ "$count" = 0 ]]; then
+            jq -n --arg sha "$EXPECTED_SHA" '{ref:"main", inputs:{target:"production", ref:"main", expected_sha:$sha}}' \
+              | gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" --input -
+          fi
+          run_id=''
+          for attempt in $(seq 1 30); do
+            run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$EXPECTED_SHA&event=workflow_dispatch&per_page=100" --jq '.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml") | .id' | head -n1)"
+            [[ -z "$run_id" ]] || break
+            sleep 5
+          done
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$run_id" > "$RUNNER_TEMP/contact-live-evidence/release-run-id.txt"
+          printf 'Release run: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$run_id" >> "$GITHUB_STEP_SUMMARY"
+      - name: Wait for the complete unmodified release gates and deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          finished=false
+          for attempt in $(seq 1 150); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN" > "$RUNNER_TEMP/contact-live-evidence/release-run.json"
+            status="$(jq -r .status "$RUNNER_TEMP/contact-live-evidence/release-run.json")"
+            if [[ "$status" == completed ]]; then
+              finished=true
+              break
+            fi
+            echo "Release $RELEASE_RUN: $status"
+            sleep 30
+          done
+          test "$finished" = true
+          jq -e --arg sha "$EXPECTED_SHA" '.head_sha == $sha and .conclusion == "success"' "$RUNNER_TEMP/contact-live-evidence/release-run.json" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" > "$RUNNER_TEMP/contact-live-evidence/main-after-release.json"
+      - name: Check out only the released application for read-only live browser tests
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact test dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Exercise the seven contact tests on the canonical live website
+        shell: bash
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          cat > playwright.contact-live.config.ts <<'CONFIG'
+          import { defineConfig } from '@playwright/test';
+          export default defineConfig({
+            testDir: './tests',
+            testMatch: 'contact-page-layout.spec.ts',
+            outputDir: process.env.RUNNER_TEMP + '/contact-live-evidence/browser',
+            timeout: 60000,
+            expect: { timeout: 10000 },
+            retries: 0,
+            workers: 1,
+            reporter: 'line',
+            use: {
+              baseURL: 'https://www.moraltrade.org',
+              browserName: 'chromium',
+              storageState: {
+                cookies: [{ domain: 'www.moraltrade.org', name: 'mt_walkthrough_seen', value: '1', path: '/', expires: -1, httpOnly: true, sameSite: 'Lax', secure: true }],
+                origins: [],
+              },
+              trace: 'retain-on-failure',
+            },
+          });
+          CONFIG
+          npx playwright test --config=playwright.contact-live.config.ts
+      - name: Preserve release and canonical browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contact-829-production-evidence-${{ env.EXPECTED_SHA }}
+          path: ${{ runner.temp }}/contact-live-evidence
+          if-no-files-found: error
+          retention-days: 30
