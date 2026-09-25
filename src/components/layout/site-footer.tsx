@@ -15,16 +15,8 @@ export function SiteFooter() {
 
       <div className="footer-grid mt-footer-grid">
         <div className="footer-intro mt-footer-intro">
-          <h2>A marketplace for productive difference.</h2>
-          <p>
-            Trade commitments, redirect offsetting donations, and join conditional funding pools.
-            Moral Trade keeps the no-deal default, maximum exposure, evidence, settlement, and exit
-            terms visible before reliance.
-          </p>
-          <p>
-            Research supports the mechanism. The public product is the marketplace and coordination
-            infrastructure.
-          </p>
+          <h2>Do more good together.</h2>
+          <p>Offer an action in exchange for an action you value.</p>
         </div>
 
         <nav aria-label="Footer" className="mt-footer-links">

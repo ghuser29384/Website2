@@ -17,16 +17,22 @@ export interface SiteFooterLinkGroup {
   links: SiteNavRouteItem[];
 }
 
-export function getPrimaryNavLinks(_isAuthenticated = false): SiteNavLinkItem[] {
+export function getPrimaryNavLinks(isAuthenticated = false): SiteNavLinkItem[] {
   return [
     { href: "/feed", label: "Feed" },
     { href: "/discover", label: "Discover" },
-    { href: "/trades/new", label: "Create" },
-    { href: "/invite", label: "Invite" },
     { href: "/messages", label: "Messages" },
     { href: "/commitments", label: "Commitments" },
-    { href: "/evidence", label: "Evidence" },
-    { href: "/safety", label: "Safety" },
+    {
+      label: "More",
+      items: [
+        // Signed-in users already have the primary Create button.
+        ...(!isAuthenticated ? [{ href: "/trades/new", label: "Create a trade" }] : []),
+        { href: "/invite", label: "Invite" },
+        { href: "/evidence", label: "Evidence" },
+        { href: "/safety", label: "Safety" },
+      ],
+    },
   ];
 }
 
@@ -45,50 +51,42 @@ export function getTopbarActions(isAuthenticated = false) {
   };
 }
 
+// Keep experiments and technical demos out of the site-wide task navigation.
+// Their routes and records remain available; this is not a data deletion.
 export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
   {
-    title: "Marketplace",
+    title: "Explore",
     links: [
-      { href: "/feed", label: "Personalized feed" },
-      { href: "/discover", label: "Discover opportunities" },
+      { href: "/feed", label: "Feed" },
+      { href: "/discover", label: "Discover" },
       { href: "/trades/new", label: "Create a trade" },
-      { href: "/messages", label: "Private messages" },
-      { href: "/commitments", label: "Track commitments" },
+      { href: "/messages", label: "Messages" },
+      { href: "/commitments", label: "Commitments" },
     ],
   },
   {
-    title: "Safety & transparency",
+    title: "Trust",
     links: [
-      { href: "/credibility", label: "Contextual credibility" },
-      { href: "/evidence", label: "Public evidence" },
-      { href: "/status", label: "Service status" },
-      { href: "/safety", label: "Safety and anti-threat rules" },
+      { href: "/safety", label: "Safety" },
+      { href: "/evidence", label: "Evidence" },
+      { href: "/credibility", label: "Credibility" },
       { href: "/transparency", label: "Transparency" },
+      { href: "/status", label: "Service status" },
     ],
   },
   {
-    title: "Learn",
+    title: "Help",
     links: [
-      { href: "/walkthrough", label: "Interactive walkthrough" },
-      { href: "/what-is-moral-trade", label: "What is Moral Trade?" },
-      { href: "/research", label: "Research" },
-      { href: "/bottleneck-atlas", label: "Bottleneck Atlas" },
-      { href: "/moral-trade/technical-spec", label: "Technical specification" },
-      { href: "/worked-examples", label: "Worked examples" },
-      { href: "/reasoning-center", label: "Worked-example review notes" },
-      { href: "/trade-controls", label: "Safeguard demonstrations" },
-      { href: "/priority-correction-fund", label: "Allocation experiment" },
+      { href: "/what-is-moral-trade", label: "How it works" },
+      { href: "/walkthrough", label: "Tour" },
+      { href: "/support", label: "Support" },
     ],
   },
   {
-    title: "Organization",
+    title: "About",
     links: [
       { href: "/team-and-governance", label: "Team and governance" },
-      { href: "/cohort", label: "Join the network" },
-      { href: "/support", label: "Support" },
-      { href: "/contact", label: "Contact" },
-      { href: "/privacy", label: "Privacy" },
-      { href: "/terms", label: "Terms" },
+      { href: "/research", label: "Research" },
     ],
   },
 ];
