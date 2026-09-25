@@ -61,7 +61,6 @@ const labsTopbarLinks = [
   { href: "/offers", label: "Explore" },
   { href: MORAL_PUBLIC_GOODS_LABS_ROUTE, label: "Moral Public Goods" },
   { href: "/dashboard", label: "My Activity" },
-  { href: "/about", label: "About" },
   { href: "/how-it-works", label: "Learn" },
 ] as const;
 
