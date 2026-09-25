@@ -10,6 +10,8 @@ on:
       - "src/lib/commitments-loading.test.ts"
       - "src/lib/commitments-portfolio.ts"
       - "src/commitments-portfolio-wiring.test.ts"
+      - "playwright.commitments.config.ts"
+      - "tests/commitments-loading.auth.ts"
 
 permissions:
   contents: read
@@ -21,15 +23,17 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      PLAYWRIGHT_HTML_OPEN: never
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -43,20 +47,28 @@ jobs:
             src/lib/commitments-offer-data.test.ts \
             src/lib/commitments-loading.test.ts \
             src/commitments-portfolio-wiring.test.ts
-      - name: Lint changed TypeScript
+      - name: Lint repository and check diff
         run: |
-          npx eslint \
-            src/app/commitments/loading.tsx \
-            src/lib/commitments-offer-data.ts \
-            src/lib/commitments-offer-data.test.ts \
-            src/lib/commitments-loading.test.ts \
-            src/lib/commitments-portfolio.ts \
-            src/commitments-portfolio-wiring.test.ts
-      # Intentionally no deployment, database migrations, credentials or live fixtures.
+          npm run lint -- --quiet
+          git diff --check origin/main...HEAD
       - name: Build Next.js application
         run: npm run build
-      # Run even after a build failure to retain both results; any failed step
-      # still fails the job. This is not a continue-on-error or release bypass.
+      - name: Verify TypeScript
+        run: npx tsc --noEmit --pretty false
       - name: Run repository regression tests
         if: success() || failure()
         run: npm test
+      # The real production renderer talks only to the existing loopback fixture.
+      # No real user sessions, database migrations or production writes are used.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify streaming, signed-out access and fixture-session navigation
+        run: npx playwright test --config=playwright.commitments.config.ts --reporter=line
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-rendered-${{ github.event.pull_request.head.sha }}
+          path: test-results/commitments-loading
+          if-no-files-found: ignore
+          retention-days: 3
