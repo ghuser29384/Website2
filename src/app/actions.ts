@@ -3081,10 +3081,7 @@ export async function saveOnboardingAction(formData: FormData) {
   const causeAreas = readRepeatedStrings(formData, "cause_area", 6);
   const inviteTarget = readOptional(formData, "invite_target");
   const referralSource = readOptional(formData, "referral_source");
-
-  if (!causeAreas.length) {
-    redirectWithMessage(returnTo, "error", "Choose at least one cause area.");
-  }
+  const emailUpdatesOptIn = readOptional(formData, "email_updates") === "1";
 
   const supabase = await createClient();
   const { error } = await (supabase as any)
@@ -3152,17 +3149,19 @@ export async function saveOnboardingAction(formData: FormData) {
     profileId: viewer.authUser.id,
     supabase,
   });
-  await subscribeEmailNurture({
-    email: viewer.profile.email,
-    nextStep:
-      firstAction === "invite_counterparty"
-        ? "Send one counterparty invite"
-        : "Complete selected first action",
-    profileId: viewer.authUser.id,
-    segment: "signed_up_not_activated",
-    source: "onboarding",
-    supabase,
-  });
+  if (emailUpdatesOptIn) {
+    await subscribeEmailNurture({
+      email: viewer.profile.email,
+      nextStep:
+        firstAction === "invite_counterparty"
+          ? "Send one counterparty invite"
+          : "Complete selected first action",
+      profileId: viewer.authUser.id,
+      segment: "signed_up_not_activated",
+      source: "onboarding_opt_in",
+      supabase,
+    });
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/onboarding");
