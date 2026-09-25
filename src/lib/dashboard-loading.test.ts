@@ -95,6 +95,7 @@ function harness(options: {
   const exports: { getDashboardData?: (id: string) => Promise<DashboardResult> } = {};
   const context: Record<string, unknown> = {
     exports,
+    Error,
     console: { error() {} },
     DASHBOARD_PAGE_SIZE: 50,
     hasSupabaseEnv: () => options.configured !== false,
