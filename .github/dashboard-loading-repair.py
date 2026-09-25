@@ -26,7 +26,7 @@ policy_ids = '''  const collectivePolicyIds = [
 '''
 assert region.count(policy_ids) == 1
 region = region.replace(policy_ids, '')
-pattern = re.compile(r'^(  let (\w+):[^\n]+;\n)(  try \{\n.*?^  \}\n?)', re.M | re.S)
+pattern = re.compile(r'^(  let (\w+):[^\n]+;\n)(  try \{\n.*?^  \}$\n?)', re.M | re.S)
 blocks = list(pattern.finditer(region))
 assert not pattern.sub('', region).strip(), 'Unrecognized code in the section-loader region'
 assert len(blocks) == 42, f'Expected 42 section loaders, found {len(blocks)}'
