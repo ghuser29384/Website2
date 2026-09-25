@@ -30,6 +30,8 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
       await page.evaluate(() => document.fonts.ready);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
       for (const link of await nav.locator(":scope > a").all()) {
+        await expect(link).toHaveCSS("text-transform", "none");
+        await expect(link).toHaveCSS("box-shadow", "none");
         const box = await link.boundingBox();
         expect(box).not.toBeNull();
         expect(box!.x).toBeGreaterThanOrEqual(0);

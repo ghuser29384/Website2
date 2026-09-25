@@ -106,9 +106,16 @@ function NavMenu({
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onOpenChange(false);
       }}
-      onToggle={(event) => onOpenChange(event.currentTarget.open)}
     >
-      <summary className="topbar-menu-trigger">
+      <summary
+        className="topbar-menu-trigger"
+        onClick={(event) => {
+          // Keep one state transition per click, including keyboard activation.
+          // Native toggle events must not race React's controlled open state.
+          event.preventDefault();
+          onOpenChange(!isOpen);
+        }}
+      >
         <span>{label}</span>
         <span aria-hidden="true" className="topbar-menu-caret">
           ▾
