@@ -1,31 +1,27 @@
-name: Release approved Create proportions PR 825 once
+name: Verify approved Create proportions release once
 on:
   push:
     branches: [ops/release-create-825-20260925]
     paths: [.github/workflows/ops-release-create-825-once.yml]
 permissions:
   contents: read
-  actions: write
+  actions: read
 concurrency:
   group: ops-release-create-825-20260925
   cancel-in-progress: false
 jobs:
-  dispatch-and-verify:
+  observe-and-verify:
     if: github.repository == 'ghuser29384/Website2'
     runs-on: ubuntu-24.04
     timeout-minutes: 125
-    env:
-      RELEASE_SHA: 0f37928e9a0a6aaec6ce24c2a989fd409a4019c0
-      APPROVED_PR_HEAD: a4c63f4b13817c89763473d59a825af49a34aa90
-      EXPECTED_RELEASE_WORKFLOW_BLOB: e219e99d25279161b89eee80fc410912c3561a19
     steps:
-      - name: Check out the one-use dispatcher
+      - name: Check out the exact read-only observer
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate scope and dispatch the unchanged gated release
+      - name: Observe the existing exact release and verify public assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -33,7 +29,8 @@ jobs:
           python3 - <<'PY'
           import hashlib, json, os, pathlib, subprocess, time, urllib.request
           repo = 'ghuser29384/Website2'
-          sha = os.environ['RELEASE_SHA']
+          sha = '0f37928e9a0a6aaec6ce24c2a989fd409a4019c0'
+          run_id = 36197251864
           own_path = '.github/workflows/ops-release-create-825-once.yml'
           evidence = pathlib.Path('create-825-release-evidence')
           evidence.mkdir()
@@ -42,90 +39,60 @@ jobs:
                   raise SystemExit(message)
           def git(*args):
               return subprocess.check_output(['git', *args], text=True).strip()
-          def api(path, method='GET', body=None):
-              request = urllib.request.Request(
-                  'https://api.github.com/repos/' + repo + '/' + path,
-                  data=None if body is None else json.dumps(body).encode(), method=method,
+          def api(path):
+              request = urllib.request.Request('https://api.github.com/repos/' + repo + '/' + path,
                   headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
-                           'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json',
-                           'X-GitHub-Api-Version': '2026-03-10'})
+                           'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'})
               with urllib.request.urlopen(request, timeout=40) as response:
-                  raw = response.read()
-                  return json.loads(raw) if raw else {}
+                  return json.load(response)
           require(os.environ['GITHUB_REPOSITORY'] == repo, 'Wrong repository')
-          require(os.environ['GITHUB_REF'] == 'refs/heads/ops/release-create-825-20260925', 'Wrong dispatcher branch')
-          require(os.environ['GITHUB_RUN_ATTEMPT'] == '1', 'No automatic or manual redispatch on rerun')
-          require(git('rev-parse', 'HEAD') == os.environ['GITHUB_SHA'], 'Wrong dispatcher head')
-          require(git('show', '-s', '--format=%P', 'HEAD') == sha, 'Dispatcher must have exactly the released main as its sole parent')
-          require(git('diff', '--name-only', sha, 'HEAD') == own_path, 'Dispatcher must change exactly its own file')
+          require(os.environ['GITHUB_REF'] == 'refs/heads/ops/release-create-825-20260925', 'Wrong branch')
+          require(git('rev-parse', 'HEAD') == os.environ['GITHUB_SHA'], 'Wrong observer head')
+          require(git('show', '-s', '--format=%P', 'HEAD') == 'a834ead3cf0721932461e0437c07f1eb2ab14e3c', 'Wrong observer parent')
+          require(git('show', '-s', '--format=%P', 'HEAD^') == sha, 'Wrong initial dispatcher parent')
+          require(git('diff', '--name-only', sha, 'HEAD') == own_path, 'Unexpected observer scope')
           subprocess.run(['git', 'diff', '--check', sha, 'HEAD'], check=True)
-          require(git('rev-parse', sha + ':.github/workflows/vercel-release.yml') == os.environ['EXPECTED_RELEASE_WORKFLOW_BLOB'], 'Release workflow changed')
-          expected = {
+          for path, blob in {
               'public/moral-trade-create/ui-repairs.css': '812b5982ecc2e3801ce8334b2ed6eb8f594d7326',
               'tests/create-route-ui-regression.spec.ts': '88623d469486e274cd0150eaf42d6d3ede11bbcd',
-          }
-          for path, blob in expected.items():
-              require(git('rev-parse', sha + ':' + path) == blob, 'Approved Create file changed: ' + path)
-          pr = api('pulls/825')
-          require(pr.get('merged') is True, 'PR 825 is not merged')
-          require(pr['head']['sha'] == os.environ['APPROVED_PR_HEAD'], 'Unexpected PR head')
-          require(pr['merge_commit_sha'] == sha, 'Unexpected merge SHA')
-          require(api('git/ref/heads/main')['object']['sha'] == sha, 'Main advanced; re-review before release')
-          workflow = api('actions/workflows/vercel-release.yml')
-          require(workflow['path'] == '.github/workflows/vercel-release.yml' and workflow['state'] == 'active', 'Wrong or disabled release workflow')
-          before_ids = {r['id'] for r in api('actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=30')['workflow_runs']}
-          # This invokes the existing release gates; it does not build, deploy, or move aliases itself.
-          dispatched = api('actions/workflows/vercel-release.yml/dispatches', 'POST', {
-              'ref': 'main', 'inputs': {'target': 'production', 'ref': 'main',
-              'expected_sha': sha, 'synthetic_auth_fixture_url': ''}})
-          run_id = dispatched.get('workflow_run_id')
-          if run_id is None:
-              # Older API responses can be empty. Locate the one new exact-SHA run without redispatching.
-              for attempt in range(24):
-                  runs = api('actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=30')['workflow_runs']
-                  matches = [r for r in runs if r['id'] not in before_ids and r['head_sha'] == sha and r['workflow_id'] == workflow['id']]
-                  require(len(matches) <= 1, 'Ambiguous dispatch result; inspect instead of redispatching')
-                  if matches:
-                      run_id = matches[0]['id']
-                      break
-                  time.sleep(5)
-          require(isinstance(run_id, int) and run_id > 0, 'Dispatch response did not identify a run; inspect before retrying')
+              '.github/workflows/vercel-release.yml': 'e219e99d25279161b89eee80fc410912c3561a19',
+          }.items():
+              require(git('rev-parse', sha + ':' + path) == blob, 'Approved source changed: ' + path)
+          # GET requests only: the Contact release already dispatched this exact main.
           receipt = {'source_sha': sha, 'pr': 825, 'release_run_id': run_id,
                      'release_url': f'https://github.com/{repo}/actions/runs/{run_id}',
-                     'dispatcher_run_id': os.environ['GITHUB_RUN_ID']}
-          (evidence / 'dispatch.json').write_text(json.dumps(receipt, indent=2) + '\n')
-          print(json.dumps(receipt), flush=True)
-          deadline = time.monotonic() + 7000
+                     'observer_run_id': os.environ['GITHUB_RUN_ID'], 'dispatch_performed_by_observer': False}
+          (evidence / 'observation.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          deadline = time.monotonic() + 6900
           while time.monotonic() < deadline:
               run = api('actions/runs/' + str(run_id))
-              require(run['head_sha'] == sha and run['workflow_id'] == workflow['id'] and run['event'] == 'workflow_dispatch', 'Release run identity mismatch')
+              require(run['head_sha'] == sha and run['workflow_id'] == 325045339
+                  and run['event'] == 'workflow_dispatch' and run['head_branch'] == 'main', 'Release identity mismatch')
               if run['status'] == 'completed':
                   receipt['release_conclusion'] = run['conclusion']
-                  (evidence / 'dispatch.json').write_text(json.dumps(receipt, indent=2) + '\n')
-                  require(run['conclusion'] == 'success', 'Gated release did not succeed; no success or promotion is inferred')
+                  (evidence / 'observation.json').write_text(json.dumps(receipt, indent=2) + '\n')
+                  require(run['conclusion'] == 'success', 'Existing gated release failed; no deployment success is inferred')
                   break
               time.sleep(20)
           else:
-              raise SystemExit('Release observation deadline reached; inspect recorded run')
+              raise SystemExit('Observation deadline reached; inspect the recorded release')
           expected_css = subprocess.check_output(['git', 'show', sha + ':public/moral-trade-create/ui-repairs.css'])
           records = []
           for host in ('moraltrade.org', 'www.moraltrade.org'):
-              url = f'https://{host}/moral-trade-create/ui-repairs.css?integrity={sha}-{run_id}'
+              matched = False
               for attempt in range(30):
-                  try:
-                      request = urllib.request.Request(url + '-' + str(attempt), headers={'Cache-Control': 'no-cache'})
-                      with urllib.request.urlopen(request, timeout=30) as response:
-                          content = response.read()
-                          require(response.status == 200, 'Wrong asset status')
-                          require(response.headers.get_content_type() == 'text/css', 'Wrong asset content type')
-                          require(response.url.startswith('https://' + host + '/') or response.url.startswith('https://www.moraltrade.org/'), 'Unexpected public-asset redirect')
-                      if content == expected_css:
-                          break
-                  except (OSError, TimeoutError):
-                      pass
+                  url = f'https://{host}/moral-trade-create/ui-repairs.css?integrity={sha}-{run_id}-{attempt}'
+                  request = urllib.request.Request(url, headers={'Cache-Control': 'no-cache'})
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      content = response.read()
+                      require(response.status == 200 and response.headers.get_content_type() == 'text/css', 'Bad stylesheet response')
+                      require(response.url.startswith('https://' + host + '/')
+                          or response.url.startswith('https://www.moraltrade.org/'), 'Unexpected redirect')
+                  if content == expected_css:
+                      matched = True
+                      break
                   time.sleep(5)
-              else:
-                  raise SystemExit('Live CSS did not match approved source on ' + host)
+              require(matched, 'Live CSS does not match approved source on ' + host)
               (evidence / (host + '-ui-repairs.css')).write_bytes(content)
               record = {'host': host, 'css_matches_approved_source': True,
                         'css_sha256': hashlib.sha256(content).hexdigest(),
@@ -148,5 +115,5 @@ jobs:
         with:
           name: create-825-release-${{ github.run_id }}
           path: create-825-release-evidence
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
