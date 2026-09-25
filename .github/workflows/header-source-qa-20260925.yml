@@ -1,40 +1,110 @@
-name: Header source snapshot and QA
-
+name: Refined masthead candidate verification
 on:
   push:
     branches: [ops/header-source-qa-20260925]
     paths: [.github/workflows/header-source-qa-20260925.yml]
-
 permissions:
   contents: read
-
+concurrency:
+  group: refined-masthead-candidate-20260925
+  cancel-in-progress: false
 jobs:
-  source:
+  stage:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.stage.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 079d5bbc6224bc6e9770d33622f6cab7e4baac01
+          path: transport
+          persist-credentials: false
+      - name: Verify the exact scoped transport before applying
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          cat transport/.github/header-patch/{0,1,2,3,4,5} | base64 --decode | gzip -d > /tmp/header.patch
+          echo 'd0206ced7f24051531bee0a2810a6632be933be6b44b2752b532248364ba92bf  /tmp/header.patch' | sha256sum -c -
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/refined-masthead-20260925
+          path: candidate
+          fetch-depth: 0
+      - name: Publish only the reviewed candidate branch, never main
+        id: stage
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 1a397cceb83fd51f26c69cd06209b297d881c0ca
+          test "$(git ls-remote origin refs/heads/fix/refined-masthead-20260925 | cut -f1)" = 1a397cceb83fd51f26c69cd06209b297d881c0ca
+          git apply --check /tmp/header.patch
+          git apply /tmp/header.patch
+          git diff --check
+          git add public/moral-trade-discover.html public/moral-trade-live-navigation.js public/moral-trade-live.html public/moral-trade-refined-header.css src/app/layout.tsx src/components/layout/site-topbar.tsx src/discover-home-visual-contract.test.ts src/lib/live-discover-navigation.test.ts src/lib/refined-header.test.ts src/lib/refined-header.ts tests/discover-home-visual-alignment.spec.ts tests/exact-live-local-time.spec.ts tests/exact-live-now-recommendations.spec.ts tests/homepage-narrow-header.spec.ts tests/public-routes.spec.ts tests/refined-header.spec.ts tests/returning-homepage.spec.ts tests/sitewide-canonical-visual-system.spec.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 18
+          git diff --cached --check
+          git diff --cached --stat
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git commit -m 'Refine the shared masthead and keep priorities under Profile'
+          git push origin HEAD:refs/heads/fix/refined-masthead-20260925
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+  quality:
+    needs: stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL: '1'
+      VERCEL_ENV: preview
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.stage.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Install exact locked dependencies without application credentials
-        run: npm ci
-      - name: Archive dependencies for isolated local verification
+      - name: Record exact candidate
+        run: |
+          mkdir -p header-evidence
+          git rev-parse HEAD | tee header-evidence/commit.txt
+          git diff HEAD^ --stat > header-evidence/diff-stat.txt
+          git archive --format=tar.gz HEAD > header-evidence/source.tar.gz
+          git diff --check HEAD^
+      - run: npm ci
+      - name: Repository tests, lint, TypeScript, production build
         run: |
           set -euo pipefail
-          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          test "$(git rev-parse HEAD)" = 079d5bbc6224bc6e9770d33622f6cab7e4baac01
-          mkdir -p /tmp/header-dependencies
-          tar -czf /tmp/header-dependencies/dependencies.tar.gz node_modules
-          sha256sum package-lock.json > /tmp/header-dependencies/package-lock.sha256
-          sha256sum /tmp/header-dependencies/dependencies.tar.gz > /tmp/header-dependencies/dependencies.sha256
+          npm test 2>&1 | tee header-evidence/unit.log
+          npm run lint -- --quiet 2>&1 | tee header-evidence/lint.log
+          npx tsc --noEmit 2>&1 | tee header-evidence/types.log
+          npm run build 2>&1 | tee header-evidence/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Actual application header and navigation render checks
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.release.config.ts tests/refined-header.spec.ts tests/homepage-narrow-header.spec.ts tests/discover-home-visual-alignment.spec.ts tests/public-routes.spec.ts tests/returning-homepage.spec.ts tests/sitewide-canonical-visual-system.spec.ts --reporter=line 2>&1 | tee header-evidence/header-browser.log
+      - name: Preserve focused screenshots before the broader suite
+        if: always()
+        run: cp -a test-results header-evidence/focused-test-results 2>/dev/null || true
+      - name: Complete release browser regression suite
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee header-evidence/release-browser.log
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: header-locked-dependencies-079d5bbc
-          path: /tmp/header-dependencies
-          retention-days: 1
-          compression-level: 0
+          name: refined-masthead-candidate-${{ needs.stage.outputs.sha }}
+          path: |
+            header-evidence
+            test-results
+          retention-days: 7
