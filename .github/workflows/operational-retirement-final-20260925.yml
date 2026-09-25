@@ -1,0 +1,163 @@
+name: Final operational retirement validation 20260925
+on:
+  push:
+    branches: [ops/feature-pruning-audit-20260925]
+    paths: [.github/workflows/operational-retirement-final-20260925.yml]
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.repair.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f7eba4131e49f3b51ecad08fbf3e162c1c3a03c8
+          fetch-depth: 10
+      - name: Correct only two retired-route browser contracts
+        id: repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch=cleanup/remove-simulated-operations-20260925
+          test "$(git rev-parse HEAD)" = f7eba4131e49f3b51ecad08fbf3e162c1c3a03c8
+          test "$(git rev-parse HEAD^{tree})" = 06e2328ad133068e7797c248df83db08b9766cd9
+          test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = f7eba4131e49f3b51ecad08fbf3e162c1c3a03c8
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 3c606844d5c3369f64c43ea2ed6e70e4d687ae38
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tests/exact-live-local-time.spec.ts')
+          s = p.read_text().replace('expectHeaderAcrossPrimaryPages', 'expectHeaderAcrossLiveViews')
+          old = '''  for (const pageName of ["now", "activity"]) {
+              await page.locator(`.topbar nav button[data-page="${pageName}"]`).click();
+              await expectLocalHeader(page, expected);
+            }'''
+          new = '''  for (const section of ["focus", "plan", "focus"]) {
+              await page.locator(`[data-now="${section}"]`).click();
+              await expectLocalHeader(page, expected);
+            }
+            await page.locator('.topbar nav button[data-page="activity"]').click();
+            await expect(page).toHaveURL(/\\/commitments$/);
+            await expect(page.locator("#commitments-heading")).toBeVisible();
+            await expect(page.locator(".head .date")).toHaveCount(0);'''
+          assert s.count(old) == 1
+          s = s.replace(old, new).replace('across Now and Activity', 'across Focus and Plan, then opens real Commitments')
+          p.write_text(s)
+          p = Path('tests/sitewide-canonical-visual-system.spec.ts')
+          s = p.read_text()
+          old = '''    await expect(page.locator(".mt-site-topbar").first()).toBeVisible();
+              await waitForTextLength(page, 80);'''
+          new = '''    await expect(page.locator("#outcomes-heading")).toHaveText(
+                "Verified outcomes, without public evidence dossiers.",
+              );
+              await expect(page.getByRole("region", { name: "Exactly six fields leave the private workflow." })).toBeVisible();
+              await expect(page.locator("[data-completion]")).toHaveCount(0);
+              await waitForTextLength(page, 80);'''
+          assert s.count(old) == 1
+          p.write_text(s.replace(old, new))
+          PY
+          git add tests/exact-live-local-time.spec.ts tests/sitewide-canonical-visual-system.spec.ts
+          git diff --cached --check
+          test "$(git write-tree)" = cb5411e3157b7b4bb3e99c9be40f7d870bd12d36
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Test local dates on live views and verification redirect on real evidence'
+          git push origin "HEAD:refs/heads/$branch"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          mkdir -p repair-evidence
+          git rev-parse HEAD HEAD^{tree} > repair-evidence/identity.txt
+          git diff --binary HEAD^ HEAD > repair-evidence/test-contract-repair.patch
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retirement-test-repair-${{ github.run_id }}
+          path: repair-evidence/
+          retention-days: 14
+  quality:
+    needs: repair
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.repair.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: All unit and affected source contracts
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/retirement-quality
+          git rev-parse HEAD HEAD^{tree} > /tmp/retirement-quality/identity.txt
+          npm test 2>&1 | tee /tmp/retirement-quality/unit.log
+          node --import tsx --test src/live-operational-retirement.test.ts src/live-account-data.test.ts src/live-now-data.test.ts src/lib/create-interface/unified-entry-routes.test.ts src/sitewide-canonical-visual-system.test.ts src/sitewide-canonical-visual-fidelity.test.ts 2>&1 | tee /tmp/retirement-quality/affected.log
+      - name: Full lint and typecheck
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee /tmp/retirement-quality/lint.log
+          npx tsc --noEmit 2>&1 | tee /tmp/retirement-quality/types.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-retirement-quality-${{ github.run_id }}
+          path: /tmp/retirement-quality/
+          retention-days: 14
+  rendered:
+    needs: repair
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.repair.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Production build
+        id: build
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/retirement-browser
+          git rev-parse HEAD HEAD^{tree} > /tmp/retirement-browser/identity.txt
+          npm run build 2>&1 | tee /tmp/retirement-browser/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Affected rendered navigation-account-command-planner contracts
+        run: |
+          set -euo pipefail
+          npx playwright test tests/operational-retirement.spec.ts tests/exact-live-verification.spec.ts tests/exact-live-account.spec.ts tests/exact-live-command-center.spec.ts tests/exact-live-custom-route.spec.ts tests/exact-live-route-recommendations.spec.ts tests/exact-live-local-time.spec.ts --workers=1 --reporter=line --output=pruning-targeted-results 2>&1 | tee /tmp/retirement-browser/targeted.log
+          npx playwright test tests/sitewide-canonical-visual-system.spec.ts -g 'complete-verification' --workers=1 --reporter=line --output=pruning-redirect-results 2>&1 | tee /tmp/retirement-browser/redirect.log
+      - name: Full unchanged release browser gate
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee /tmp/retirement-browser/release.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-retirement-rendered-${{ github.run_id }}
+          path: |
+            /tmp/retirement-browser/
+            pruning-targeted-results/
+            pruning-redirect-results/
+            test-results/
+          retention-days: 14
