@@ -174,7 +174,6 @@ interface ProfileLike {
   id: string;
   display_name: string | null;
   email: string;
-  karma: number;
 }
 
 interface AgreementPaymentLike {
@@ -766,7 +765,7 @@ export async function publishPriorityCorrectionCycleForMonth({
       .eq("status", "reserved")
       .is("carryover_consumed_by_cycle_id", null)
       .lt("cycle_month", formatDateOnly(cycleMonthDate)),
-    supabase.from("profiles").select("id,display_name,email,karma"),
+    supabase.from("profiles").select("id,display_name,email"),
     supabase
       .from("agreement_payments")
       .select("id,agreement_id,payer_id,payee_id,amount_cents,status,paid_at,created_at")
@@ -1020,12 +1019,6 @@ export async function publishPriorityCorrectionCycleForMonth({
     const recentlyServed = new Set(
       ((recentAssignments ?? []) as Array<{ profile_id: string }>).map((assignment) => assignment.profile_id),
     );
-    const top10Count = Math.max(1, Math.ceil(profileRows.length * 0.1));
-    const top5Count = Math.max(1, Math.ceil(profileRows.length * 0.05));
-    const profilesByKarma = [...profileRows].sort((left, right) => right.karma - left.karma);
-    const top10Ids = new Set(profilesByKarma.slice(0, top10Count).map((profile) => profile.id));
-    const top5Ids = new Set(profilesByKarma.slice(0, top5Count).map((profile) => profile.id));
-
     const snapshotsByProfileId = new Map(
       snapshotPayloads.map((snapshot) => [snapshot.profile_id, snapshot]),
     );
@@ -1037,7 +1030,6 @@ export async function publishPriorityCorrectionCycleForMonth({
         profileRows.filter((profile) => {
           const snapshot = snapshotsByProfileId.get(profile.id);
           return (
-            top10Ids.has(profile.id) &&
             !recentlyServed.has(profile.id) &&
             snapshot?.prioritized_cause_area === causeArea
           );
@@ -1050,8 +1042,8 @@ export async function publishPriorityCorrectionCycleForMonth({
           profile_id: profile.id,
           role: "specific_action_arbiter",
           cause_area: causeArea,
-          selection_pool: "top_10_percent_karma",
-          selection_score: profile.karma,
+          selection_pool: "eligible_priority_participants",
+          selection_score: 0,
           status: "active",
         });
       }
@@ -1060,7 +1052,7 @@ export async function publishPriorityCorrectionCycleForMonth({
     const causeAreaCandidates = profileRows
       .filter((profile) => {
         const snapshot = snapshotsByProfileId.get(profile.id);
-        return top5Ids.has(profile.id) && !recentlyServed.has(profile.id) && snapshot?.prioritized_cause_area;
+        return !recentlyServed.has(profile.id) && Boolean(snapshot?.prioritized_cause_area);
       })
       .map((profile) => ({
         profile,
@@ -1073,8 +1065,8 @@ export async function publishPriorityCorrectionCycleForMonth({
         profile_id: candidate.profile.id,
         role: "cause_area_arbiter",
         cause_area: null,
-        selection_pool: "top_5_percent_karma",
-        selection_score: candidate.profile.karma,
+        selection_pool: "eligible_priority_participants_diverse_causes",
+        selection_score: 0,
         status: "active",
       });
     }
