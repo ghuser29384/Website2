@@ -225,7 +225,7 @@ test("concurrent requests do not share private results or queues", async () => {
 
 test("page data loads stay after authentication and no longer form a waterfall", () => {
   const source = readFileSync("src/app/dashboard/page.tsx", "utf8");
-  const authentication = source.indexOf('await requireViewer("/dashboard")');
+  const authentication = source.indexOf('await requireViewer("/dashboard?view=controls")');
   const parallel = source.indexOf("const [dashboardData, accountSecuritySummary, priorityFundSummary] = await Promise.all([");
   assert.ok(authentication >= 0 && parallel > authentication);
   assert.match(source.slice(parallel, parallel + 550), /viewer \? getDashboardData\(viewer\.authUser\.id\) : null/);
