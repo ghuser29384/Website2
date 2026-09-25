@@ -1,0 +1,36 @@
+name: Account controls integration proof
+on:
+  push:
+    branches: [ops/account-controls-release-qa-20260925]
+    paths: [.github/workflows/account-controls-integration-proof-20260925.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 004120b20ccf4c551dc2120ea01a015f568743b4
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Prove exact three-file integration and run focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '004120b20ccf4c551dc2120ea01a015f568743b4'
+          git merge-base --is-ancestor 0f37928e9a0a6aaec6ce24c2a989fd409a4019c0 HEAD
+          git diff --check 0f37928e9a0a6aaec6ce24c2a989fd409a4019c0 HEAD
+          printf '%s\n' public/moral-trade-live-account.js src/lib/live-account-actions.test.ts tests/live-account-controls.spec.ts > /tmp/expected
+          git diff --name-only 0f37928e9a0a6aaec6ce24c2a989fd409a4019c0 HEAD > /tmp/actual
+          diff -u /tmp/expected /tmp/actual
+          while IFS= read -r path; do
+            test "$(git rev-parse HEAD:"$path")" = "$(git rev-parse c5d4524ed8e25c3013eb7de00c3b3834cc6e8877:"$path")"
+          done < /tmp/expected
+          node --check public/moral-trade-live-account.js
+          node --experimental-strip-types --test src/lib/live-account-actions.test.ts src/live-account-data.test.ts src/sitewide-account-identity.test.ts src/live-operational-retirement.test.ts
+          echo 'Exact integration preserves every verified patch byte. Full integrated release gates still required before deployment.'
