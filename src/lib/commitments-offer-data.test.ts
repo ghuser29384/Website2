@@ -22,14 +22,14 @@ function compile(path: string, dependencies: Record<string, unknown>) {
     compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
     fileName: path,
   });
-  const module = { exports: {} };
+  const compiledModule = { exports: {} };
   const requireDependency = (name: string) => {
     assert.ok(Object.hasOwn(dependencies, name), `unexpected runtime dependency: ${name}`);
     return dependencies[name];
   };
   // Execute the actual loader with inert I/O; never import a live database client.
-  new Function("require", "module", "exports", outputText)(requireDependency, module, module.exports);
-  return module.exports;
+  new Function("require", "module", "exports", outputText)(requireDependency, compiledModule, compiledModule.exports);
+  return compiledModule.exports;
 }
 
 function harness(reply: (query: Read) => Result | Promise<Result>, configured = true) {
