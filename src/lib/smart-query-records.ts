@@ -76,22 +76,14 @@ export function extractSmartRecordDeadline(
   return result;
 }
 
-export function isVerifiedEvidenceText(value: string | null | undefined) {
-  const normalized = normalizeSmartQueryText(value);
-  if (!normalized) return false;
-  if (/\b(unverified|none|no evidence|self report only|self-report only|not required)\b/.test(normalized)) {
-    return false;
-  }
-  return /\b(verified|reviewed|receipt|receipts|proof|attestation|audit|third party|third-party|evidence|validation|accepted)\b/.test(
-    normalized,
-  );
+export function isVerifiedEvidenceText(_value: string | null | undefined) {
+  // Free-text evidence terms describe what a proposal asks for. They are not a
+  // review record and must never be promoted to a verified state by keywords.
+  return false;
 }
 
-export function evidenceTextQuality(value: string | null | undefined) {
-  const normalized = normalizeSmartQueryText(value);
-  if (!normalized) return 0;
-  if (!isVerifiedEvidenceText(normalized)) return 0.15;
-  if (/\b(third party|third-party|independent|audit|accepted|reviewed)\b/.test(normalized)) return 1;
-  if (/\b(receipt|receipts|proof|attestation|validation)\b/.test(normalized)) return 0.84;
-  return 0.68;
+export function evidenceTextQuality(_value: string | null | undefined) {
+  // Until a structured evidence/review state is supplied, prose contributes no
+  // evidence-quality ranking signal. This keeps discovery fail-closed.
+  return 0;
 }
