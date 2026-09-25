@@ -1,0 +1,121 @@
+name: Dashboard final QA
+on:
+  push:
+    branches: [ops/dashboard-qa-20260925]
+    paths: [.github/workflows/dashboard-final-qa-20260925.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a7f0353d8a807a158cc7a4b7267fc69f69c137e2
+          persist-credentials: false
+      - name: Preserve exact source identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = a7f0353d8a807a158cc7a4b7267fc69f69c137e2
+          mkdir -p /tmp/dashboard-qa/source/src/lib /tmp/dashboard-qa/source/src/app/dashboard
+          git rev-parse HEAD > /tmp/dashboard-qa/commit.txt
+          cp src/lib/app-data.ts src/lib/dashboard-loading.ts src/lib/dashboard-loading.test.ts /tmp/dashboard-qa/source/src/lib/
+          cp src/app/dashboard/page.tsx src/app/dashboard/loading.tsx /tmp/dashboard-qa/source/src/app/dashboard/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Focused regression tests
+        id: focused
+        continue-on-error: true
+        run: node --import tsx --test src/lib/dashboard-loading.test.ts > /tmp/dashboard-qa/focused-tests.log 2>&1
+      - name: Complete repository tests
+        id: tests
+        continue-on-error: true
+        run: npm test > /tmp/dashboard-qa/full-tests.log 2>&1
+      - name: Repository lint and typecheck
+        id: lint
+        continue-on-error: true
+        run: |
+          npm run lint -- --quiet > /tmp/dashboard-qa/lint.log 2>&1
+          npx tsc --noEmit --pretty false > /tmp/dashboard-qa/typecheck.log 2>&1
+      - name: Production build
+        id: build
+        continue-on-error: true
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npm run build > /tmp/dashboard-qa/build.log 2>&1
+      - name: Browser checks on local production build
+        id: browser
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npx next start -p 3210 > /tmp/dashboard-qa/server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3210/dashboard >/dev/null; then break; fi
+            sleep 1
+          done
+          node --input-type=module <<'JS'
+          import { chromium } from '@playwright/test';
+          import { writeFile } from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const browser = await chromium.launch();
+          const results = [];
+          try {
+            for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
+              const page = await browser.newPage({ viewport: { width, height } });
+              const errors = [];
+              page.on('pageerror', error => errors.push(error.message));
+              const response = await page.goto('http://127.0.0.1:3210/dashboard');
+              await page.getByRole('heading', { name: 'Account', exact: true }).waitFor();
+              const title = await page.title();
+              assert.match(title, /Dashboard/);
+              assert.equal(response.status(), 200);
+              assert.equal(await page.locator('nextjs-portal').count(), 0);
+              await page.screenshot({ path: `/tmp/dashboard-qa/dashboard-${name}.png`, fullPage: false });
+              const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+              assert.equal(overflow, false);
+              await page.locator('nav[aria-label="Account shortcuts"] a[href="/contact"]').click();
+              await page.waitForURL('**/contact');
+              results.push({ viewport: name, title, status: response.status(), nonblank: true, frameworkOverlay: false, overflow, interaction: 'Dashboard -> Contact -> /contact', errors });
+              await page.close();
+            }
+          } finally {
+            await writeFile('/tmp/dashboard-qa/browser-results.json', JSON.stringify(results, null, 2));
+            await browser.close();
+          }
+          assert.equal(results.length, 2);
+          assert.ok(results.every(result => result.errors.length === 0), JSON.stringify(results));
+          JS
+      - name: Record outcomes
+        if: always()
+        run: |
+          mkdir -p /tmp/dashboard-qa
+          printf 'focused=%s\ntests=%s\nlint_typecheck=%s\nbuild=%s\nbrowser=%s\n' '${{ steps.focused.outcome }}' '${{ steps.tests.outcome }}' '${{ steps.lint.outcome }}' '${{ steps.build.outcome }}' '${{ steps.browser.outcome }}' > /tmp/dashboard-qa/outcomes.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-final-qa
+          path: /tmp/dashboard-qa
+          retention-days: 7
+      - name: Require every gate
+        if: always()
+        run: |
+          test '${{ steps.focused.outcome }}' = success
+          test '${{ steps.tests.outcome }}' = success
+          test '${{ steps.lint.outcome }}' = success
+          test '${{ steps.build.outcome }}' = success
+          test '${{ steps.browser.outcome }}' = success
