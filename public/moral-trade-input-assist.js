@@ -87,12 +87,6 @@
   ]);
   const AUTO_RESOLVE_CONTEXTS = new Set([
     "priorities",
-    "recipients",
-    "commitments",
-    "evidence",
-    "durations",
-    "baselines",
-    "exits",
     "organizations",
   ]);
 
