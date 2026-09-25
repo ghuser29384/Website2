@@ -1,0 +1,154 @@
+name: Dashboard loading repair and QA
+
+on:
+  push:
+    branches: [fix/dashboard-loading-20260925]
+    paths:
+      - .github/workflows/dashboard-loading-repair-20260925.yml
+      - .github/dashboard-loading-repair.py
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dashboard-loading-repair-20260925
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Guard branch and apply the scoped source edit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/fix/dashboard-loading-20260925
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p /tmp/dashboard-qa/source/src/lib /tmp/dashboard-qa/source/src/app/dashboard
+          python .github/dashboard-loading-repair.py
+          git diff --check
+          git diff > /tmp/dashboard-qa/source-edit.patch
+          cp src/lib/app-data.ts src/lib/dashboard-loading.ts src/lib/dashboard-loading.test.ts /tmp/dashboard-qa/source/src/lib/
+          cp src/app/dashboard/page.tsx src/app/dashboard/loading.tsx /tmp/dashboard-qa/source/src/app/dashboard/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Focused regression tests
+        run: node --import tsx --test src/lib/dashboard-loading.test.ts | tee /tmp/dashboard-qa/focused-tests.log
+      - name: Scoped lint and typecheck
+        run: |
+          npx eslint src/lib/app-data.ts src/lib/dashboard-loading.ts src/lib/dashboard-loading.test.ts src/app/dashboard/page.tsx src/app/dashboard/loading.tsx
+          npx tsc --noEmit --pretty false
+      - name: Commit only the fix and remove the temporary repair tools
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/dashboard-loading-repair.py .github/workflows/dashboard-loading-repair-20260925.yml
+          git add src/lib/app-data.ts src/app/dashboard/page.tsx
+          git diff --cached --check
+          git commit -m 'Parallelize dashboard reads with bounded concurrency'
+          git push origin HEAD:refs/heads/fix/dashboard-loading-20260925
+          git rev-parse HEAD | tee /tmp/dashboard-qa/commit.txt
+          git diff --stat 98723f7f7c45407d8303cf72acf38e9a35a0904c HEAD | tee /tmp/dashboard-qa/diff-stat.txt
+      - name: Complete repository tests
+        id: tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test > /tmp/dashboard-qa/full-tests.log 2>&1
+          result=$?
+          tail -40 /tmp/dashboard-qa/full-tests.log
+          exit "$result"
+      - name: Repository lint
+        id: lint
+        continue-on-error: true
+        run: npm run lint -- --quiet > /tmp/dashboard-qa/lint.log 2>&1
+      - name: Production build
+        id: build
+        continue-on-error: true
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npm run build > /tmp/dashboard-qa/build.log 2>&1
+      - name: Browser check on the local production build
+        id: browser
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npx next start -p 3210 > /tmp/dashboard-qa/server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3210/dashboard >/dev/null; then break; fi
+            sleep 1
+          done
+          node --input-type=module <<'JS'
+          import { chromium } from '@playwright/test';
+          import { writeFile } from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const browser = await chromium.launch();
+          const results = [];
+          try {
+            for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
+              const page = await browser.newPage({ viewport: { width, height } });
+              const errors = [];
+              page.on('pageerror', error => errors.push(error.message));
+              const response = await page.goto('http://127.0.0.1:3210/dashboard');
+              await page.getByRole('heading', { name: 'Account', exact: true }).waitFor();
+              const title = await page.title();
+              assert.match(title, /Dashboard/);
+              assert.equal(response.status(), 200);
+              assert.equal(await page.locator('nextjs-portal').count(), 0);
+              await page.screenshot({ path: `/tmp/dashboard-qa/dashboard-${name}.png`, fullPage: false });
+              const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+              assert.equal(overflow, false);
+              await page.getByRole('link', { name: 'Browse Offers', exact: true }).click();
+              await page.waitForURL('**/offers');
+              results.push({ viewport: name, title, status: response.status(), nonblank: true, frameworkOverlay: false, overflow, interaction: 'Dashboard -> Browse Offers -> /offers', errors });
+              await page.close();
+            }
+          } finally {
+            await writeFile('/tmp/dashboard-qa/browser-results.json', JSON.stringify(results, null, 2));
+            await browser.close();
+          }
+          assert.ok(results.every(result => result.errors.length === 0), JSON.stringify(results));
+          JS
+      - name: Record quality-gate outcomes
+        if: always()
+        run: |
+          mkdir -p /tmp/dashboard-qa
+          printf 'commit=%s\ntests=%s\nlint=%s\nbuild=%s\nbrowser=%s\n' '${{ steps.commit.outcome }}' '${{ steps.tests.outcome }}' '${{ steps.lint.outcome }}' '${{ steps.build.outcome }}' '${{ steps.browser.outcome }}' > /tmp/dashboard-qa/outcomes.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-loading-qa
+          path: /tmp/dashboard-qa
+          retention-days: 7
+      - name: Require all validation gates
+        if: always()
+        run: |
+          test '${{ steps.commit.outcome }}' = success
+          test '${{ steps.tests.outcome }}' = success
+          test '${{ steps.lint.outcome }}' = success
+          test '${{ steps.build.outcome }}' = success
+          test '${{ steps.browser.outcome }}' = success
