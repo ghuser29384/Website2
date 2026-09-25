@@ -39,7 +39,9 @@ jobs:
           test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = 9e075241e0e997a99d49a0d024f5da6b11cf1d4b
 
           base64 -d ../recipe/.github/patches/truthful-simplification-20260925.patch.gz.b64 | gzip -dc > /tmp/change.patch
-          test "$(sha256sum /tmp/change.patch | cut -d' ' -f1)" = d1841ab932a9e2dbbe58574ee67c6b1f03d793dfac68663b6166d05526c6044c
+          actual_patch_sha="$(sha256sum /tmp/change.patch | cut -d' ' -f1)"
+          echo "decoded patch sha256=$actual_patch_sha"
+          test "$actual_patch_sha" = d1841ab932a9e2dbbe58574ee67c6b1f03d793dfac68663b6166d05526c6044c
           git apply --check /tmp/change.patch
           git apply --index /tmp/change.patch
           git diff --cached --check
