@@ -807,9 +807,6 @@ export function filterAndRankDiscoverCoFunds(
           right.score - left.score
         );
       }
-      if (plan.sort === "strongest-evidence") {
-        return right.evidenceLabel.length - left.evidenceLabel.length || right.score - left.score;
-      }
       return right.score - left.score || left.title.localeCompare(right.title);
     });
 }
@@ -878,7 +875,6 @@ export function filterAndRankDiscoverPools(
 
   return result.sort((left, right) => {
     if (plan.sort === "lowest-cost") return left.targetFundingCents - right.targetFundingCents || right.score - left.score;
-    if (plan.sort === "strongest-evidence") return right.evidenceLabel.length - left.evidenceLabel.length || right.score - left.score;
     return right.score - left.score || left.title.localeCompare(right.title);
   });
 }
