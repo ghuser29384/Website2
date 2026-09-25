@@ -20,7 +20,9 @@ for (const width of [1440, 390]) {
     expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width + 1);
     expect(errors).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`clean-home-${width}.png`), fullPage: true });
-    await page.locator('[data-page="activity"]').click();
+    const commitments = page.locator('[data-mt-primary-links] a[href="/commitments"]');
+    await expect(commitments).toHaveAccessibleName("Commitments");
+    await commitments.click();
     await expect(page).toHaveURL(/\/commitments$/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByText("$18,760 total", { exact: true })).toHaveCount(0);
