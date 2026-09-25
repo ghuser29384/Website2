@@ -151,9 +151,6 @@ function optionLabel<T extends string>(
 }
 
 function rankingDescription(sort: PeopleDiscoverySort, hasSearch: boolean) {
-  if (sort === "offers") {
-    return "Most open offers prioritizes currently available proposals, with relevance and recency breaking close results.";
-  }
   if (sort === "newest") {
     return "Newest is chronological; relevance and reviewed public activity break close results.";
   }
@@ -181,9 +178,9 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
     parsedInterpretation.facets,
     parseSerializedSmartQueryFacets(resolvedSearchParams),
   );
-  const requestedGeneralCreditRanking = Boolean(
+  const requestedGeneralPersonRanking = Boolean(
     readParam(resolvedSearchParams, "credit") ||
-      readParam(resolvedSearchParams, "sort") === "credit" ||
+      ["credit", "offers"].includes(readParam(resolvedSearchParams, "sort")) ||
       smartFacets.minCredit !== null,
   );
   const peopleFacets = { ...smartFacets, minCredit: null };
@@ -466,11 +463,11 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                 </Link>
               ) : null}
             </div>
-            {requestedGeneralCreditRanking ? (
+            {requestedGeneralPersonRanking ? (
               <p className={filterStyles.rankingNote}>
-                General credit sorting and thresholds are not used in the People directory. Open a
-                participant&apos;s contextual credibility record when you have a specific transaction role
-                and category to evaluate.
+                General person leaderboards by credit or raw offer count are not used in the People
+                directory. Use task filters here, then inspect contextual credibility for a specific
+                transaction role and category.
               </p>
             ) : null}
             <div className={filterStyles.filterMeta}>
@@ -560,7 +557,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                         </span>
                       ))}
                       {profile.offerCount > 0 ? (
-                        <span className="source-pill">{profile.offerCount} open offer(s)</span>
+                        <span className="source-pill">Has current public offers</span>
                       ) : null}
                       {profile.ratingCount > 0 ? (
                         <span className="source-pill">
@@ -579,7 +576,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     <div className="offer-footer">
                       <div className="tag-row">
                         {profile.offerCount > 0 ? (
-                          <span>{profile.offerCount} current offer(s)</span>
+                          <span>Current public offers available</span>
                         ) : (
                           <span>No current public offer</span>
                         )}
