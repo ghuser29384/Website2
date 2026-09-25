@@ -1,0 +1,173 @@
+name: Account controls exact-head release QA
+
+on:
+  push:
+    branches: [ops/account-controls-release-qa-20260925]
+    paths: [.github/workflows/account-controls-release-qa-20260925.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: account-controls-release-qa-833
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      CANDIDATE: c5d4524ed8e25c3013eb7de00c3b3834cc6e8877
+      BASE: 127497c980a57435a7660e1f07d0836e8f579c59
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: c5d4524ed8e25c3013eb7de00c3b3834cc6e8877
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify exact source and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p account-controls-release-evidence
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          git merge-base --is-ancestor "$BASE" HEAD
+          git diff --check "$BASE" HEAD
+          printf '%s\n' public/moral-trade-live-account.js src/lib/live-account-actions.test.ts tests/live-account-controls.spec.ts > /tmp/expected-paths
+          git diff --name-only "$BASE" HEAD > /tmp/actual-paths
+          diff -u /tmp/expected-paths /tmp/actual-paths
+          { git rev-parse HEAD; git rev-parse HEAD^{tree}; sha256sum public/moral-trade-live-account.js; } | tee account-controls-release-evidence/source.txt
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${STRIPE_SECRET_KEY:-}"
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Focused regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check public/moral-trade-live-account.js
+          node --import tsx --test src/lib/live-account-actions.test.ts src/live-account-data.test.ts src/sitewide-account-identity.test.ts src/live-operational-retirement.test.ts | tee account-controls-release-evidence/focused.log
+      - name: Full repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test | tee account-controls-release-evidence/tests.log
+      - name: Full lint and TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet | tee account-controls-release-evidence/lint.log
+          npx tsc --noEmit --pretty false | tee account-controls-release-evidence/types.log
+      - name: Production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build | tee account-controls-release-evidence/build.log
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Run committed account-controls browser regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e -- tests/live-account-controls.spec.ts --workers=1 --reporter=line | tee account-controls-release-evidence/account-browser.log
+      - name: Full credential-free release browser gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line | tee account-controls-release-evidence/release-browser.log
+      - name: Verify complete rendered shell and navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3210 > account-controls-release-evidence/server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3210/moral-trade-live-account.js >/dev/null && break; sleep 2; done
+          cat > "$RUNNER_TEMP/account-controls-shell.cjs" <<'JS'
+          const { createRequire } = require('node:module');
+          const { writeFileSync } = require('node:fs');
+          const assert = require('node:assert/strict');
+          const req = createRequire(process.cwd() + '/package.json');
+          const { chromium } = req('@playwright/test');
+          const origin = 'http://127.0.0.1:3210';
+          const out = process.cwd() + '/account-controls-release-evidence';
+          const results = [];
+          const account = {
+            displayName: 'QA Member', firstName: 'QA', initials: 'QM',
+            memberSince: '2026-04-01T12:00:00Z', completedCommitments: 0,
+            paymentAccount: { configured: true, label: 'Setup incomplete' },
+            notifications: { enabled: false, label: 'Off' },
+            publicTrustProfile: { enabled: false, label: 'Private' },
+            defaultPrivacy: 'Strict', standardTerms: { href: '/terms', label: 'Current site terms' }
+          };
+          (async () => {
+            const browser = await chromium.launch();
+            try {
+              for (const width of [390, 1440]) {
+                const context = await browser.newContext({ viewport: { width, height: 1000 } });
+                const page = await context.newPage();
+                const errors = [];
+                page.on('pageerror', e => errors.push(e.message));
+                await page.route('**/*', route => {
+                  const request = route.request();
+                  if (!request.url().startsWith(origin + '/')) return route.abort();
+                  if (!['GET', 'HEAD'].includes(request.method())) return route.abort();
+                  return route.continue();
+                });
+                await page.route('**/api/live-account', route => route.fulfill({ json: { authenticated: true, account } }));
+                async function openDrawer() {
+                  await page.goto(origin + '/', { waitUntil: 'domcontentloaded' });
+                  await page.locator('[data-action="profile"]').waitFor();
+                  await page.locator('[data-action="profile"]').click();
+                  await page.locator('[data-mt-live-account-action="payment-account"]').waitFor();
+                }
+                await openDrawer();
+                assert.match(await page.title(), /Moral Trade/);
+                assert.equal(await page.locator('[data-mt-live-account-panel] [disabled]').count(), 0);
+                assert.equal(await page.locator('nextjs-portal').count(), 0);
+                await page.screenshot({ path: out + `/account-shell-${width}.png` });
+                for (const key of ['currency', 'safe-cap', 'dispute']) {
+                  const control = page.locator(`[data-mt-live-account-action="${key}"]`);
+                  const help = page.locator(`[data-mt-live-account-help="${key}"]`);
+                  await control.click();
+                  assert.equal(await help.isVisible(), true);
+                  await control.press('Space');
+                  assert.equal(await help.isVisible(), false);
+                }
+                await page.locator('[data-mt-live-account-action="safe-cap"]').press('Enter');
+                await page.screenshot({ path: out + `/account-shell-details-${width}.png` });
+                assert.equal(await page.locator('#drawer').evaluate(el => el.scrollWidth <= el.clientWidth), true);
+                await page.getByRole('link', { name: 'Manage payment account', exact: true }).click();
+                await page.waitForURL(/\/login/);
+                assert.match(new URL(page.url()).searchParams.get('returnTo') || '', /^\/dashboard/);
+                await page.screenshot({ path: out + `/account-signin-boundary-${width}.png` });
+                await openDrawer();
+                await page.getByRole('link', { name: 'View standard terms', exact: true }).click();
+                await page.waitForURL(/\/terms/);
+                assert.match(await page.locator('body').innerText(), /Terms/i);
+                results.push({ width, shell: 'passed', controls: 'passed', terms: 'passed', protectedDestination: 'login', browserErrors: errors });
+                assert.deepEqual(errors, []);
+                await context.close();
+              }
+            } finally { await browser.close(); writeFileSync(out + '/shell-results.json', JSON.stringify(results, null, 2)); }
+          })().catch(error => { console.error(error); process.exitCode = 1; });
+          JS
+          node "$RUNNER_TEMP/account-controls-shell.cjs"
+      - name: Preserve release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-controls-release-qa-${{ github.run_id }}
+          path: |
+            account-controls-release-evidence/
+            test-results/
+          if-no-files-found: error
+          retention-days: 14
