@@ -7,7 +7,9 @@ import {
   MarketplaceBottomNav,
   MarketplaceRouteShell,
 } from "@/components/marketplace/marketplace-components";
+import { ProfilePrioritiesCard } from "@/components/profile/profile-priorities-card";
 import { getViewer } from "@/lib/app-data";
+import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -19,7 +21,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function ProfilePage() {
+interface ProfilePageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function ProfilePage({ searchParams }: ProfilePageProps) {
+  const formMessage = getFormMessage(await searchParams);
   const supabaseReady = hasSupabaseEnv();
   const viewer = supabaseReady ? await getViewer() : null;
 
@@ -40,12 +47,20 @@ export default async function ProfilePage() {
           <section className="v72-private-surface mt-v75-route-card" aria-labelledby="profile-heading">
             <div className="v72-account-header">
               <p className="detail-kicker">Private profile</p>
-              <h1 id="profile-heading">{viewer ? "Your profile" : "Profile unavailable"}</h1>
-              <p>
-                Role readiness is private, source-owned, and not a public credit score or reputation
-                rank.
-              </p>
+              <h1 id="profile-heading">Your profile</h1>
+              <p>Manage your account and the priorities used to personalize your feed.</p>
             </div>
+
+            {formMessage ? (
+              <div
+                className={`status-banner ${formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"}`}
+                role={formMessage.tone === "error" ? "alert" : "status"}
+              >
+                {formMessage.text}
+              </div>
+            ) : null}
+
+            <ProfilePrioritiesCard returnTo="/profile" />
 
             <article className="commitment-row panel">
               <div className="commitment-row-main">
