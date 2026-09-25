@@ -1,4 +1,5 @@
 name: Truthful simplification final validation 20260925
+# Registered validation rerun.
 on:
   push:
     branches: [ops/feature-pruning-audit-20260925]
