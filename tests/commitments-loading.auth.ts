@@ -57,15 +57,26 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
         ["Calendar", "No dates match this calendar view."],
       ]) {
         await tabs.getByRole("link", { name: label, exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(`tab=${label.toLowerCase()}`));
         await expect(page.getByText(state, { exact: true })).toBeVisible();
         await expect(tabs.getByRole("link", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
       }
-      await page.getByRole("navigation", { name: "Calendar scope" }).getByRole("link", { name: "All dates" }).click();
+      const allDates = page.getByRole("navigation", { name: "Calendar scope" }).getByRole("link", { name: "All dates" });
+      await allDates.click();
       await expect(page).toHaveURL(/calendar=all/);
-      await tabs.getByRole("link", { name: "Portfolio", exact: true }).click();
+      // URL commitment precedes the streamed view. Finish this transition before
+      // issuing another navigation, as for each of the tab transitions above.
+      await expect(allDates).toHaveAttribute("aria-current", "page");
+      await expect(page.getByText("No dates match this calendar view.", { exact: true })).toBeVisible();
+      const portfolio = tabs.getByRole("link", { name: "Portfolio", exact: true });
+      await portfolio.click();
+      await expect(page).toHaveURL(/\/commitments$/);
+      await expect(portfolio).toHaveAttribute("aria-current", "page");
       await expect(page.getByRole("heading", { name: "No commitments yet." })).toBeVisible();
-      await page.getByRole("navigation", { name: "Group portfolio by" }).getByRole("link", { name: "Mechanism", exact: true }).click();
+      const mechanism = page.getByRole("navigation", { name: "Group portfolio by" }).getByRole("link", { name: "Mechanism", exact: true });
+      await mechanism.click();
       await expect(page).toHaveURL(/group=mechanism/);
+      await expect(mechanism).toHaveAttribute("aria-current", "page");
       await expect(page.getByRole("heading", { name: "No commitments yet." })).toBeVisible();
       expect(errors).toEqual([]);
     });

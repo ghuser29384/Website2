@@ -63,7 +63,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Verify streaming, signed-out access and fixture-session navigation
-        run: npx playwright test --config=playwright.commitments.config.ts --reporter=line
+        run: npx playwright test --config=playwright.commitments.config.ts --reporter=line --repeat-each=3
       - name: Preserve browser evidence
         if: always()
         uses: actions/upload-artifact@v4
