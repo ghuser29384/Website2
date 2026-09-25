@@ -9,11 +9,12 @@ permissions:
   pull-requests: read
   actions: write
 concurrency:
-  group: authorized-contact-release-829
+  group: authorized-contact-release-829-0f37928e
   cancel-in-progress: false
 env:
-  EXPECTED_SHA: d13ef669f002f44fb32c2a08909142f272f4cad9
-  EXPECTED_TREE: 6add89105f7bc64e8b95ef178fc16e33a3e3c6cd
+  EXPECTED_SHA: 0f37928e9a0a6aaec6ce24c2a989fd409a4019c0
+  EXPECTED_TREE: c28f2107ffb31f034fad80d9a40c8891a3a5aab1
+  CONTACT_MERGE_SHA: d13ef669f002f44fb32c2a08909142f272f4cad9
   EXPECTED_PR_HEAD: b663fae4da8f647644b180a26909ce86c82dcc5b
 jobs:
   release-and-verify:
@@ -21,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 100
     steps:
-      - name: Guard the authorized merged commit and dispatch existing gated release
+      - name: Guard the approved contact fix in current main and dispatch existing gated release
         id: dispatch
         env:
           GH_TOKEN: ${{ github.token }}
@@ -32,12 +33,18 @@ jobs:
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           mkdir -p "$RUNNER_TEMP/contact-live-evidence"
           gh api "repos/$GITHUB_REPOSITORY/pulls/829" > "$RUNNER_TEMP/contact-live-evidence/pr.json"
-          jq -e --arg sha "$EXPECTED_SHA" --arg head "$EXPECTED_PR_HEAD" '
+          jq -e --arg sha "$CONTACT_MERGE_SHA" --arg head "$EXPECTED_PR_HEAD" '
             .merged == true and .merge_commit_sha == $sha and .head.sha == $head and .base.ref == "main"
           ' "$RUNNER_TEMP/contact-live-evidence/pr.json" >/dev/null
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_SHA"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_SHA" --jq .tree.sha)" = "$EXPECTED_TREE"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/36196466085" --jq .conclusion)" = success
+          gh api "repos/$GITHUB_REPOSITORY/compare/$CONTACT_MERGE_SHA...$EXPECTED_SHA" > "$RUNNER_TEMP/contact-live-evidence/integration.json"
+          jq -e --arg sha "$CONTACT_MERGE_SHA" '
+            .merge_base_commit.sha == $sha and .ahead_by == 1 and
+            ([.files[].filename] | sort) == ["public/moral-trade-create/ui-repairs.css", "tests/create-route-ui-regression.spec.ts"]
+          ' "$RUNNER_TEMP/contact-live-evidence/integration.json" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36196466085" > "$RUNNER_TEMP/contact-live-evidence/contact-qa.json"
+          jq -e --arg sha "$EXPECTED_PR_HEAD" '.head_sha == $sha and .conclusion == "success"' "$RUNNER_TEMP/contact-live-evidence/contact-qa.json" >/dev/null
           gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$EXPECTED_SHA&event=workflow_dispatch&per_page=100" > "$RUNNER_TEMP/contact-live-evidence/existing-runs.json"
           count="$(jq '[.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml")] | length' "$RUNNER_TEMP/contact-live-evidence/existing-runs.json")"
           test "$count" -le 1
