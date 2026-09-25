@@ -62,7 +62,7 @@ interface PoolsPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-type PoolSort = "best_match" | "soonest_deadline" | "lowest_cost" | "most_verified";
+type PoolSort = "best_match" | "soonest_deadline" | "lowest_cost";
 
 interface RankedPoolRoute {
   causeIds: string[];
@@ -77,7 +77,6 @@ const POOL_SORT_OPTIONS: ReadonlyArray<{ value: PoolSort; label: string }> = [
   { value: "best_match", label: "Best match" },
   { value: "soonest_deadline", label: "Soonest deadline" },
   { value: "lowest_cost", label: "Lowest maximum funding" },
-  { value: "most_verified", label: "Strongest evidence" },
 ];
 
 const mechanismFacts = [
@@ -240,10 +239,6 @@ function rankPoolRoutes(
         return left.route.targetFundingCents - right.route.targetFundingCents ||
           right.score - left.score || left.route.id.localeCompare(right.route.id);
       }
-      if (sort === "most_verified") {
-        return right.evidenceQuality - left.evidenceQuality || right.score - left.score ||
-          left.route.id.localeCompare(right.route.id);
-      }
       return right.score - left.score ||
         right.semanticRelevance - left.semanticRelevance ||
         left.route.id.localeCompare(right.route.id);
@@ -305,8 +300,8 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
           <div className="mt-mechanism-copy">
             <h1 id="pools-heading">Live conditional pools.</h1>
             <p>
-              Search by cause, maximum target funding, evidence standard, or deadline. Hard constraints
-              are enforced before semantic fit, evidence quality, saved cause priorities, and urgency.
+              Search by cause, maximum target funding, proposed evidence terms, or deadline. Hard constraints
+              are enforced before semantic fit, saved cause priorities, and urgency.
             </p>
             <div className="mt-product-actions">
               <Link className="button button-primary" href="#live-pools">
@@ -347,7 +342,7 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
                 <input
                   defaultValue={query}
                   name="q"
-                  placeholder="e.g. verified public-health pools under $10,000 before October 1"
+                  placeholder="e.g. public-health pools under $10,000 before October 1"
                   type="search"
                 />
               </label>
@@ -371,8 +366,8 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
               </div>
             ) : null}
             <p className="form-help">
-              Generic money limits apply to the pool’s published maximum target funding. A pool with
-              no public deadline or verification state cannot satisfy a hard constraint on that field.
+              Generic money limits apply to the pool’s published maximum target funding. Free-text evidence
+              terms are not treated as verified evidence; a verified-only query returns no match unless a structured review state exists.
             </p>
           </SmartQueryForm>
 
