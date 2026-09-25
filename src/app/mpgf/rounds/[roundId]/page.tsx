@@ -67,7 +67,8 @@ function formatCountdown(seconds: number) {
 
   const hours = Math.floor(seconds / 3_600);
 
-  return hours > 0 ? `${hours} hours` : "closing window";
+  if (hours > 0) return `${hours} hours`;
+  return seconds > 0 ? "less than one hour" : "closed";
 }
 
 function statusLabel(value: string) {
@@ -125,7 +126,7 @@ function qualitativeSealedProgressLabel({
     return "Needs more support";
   }
 
-  return "Likely near threshold";
+  return "Progress not disclosed";
 }
 
 function commonGroundStanceLabel(stance: MpgfCommonGroundBudgetStance) {
