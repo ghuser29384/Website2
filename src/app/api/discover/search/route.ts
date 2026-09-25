@@ -67,8 +67,7 @@ function parseRequestBody(value: unknown): DiscoverSearchInput | null {
     value.sort === "best-fit" ||
     value.sort === "newest" ||
     value.sort === "deadline" ||
-    value.sort === "lowest-cost" ||
-    value.sort === "strongest-evidence"
+    value.sort === "lowest-cost"
       ? value.sort
       : undefined;
   return {
