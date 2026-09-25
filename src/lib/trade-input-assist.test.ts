@@ -238,17 +238,22 @@ test("insertions, deletions, and transpositions resolve across every canonical l
   assert.equal(mutationCount, 165);
 });
 
-test("automatic resolution is delayed, undoable, and IME-safe", async () => {
+test("canonicalization is suggestion-only and never rewrites material terms implicitly", async () => {
   const assist = await loadAssistApi();
 
   assert.equal(assist.autoResolveDelayMs, 650);
-  assert.match(assistSource, /Changed “\$\{previousValue\}” to “\$\{canonicalValue\}”/);
-  assert.match(assistSource, /undo\.textContent = "Undo"/);
-  assert.match(assistSource, /ignoredCorrectionKeys/);
-  assert.match(assistSource, /correctionElementKey/);
+  assert.match(assistSource, /function selectSuggestion/);
   assert.match(assistSource, /compositionstart/);
   assert.match(assistSource, /compositionend/);
-  assert.match(assistSource, /ignoredCorrectionValues/);
+  assert.doesNotMatch(assistSource, /function scheduleCanonicalCorrection/);
+  assert.doesNotMatch(
+    assistSource,
+    /form\.addEventListener\("submit"[^]*correctElement\(/,
+  );
+  assert.doesNotMatch(
+    assistSource,
+    /control\.addEventListener\("blur"[^]*correctElement\(/,
+  );
 });
 
 test("the shared catalog covers every standardized trade-term context", () => {

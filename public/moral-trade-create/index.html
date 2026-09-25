@@ -3685,8 +3685,8 @@
                     <input type="radio" name="poolFailureBonusType" value="percentage" />
                     <span><strong>Fixed percentage</strong><small>Pay the same percentage of each contributor’s refunded contribution.</small></span>
                   </label>
-                  <label class="pool-choice-option">
-                    <input type="radio" name="poolFailureBonusType" value="function" />
+                  <label class="pool-choice-option" hidden aria-hidden="true">
+                    <input type="radio" name="poolFailureBonusType" value="function" disabled />
                     <span><strong>Percentage function</strong><small>Set a percentage that varies with each contributor’s refunded contribution.</small></span>
                   </label>
                 </div>
@@ -3722,7 +3722,9 @@
                 </div>
               </section>
 
-              <section class="failure-timing-panel disabled" id="failureTimingPanel" aria-labelledby="failureTimingHeading">
+              <p class="timing-inline-note"><strong>Simple templates only in ordinary creation.</strong> Advanced timing schedules, piecewise curves, and custom payout formulas are reserved for expert review and are not offered in this flow. <a href="/mpgf/technical-spec">Review the technical specification</a>.</p>
+
+              <section class="failure-timing-panel disabled" id="failureTimingPanel" aria-labelledby="failureTimingHeading" hidden aria-hidden="true">
                 <div class="pool-subpanel-head">
                   <div>
                     <strong id="failureTimingHeading">Failure-bonus timing</strong>

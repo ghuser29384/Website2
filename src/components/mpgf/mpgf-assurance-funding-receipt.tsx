@@ -45,8 +45,9 @@ function formatPerDollar(value: number) {
 }
 
 export function MpgfAssuranceFundingReceipt() {
-  const [pledgeInput, setPledgeInput] = useState("100");
-  const [probabilityInput, setProbabilityInput] = useState("20");
+  const [pledgeInput, setPledgeInput] = useState("");
+  const [probabilityInput, setProbabilityInput] = useState("");
+  const hasInputs = pledgeInput.trim().length > 0 && probabilityInput.trim().length > 0;
   const pledgeCents = parseAssurancePledgeDollars(pledgeInput);
   const decisiveProbabilityBasisPoints = parseAssuranceProbabilityPercent(probabilityInput);
   const pledgeInvalid =
@@ -68,12 +69,13 @@ export function MpgfAssuranceFundingReceipt() {
             <span aria-hidden="true">$</span>
             <input
               aria-describedby="assurance-pledge-help"
-              aria-invalid={pledgeInvalid}
+              aria-invalid={hasInputs && pledgeInvalid}
               inputMode="decimal"
               max="1000"
               min="1"
               onChange={(event) => setPledgeInput(event.target.value)}
               step="0.01"
+              placeholder="100"
               type="number"
               value={pledgeInput}
             />
@@ -86,12 +88,13 @@ export function MpgfAssuranceFundingReceipt() {
           <span className={styles.inputShell}>
             <input
               aria-describedby="assurance-probability-help"
-              aria-invalid={probabilityInvalid}
+              aria-invalid={hasInputs && probabilityInvalid}
               inputMode="decimal"
               max="100"
               min="0"
               onChange={(event) => setProbabilityInput(event.target.value)}
               step="0.01"
+              placeholder="20"
               type="number"
               value={probabilityInput}
             />
@@ -106,7 +109,7 @@ export function MpgfAssuranceFundingReceipt() {
         <p>Decisive means the pool would clear with this pledge and would not clear without it.</p>
       </div>
 
-      {result.ok ? (
+      {hasInputs && result.ok ? (
         <div className={styles.result} aria-live="polite">
           <div className={styles.metrics}>
             <article className={`${styles.metric} ${styles.metricPrimary}`}>
@@ -143,10 +146,12 @@ export function MpgfAssuranceFundingReceipt() {
             <p>Funding estimate, not an impact guarantee.</p>
           </div>
         </div>
-      ) : (
+      ) : hasInputs ? (
         <p className={styles.error} role="alert">
           {result.error}
         </p>
+      ) : (
+        <p className={styles.boundary}>Enter both values to see an educational estimate. No probability is assumed for you.</p>
       )}
 
       <p className={styles.boundary}>{ASSURANCE_FUNDING_RECEIPT_BOUNDARY}</p>

@@ -50,15 +50,18 @@
       : experiment.stoppedByGuardrail
         ? "Causal holdout stopped by guardrail"
         : "Causal holdout disabled";
-    return `<aside class="mt-learning-diagnostics" aria-label="Recommendation-ranking status">
-      <div><span>Recommendation ranking</span><strong>${escapeHtml(copy.label)}</strong><p>${escapeHtml(copy.detail)}</p></div>
-      <dl>
-        <div><dt>Role</dt><dd>Ranking aid under separate evidence and safety review</dd></div>
-        <div><dt>Experiment</dt><dd>${escapeHtml(experimentLabel)}</dd></div>
-        <div><dt>Audit</dt><dd>${escapeHtml(receipt)}</dd></div>
-        <div><dt>Privacy</dt><dd>No raw private profile prose or sensitive demographic features</dd></div>
-      </dl>
-    </aside>`;
+    return `<details class="mt-learning-diagnostics" aria-label="Advanced recommendation-ranking diagnostics">
+      <summary><strong>Advanced feed diagnostics</strong><span>Model mode, experiment, audit, and privacy details</span></summary>
+      <div class="mt-learning-diagnostics-body">
+        <div><span>Recommendation ranking</span><strong>${escapeHtml(copy.label)}</strong><p>${escapeHtml(copy.detail)}</p></div>
+        <dl>
+          <div><dt>Role</dt><dd>Ranking aid under separate evidence and safety review</dd></div>
+          <div><dt>Experiment</dt><dd>${escapeHtml(experimentLabel)}</dd></div>
+          <div><dt>Audit</dt><dd>${escapeHtml(receipt)}</dd></div>
+          <div><dt>Privacy</dt><dd>No raw private profile prose or sensitive demographic features</dd></div>
+        </dl>
+      </div>
+    </details>`;
   }
 
   function decorateCards() {

@@ -72,15 +72,10 @@ test("the exact live trade clauses autocomplete causes, charities, and organizat
   await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-context", "recipients");
 
   await recipientToken.fill("Globla poverty");
-  await expect(recipientToken).toHaveText("Global poverty", { timeout: 2_000 });
-  const correctionNotice = page.locator(".mt-input-assist-correction");
-  await expect(correctionNotice).toContainText(
-    "Changed “Globla poverty” to “Global poverty”.",
-  );
-  await correctionNotice.getByRole("button", { name: "Undo" }).click();
-  await expect(recipientToken).toHaveText("Globla poverty");
   await page.waitForTimeout(800);
   await expect(recipientToken).toHaveText("Globla poverty");
+  const correctionNotice = page.locator(".mt-input-assist-correction");
+  await expect(correctionNotice).toBeHidden();
 
   const activationToken = page
     .locator(".clause")

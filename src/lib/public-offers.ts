@@ -961,8 +961,8 @@ export function buildPublicGoodsEntryCard({
   reviewedSeedTemplateCount: number;
   workedExampleCount: number;
 }): PublicGoodsEntryCard {
-  const currentRoundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}`;
-  const previewHref = `${currentRoundHref}#common-ground-budget-preview`;
+  const demonstrationHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}`;
+  const previewHref = `${demonstrationHref}#common-ground-budget-preview`;
   const primaryCta: PublicGoodsEntryAction = {
     key: "preview-common-ground-budget",
     label: "Preview a Common Ground Budget",
@@ -978,9 +978,9 @@ export function buildPublicGoodsEntryCard({
   };
   const secondaryCtas: PublicGoodsEntryAction[] = [
     {
-      key: "view-current-round",
-      label: "View current round",
-      href: currentRoundHref,
+      key: "view-worked-demonstration",
+      label: "Open worked demonstration",
+      href: demonstrationHref,
       method: "GET",
       rank: 2,
       authRequired: false,

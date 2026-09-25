@@ -235,15 +235,15 @@ export default async function PriorityCorrectionFundPage({
             <article className="panel concept-card">
               <h3>Specific-action arbiters</h3>
               <p>
-                Each cause area can receive up to five randomly selected arbiters from members in
-                the top 10% of karma for that cycle, excluding members who recently served.
+                Each cause area can receive up to five randomly selected eligible participants who
+                currently prioritize that cause, excluding participants who recently served. General community karma does not determine eligibility.
               </p>
             </article>
             <article className="panel concept-card">
               <h3>Community-wide arbiters</h3>
               <p>
-                Seven cycle-wide arbiters are selected from high-karma members with diverse cause
-                priorities. Their allocation reasoning is recorded before a cycle is finalized.
+                Seven cycle-wide arbiters are selected from eligible participants across diverse cause
+                priorities. General community karma does not determine selection; reasoning is recorded before finalization.
               </p>
             </article>
           </div>
@@ -476,9 +476,9 @@ export default async function PriorityCorrectionFundPage({
             <p className="eyebrow">Stage one</p>
             <h2>Specific-action combinations inside each cause area</h2>
             <p>
-              Five randomly selected arbiters from the top 10% of community karma, among members
-              currently prioritizing the cause area, can publish a cause-specific combination once
-              at least three agree.
+              Five randomly selected eligible participants currently prioritizing the cause area can
+              publish a cause-specific combination once at least three agree. General community karma
+              is not used as a proxy for allocation expertise.
             </p>
           </div>
 

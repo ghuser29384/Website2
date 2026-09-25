@@ -35,9 +35,7 @@ import {
   mergeSmartQueryFacets,
 } from "@/lib/smart-query-facets";
 import {
-  evidenceTextQuality,
   extractSmartRecordDeadline,
-  isVerifiedEvidenceText,
 } from "@/lib/smart-query-records";
 import {
   smartCauseMatchScore,
@@ -97,7 +95,7 @@ type OfferMode = OfferRow["mode"];
 type ModeFilter = "all" | OfferMode;
 type OfferSort = Extract<
   SmartQuerySort,
-  "best_match" | "newest" | "lowest_cost" | "most_verified" | "soonest_deadline" | "highest_credit"
+  "best_match" | "newest" | "lowest_cost" | "soonest_deadline" | "highest_credit"
 >;
 
 interface RankedOffer {
@@ -108,7 +106,7 @@ interface RankedOffer {
   offer: OfferRow;
   score: number;
   semanticRelevance: number;
-  verified: boolean;
+  verified: boolean | null;
 }
 
 interface LiveOffersResult {
@@ -131,7 +129,6 @@ const MODE_OPTIONS: ReadonlyArray<{ value: ModeFilter; label: string }> = [
 
 const SORT_OPTIONS: ReadonlyArray<{ value: OfferSort; label: string }> = [
   { value: "best_match", label: "Best match" },
-  { value: "most_verified", label: "Strongest evidence" },
   { value: "soonest_deadline", label: "Soonest deadline" },
   { value: "lowest_cost", label: "Lowest stated cost" },
   { value: "highest_credit", label: "Highest transaction credit" },
@@ -209,7 +206,7 @@ function offerMatchesHardConstraints(
   causeIds: readonly string[],
   amountCents: readonly number[],
   deadline: string | null,
-  verified: boolean,
+  verified: boolean | null,
 ) {
   if (facets.actionTypes.length) {
     const modeMatches = facets.actionTypes.some((actionType) => actionType === offer.mode);
@@ -242,8 +239,9 @@ function rankOffer(
     [offer.duration, offer.discount_note, offer.notes, offer.request_action, offer.offer_action],
     now,
   );
-  const verified = isVerifiedEvidenceText(offer.verification);
-  const evidenceQuality = evidenceTextQuality(offer.verification);
+  // `verification` is proposed free text, not a completed review record.
+  const verified = null;
+  const evidenceQuality = 0;
   const semanticRelevance = smartInterpretationScore(interpretation, fields);
 
   if (
@@ -294,10 +292,6 @@ function sortRankedOffers(items: RankedOffer[], sort: OfferSort) {
       const leftAmount = left.amountCents.length ? Math.max(...left.amountCents) : Number.POSITIVE_INFINITY;
       const rightAmount = right.amountCents.length ? Math.max(...right.amountCents) : Number.POSITIVE_INFINITY;
       return leftAmount - rightAmount || right.score - left.score || left.offer.id.localeCompare(right.offer.id);
-    }
-    if (sort === "most_verified") {
-      return right.evidenceQuality - left.evidenceQuality || right.score - left.score ||
-        left.offer.id.localeCompare(right.offer.id);
     }
     if (sort === "soonest_deadline") {
       const leftDeadline = left.deadline ? Date.parse(left.deadline) : Number.POSITIVE_INFINITY;
@@ -671,7 +665,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     defaultValue={search}
                     id="offers-search"
                     name="search"
-                    placeholder="e.g. verified civic work under $50 before August 1"
+                    placeholder="e.g. civic work under $50 before August 1"
                     type="search"
                   />
                   <button type="submit">Search</button>
@@ -711,15 +705,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <details className={densityStyles.rankingDisclosure}>
                   <summary>How ranking works</summary>
                   <p>
-                    Hard constraints are applied before semantic and trust-aware ranking. Hard
-                    constraints → semantic relevance (46%) → evidence quality (20%) → personal
-                    cause fit (16%) → deadline urgency (10%) → transaction credit (8%). Explicit
-                    sort choices may reorder the surviving set.
+                    Hard constraints are applied before ranking. Free-text evidence-method terms are
+                    not treated as completed verification and do not earn an evidence-quality boost.
+                    Current ordering relies on semantic relevance, explicitly available cause fit,
+                    deadline information, and bounded transaction-credit context. Explicit sort
+                    choices may reorder the surviving set.
                   </p>
                 </details>
               </div>
             </details>
           </SmartQueryForm>
+
+          {facets.verified !== null ? (
+            <p className={densityStyles.activeState} role="status">
+              Completed verification state is not available on these proposal records. A stated
+              evidence method is not treated as verified or unverified, so this hard filter returns
+              no record until structured review state exists.
+            </p>
+          ) : null}
 
           <div
             className={`${densityStyles.resultsStage} mt-directory-view`}

@@ -19,7 +19,7 @@ export function MpgfRoundBoard({
   return (
     <section className="section section-white" id="round-board">
       <div className="section-head section-head-compact">
-        <p className="eyebrow">Live rounds</p>
+        <p className="eyebrow">Round board</p>
         <h2>Round board and budget router</h2>
         <p>
           Review the next safe participant action before setting moral public goods. Exact
@@ -35,7 +35,7 @@ export function MpgfRoundBoard({
 
       <div className="mpgf-round-board-header">
         <div>
-          <span>Current round</span>
+          <span>Selected round or demonstration</span>
           <strong>{roundName}</strong>
         </div>
         <Link className="button button-secondary" href={roundHref}>

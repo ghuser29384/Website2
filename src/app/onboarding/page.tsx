@@ -53,12 +53,12 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
     : "/onboarding";
   const signupHref = `/signup?returnTo=${encodeURIComponent(onboardingReturnTo)}`;
   const loginHref = `/login?returnTo=${encodeURIComponent(onboardingReturnTo)}`;
-  const defaultGoal = walkthroughDraft?.primaryGoal ?? actionFirstGoals[0]?.value;
-  const defaultParticipantKind = walkthroughDraft?.participantKind ?? PARTICIPANT_KINDS[0]?.value;
+  const defaultGoal = walkthroughDraft?.primaryGoal;
+  const defaultParticipantKind = walkthroughDraft?.participantKind;
   const defaultCauseAreas = new Set(
-    walkthroughDraft ? [walkthroughDraft.causeArea] : COHORT_CAUSES.slice(0, 2),
+    walkthroughDraft ? [walkthroughDraft.causeArea] : [],
   );
-  const defaultFirstAction = walkthroughDraft?.firstAction ?? actionFirstActions[0]?.value;
+  const defaultFirstAction = walkthroughDraft?.firstAction;
 
   return (
     <div className="page-shell page-shell-focused">
@@ -96,7 +96,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             <h1 id="onboarding-heading">
               {isWalkthroughProfile
                 ? "Your walkthrough profile is ready to complete."
-                : "Pick one role, one cause, and one first action."}
+                : "Choose a role and first action; causes are optional."}
             </h1>
             <p className="hero-text">
               {isWalkthroughProfile
@@ -126,7 +126,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
               </div>
             ) : (
               <p>
-                Role, cause areas, referral context, and your chosen first action. This step does not
+                Role, any cause areas you explicitly choose, referral context, and your chosen first action. This step does not
                 publish your identity, exact wishes, or contact details.
               </p>
             )}
@@ -161,6 +161,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                           <input
                             defaultChecked={goal.value === defaultGoal}
                             name="primary_goal"
+                            required
                             type="radio"
                             value={goal.value}
                           />
@@ -181,6 +182,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                           <input
                             defaultChecked={kind.value === defaultParticipantKind}
                             name="participant_kind"
+                            required
                             type="radio"
                             value={kind.value}
                           />
@@ -191,7 +193,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   </fieldset>
 
                   <fieldset className="field onboarding-fieldset">
-                    <legend>Cause areas</legend>
+                    <legend>Cause areas <span className="muted">(optional)</span></legend>
                     <div className="onboarding-inline-grid">
                       {COHORT_CAUSES.map((cause) => (
                         <label className="onboarding-radio" key={cause}>
@@ -215,6 +217,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                           <input
                             defaultChecked={action.value === defaultFirstAction}
                             name="first_action"
+                            required
                             type="radio"
                             value={action.value}
                           />
@@ -242,6 +245,11 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                       name="referral_source"
                       placeholder="Optional: who invited you or where you heard about Moral Trade"
                     />
+                  </label>
+
+                  <label className="onboarding-radio">
+                    <input name="email_updates" type="checkbox" value="1" />
+                    <span>Email me occasional onboarding tips and product updates. Optional.</span>
                   </label>
 
                   <button className="button button-primary" type="submit">

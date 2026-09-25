@@ -810,6 +810,12 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(supabaseProxy, /maxAge: 0/);
   assert.match(actionsSource, /buildPrivacySafeFunnelEventRecord/);
   assert.match(actionsSource, /isAnalyticsOptedOut/);
+  assert.doesNotMatch(onboardingPage, /COHORT_CAUSES\.slice\(0, 2\)/);
+  assert.match(onboardingPage, /Cause areas.*optional/s);
+  assert.match(onboardingPage, /name="email_updates"/);
+  assert.match(actionsSource, /readOptional\(formData, "email_updates"\) === "1"/);
+  assert.match(actionsSource, /source: "onboarding_opt_in"/);
+  assert.doesNotMatch(actionsSource, /source: "signup"[^]*segment: "signed_up_not_activated"/);
   assert.match(funnelTracker, /useReportWebVitals/);
   assert.match(funnelTracker, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
   assert.match(funnelTracker, /buildPrivacySafeSearchMetadata/);

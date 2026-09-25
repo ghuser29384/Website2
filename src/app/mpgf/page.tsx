@@ -55,11 +55,11 @@ const workflow = [
 
 const serviceRoutes = [
   {
-    title: "Current round",
+    title: "Worked demonstration",
     detail:
-      "Inspect the public round, project stances, sealed progress rules, contribution terms, and final reporting path.",
+      "Inspect the May 2026 demonstration of project stances, sealed-progress rules, contribution terms, and reporting. It is not a current funding round.",
     href: `/mpgf/rounds/${demoMpgfAssuranceRound.id}`,
-    action: "View current round",
+    action: "Open worked demonstration",
   },
   {
     title: "Candidate pools",
@@ -116,11 +116,11 @@ export default async function MpgfPage() {
     <MpgfPageFrame
       actions={
         <>
-          <Link className="button button-primary" href={`${roundHref}#common-ground-budget-preview`}>
-            Build a Common Ground Budget
+          <Link className="button button-primary" href="/mpgf/pools">
+            Browse candidate pools
           </Link>
           <Link className="button button-secondary" href={roundHref}>
-            View current round
+            Open worked demonstration
           </Link>
           <Link className="button button-secondary" href="/mpgf/about">
             Read the mechanism
@@ -138,7 +138,7 @@ export default async function MpgfPage() {
         <a href="#assurance-funding">Assurance funding estimate</a>
         <a href="#routes">Service routes</a>
         <a href="#boundaries">Operating boundaries</a>
-        <Link href={roundHref}>Current round</Link>
+        <Link href={roundHref}>Worked demonstration</Link>
         <Link href="/mpgf/pools">Candidate pools</Link>
         <Link href="/mpgf/governance">Governance</Link>
         <Link href="/mpgf/metrics">Metrics</Link>

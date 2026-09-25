@@ -2,13 +2,32 @@
   border: 1px solid rgba(17, 17, 17, 0.18);
   background: rgba(255, 255, 255, 0.72);
   padding: 18px;
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(300px, 1.4fr);
-  gap: 18px;
+  display: block;
   margin: 14px 0 18px;
 }
 
-.mt-learning-diagnostics > div > span {
+.mt-learning-diagnostics summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.mt-learning-diagnostics summary span {
+  color: #57534e;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.mt-learning-diagnostics-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(300px, 1.4fr);
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.mt-learning-diagnostics-body > div > span {
   display: block;
   color: #1557ff;
   font-size: 11px;
@@ -65,7 +84,7 @@
 }
 
 @media (max-width: 760px) {
-  .mt-learning-diagnostics {
+  .mt-learning-diagnostics-body {
     grid-template-columns: 1fr;
   }
   .mt-learning-diagnostics dl {

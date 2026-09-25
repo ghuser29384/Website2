@@ -800,15 +800,7 @@
     correctionTimers.delete(element);
   }
 
-  function scheduleCanonicalCorrection(element, context, options = {}) {
-    clearCorrectionTimer(element);
-    if (!AUTO_RESOLVE_CONTEXTS.has(context) || composingControls.has(element)) return;
-    const timer = window.setTimeout(() => {
-      correctionTimers.delete(element);
-      if (!composingControls.has(element)) correctElement(element, context, options);
-    }, AUTO_RESOLVE_DELAY_MS);
-    correctionTimers.set(element, timer);
-  }
+
 
   function eligibleControl(control) {
     if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
@@ -837,14 +829,6 @@
     if (!(form instanceof HTMLFormElement) || preparedForms.has(form)) return;
     preparedForms.add(form);
     form.addEventListener("submit", () => {
-      form
-        .querySelectorAll("input, textarea")
-        .forEach((control) => {
-          const context = inferContext(control);
-          if (context) {
-            correctElement(control, context, contextOptionsForElement(control, context));
-          }
-        });
       const values = {
         client_local_date: localCalendarDate(),
         client_time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -1237,13 +1221,6 @@
     control.addEventListener("input", () => {
       const activeContext = inferContext(control);
       if (document.activeElement === control && activeContext) renderSuggestions(control);
-      if (activeContext) {
-        scheduleCanonicalCorrection(
-          control,
-          activeContext,
-          contextOptionsForElement(control, activeContext),
-        );
-      }
       updateWebsitePreview(control);
     });
     control.addEventListener("compositionstart", () => {
@@ -1252,14 +1229,7 @@
     });
     control.addEventListener("compositionend", () => {
       composingControls.delete(control);
-      const activeContext = inferContext(control);
-      if (activeContext) {
-        scheduleCanonicalCorrection(
-          control,
-          activeContext,
-          contextOptionsForElement(control, activeContext),
-        );
-      }
+      if (document.activeElement === control && inferContext(control)) renderSuggestions(control);
     });
     control.addEventListener("keydown", (event) => {
       if (event.isComposing || activeControl !== control || !suggestionPanel || suggestionPanel.hidden) return;
@@ -1288,14 +1258,6 @@
     });
     control.addEventListener("blur", () => {
       clearCorrectionTimer(control);
-      const activeContext = inferContext(control);
-      if (!composingControls.has(control) && activeContext) {
-        correctElement(
-          control,
-          activeContext,
-          contextOptionsForElement(control, activeContext),
-        );
-      }
       window.setTimeout(() => {
         if (
           activeControl === control &&

@@ -125,7 +125,7 @@ function qualitativeSealedProgressLabel({
     return "Needs more support";
   }
 
-  return "Likely near threshold";
+  return "Progress not disclosed";
 }
 
 function commonGroundStanceLabel(stance: MpgfCommonGroundBudgetStance) {
@@ -549,6 +549,12 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
         </div>
       </section>
 
+      {round.isDemonstration ? (
+        <div className="status-banner" role="status">
+          Worked demonstration only. These May 2026 records and calculations are examples, not a current funding round or live countdown.
+        </div>
+      ) : null}
+
       <section className="mpgf-kpi-grid" aria-label="Round status">
         <div className="mpgf-kpi">
           <span>Sponsor-pool size</span>
@@ -559,8 +565,8 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
           <strong>{formatDate(round.closesAt)}</strong>
         </div>
         <div className="mpgf-kpi">
-          <span>Time remaining</span>
-          <strong>{formatCountdown(round.countdownSeconds)}</strong>
+          <span>{round.isDemonstration ? "Round status" : "Time remaining"}</span>
+          <strong>{round.isDemonstration ? "Worked demonstration · not live" : formatCountdown(round.countdownSeconds ?? 0)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Verified donors</span>

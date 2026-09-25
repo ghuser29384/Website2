@@ -262,13 +262,15 @@ export function listMpgfPublicGoodsRoundsApi() {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
-    rounds: [
+    rounds: [],
+    examples: [
       {
         id: demoMpgfAssuranceRound.id,
         name: demoMpgfAssuranceRound.name,
         startsAt: demoMpgfAssuranceRound.startsAt,
         closesAt: demoMpgfAssuranceRound.endsAt,
-        status: "open",
+        status: "demonstration",
+        isDemonstration: true,
         sealedProgress,
         sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
         campaignCount: demoMpgfPublicGoodsCampaigns.length,
@@ -276,7 +278,7 @@ export function listMpgfPublicGoodsRoundsApi() {
           sealedProgress.active,
           allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
         ),
-        countdownSeconds: secondsUntil(demoMpgfAssuranceRound.endsAt),
+        countdownSeconds: null,
       },
     ],
   };
@@ -387,8 +389,9 @@ export function buildMpgfPublicGoodsRoundApi({
       name: round.name,
       startsAt: round.startsAt,
       closesAt: round.endsAt,
-      status: "open",
-      countdownSeconds: secondsUntil(round.endsAt),
+      status: usesPersistedState ? "open" : "demonstration",
+      isDemonstration: !usesPersistedState,
+      countdownSeconds: usesPersistedState ? secondsUntil(round.endsAt) : null,
       sealedProgress,
       qfEnabled: round.qfEnabled,
       qfCapMultiple: round.qfCapMultiple,

@@ -144,11 +144,14 @@ import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
   buildPrivacySafeFunnelEventRecord,
+  FIRST_ACTIONS,
   getFirstActionHref,
   isAnalyticsOptedOut,
   normalizeFirstAction,
   normalizeOnboardingGoal,
   normalizeParticipantKind as normalizeCohortParticipantKind,
+  ONBOARDING_GOALS,
+  PARTICIPANT_KINDS,
   parseAttributionCookie,
   type FunnelEventType,
 } from "@/lib/growth";
@@ -3040,25 +3043,8 @@ export async function signUpAction(formData: FormData) {
       profileId: data.user.id,
       supabase,
     });
-    await subscribeEmailNurture({
-      email,
-      nextStep: "Complete onboarding wizard",
-      profileId: data.user.id,
-      segment: "signed_up_not_activated",
-      source: "signup",
-      supabase,
-    });
     redirectWithMessage(returnTo, "message", "Account created. Choose one low-risk first action.");
   }
-
-  await subscribeEmailNurture({
-    email,
-    nextStep: "Confirm email and complete onboarding",
-    profileId: null,
-    segment: "lead",
-    source: "signup",
-    supabase,
-  });
 
   redirectWithMessage(
     buildAuthPath({ mode: "login", returnTo, route: "/login" }),
@@ -3075,16 +3061,26 @@ export async function saveOnboardingAction(formData: FormData) {
   }
 
   const viewer = await requireViewer(returnTo);
-  const primaryGoal = normalizeOnboardingGoal(readRequired(formData, "primary_goal"));
-  const participantKind = normalizeCohortParticipantKind(readRequired(formData, "participant_kind"));
-  const firstAction = normalizeFirstAction(readRequired(formData, "first_action"));
+  const primaryGoalInput = readRequired(formData, "primary_goal");
+  const participantKindInput = readRequired(formData, "participant_kind");
+  const firstActionInput = readRequired(formData, "first_action");
+
+  if (!ONBOARDING_GOALS.some((goal) => goal.value === primaryGoalInput)) {
+    redirectWithMessage(returnTo, "error", "Choose a valid primary goal.");
+  }
+  if (!PARTICIPANT_KINDS.some((kind) => kind.value === participantKindInput)) {
+    redirectWithMessage(returnTo, "error", "Choose a valid participant role.");
+  }
+  if (!FIRST_ACTIONS.some((action) => action.value === firstActionInput)) {
+    redirectWithMessage(returnTo, "error", "Choose a valid first action.");
+  }
+
+  const primaryGoal = normalizeOnboardingGoal(primaryGoalInput);
+  const participantKind = normalizeCohortParticipantKind(participantKindInput);
+  const firstAction = normalizeFirstAction(firstActionInput);
   const causeAreas = readRepeatedStrings(formData, "cause_area", 6);
   const inviteTarget = readOptional(formData, "invite_target");
   const referralSource = readOptional(formData, "referral_source");
-
-  if (!causeAreas.length) {
-    redirectWithMessage(returnTo, "error", "Choose at least one cause area.");
-  }
 
   const supabase = await createClient();
   const { error } = await (supabase as any)
@@ -3123,13 +3119,15 @@ export async function saveOnboardingAction(formData: FormData) {
     profileId: viewer.authUser.id,
     supabase,
   });
-  await recordServerFunnelEvent({
-    eventType: "cause_selected",
-    metadata: { causeAreas },
-    path: returnTo,
-    profileId: viewer.authUser.id,
-    supabase,
-  });
+  if (causeAreas.length) {
+    await recordServerFunnelEvent({
+      eventType: "cause_selected",
+      metadata: { causeAreas },
+      path: returnTo,
+      profileId: viewer.authUser.id,
+      supabase,
+    });
+  }
   await recordServerFunnelEvent({
     eventType: "first_action_selected",
     metadata: {
@@ -3152,17 +3150,19 @@ export async function saveOnboardingAction(formData: FormData) {
     profileId: viewer.authUser.id,
     supabase,
   });
-  await subscribeEmailNurture({
-    email: viewer.profile.email,
-    nextStep:
-      firstAction === "invite_counterparty"
-        ? "Send one counterparty invite"
-        : "Complete selected first action",
-    profileId: viewer.authUser.id,
-    segment: "signed_up_not_activated",
-    source: "onboarding",
-    supabase,
-  });
+  if (readOptional(formData, "email_updates") === "1") {
+    await subscribeEmailNurture({
+      email: viewer.profile.email,
+      nextStep:
+        firstAction === "invite_counterparty"
+          ? "Send one counterparty invite"
+          : "Complete selected first action",
+      profileId: viewer.authUser.id,
+      segment: "signed_up_not_activated",
+      source: "onboarding_opt_in",
+      supabase,
+    });
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/onboarding");

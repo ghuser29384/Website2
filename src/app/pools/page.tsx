@@ -30,10 +30,6 @@ import {
 } from "@/lib/smart-query-facets";
 import { loadSmartQueryCausePriorities } from "@/lib/smart-query-personalization";
 import {
-  evidenceTextQuality,
-  isVerifiedEvidenceText,
-} from "@/lib/smart-query-records";
-import {
   smartCauseMatchScore,
   smartInterpretationScore,
   smartPersonalPriorityScore,
@@ -62,7 +58,7 @@ interface PoolsPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-type PoolSort = "best_match" | "soonest_deadline" | "lowest_cost" | "most_verified";
+type PoolSort = "best_match" | "soonest_deadline" | "lowest_cost";
 
 interface RankedPoolRoute {
   causeIds: string[];
@@ -70,14 +66,13 @@ interface RankedPoolRoute {
   route: LiveGroupBuyingRoute;
   score: number;
   semanticRelevance: number;
-  verified: boolean;
+  verified: boolean | null;
 }
 
 const POOL_SORT_OPTIONS: ReadonlyArray<{ value: PoolSort; label: string }> = [
   { value: "best_match", label: "Best match" },
   { value: "soonest_deadline", label: "Soonest deadline" },
   { value: "lowest_cost", label: "Lowest maximum funding" },
-  { value: "most_verified", label: "Strongest evidence" },
 ];
 
 const mechanismFacts = [
@@ -166,7 +161,7 @@ function poolMatchesHardConstraints(
   route: LiveGroupBuyingRoute,
   facets: SmartQueryFacets,
   causeIds: readonly string[],
-  verified: boolean,
+  verified: boolean | null,
 ) {
   if (facets.causes.length) {
     const direct = facets.causes.some((cause) => causeIds.includes(cause));
@@ -202,7 +197,8 @@ function rankPoolRoutes(
   const ranked = routes
     .map((route): RankedPoolRoute | null => {
       const causeIds = routeCauseIds(route);
-      const verified = isVerifiedEvidenceText(route.verificationSummary);
+      // A verification summary describes the proposed method, not a completed review.
+      const verified = null;
       if (!poolMatchesHardConstraints(route, facets, causeIds, verified)) return null;
 
       const semanticRelevance = smartInterpretationScore(interpretation, poolFields(route));
@@ -212,7 +208,7 @@ function rankPoolRoutes(
       ) {
         return null;
       }
-      const evidenceQuality = evidenceTextQuality(route.verificationSummary);
+      const evidenceQuality = 0;
       const score = smartDiscoveryScore({
         semanticRelevance,
         evidenceQuality,
@@ -239,10 +235,6 @@ function rankPoolRoutes(
       if (sort === "lowest_cost") {
         return left.route.targetFundingCents - right.route.targetFundingCents ||
           right.score - left.score || left.route.id.localeCompare(right.route.id);
-      }
-      if (sort === "most_verified") {
-        return right.evidenceQuality - left.evidenceQuality || right.score - left.score ||
-          left.route.id.localeCompare(right.route.id);
       }
       return right.score - left.score ||
         right.semanticRelevance - left.semanticRelevance ||
@@ -347,7 +339,7 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
                 <input
                   defaultValue={query}
                   name="q"
-                  placeholder="e.g. verified public-health pools under $10,000 before October 1"
+                  placeholder="e.g. public-health pools under $10,000 before October 1"
                   type="search"
                 />
               </label>
@@ -375,6 +367,14 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
               no public deadline or verification state cannot satisfy a hard constraint on that field.
             </p>
           </SmartQueryForm>
+
+          {facets.verified !== null ? (
+            <p className="route-text" role="status">
+              Completed verification state is not available on these pool records. A stated
+              verification method is not treated as verified or unverified, so this hard filter
+              returns no record until structured review state exists.
+            </p>
+          ) : null}
 
           {liveDataAvailable ? (
             routes.length > 0 ? (

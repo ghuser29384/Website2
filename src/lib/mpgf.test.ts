@@ -1110,11 +1110,16 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(rounds.privacyPolicy, MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY);
   assert.equal(rounds.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.deepEqual(MPGF_PUBLIC_GOODS_API_HEADERS, { "Cache-Control": MPGF_PUBLIC_GOODS_API_CACHE_CONTROL });
-  assert.equal(rounds.rounds.length, 1);
-  assert.equal(rounds.rounds[0]?.sealedProgress.active, true);
-  assert.equal(rounds.rounds[0]?.verifiedDonorCount, null);
+  assert.equal(rounds.rounds.length, 0);
+  assert.equal(rounds.examples.length, 1);
+  assert.equal(rounds.examples[0]?.status, "demonstration");
+  assert.equal(rounds.examples[0]?.isDemonstration, true);
+  assert.equal(rounds.examples[0]?.countdownSeconds, null);
   assert.ok(round);
   assert.equal(round.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
+  assert.equal(round.round.status, "demonstration");
+  assert.equal(round.round.isDemonstration, true);
+  assert.equal(round.round.countdownSeconds, null);
   assert.equal(round.round.sealedProgress.active, true);
   assert.equal(round.round.sealedProgress.policy, MPGF_PUBLIC_GOODS_SEALED_PROGRESS_POLICY);
   assert.equal(round.round.sealedProgress.exactPublicProgressVisible, false);
@@ -1570,7 +1575,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /Final match/,
     /sealedProgressActive/,
     /sealedProgressText/,
-    /round\.countdownSeconds > 0/,
+    /round\.isDemonstration/,
     /Threshold \{sealedThresholdStatus\(sealedProgressActive, publicBoolean\(campaign\.thresholdPassed\)\)\}/,
     /value=\{sealedProgressActive \? 0 : Math\.min\(publicNumber\(campaign\.directEligibleCents\), campaign\.thresholdAmountCents\)\}/,
     /Exact live threshold, counterparty-volume, common-ground signal, and success-without-me/,

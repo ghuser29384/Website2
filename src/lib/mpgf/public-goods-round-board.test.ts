@@ -23,7 +23,7 @@ test("MPGF round board exposes threshold, match, choice, maximum, and action fie
   assert.ok(cards.every((card) => card.activeClusterCount > 0));
   assert.ok(
     cards.every((card) =>
-      ["Needs more support", "Likely near threshold", "Review pending", "Closed; final audit available"].includes(
+      ["Needs more support", "Progress not disclosed", "Review pending", "Closed; final audit available"].includes(
         card.sealedProgressLabel,
       ),
     ),
@@ -43,7 +43,7 @@ test("MPGF round board exposes threshold, match, choice, maximum, and action fie
 
   const nearThreshold = cards.find((card) => card.status === "near_threshold");
   assert.ok(nearThreshold);
-  assert.equal(nearThreshold.sealedProgressLabel, "Likely near threshold");
+  assert.equal(nearThreshold.sealedProgressLabel, "Progress not disclosed");
   assert.equal(nearThreshold.yourChoiceLabel, "Fund if different-view support joins");
   assert.equal(nearThreshold.yourMaximumCents, 500);
   assert.equal(nearThreshold.pivotalActionLabel, "Preview $5 budget");
@@ -59,8 +59,9 @@ test("MPGF hub renders the moraltrade60 round board surface", () => {
   assert.match(page, /MpgfRoundBoard/);
   assert.match(page, /buildMpgfRoundBoardCards/);
   assert.match(page, /href="#round-board"/);
-  assert.match(component, /Live rounds/);
+  assert.match(component, /Round board/);
   assert.match(component, /Round board and budget router/);
+  assert.doesNotMatch(component, /Current round/);
   assert.match(component, /Exact\s+threshold progress, supporter counts, active-cluster counts/);
   assert.match(component, /Public exact aggregates appear only\s+after close in final reports or audit bundles/);
   assert.match(component, /Deployment mode: capped pilot/);
@@ -82,7 +83,7 @@ test("MPGF hub renders the moraltrade60 round board surface", () => {
   assert.match(helper, /getMpgfCrecPlainLanguageLabelForStance\("weak"\)/);
   assert.match(helper, /Preview \$5 budget/);
   assert.equal(helper.includes("weak common-ground preview"), false);
-  assert.match(helper, /Likely near threshold/);
+  assert.match(helper, /Progress not disclosed/);
   assert.match(helper, /Needs more support/);
   assert.match(helper, /Review pending/);
   assert.match(helper, /Closed; final audit available/);

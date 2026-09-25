@@ -293,7 +293,7 @@ test("public offers collection separates template, moral public goods, and demo 
   ]);
   assert.deepEqual(
     publicGoodSearchPayload.publicGoodsEntry?.secondaryCtas.map((action) => action.label),
-    ["View current round", "Learn how it works / View audit and rules"],
+    ["Open worked demonstration", "Learn how it works / View audit and rules"],
   );
   assert.deepEqual(
     publicGoodSearchPayload.publicGoodsEntry?.secondaryCtas.map((action) => action.safety),
