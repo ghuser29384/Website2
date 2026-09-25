@@ -216,12 +216,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const backgroundRolloutValidation =
     validateBackgroundNetworkingRolloutPlan(backgroundRolloutPlan);
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
-  const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
-  const accountSecuritySummary = viewer ? await loadBackgroundAccountSecuritySummary() : null;
-  const priorityFundSummary =
+  const [dashboardData, accountSecuritySummary, priorityFundSummary] = await Promise.all([
+    viewer ? getDashboardData(viewer.authUser.id) : null,
+    viewer ? loadBackgroundAccountSecuritySummary() : null,
     viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY
-      ? await getPriorityCorrectionSummary(viewer.authUser.id)
-      : null;
+      ? getPriorityCorrectionSummary(viewer.authUser.id)
+      : null,
+  ]);
   const collectiveNameById = new Map(
     (dashboardData?.collectives ?? []).map((collective) => [collective.id, collective.name]),
   );
