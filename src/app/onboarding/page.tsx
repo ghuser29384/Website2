@@ -56,7 +56,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const defaultGoal = walkthroughDraft?.primaryGoal ?? actionFirstGoals[0]?.value;
   const defaultParticipantKind = walkthroughDraft?.participantKind ?? PARTICIPANT_KINDS[0]?.value;
   const defaultCauseAreas = new Set(
-    walkthroughDraft ? [walkthroughDraft.causeArea] : COHORT_CAUSES.slice(0, 2),
+    walkthroughDraft ? [walkthroughDraft.causeArea] : [],
   );
   const defaultFirstAction = walkthroughDraft?.firstAction ?? actionFirstActions[0]?.value;
 
@@ -96,7 +96,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             <h1 id="onboarding-heading">
               {isWalkthroughProfile
                 ? "Your walkthrough profile is ready to complete."
-                : "Pick one role, one cause, and one first action."}
+                : "Pick a role, optional causes, and one first action."}
             </h1>
             <p className="hero-text">
               {isWalkthroughProfile
@@ -191,7 +191,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   </fieldset>
 
                   <fieldset className="field onboarding-fieldset">
-                    <legend>Cause areas</legend>
+                    <legend>Cause areas <span className="muted">(optional)</span></legend>
                     <div className="onboarding-inline-grid">
                       {COHORT_CAUSES.map((cause) => (
                         <label className="onboarding-radio" key={cause}>
@@ -242,6 +242,13 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                       name="referral_source"
                       placeholder="Optional: who invited you or where you heard about Moral Trade"
                     />
+                  </label>
+
+                  <label className="onboarding-radio">
+                    <input name="email_updates" type="checkbox" value="1" />
+                    <span>
+                      Email me optional onboarding reminders and product follow-up.
+                    </span>
                   </label>
 
                   <button className="button button-primary" type="submit">
