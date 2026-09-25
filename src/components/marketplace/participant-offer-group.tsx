@@ -145,8 +145,8 @@ export function ParticipantOfferGroup({
                       <dd>{offer.verification}</dd>
                     </div>
                     <div>
-                      <dt>Evidence status</dt>
-                      <dd>{verified ? "Named verification evidence" : "Verification terms stated"}</dd>
+                      <dt>Evidence terms</dt>
+                      <dd>Proposed by the participant; no review state is inferred from this text.</dd>
                     </div>
                     <div>
                       <dt>Terms note</dt>
