@@ -632,7 +632,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(feed.getByRole("button", { name: "Hard for me" })).toHaveCount(0);
   });
 
-  test("exposes Evidence as a first-class destination after Commitments", async ({ page }) => {
+  test("keeps Evidence out of the primary menu while its direct route stays available", async ({ page }) => {
     await page.setViewportSize({ width: 1230, height: 900 });
     await page.route("**/api/live-now", (route) =>
       route.fulfill({
@@ -664,25 +664,24 @@ test.describe("adaptive moral-opportunity Now feed", () => {
       "Discover",
       "Trade",
       "Commitments",
-      "Evidence",
       "Tour",
     ]);
 
-    const evidence = navigation.getByRole("button", { name: "Open Evidence" });
-    await expect(evidence).toBeVisible();
+    await expect(navigation.getByRole("button", { name: "Open Evidence" })).toHaveCount(0);
+    await expect(navigation.locator('a[href="/evidence"]')).toHaveCount(0);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
 
-    await evidence.click();
+    await page.goto("/evidence", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/evidence$/);
     await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "Verified outcomes, without public evidence dossiers.",
-      exact: true,
-    }),
-  ).toBeVisible();
+      page.getByRole("heading", {
+        level: 1,
+        name: "Verified outcomes, without public evidence dossiers.",
+        exact: true,
+      }),
+    ).toBeVisible();
   });
 });
