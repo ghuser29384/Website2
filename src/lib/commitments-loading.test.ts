@@ -61,3 +61,14 @@ test("loading navigation remains usable without triggering automatic prefetch re
   assert.match(css, /@media \(max-width: 640px\)/);
   assert.doesNotMatch(css, /animation\s*:/);
 });
+
+test("private portfolio navigation avoids speculative reloads and scroll resets", () => {
+  const page = readFileSync("src/app/commitments/page.tsx", "utf8");
+  const controls = page.match(/<Link\b[^>]*aria-current=[^>]*>/g) ?? [];
+  assert.equal(controls.length, 4, "tabs, grouping, and both calendar scopes are covered");
+  for (const control of controls) {
+    assert.ok(control.includes("prefetch={false}"), control);
+    assert.ok(control.includes("scroll={false}"), control);
+  }
+  assert.ok(page.includes('<Link prefetch={false} scroll={false} href="/commitments?tab=ledger">View all'));
+});
