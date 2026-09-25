@@ -55,20 +55,17 @@ test("both priority routes share account-bound reads and the existing save actio
   assert.match(view, /!loadError \? \(/);
   assert.match(view, /dashboard \? "\/dashboard"/);
   assert.match(editor, /action=\{saveProfilePrioritySearchAction\}/);
-  assert.match(editor, /name="return_to"[^
-]*returnPath/);
-  assert.match(editor, /name="success_to"[^
-]*returnTo/);
+  assert.match(editor, /name="return_to"[^\n]*returnPath/);
+  assert.match(editor, /name="success_to"[^\n]*returnTo/);
 });
 
 test("currency is a disclosure, controls do not prefetch, and control forms keep their return view", () => {
   const tools = readFileSync("src/components/dashboard/dashboard-tools.tsx", "utf8");
   assert.match(tools, /<summary>Currency<\/summary>/);
   assert.match(tools, /account-wide currency selector is not available/);
-  for (const link of tools.matchAll(/<Link[^>]+>/g)) assert.match(link[0], /prefetch=\{false\}/);
+  for (const link of tools.matchAll(/<Link\b[^>]+>/g)) assert.match(link[0], /prefetch=\{false\}/);
   assert.doesNotMatch(tools, /createClient|fetch\(|localStorage|sessionStorage/);
   const page = readFileSync("src/app/dashboard/page.tsx", "utf8");
-  assert.doesNotMatch(page, /name="return_to"[^
-]*value="\/dashboard(?:"|#)/);
+  assert.doesNotMatch(page, /name="return_to"[^\n]*value="\/dashboard(?:"|#)/);
   assert.match(page, /value="\/dashboard\?view=controls"/);
 });
