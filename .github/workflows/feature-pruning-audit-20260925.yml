@@ -1,0 +1,76 @@
+name: Read-only feature-pruning audit 20260925
+on:
+  push:
+    branches: [ops/feature-pruning-audit-20260925]
+    paths: [.github/workflows/feature-pruning-audit-20260925.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: c6baf49d52cb089254e857081de982a6f0449283
+          persist-credentials: false
+      - name: Preserve exact public source and route inventory
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = c6baf49d52cb089254e857081de982a6f0449283
+          mkdir -p audit-evidence
+          git rev-parse HEAD HEAD^{tree} > audit-evidence/identity.txt
+          git ls-tree -r --name-only HEAD > audit-evidence/paths.txt
+          git archive --format=tar.gz -o audit-evidence/source.tar.gz HEAD
+          sha256sum audit-evidence/source.tar.gz > audit-evidence/SHA256SUMS
+          find src/app -name page.tsx -o -name page.ts -o -name route.ts | sort > audit-evidence/routes.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Capture anonymous production routes without writes
+        run: |
+          cat > audit-evidence/capture.mjs <<'JS'
+          import { chromium } from '@playwright/test';
+          import { writeFile } from 'node:fs/promises';
+          const browser = await chromium.launch({ headless: true });
+          const paths = ['/', '/discover', '/start', '/offers', '/people', '/create', '/controls', '/reasoning-center', '/pools', '/dashboard'];
+          const results = [];
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 1000 }, serviceWorkers: 'block' });
+              await context.addCookies([{ name: 'mt_analytics_opt_out', value: '1', domain: 'www.moraltrade.org', path: '/' }]);
+              await context.route('**/*', route => ['GET', 'HEAD'].includes(route.request().method()) ? route.continue() : route.abort('blockedbyclient'));
+              for (const path of paths) {
+                const page = await context.newPage();
+                const errors = [];
+                page.on('pageerror', e => errors.push(e.message));
+                const key = `${width}-${path.replaceAll('/', '_') || 'home'}`;
+                try {
+                  const response = await page.goto(`https://www.moraltrade.org${path}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+                  const text = await page.locator('body').innerText();
+                  const controls = await page.locator('a, button, input, select').evaluateAll(elements => elements.map(e => ({ tag: e.tagName, text: (e.innerText || e.getAttribute('aria-label') || '').trim(), href: e.getAttribute('href'), disabled: e.disabled === true, type: e.getAttribute('type') })));
+                  const geometry = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+                  await writeFile(`audit-evidence/${key}.txt`, text);
+                  await page.screenshot({ path: `audit-evidence/${key}.png`, fullPage: true });
+                  results.push({ path, width, status: response?.status(), finalUrl: page.url(), geometry, controls, errors });
+                } catch (error) {
+                  results.push({ path, width, error: String(error), errors });
+                } finally { await page.close(); }
+              }
+              await context.close();
+            }
+          } finally { await browser.close(); }
+          await writeFile('audit-evidence/production-audit.json', JSON.stringify({ sourceCommit: 'c6baf49d52cb089254e857081de982a6f0449283', readOnly: true, unauthenticated: true, blockedNonReadRequests: true, results }, null, 2));
+          JS
+          node audit-evidence/capture.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feature-pruning-audit-${{ github.run_id }}
+          path: audit-evidence/
+          retention-days: 7
+          if-no-files-found: error
