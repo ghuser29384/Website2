@@ -1,0 +1,83 @@
+name: Feed empty-layout QA
+
+on:
+  pull_request:
+    paths:
+      - "public/moral-trade-live-feed-diagnostics.*"
+      - "public/moral-trade-live-now.js"
+      - "public/moral-trade-live-core.txt"
+      - "public/moral-trade-live.html"
+      - "public/moral-trade-live-feed.css"
+      - "src/lib/feed-empty-layout.test.ts"
+      - "tests/feed-empty-layout.spec.ts"
+      - "playwright.feed-layout.config.ts"
+      - ".github/workflows/feed-empty-layout-qa.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  layout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify focused source and lint
+        run: |
+          node --check public/moral-trade-live-feed-diagnostics.js
+          node --import tsx --test src/lib/feed-empty-layout.test.ts
+          npx eslint public/moral-trade-live-feed-diagnostics.js src/lib/feed-empty-layout.test.ts tests/feed-empty-layout.spec.ts playwright.feed-layout.config.ts
+          git diff --check '${{ github.event.pull_request.base.sha }}'...HEAD
+      - name: Run repository tests
+        id: repository-tests
+        continue-on-error: true
+        run: npm test > "$RUNNER_TEMP/feed-repository-tests.log" 2>&1
+      - name: Prepare exact-base comparison
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/feed-layout-base"
+          for ext in js css; do
+            git show "$BASE_SHA:public/moral-trade-live-feed-diagnostics.$ext" > "$RUNNER_TEMP/feed-layout-base/moral-trade-live-feed-diagnostics.$ext"
+          done
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify actual static-shell assets with isolated fixture data
+        env:
+          FEED_LAYOUT_BASELINE_DIR: ${{ runner.temp }}/feed-layout-base
+          FEED_LAYOUT_OUTPUT_DIR: ${{ runner.temp }}/feed-layout-results
+        run: npx playwright test --config=playwright.feed-layout.config.ts
+      - name: Package public rendering inputs for reproducible QA
+        if: always()
+        run: |
+          node - <<'JS'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const loader = fs.readFileSync('public/moral-trade-live.html', 'utf8');
+          const names = new Set(['moral-trade-live.html', 'moral-trade-live-core.txt', ...[...loader.matchAll(/(?:src|href)="\/([^"<>]+\.(?:js|css))"/g)].map(m => m[1])]);
+          const root = path.join(process.env.RUNNER_TEMP, 'feed-layout-inputs');
+          fs.mkdirSync(root, {recursive:true});
+          for (const name of names) fs.copyFileSync(path.join('public', name), path.join(root, name));
+          JS
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-empty-layout-qa
+          path: |
+            ${{ runner.temp }}/feed-layout-results
+            ${{ runner.temp }}/feed-layout-inputs
+            ${{ runner.temp }}/feed-layout-base
+            ${{ runner.temp }}/feed-repository-tests.log
+          retention-days: 7
+      - name: Preserve repository-test failure
+        if: steps.repository-tests.outcome == 'failure'
+        run: exit 1

@@ -247,6 +247,33 @@
     </details>`;
   }
 
+  // Keep empty-state explanations available without giving them the visual
+  // priority of a task. Move the existing nodes, preserving links and listeners.
+  function arrangeEmptyLayout(root) {
+    if (root.classList.contains("mt-feed-empty-layout")) return;
+    const main = root.querySelector(":scope > main");
+    const urgent = main?.querySelector(".panel.black.urgent");
+    if (!main || !urgent) return;
+
+    const context = document.createElement("details");
+    context.className = "mt-feed-context";
+    context.innerHTML = '<summary><span>Profile and matching details</span><span aria-hidden="true">＋</span></summary><div class="mt-feed-context-body"></div>';
+    const body = context.querySelector(".mt-feed-context-body");
+    const facts = urgent.querySelector(".terms");
+    if (facts) {
+      facts.classList.add("mt-feed-empty-facts");
+      body.appendChild(facts);
+    }
+    const funnel = urgent.querySelector(".mt-feed-empty-diagnostics");
+    if (funnel) body.appendChild(funnel);
+    const aside = root.querySelector(":scope > aside");
+    if (aside) body.appendChild(aside);
+    const explanation = main.querySelector(".attention");
+    if (explanation) body.appendChild(explanation);
+    urgent.insertAdjacentElement("afterend", context);
+    root.classList.add("mt-feed-empty-layout");
+  }
+
   function enhanceEmpty(root, data) {
     const urgent = root.querySelector(".panel.black.urgent");
     if (!urgent) return;
@@ -258,7 +285,7 @@
     if (root.dataset.reciprocalDiagnostics === signature) return;
     const title = urgent.querySelector("h2");
     const copy = urgent.querySelector("p.muted");
-    const facts = urgent.querySelectorAll(".terms strong");
+    const facts = root.querySelectorAll(".mt-feed-empty-facts strong");
 
     if (data.inventorySemanticsVersion === "external-candidate-funnel-v1" && external === 0) {
       if (title) title.textContent = "No external opportunities are available yet.";
@@ -281,19 +308,22 @@
       if (facts[1]) facts[1].textContent = "0 direct matches";
     }
 
-    if (!urgent.querySelector(".mt-feed-empty-diagnostics")) {
-      const terms = urgent.querySelector(".terms");
+    if (!root.querySelector(".mt-feed-empty-diagnostics")) {
+      const terms = root.querySelector(".mt-feed-empty-facts");
       if (terms) terms.insertAdjacentHTML("afterend", emptyDiagnosticsMarkup(data));
     }
     root.dataset.reciprocalDiagnostics = signature;
   }
 
   function enhance() {
-    const data = diagnostics();
-    if (!data || data.version !== "hybrid-reciprocal-v1") return;
     const root = document.querySelector('[data-mt-live-now="adaptive"]');
     if (!root) return;
     const state = root.getAttribute("data-mt-live-now-state");
+    if (["no_matches", "profile_incomplete", "signed_out", "unavailable"].includes(state)) {
+      arrangeEmptyLayout(root);
+    }
+    const data = diagnostics();
+    if (!data || data.version !== "hybrid-reciprocal-v1") return;
     if (state === "ready") enhanceReady(root, data);
     else if (state === "no_matches") enhanceEmpty(root, data);
   }
