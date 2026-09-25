@@ -130,7 +130,11 @@ async function waitForMeaningfulSurface(page: Page, route: string) {
 
   if (pathname === "/complete-verification.html") {
     await expect(page).toHaveURL(/\/evidence$/, { timeout: 45_000 });
-    await expect(page.locator(".mt-site-topbar").first()).toBeVisible();
+    await expect(page.locator("#outcomes-heading")).toHaveText(
+      "Verified outcomes, without public evidence dossiers.",
+    );
+    await expect(page.getByRole("region", { name: "Exactly six fields leave the private workflow." })).toBeVisible();
+    await expect(page.locator("[data-completion]")).toHaveCount(0);
     await waitForTextLength(page, 80);
     return;
   }
