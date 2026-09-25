@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390, 320]) {
@@ -19,6 +20,8 @@ for (const width of [1440, 390, 320]) {
       await expect(card.getByRole("heading", { name: "100 Sparks", exact: true })).toBeVisible();
       const action = card.getByRole("link", { name: "Adjust priorities", exact: true });
       await expect(action).toBeVisible();
+      await expect(action).toHaveCSS("color", "rgb(255, 255, 255)");
+      await expect(action).toHaveCSS("background-color", "rgb(36, 69, 199)");
       await expect(action).toHaveAttribute("href", `/profile/priorities?returnTo=${encodeURIComponent(route)}`);
       expect(await card.evaluate((node) => node.closest("details, form") === null)).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
@@ -37,7 +40,8 @@ for (const width of [1440, 390, 320]) {
       expect(editor.pathname).toBe("/profile/priorities");
       expect(editor.searchParams.get("returnTo")).toBe(route);
       expect(errors).toEqual([]);
-      await testInfo.attach("console-errors", { body: JSON.stringify(consoleErrors, null, 2), contentType: "application/json" });
+      await writeFile(testInfo.outputPath("console-errors.json"), JSON.stringify(consoleErrors, null, 2));
+      expect(consoleErrors).toEqual([]);
     });
   }
 }

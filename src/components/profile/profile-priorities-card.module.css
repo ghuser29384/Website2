@@ -65,7 +65,7 @@
   font-size: 13px;
 }
 
-.action {
+.card .action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -84,12 +84,12 @@
   text-decoration: none;
 }
 
-.action:hover {
+.card .action:hover {
   background: #1938b4;
   color: #fff;
 }
 
-.action:focus-visible {
+.card .action:focus-visible {
   outline: 3px solid #18223b;
   outline-offset: 4px;
 }
