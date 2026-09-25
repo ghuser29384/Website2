@@ -1,0 +1,34 @@
+name: PR 827 authorized release dispatch
+on:
+  push:
+    branches: [ops/pr827-selection-validation-20260925]
+    paths: [.github/workflows/pr827-production-release-dispatch.yml]
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard verified source and dispatch the unchanged canonical workflow once
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: deff62e0877e014bee49edab96c996aae448cbc8
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/pr827-selection-validation-20260925
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          repo='repos/ghuser29384/Website2'
+          test "$(gh api "$repo/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_SHA"
+          test "$(gh api "$repo/git/commits/$EXPECTED_SHA" --jq .tree.sha)" = 27992866c81bc691146366cfe69d7e95b2fb563e
+          gh api "$repo/pulls/827" | jq -e --arg sha "$EXPECTED_SHA" '.merged == true and .merge_commit_sha == $sha and .head.sha == "5b7e1db21b337208eaded8748458ec8d2f1b7fdd" and .base.ref == "main"' >/dev/null
+          gh api "$repo/actions/runs/36196189530" | jq -e '.status == "completed" and .conclusion == "success" and .head_sha == "731efa73a2a755b8be1ea77917b821506a8fb070"' >/dev/null
+          gh api "$repo/actions/runs/36197891587" | jq -e '.status == "completed" and .conclusion == "success" and .head_sha == "28131d5d59355451e3af6ca0f8e9be71958a2098"' >/dev/null
+          test "$(gh api "$repo/contents/.github/workflows/vercel-release.yml?ref=$EXPECTED_SHA" --jq .sha)" = e219e99d25279161b89eee80fc410912c3561a19
+          jq -n --arg sha "$EXPECTED_SHA" '{ref:"main", inputs:{target:"production", ref:"main", expected_sha:$sha}}' \
+            | gh api --method POST "$repo/actions/workflows/vercel-release.yml/dispatches" --input -
+          printf 'Dispatched the unchanged Gated Vercel release for production main at `%s`. Its gates, upload, alias verification and post-release checks must finish before claiming this fix live.\n' "$EXPECTED_SHA" >> "$GITHUB_STEP_SUMMARY"
