@@ -35,8 +35,8 @@ test("Commitments renders a live, cross-mechanism portfolio instead of the visua
 test("Commitments data is participant-scoped, real-record based, and noncustodial", () => {
   for (const required of [
     "listAgreementsForUser",
-    "listCartItems",
-    "listProfileOffers",
+    "listCommitmentCartItems",
+    "listCommitmentOpenOffers",
     "loadMpgfParticipantState",
     "donation_offset_matches",
     "attributedAdditionalResources",

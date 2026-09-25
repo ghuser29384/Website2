@@ -1,0 +1,57 @@
+name: Commitments performance gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/commitments-performance-gates.yml"
+      - "src/app/commitments/**"
+      - "src/lib/commitments-offer-data*"
+      - "src/lib/commitments-loading.test.ts"
+      - "src/lib/commitments-portfolio.ts"
+      - "src/commitments-portfolio-wiring.test.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitments-performance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Test portfolio reads and loading boundary
+        run: |
+          node --import tsx --test \
+            src/lib/commitments-offer-data.test.ts \
+            src/lib/commitments-loading.test.ts \
+            src/commitments-portfolio-wiring.test.ts
+      - name: Lint changed TypeScript
+        run: |
+          npx eslint \
+            src/app/commitments/loading.tsx \
+            src/lib/commitments-offer-data.ts \
+            src/lib/commitments-offer-data.test.ts \
+            src/lib/commitments-loading.test.ts \
+            src/lib/commitments-portfolio.ts \
+            src/commitments-portfolio-wiring.test.ts
+      # Intentionally no deployment, database migrations, credentials or live fixtures.
+      - name: Build Next.js application
+        run: npm run build
