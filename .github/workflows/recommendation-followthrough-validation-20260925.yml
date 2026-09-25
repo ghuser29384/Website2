@@ -39,6 +39,10 @@ jobs:
           set -euo pipefail
           node --check public/moral-trade-input-assist.js
           node --check public/moral-trade-live-learning-diagnostics.js
+      - name: Focused changed contracts
+        run: |
+          set -euo pipefail
+          node --import tsx --test             src/recommendation-followthrough.test.ts             src/lib/mpgf/public-goods-round-board.test.ts             src/lib/discover-search.test.ts             2>&1 | tee validation-evidence/focused.log
       - name: Full unit suite
         run: |
           set -euo pipefail
@@ -84,6 +88,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Production build for browser gate
+        run: npm run build
       - run: npx playwright install --with-deps chromium
       - name: Full release browser gate
         run: |
