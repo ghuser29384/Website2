@@ -1,0 +1,33 @@
+name: Header source snapshot and QA
+
+on:
+  push:
+    branches: [ops/header-source-qa-20260925]
+    paths: [.github/workflows/header-source-qa-20260925.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 079d5bbc6224bc6e9770d33622f6cab7e4baac01
+          persist-credentials: false
+      - name: Archive the exact tracked public source, without credentials
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = 079d5bbc6224bc6e9770d33622f6cab7e4baac01
+          mkdir -p /tmp/header-source
+          git archive --format=tar.gz HEAD > /tmp/header-source/source.tar.gz
+          git rev-parse HEAD > /tmp/header-source/commit.txt
+          sha256sum /tmp/header-source/source.tar.gz > /tmp/header-source/source.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: header-source-079d5bbc6224bc6e9770d33622f6cab7e4baac01
+          path: /tmp/header-source
+          retention-days: 2
