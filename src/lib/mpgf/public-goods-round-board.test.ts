@@ -51,37 +51,17 @@ test("MPGF round board exposes threshold, match, choice, maximum, and action fie
   assert.equal(nearThreshold.projectedAllocationCents, 500);
 });
 
-test("MPGF hub renders the moraltrade60 round board surface", () => {
+test("MPGF hub keeps the demonstration round out of the default funding path", () => {
   const page = readFileSync("src/app/mpgf/page.tsx", "utf8");
-  const component = readFileSync("src/components/mpgf/mpgf-round-board.tsx", "utf8");
   const helper = readFileSync("src/lib/mpgf/public-goods-round-board.ts", "utf8");
 
-  assert.match(page, /MpgfRoundBoard/);
-  assert.match(page, /buildMpgfRoundBoardCards/);
-  assert.match(page, /href="#round-board"/);
-  assert.match(component, /Live rounds/);
-  assert.match(component, /Round board and budget router/);
-  assert.match(component, /Exact\s+threshold progress, supporter counts, active-cluster counts/);
-  assert.match(component, /Public exact aggregates appear only\s+after close in final reports or audit bundles/);
-  assert.match(component, /Deployment mode: capped pilot/);
-  assert.match(component, /participant limits/);
-  assert.match(component, /Sealed before close/);
-  assert.match(component, /Qualitative progress/);
-  assert.match(component, /card\.sealedProgressLabel/);
-  assert.match(component, /Your choice/);
-  assert.match(component, /card\.yourChoiceLabel/);
-  assert.match(component, /Your maximum/);
-  assert.match(component, /card\.yourMaximumCents/);
-  assert.match(component, /Possible bonus match if gates pass/);
-  assert.equal(component.includes("Your projected allocation"), false);
-  assert.equal(component.includes("Projected bonus match"), false);
-  assert.match(component, /Pivotal action:/);
-  assert.equal(component.includes("{formatUsd(card.directCountedCents)}"), false);
-  assert.equal(component.includes("{card.verifiedSupporterCount}/{card.thresholdSupporters}"), false);
-  assert.match(helper, /Copy user-initiated invite link/);
-  assert.match(helper, /getMpgfCrecPlainLanguageLabelForStance\("weak"\)/);
-  assert.match(helper, /Preview \$5 budget/);
-  assert.equal(helper.includes("weak common-ground preview"), false);
+  assert.match(page, /title: "Example round"/);
+  assert.match(page, /It is not a current live round/);
+  assert.match(page, /Browse candidate pools/);
+  assert.match(page, /Open educational assurance calculator/);
+  assert.equal(page.includes("Open current round"), false);
+  assert.equal(page.includes("Build a Common Ground Budget"), false);
+
   assert.match(helper, /Progress not disclosed/);
   assert.match(helper, /Needs more support/);
   assert.match(helper, /Review pending/);
