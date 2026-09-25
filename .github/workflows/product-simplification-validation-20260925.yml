@@ -1,0 +1,42 @@
+name: Product simplification validation 20260925
+on:
+  push:
+    branches: [ops/product-simplification-automation-20260925]
+    paths: [.github/workflows/product-simplification-validation-20260925.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4914d9e898b87fff24149ddadb4be2bb290133cc
+          persist-credentials: false
+      - name: Verify candidate identity
+        run: |
+          test "$(git rev-parse HEAD)" = 4914d9e898b87fff24149ddadb4be2bb290133cc
+          git diff --check 98723f7f7c45407d8303cf72acf38e9a35a0904c HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Lint
+        run: npm run lint -- --quiet
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Production build
+        run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Focused rendered regression
+        run: |
+          npx playwright test tests/public-routes.spec.ts tests/discover-live-search.spec.ts tests/returning-homepage.spec.ts --workers=1 --reporter=line
