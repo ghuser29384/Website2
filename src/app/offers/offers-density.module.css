@@ -60,18 +60,18 @@
   color: var(--offers-surface);
 }
 
-.shell .routeTopbar :global(.brand) {
+.shell .routeTopbar :global(.mt-site-topbar .brand) {
   grid-area: brand;
   min-width: 0;
   color: var(--offers-surface);
 }
 
-.shell .routeTopbar :global(.brand .mt-wordmark) {
+.shell .routeTopbar :global(.mt-site-topbar .brand .mt-wordmark) {
   max-width: 100%;
   font-size: clamp(1.2rem, 1.7vw, 1.65rem);
 }
 
-.shell .routeTopbar :global(.topbar-links) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-links) {
   grid-area: nav;
   display: flex;
   width: auto;
@@ -82,8 +82,8 @@
   border: 0;
 }
 
-.shell .routeTopbar :global(.topbar-menu-trigger),
-.shell .routeTopbar :global(.topbar-utility) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-menu-trigger),
+.shell .routeTopbar :global(.mt-site-topbar .topbar-utility) {
   min-height: 2.75rem !important;
   padding: 0.55rem 0.65rem !important;
   border: 1px solid transparent !important;
@@ -96,19 +96,19 @@
   text-transform: none;
 }
 
-.shell .routeTopbar :global(.topbar-menu-trigger:hover),
-.shell .routeTopbar :global(.topbar-menu[open] .topbar-menu-trigger),
-.shell .routeTopbar :global(.topbar-utility:hover) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-menu-trigger:hover),
+.shell .routeTopbar :global(.mt-site-topbar .topbar-menu[open] .topbar-menu-trigger),
+.shell .routeTopbar :global(.mt-site-topbar .topbar-utility:hover) {
   border-color: var(--offers-rule-strong) !important;
   background: #242424 !important;
   color: #ffffff !important;
 }
 
-.shell .routeTopbar :global(.topbar-menu) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-menu) {
   position: relative;
 }
 
-.shell .routeTopbar :global(.topbar-menu-panel) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-menu-panel) {
   top: calc(100% + 0.5rem);
   z-index: 30;
   min-width: min(20rem, calc(100vw - 2rem));
@@ -120,18 +120,18 @@
   color: var(--offers-ink);
 }
 
-.shell .routeTopbar :global(.topbar-actions .topbar-menu-panel) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-actions .topbar-menu-panel) {
   right: 0;
   left: auto;
 }
 
-.shell .routeTopbar :global(.topbar-search) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-search) {
   grid-area: search;
   width: 100%;
   min-width: 0;
 }
 
-.shell .routeTopbar :global(.topbar-search-box) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-search-box) {
   min-height: 2.75rem;
   border: 1px solid var(--offers-rule-strong);
   border-radius: 0;
@@ -140,7 +140,7 @@
   box-shadow: none;
 }
 
-.shell .routeTopbar :global(.topbar-search input) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-search input) {
   width: 100%;
   min-width: 0;
   color: var(--offers-ink);
@@ -148,7 +148,7 @@
   font-size: 0.8125rem;
 }
 
-.shell .routeTopbar :global(.topbar-search-submit) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-search-submit) {
   min-width: 2.75rem;
   min-height: 2.5rem;
   border-radius: 0;
@@ -156,7 +156,7 @@
   color: #ffffff;
 }
 
-.shell .routeTopbar :global(.topbar-actions) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-actions) {
   grid-area: actions;
   display: flex;
   width: auto;
@@ -167,7 +167,7 @@
   gap: 0.35rem;
 }
 
-.shell .routeTopbar :global(.topbar-actions .button) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-actions .button) {
   display: inline-flex;
   width: auto;
   min-height: 2.75rem;
@@ -185,21 +185,21 @@
   white-space: nowrap;
 }
 
-.shell .routeTopbar :global(.topbar-actions .button-secondary) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-actions .button-secondary) {
   border-color: #777;
   background: transparent;
   color: #ffffff;
 }
 
-.shell .routeTopbar :global(a:focus-visible),
-.shell .routeTopbar :global(button:focus-visible),
-.shell .routeTopbar :global(summary:focus-visible) {
+.shell .routeTopbar :global(.mt-site-topbar a:focus-visible),
+.shell .routeTopbar :global(.mt-site-topbar button:focus-visible),
+.shell .routeTopbar :global(.mt-site-topbar summary:focus-visible) {
   outline: 2px solid #ffffff;
   outline-offset: 3px;
 }
 
-.shell .routeTopbar :global(.topbar-menu-panel a:focus-visible),
-.shell .routeTopbar :global(.topbar-search-box:focus-within) {
+.shell .routeTopbar :global(.mt-site-topbar .topbar-menu-panel a:focus-visible),
+.shell .routeTopbar :global(.mt-site-topbar .topbar-search-box:focus-within) {
   outline: 2px solid var(--offers-action);
   outline-offset: 2px;
 }
@@ -673,18 +673,18 @@
     gap: 0.5rem !important;
   }
 
-  .shell .routeTopbar :global(.topbar-actions) {
+  .shell .routeTopbar :global(.mt-site-topbar .topbar-actions) {
     justify-content: flex-start;
   }
 
-  .shell .routeTopbar :global(.topbar-links) {
+  .shell .routeTopbar :global(.mt-site-topbar .topbar-links) {
     width: auto;
     padding: 0;
     border: 0;
     overflow: visible;
   }
 
-  .shell .routeTopbar :global(.topbar-menu-panel) {
+  .shell .routeTopbar :global(.mt-site-topbar .topbar-menu-panel) {
     position: fixed;
     top: 4.5rem;
     right: 1rem;
@@ -696,7 +696,7 @@
     overflow-y: auto;
   }
 
-  .shell .routeTopbar :global(.topbar-actions .topbar-menu-panel) {
+  .shell .routeTopbar :global(.mt-site-topbar .topbar-actions .topbar-menu-panel) {
     right: 1rem;
     left: 1rem;
   }

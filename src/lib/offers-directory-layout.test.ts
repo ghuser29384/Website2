@@ -26,6 +26,8 @@ test("masthead reserves separate real slots instead of positioning text over sea
   const masthead = rule(directoryCss, ".shell .routeTopbar :global(.mt-site-topbar)");
   assert.match(masthead, /grid-template-areas: "brand nav search actions"/);
   assert.doesNotMatch(directoryCss, /\.routeContext\s*\{/);
+  assert.match(rule(directoryCss, ".shell .routeTopbar :global(.mt-site-topbar .topbar-links)"), /overflow: visible/);
+  assert.match(rule(directoryCss, ".shell .routeTopbar :global(.mt-site-topbar .topbar-actions)"), /flex-wrap: wrap/);
   assert.match(directoryCss, /@media \(max-width: 1120px\)/);
   assert.match(directoryCss, /@media \(max-width: 760px\)/);
 });
