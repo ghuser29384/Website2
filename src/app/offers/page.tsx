@@ -97,7 +97,7 @@ type OfferMode = OfferRow["mode"];
 type ModeFilter = "all" | OfferMode;
 type OfferSort = Extract<
   SmartQuerySort,
-  "best_match" | "newest" | "lowest_cost" | "most_verified" | "soonest_deadline" | "highest_credit"
+  "best_match" | "newest" | "lowest_cost" | "soonest_deadline" | "highest_credit"
 >;
 
 interface RankedOffer {
@@ -131,7 +131,6 @@ const MODE_OPTIONS: ReadonlyArray<{ value: ModeFilter; label: string }> = [
 
 const SORT_OPTIONS: ReadonlyArray<{ value: OfferSort; label: string }> = [
   { value: "best_match", label: "Best match" },
-  { value: "most_verified", label: "Strongest evidence" },
   { value: "soonest_deadline", label: "Soonest deadline" },
   { value: "lowest_cost", label: "Lowest stated cost" },
   { value: "highest_credit", label: "Highest transaction credit" },
@@ -294,10 +293,6 @@ function sortRankedOffers(items: RankedOffer[], sort: OfferSort) {
       const leftAmount = left.amountCents.length ? Math.max(...left.amountCents) : Number.POSITIVE_INFINITY;
       const rightAmount = right.amountCents.length ? Math.max(...right.amountCents) : Number.POSITIVE_INFINITY;
       return leftAmount - rightAmount || right.score - left.score || left.offer.id.localeCompare(right.offer.id);
-    }
-    if (sort === "most_verified") {
-      return right.evidenceQuality - left.evidenceQuality || right.score - left.score ||
-        left.offer.id.localeCompare(right.offer.id);
     }
     if (sort === "soonest_deadline") {
       const leftDeadline = left.deadline ? Date.parse(left.deadline) : Number.POSITIVE_INFINITY;
