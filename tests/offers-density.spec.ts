@@ -1029,7 +1029,7 @@ test.describe("Offers compact hybrid", () => {
     const noJsPage = await noJsContext.newPage();
     const response = await noJsPage.goto(targetRoute, { waitUntil: "domcontentloaded" });
     expect(response?.ok()).toBe(true);
-    const heading = noJsPage.locator("h1").filter({ hasText: "Find a live proposal you can evaluate quickly." });
+    const heading = noJsPage.getByRole("heading", { name: "Live proposals", exact: true, level: 1 });
     const rows = noJsPage.locator("[data-participant-offer]");
     const primaryActions = noJsPage.locator('[data-testid="proposal-primary-action"]');
     await expect(heading).toHaveCount(1);
