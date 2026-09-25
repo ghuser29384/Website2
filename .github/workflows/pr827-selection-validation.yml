@@ -1,0 +1,153 @@
+name: PR 827 exact selection validation
+
+on:
+  push:
+    branches: [ops/pr827-selection-validation-20260925]
+    paths: [.github/workflows/pr827-selection-validation.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr827-selection-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      CANDIDATE_SHA: 8392c042ff8089fd0b8072e3204bf7f70f4686e6
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Check out the unchanged PR candidate, not the runner branch
+        uses: actions/checkout@v4
+        with:
+          ref: 8392c042ff8089fd0b8072e3204bf7f70f4686e6
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard repository and exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/ops/pr827-selection-validation-20260925'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = '57c9e2636bebbb3fd8d07eb0fc3f22302bf1857b'
+          git diff --check 98723f7f7c45407d8303cf72acf38e9a35a0904c HEAD
+          mkdir -p "$RUNNER_TEMP/pr827-evidence"
+          git show --stat --oneline HEAD > "$RUNNER_TEMP/pr827-evidence/source.txt"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Run focused and complete repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/text-selection-style.test.ts | tee "$RUNNER_TEMP/pr827-evidence/focused.log"
+          npm test | tee "$RUNNER_TEMP/pr827-evidence/tests.log"
+          npm run lint -- --quiet | tee "$RUNNER_TEMP/pr827-evidence/lint.log"
+          npx tsc --noEmit | tee "$RUNNER_TEMP/pr827-evidence/typecheck.log"
+          npm run build | tee "$RUNNER_TEMP/pr827-evidence/build.log"
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify selection on real built application routes
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npm run start -- --hostname 127.0.0.1 --port 3210 > "$RUNNER_TEMP/pr827-evidence/server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3210/about >/dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium } from '@playwright/test';
+          const results = [];
+          const browser = await chromium.launch();
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 900 } });
+              await context.addCookies([{ name: 'mt_analytics_opt_out', value: '1', url: 'http://127.0.0.1:3210', sameSite: 'Lax' }]);
+              const page = await context.newPage();
+              const pageErrors = [];
+              const consoleErrors = [];
+              page.on('pageerror', error => pageErrors.push(error.message));
+              page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+              for (const route of ['/about', '/pledge-swaps']) {
+                const response = await page.goto('http://127.0.0.1:3210' + route, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                assert.equal(response.status(), 200);
+                const heading = page.getByRole('heading', { level: 1 }).first();
+                await heading.waitFor({ state: 'visible', timeout: 45000 });
+                await page.evaluate(() => document.fonts.ready);
+                const before = await heading.evaluate(element => ({ rect: element.getBoundingClientRect().toJSON(), background: getComputedStyle(element).backgroundColor }));
+                const selected = await heading.evaluate(element => {
+                  const probe = document.createElement('span');
+                  probe.style.cssText = 'position:fixed;width:0;height:0;visibility:hidden;background:var(--accent-soft);color:var(--ink)';
+                  element.appendChild(probe);
+                  const expected = { background: getComputedStyle(probe).backgroundColor, color: getComputedStyle(probe).color };
+                  probe.remove();
+                  const selection = window.getSelection();
+                  selection.removeAllRanges();
+                  const range = document.createRange();
+                  range.selectNodeContents(element);
+                  selection.addRange(range);
+                  const style = getComputedStyle(element, '::selection');
+                  return { expected, background: style.backgroundColor, color: style.color, text: selection.toString(), heading: element.textContent, rect: element.getBoundingClientRect().toJSON() };
+                });
+                assert.equal(selected.background, selected.expected.background);
+                assert.equal(selected.color, selected.expected.color);
+                assert.notEqual(selected.background, 'rgba(0, 0, 0, 0)');
+                assert.notEqual(selected.background, 'rgb(225, 246, 91)');
+                assert.ok(selected.text.trim().length > 0);
+                assert.equal(selected.text, selected.heading);
+                assert.deepEqual(selected.rect, before.rect);
+                const name = `${route.slice(1)}-${width}`;
+                await page.screenshot({ path: `${process.env.RUNNER_TEMP}/pr827-evidence/${name}-selected.png`, fullPage: true });
+                await page.evaluate(() => window.getSelection().removeAllRanges());
+                assert.equal(await page.evaluate(() => window.getSelection().toString()), '');
+                const after = await heading.evaluate(element => ({ rect: element.getBoundingClientRect().toJSON(), background: getComputedStyle(element).backgroundColor }));
+                assert.deepEqual(after, before);
+                await page.screenshot({ path: `${process.env.RUNNER_TEMP}/pr827-evidence/${name}-ordinary.png`, fullPage: true });
+                results.push({ route, width, before, selected, after, pageErrors: [...pageErrors], consoleErrors: [...consoleErrors] });
+                assert.deepEqual(pageErrors, []);
+              }
+              await context.close();
+            }
+            await writeFile(`${process.env.RUNNER_TEMP}/pr827-evidence/selection.json`, JSON.stringify({ candidate: process.env.CANDIDATE_SHA, results }, null, 2));
+          } finally {
+            await browser.close();
+          }
+          NODE
+      - name: Run the unchanged complete release browser gate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line | tee "$RUNNER_TEMP/pr827-evidence/browser-gate.log"
+      - name: Preserve exact-candidate validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr827-selection-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/pr827-evidence
+            test-results
+          if-no-files-found: error
+          retention-days: 7
