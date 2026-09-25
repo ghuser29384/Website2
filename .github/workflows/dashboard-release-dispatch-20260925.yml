@@ -1,0 +1,54 @@
+name: Dispatch verified Dashboard release
+
+on:
+  push:
+    branches: [ops/dashboard-qa-20260925]
+    paths: [.github/workflows/dashboard-release-dispatch-20260925.yml]
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: dashboard-release-dispatch-20260925
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA: 127497c980a57435a7660e1f07d0836e8f579c59
+      CANDIDATE_SHA: a7f0353d8a807a158cc7a4b7267fc69f69c137e2
+    steps:
+      - name: Verify immutable merge, tested tree, and unchanged release policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/dashboard-qa-20260925
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/826" > /tmp/pr.json
+          jq -e --arg sha "$EXPECTED_SHA" --arg head "$CANDIDATE_SHA" '.merged == true and .merge_commit_sha == $sha and .head.sha == $head and .changed_files == 5' /tmp/pr.json > /dev/null
+          expected_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_SHA" --jq .tree.sha)"
+          candidate_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$CANDIDATE_SHA" --jq .tree.sha)"
+          test "$expected_tree" = "$candidate_tree"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/vercel-release.yml?ref=$EXPECTED_SHA" --jq .sha)" = e219e99d25279161b89eee80fc410912c3561a19
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36193962394" > /tmp/qa.json
+          jq -e '.status == "completed" and .conclusion == "success" and .head_sha == "8e984087904bd89a7816af6143da0156fd1dd1c1"' /tmp/qa.json > /dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$EXPECTED_SHA&event=workflow_dispatch" > /tmp/existing-runs.json
+          jq -e '[.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml" and (.status != "completed" or .conclusion == "success"))] | length == 0' /tmp/existing-runs.json > /dev/null
+      - name: Dispatch the existing gated production workflow exactly once
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run vercel-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f target=production \
+            -f ref=main \
+            -f expected_sha="$EXPECTED_SHA"
+          printf 'Dispatched the unchanged gated Vercel workflow for %s. Deployment success still requires its full gates and alias checks.\n' "$EXPECTED_SHA" >> "$GITHUB_STEP_SUMMARY"
