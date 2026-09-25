@@ -1,0 +1,39 @@
+name: PR 827 release access preflight
+
+on:
+  push:
+    branches: [ops/pr827-selection-validation-20260925]
+    paths: [.github/workflows/pr827-release-access-check.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check existing release token against the canonical team and project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/ops/pr827-selection-validation-20260925'
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo 'The stored VERCEL_TOKEN is unavailable to the release runner.'
+            exit 1
+          fi
+          team_id='team_ySu6sF3Uho1E1GnJtCQPVEuJ'
+          project_id='prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7'
+          team_code="$(curl --silent --show-error --output "$RUNNER_TEMP/pr827-team.json" --write-out '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v2/teams/$team_id")"
+          project_code="$(curl --silent --show-error --output "$RUNNER_TEMP/pr827-project.json" --write-out '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$project_id?teamId=$team_id")"
+          printf 'Canonical Vercel team read: HTTP %s\nCanonical Vercel project read: HTTP %s\n' "$team_code" "$project_code" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ "$team_code" != 200 || "$project_code" != 200 ]]; then
+            echo 'Release access preflight failed; no deployment or configuration write was attempted.'
+            exit 1
+          fi
+          jq -e --arg id "$team_id" '.id == $id' "$RUNNER_TEMP/pr827-team.json" >/dev/null
+          jq -e --arg id "$project_id" '.id == $id and .name == "moraltrade-site"' "$RUNNER_TEMP/pr827-project.json" >/dev/null
+          echo 'Canonical release read access passed; deployment permission itself has not yet been exercised.' >> "$GITHUB_STEP_SUMMARY"
