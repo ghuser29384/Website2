@@ -61,9 +61,7 @@ test("MPGF demo state is explicitly historical and pivotality starts blank", () 
   assert.doesNotMatch(page, /Open current round/);
   assert.match(page, /Browse candidate pools/);
   assert.match(page, /Open educational assurance calculator/);
-  assert.match(receipt, /useState\(""
-
-/);
+  assert.match(receipt, /useState\("\\"\)/);
   assert.doesNotMatch(receipt, /useState\("20"\)/);
   assert.doesNotMatch(receipt, /useState\("100"\)/);
   assert.match(receipt, /No pledge amount or decisive\s+probability is assumed for you/);
