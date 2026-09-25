@@ -138,7 +138,7 @@ function render() {
   $('#app').innerHTML = nowPage();
 }
 function nowPage() {
-  return `<section class="page">${pageHead('What needs you now.', 'Review live opportunities and plan your next action.', 'Create offer')}
+  return `<section class="page">
     ${tab([['focus', 'Focus'], ['plan', 'Plan resources']], 'now', 'now')}
     ${state.now === 'plan' ? nowPlan() : nowFocus()}</section>`;
 }
