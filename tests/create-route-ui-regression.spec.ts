@@ -264,3 +264,118 @@ test.describe("Create route UI regression repairs", () => {
     }
   });
 });
+
+test.describe("Cause-step proportions", () => {
+  for (const width of [320, 375, 390, 768, 820, 900, 901, 1024, 1180, 1181, 1440, 1644]) {
+    test(`keeps the heading padded and all cause controls bounded at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const create = await openCreate(page);
+      await expect(create.locator(".cause-choice")).toHaveCount(14);
+      await create.locator("body").evaluate(() => document.fonts.ready.then(() => null));
+
+      const layout = await create.locator("body").evaluate(() => {
+        const required = (selector: string) => {
+          const element = document.querySelector(selector);
+          if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+          return element;
+        };
+        const intro = required("#screenCause .intro");
+        const heading = required("#causeHeading");
+        const panel = required("#screenCause .cause-panel");
+        const introRect = intro.getBoundingClientRect();
+        const headingRect = heading.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const headingStyle = getComputedStyle(heading);
+        const textFitsInside = (element: Element, container: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const box = container.getBoundingClientRect();
+          return [...range.getClientRects()].every((rect) =>
+            rect.left >= box.left - 1
+            && rect.right <= box.right + 1
+            && rect.top >= box.top - 1
+            && rect.bottom <= box.bottom + 1,
+          );
+        };
+        const labels = [...document.querySelectorAll("#screenCause .cause-choice strong")];
+        const controls = [...document.querySelectorAll("#screenCause button, #screenCause input")];
+        return {
+          viewportWidth: window.innerWidth,
+          fontSize: parseFloat(headingStyle.fontSize),
+          lineHeight: parseFloat(headingStyle.lineHeight),
+          headingHeight: headingRect.height,
+          headingLeftInset: headingRect.left - introRect.left,
+          headingRightInset: introRect.right - headingRect.right,
+          headingFits: textFitsInside(heading, intro),
+          introHeight: introRect.height,
+          introWidth: introRect.width,
+          panelHeight: panelRect.height,
+          panelWidth: panelRect.width,
+          panelTop: panelRect.top,
+          introBottom: introRect.bottom,
+          columnCount: getComputedStyle(required("#causeGrid")).gridTemplateColumns.split(" ").length,
+          clippedLabels: labels.filter((label) => {
+            const button = label.closest("button");
+            return !button || !textFitsInside(label, button);
+          }).map((label) => label.textContent),
+          outOfBoundsControls: controls.filter((control) => {
+            const rect = control.getBoundingClientRect();
+            return rect.left < -1 || rect.right > window.innerWidth + 1;
+          }).map((control) => control.id || control.textContent),
+          horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+        };
+      });
+
+      expect(layout.fontSize).toBeLessThanOrEqual(56.1);
+      expect(layout.fontSize).toBeGreaterThanOrEqual(32);
+      expect(layout.lineHeight).toBeGreaterThanOrEqual(layout.fontSize * 1.04);
+      expect(layout.headingHeight).toBeLessThanOrEqual(layout.lineHeight * 3 + 1);
+      expect(layout.headingLeftInset).toBeGreaterThanOrEqual(23);
+      expect(layout.headingRightInset).toBeGreaterThanOrEqual(23);
+      expect(layout.headingFits).toBe(true);
+      expect(layout.clippedLabels).toEqual([]);
+      expect(layout.outOfBoundsControls).toEqual([]);
+      expect(layout.horizontalOverflow).toBe(false);
+      const expectedColumns = layout.viewportWidth > 1180 ? 4
+        : layout.viewportWidth > 900 ? 3
+          : layout.viewportWidth >= 360 ? 2 : 1;
+      expect(layout.columnCount).toBe(expectedColumns);
+      if (layout.viewportWidth <= 900) {
+        expect(layout.introHeight).toBeLessThan(300);
+        expect(layout.panelTop).toBeGreaterThanOrEqual(layout.introBottom - 1);
+      } else {
+        expect(layout.panelWidth).toBeGreaterThan(layout.introWidth);
+        expect(Math.abs(layout.panelHeight - layout.introHeight)).toBeLessThanOrEqual(1);
+      }
+
+      if (captureVisuals && [320, 390, 901, 1440, 1644].includes(width)) {
+        await mkdir(captureDirectory, { recursive: true });
+        await create.locator("body").screenshot({
+          animations: "disabled",
+          path: path.join(captureDirectory, `cause-proportions-${width}.png`),
+        });
+      }
+    });
+  }
+
+  test("preserves keyboard cause selection and the custom-cause transition", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    let create = await openCreate(page);
+    const listedCause = create.locator('.cause-choice[data-cause="Wild animal suffering"]');
+    await listedCause.focus();
+    await expect(listedCause).toBeFocused();
+    await listedCause.press("Enter");
+    await expectRequestTransitionClear(create, "Wild animal suffering");
+
+    create = await openCreate(page);
+    const input = create.locator("#otherCauseInput");
+    const submit = create.locator(".other-cause-submit");
+    await expect(submit).toBeDisabled();
+    await input.fill("Moral uncertainty");
+    await expect(submit).toBeEnabled();
+    await input.press("Enter");
+    await expectRequestTransitionClear(create, "Moral uncertainty");
+  });
+});
