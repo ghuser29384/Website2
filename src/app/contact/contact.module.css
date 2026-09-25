@@ -1,0 +1,329 @@
+/* Keep this utility page out of the legacy, full-height marketing-hero cascade. */
+.page {
+  min-height: 100vh;
+  background: var(--mt-paper-strong);
+  color: var(--mt-ink);
+}
+
+/* A dedicated navigation row prevents wrapping inside the shared 72px row.
+ * These overrides belong to /contact; other routes retain their current shell. */
+.page .masthead :global(.mt-site-topbar) {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  height: auto;
+  margin: 0;
+  padding: 12px clamp(16px, 3vw, 40px) 0;
+  grid-template-areas: "brand search actions" "nav nav nav";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 8px 24px;
+  overflow: visible;
+}
+
+.page .masthead :global(.brand) {
+  min-height: 48px;
+}
+
+.page .masthead :global(.topbar-links) {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 48px;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0 8px;
+  border-top: 1px solid #2d2d2d;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #77746e #050505;
+}
+
+.page .masthead :global(.topbar-links)::-webkit-scrollbar {
+  display: block;
+  height: 4px;
+}
+
+.page .masthead :global(.topbar-links) > a {
+  flex: 0 0 auto;
+  min-height: 40px;
+  height: auto;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.page .masthead :global(.topbar-search) {
+  width: 100%;
+  min-width: 0;
+  max-width: 440px;
+  justify-self: end;
+}
+
+.page .masthead :global(.topbar-actions) {
+  min-width: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.main {
+  width: min(1120px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 56px 0 72px;
+}
+
+.intro {
+  padding-bottom: 36px;
+  border-bottom: 1px solid var(--mt-line);
+}
+
+.kicker {
+  margin: 0 0 14px;
+  color: var(--mt-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.intro h1 {
+  max-width: 26ch;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.description {
+  max-width: 72ch;
+  margin: 18px 0 0;
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  min-height: 46px;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 18px;
+  border: 1px solid var(--mt-blue);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.primaryAction {
+  background: var(--mt-blue);
+  color: #ffffff;
+}
+
+.primaryAction:hover {
+  border-color: var(--mt-blue-deep);
+  background: var(--mt-blue-deep);
+  color: #ffffff;
+}
+
+.secondaryAction {
+  border-color: var(--mt-line);
+  background: transparent;
+  color: var(--mt-ink);
+}
+
+.secondaryAction:hover {
+  border-color: var(--mt-ink);
+  background: var(--surface-muted);
+  color: var(--mt-ink);
+}
+
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible,
+.routeLink:focus-visible {
+  outline: 2px solid var(--mt-blue);
+  outline-offset: 4px;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 48px;
+  padding-top: 36px;
+}
+
+.routes,
+.guidance {
+  min-width: 0;
+}
+
+.sectionHeading h2,
+.guidance h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.sectionHeading p,
+.route p,
+.steps p {
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.routeList {
+  margin-top: 24px;
+  border-top: 1px solid var(--mt-line);
+}
+
+.route {
+  padding: 22px 0;
+  border-bottom: 1px solid var(--mt-line);
+}
+
+.route h3,
+.steps h3 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
+.routeLink {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin-top: 6px;
+  color: var(--mt-blue-deep);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.routeLink:hover {
+  color: var(--mt-ink);
+}
+
+.guidance {
+  padding-left: 32px;
+  border-left: 1px solid var(--mt-line);
+}
+
+.steps {
+  display: grid;
+  gap: 24px;
+  margin: 24px 0 0;
+  padding-left: 22px;
+}
+
+.steps li {
+  padding-left: 8px;
+}
+
+.steps li::marker {
+  color: var(--mt-blue-deep);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.page :global(.mt-site-footer) {
+  width: 100%;
+  margin: 0;
+}
+
+@media (max-width: 800px) {
+  .page .masthead :global(.mt-site-topbar) {
+    grid-template-areas: "brand actions" "search search" "nav nav";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    column-gap: 16px;
+  }
+
+  .page .masthead :global(.topbar-search) {
+    max-width: none;
+  }
+
+  .main {
+    width: calc(100% - 40px);
+    padding: 36px 0 48px;
+  }
+
+  .content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .guidance {
+    padding: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .page .masthead :global(.mt-site-topbar) {
+    grid-template-areas: "brand" "nav" "search" "actions";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(4, auto);
+    padding-bottom: 12px;
+  }
+
+  .page .masthead :global(.topbar-actions) {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .page .masthead :global(.topbar-menu-panel) {
+    right: auto;
+    left: 0;
+    width: min(320px, calc(100vw - 32px));
+    min-width: 0;
+  }
+
+  .main {
+    width: calc(100% - 32px);
+    padding-top: 28px;
+  }
+
+  .intro {
+    padding-bottom: 28px;
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .content {
+    padding-top: 28px;
+  }
+}
