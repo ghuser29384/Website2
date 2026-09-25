@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { MoralTradeWordmark, MutualStepMark } from "@/components/brand/moral-trade-wordmark";
 import { FOOTER_LINK_GROUPS } from "@/lib/site";
+import { isSiteNavigationHrefVisible } from "@/lib/site-navigation-visibility";
 
 export function SiteFooter() {
   return (
@@ -32,7 +33,7 @@ export function SiteFooter() {
             <div className="footer-column" key={group.title}>
               <h3>{group.title}</h3>
               <ul className="footer-links">
-                {group.links.map((link) => (
+                {group.links.filter((link) => isSiteNavigationHrefVisible(link.href)).map((link) => (
                   <li key={link.href}>
                     <Link prefetch={false} href={link.href}>{link.label}</Link>
                   </li>

@@ -11,7 +11,7 @@ test("the exact live loader injects the Discover navigation bridge", () => {
   assert.match(loader, /accountAwareSource\.replace\('<\/body>'/);
 });
 
-test("the live navigation bridge exposes Feed, Discover, an optional tour, and the global Evidence ledger", () => {
+test("the live navigation bridge exposes Feed, Discover, and Tour without publishing Evidence", () => {
   const bridge = readPublicFile("moral-trade-live-navigation.js");
 
   assert.match(bridge, /control\.textContent = "Feed"/);
@@ -23,18 +23,19 @@ test("the live navigation bridge exposes Feed, Discover, an optional tour, and t
   assert.doesNotMatch(bridge, /createControlsControl|prepareControlsControl/);
   assert.match(bridge, /data-mt-optional-tour/);
   assert.match(bridge, /tour\.href = "\/walkthrough"/);
-  assert.match(bridge, /window\.location\.assign\("\/evidence"\)/);
-  assert.match(bridge, /data-mt-evidence-link/);
-  assert.match(bridge, /control\.textContent = "Evidence"/);
-  assert.match(bridge, /normalizeLabel\(control\) === "evidence"/);
-  assert.match(bridge, /label === "commitments" \|\| label === "activity"/);
+  assert.doesNotMatch(bridge, /openEvidence|prepareEvidenceControl|createEvidenceControl/);
+  assert.doesNotMatch(bridge, /control\.textContent = "Evidence"/);
+  assert.match(bridge, /label === "evidence"/);
+  assert.match(bridge, /path === "\/evidence"/);
+  assert.match(bridge, /normalizeLiveLandmarks\(\);\s+patchNavigation\(\);/);
 });
 
 test("Discover uses ordinary canonical navigation without a graph or navigation patcher", () => {
   const shell = readPublicFile("moral-trade-discover.html");
-  for (const href of ["/feed", "/discover", "/walkthrough", "/trades/new", "/commitments", "/evidence"]) {
+  for (const href of ["/feed", "/discover", "/walkthrough", "/trades/new", "/commitments"]) {
     assert.ok(shell.includes(`href="${href}"`));
   }
+  assert.doesNotMatch(shell, /href="\/evidence"/);
   assert.match(shell, /aria-current="page">Discover/);
   assert.doesNotMatch(shell, /moral-trade-discover-navigation|moral-trade-discover-value-hover/);
 });

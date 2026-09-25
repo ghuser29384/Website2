@@ -108,12 +108,6 @@
     window.location.assign("/discover");
   }
 
-  function openEvidence(event) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    window.location.assign("/evidence");
-  }
-
   function prepareDiscoverControl(control) {
     control.setAttribute("data-mt-discover-link", "true");
     control.removeAttribute("aria-current");
@@ -129,24 +123,6 @@
     }
 
     control.addEventListener("click", openDiscover, true);
-  }
-
-  function prepareEvidenceControl(control) {
-    control.setAttribute("data-mt-evidence-link", "true");
-    control.setAttribute("aria-label", "Open Evidence");
-    control.removeAttribute("aria-current");
-    control.removeAttribute("data-page");
-    control.removeAttribute("data-action");
-    control.removeAttribute("data-view");
-    control.classList.remove("active");
-
-    if (control instanceof HTMLAnchorElement) {
-      control.href = "/evidence";
-    } else if (control instanceof HTMLButtonElement) {
-      control.type = "button";
-    }
-
-    control.addEventListener("click", openEvidence, true);
   }
 
   function createDiscoverControl(nav, template) {
@@ -168,20 +144,6 @@
     }
 
     return control;
-  }
-
-  function createEvidenceControl(nav, template, commitmentsControl) {
-    const tagName = template instanceof HTMLAnchorElement ? "a" : "button";
-    const control = document.createElement(tagName);
-    control.className = template.className;
-    control.textContent = "Evidence";
-    prepareEvidenceControl(control);
-
-    if (commitmentsControl?.nextSibling) {
-      nav.insertBefore(control, commitmentsControl.nextSibling);
-    } else {
-      nav.appendChild(control);
-    }
   }
 
   function patchNavigation() {
@@ -212,30 +174,27 @@
         discoverControl = createDiscoverControl(nav, template);
       }
 
-      // Remove legacy simulator navigation, not real safety enforcement.
+      // Keep the public Evidence menu unpublished until completed live trades
+      // have been confirmed. Demo/test activity must not make it appear.
+      // This affects navigation only, never trade-specific evidence controls.
       for (const control of nav.querySelectorAll("a, button")) {
-        if (normalizeLabel(control) === "controls") control.remove();
+        const label = normalizeLabel(control);
+        const path = control.getAttribute("href")?.split(/[?#]/, 1)[0].replace(/\/+$/, "");
+        if (label === "controls" || label === "evidence" || label === "public evidence" || path === "/evidence") {
+          control.remove();
+        }
       }
 
       const finalControls = [...nav.querySelectorAll("a, button")];
-      const evidenceControl = finalControls.find(
-        (control) => normalizeLabel(control) === "evidence",
-      );
 
-      if (evidenceControl) {
-        if (!evidenceControl.hasAttribute("data-mt-evidence-link")) {
-          prepareEvidenceControl(evidenceControl);
+      const existingTour = nav.querySelector('[data-mt-optional-tour]') || finalControls.find(
+        (control) => normalizeLabel(control) === "tour",
+      );
+      if (existingTour) {
+        if (!existingTour.hasAttribute("data-mt-optional-tour")) {
+          existingTour.setAttribute("data-mt-optional-tour", "true");
         }
       } else {
-        const commitmentsControl = finalControls.find((control) => {
-          const label = normalizeLabel(control);
-          return label === "commitments" || label === "activity";
-        });
-        const template = commitmentsControl || findFeedControl(nav) || finalControls[0];
-        if (template) createEvidenceControl(nav, template, commitmentsControl);
-      }
-
-      if (!nav.querySelector('[data-mt-optional-tour]')) {
         const tour = document.createElement("a");
         tour.className = (findFeedControl(nav) || finalControls[0])?.className || "";
         tour.classList.remove("active");
@@ -259,6 +218,7 @@
     queueMicrotask(() => {
       landmarkNormalizationQueued = false;
       normalizeLiveLandmarks();
+      patchNavigation();
     });
   });
 
@@ -268,14 +228,6 @@
     subtree: true,
   });
 
-  if (!patchNavigation()) {
-    const navigationObserver = new MutationObserver(() => {
-      if (patchNavigation()) navigationObserver.disconnect();
-    });
-
-    navigationObserver.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
-  }
+  // Also reapply after a client-side navigation rebuilds the menu.
+  patchNavigation();
 })();

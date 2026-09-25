@@ -13,7 +13,8 @@ for (const [width, height] of [[1440, 1000], [390, 844], [320, 568]]) {
     await expect(page).toHaveTitle("Browse trades · Moral Trade");
     await expect(page.locator(".app-header")).toHaveCSS("background-color", "rgb(5, 5, 5)");
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(245, 242, 233)");
-    await expect(page.locator(".top-nav a")).toHaveText(["Feed", "Discover", "Trade", "Commitments", "Evidence", "Tour"]);
+    await expect(page.locator(".top-nav a")).toHaveText(["Feed", "Discover", "Trade", "Commitments", "Tour"]);
+    await expect(page.locator('.top-nav a[href="/evidence"]')).toHaveCount(0);
     await expect(page.locator('.top-nav a[aria-current="page"]')).toHaveText("Discover");
     const geometry = await page.evaluate(() => ({ width: innerWidth, document: document.documentElement.scrollWidth }));
     expect(geometry.document).toBeLessThanOrEqual(geometry.width + 1);
@@ -40,5 +41,6 @@ test("a visitor without JavaScript has a direct live-directory fallback", async 
   await page.goto("/discover");
   await expect(page.locator('noscript a[href="/offers?view=live"]')).toBeVisible();
   await expect(page.locator(".trade-row")).toHaveCount(0);
+  await expect(page.locator('.top-nav a[href="/evidence"]')).toHaveCount(0);
   await context.close();
 });

@@ -18,6 +18,7 @@ import {
   filterSmartSiteSearchItems,
   getSmartSiteSearchTarget,
 } from "@/lib/site-search-smart";
+import { getVisibleSiteNavLinks } from "@/lib/site-navigation-visibility";
 import { createClient } from "@/lib/supabase/browser";
 
 interface NavRouteItem {
@@ -254,7 +255,7 @@ export function SiteTopbar({
         <MoralTradeWordmark />
       </Link>
       <div className="topbar-links">
-        {links.map((link) =>
+        {getVisibleSiteNavLinks(links).map((link) =>
           link.items?.length ? (
             <NavMenu
               isOpen={openMenuKey === `primary-${link.label}`}
