@@ -1,0 +1,35 @@
+name: Account controls release access preflight
+
+on:
+  push:
+    branches: [ops/account-controls-production-dispatch-20260925]
+    paths: [.github/workflows/account-controls-release-preflight-20260925.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read-only access check for the existing release token
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN is missing'; exit 1; }
+          response="$(mktemp)"
+          trap 'rm -f "$response"' EXIT
+          code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' --header "Authorization: Bearer $VERCEL_TOKEN" 'https://api.vercel.com/v9/projects/prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7?teamId=team_ySu6sF3Uho1E1GnJtCQPVEuJ')"
+          echo "Canonical project read HTTP $code"
+          test "$code" = 200 || { jq '{error: {code: .error.code, message: .error.message}}' "$response"; exit 1; }
+          jq -e '.id == "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7" and .accountId == "team_ySu6sF3Uho1E1GnJtCQPVEuJ"' "$response" >/dev/null
+          jq '{id, name, accountId}' "$response"
+          code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' --header "Authorization: Bearer $VERCEL_TOKEN" 'https://api.vercel.com/v2/teams/team_ySu6sF3Uho1E1GnJtCQPVEuJ')"
+          echo "Canonical team read HTTP $code"
+          test "$code" = 200 || { jq '{error: {code: .error.code, message: .error.message}}' "$response"; exit 1; }
+          jq -e '.id == "team_ySu6sF3Uho1E1GnJtCQPVEuJ"' "$response" >/dev/null
+          jq '{id, slug}' "$response"
+          echo 'Read-only release access preflight passed. No deployment or configuration mutation performed.'
