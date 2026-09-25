@@ -58,7 +58,7 @@ test("route-local styling replaces the legacy marketing hero and card stack", ()
   assert.match(page, /data-mt-surface="contact"/);
   assert.doesNotMatch(page, /className="(?:hero|hero-grid|hero-copy|hero-panel|flow-card|data-grid)/);
   assert.match(css, /\.page \.masthead :global\(\.mt-site-topbar\)/);
-  assert.match(css, /flex-wrap: nowrap/);
+  assert.match(css, /flex-direction: row;\n  flex-wrap: nowrap/);
   assert.match(css, /overflow-x: auto/);
   assert.match(css, /grid-template-areas: "brand search actions" "nav nav nav"/);
   assert.match(css, /font-size: clamp\(2rem, 3\.5vw, 3rem\)/);

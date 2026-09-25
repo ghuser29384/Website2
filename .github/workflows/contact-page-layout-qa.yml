@@ -41,6 +41,8 @@ jobs:
         run: node --import tsx --test src/lib/contact-page-layout.test.ts
       - name: Lint changed TypeScript
         run: npx eslint src/app/contact/page.tsx src/lib/contact-page-layout.test.ts tests/contact-page-layout.spec.ts
+      - name: Build production application without production credentials
+        run: npm run build
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Check rendered contact route and preserve screenshots
@@ -51,9 +53,6 @@ jobs:
       - name: Type-check repository
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npx tsc --noEmit
-      - name: Build production application without production credentials
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: npm run build
       - name: Save browser evidence
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         uses: actions/upload-artifact@v4

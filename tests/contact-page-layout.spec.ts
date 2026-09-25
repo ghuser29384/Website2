@@ -43,14 +43,19 @@ for (const viewport of viewports) {
       expect(bounds.bottom).toBeLessThanOrEqual(navBounds!.y + navBounds!.height);
     }
 
-    // Focus must reveal the last link in the horizontally scrolling mobile row.
+    // Native focus must reveal the link text; browsers may leave padding clipped.
     const safety = links.getByRole("link", { name: "Safety", exact: true });
     await safety.focus();
     await expect(safety).toBeFocused();
-    const safetyBounds = await safety.boundingBox();
+    const safetyBounds = await safety.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.x, width: rect.width };
+    });
     const rowBounds = await links.boundingBox();
-    expect(safetyBounds!.x).toBeGreaterThanOrEqual(rowBounds!.x - 1);
-    expect(safetyBounds!.x + safetyBounds!.width)
+    expect(safetyBounds.x).toBeGreaterThanOrEqual(rowBounds!.x - 1);
+    expect(safetyBounds.x + safetyBounds.width)
       .toBeLessThanOrEqual(rowBounds!.x + rowBounds!.width + 1);
 
     await page.getByRole("link", { name: "Skip to main content", exact: true }).focus();
