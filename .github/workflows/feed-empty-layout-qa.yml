@@ -10,7 +10,9 @@ on:
       - "public/moral-trade-live-feed.css"
       - "src/lib/feed-empty-layout.test.ts"
       - "tests/feed-empty-layout.spec.ts"
+      - "tests/feed-layout-server.spec.ts"
       - "playwright.feed-layout.config.ts"
+      - "playwright.feed-layout-server.config.ts"
       - ".github/workflows/feed-empty-layout-qa.yml"
 
 permissions:
@@ -34,7 +36,7 @@ jobs:
         run: |
           node --check public/moral-trade-live-feed-diagnostics.js
           node --import tsx --test src/lib/feed-empty-layout.test.ts
-          npx eslint public/moral-trade-live-feed-diagnostics.js src/lib/feed-empty-layout.test.ts tests/feed-empty-layout.spec.ts playwright.feed-layout.config.ts
+          npx eslint public/moral-trade-live-feed-diagnostics.js src/lib/feed-empty-layout.test.ts tests/feed-empty-layout.spec.ts tests/feed-layout-server.spec.ts playwright.feed-layout.config.ts playwright.feed-layout-server.config.ts
           git diff --check '${{ github.event.pull_request.base.sha }}'...HEAD
       - name: Run repository tests
         id: repository-tests
@@ -81,3 +83,44 @@ jobs:
       - name: Preserve repository-test failure
         if: steps.repository-tests.outcome == 'failure'
         run: exit 1
+
+  production-build-and-route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Lint repository
+        run: npm run lint > "$RUNNER_TEMP/feed-lint.log" 2>&1
+      - name: Build production application without service credentials
+        run: npm run build > "$RUNNER_TEMP/feed-build.log" 2>&1
+      - name: Type-check application and tests
+        run: npx tsc --noEmit > "$RUNNER_TEMP/feed-typescript.log" 2>&1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Exercise real production-server Feed with guarded fixture responses
+        env:
+          FEED_LAYOUT_SERVER_OUTPUT_DIR: ${{ runner.temp }}/feed-server-results
+        run: npx playwright test --config=playwright.feed-layout-server.config.ts
+      - name: Upload production-build and route evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-production-build-and-route
+          path: |
+            ${{ runner.temp }}/feed-lint.log
+            ${{ runner.temp }}/feed-build.log
+            ${{ runner.temp }}/feed-typescript.log
+            ${{ runner.temp }}/feed-server-results
+          retention-days: 7

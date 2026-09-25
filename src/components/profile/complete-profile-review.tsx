@@ -12,6 +12,7 @@ import {
   PROFILE_SETUP_LIMITS, profileDraftKey, readProfileDraft,
   type ProfileDraftEnvelope, type ProfileSetupValues,
 } from "@/lib/profile-setup-draft";
+import { ProfilePrioritiesCard } from "./profile-priorities-card";
 import styles from "./profile-setup.module.css";
 
 interface CompleteProfileReviewProps {
@@ -141,6 +142,7 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
       <p>A name and username are enough. Matching preferences are optional; no tour or priority allocation is required.</p>
       <Link href={successTo} prefetch={false}>Skip setup and browse</Link>
     </div>
+    <ProfilePrioritiesCard returnTo={returnTo} />
     <form action={completeWalkthroughProfileAction} onSubmit={handleSubmit}>
       <input type="hidden" name="profile_owner_id" value={accountId ?? ""} />
       <input type="hidden" name="return_to" value={returnTo} />
@@ -185,7 +187,6 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
         <label className={styles.check}><input type="checkbox" name="save_preferences" checked={savePreferences}
           onChange={(e) => setSavePreferences(e.target.checked)} />Save the private matching notes I entered</label>
         <p>Skipping this step preserves existing preferences and priority allocations. Private notes require encrypted account storage.</p>
-        <Link href="/profile/priorities" prefetch={false}>Advanced priority allocation (optional)</Link>
       </details>
       <details className={styles.personalization}>
         <summary>Public invitation setting</summary>
