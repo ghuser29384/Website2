@@ -19,6 +19,9 @@ import {
   getSmartSiteSearchTarget,
 } from "@/lib/site-search-smart";
 import { createClient } from "@/lib/supabase/browser";
+import { groupPrimaryNavigation, getTaskPrimaryAction } from "@/lib/site-navigation";
+
+import "../../../public/moral-trade-site-navigation.css";
 
 interface NavRouteItem {
   href: string;
@@ -51,11 +54,13 @@ interface QueryApiResponse {
 }
 
 function getHrefPath(href: string) {
-  const [path] = href.split("#");
+  const [path] = href.split(/[?#]/);
   return path || "/";
 }
 
 function isHrefActive(pathname: string | null, href: string) {
+  // Fragment shortcuts are utilities, not separate current pages.
+  if (href.includes("#")) return false;
   const targetPath = getHrefPath(href);
 
   if (targetPath === "/") {
@@ -70,7 +75,7 @@ function NavItem({ href, label, className }: { href: string; label: string; clas
   const isActive = isHrefActive(pathname, href);
 
   return (
-    <Link prefetch={false} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
+    <Link prefetch={false} aria-current={pathname === getHrefPath(href) && !href.includes("#") ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
       {label}
     </Link>
   );
@@ -90,7 +95,10 @@ function NavMenu({
   summary?: string;
 }) {
   const pathname = usePathname();
-  const hasActiveItem = items.some((item) => (item.href ? isHrefActive(pathname, item.href) : false));
+  const activeItem = items
+    .filter((item) => isHrefActive(pathname, item.href))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+  const hasActiveItem = Boolean(activeItem);
 
   return (
     <details
@@ -98,6 +106,13 @@ function NavMenu({
       open={isOpen}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
+          event.preventDefault();
+          onOpenChange(false);
+          event.currentTarget.querySelector("summary")?.focus();
+        }
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           onOpenChange(false);
         }
       }}
@@ -121,7 +136,8 @@ function NavMenu({
             <Fragment key={`${item.href}-${item.label}`}>
               {showSection ? <div className="topbar-menu-section">{item.section}</div> : null}
               <Link prefetch={false}
-                className={["topbar-menu-link", isHrefActive(pathname, item.href) ? "is-active" : ""]
+                aria-current={pathname === getHrefPath(item.href) && !item.href.includes("#") ? "page" : undefined}
+                className={["topbar-menu-link", activeItem?.href === item.href ? "is-active" : ""]
                   .filter(Boolean)
                   .join(" ")}
                 href={item.href}
@@ -151,6 +167,8 @@ export function SiteTopbar({
   logoutRedirectTo = "/",
 }: SiteTopbarProps) {
   const router = useRouter();
+  const navigationLinks = groupPrimaryNavigation(links);
+  const navigationAction = getTaskPrimaryAction(primaryAction);
   const searchInputId = useId();
   const searchResultsId = useId();
   const clarificationInputId = useId();
@@ -254,7 +272,7 @@ export function SiteTopbar({
         <MoralTradeWordmark />
       </Link>
       <div className="topbar-links">
-        {links.map((link) =>
+        {navigationLinks.map((link) =>
           link.items?.length ? (
             <NavMenu
               isOpen={openMenuKey === `primary-${link.label}`}
@@ -395,7 +413,7 @@ export function SiteTopbar({
       ) : null}
       {showLogout || authLink || primaryAction ? (
         <div className="topbar-actions">
-          {showLogout ? (
+          {showLogout && !navigationLinks.some((link) => link.label === "Profile") ? (
             <NavMenu
               isOpen={openMenuKey === "account"}
               items={[
@@ -408,8 +426,8 @@ export function SiteTopbar({
               onOpenChange={(isOpen) => handleMenuOpenChange("account", isOpen)}
             />
           ) : null}
-          {primaryAction ? (
-            <NavItem className="button button-nav" href={primaryAction.href} label={primaryAction.label} />
+          {navigationAction ? (
+            <NavItem className="button button-nav" href={navigationAction.href} label={navigationAction.label} />
           ) : null}
           {authLink ? (
             <NavItem

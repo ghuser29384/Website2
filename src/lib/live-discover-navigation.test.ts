@@ -14,27 +14,30 @@ test("the exact live loader injects the Discover navigation bridge", () => {
 test("the live navigation bridge exposes Feed, Discover, an optional tour, and the global Evidence ledger", () => {
   const bridge = readPublicFile("moral-trade-live-navigation.js");
 
-  assert.match(bridge, /control\.textContent = "Feed"/);
-  assert.match(bridge, /data-mt-feed-link/);
-  assert.match(bridge, /Open personalized feed/);
-  assert.match(bridge, /window\.location\.assign\("\/discover"\)/);
-  assert.match(bridge, /data-mt-discover-link/);
-  assert.match(bridge, /control\.textContent = "Discover"/);
-  assert.doesNotMatch(bridge, /createControlsControl|prepareControlsControl/);
-  assert.match(bridge, /data-mt-optional-tour/);
-  assert.match(bridge, /tour\.href = "\/walkthrough"/);
-  assert.match(bridge, /window\.location\.assign\("\/evidence"\)/);
-  assert.match(bridge, /data-mt-evidence-link/);
-  assert.match(bridge, /control\.textContent = "Evidence"/);
-  assert.match(bridge, /normalizeLabel\(control\) === "evidence"/);
-  assert.match(bridge, /label === "commitments" \|\| label === "activity"/);
+  const config = bridge.match(/const primaryNavigation = ([\s\S]*?);\n/)?.[1];
+  assert.ok(config, "The navigation configuration must be inspectable");
+  const sections = JSON.parse(config) as Array<{ href?: string; label: string; items?: Array<{ href: string; label: string }> }>;
+  assert.deepEqual(sections.slice(0, 2), [{ href: "/discover", label: "Discover" }, { href: "/feed", label: "Feed" }]);
+  const help = sections.find((section) => section.label === "Help")?.items ?? [];
+  assert.ok(help.some((item) => item.href === "/walkthrough" && item.label === "How it works"));
+  assert.ok(help.some((item) => item.href === "/evidence" && item.label === "Public evidence"));
+  assert.ok(sections.find((section) => section.label === "Activity")?.items?.some((item) => item.href === "/commitments"));
+  for (const hook of ["data-mt-feed-link", "data-mt-discover-link", "data-mt-optional-tour", "data-mt-evidence-link"]) {
+    assert.ok(bridge.includes(hook), `missing existing integration hook: ${hook}`);
+  }
+  assert.match(bridge, /document\.createElement\("a"\)/);
+  assert.match(bridge, /link\.href = item\.href/);
+  assert.doesNotMatch(bridge, /createControlsControl|prepareControlsControl|location\.assign|stopImmediatePropagation/);
 });
 
-test("Discover uses ordinary canonical navigation without a graph or navigation patcher", () => {
+test("Discover ships complete canonical navigation without a graph or required JavaScript patch", () => {
   const shell = readPublicFile("moral-trade-discover.html");
   for (const href of ["/feed", "/discover", "/walkthrough", "/trades/new", "/commitments", "/evidence"]) {
     assert.ok(shell.includes(`href="${href}"`));
   }
-  assert.match(shell, /aria-current="page">Discover/);
+  assert.match(shell, /aria-current="page"[^>]*>Discover/);
+  assert.match(shell, /data-mt-task-navigation="true"/);
+  assert.match(shell, /<summary>Profile<\/summary>/);
+  assert.match(shell, /href="\/profile\/priorities"/);
   assert.doesNotMatch(shell, /moral-trade-discover-navigation|moral-trade-discover-value-hover/);
 });

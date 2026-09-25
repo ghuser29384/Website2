@@ -1,0 +1,119 @@
+/* Task navigation only. Existing page content, controls and theme are unchanged. */
+header.topbar:has(> .mt-task-nav),
+.app-header:has(> .mt-task-nav) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  height: auto;
+  min-height: 76px;
+  padding: 12px 24px;
+}
+header.topbar > .mt-task-nav,
+.app-header > .mt-task-nav {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+  width: auto;
+  overflow: visible;
+  position: relative;
+}
+.mt-task-nav > .mt-nav-group { position: relative; }
+.mt-task-nav .mt-nav-link,
+.mt-task-nav .mt-nav-group > summary {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #e4e2dc;
+  cursor: pointer;
+  font: 500 14px/1.4 var(--sans, system-ui, sans-serif);
+  text-decoration: none;
+  white-space: normal;
+}
+.mt-task-nav .mt-nav-group > summary { gap: 8px; list-style: none; }
+.mt-task-nav .mt-nav-group > summary::-webkit-details-marker { display: none; }
+.mt-task-nav .mt-nav-group > summary::after { content: "▾"; font-size: 11px; }
+.mt-task-nav .mt-nav-group[open] > summary::after { content: "▴"; }
+.mt-task-nav > .mt-nav-link:hover,
+.mt-task-nav .mt-nav-group > summary:hover { background: #242424; color: #fff; }
+.mt-task-nav > .mt-nav-link[aria-current="page"],
+.mt-task-nav .mt-nav-group.is-active > summary { background: #f5f2e9; color: #111; }
+.mt-task-nav > .mt-nav-create { margin-left: 8px; background: #0a4cff; color: #fff; }
+.mt-task-nav > .mt-nav-create:hover { background: #073bc7; color: #fff; }
+.mt-task-nav .mt-nav-panel {
+  box-sizing: border-box;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  border: 1px solid #b9b4aa;
+  border-radius: 4px;
+  background: #fbfaf6;
+  color: #111;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+}
+.mt-task-nav .mt-nav-description { margin: 8px 12px 12px; color: #56524c; font: 13px/1.5 var(--sans, system-ui, sans-serif); }
+.mt-task-nav .mt-nav-panel .mt-nav-link { color: #111; overflow-wrap: anywhere; }
+.mt-task-nav .mt-nav-panel .mt-nav-link:hover,
+.mt-task-nav .mt-nav-panel .mt-nav-link[aria-current="page"] { background: #e7ecfa; color: #063fc4; }
+.mt-task-nav :is(a, summary):focus-visible,
+.mt-site-topbar :is(a, summary):focus-visible { outline: 3px solid #6997ff; outline-offset: 3px; }
+
+/* Preserve the existing React search/account controls and make every section
+   reachable on small screens instead of hiding the primary menu. */
+nav.mt-site-topbar.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  height: auto;
+  overflow: visible;
+}
+nav.mt-site-topbar.topbar > .topbar-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: visible;
+}
+nav.mt-site-topbar.topbar .topbar-menu-panel {
+  box-sizing: border-box;
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+nav.mt-site-topbar.topbar :is(.topbar-menu-link, .topbar-menu-trigger, .topbar-links > a) { min-height: 44px; }
+nav.mt-site-topbar.topbar .topbar-menu-copy { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  header.topbar:has(> .mt-task-nav),
+  .app-header:has(> .mt-task-nav) { padding: 12px 16px; gap: 12px; }
+  header.topbar > .mt-task-nav,
+  .app-header > .mt-task-nav { order: 3; flex-basis: 100%; justify-content: flex-start; margin: 0; }
+  .app-header:has(> .mt-task-nav) > .avatar,
+  header.topbar:has(> .mt-task-nav) > .top-actions { margin-left: auto; }
+  .mt-task-nav > .mt-nav-group { position: static; }
+  .mt-task-nav .mt-nav-panel { left: 0; right: auto; width: min(360px, 100%); max-width: 100%; }
+  nav.mt-site-topbar.topbar > .topbar-links { position: relative; order: 3; flex-basis: 100%; }
+  nav.mt-site-topbar.topbar .topbar-links > .topbar-menu { position: static; }
+  nav.mt-site-topbar.topbar .topbar-links .topbar-menu-panel { left: 0; right: auto; width: min(360px, 100%); max-width: 100%; }
+  nav.mt-site-topbar.topbar > .topbar-search { order: 4; flex: 1 1 100%; min-width: 0; }
+  nav.mt-site-topbar.topbar > .topbar-actions { margin-left: auto; flex-wrap: wrap; }
+}

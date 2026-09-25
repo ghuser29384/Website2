@@ -11,6 +11,8 @@
   <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
   <title>Browse trades · Moral Trade</title>
   <link rel="stylesheet" href="/moral-trade-discover.css?v=20260923">
+  <link rel="stylesheet" href="/moral-trade-site-navigation.css">
+  <script defer src="/moral-trade-live-navigation.js"></script>
   <link rel="stylesheet" href="/moral-trade-input-assist.css?v=20260923">
   <script defer src="/moral-trade-brand.js?v=20260923"></script>
   <script defer src="/moral-trade-account-identity.js?v=20260923"></script>
@@ -21,13 +23,37 @@
   <a class="skip-link" href="#discover-main">Skip to trades</a>
   <header class="app-header">
     <a class="brand" href="/" aria-label="Moral Trade home">Moral Trade</a>
-    <nav class="top-nav" aria-label="Primary navigation">
-      <a href="/feed">Feed</a>
-      <a href="/discover" class="active" aria-current="page">Discover</a>
-      <a href="/trades/new">Trade</a>
-      <a href="/commitments">Commitments</a>
-      <a href="/evidence">Evidence</a>
-      <a href="/walkthrough" aria-label="Open optional walkthrough">Tour</a>
+    <nav class="top-nav mt-task-nav" aria-label="Primary navigation" data-mt-task-navigation="true">
+      <a class="mt-nav-link" href="/discover" aria-current="page" data-mt-discover-link="true">Discover</a>
+      <a class="mt-nav-link" href="/feed" data-mt-feed-link="true">Feed</a>
+      <details class="mt-nav-group" name="mt-primary-navigation">
+        <summary>Activity</summary>
+        <div class="mt-nav-panel"><p class="mt-nav-description">Manage the trades you are involved in.</p>
+          <a class="mt-nav-link" href="/dashboard">Dashboard</a>
+          <a class="mt-nav-link" href="/commitments">Commitments</a>
+          <a class="mt-nav-link" href="/messages">Messages</a>
+          <a class="mt-nav-link" href="/saved-offers">Saved offers</a>
+          <a class="mt-nav-link" href="/invite">Invite someone</a>
+        </div>
+      </details>
+      <details class="mt-nav-group" name="mt-primary-navigation">
+        <summary>Profile</summary>
+        <div class="mt-nav-panel"><p class="mt-nav-description">Manage your profile and private priorities.</p>
+          <a class="mt-nav-link" href="/profile">Your profile</a>
+          <a class="mt-nav-link" href="/profile/priorities">Adjust priorities · 100 Sparks</a>
+          <a class="mt-nav-link" href="/dashboard#data-portability">Profile data</a>
+        </div>
+      </details>
+      <details class="mt-nav-group" name="mt-primary-navigation">
+        <summary>Help</summary>
+        <div class="mt-nav-panel"><p class="mt-nav-description">Understand the process and review safeguards.</p>
+          <a class="mt-nav-link" href="/walkthrough" data-mt-optional-tour="true">How it works</a>
+          <a class="mt-nav-link" href="/evidence" data-mt-evidence-link="true">Public evidence</a>
+          <a class="mt-nav-link" href="/safety">Safety</a>
+          <a class="mt-nav-link" href="/contact">Contact</a>
+        </div>
+      </details>
+      <a class="mt-nav-link mt-nav-create" href="/trades/new">Create trade</a>
     </nav>
     <a class="avatar" href="/profile" aria-label="Account"><span data-mt-account-avatar="true">•</span></a>
   </header>
