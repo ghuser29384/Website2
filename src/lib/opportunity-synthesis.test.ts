@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   buildSynthesizedTradeDraftPrefill,
-  isOpportunitySynthesisEnabled,
   mergeExistingAndSynthesizedRecommendations,
   parseSynthesizedOpportunityId,
   synthesizeBottleneckAtlasRecommendations,
@@ -124,13 +123,6 @@ test("atlas candidates prefill a private draft without inventing a counterparty 
     role: "first_party",
   });
   assert.match(privateFallback.requestedCause, /^\[Replace:/);
-});
-
-test("the kill switch is explicit and fail-operational only when not disabled", () => {
-  assert.equal(isOpportunitySynthesisEnabled({ OPPORTUNITY_SYNTHESIS_ENABLED: "false" }), false);
-  assert.equal(isOpportunitySynthesisEnabled({ OPPORTUNITY_SYNTHESIS_ENABLED: "FALSE" }), false);
-  assert.equal(isOpportunitySynthesisEnabled({ OPPORTUNITY_SYNTHESIS_ENABLED: "true" }), true);
-  assert.equal(isOpportunitySynthesisEnabled({}), true);
 });
 
 test("generated possibilities are interleaved without displacing the entire existing feed", () => {

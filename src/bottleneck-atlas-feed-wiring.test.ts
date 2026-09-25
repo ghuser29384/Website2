@@ -7,27 +7,21 @@ function read(relativePath: string) {
   return readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
 
-test("the authenticated feed merges generated possibilities into existing inventory", () => {
+test("the authenticated feed uses current inventory without Atlas template injection", () => {
   const route = read("src/app/api/live-now/route.ts");
-  assert.match(route, /synthesizeBottleneckAtlasRecommendations/);
-  assert.match(route, /mergeExistingAndSynthesizedRecommendations/);
-  assert.match(route, /isOpportunitySynthesisEnabled/);
-  assert.match(route, /suggestedOpportunityCount/);
-  assert.match(route, /opportunitySynthesisDiagnostics/);
+  assert.doesNotMatch(route, /opportunity-synthesis|synthesizeBottleneckAtlasRecommendations|mergeExistingAndSynthesizedRecommendations/);
+  assert.match(route, /suggestedOpportunityCount: 0/);
+  assert.match(route, /opportunitySynthesisDiagnostics: null/);
 });
 
-test("the feed distinguishes generated possibilities from live opportunity inventory", () => {
+test("the feed rejects legacy generated possibilities instead of rendering them", () => {
   const feed = read("public/moral-trade-live-now.js");
-  const styles = read("public/moral-trade-live-feed.css");
   assert.match(feed, /metadata\.origin === "platform_generated"/);
-  assert.match(feed, /Potential trade/);
+  assert.match(feed, /id\.startsWith\("synth:"\)/);
+  assert.doesNotMatch(feed, /Potential trade/);
   assert.match(feed, /Opportunities for you/);
   assert.match(feed, /model\.feedOpportunityCount/);
-  assert.match(feed, /model\.publishedOpportunityCount/);
-  assert.match(feed, /recommendation\.origin === "published"/);
-  assert.match(feed, /generated \$\{/);
-  assert.match(feed, /possibilities/);
-  assert.match(styles, /mt-feed-card--suggested/);
+  assert.doesNotMatch(feed, /generated \$\{/);
 });
 
 test("synthesized interactions resolve locally without querying generated IDs as UUID offers", () => {

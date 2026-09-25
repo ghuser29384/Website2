@@ -20,11 +20,6 @@ import {
   type LiveNowPriorityAllocation,
 } from "@/lib/live-now-recommendations";
 import {
-  isOpportunitySynthesisEnabled,
-  mergeExistingAndSynthesizedRecommendations,
-  synthesizeBottleneckAtlasRecommendations,
-} from "@/lib/opportunity-synthesis";
-import {
   buildBrowsingCauseWeights,
   buildLearnedActionPreferences,
   buildOpportunityFeedbackState,
@@ -767,13 +762,6 @@ export async function GET() {
     savedOpportunityKeys,
     explorationPercent,
   };
-  const opportunitySynthesis = isOpportunitySynthesisEnabled()
-    ? synthesizeBottleneckAtlasRecommendations({
-        profile,
-        now: checkedAt,
-        limit: 6,
-      })
-    : null;
   // The hybrid builder retains rankLiveNowOffers as its lexical and action-learning prior,
   // then adds public-only semantic retrieval and reciprocal acceptance estimates.
   let hybridFeed = await buildHybridLiveNowFeed({
@@ -793,12 +781,9 @@ export async function GET() {
       feasibilityProbe.blockedSources,
     );
   }
-  const synthesizedRecommendations = opportunitySynthesis?.recommendations ?? [];
-  const recommendations = mergeExistingAndSynthesizedRecommendations(
-    hybridFeed.recommendations,
-    synthesizedRecommendations,
-    12,
-  );
+  // Feed cards must come from current inventory. Atlas research templates belong
+  // on the Atlas pages and must never fill an empty or partially filled feed.
+  const recommendations = hybridFeed.recommendations.slice(0, 12);
   const routePlannerResult = presentRoutePlanner(
     buildRoutePlanner({
       profile: runtimeRouteProfile,
@@ -831,12 +816,10 @@ export async function GET() {
     generatedAt: checkedAt.toISOString(),
     matchingOfferCount: hybridFeed.diagnostics.directCount,
     matchingOpportunityCount: hybridFeed.diagnostics.directCount,
-    suggestedOpportunityCount: recommendations.filter(
-      (recommendation) => recommendation.metadata?.origin === "platform_generated",
-    ).length,
+    suggestedOpportunityCount: 0,
     feedOpportunityCount: recommendations.length,
     feedDiagnostics: hybridFeed.diagnostics,
-    opportunitySynthesisDiagnostics: opportunitySynthesis?.diagnostics ?? null,
+    opportunitySynthesisDiagnostics: null,
     profile: {
       causes,
       weightedCauses: causeSignals,
