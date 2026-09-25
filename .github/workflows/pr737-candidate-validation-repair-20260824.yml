@@ -1,0 +1,113 @@
+name: PR 737 one-use candidate validation repair 20260824
+
+on:
+  push:
+    branches:
+      - ops/pr737-ledger-isolated-qa-uat-20260821
+    paths:
+      - ".github/workflows/pr737-candidate-validation-repair-20260824.yml"
+      - "ops/pr737-ledger-uat/repair-candidate-validation.py"
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr737-candidate-validation-repair-20260824
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CANDIDATE_HEAD: 8bbd6dc887f827aa57ea21dd40a338b5ccbb9f91
+  TARGET_BRANCH: feature/compact-authoritative-outflow-ledger-v1-20260816
+
+jobs:
+  repair:
+    name: Repair false-positive and rollback-order validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Announce the exact one-use repair run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr comment 737 --repo "$GITHUB_REPOSITORY" --body "<!-- pr737-validation-repair-start:$GITHUB_RUN_ID -->
+          PR #737 fail-closed validation repair started: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. It is bound to candidate \`$EXPECTED_CANDIDATE_HEAD\` and may change only the permanent ledger QA workflow and its phase-order contract."
+
+      - name: Check out the one-use controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+
+      - name: Check out the exact frozen candidate
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_CANDIDATE_HEAD }}
+
+      - name: Verify the candidate branch has not moved
+        shell: bash
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_HEAD"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_CANDIDATE_HEAD"
+          test -z "$(git status --porcelain)"
+
+      - name: Apply and verify the bounded two-file validation repair
+        shell: bash
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          python3 ../controller/ops/pr737-ledger-uat/repair-candidate-validation.py
+          git diff --check
+          git diff --name-only | LC_ALL=C sort > "$RUNNER_TEMP/actual-repair-files.txt"
+          cat > "$RUNNER_TEMP/expected-repair-files.txt" <<'FILES'
+          .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          FILES
+          diff -u "$RUNNER_TEMP/expected-repair-files.txt" "$RUNNER_TEMP/actual-repair-files.txt"
+          grep -Fq 'set -euo pipefail' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'Execute ordered rollback-only legacy and authoritative-ledger lifecycles' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'savepoint authoritative_ledger_authorization;' .github/workflows/compact-authoritative-outflow-ledger-qa.yml
+          grep -Fq 'Run genuinely concurrent readiness freeze test before ledger authority hardening' src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+
+      - name: Commit the exact repair to the candidate branch
+        id: commit
+        shell: bash
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_HEAD"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_CANDIDATE_HEAD"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            .github/workflows/compact-authoritative-outflow-ledger-qa.yml \
+            src/lib/mpgf/compact-authoritative-outflow-phase-order-contract.test.ts
+          git commit -m "ci: make PR 737 validation fail closed"
+          repaired_head="$(git rev-parse HEAD)"
+          repaired_tree="$(git rev-parse HEAD^{tree})"
+          git push origin "HEAD:$TARGET_BRANCH"
+          echo "head=$repaired_head" >> "$GITHUB_OUTPUT"
+          echo "tree=$repaired_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Publish terminal repair result
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPAIRED_HEAD: ${{ steps.commit.outputs.head }}
+          REPAIRED_TREE: ${{ steps.commit.outputs.tree }}
+          COMMIT_OUTCOME: ${{ steps.commit.outcome }}
+        run: |
+          set -euo pipefail
+          gh pr comment 737 --repo "$GITHUB_REPOSITORY" --body "<!-- pr737-validation-repair-final:$GITHUB_RUN_ID -->
+          PR #737 fail-closed validation repair outcome: **$COMMIT_OUTCOME**. Controller: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Repaired candidate: \`${REPAIRED_HEAD:-not-created}\`; tree: \`${REPAIRED_TREE:-not-created}\`. No merge, deployment, persistent migration, provider action, activation, electorate, or money movement was authorized."
+          test "$COMMIT_OUTCOME" = "success"
