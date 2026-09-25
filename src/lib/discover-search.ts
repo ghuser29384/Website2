@@ -15,8 +15,7 @@ export type DiscoverSearchSort =
   | "best-fit"
   | "newest"
   | "deadline"
-  | "lowest-cost"
-  | "strongest-evidence";
+  | "lowest-cost";
 
 export interface DiscoverSearchManualFilters {
   causes: string[];
@@ -514,7 +513,7 @@ export function buildDiscoverSearchPlan(input: DiscoverSearchInput): DiscoverSea
   exchange.offerTypes = exchange.offerTypes.filter((type) => !excluded.has(`offer-type:${type}`));
   exchange.returnTypes = exchange.returnTypes.filter((type) => !excluded.has(`return-type:${type}`));
   const manual = normalizedManualFilters(input.manual);
-  const sort: DiscoverSearchSort = ["best-fit", "newest", "deadline", "lowest-cost", "strongest-evidence"].includes(input.sort ?? "")
+  const sort: DiscoverSearchSort = ["best-fit", "newest", "deadline", "lowest-cost"].includes(input.sort ?? "")
     ? (input.sort as DiscoverSearchSort)
     : "best-fit";
   return {
@@ -687,7 +686,6 @@ export function filterAndRankDiscoverOffers(
 
   return result.sort((left, right) => {
     if (plan.sort === "newest") return Date.parse(right.createdAt) - Date.parse(left.createdAt);
-    if (plan.sort === "strongest-evidence") return right.evidenceLabel.length - left.evidenceLabel.length || right.score - left.score;
     return right.score - left.score || Date.parse(right.createdAt) - Date.parse(left.createdAt);
   });
 }
@@ -761,10 +759,9 @@ export function filterAndRankDiscoverCoFunds(
       ) {
         return [];
       }
-      const verified = Boolean(
-        route.verificationSummary &&
-          !/unavailable|not verified/i.test(route.verificationSummary),
-      );
+      // Co-Fund verificationSummary is proposal-facing prose, not a structured
+      // review record. Fail closed until the live route exposes such a state.
+      const verified = false;
       if ((plan.facets.verified === true || plan.manual.verifiedOnly) && !verified) return [];
       if (plan.facets.verified === false && verified) return [];
       const evidenceText = normalize(route.verificationSummary);
