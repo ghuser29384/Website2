@@ -6,54 +6,10 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: refined-masthead-candidate-20260925
+  group: refined-masthead-candidate-bcfa8772
   cancel-in-progress: false
 jobs:
-  stage:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    outputs:
-      sha: ${{ steps.stage.outputs.sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: transport
-          persist-credentials: false
-      - name: Verify exact rendered-audit correction
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          cat transport/.github/header-correction/{0,1} | base64 --decode | gzip -d > /tmp/header-correction.patch
-          echo '6b4ac195f4baae31f4637b202f0acd05d4fcd3fdefb4a8c51e486810101f8800  /tmp/header-correction.patch' | sha256sum -c -
-      - uses: actions/checkout@v4
-        with:
-          ref: fix/refined-masthead-20260925
-          path: candidate
-          fetch-depth: 0
-      - name: Apply only reviewed presentation and navigation regressions
-        id: stage
-        working-directory: candidate
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = a1c1b0e16a882c9b2204d3c1c32cb5f55401d6fc
-          test "$(git ls-remote origin refs/heads/fix/refined-masthead-20260925 | cut -f1)" = a1c1b0e16a882c9b2204d3c1c32cb5f55401d6fc
-          git apply --check /tmp/header-correction.patch
-          git apply /tmp/header-correction.patch
-          git diff --check
-          git add public/moral-trade-refined-header.css tests/create-entry-routing.spec.ts tests/exact-live-now-recommendations.spec.ts tests/homepage-narrow-header.spec.ts tests/public-routes.spec.ts tests/refined-header.spec.ts tests/sitewide-canonical-visual-system.spec.ts
-          test "$(git diff --cached --name-only | wc -l)" -eq 7
-          git diff --cached --check
-          git diff --cached --stat
-          git config user.name ghuser29384
-          git config user.email 262476329+ghuser29384@users.noreply.github.com
-          git commit -m 'Resolve rendered native header overrides and preserve semantic navigation tests'
-          git push origin HEAD:refs/heads/fix/refined-masthead-20260925
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          git config --local --unset-all http.https://github.com/.extraheader || true
   quality:
-    needs: stage
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
@@ -65,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.stage.outputs.sha }}
+          ref: bcfa87725d08ea229a9bc27bf03a659594169ac2
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -75,6 +31,7 @@ jobs:
       - name: Record exact integrated candidate
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = bcfa87725d08ea229a9bc27bf03a659594169ac2
           mkdir -p header-evidence
           git rev-parse HEAD | tee header-evidence/commit.txt
           git diff deff62e0877e014bee49edab96c996aae448cbc8 --stat > header-evidence/diff-stat.txt
@@ -93,7 +50,7 @@ jobs:
       - name: Actual application header and navigation render checks
         run: |
           set -euo pipefail
-          npx playwright test --config=playwright.release.config.ts tests/refined-header.spec.ts tests/homepage-narrow-header.spec.ts tests/discover-home-visual-alignment.spec.ts tests/public-routes.spec.ts tests/returning-homepage.spec.ts tests/sitewide-canonical-visual-system.spec.ts tests/create-entry-routing.spec.ts tests/exact-live-now-recommendations.spec.ts --reporter=line 2>&1 | tee header-evidence/header-browser.log
+          npx playwright test --config=playwright.release.config.ts tests/refined-header.spec.ts tests/homepage-narrow-header.spec.ts tests/discover-home-visual-alignment.spec.ts tests/public-routes.spec.ts tests/returning-homepage.spec.ts tests/sitewide-canonical-visual-system.spec.ts tests/create-entry-routing.spec.ts tests/exact-live-now-recommendations.spec.ts tests/operational-retirement.spec.ts --reporter=line 2>&1 | tee header-evidence/header-browser.log
       - name: Preserve focused screenshots before the broader suite
         if: always()
         run: cp -a test-results header-evidence/focused-test-results 2>/dev/null || true
@@ -105,7 +62,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: refined-masthead-candidate-${{ needs.stage.outputs.sha }}
+          name: refined-masthead-candidate-bcfa87725d08ea229a9bc27bf03a659594169ac2
           path: |
             header-evidence
             test-results
