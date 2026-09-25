@@ -55,3 +55,8 @@ jobs:
       # Intentionally no deployment, database migrations, credentials or live fixtures.
       - name: Build Next.js application
         run: npm run build
+      # Run even after a build failure to retain both results; any failed step
+      # still fails the job. This is not a continue-on-error or release bypass.
+      - name: Run repository regression tests
+        if: success() || failure()
+        run: npm test
