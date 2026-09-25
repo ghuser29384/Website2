@@ -11,7 +11,7 @@ function loadBoundary() {
     fileName: "loading.tsx",
   });
   const jsx = (type: unknown, props: Record<string, unknown>): Node => ({ type, props });
-  const module = { exports: {} };
+  const compiledModule = { exports: {} };
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx, jsxs: jsx },
     "next/link": { __esModule: true, default: "a" },
@@ -20,8 +20,8 @@ function loadBoundary() {
   new Function("require", "module", "exports", outputText)((name: string) => {
     assert.ok(Object.hasOwn(dependencies, name), `loading boundary must not import data: ${name}`);
     return dependencies[name];
-  }, module, module.exports);
-  return (module.exports as { default: () => Node }).default();
+  }, compiledModule, compiledModule.exports);
+  return (compiledModule.exports as { default: () => Node }).default();
 }
 
 function nodes(value: unknown): Node[] {
