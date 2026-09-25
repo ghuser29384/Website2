@@ -92,7 +92,7 @@ export interface MpgfPublicGoodsPublicApiOptions {
 }
 
 function nowMs() {
-  return new Date("2026-05-31T12:00:00.000Z").getTime();
+  return Date.now();
 }
 
 function secondsUntil(value: string) {
@@ -268,7 +268,7 @@ export function listMpgfPublicGoodsRoundsApi() {
         name: demoMpgfAssuranceRound.name,
         startsAt: demoMpgfAssuranceRound.startsAt,
         closesAt: demoMpgfAssuranceRound.endsAt,
-        status: "open",
+        status: secondsUntil(demoMpgfAssuranceRound.endsAt) > 0 ? "open" : "closed_demo",
         sealedProgress,
         sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
         campaignCount: demoMpgfPublicGoodsCampaigns.length,
@@ -387,7 +387,7 @@ export function buildMpgfPublicGoodsRoundApi({
       name: round.name,
       startsAt: round.startsAt,
       closesAt: round.endsAt,
-      status: "open",
+      status: secondsUntil(round.endsAt) > 0 ? "open" : dataSource === "demo_fixture" ? "closed_demo" : "closed",
       countdownSeconds: secondsUntil(round.endsAt),
       sealedProgress,
       qfEnabled: round.qfEnabled,
