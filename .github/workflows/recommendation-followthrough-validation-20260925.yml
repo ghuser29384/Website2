@@ -1,0 +1,101 @@
+name: Recommendation follow-through validation 20260925
+
+on:
+  push:
+    branches: [ops/recommendation-followthrough-validation-20260925]
+    paths: [.github/workflows/recommendation-followthrough-validation-20260925.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ef87fca2940280d0c8a78cc3512c0f09928038a2
+          persist-credentials: false
+      - name: Verify exact implementation revision
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ef87fca2940280d0c8a78cc3512c0f09928038a2
+          mkdir -p validation-evidence
+          git rev-parse HEAD HEAD^{tree} > validation-evidence/identity.txt
+          git diff --check 9e075241e0e997a99d49a0d024f5da6b11cf1d4b HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Public-script syntax
+        run: |
+          set -euo pipefail
+          node --check public/moral-trade-input-assist.js
+          node --check public/moral-trade-live-learning-diagnostics.js
+      - name: Full unit suite
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee validation-evidence/unit.log
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee validation-evidence/lint.log
+      - name: Typecheck
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee validation-evidence/typecheck.log
+      - name: Production build
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee validation-evidence/build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recommendation-followthrough-quality-${{ github.run_id }}
+          path: validation-evidence/
+          retention-days: 14
+          if-no-files-found: error
+
+  release-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ef87fca2940280d0c8a78cc3512c0f09928038a2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Full release browser gate
+        run: |
+          set -euo pipefail
+          mkdir -p browser-evidence
+          git rev-parse HEAD HEAD^{tree} > browser-evidence/identity.txt
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee browser-evidence/release.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recommendation-followthrough-browser-${{ github.run_id }}
+          path: |
+            browser-evidence/
+            test-results/
+          retention-days: 14
+          if-no-files-found: error
