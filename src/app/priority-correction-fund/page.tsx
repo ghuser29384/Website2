@@ -236,13 +236,13 @@ export default async function PriorityCorrectionFundPage({
               <h3>Specific-action arbiters</h3>
               <p>
                 Each cause area can receive up to five randomly selected arbiters from members in
-                the top 10% of karma for that cycle, excluding members who recently served.
+                the an explicitly qualified review pool for that cycle, excluding members who recently served.
               </p>
             </article>
             <article className="panel concept-card">
               <h3>Community-wide arbiters</h3>
               <p>
-                Seven cycle-wide arbiters are selected from high-karma members with diverse cause
+                Seven cycle-wide arbiters are selected from explicitly qualified reviewers with diverse cause
                 priorities. Their allocation reasoning is recorded before a cycle is finalized.
               </p>
             </article>
@@ -805,7 +805,7 @@ export default async function PriorityCorrectionFundPage({
               <h2>Publish or finalize a monthly cycle</h2>
               <p>
                 Publishing computes the previous month&apos;s fund, applies any carryover, snapshots
-                current cause priorities, and assigns arbiters. Finalizing marks the cycle either
+                current cause priorities, and leaves arbiter assignment paused until an explicit competence-based review policy is available. Finalizing marks the cycle either
                 finalized or reserved.
               </p>
             </div>

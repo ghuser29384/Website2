@@ -51,13 +51,17 @@
         ? "Causal holdout stopped by guardrail"
         : "Causal holdout disabled";
     return `<aside class="mt-learning-diagnostics" aria-label="Recommendation-ranking status">
-      <div><span>Recommendation ranking</span><strong>${escapeHtml(copy.label)}</strong><p>${escapeHtml(copy.detail)}</p></div>
-      <dl>
-        <div><dt>Role</dt><dd>Ranking aid under separate evidence and safety review</dd></div>
-        <div><dt>Experiment</dt><dd>${escapeHtml(experimentLabel)}</dd></div>
-        <div><dt>Audit</dt><dd>${escapeHtml(receipt)}</dd></div>
-        <div><dt>Privacy</dt><dd>No raw private profile prose or sensitive demographic features</dd></div>
-      </dl>
+      <p><strong>Why these results</strong> Relevance and your opted-in preferences help order opportunities; concrete terms, evidence, and counterparty responses remain primary.</p>
+      <details>
+        <summary>Recommendation system details</summary>
+        <div><span>Recommendation ranking</span><strong>${escapeHtml(copy.label)}</strong><p>${escapeHtml(copy.detail)}</p></div>
+        <dl>
+          <div><dt>Role</dt><dd>Ranking aid under separate evidence and safety review</dd></div>
+          <div><dt>Experiment</dt><dd>${escapeHtml(experimentLabel)}</dd></div>
+          <div><dt>Audit</dt><dd>${escapeHtml(receipt)}</dd></div>
+          <div><dt>Privacy</dt><dd>No raw private profile prose or sensitive demographic features</dd></div>
+        </dl>
+      </details>
     </aside>`;
   }
 

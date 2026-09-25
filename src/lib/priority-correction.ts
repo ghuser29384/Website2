@@ -1007,87 +1007,10 @@ export async function publishPriorityCorrectionCycleForMonth({
   }
 
   if ((existingAssignments ?? []).length === 0) {
-    const recentCutoff = new Date(Date.UTC(cycleMonthDate.getUTCFullYear(), cycleMonthDate.getUTCMonth() - 3, 1)).toISOString();
-    const { data: recentAssignments, error: recentAssignmentsError } = await supabase
-      .from("priority_correction_arbiter_assignments")
-      .select("profile_id")
-      .gte("created_at", recentCutoff);
-
-    if (recentAssignmentsError) {
-      throw new Error(recentAssignmentsError.message);
-    }
-
-    const recentlyServed = new Set(
-      ((recentAssignments ?? []) as Array<{ profile_id: string }>).map((assignment) => assignment.profile_id),
-    );
-    const top10Count = Math.max(1, Math.ceil(profileRows.length * 0.1));
-    const top5Count = Math.max(1, Math.ceil(profileRows.length * 0.05));
-    const profilesByKarma = [...profileRows].sort((left, right) => right.karma - left.karma);
-    const top10Ids = new Set(profilesByKarma.slice(0, top10Count).map((profile) => profile.id));
-    const top5Ids = new Set(profilesByKarma.slice(0, top5Count).map((profile) => profile.id));
-
-    const snapshotsByProfileId = new Map(
-      snapshotPayloads.map((snapshot) => [snapshot.profile_id, snapshot]),
-    );
-    const causeAreas = dedupeStrings(snapshotPayloads.map((snapshot) => snapshot.prioritized_cause_area));
-    const arbiterPayloads: Array<Record<string, unknown>> = [];
-
-    for (const causeArea of causeAreas) {
-      const candidates = shuffleInPlace(
-        profileRows.filter((profile) => {
-          const snapshot = snapshotsByProfileId.get(profile.id);
-          return (
-            top10Ids.has(profile.id) &&
-            !recentlyServed.has(profile.id) &&
-            snapshot?.prioritized_cause_area === causeArea
-          );
-        }),
-      ).slice(0, 5);
-
-      for (const profile of candidates) {
-        arbiterPayloads.push({
-          cycle_id: cycleId,
-          profile_id: profile.id,
-          role: "specific_action_arbiter",
-          cause_area: causeArea,
-          selection_pool: "top_10_percent_karma",
-          selection_score: profile.karma,
-          status: "active",
-        });
-      }
-    }
-
-    const causeAreaCandidates = profileRows
-      .filter((profile) => {
-        const snapshot = snapshotsByProfileId.get(profile.id);
-        return top5Ids.has(profile.id) && !recentlyServed.has(profile.id) && snapshot?.prioritized_cause_area;
-      })
-      .map((profile) => ({
-        profile,
-        causeArea: snapshotsByProfileId.get(profile.id)?.prioritized_cause_area ?? "",
-      }));
-
-    for (const candidate of pickDiverseCauseAreaArbiters(causeAreaCandidates, 7)) {
-      arbiterPayloads.push({
-        cycle_id: cycleId,
-        profile_id: candidate.profile.id,
-        role: "cause_area_arbiter",
-        cause_area: null,
-        selection_pool: "top_5_percent_karma",
-        selection_score: candidate.profile.karma,
-        status: "active",
-      });
-    }
-
-    if (arbiterPayloads.length) {
-      const { error: arbiterInsertError } = await supabase
-        .from("priority_correction_arbiter_assignments")
-        .insert(arbiterPayloads);
-
-      if (arbiterInsertError) {
-        throw new Error(arbiterInsertError.message);
-      }
-    }
+    // Automatic arbiter assignment is intentionally paused. A general participation
+    // score is not evidence of allocation expertise. Historical assignments remain
+    // readable, but new cycles fail closed until a competence-based review policy
+    // with explicit eligibility is implemented.
   }
 
   return { cycleId };

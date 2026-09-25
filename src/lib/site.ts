@@ -77,7 +77,6 @@ export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
       { href: "/worked-examples", label: "Worked examples" },
       { href: "/reasoning-center", label: "Worked-example review notes" },
       { href: "/trade-controls", label: "Safeguard demonstrations" },
-      { href: "/priority-correction-fund", label: "Allocation experiment" },
     ],
   },
   {
