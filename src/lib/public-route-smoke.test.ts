@@ -586,7 +586,9 @@ test("people directory avoids popularity leaderboards and keeps trust signals ev
 
   assert.match(peoplePage, /Browse visible members/);
   assert.match(peoplePage, /reviewed evidence/);
-  assert.match(peoplePage, /Most open offers/);
+  assert.match(peoplePage, /does not rank people by a general credibility score/);
+  assert.doesNotMatch(peoplePage, /Most open offers/);
+  assert.doesNotMatch(peoplePage, /Highest credit/);
   assert.match(peoplePage, /Newest is chronological/);
   assert.match(peoplePage, /not follower, karma, or comment leaderboards/);
   assert.equal(peoplePage.includes("Counterparty interest"), false);

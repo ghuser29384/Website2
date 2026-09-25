@@ -1087,6 +1087,52 @@ export async function requireViewer(nextPath?: string) {
   return viewer;
 }
 
+const OPEN_OFFER_DIRECTORY_BATCH_SIZE = 500;
+const OPEN_OFFER_DIRECTORY_MAX_PAGES = 200;
+
+async function listAllOpenOfferRows(mode: OfferRow["mode"] | "all" = "all") {
+  if (!hasSupabaseEnv()) return [] as OfferRow[];
+
+  const supabase = await createClient();
+  const rows: OfferRow[] = [];
+
+  for (let page = 0; page < OPEN_OFFER_DIRECTORY_MAX_PAGES; page += 1) {
+    const offset = page * OPEN_OFFER_DIRECTORY_BATCH_SIZE;
+    let query = supabase
+      .from("offers")
+      .select("*")
+      .eq("status", "open");
+
+    if (mode !== "all") {
+      query = query.eq("mode", mode);
+    }
+
+    const { data, error } = await query
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(offset, offset + OPEN_OFFER_DIRECTORY_BATCH_SIZE - 1);
+
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as OfferRow[];
+    rows.push(...batch);
+    if (batch.length < OPEN_OFFER_DIRECTORY_BATCH_SIZE) return rows;
+  }
+
+  throw new Error(
+    "Open-offer directory exceeded the supported exhaustive-read safety bound; refusing to return a truncated inventory.",
+  );
+}
+
+export async function listOpenOffersDirectory(
+  mode: OfferRow["mode"] | "all" = "all",
+): Promise<OfferRecord[]> {
+  const rows = await listAllOpenOfferRows(mode);
+  if (!rows.length) return [];
+  const viewer = await getViewer();
+  return hydrateOffers(rows, viewer?.authUser.id);
+}
+
 export async function listOpenOffersPage(
   page = 1,
   pageSize = OFFERS_PAGE_SIZE,
@@ -1100,6 +1146,19 @@ export async function listOpenOffersPage(
   const normalizedPage = normalizePage(page);
   const offset = (normalizedPage - 1) * pageSize;
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
+  if (normalizedSearchQuery) {
+    const completeInventory = await listOpenOffersDirectory(mode);
+    const searched = completeInventory.filter((offer) =>
+      offerMatchesSearchQuery(offer, normalizedSearchQuery),
+    );
+    return buildPaginatedResult(
+      searched.slice(offset, offset + pageSize + 1),
+      normalizedPage,
+      pageSize,
+    );
+  }
+
   const supabase = await createClient();
   let query = supabase
     .from("offers")
@@ -1110,25 +1169,16 @@ export async function listOpenOffersPage(
     query = query.eq("mode", mode);
   }
 
-  const orderedQuery = query
+  const { data, error } = await query
     .order("created_at", { ascending: false })
-    .order("id", { ascending: true });
-  const { data, error } = normalizedSearchQuery
-    ? await orderedQuery.limit(240)
-    : await orderedQuery.range(offset, offset + pageSize);
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   const viewer = await getViewer();
   const hydrated = await hydrateOffers((data ?? []) as OfferRow[], viewer?.authUser.id);
-  const searched = normalizedSearchQuery
-    ? hydrated.filter((offer) => offerMatchesSearchQuery(offer, normalizedSearchQuery))
-    : hydrated;
-  const pagedItems = normalizedSearchQuery ? searched.slice(offset) : searched;
-
-  return buildPaginatedResult(pagedItems, normalizedPage, pageSize);
+  return buildPaginatedResult(hydrated, normalizedPage, pageSize);
 }
 
 export async function listOpenOffersPreview(limit = 120, mode: OfferRow["mode"] | "all" = "all") {

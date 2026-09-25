@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { toggleCartAction } from "@/app/actions";
+import { groupOffersByUnderlyingAction } from "@/lib/marketplace-participant-groups";
 import { formatMode } from "@/lib/offers";
 import { isVerifiedEvidenceText } from "@/lib/smart-query-records";
 import type { Database } from "@/lib/supabase/database.types";
@@ -35,6 +36,7 @@ export function ParticipantOfferGroup({
 
   const headingId = `participant-${ownerId}`;
   const truthNoteId = `participant-${ownerId}-truth-note`;
+  const actionGroups = groupOffersByUnderlyingAction(offers);
 
   return (
     <article
@@ -51,12 +53,26 @@ export function ParticipantOfferGroup({
           </div>
         </div>
         <p className={styles.proposalCount}>
-          {offers.length} exact proposal{offers.length === 1 ? "" : "s"}
+          {offers.length} exact proposal{offers.length === 1 ? "" : "s"} ·{" "}
+          {actionGroups.length} offered action{actionGroups.length === 1 ? "" : "s"}
         </p>
       </header>
 
       <div className={styles.offerList}>
-        {offers.map((offer) => {
+        {actionGroups.map((actionGroup) => (
+          <section className={styles.actionGroup} key={actionGroup.key}>
+            <header className={styles.actionGroupHeader}>
+              <div>
+                <p className={styles.kicker}>One offered action</p>
+                <strong>{actionGroup.offeredAction}</strong>
+              </div>
+              <span>
+                {actionGroup.offers.length} requested-action alternative
+                {actionGroup.offers.length === 1 ? "" : "s"}
+              </span>
+            </header>
+            <div className={styles.actionOfferList}>
+              {actionGroup.offers.map((offer) => {
           const offerHref = `/offers/${offer.id}`;
           const respondHref = `${offerHref}#respond`;
           const questionHref = `${offerHref}#discussion`;
@@ -170,7 +186,10 @@ export function ParticipantOfferGroup({
               </details>
             </section>
           );
-        })}
+              })}
+            </div>
+          </section>
+        ))}
       </div>
 
       <p className={styles.truthNote} data-participant-exact-terms-note id={truthNoteId}>

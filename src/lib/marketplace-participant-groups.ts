@@ -35,3 +35,43 @@ export function groupOffersByParticipant<T extends MarketplaceParticipantOffer>(
 
   return [...groups.values()];
 }
+
+
+export interface MarketplaceUnderlyingActionOffer extends MarketplaceParticipantOffer {
+  offer_action: string;
+}
+
+export interface MarketplaceUnderlyingActionGroup<
+  T extends MarketplaceUnderlyingActionOffer,
+> {
+  key: string;
+  offeredAction: string;
+  offers: T[];
+}
+
+export function publicUnderlyingOfferAction(value: string) {
+  return value.replace(/^\s*[A-Z]\d+\s*[—:-]\s*/u, "").trim();
+}
+
+export function groupOffersByUnderlyingAction<
+  T extends MarketplaceUnderlyingActionOffer,
+>(offers: readonly T[]): MarketplaceUnderlyingActionGroup<T>[] {
+  const groups = new Map<string, MarketplaceUnderlyingActionGroup<T>>();
+
+  for (const offer of offers) {
+    const offeredAction = publicUnderlyingOfferAction(offer.offer_action);
+    const key = offeredAction.toLowerCase().replace(/\s+/g, " ");
+    const existing = groups.get(key);
+    if (existing) {
+      existing.offers.push(offer);
+      continue;
+    }
+    groups.set(key, {
+      key,
+      offeredAction: offeredAction || "Published action",
+      offers: [offer],
+    });
+  }
+
+  return [...groups.values()];
+}
