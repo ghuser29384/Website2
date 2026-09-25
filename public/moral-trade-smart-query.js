@@ -191,10 +191,10 @@
   }
 
   function discoverSort(sort, domain) {
-    if (sort === "most_verified") return domain === "people" ? "reliability" : "strongest-evidence";
+    if (sort === "most_verified") return domain === "people" ? "reliability" : "best-fit";
     if (sort === "soonest_deadline") return domain === "pools" ? "deadline-risk" : "deadline";
     if (sort === "newest") return domain === "people" ? "recently-verified" : "newest";
-    if (sort === "highest_credit") return domain === "people" ? "reliability" : "strongest-evidence";
+    if (sort === "highest_credit") return domain === "people" ? "reliability" : "best-fit";
     if (sort === "lowest_cost") return "lowest-burden";
     return "best-fit";
   }
