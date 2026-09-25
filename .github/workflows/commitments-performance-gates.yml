@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/commitments-performance-gates.yml"
       - "src/app/commitments/**"
+      - "src/components/commitments/**"
       - "src/lib/commitments-offer-data*"
       - "src/lib/commitments-loading.test.ts"
       - "src/lib/commitments-portfolio.ts"

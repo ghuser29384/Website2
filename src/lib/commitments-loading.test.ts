@@ -62,13 +62,33 @@ test("loading navigation remains usable without triggering automatic prefetch re
   assert.doesNotMatch(css, /animation\s*:/);
 });
 
-test("private portfolio navigation avoids speculative reloads and scroll resets", () => {
+test("private portfolio views use native document links without speculative reads", () => {
   const page = readFileSync("src/app/commitments/page.tsx", "utf8");
-  const controls = page.match(/<Link\b[^>]*aria-current=[^>]*>/g) ?? [];
+  const controls = page.match(/<CommitmentsDocumentLink\b[^>]*aria-current=[^>]*>/g) ?? [];
   assert.equal(controls.length, 4, "tabs, grouping, and both calendar scopes are covered");
-  for (const control of controls) {
-    assert.ok(control.includes("prefetch={false}"), control);
-    assert.ok(control.includes("scroll={false}"), control);
-  }
-  assert.ok(page.includes('<Link prefetch={false} scroll={false} href="/commitments?tab=ledger">View all'));
+  assert.ok(page.includes('<CommitmentsDocumentLink href="/commitments?tab=ledger">View all'));
+  assert.doesNotMatch(page, /<Link\b[^>]*aria-current=/);
+
+  const source = readFileSync("src/components/commitments/commitments-document-link.tsx", "utf8");
+  const { outputText } = transpileModule(source, {
+    compilerOptions: { jsx: JsxEmit.ReactJSX, module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    fileName: "commitments-document-link.tsx",
+  });
+  const jsx = (type: unknown, props: Record<string, unknown>): Node => ({ type, props });
+  const compiledModule = { exports: {} };
+  new Function("require", "module", "exports", outputText)((name: string) => {
+    assert.equal(name, "react/jsx-runtime", "document links need no router or data dependency");
+    return { jsx, jsxs: jsx };
+  }, compiledModule, compiledModule.exports);
+  const { CommitmentsDocumentLink } = compiledModule.exports as {
+    CommitmentsDocumentLink: (props: { href: string; children: string; "aria-current"?: "page" }) => Node;
+  };
+  const selected = CommitmentsDocumentLink({ href: "/commitments?tab=ledger", children: "Ledger", "aria-current": "page" });
+  assert.equal(selected.type, "a");
+  assert.deepEqual(selected.props, { href: "/commitments?tab=ledger", children: "Ledger", "aria-current": "page" });
+  const unselected = CommitmentsDocumentLink({ href: "/commitments", children: "Portfolio" });
+  assert.equal(unselected.type, "a");
+  assert.equal(unselected.props["aria-current"], undefined);
+  assert.equal(unselected.props.onClick, undefined);
+  assert.equal(unselected.props.prefetch, undefined);
 });
