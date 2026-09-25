@@ -1,7 +1,7 @@
 export const ASSURANCE_FUNDING_SCENARIO_TARGET_CENTS = 100_000;
 
 export const ASSURANCE_FUNDING_RECEIPT_BOUNDARY =
-  "Exact-fill educational scenario. You supplied the decisive-chance estimate. This does not use live round progress, predict whether you are decisive, create or change a pledge, or count a failure-participation bonus as pool funding.";
+  "Exact-fill educational scenario. The decisive-chance estimate is used only after you enter it. This does not use live round progress, predict whether you are decisive, create or change a pledge, or count a failure-participation bonus as pool funding.";
 
 const DOLLAR_INPUT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const PERCENT_INPUT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;

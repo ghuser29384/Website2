@@ -262,23 +262,20 @@ export function listMpgfPublicGoodsRoundsApi() {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
-    rounds: [
-      {
-        id: demoMpgfAssuranceRound.id,
-        name: demoMpgfAssuranceRound.name,
-        startsAt: demoMpgfAssuranceRound.startsAt,
-        closesAt: demoMpgfAssuranceRound.endsAt,
-        status: "open",
-        sealedProgress,
-        sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
-        campaignCount: demoMpgfPublicGoodsCampaigns.length,
-        verifiedDonorCount: sealNumber(
-          sealedProgress.active,
-          allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
-        ),
-        countdownSeconds: secondsUntil(demoMpgfAssuranceRound.endsAt),
-      },
-    ],
+    rounds: [],
+    examples: [{
+      id: demoMpgfAssuranceRound.id,
+      name: demoMpgfAssuranceRound.name,
+      startsAt: demoMpgfAssuranceRound.startsAt,
+      closesAt: demoMpgfAssuranceRound.endsAt,
+      status: "archived_demo",
+      clock: "frozen_example",
+      sealedProgress,
+      sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
+      campaignCount: demoMpgfPublicGoodsCampaigns.length,
+      verifiedDonorCount: null,
+      countdownSeconds: null,
+    }],
   };
 }
 
@@ -387,8 +384,13 @@ export function buildMpgfPublicGoodsRoundApi({
       name: round.name,
       startsAt: round.startsAt,
       closesAt: round.endsAt,
-      status: "open",
-      countdownSeconds: secondsUntil(round.endsAt),
+      status: usesPersistedState
+        ? Date.parse(round.endsAt) > Date.now() ? "open" : "closed"
+        : "archived_demo",
+      countdownSeconds: usesPersistedState
+        ? Math.max(0, Math.floor((Date.parse(round.endsAt) - Date.now()) / 1000))
+        : null,
+      dataSource,
       sealedProgress,
       qfEnabled: round.qfEnabled,
       qfCapMultiple: round.qfCapMultiple,

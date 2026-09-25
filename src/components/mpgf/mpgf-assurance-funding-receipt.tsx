@@ -45,8 +45,8 @@ function formatPerDollar(value: number) {
 }
 
 export function MpgfAssuranceFundingReceipt() {
-  const [pledgeInput, setPledgeInput] = useState("100");
-  const [probabilityInput, setProbabilityInput] = useState("20");
+  const [pledgeInput, setPledgeInput] = useState("");
+  const [probabilityInput, setProbabilityInput] = useState("");
   const pledgeCents = parseAssurancePledgeDollars(pledgeInput);
   const decisiveProbabilityBasisPoints = parseAssuranceProbabilityPercent(probabilityInput);
   const pledgeInvalid =
@@ -54,10 +54,13 @@ export function MpgfAssuranceFundingReceipt() {
     pledgeCents < 100 ||
     pledgeCents > ASSURANCE_FUNDING_SCENARIO_TARGET_CENTS;
   const probabilityInvalid = decisiveProbabilityBasisPoints === null;
-  const result = calculateAssuranceFundingReceipt({
-    pledgeCents: pledgeCents ?? Number.NaN,
-    decisiveProbabilityBasisPoints: decisiveProbabilityBasisPoints ?? Number.NaN,
-  });
+  const hasCompleteInputs = pledgeInput.trim() !== "" && probabilityInput.trim() !== "";
+  const result = hasCompleteInputs
+    ? calculateAssuranceFundingReceipt({
+        pledgeCents: pledgeCents ?? Number.NaN,
+        decisiveProbabilityBasisPoints: decisiveProbabilityBasisPoints ?? Number.NaN,
+      })
+    : null;
 
   return (
     <div className={styles.calculator} aria-label="Assurance funding estimate">
@@ -106,7 +109,7 @@ export function MpgfAssuranceFundingReceipt() {
         <p>Decisive means the pool would clear with this pledge and would not clear without it.</p>
       </div>
 
-      {result.ok ? (
+      {result?.ok ? (
         <div className={styles.result} aria-live="polite">
           <div className={styles.metrics}>
             <article className={`${styles.metric} ${styles.metricPrimary}`}>
@@ -143,9 +146,11 @@ export function MpgfAssuranceFundingReceipt() {
             <p>Funding estimate, not an impact guarantee.</p>
           </div>
         </div>
+      ) : result ? (
+        <p className={styles.error} role="alert">{result.error}</p>
       ) : (
-        <p className={styles.error} role="alert">
-          {result.error}
+        <p className={styles.boundary} role="status">
+          Enter both assumptions to calculate an educational scenario. No probability is assumed for you.
         </p>
       )}
 

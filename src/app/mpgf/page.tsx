@@ -57,9 +57,9 @@ const serviceRoutes = [
   {
     title: "Current round",
     detail:
-      "Inspect the public round, project stances, sealed progress rules, contribution terms, and final reporting path.",
+      "Review the May 2026 demonstration round, its project stances, sealed-progress rules, contribution terms, and reporting path. It is not a current funding round.",
     href: `/mpgf/rounds/${demoMpgfAssuranceRound.id}`,
-    action: "View current round",
+    action: "Review archived example",
   },
   {
     title: "Candidate pools",

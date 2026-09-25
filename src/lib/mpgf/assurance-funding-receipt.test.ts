@@ -113,7 +113,8 @@ test("public assurance receipt preserves the educational and no-live-data bounda
   assert.match(component, /Expected other funding per \$1 pledged/);
   assert.match(component, /Your estimated chance this pledge would be decisive/);
   assert.match(component, /Funding estimate, not an impact guarantee/);
-  assert.match(ASSURANCE_FUNDING_RECEIPT_BOUNDARY, /You supplied the decisive-chance estimate/);
+  assert.match(ASSURANCE_FUNDING_RECEIPT_BOUNDARY, /only after you enter it/);
+  assert.match(component, /No probability is assumed for you/);
   assert.match(ASSURANCE_FUNDING_RECEIPT_BOUNDARY, /does not use live round progress/);
   assert.equal(component.includes("you were pivotal"), false);
   assert.equal(component.includes("liveThreshold"), false);

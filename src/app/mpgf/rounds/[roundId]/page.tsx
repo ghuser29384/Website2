@@ -58,7 +58,8 @@ function formatDate(value: string) {
   );
 }
 
-function formatCountdown(seconds: number) {
+function formatCountdown(seconds: number | null) {
+  if (seconds === null) return "Example clock not running";
   const days = Math.floor(seconds / 86_400);
 
   if (days > 0) {
@@ -125,7 +126,7 @@ function qualitativeSealedProgressLabel({
     return "Needs more support";
   }
 
-  return "Likely near threshold";
+  return "Progress not disclosed";
 }
 
 function commonGroundStanceLabel(stance: MpgfCommonGroundBudgetStance) {
@@ -559,7 +560,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
           <strong>{formatDate(round.closesAt)}</strong>
         </div>
         <div className="mpgf-kpi">
-          <span>Time remaining</span>
+          <span>{round.status === "archived_demo" ? "Example clock" : "Time remaining"}</span>
           <strong>{formatCountdown(round.countdownSeconds)}</strong>
         </div>
         <div className="mpgf-kpi">
