@@ -9,55 +9,9 @@ concurrency:
   group: refined-masthead-candidate-20260925
   cancel-in-progress: false
 jobs:
-  stage:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    outputs:
-      sha: ${{ steps.stage.outputs.sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: transport
-          persist-credentials: false
-      - name: Verify the exact scoped transport before applying
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          cat transport/.github/header-patch/{0,1,2,3,4,5} | base64 --decode | gzip -d > /tmp/header.patch
-          echo 'd0206ced7f24051531bee0a2810a6632be933be6b44b2752b532248364ba92bf  /tmp/header.patch' | sha256sum -c -
-      - uses: actions/checkout@v4
-        with:
-          ref: fix/refined-masthead-20260925
-          path: candidate
-          fetch-depth: 0
-      - name: Publish only the reviewed candidate branch, never main
-        id: stage
-        working-directory: candidate
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = 1a397cceb83fd51f26c69cd06209b297d881c0ca
-          test "$(git ls-remote origin refs/heads/fix/refined-masthead-20260925 | cut -f1)" = 1a397cceb83fd51f26c69cd06209b297d881c0ca
-          git apply --check /tmp/header.patch
-          git apply /tmp/header.patch
-          git diff --check
-          git add public/moral-trade-discover.html public/moral-trade-live-navigation.js public/moral-trade-live.html public/moral-trade-refined-header.css src/app/layout.tsx src/components/layout/site-topbar.tsx src/discover-home-visual-contract.test.ts src/lib/live-discover-navigation.test.ts src/lib/refined-header.test.ts src/lib/refined-header.ts tests/discover-home-visual-alignment.spec.ts tests/exact-live-local-time.spec.ts tests/exact-live-now-recommendations.spec.ts tests/homepage-narrow-header.spec.ts tests/public-routes.spec.ts tests/refined-header.spec.ts tests/returning-homepage.spec.ts tests/sitewide-canonical-visual-system.spec.ts
-          test "$(git diff --cached --name-only | wc -l)" -eq 18
-          git diff --cached --check
-          git diff --cached --stat
-          git config user.name ghuser29384
-          git config user.email 262476329+ghuser29384@users.noreply.github.com
-          git commit -m 'Refine the shared masthead and keep priorities under Profile'
-          git push origin HEAD:refs/heads/fix/refined-masthead-20260925
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          git config --local --unset-all http.https://github.com/.extraheader || true
   quality:
-    needs: stage
     runs-on: ubuntu-24.04
     timeout-minutes: 50
-    permissions:
-      contents: read
     env:
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -67,19 +21,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.stage.outputs.sha }}
+          ref: a1c1b0e16a882c9b2204d3c1c32cb5f55401d6fc
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Record exact candidate
+      - name: Record exact integrated candidate
         run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = a1c1b0e16a882c9b2204d3c1c32cb5f55401d6fc
           mkdir -p header-evidence
           git rev-parse HEAD | tee header-evidence/commit.txt
-          git diff HEAD^ --stat > header-evidence/diff-stat.txt
+          git diff deff62e0877e014bee49edab96c996aae448cbc8 --stat > header-evidence/diff-stat.txt
           git archive --format=tar.gz HEAD > header-evidence/source.tar.gz
-          git diff --check HEAD^
+          git diff --check deff62e0877e014bee49edab96c996aae448cbc8
       - run: npm ci
       - name: Repository tests, lint, TypeScript, production build
         run: |
@@ -103,7 +60,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: refined-masthead-candidate-${{ needs.stage.outputs.sha }}
+          name: refined-masthead-candidate-a1c1b0e16a882c9b2204d3c1c32cb5f55401d6fc
           path: |
             header-evidence
             test-results
