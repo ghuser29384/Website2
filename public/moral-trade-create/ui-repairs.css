@@ -177,3 +177,151 @@ html {
     border-top: 0;
   }
 }
+
+/* Cause selection is a form, not a poster. Keep this repair local to step one. */
+#screenCause .stage {
+  min-height: 0;
+  grid-template-columns: minmax(260px, .7fr) minmax(0, 1.7fr);
+  gap: 0;
+  align-items: stretch;
+}
+
+#screenCause .intro {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 0;
+  padding: clamp(24px, 2.5vw, 36px);
+  border-right: 1px solid var(--ink);
+}
+
+#screenCause .step-label {
+  margin-bottom: 16px;
+}
+
+#screenCause #causeHeading {
+  max-width: 12ch;
+  font-size: clamp(2.25rem, 3.4vw, 3.5rem);
+  line-height: 1.08 !important; /* Override the canonical poster leading. */
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+#screenCause .intro-copy {
+  max-width: 32ch;
+  margin-top: 20px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+#screenCause .cause-panel {
+  padding: clamp(16px, 2vw, 28px);
+}
+
+#screenCause .cause-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#screenCause .cause-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 100px;
+  padding: 16px;
+}
+
+#screenCause .cause-choice::before {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+#screenCause .cause-choice strong {
+  max-width: 100%;
+  font-size: clamp(15px, 1.2vw, 18px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+#screenCause .other-cause-form {
+  margin-top: 16px;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+}
+
+#screenCause .other-cause-submit {
+  min-width: 112px;
+}
+
+@media (max-width: 1180px) {
+  #screenCause .cause-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #screenCause .other-cause-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #screenCause .other-cause-form label {
+    grid-column: 1 / -1;
+    min-height: 36px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 900px) {
+  #screenCause .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #screenCause .intro {
+    min-height: 0 !important; /* Do not inherit the canonical 310px mobile hero. */
+    padding: 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  #screenCause #causeHeading {
+    max-width: 22ch;
+    font-size: clamp(2rem, 5.5vw, 3rem);
+  }
+
+  #screenCause .intro-copy {
+    max-width: 48ch;
+    margin-top: 16px;
+  }
+
+  #screenCause .cause-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #screenCause .cause-choice {
+    min-height: 88px;
+    padding: 12px;
+  }
+
+  #screenCause .cause-choice::before {
+    margin-bottom: 14px;
+  }
+
+  #screenCause .other-cause-form input {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 359px) {
+  #screenCause .cause-grid,
+  #screenCause .other-cause-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #screenCause .other-cause-submit {
+    min-height: 48px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
