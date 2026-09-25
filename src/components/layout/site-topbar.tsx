@@ -83,12 +83,14 @@ function NavMenu({
   label,
   onOpenChange,
   summary,
+  nativeDisclosure = false,
 }: {
   isOpen: boolean;
   items: NavRouteItem[];
   label: string;
   onOpenChange: (isOpen: boolean) => void;
   summary?: string;
+  nativeDisclosure?: boolean;
 }) {
   const pathname = usePathname();
   const hasActiveItem = items.some((item) => (item.href ? isHrefActive(pathname, item.href) : false));
@@ -96,20 +98,27 @@ function NavMenu({
   return (
     <details
       className={["topbar-menu", hasActiveItem ? "is-active" : ""].filter(Boolean).join(" ")}
-      open={isOpen}
+      open={nativeDisclosure ? undefined : isOpen}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
+          if (nativeDisclosure) event.currentTarget.open = false;
           onOpenChange(false);
           event.currentTarget.querySelector("summary")?.focus();
         }
       }}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onOpenChange(false);
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          if (nativeDisclosure) event.currentTarget.open = false;
+          onOpenChange(false);
+        }
       }}
     >
       <summary
         className="topbar-menu-trigger"
         onClick={(event) => {
+          // Refined utilities use native disclosure before and after hydration.
+          // React must not reset an early keyboard activation to its initial state.
+          if (nativeDisclosure) return;
           // Keep one state transition per click, including keyboard activation.
           // Native toggle events must not race React's controlled open state.
           event.preventDefault();
@@ -137,7 +146,13 @@ function NavMenu({
                   .filter(Boolean)
                   .join(" ")}
                 href={item.href}
-                onClick={() => onOpenChange(false)}
+                onClick={(event) => {
+                  if (nativeDisclosure) {
+                    const menu = event.currentTarget.closest("details");
+                    if (menu) menu.open = false;
+                  }
+                  onOpenChange(false);
+                }}
               >
                 <span className="topbar-menu-icon" aria-hidden="true" />
                 <span className="topbar-menu-copy">
@@ -414,6 +429,7 @@ export function SiteTopbar({
               isOpen={openMenuKey === "utilities"}
               items={HEADER_UTILITY_LINKS}
               label="More"
+              nativeDisclosure
               onOpenChange={(isOpen) => handleMenuOpenChange("utilities", isOpen)}
             />
           ) : null}
@@ -427,6 +443,7 @@ export function SiteTopbar({
                 { href: "/cart", label: "Favourites", description: "Watch offers for later review." },
               ]}
               label="Account"
+              nativeDisclosure={refinedHeader}
               summary="Manage your saved and private workspace."
               onOpenChange={(isOpen) => handleMenuOpenChange("account", isOpen)}
             />

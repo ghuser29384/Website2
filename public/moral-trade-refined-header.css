@@ -276,3 +276,21 @@ body .mt-refined-header.mt-refined-header .topbar-actions .button-secondary:focu
   background: transparent !important;
   color: #fff !important;
 }
+
+/* Refined utilities must remain visible; legacy shells hide account menus on
+ * narrow screens and replace their labels with avatar-only decoration. */
+.mt-refined-header.mt-refined-header .topbar-actions .topbar-menu {
+  display: block;
+}
+.mt-refined-header.mt-refined-header .topbar-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  overflow: visible;
+}
+.mt-refined-header.mt-refined-header .topbar-menu-trigger span:first-child::before {
+  content: none;
+}
+.mt-refined-header.mt-refined-header .topbar-menu-panel {
+  min-width: 0;
+}

@@ -55,22 +55,27 @@ test("Profile owns priorities and a legacy Sparks URL preserves the authenticate
   expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
 });
 
-test("secondary utilities support keyboard disclosure and native page navigation", async ({ page }) => {
-  for (const route of ["/feed", "/profile"]) {
-    await page.goto(route);
-    const header = page.locator(".mt-refined-header").first();
-    const summary = header.locator("summary").filter({ hasText: "More" });
-    await summary.focus();
-    await page.keyboard.press("Enter");
-    await expect(header.getByRole("link", { name: "Messages", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(summary).toBeFocused();
-    await expect(header.getByRole("link", { name: "Messages", exact: true })).not.toBeVisible();
-    const trades = header.locator('[data-mt-primary-links] a[href="/discover"]');
-    await trades.click();
-    await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
-  }
-});
+for (const width of [1280, 390, 320]) {
+  test(`secondary utilities support keyboard disclosure at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 950 });
+    for (const route of ["/feed", "/profile", "/contact"]) {
+      await page.goto(route);
+      const header = page.locator(".mt-refined-header").first();
+      const summary = header.locator("summary").filter({ hasText: "More" });
+      await expect(summary).toBeVisible();
+      await summary.focus();
+      await expect(summary).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(header.getByRole("link", { name: "Messages", exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(summary).toBeFocused();
+      await expect(header.getByRole("link", { name: "Messages", exact: true })).not.toBeVisible();
+      const trades = header.locator('[data-mt-primary-links] a[href="/discover"]');
+      await trades.click();
+      await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
+    }
+  });
+}
 
 test("the directory masthead keeps native page links usable without JavaScript", async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
