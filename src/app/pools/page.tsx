@@ -19,7 +19,6 @@ import {
   getSmartQueryCauseLabel,
   matchesSmartAmountConstraint,
   matchesSmartDeadlineConstraint,
-  matchesSmartVerificationConstraint,
   parseSerializedSmartQueryFacets,
   parseSmartQuery,
   type SmartQueryFacets,
@@ -29,10 +28,6 @@ import {
   mergeSmartQueryFacets,
 } from "@/lib/smart-query-facets";
 import { loadSmartQueryCausePriorities } from "@/lib/smart-query-personalization";
-import {
-  evidenceTextQuality,
-  isVerifiedEvidenceText,
-} from "@/lib/smart-query-records";
 import {
   smartCauseMatchScore,
   smartInterpretationScore,
@@ -62,22 +57,19 @@ interface PoolsPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-type PoolSort = "best_match" | "soonest_deadline" | "lowest_cost" | "most_verified";
+type PoolSort = "best_match" | "soonest_deadline" | "lowest_cost";
 
 interface RankedPoolRoute {
   causeIds: string[];
-  evidenceQuality: number;
   route: LiveGroupBuyingRoute;
   score: number;
   semanticRelevance: number;
-  verified: boolean;
 }
 
 const POOL_SORT_OPTIONS: ReadonlyArray<{ value: PoolSort; label: string }> = [
   { value: "best_match", label: "Best match" },
   { value: "soonest_deadline", label: "Soonest deadline" },
   { value: "lowest_cost", label: "Lowest maximum funding" },
-  { value: "most_verified", label: "Strongest evidence" },
 ];
 
 const mechanismFacts = [
@@ -166,13 +158,13 @@ function poolMatchesHardConstraints(
   route: LiveGroupBuyingRoute,
   facets: SmartQueryFacets,
   causeIds: readonly string[],
-  verified: boolean,
 ) {
   if (facets.causes.length) {
     const direct = facets.causes.some((cause) => causeIds.includes(cause));
     if (!direct && smartCauseMatchScore(facets.causes, poolFields(route)) < 0.42) return false;
   }
-  if (!matchesSmartVerificationConstraint(facets, verified)) return false;
+  // Proposed verification terms are not an independent evidence-review state.
+  if (facets.verified !== null || facets.evidenceStates.length) return false;
   if (!matchesSmartAmountConstraint(facets, [route.targetFundingCents])) return false;
   if (!matchesSmartDeadlineConstraint(facets, route.deadlineAt)) return false;
   if (facets.actionTypes.length && !facets.actionTypes.includes("pool")) return false;
@@ -202,8 +194,7 @@ function rankPoolRoutes(
   const ranked = routes
     .map((route): RankedPoolRoute | null => {
       const causeIds = routeCauseIds(route);
-      const verified = isVerifiedEvidenceText(route.verificationSummary);
-      if (!poolMatchesHardConstraints(route, facets, causeIds, verified)) return null;
+      if (!poolMatchesHardConstraints(route, facets, causeIds)) return null;
 
       const semanticRelevance = smartInterpretationScore(interpretation, poolFields(route));
       if (
@@ -212,15 +203,14 @@ function rankPoolRoutes(
       ) {
         return null;
       }
-      const evidenceQuality = evidenceTextQuality(route.verificationSummary);
       const score = smartDiscoveryScore({
         semanticRelevance,
-        evidenceQuality,
+        evidenceQuality: null,
         personalMoralFit: smartPersonalPriorityScore(causeIds, personalPriorities),
         deadlineUrgency: getSmartDeadlineUrgency(route.deadlineAt),
         credit: 0,
       });
-      return { causeIds, evidenceQuality, route, score, semanticRelevance, verified };
+      return { causeIds, route, score, semanticRelevance };
     })
     .filter((entry): entry is RankedPoolRoute => Boolean(entry));
 
@@ -239,10 +229,6 @@ function rankPoolRoutes(
       if (sort === "lowest_cost") {
         return left.route.targetFundingCents - right.route.targetFundingCents ||
           right.score - left.score || left.route.id.localeCompare(right.route.id);
-      }
-      if (sort === "most_verified") {
-        return right.evidenceQuality - left.evidenceQuality || right.score - left.score ||
-          left.route.id.localeCompare(right.route.id);
       }
       return right.score - left.score ||
         right.semanticRelevance - left.semanticRelevance ||
@@ -282,7 +268,7 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
   const readiness = snapshot.paymentReadiness;
   const activeConstraints = [
     ...facets.causes.map((cause) => `Cause: ${getSmartQueryCauseLabel(cause)}`),
-    facets.verified === true ? "Verified evidence" : facets.verified === false ? "No verified evidence" : null,
+    facets.verified !== null || facets.evidenceStates.length ? "Structured evidence state unavailable on this inventory" : null,
     moneyConstraintLabel(facets),
     facets.deadlineBefore
       ? `${facets.deadlineBeforeInclusive ? "By" : "Before"} ${facets.deadlineBefore}`

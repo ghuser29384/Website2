@@ -3,7 +3,6 @@ import Link from "next/link";
 import { toggleCartAction } from "@/app/actions";
 import { groupOffersByUnderlyingAction } from "@/lib/marketplace-participant-groups";
 import { formatMode } from "@/lib/offers";
-import { isVerifiedEvidenceText } from "@/lib/smart-query-records";
 import type { Database } from "@/lib/supabase/database.types";
 
 import styles from "./participant-offer-group.module.css";
@@ -79,7 +78,6 @@ export function ParticipantOfferGroup({
           const counterofferHref = `/offers/new?mode=${offer.mode}&source_offer=${offer.id}`;
           const isOwner = viewerId === offer.owner_id;
           const saved = savedOfferIds.has(offer.id);
-          const verified = isVerifiedEvidenceText(offer.verification);
           const offerHeadingId = `offer-${offer.id}-heading`;
           const offerDescriptionId = `offer-${offer.id}-description`;
 
@@ -114,7 +112,7 @@ export function ParticipantOfferGroup({
 
               <ul aria-label="Proposal summary" className={styles.meta} id={offerDescriptionId}>
                 <li>{offer.duration}</li>
-                <li>{verified ? "Named verification evidence" : "Verification terms stated"}</li>
+                <li>Verification terms stated · review state not inferred</li>
                 <li>Open · Exact published proposal</li>
               </ul>
 
@@ -148,7 +146,7 @@ export function ParticipantOfferGroup({
                     </div>
                     <div>
                       <dt>Evidence status</dt>
-                      <dd>{verified ? "Named verification evidence" : "Verification terms stated"}</dd>
+                      <dd>Terms stated; independent review state is not attached here</dd>
                     </div>
                     <div>
                       <dt>Terms note</dt>

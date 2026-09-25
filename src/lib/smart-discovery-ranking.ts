@@ -1,6 +1,6 @@
 export interface SmartDiscoverySignals {
   semanticRelevance: number;
-  evidenceQuality: number;
+  evidenceQuality: number | null;
   personalMoralFit: number;
   deadlineUrgency: number;
   credit: number;
@@ -24,13 +24,19 @@ function clamp(value: number) {
  * personal moral fit, deadline urgency, and a deliberately modest credit signal.
  */
 export function smartDiscoveryScore(signals: SmartDiscoverySignals) {
-  return (
-    SMART_DISCOVERY_WEIGHTS.semanticRelevance * clamp(signals.semanticRelevance) +
-    SMART_DISCOVERY_WEIGHTS.evidenceQuality * clamp(signals.evidenceQuality) +
-    SMART_DISCOVERY_WEIGHTS.personalMoralFit * clamp(signals.personalMoralFit) +
-    SMART_DISCOVERY_WEIGHTS.deadlineUrgency * clamp(signals.deadlineUrgency) +
-    SMART_DISCOVERY_WEIGHTS.credit * clamp(signals.credit)
+  const weightedSignals = [
+    [SMART_DISCOVERY_WEIGHTS.semanticRelevance, signals.semanticRelevance],
+    [SMART_DISCOVERY_WEIGHTS.evidenceQuality, signals.evidenceQuality],
+    [SMART_DISCOVERY_WEIGHTS.personalMoralFit, signals.personalMoralFit],
+    [SMART_DISCOVERY_WEIGHTS.deadlineUrgency, signals.deadlineUrgency],
+    [SMART_DISCOVERY_WEIGHTS.credit, signals.credit],
+  ] as const;
+  const available = weightedSignals.filter(
+    (entry): entry is readonly [number, number] => entry[1] !== null,
   );
+  const totalWeight = available.reduce((sum, [weight]) => sum + weight, 0);
+  if (!totalWeight) return 0;
+  return available.reduce((sum, [weight, value]) => sum + weight * clamp(value), 0) / totalWeight;
 }
 
 export function normalizeCreditSignal(value: number | null | undefined) {

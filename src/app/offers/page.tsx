@@ -22,7 +22,6 @@ import {
   getSmartQueryCauseLabel,
   matchesSmartAmountConstraint,
   matchesSmartDeadlineConstraint,
-  matchesSmartVerificationConstraint,
   parseSerializedSmartQueryFacets,
   parseSmartQuery,
   serializeSmartQueryFacets,
@@ -97,18 +96,16 @@ type OfferMode = OfferRow["mode"];
 type ModeFilter = "all" | OfferMode;
 type OfferSort = Extract<
   SmartQuerySort,
-  "best_match" | "newest" | "lowest_cost" | "most_verified" | "soonest_deadline" | "highest_credit"
+  "best_match" | "newest" | "lowest_cost" | "soonest_deadline" | "highest_credit"
 >;
 
 interface RankedOffer {
   amountCents: number[];
   causeIds: string[];
   deadline: string | null;
-  evidenceQuality: number;
   offer: OfferRow;
   score: number;
   semanticRelevance: number;
-  verified: boolean;
 }
 
 interface LiveOffersResult {
@@ -131,7 +128,6 @@ const MODE_OPTIONS: ReadonlyArray<{ value: ModeFilter; label: string }> = [
 
 const SORT_OPTIONS: ReadonlyArray<{ value: OfferSort; label: string }> = [
   { value: "best_match", label: "Best match" },
-  { value: "most_verified", label: "Strongest evidence" },
   { value: "soonest_deadline", label: "Soonest deadline" },
   { value: "lowest_cost", label: "Lowest stated cost" },
   { value: "highest_credit", label: "Highest transaction credit" },
@@ -209,7 +205,6 @@ function offerMatchesHardConstraints(
   causeIds: readonly string[],
   amountCents: readonly number[],
   deadline: string | null,
-  verified: boolean,
 ) {
   if (facets.actionTypes.length) {
     const modeMatches = facets.actionTypes.some((actionType) => actionType === offer.mode);
@@ -219,7 +214,8 @@ function offerMatchesHardConstraints(
     const causeScore = smartCauseMatchScore(facets.causes, offerTextFields(offer));
     if (causeScore < 0.42 && !facets.causes.some((cause) => causeIds.includes(cause))) return false;
   }
-  if (!matchesSmartVerificationConstraint(facets, verified)) return false;
+  // Free-form verification terms are not a reviewed evidence state.
+  if (facets.verified !== null || facets.evidenceStates.length) return false;
   if (!strictAmountMatch(facets, amountCents)) return false;
   if (!matchesSmartDeadlineConstraint(facets, deadline)) return false;
   if (facets.minCredit !== null && normalizeCreditSignal(offer.trust_level) * 100 < facets.minCredit) {
@@ -242,8 +238,6 @@ function rankOffer(
     [offer.duration, offer.discount_note, offer.notes, offer.request_action, offer.offer_action],
     now,
   );
-  const verified = isVerifiedEvidenceText(offer.verification);
-  const evidenceQuality = evidenceTextQuality(offer.verification);
   const semanticRelevance = smartInterpretationScore(interpretation, fields);
 
   if (
@@ -253,7 +247,6 @@ function rankOffer(
       causeIds,
       amountCents,
       deadline,
-      verified,
     )
   ) {
     return null;
@@ -266,7 +259,7 @@ function rankOffer(
 
   const score = smartDiscoveryScore({
     semanticRelevance,
-    evidenceQuality,
+    evidenceQuality: null,
     personalMoralFit: smartPersonalPriorityScore(causeIds, personalPriorities),
     deadlineUrgency: getSmartDeadlineUrgency(deadline, now),
     credit: normalizeCreditSignal(offer.trust_level),
@@ -276,11 +269,9 @@ function rankOffer(
     amountCents,
     causeIds,
     deadline,
-    evidenceQuality,
     offer,
     score,
     semanticRelevance,
-    verified,
   };
 }
 
@@ -294,10 +285,6 @@ function sortRankedOffers(items: RankedOffer[], sort: OfferSort) {
       const leftAmount = left.amountCents.length ? Math.max(...left.amountCents) : Number.POSITIVE_INFINITY;
       const rightAmount = right.amountCents.length ? Math.max(...right.amountCents) : Number.POSITIVE_INFINITY;
       return leftAmount - rightAmount || right.score - left.score || left.offer.id.localeCompare(right.offer.id);
-    }
-    if (sort === "most_verified") {
-      return right.evidenceQuality - left.evidenceQuality || right.score - left.score ||
-        left.offer.id.localeCompare(right.offer.id);
     }
     if (sort === "soonest_deadline") {
       const leftDeadline = left.deadline ? Date.parse(left.deadline) : Number.POSITIVE_INFINITY;
@@ -546,7 +533,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
   const activeConstraintLabels = [
     ...facets.causes.map((cause) => `Cause: ${getSmartQueryCauseLabel(cause)}`),
-    facets.verified === true ? "Verified only" : facets.verified === false ? "Unverified only" : null,
+    facets.verified !== null || facets.evidenceStates.length ? "Structured evidence state unavailable" : null,
     formatMoneyConstraint(facets),
     facets.deadlineBefore ? `${facets.deadlineBeforeInclusive ? "By" : "Before"} ${facets.deadlineBefore}` : null,
     facets.minCredit !== null ? `Credit ≥ ${facets.minCredit}` : null,
