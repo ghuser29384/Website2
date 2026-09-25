@@ -56,7 +56,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const defaultGoal = walkthroughDraft?.primaryGoal ?? actionFirstGoals[0]?.value;
   const defaultParticipantKind = walkthroughDraft?.participantKind ?? PARTICIPANT_KINDS[0]?.value;
   const defaultCauseAreas = new Set(
-    walkthroughDraft ? [walkthroughDraft.causeArea] : COHORT_CAUSES.slice(0, 2),
+    walkthroughDraft ? [walkthroughDraft.causeArea] : [],
   );
   const defaultFirstAction = walkthroughDraft?.firstAction ?? actionFirstActions[0]?.value;
 
@@ -191,7 +191,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   </fieldset>
 
                   <fieldset className="field onboarding-fieldset">
-                    <legend>Cause areas</legend>
+                    <legend>Cause areas <span className="muted">(optional)</span></legend>
                     <div className="onboarding-inline-grid">
                       {COHORT_CAUSES.map((cause) => (
                         <label className="onboarding-radio" key={cause}>
@@ -243,6 +243,15 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                       placeholder="Optional: who invited you or where you heard about Moral Trade"
                     />
                   </label>
+
+                  <label className="onboarding-radio">
+                    <input name="email_nurture_opt_in" type="checkbox" value="on" />
+                    <span>Email me optional onboarding tips and product updates.</span>
+                  </label>
+                  <p className="panel-note">
+                    Leave this unchecked for no marketing or nurture email. Account-security and
+                    transaction messages are handled separately.
+                  </p>
 
                   <button className="button button-primary" type="submit">
                     {isWalkthroughProfile ? "Save completed profile" : "Save and start"}

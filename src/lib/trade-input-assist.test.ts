@@ -29,6 +29,7 @@ const migrationSource = readRepoFile(
 
 interface AssistApi {
   autoResolveDelayMs: number;
+  autoRewriteEnabled: boolean;
   composeCommitmentSuggestions(
     query: string,
     options?: { topicHint?: string },
@@ -238,17 +239,12 @@ test("insertions, deletions, and transpositions resolve across every canonical l
   assert.equal(mutationCount, 165);
 });
 
-test("automatic resolution is delayed, undoable, and IME-safe", async () => {
+test("canonical suggestions never rewrite trade terms without explicit selection", async () => {
   const assist = await loadAssistApi();
-
-  assert.equal(assist.autoResolveDelayMs, 650);
-  assert.match(assistSource, /Changed “\$\{previousValue\}” to “\$\{canonicalValue\}”/);
-  assert.match(assistSource, /undo\.textContent = "Undo"/);
-  assert.match(assistSource, /ignoredCorrectionKeys/);
-  assert.match(assistSource, /correctionElementKey/);
-  assert.match(assistSource, /compositionstart/);
-  assert.match(assistSource, /compositionend/);
-  assert.match(assistSource, /ignoredCorrectionValues/);
+  assert.equal(assist.autoRewriteEnabled, false);
+  assert.match(assistSource, /const AUTO_REWRITE_ENABLED = false/);
+  assert.match(assistSource, /if \(!AUTO_REWRITE_ENABLED\) return false/);
+  assert.match(assistSource, /function selectSuggestion/);
 });
 
 test("the shared catalog covers every standardized trade-term context", () => {

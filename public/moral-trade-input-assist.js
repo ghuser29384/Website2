@@ -7,6 +7,8 @@
   const CATALOG_URL = "/moral-trade-input-standards.json";
   const MAX_RESULTS = 7;
   const AUTO_RESOLVE_DELAY_MS = 650;
+  // Suggestions remain available, but trade terms never rewrite without explicit selection.
+  const AUTO_REWRITE_ENABLED = false;
   const AUTO_RESOLVE_MIN_CONFIDENCE = 0.88;
   const AUTO_RESOLVE_MIN_MARGIN = 0.08;
   const MAX_TOPIC_TOKENS = 8;
@@ -775,6 +777,7 @@
   }
 
   function correctElement(element, context, options = {}) {
+    if (!AUTO_REWRITE_ENABLED) return false;
     if (!element || !AUTO_RESOLVE_CONTEXTS.has(context)) return false;
     const currentValue = elementValue(element).trim();
     if (!currentValue) return false;
@@ -1368,6 +1371,7 @@
 
   window.MoralTradeInputAssist = {
     autoResolveDelayMs: AUTO_RESOLVE_DELAY_MS,
+    autoRewriteEnabled: AUTO_REWRITE_ENABLED,
     composeCommitmentSuggestions,
     contextOptionsForElement,
     correctElement,
