@@ -1,0 +1,115 @@
+name: Release and verify compact Profile account section
+on:
+  push:
+    branches: [ops/profile-account-release-20260926]
+    paths:
+      - .github/workflows/profile-account-release-20260926.yml
+      - scripts/profile-account-canonical.mjs
+permissions:
+  contents: read
+concurrency:
+  group: profile-account-release-843
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      run: ${{ steps.release.outputs.run }}
+    steps:
+      - uses: actions/github-script@v7
+        id: release
+        with:
+          script: |
+            const repo = { owner: 'ghuser29384', repo: 'Website2' };
+            if (context.repo.owner !== repo.owner || context.repo.repo !== repo.repo) throw new Error('Wrong repository');
+            const expectedHead = '3434139dc122e008ef0f56eeea8b73477632d28d';
+            const expectedTree = '701c9349af45d194fac4bbdf2a180bd7b04f68c4';
+            const pr = (await github.rest.pulls.get({ ...repo, pull_number: 843 })).data;
+            if (!pr.merged || pr.head.sha !== expectedHead || pr.base.ref !== 'main') throw new Error('Verified PR is not the merged candidate');
+            const sha = pr.merge_commit_sha;
+            const current = (await github.rest.git.getRef({ ...repo, ref: 'heads/main' })).data.object.sha;
+            if (current !== sha) throw new Error('Main advanced; inspect before release');
+            const commit = (await github.rest.git.getCommit({ ...repo, commit_sha: sha })).data;
+            if (commit.tree.sha !== expectedTree) throw new Error('Merged tree differs from reviewed integration');
+            const gate = (await github.rest.actions.getWorkflowRun({ ...repo, run_id: 36211127714 })).data;
+            if (gate.head_sha !== expectedHead || gate.status !== 'completed' || gate.conclusion !== 'success') throw new Error('Exact integrated candidate QA did not pass');
+            const workflow = (await github.rest.repos.getContent({ ...repo, path: '.github/workflows/vercel-release.yml', ref: sha })).data;
+            if (workflow.sha !== 'e219e99d25279161b89eee80fc410912c3561a19') throw new Error('Release workflow changed');
+            const list = async () => (await github.rest.actions.listWorkflowRuns({ ...repo, workflow_id: 'vercel-release.yml', head_sha: sha, event: 'workflow_dispatch', per_page: 30 })).data.workflow_runs.filter(r => r.head_sha === sha);
+            let runs = await list();
+            if (!runs.length) {
+              await github.rest.actions.createWorkflowDispatch({ ...repo, workflow_id: 'vercel-release.yml', ref: 'main', inputs: { target: 'production', ref: 'main', expected_sha: sha } });
+              for (let attempt = 0; attempt < 18 && !runs.length; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                runs = await list();
+              }
+            }
+            if (!runs.length) throw new Error('Dispatch accepted but run not found; do not duplicate deployment');
+            const run = runs[0];
+            if (run.status === 'completed' && run.conclusion !== 'success') throw new Error('Existing release did not succeed; inspect failure');
+            core.setOutput('sha', sha);
+            core.setOutput('run', String(run.id));
+            core.notice(`Normal gated release ${run.id}, exact source ${sha}`);
+  canonical:
+    needs: dispatch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    env:
+      EXPECTED_SHA: ${{ needs.dispatch.outputs.sha }}
+      RELEASE_RUN: ${{ needs.dispatch.outputs.run }}
+      EVIDENCE_DIR: ${{ runner.temp }}/profile-account-canonical
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.dispatch.outputs.sha }}
+          path: app
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: ops
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Prepare locked read-only browser tooling
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+      - name: Wait for this exact normal gated release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = { owner: 'ghuser29384', repo: 'Website2' };
+            for (let attempt = 0; attempt < 160; attempt++) {
+              const run = (await github.rest.actions.getWorkflowRun({ ...repo, run_id: Number(process.env.RELEASE_RUN) })).data;
+              if (run.head_sha !== process.env.EXPECTED_SHA) throw new Error('Release identity changed');
+              if (run.status === 'completed') {
+                if (run.conclusion !== 'success') throw new Error(`Release ${run.conclusion}; no production success claim`);
+                return;
+              }
+              await new Promise(resolve => setTimeout(resolve, 15000));
+            }
+            throw new Error('Release still pending; no production success claim');
+      - name: Verify real canonical Profile rendering and navigation without account writes
+        working-directory: app
+        run: node --input-type=module < ../ops/scripts/profile-account-canonical.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-account-canonical-${{ needs.dispatch.outputs.sha }}
+          path: ${{ runner.temp }}/profile-account-canonical
+          if-no-files-found: warn
+          retention-days: 7
