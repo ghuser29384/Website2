@@ -1,0 +1,135 @@
+name: Generate and validate authoritative pre-activation Supabase baseline
+
+on:
+  push:
+    branches:
+      - database/preactivation-schema-baseline-20260818
+    paths:
+      - scripts/database/generate-preactivation-baseline.trigger
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preactivation-baseline-generation
+  cancel-in-progress: false
+
+jobs:
+  generate-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      SOURCE_HEAD: ${{ github.sha }}
+      SOURCE_MAIN: f1cd364bf058b28b3b29501aa6528c48f8f39bb7
+      TARGET_BRANCH: database/preactivation-schema-baseline-20260818
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact generator source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact repository dependencies
+        run: npm ci
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Generate the production-derived data-free baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          bash scripts/database/generate-preactivation-baseline.sh
+
+      - name: Verify source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/database-preactivation-baseline-contract.test.ts
+          npx eslint src/lib/database-preactivation-baseline-contract.test.ts
+          git diff --check
+
+      - name: Reconstruct the pre-activation catalog in a clean local Supabase stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/database/validate-preactivation-baseline.sh \
+            "$GITHUB_WORKSPACE/artifacts/preactivation-baseline-clean-room"
+
+      - name: Run repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit --pretty false
+          npm run build
+
+      - name: Commit and push only the validated generated boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$SOURCE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/baseline/pre_activation \
+            src/lib/database-preactivation-baseline-contract.test.ts
+          git commit -m "Capture authoritative pre-activation Supabase baseline"
+          RESULT_HEAD="$(git rev-parse HEAD)"
+          git push origin "HEAD:$TARGET_BRANCH"
+          printf 'result_head=%s\nresult_tree=%s\n' \
+            "$RESULT_HEAD" \
+            "$(git rev-parse HEAD^{tree})" \
+            >> "${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}/manifests/result.txt"
+
+      - name: Package privacy-safe generation and clean-room evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          GENERATED="${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}"
+          mkdir -p evidence/generation evidence/clean-room
+          if [[ -d "$GENERATED/manifests" ]]; then
+            cp -R "$GENERATED/manifests" evidence/generation/
+          fi
+          if [[ -d "$GENERATED/logs" ]]; then
+            cp -R "$GENERATED/logs" evidence/generation/
+          fi
+          if [[ -d artifacts/preactivation-baseline-clean-room ]]; then
+            cp -R artifacts/preactivation-baseline-clean-room/. evidence/clean-room/
+          fi
+          if grep -RIl \
+              'postgresql\?://\|eyJ[A-Za-z0-9_-]\{20,\}' \
+              evidence 2>/dev/null > evidence/credential-scan-matches.txt; then
+            test ! -s evidence/credential-scan-matches.txt
+          fi
+          find evidence -type f -print0 | sort -z | xargs -0 -r sha256sum \
+            > evidence/artifact-sha256.txt
+
+      - name: Upload generation and clean-room evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preactivation-baseline-generation-${{ github.run_id }}
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 21

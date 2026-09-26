@@ -1,0 +1,75 @@
+name: Synchronize PR 770 and trigger authoritative baseline generation
+
+on:
+  push:
+    branches:
+      - database/preactivation-schema-baseline-20260818
+    paths:
+      - .github/workflows/sync-pr770-and-trigger-generation.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-pr770-and-trigger-generation
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: database/preactivation-schema-baseline-20260818
+  EXPECTED_PARENT: da78519e43420a604a9a2c8edf6400c25dbaa9c0
+  EXPECTED_MAIN: 66818481c7b77b001e72fdd1a7698a5ab3b3e447
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: database/preactivation-schema-baseline-20260818
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Merge exact current main without rewriting history
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          git fetch --no-tags origin main "$TARGET_BRANCH"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$(git rev-parse HEAD)"
+          test -z "$(git status --porcelain)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-ff --no-edit origin/main
+
+      - name: Rebind the generator to the synchronized main and trigger it
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/generate-preactivation-baseline.yml')
+          text = workflow.read_text()
+          old = '      SOURCE_MAIN: f1cd364bf058b28b3b29501aa6528c48f8f39bb7\n'
+          new = '      SOURCE_MAIN: 66818481c7b77b001e72fdd1a7698a5ab3b3e447\n'
+          if text.count(old) != 1:
+              raise SystemExit('The expected SOURCE_MAIN binding was not unique.')
+          workflow.write_text(text.replace(old, new))
+
+          trigger = Path('scripts/database/generate-preactivation-baseline.trigger')
+          trigger.write_text(
+              'issue-714 authoritative pre-activation baseline generation\n'
+              'source-main=66818481c7b77b001e72fdd1a7698a5ab3b3e447\n'
+              'requested-at=2026-08-19T06:30:00Z\n'
+              'purpose=complete-reviewed-clean-room-boundary\n'
+          )
+          PY
+          bash -n scripts/database/generate-preactivation-baseline.sh
+          git diff --check
+          git add \
+            .github/workflows/generate-preactivation-baseline.yml \
+            scripts/database/generate-preactivation-baseline.trigger
+          git commit -m "Synchronize baseline generator with current main"
+          git push origin "HEAD:$TARGET_BRANCH"

@@ -1,0 +1,75 @@
+name: Repair pre-activation baseline generator v2
+
+on:
+  push:
+    branches:
+      - database/preactivation-schema-baseline-20260818
+    paths:
+      - .github/workflows/repair-preactivation-baseline-generator-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-preactivation-baseline-generator-v2
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: database/preactivation-schema-baseline-20260818
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: database/preactivation-schema-baseline-20260818
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Execute the reviewed deterministic patch embedded in v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          source = Path('.github/workflows/repair-preactivation-baseline-generator.yml').read_text()
+          start_marker = "          python3 - <<'PY'\n"
+          end_marker = "\n          PY\n\n          bash -n scripts/database/generate-preactivation-baseline.sh"
+          start = source.find(start_marker)
+          end = source.find(end_marker, start + len(start_marker))
+          if start < 0 or end < 0:
+              raise SystemExit('Could not locate the reviewed repair program in v1.')
+          program = textwrap.dedent(source[start + len(start_marker):end])
+          compile(program, '<preactivation-generator-repair>', 'exec')
+          exec(program, {'__name__': '__main__'})
+          PY
+
+          bash -n scripts/database/generate-preactivation-baseline.sh
+          bash -n scripts/database/validate-preactivation-baseline.sh
+          python3 - <<'PY'
+          import yaml
+          from pathlib import Path
+          for path in (
+              '.github/workflows/generate-preactivation-baseline.yml',
+              '.github/workflows/validate-preactivation-baseline.yml',
+          ):
+              yaml.safe_load(Path(path).read_text())
+          PY
+          git diff --check
+
+      - name: Commit and push normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            scripts/database/generate-preactivation-baseline.sh \
+            scripts/database/validate-preactivation-baseline.sh \
+            .github/workflows/generate-preactivation-baseline.yml
+          git commit -m 'Harden pre-activation baseline capture boundary'
+          git push origin "HEAD:$TARGET_BRANCH"

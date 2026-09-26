@@ -1,0 +1,56 @@
+name: Repair pre-activation catalog role boundary
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - .github/workflows/repair-preactivation-catalog-role-boundary.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-preactivation-catalog-role-boundary-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'database/preactivation-schema-baseline-20260818'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Restrict normalized privilege comparison to application roles
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/database/preactivation-catalog.sql')
+          text = path.read_text()
+          old = "(values ('anon'), ('authenticated'), ('service_role'), ('authenticator'), ('supabase_auth_admin'))"
+          new = "(values ('anon'), ('authenticated'), ('service_role'))"
+          count = text.count(old)
+          if count != 3:
+              raise SystemExit(f'Expected three application-role lists, found {count}.')
+          path.write_text(text.replace(old, new))
+          PY
+          git diff --check
+
+      - name: Commit and push normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/database/preactivation-catalog.sql
+          git commit -m 'Scope baseline catalog privileges to application roles'
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"

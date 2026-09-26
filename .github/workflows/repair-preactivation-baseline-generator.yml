@@ -1,0 +1,498 @@
+name: Repair pre-activation baseline generator
+
+on:
+  push:
+    branches:
+      - database/preactivation-schema-baseline-20260818
+    paths:
+      - .github/workflows/repair-preactivation-baseline-generator.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-preactivation-baseline-generator
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HEAD: acd243101e88d4992b281bf8c889022d3fe14010
+  TARGET_BRANCH: database/preactivation-schema-baseline-20260818
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: database/preactivation-schema-baseline-20260818
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Apply deterministic generator and validator repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new)
+
+          generator_path = Path("scripts/database/generate-preactivation-baseline.sh")
+          generator = generator_path.read_text()
+
+          generator = replace_once(
+              generator,
+              'EXTENSIONS="$WORK_DIR/extensions.sql"\nBASELINE_TMP=',
+              'EXTENSIONS="$WORK_DIR/extensions.sql"\n'
+              'EXTENSION_MANIFEST="$WORK_DIR/extensions.tsv"\n'
+              'AUTH_TRIGGERS="$WORK_DIR/auth-user-triggers.sql"\n'
+              'SOURCE_CATALOG_AFTER="$WORK_DIR/source-catalog-after.tsv"\n'
+              'SOURCE_CATALOG_AFTER_NORMALIZED="$WORK_DIR/source-catalog-after.normalized.tsv"\n'
+              'BASELINE_TMP=',
+              "generator work files",
+          )
+
+          generator = replace_once(
+              generator,
+              '''psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\\t' -c "
+          select version, name
+          from supabase_migrations.schema_migrations
+          order by version, name;
+          " > "$MIGRATION_HISTORY"
+          ''',
+              '''psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\\t' -c "
+          select
+            to_jsonb(m) ->> 'version' as version,
+            coalesce(to_jsonb(m) ->> 'name', '') as name,
+            case
+              when coalesce(to_jsonb(m) ->> 'created_by', '') = '' then ''
+              when to_jsonb(m) ->> 'created_by' in ('postgres', 'supabase_admin')
+                then to_jsonb(m) ->> 'created_by'
+              when to_jsonb(m) ->> 'created_by' like 'chatgpt:%' then 'chatgpt'
+              when to_jsonb(m) ->> 'created_by' like '%@%' then 'email_principal'
+              else 'other_principal'
+            end as created_by_class,
+            case
+              when jsonb_typeof(to_jsonb(m) -> 'statements') = 'array'
+                then jsonb_array_length(to_jsonb(m) -> 'statements')
+              else null
+            end as statement_count,
+            md5(coalesce((to_jsonb(m) -> 'statements')::text, '')) as statements_md5
+          from supabase_migrations.schema_migrations m
+          order by 1, 2;
+          " > "$MIGRATION_HISTORY"
+          ''',
+              "sanitized migration history",
+          )
+
+          generator = replace_once(
+              generator,
+              '''select format(
+            'create extension if not exists %I with schema %I;',
+            e.extname,
+            n.nspname
+          )
+          from pg_extension e
+          join pg_namespace n on n.oid = e.extnamespace
+          where e.extname not in ('plpgsql')
+          order by e.extname;
+          " > "$EXTENSIONS"
+          ''',
+              '''select format(
+            'create schema if not exists %I; create extension if not exists %I with schema %I;',
+            n.nspname,
+            e.extname,
+            n.nspname
+          )
+          from pg_extension e
+          join pg_namespace n on n.oid = e.extnamespace
+          where e.extname not in ('plpgsql')
+          order by e.extname;
+          " > "$EXTENSIONS"
+
+          psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\\t' -c "
+          select e.extname, n.nspname, e.extversion
+          from pg_extension e
+          join pg_namespace n on n.oid = e.extnamespace
+          where e.extname <> 'plpgsql'
+          order by e.extname;
+          " > "$EXTENSION_MANIFEST"
+
+          psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "
+          select format(
+            'drop trigger if exists %I on auth.users;%s%s;',
+            t.tgname,
+            E'\\n',
+            pg_get_triggerdef(t.oid, true)
+          )
+          from pg_trigger t
+          join pg_class c on c.oid = t.tgrelid
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_proc p on p.oid = t.tgfoid
+          join pg_namespace pn on pn.oid = p.pronamespace
+          where not t.tgisinternal
+            and n.nspname = 'auth'
+            and c.relname = 'users'
+            and pn.nspname in ('public', 'moral_trade_private')
+          order by t.tgname;
+          " > "$AUTH_TRIGGERS"
+          if [[ ! -s "$AUTH_TRIGGERS" ]]; then
+            echo "The production auth-to-profile trigger boundary is empty." >&2
+            exit 1
+          fi
+          ''',
+              "extension and auth trigger capture",
+          )
+
+          generator = replace_once(
+              generator,
+              '''Path(sys.argv[2]).write_text(normalized)
+          PY
+
+          cat > "$BASELINE_TMP" <<'SQL'
+          ''',
+              '''Path(sys.argv[2]).write_text(normalized)
+          PY
+
+          psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -f "$CATALOG_SQL" \\
+            > "$SOURCE_CATALOG_AFTER"
+          LC_ALL=C sort -u "$SOURCE_CATALOG_AFTER" > "$SOURCE_CATALOG_AFTER_NORMALIZED"
+          if ! cmp "$SOURCE_CATALOG_NORMALIZED" "$SOURCE_CATALOG_AFTER_NORMALIZED"; then
+            echo "The production catalog drifted during baseline capture." >&2
+            exit 1
+          fi
+
+          cat > "$BASELINE_TMP" <<'SQL'
+          ''',
+              "catalog drift guard",
+          )
+
+          generator = replace_once(
+              generator,
+              '''-- It intentionally precedes 20260814042516_account_activation_stage.sql.
+          -- Do not edit by hand; regenerate through generate-preactivation-baseline.yml.
+
+          \\set ON_ERROR_STOP on
+
+          begin;
+          ''',
+              '''-- The exact post-boundary activation migration is bound in manifest.json.
+          -- Do not edit by hand; regenerate through generate-preactivation-baseline.yml.
+
+          begin;
+          ''',
+              "portable baseline header",
+          )
+
+          generator = replace_once(
+              generator,
+              '''DECLARE
+            application_relation_count integer;
+          BEGIN
+          ''',
+              '''DECLARE
+            application_relation_count integer;
+            application_function_count integer;
+            application_auth_trigger_count integer;
+          BEGIN
+          ''',
+              "empty guard declarations",
+          )
+
+          generator = replace_once(
+              generator,
+              '''  IF application_relation_count <> 0 THEN
+            RAISE EXCEPTION
+              USING
+                ERRCODE = 'object_not_in_prerequisite_state',
+                MESSAGE = format(
+                  'Pre-activation baseline requires an empty application schema; found %s application relations.',
+                  application_relation_count
+                );
+            END IF;
+          END;
+          $baseline_guard$;
+          SQL
+          ''',
+              '''  SELECT count(*)
+            INTO application_function_count
+          FROM pg_proc p
+          JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname IN ('public', 'moral_trade_private')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pg_depend d
+              WHERE d.deptype = 'e'
+                AND d.classid = 'pg_proc'::regclass
+                AND d.objid = p.oid
+                AND d.objsubid = 0
+            );
+
+            SELECT count(*)
+              INTO application_auth_trigger_count
+            FROM pg_trigger t
+            JOIN pg_class c ON c.oid = t.tgrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_proc p ON p.oid = t.tgfoid
+            JOIN pg_namespace pn ON pn.oid = p.pronamespace
+            WHERE NOT t.tgisinternal
+              AND n.nspname = 'auth'
+              AND c.relname = 'users'
+              AND pn.nspname IN ('public', 'moral_trade_private');
+
+            IF application_relation_count <> 0
+               OR application_function_count <> 0
+               OR application_auth_trigger_count <> 0 THEN
+              RAISE EXCEPTION
+                USING
+                  ERRCODE = 'object_not_in_prerequisite_state',
+                  MESSAGE = format(
+                    'Pre-activation baseline requires an empty application schema; found %s relations, %s functions, and %s auth triggers.',
+                    application_relation_count,
+                    application_function_count,
+                    application_auth_trigger_count
+                  );
+            END IF;
+          END;
+          $baseline_guard$;
+          SQL
+          ''',
+              "complete empty guard",
+          )
+
+          generator = replace_once(
+              generator,
+              '''cat "$DUMP_NORMALIZED" >> "$BASELINE_TMP"
+          cat >> "$BASELINE_TMP" <<'SQL'
+
+          commit;
+          SQL
+          ''',
+              '''cat "$DUMP_NORMALIZED" >> "$BASELINE_TMP"
+          printf '\\n-- Application-owned trigger(s) on Supabase-managed auth.users.\\n' \\
+            >> "$BASELINE_TMP"
+          cat "$AUTH_TRIGGERS" >> "$BASELINE_TMP"
+          cat >> "$BASELINE_TMP" <<'SQL'
+
+          commit;
+          SQL
+          ''',
+              "cross-schema trigger append",
+          )
+
+          generator = replace_once(
+              generator,
+              '''  "$MIGRATION_HISTORY" \\
+            "$MANIFEST_TMP" <<'PY'
+          ''',
+              '''  "$MIGRATION_HISTORY" \\
+            "$EXTENSION_MANIFEST" \\
+            "$MANIFEST_TMP" <<'PY'
+          ''',
+              "manifest arguments",
+          )
+
+          generator = replace_once(
+              generator,
+              '''source_head, source_main, baseline_path, catalog_path, history_path, manifest_path = sys.argv[1:]
+          ''',
+              '''source_head, source_main, baseline_path, catalog_path, history_path, extension_path, manifest_path = sys.argv[1:]
+          ''',
+              "manifest assignment",
+          )
+
+          generator = replace_once(
+              generator,
+              '''history_lines = [line for line in Path(history_path).read_text().splitlines() if line]
+          catalog_lines = [line for line in Path(catalog_path).read_text().splitlines() if line]
+          ''',
+              '''history_lines = [line for line in Path(history_path).read_text().splitlines() if line]
+          catalog_lines = [line for line in Path(catalog_path).read_text().splitlines() if line]
+          extension_lines = [line for line in Path(extension_path).read_text().splitlines() if line]
+          ''',
+              "manifest input rows",
+          )
+
+          generator = replace_once(
+              generator,
+              '''        "source_migration_history.tsv": digest(history_path),
+              },
+              "counts": {
+                "catalog_rows": len(catalog_lines),
+                "migration_history_rows": len(history_lines),
+              },
+          ''',
+              '''        "source_migration_history.tsv": digest(history_path),
+                "source_extensions.tsv": digest(extension_path),
+              },
+              "counts": {
+                "catalog_rows": len(catalog_lines),
+                "migration_history_rows": len(history_lines),
+                "extension_rows": len(extension_lines),
+              },
+          ''',
+              "manifest extension file",
+          )
+
+          generator = replace_once(
+              generator,
+              '''  assert.doesNotMatch(sql, /complete_(?:walkthrough|profile)_activation_v1/);
+            assert.doesNotMatch(sql, /postgres(?:ql)?:\\/\\//);
+          ''',
+              '''  assert.doesNotMatch(sql, /complete_(?:walkthrough|profile)_activation_v1/);
+            assert.doesNotMatch(sql, /^\\\\(?:un)?restrict\\b/m);
+            assert.match(sql, /CREATE TRIGGER on_auth_profile_created/i);
+            assert.match(sql, /ON auth\\.users/i);
+            assert.doesNotMatch(sql, /postgres(?:ql)?:\\/\\//);
+          ''',
+              "contract trigger and portability checks",
+          )
+
+          generator = replace_once(
+              generator,
+              '''install -m 0644 "$MIGRATION_HISTORY" "$BASELINE_DIR/source_migration_history.tsv"
+          install -m 0644 "$MANIFEST_TMP" "$BASELINE_DIR/manifest.json"
+          ''',
+              '''install -m 0644 "$MIGRATION_HISTORY" "$BASELINE_DIR/source_migration_history.tsv"
+          install -m 0644 "$EXTENSION_MANIFEST" "$BASELINE_DIR/source_extensions.tsv"
+          install -m 0644 "$MANIFEST_TMP" "$BASELINE_DIR/manifest.json"
+          ''',
+              "install extension manifest",
+          )
+
+          generator = replace_once(
+              generator,
+              '''cp "$EVIDENCE_ROOT/manifests/source-session.txt" "$EVIDENCE_ROOT/manifests/"
+          cp "$EVIDENCE_ROOT/manifests/source-counts.json" "$EVIDENCE_ROOT/manifests/"
+          cp "$SOURCE_CATALOG_NORMALIZED" "$EVIDENCE_ROOT/manifests/source-catalog.tsv"
+          ''',
+              '''cp "$SOURCE_CATALOG_NORMALIZED" "$EVIDENCE_ROOT/manifests/source-catalog.tsv"
+          ''',
+              "remove same-file copies",
+          )
+
+          generator = replace_once(
+              generator,
+              '''cp "$MIGRATION_HISTORY" "$EVIDENCE_ROOT/manifests/source-migration-history.tsv"
+          cp "$MANIFEST_TMP" "$EVIDENCE_ROOT/manifests/manifest.json"
+          ''',
+              '''cp "$MIGRATION_HISTORY" "$EVIDENCE_ROOT/manifests/source-migration-history.tsv"
+          cp "$EXTENSION_MANIFEST" "$EVIDENCE_ROOT/manifests/source-extensions.tsv"
+          cp "$MANIFEST_TMP" "$EVIDENCE_ROOT/manifests/manifest.json"
+          ''',
+              "evidence extension manifest",
+          )
+
+          generator = replace_once(
+              generator,
+              '''printf 'manifest_sha256=%s\\n' "$(sha256sum "$BASELINE_DIR/manifest.json" | awk '{print $1}')" \\
+            >> "$EVIDENCE_ROOT/manifests/generated-files.txt"
+          ''',
+              '''printf 'extensions_sha256=%s\\n' "$(sha256sum "$BASELINE_DIR/source_extensions.tsv" | awk '{print $1}')" \\
+            >> "$EVIDENCE_ROOT/manifests/generated-files.txt"
+          printf 'manifest_sha256=%s\\n' "$(sha256sum "$BASELINE_DIR/manifest.json" | awk '{print $1}')" \\
+            >> "$EVIDENCE_ROOT/manifests/generated-files.txt"
+          ''',
+              "generated extension digest",
+          )
+
+          generator_path.write_text(generator)
+
+          validator_path = Path("scripts/database/validate-preactivation-baseline.sh")
+          validator = validator_path.read_text()
+          validator = replace_once(
+              validator,
+              'SOURCE_CATALOG="$BASELINE_DIR/source_catalog.tsv"\nCATALOG_SQL=',
+              'SOURCE_CATALOG="$BASELINE_DIR/source_catalog.tsv"\n'
+              'SOURCE_EXTENSIONS="$BASELINE_DIR/source_extensions.tsv"\n'
+              'CATALOG_SQL=',
+              "validator extension source",
+          )
+          validator = replace_once(
+              validator,
+              '''if [[ ! -s "$BASELINE_SQL" || ! -s "$SOURCE_CATALOG" ]]; then
+          ''',
+              '''if [[ ! -s "$BASELINE_SQL" || ! -s "$SOURCE_CATALOG" || ! -s "$SOURCE_EXTENSIONS" ]]; then
+          ''',
+              "validator inputs",
+          )
+          validator = replace_once(
+              validator,
+              '''test ! -s "$OUTPUT_DIR/catalog.diff"
+
+          if psql "$LOCAL_DB_URL"''',
+              '''test ! -s "$OUTPUT_DIR/catalog.diff"
+
+          psql "$LOCAL_DB_URL" -X -v ON_ERROR_STOP=1 -AtF $'\\t' -c "
+          select e.extname, n.nspname, e.extversion
+          from pg_extension e
+          join pg_namespace n on n.oid = e.extnamespace
+          where e.extname <> 'plpgsql'
+          order by e.extname;
+          " > "$OUTPUT_DIR/target-extensions.tsv"
+          cut -f1-2 "$SOURCE_EXTENSIONS" > "$OUTPUT_DIR/source-extension-boundary.tsv"
+          cut -f1-2 "$OUTPUT_DIR/target-extensions.tsv" \\
+            | grep -Fxf "$OUTPUT_DIR/source-extension-boundary.tsv" \\
+            | LC_ALL=C sort -u > "$OUTPUT_DIR/target-extension-boundary.tsv"
+          LC_ALL=C diff -u \\
+            "$OUTPUT_DIR/source-extension-boundary.tsv" \\
+            "$OUTPUT_DIR/target-extension-boundary.tsv" \\
+            > "$OUTPUT_DIR/extensions.diff"
+          test ! -s "$OUTPUT_DIR/extensions.diff"
+
+          if psql "$LOCAL_DB_URL"''',
+              "validator extension comparison",
+          )
+          validator = replace_once(
+              validator,
+              '''printf 'catalog_match=true\\nauth_profile_trigger=true\\nactivation_stage_absent=true\\nnonempty_guard=true\\nzero_synthetic_residue=true\\n' \\
+          ''',
+              '''printf 'catalog_match=true\\nextension_boundary=true\\nauth_profile_trigger=true\\nactivation_stage_absent=true\\nnonempty_guard=true\\nzero_synthetic_residue=true\\n' \\
+          ''',
+              "validator result",
+          )
+          validator_path.write_text(validator)
+
+          workflow_path = Path(".github/workflows/generate-preactivation-baseline.yml")
+          workflow = workflow_path.read_text()
+          workflow = replace_once(
+              workflow,
+              '      - .github/workflows/generate-preactivation-baseline.yml\n',
+              '      - .github/workflows/generate-preactivation-baseline.yml\n'
+              '      - .github/preactivation-baseline-trigger.txt\n',
+              "generator trigger path",
+          )
+          workflow_path.write_text(workflow)
+          PY
+
+          bash -n scripts/database/generate-preactivation-baseline.sh
+          bash -n scripts/database/validate-preactivation-baseline.sh
+          python3 - <<'PY'
+          import yaml
+          from pathlib import Path
+          for path in (
+              ".github/workflows/generate-preactivation-baseline.yml",
+              ".github/workflows/validate-preactivation-baseline.yml",
+          ):
+              yaml.safe_load(Path(path).read_text())
+          PY
+          git diff --check
+
+      - name: Commit and push normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/database/generate-preactivation-baseline.sh \
+            scripts/database/validate-preactivation-baseline.sh \
+            .github/workflows/generate-preactivation-baseline.yml
+          git commit -m "Harden pre-activation baseline capture boundary"
+          git push origin "HEAD:$TARGET_BRANCH"

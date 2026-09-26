@@ -1,0 +1,72 @@
+name: Repair pre-activation dump client v3
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - .github/workflows/repair-preactivation-dump-client-v3.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-preactivation-dump-client-v3-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'database/preactivation-schema-baseline-20260818'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Replace the entire dump-client section between stable markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/database/generate-preactivation-baseline.sh')
+          text = path.read_text()
+          start = text.find('if ! command -v pg_dump')
+          if start < 0:
+              start = text.find('pg_dump "$PROD_SUPABASE_DB_URL"')
+          next_marker = 'python3 - "$DUMP_RAW" "$DUMP_NORMALIZED" <<\'PY\'\n'
+          end = text.find(next_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit(f'Could not locate dump section: start={start}, end={end}.')
+          replacement = '''npx --yes supabase@2.110.0 db dump \\
+  --db-url "$PROD_SUPABASE_DB_URL" \\
+  --schema public,moral_trade_private \\
+  --file "$DUMP_RAW" \\
+  > "$EVIDENCE_ROOT/logs/supabase-db-dump.log" 2>&1
+          test -s "$DUMP_RAW"
+
+          '''
+          updated = text[:start] + replacement + text[end:]
+          if updated.count('supabase@2.110.0 db dump') != 1:
+              raise SystemExit('The compatible dump invocation is not unique after repair.')
+          if 'pg_dump "$PROD_SUPABASE_DB_URL"' in updated:
+              raise SystemExit('The incompatible host pg_dump invocation remains.')
+          path.write_text(updated)
+          PY
+          bash -n scripts/database/generate-preactivation-baseline.sh
+          git diff --check
+
+      - name: Commit and push normally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/database/generate-preactivation-baseline.sh
+          git commit -m 'Use Supabase-compatible schema dump client'
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"

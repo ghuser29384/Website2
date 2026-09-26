@@ -1,0 +1,114 @@
+name: Generate authoritative pre-activation baseline for PR 770
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - scripts/database/generate-preactivation-baseline.sh
+      - scripts/database/preactivation-catalog.sql
+      - docs/database/preactivation-schema-baseline.md
+      - .github/workflows/generate-preactivation-baseline-pr.yml
+      - .github/preactivation-baseline-trigger.txt
+      - scripts/database/generate-preactivation-baseline.trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-preactivation-baseline-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+  SOURCE_MAIN: ${{ github.event.pull_request.base.sha }}
+  TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
+  PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+  PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+  PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+  EVIDENCE_ROOT: ${{ runner.temp }}/preactivation-baseline-${{ github.run_id }}
+
+jobs:
+  generate:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'database/preactivation-schema-baseline-20260818'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out exact pull-request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install repository dependencies
+        shell: bash
+        run: npm ci
+
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          curl -fsSLo /tmp/pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          gpg --dearmor < /tmp/pgdg.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client-17
+          psql --version
+          pg_dump --version
+
+      - name: Capture production boundary and generate baseline
+        id: generate
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          bash scripts/database/generate-preactivation-baseline.sh
+          tar -C "$(dirname "$EVIDENCE_ROOT")" -czf \
+            "$GITHUB_WORKSPACE/preactivation-baseline-generation.tar.gz" \
+            "$(basename "$EVIDENCE_ROOT")"
+          sha256sum preactivation-baseline-generation.tar.gz \
+            > preactivation-baseline-generation.tar.gz.sha256
+
+      - name: Commit and push generated boundary normally
+        if: steps.generate.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/baseline/pre_activation \
+            src/lib/database-preactivation-baseline-contract.test.ts
+          test -n "$(git status --porcelain)"
+          git commit -m "Capture authoritative pre-activation Supabase baseline"
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$SOURCE_HEAD"
+          git push origin "HEAD:$TARGET_BRANCH"
+
+      - name: Upload privacy-safe generation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preactivation-baseline-generation-${{ github.run_id }}
+          path: |
+            preactivation-baseline-generation.tar.gz
+            preactivation-baseline-generation.tar.gz.sha256
+          if-no-files-found: warn
+          retention-days: 21
+
+      - name: Enforce generation result
+        if: always()
+        shell: bash
+        run: test "${{ steps.generate.outcome }}" = success
