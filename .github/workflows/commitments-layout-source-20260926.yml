@@ -1,0 +1,35 @@
+name: Commitments layout source review
+on:
+  push:
+    branches: [ops/commitments-layout-20260926]
+    paths: [.github/workflows/commitments-layout-source-20260926.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d4d4b25fdf7a46a247838482ce5225163e45a963
+          persist-credentials: false
+      - name: Collect text source only
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, zipfile
+          root = pathlib.Path('.')
+          names = subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
+          with zipfile.ZipFile('commitments-layout-source.zip','w',zipfile.ZIP_DEFLATED) as out:
+              for name in names:
+                  path = root / name
+                  if not name or not path.is_file(): continue
+                  if path.suffix not in {'.ts','.tsx','.mjs','.json','.css','.yml','.html','.md'}: continue
+                  if not (name.startswith(('src/','tests/','scripts/','.github/')) or '/' not in name): continue
+                  out.write(path,name)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commitments-layout-text-source
+          path: commitments-layout-source.zip
+          retention-days: 1
