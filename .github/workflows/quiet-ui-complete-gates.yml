@@ -23,8 +23,8 @@ jobs:
         with:
           ref: fix/quiet-ui-20260926
           path: candidate
-          fetch-depth: 20
-      - name: Stage only the reviewed directory and header-retirement contracts
+          fetch-depth: 30
+      - name: Preserve reviewed current main and stage the final directory contracts
         id: stage
         working-directory: candidate
         run: |
@@ -32,17 +32,19 @@ jobs:
           test "$GITHUB_REPOSITORY" = ghuser29384/Website2
           test "$(git rev-parse HEAD)" = 212316ab2c11b84245eb2f618d982f9a77ffa7db
           test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = 212316ab2c11b84245eb2f618d982f9a77ffa7db
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = d4d4b25fdf7a46a247838482ce5225163e45a963
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git fetch --depth=30 origin d4d4b25fdf7a46a247838482ce5225163e45a963
+          git merge --no-edit d4d4b25fdf7a46a247838482ce5225163e45a963
           python ../transport/.github/quiet-ui-contracts.py
           git diff --check
           git add public/moral-trade-discover.css tests/discover-home-visual-alignment.spec.ts tests/exact-live-local-time.spec.ts tests/returning-homepage-timezone.spec.ts tests/returning-homepage.spec.ts
           test "$(git diff --cached --name-only | wc -l)" -eq 5
           git diff --cached --check
-          git config user.name ghuser29384
-          git config user.email 262476329+ghuser29384@users.noreply.github.com
           git commit -m 'Unify directory surfaces and preserve header-free hydration behavior'
-          git diff --check 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
-          test "$(git diff --name-only 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9 | wc -l)" -eq 25
+          git diff --check d4d4b25fdf7a46a247838482ce5225163e45a963
+          test "$(git diff --name-only d4d4b25fdf7a46a247838482ce5225163e45a963 | wc -l)" -eq 25
           git push origin HEAD:refs/heads/fix/quiet-ui-20260926
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
   quality:
@@ -60,7 +62,7 @@ jobs:
         with:
           ref: ${{ needs.stage.outputs.sha }}
           persist-credentials: false
-          fetch-depth: 20
+          fetch-depth: 30
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -69,8 +71,8 @@ jobs:
         run: |
           mkdir -p /tmp/quiet-ui-ready
           git rev-parse HEAD > /tmp/quiet-ui-ready/commit.txt
-          git diff --check 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
-          git diff --stat 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9 > /tmp/quiet-ui-ready/diff-stat.txt
+          git diff --check d4d4b25fdf7a46a247838482ce5225163e45a963
+          git diff --stat d4d4b25fdf7a46a247838482ce5225163e45a963 > /tmp/quiet-ui-ready/diff-stat.txt
           git archive --format=tar.gz HEAD > /tmp/quiet-ui-ready/source.tar.gz
       - run: npm ci
       - name: Repository tests
