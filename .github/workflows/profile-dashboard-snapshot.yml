@@ -1,0 +1,27 @@
+name: Profile Dashboard source snapshot
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/workflows/profile-dashboard-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f58ee041dfd909cad7699ed67485cc0a7db95933
+          persist-credentials: false
+      - name: Archive tracked source without credentials
+        run: |
+          test "$(git rev-parse HEAD)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          mkdir -p /tmp/profile-dashboard-source
+          git rev-parse HEAD > /tmp/profile-dashboard-source/commit.txt
+          git archive --format=tar.gz HEAD > /tmp/profile-dashboard-source/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: profile-dashboard-source
+          path: /tmp/profile-dashboard-source
+          retention-days: 2
