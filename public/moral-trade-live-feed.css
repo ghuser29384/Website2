@@ -929,3 +929,20 @@
     transition: none;
   }
 }
+
+@media (max-width: 420px) {
+  /* Keep the legacy Feed heading and create action inside narrow viewports. */
+  main#app > .page > .h {
+    flex-wrap: wrap;
+  }
+
+  main#app > .page > .h > .date {
+    flex: 1 1 130px;
+    min-width: 0;
+  }
+
+  main#app > .page > .h > .btn {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+}
