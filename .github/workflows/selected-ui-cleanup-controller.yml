@@ -1,4 +1,4 @@
-name: Isolate and verify selected shared UI cleanup
+name: Verify selected shared UI cleanup
 on:
   pull_request:
     paths:
@@ -10,12 +10,13 @@ concurrency:
   group: selected-ui-cleanup-extraction-20260926
   cancel-in-progress: false
 jobs:
-  isolate-and-verify:
+  verify-selected:
     if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ops/selected-ui-cleanup-20260926-v1'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
       BASE_SHA: ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf
+      PRODUCT_SHA: 38ce90c158b3665590e0c873f78054fd4151dafe
       PRODUCT_BRANCH: cleanup/selected-shared-ui-only-20260926
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -32,20 +33,19 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Isolate the selected changes without any other PR 832 work
+      - name: Reconcile only superseded navigation and footer test expectations
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
-          test -z "$(git ls-remote --heads origin "refs/heads/$PRODUCT_BRANCH")"
-          git worktree add --detach "$RUNNER_TEMP/selected-ui-candidate" "$BASE_SHA"
-          python3 .github/selected-ui-cleanup/prepare.py "$RUNNER_TEMP/selected-ui-candidate"
+          test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
+          git worktree add --detach "$RUNNER_TEMP/selected-ui-candidate" "$PRODUCT_SHA"
+          python3 .github/selected-ui-cleanup/repair-tests.py "$RUNNER_TEMP/selected-ui-candidate"
           cd "$RUNNER_TEMP/selected-ui-candidate"
           git config user.name 'ghuser29384'
           git config user.email '262476329+ghuser29384@users.noreply.github.com'
           git switch -c "$PRODUCT_BRANCH"
-          git commit -m 'Apply only the selected shared navigation search and copy cleanup'
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
+          git commit -m 'Align navigation and footer contracts with the selected cleanup'
+          test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
           git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
           mkdir -p "$RUNNER_TEMP/selected-ui-evidence"
           git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/selected-cleanup.patch"
