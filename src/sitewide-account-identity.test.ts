@@ -4,6 +4,8 @@ import test from "node:test";
 
 const identityBridge = readFileSync("public/moral-trade-account-identity.js", "utf8");
 const liveAccountBridge = readFileSync("public/moral-trade-live-account.js", "utf8");
+const liveNavigation = readFileSync("public/moral-trade-live-navigation.js", "utf8");
+const refinedHeaderCss = readFileSync("public/moral-trade-refined-header.css", "utf8");
 const accountRoute = readFileSync("src/app/api/live-account/route.ts", "utf8");
 const shells = new Map([
   ["live", readFileSync("public/moral-trade-live.html", "utf8")],
@@ -37,6 +39,19 @@ test("the shared bridge replaces every rendered legacy avatar, including later p
   assert.match(identityBridge, /data-mt-live-account-avatar/u);
   assert.match(identityBridge, /new MutationObserver\(schedulePatch\)/u);
   assert.match(identityBridge, /closest\("button,a"\)/u);
+});
+
+
+test("static Get Started actions fail closed until signed-out identity is resolved", () => {
+  const discover = shells.get("discover") || "";
+  assert.match(discover, /data-mt-guest-only="true" hidden href="\/start"/u);
+  assert.match(liveNavigation, /start\.dataset\.mtGuestOnly = "true"/u);
+  assert.match(liveNavigation, /start\.hidden = true/u);
+  assert.match(identityBridge, /let identityResolved = hasBootstrap/u);
+  assert.match(identityBridge, /identityResolved && !identity\.authenticated/u);
+  assert.match(identityBridge, /element\.hidden = !shouldShow/u);
+  assert.match(identityBridge, /identityResolved = true/u);
+  assert.match(refinedHeaderCss, /\[data-mt-guest-only="true"\]\[hidden\][\s\S]*display: none !important/u);
 });
 
 test("account identity remains profile-derived and private", () => {

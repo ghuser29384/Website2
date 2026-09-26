@@ -59,23 +59,10 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.deepEqual(labels, [
     "Feed",
     "Discover",
-    "Create",
-    "Invite",
     "Messages",
     "Commitments",
-    "Evidence",
-    "Safety",
   ]);
-  assert.deepEqual(hrefs, [
-    "/feed",
-    "/discover",
-    "/trades/new",
-    "/invite",
-    "/messages",
-    "/commitments",
-    "/evidence",
-    "/safety",
-  ]);
+  assert.deepEqual(hrefs, ["/feed", "/discover", "/messages", "/commitments"]);
   assert.deepEqual(getTopbarActions(false).authLink, { href: "/login", label: "Sign in" });
   assert.deepEqual(getTopbarActions(false).primaryAction, { href: "/start", label: "Get started" });
   assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });
@@ -89,22 +76,26 @@ test("public navigation exposes professional marketplace routes", () => {
     "/commitments",
     "/evidence",
     "/safety",
-    "/worked-examples",
-    "/moral-trade/technical-spec",
     "/team-and-governance",
-    "/privacy",
-    "/terms",
   ]) {
     assert.ok(hrefs.includes(href) || footerHrefs.includes(href), `missing public route: ${href}`);
   }
 
+  const footerSource = readRepoFile("src/components/layout/site-footer.tsx");
+  for (const href of ["/privacy", "/terms", "/accessibility", "/contact"]) {
+    assert.ok(footerSource.includes(`href="${href}"`));
+  }
+  for (const route of ["worked-examples", "moral-trade/technical-spec"]) {
+    assert.ok(readRepoFile(`src/app/${route}/page.tsx`).length > 0);
+    assert.ok(!footerHrefs.includes(`/${route}`));
+  }
   assert.equal(hrefs.includes("/cart"), false);
   assert.equal(siteSource.includes("social credit"), false);
   assert.match(siteSource, /href: "\/feed", label: "Feed"/);
-  assert.match(siteSource, /href: "\/trades\/new", label: "Create"/);
-  assert.match(topbarSource, /filterSmartSiteSearchItems/);
-  assert.match(topbarSource, /placeholder="Search offers, people, pools, or evidence"/);
-  assert.match(topbarSource, /topbar-search-results/);
+  assert.match(siteSource, /href: "\/trades\/new",\s*label: "Create"/);
+  assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
+  assert.match(topbarSource, /placeholder="Search offers"/);
+  assert.match(topbarSource, /<form action="\/offers" className="topbar-search" method="get" role="search"/);
   assert.match(topbarSource, /showSearch = true/);
   assert.match(globalCss, /\.button-secondary\.button-nav\.is-active/);
 });
@@ -466,10 +457,10 @@ test("global search and offers search expose real marketplace discovery", () => 
   const commonGroundResults = filterSiteSearchItems("common ground budget");
   const validationResults = filterSiteSearchItems("appeal rulebook");
 
-  assert.match(topbarSource, /placeholder="Search offers, people, pools, or evidence"/);
-  assert.match(topbarSource, /filterSmartSiteSearchItems/);
-  assert.match(topbarSource, /\/api\/query\/interpret/);
-  assert.match(topbarSource, /topbar-search-results/);
+  assert.match(topbarSource, /placeholder="Search offers"/);
+  assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
+  assert.doesNotMatch(topbarSource, /\/api\/query\/interpret/);
+  assert.match(topbarSource, /<form action="\/offers" className="topbar-search" method="get" role="search"/);
   assert.match(offersPage, /SmartQueryForm/);
   assert.match(offersPage, /queryName="search"/);
   assert.match(offersPage, /Hard constraints are applied before semantic and trust-aware ranking/);
@@ -505,13 +496,11 @@ test("visitor router exposes four live action paths before deeper marketplace me
   const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
-  assert.match(startPage, /Choose a real first action/);
-  assert.match(startPage, /Fund, create, pool, or explore/);
-  assert.match(startPage, /Make a financial contribution/);
-  assert.match(startPage, /Provider-hosted payment/);
-  assert.match(startPage, /No platform custody/);
-  assert.match(startPage, /getMarketplaceOverview/);
-  assert.match(startPage, /VISITOR_PATHS\.map/);
+  assert.match(startPage, /Is this your first time here\?/);
+  assert.match(startPage, /href="\/walkthrough"/);
+  assert.match(startPage, /href="\/login"/);
+  assert.match(startPage, /if \(viewer\) redirect\("\/feed"\)/);
+  assert.doesNotMatch(startPage, /getMarketplaceOverview|VISITOR_PATHS\.map|Make a financial contribution/);
   assert.match(visitorPathsSource, /key: "fund"/);
   assert.match(visitorPathsSource, /key: "create"/);
   assert.match(visitorPathsSource, /key: "pool"/);

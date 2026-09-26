@@ -18,6 +18,14 @@ function pageFiles(directory: string): string[] {
 }
 
 function isCoveredPage(source: string) {
+  // The priorities route delegates its module-styled shell through the shared view.
+  if (source.includes('from "@/components/profile/profile-priorities-view"') && /<ProfilePrioritiesView\b/.test(source)) {
+    const view = read("src/components/profile/profile-priorities-view.tsx");
+    const editor = read("src/components/profile/profile-priority-editor.tsx");
+    return /<ProfilePriorityEditor\b/.test(view) &&
+      /import styles from "[^"\n]+\.module\.css"/.test(editor) &&
+      /className=\{styles\.profilePage\}/.test(editor);
+  }
   return [
     /className=["'][^"']*page-shell/,
     /<AuthPage\b/,

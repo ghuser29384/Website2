@@ -63,7 +63,7 @@
     const dateTime = getLocalDateTimeAttribute(now);
     const timeOfDayGreeting = getTimeOfDayGreeting(now.getHours());
 
-    document.querySelectorAll(".head .date").forEach((container) => {
+    document.querySelectorAll(".head .date, .mt-feed-actions .date").forEach((container) => {
       const time = getOrCreateTimeElement(container);
       if (time) {
         if (time.dateTime !== dateTime) time.dateTime = dateTime;

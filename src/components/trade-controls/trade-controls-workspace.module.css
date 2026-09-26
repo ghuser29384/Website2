@@ -8,8 +8,8 @@
   --blue: #3158ff;
   --blue-dark: #163bd4;
   --blue-pale: #e7ecff;
-  --lime: #bddc25;
-  --lime-dark: #748800;
+  --sage: #b9cbbb;
+  --sage-dark: #365244;
   --orange: #ed6e19;
   --orange-pale: #fff0e3;
   min-height: 100vh;
@@ -339,7 +339,7 @@
 }
 
 .protocolPass {
-  border-color: #9aac2b;
+  border-color: #526b58;
   color: #5c6d00;
 }
 
@@ -536,7 +536,7 @@
 
 .resultPass::after,
 .resultPass.safeguardOutcome::after {
-  background: var(--lime);
+  background: var(--sage);
 }
 
 .resultNeedsWork {
@@ -740,8 +740,8 @@
 }
 
 .memberConfirmed .confirmButton {
-  border-color: #8da000;
-  background: #dbe88d;
+  border-color: #526b58;
+  background: #d2e0d3;
 }
 
 .clearingStrip,
@@ -912,9 +912,9 @@
 
 .totalGood,
 .smallStatusGood {
-  border-color: #91a400;
-  background: #eef5bf;
-  color: #627100;
+  border-color: #526b58;
+  background: #e7efe5;
+  color: #365244;
 }
 
 .totalBad {
@@ -1138,8 +1138,8 @@
 
 .permissionOutcome {
   padding: 10px;
-  border: 1px solid #97a700;
-  background: #f1f7c9;
+  border: 1px solid #526b58;
+  background: #e7efe5;
   color: #576500 !important;
 }
 
