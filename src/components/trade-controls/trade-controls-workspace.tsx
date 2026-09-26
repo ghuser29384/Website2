@@ -805,7 +805,7 @@ export function TradeControlsWorkspace({ protocols }: { protocols: TradeControlP
           <Link href="/commitments">Activity</Link>
           <Link href="/worked-examples">Learn</Link>
         </nav>
-        <Link className={styles.accountLink} href="/profile" aria-label="Open account">
+        <Link className={styles.accountLink} href="/dashboard" aria-label="Open account">
           <UserCircle aria-hidden="true" size={31} weight="thin" />
         </Link>
       </header>

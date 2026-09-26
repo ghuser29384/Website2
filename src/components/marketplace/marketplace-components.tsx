@@ -661,7 +661,7 @@ function MarketplaceSideNav({
     { key: "plan", href: "/saved-offers", label: "Planner", icon: "planner" },
     { key: "track", href: "/commitments", label: "Track", icon: "track" },
     { key: "messages", href: "/messages", label: "Messages", icon: "messages" },
-    { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
+    { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },
   ] as const;
 
   return (
@@ -2430,7 +2430,7 @@ export function MarketplaceBottomNav({
     { key: "plan", href: "/saved-offers", label: "Plan", icon: "example" },
     { key: "track", href: "/commitments", label: "Track", icon: "evidence" },
     { key: "messages", href: "/messages", label: "Messages", icon: "review" },
-    { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
+    { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },
   ] as const;
 
   return (

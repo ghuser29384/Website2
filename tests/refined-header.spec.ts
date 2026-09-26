@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mockAccount, mockInventory, responseFor } from "./helpers/discover";
 
 for (const width of [1728, 1440, 1024, 390, 320]) {
-  for (const route of ["/feed", "/discover", "/profile"]) {
+  for (const route of ["/feed", "/discover", "/contact"]) {
     test(`approved masthead at ${route} ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 950 });
       const errors: string[] = [];
@@ -15,7 +15,7 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
       await expect(nav.locator(":scope > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
       await expect(header).toHaveCSS("background-color", "rgb(17, 18, 20)");
       await expect(nav.getByText("100 Sparks")).toHaveCount(0);
-      await expect(nav.locator('[aria-current="page"]')).toHaveCount(route === "/profile" ? 0 : 1);
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(route === "/contact" ? 0 : 1);
       const hrefs = await nav.locator(":scope > a").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
       expect(hrefs).toEqual(["/feed", "/discover", "/messages", "/commitments"]);
       const brand = header.locator(".brand");
@@ -63,9 +63,7 @@ for (const route of ["/feed", "/discover"] as const) {
 
 test("Profile owns priorities and a legacy Sparks URL preserves the authenticated editor", async ({ page }) => {
   await page.goto("/profile");
-  await page.getByRole("link", { name: /Adjust priorities/ }).click();
-  await expect(page).toHaveURL(/\/login\?returnTo=/);
-  expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
+  await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/dashboard");
   await page.goto("/100-sparks");
   await expect(page).toHaveURL(/\/login\?returnTo=/);
   expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
@@ -74,7 +72,7 @@ test("Profile owns priorities and a legacy Sparks URL preserves the authenticate
 for (const width of [1280, 390, 320]) {
   test(`secondary utilities support keyboard disclosure at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });
-    for (const route of ["/feed", "/profile", "/contact"]) {
+    for (const route of ["/feed", "/complete-profile", "/contact"]) {
       await page.goto(route);
       const header = page.locator(".mt-refined-header").first();
       const summary = header.locator("summary").filter({ hasText: "More" });

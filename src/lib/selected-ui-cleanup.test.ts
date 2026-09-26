@@ -62,7 +62,7 @@ test("the selected four links are shared without losing secondary account access
     assert.ok(usesDefaultHeader(getPrimaryNavLinks(auth)));
   }
   assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.label), expected);
-  for (const href of ["/profile", "/dashboard", "/trades/new", "/cart", "/invite", "/evidence", "/walkthrough", "/safety"]) {
+  for (const href of ["/dashboard", "/trades/new", "/cart", "/invite", "/evidence", "/walkthrough", "/safety"]) {
     assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === href));
   }
 });
