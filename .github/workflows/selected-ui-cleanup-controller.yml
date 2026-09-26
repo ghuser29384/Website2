@@ -1,52 +1,59 @@
-name: Final exact-head selected UI verification
+name: Release and verify only the selected shared UI cleanup
 on:
   pull_request:
     paths:
       - '.github/workflows/selected-ui-cleanup-controller.yml'
       - '.github/selected-ui-cleanup/**'
 permissions:
-  contents: write
+  contents: read
   actions: write
 concurrency:
-  group: selected-ui-cleanup-final-verification-20260926
+  group: selected-shared-ui-production-20260926
   cancel-in-progress: false
 jobs:
-  verify-selected:
+  release-selected:
     if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ops/selected-ui-cleanup-20260926-v1'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 105
     env:
+      REPO: ghuser29384/Website2
+      EXPECTED_SHA: f58ee041dfd909cad7699ed67485cc0a7db95933
+      EXPECTED_TREE: 551e46f7870aa537e44a9b8ec99675bb51a0b423
       BASE_SHA: 464e61299896216ddc77e65bfa2211664aa875ee
-      PRODUCT_SHA: 1627e4f4e9d7bb2138bb45695a50b589d3134ffd
-      PRODUCT_BRANCH: cleanup/selected-shared-ui-only-20260926
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-      SITE_URL: http://127.0.0.1:3210
-      VERCEL: '1'
-      VERCEL_ENV: production
-      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
-      PLAYWRIGHT_HTML_OPEN: never
+      EVIDENCE_DIR: ${{ runner.temp }}/selected-ui-production-evidence
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out only the exact merged product
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: f58ee041dfd909cad7699ed67485cc0a7db95933
+          fetch-depth: 2
+          persist-credentials: false
+          path: app
+      - name: Read operational verification helper without merging it
+        uses: actions/checkout@v4
+        with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - name: Align only obsolete browser locators and prove exact scope
+          fetch-depth: 1
+          persist-credentials: false
+          path: controller
+      - name: Verify merged source and previous exact-head acceptance
+        working-directory: app
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
-          test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
-          git worktree add --detach "$RUNNER_TEMP/selected-ui-candidate" "$PRODUCT_SHA"
-          cd "$RUNNER_TEMP/selected-ui-candidate"
-          git config user.name 'ghuser29384'
-          git config user.email '262476329+ghuser29384@users.noreply.github.com'
-          git switch -c "$PRODUCT_BRANCH"
-          python3 "$GITHUB_WORKSPACE/.github/selected-ui-cleanup/finish-browser-contracts.py"
-          git commit -m 'Align remaining browser contracts with the selected navigation and search'
+          mkdir -p "$EVIDENCE_DIR"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          test "$(git rev-parse HEAD^1)" = "$BASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_SHA"
+          gh api "repos/$REPO/pulls/860" > "$EVIDENCE_DIR/merged-pr.json"
+          jq -e --arg sha "$EXPECTED_SHA" '.merged == true and .merge_commit_sha == $sha and .head.sha == "8166bf75837f365c91e6d3cf40e5872c4b9cb809" and .base.ref == "main"' "$EVIDENCE_DIR/merged-pr.json" >/dev/null
+          gh api "repos/$REPO/actions/runs/36264793287" > "$EVIDENCE_DIR/pre-release-qa.json"
+          jq -e '.status == "completed" and .conclusion == "success" and .head_sha == "c6b320ab0f6574516878e3612ec9543f4ed7cf5e" and .workflow_id == 367878173' "$EVIDENCE_DIR/pre-release-qa.json" >/dev/null
+          gh api "repos/$REPO/actions/artifacts/10913837049" > "$EVIDENCE_DIR/qa-artifact.json"
+          jq -e '.workflow_run.id == 36264793287 and .digest == "sha256:251d490661f0825643e272a0efd89b1ff6e87842ee5f01c02642f8b49ee2e9d8"' "$EVIDENCE_DIR/qa-artifact.json" >/dev/null
           python3 - <<'PY'
           import os,subprocess
           expected=['public/moral-trade-live-navigation.js','public/moral-trade-discover.html',
@@ -60,64 +67,72 @@ jobs:
           assert sorted(actual)==sorted(expected),actual
           for p in ['src/app/about/page.tsx','src/app/sitemap.ts','src/app/start/page.tsx','public/moral-trade-refined-header.css','public/moral-trade-account-identity.js','.github/workflows/vercel-release.yml']:
             subprocess.run(['git','diff','--exit-code',os.environ['BASE_SHA'],'HEAD','--',p],check=True)
-          print('Exact twenty-seven-path delta: eight selected runtime paths and nineteen test files; all other runtime and release configuration unchanged.')
+          print('Merged tree matches the tested tree. Exactly the selected runtime delta; About, Start, styling, data and existing release workflow unchanged.')
           PY
-          test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
-          git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
-          mkdir -p "$RUNNER_TEMP/selected-ui-evidence"
-          git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/selected-cleanup.patch"
-          git diff --stat "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/scope.txt"
-          printf 'base=%s\nhead=%s\ntree=%s\n' "$BASE_SHA" "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee "$RUNNER_TEMP/selected-ui-evidence/source.txt"
-          git diff --name-only --diff-filter=ACM "$BASE_SHA" HEAD | zip "$RUNNER_TEMP/selected-ui-evidence/changed-source.zip" -@
-      - name: Stop only the superseded pre-correction QA run
+          git diff --check "$BASE_SHA" HEAD
+          git diff --stat "$BASE_SHA" HEAD > "$EVIDENCE_DIR/scope.txt"
+          printf 'base=%s\nmerged=%s\ntree=%s\n' "$BASE_SHA" "$EXPECTED_SHA" "$EXPECTED_TREE" > "$EVIDENCE_DIR/source.txt"
+      - name: Dispatch or observe the single exact existing gated production release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          gh api repos/ghuser29384/Website2/actions/runs/36264468532 > "$RUNNER_TEMP/previous.json"
-          test "$(jq -r .head_sha "$RUNNER_TEMP/previous.json")" = a3a43115188d91e8ed0f1a0a41d7641c696456ac
-          test "$(jq -r .head_branch "$RUNNER_TEMP/previous.json")" = ops/selected-ui-cleanup-20260926-v1
-          test "$(jq -r .workflow_id "$RUNNER_TEMP/previous.json")" = 367878173
-          if [ "$(jq -r .status "$RUNNER_TEMP/previous.json")" != completed ]; then
-            gh api --method POST repos/ghuser29384/Website2/actions/runs/36264468532/cancel
+          test "$(gh api "repos/$REPO/actions/workflows/vercel-release.yml" --jq .state)" = active
+          endpoint="repos/$REPO/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&head_sha=$EXPECTED_SHA&per_page=100"
+          gh api "$endpoint" > "$EVIDENCE_DIR/release-runs.json"
+          count="$(jq --arg sha "$EXPECTED_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main")]|length' "$EVIDENCE_DIR/release-runs.json")"
+          test "$count" -le 1
+          if [ "$count" = 0 ]; then
+            test "$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_SHA"
+            jq -n --arg sha "$EXPECTED_SHA" '{ref:"main",inputs:{ref:"main",target:"production",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+              | gh api --method POST "repos/$REPO/actions/workflows/vercel-release.yml/dispatches" --input -
           fi
-      - name: Install existing locked dependencies
-        working-directory: ${{ runner.temp }}/selected-ui-candidate
-        run: npm ci
-      - name: Complete unit tests
-        working-directory: ${{ runner.temp }}/selected-ui-candidate
-        run: set -o pipefail; npm test 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/unit.log"
-      - name: Complete lint
-        working-directory: ${{ runner.temp }}/selected-ui-candidate
-        run: set -o pipefail; npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/lint.log"
-      - name: Complete TypeScript check
-        working-directory: ${{ runner.temp }}/selected-ui-candidate
-        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/types.log"
-      - name: Optimized production build
-        working-directory: ${{ runner.temp }}/selected-ui-candidate
-        run: set -o pipefail; npm run build 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/build.log"
-      - uses: actions/upload-artifact@v4
+          run_id=''
+          for attempt in $(seq 1 30); do
+            gh api "$endpoint" > "$EVIDENCE_DIR/release-runs.json"
+            count="$(jq --arg sha "$EXPECTED_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main")]|length' "$EVIDENCE_DIR/release-runs.json")"
+            test "$count" -le 1
+            if [ "$count" = 1 ]; then
+              run_id="$(jq -r --arg sha "$EXPECTED_SHA" '.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main") | .id' "$EVIDENCE_DIR/release-runs.json")"
+              break
+            fi
+            sleep 3
+          done
+          test -n "$run_id"
+          printf 'release_run=%s\n' "$run_id" | tee "$EVIDENCE_DIR/release-run.txt"
+          echo "Existing gated production workflow: https://github.com/$REPO/actions/runs/$run_id"
+          for attempt in $(seq 1 180); do
+            gh api "repos/$REPO/actions/runs/$run_id" > "$EVIDENCE_DIR/release-run.json"
+            test "$(jq -r .head_sha "$EVIDENCE_DIR/release-run.json")" = "$EXPECTED_SHA"
+            status="$(jq -r .status "$EVIDENCE_DIR/release-run.json")"
+            if [ "$status" = completed ]; then
+              test "$(jq -r .conclusion "$EVIDENCE_DIR/release-run.json")" = success
+              exit 0
+            fi
+            sleep 30
+          done
+          echo 'Existing production gate did not finish in the observation window.' >&2
+          exit 1
+      - uses: actions/setup-node@v4
         with:
-          name: selected-ui-source-quality-${{ github.run_id }}
-          path: ${{ runner.temp }}/selected-ui-evidence
-          retention-days: 14
-      - name: Actual production-server browser checks
-        working-directory: ${{ runner.temp }}/selected-ui-candidate
-        shell: bash
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install only the existing locked browser tooling
+        working-directory: app
         run: |
-          set -euo pipefail
+          npm ci
           npx playwright install --with-deps chromium
-          npx playwright test tests/refined-header.spec.ts tests/selected-ui-cleanup.spec.ts --workers=1 --reporter=line 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/browser.log"
-          cp -R test-results "$RUNNER_TEMP/selected-ui-evidence/selected-browser-results"
-          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/release-browser.log"
-          git diff --exit-code
+      - name: Verify published assets and read-only live user flows
+        working-directory: app
+        env:
+          APP_ROOT: ${{ github.workspace }}/app
+        run: node "$GITHUB_WORKSPACE/controller/.github/selected-ui-cleanup/verify-live.mjs"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: selected-ui-cleanup-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/selected-ui-evidence
-            ${{ runner.temp }}/selected-ui-candidate/test-results
+          name: selected-ui-production-${{ github.run_id }}
+          path: ${{ runner.temp }}/selected-ui-production-evidence
           if-no-files-found: warn
           retention-days: 14
