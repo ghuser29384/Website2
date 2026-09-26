@@ -19,6 +19,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          show-progress: false
       - name: Guard controller-only scope and pin the already-live application
         shell: bash
         env:
@@ -68,7 +69,9 @@ jobs:
           const target = '.vercel/.env.production.local';
           const env = parseEnv(fs.readFileSync(target, 'utf8'));
           Object.assign(process.env, env);
-          const { getSupabaseEnv } = await import('./src/lib/supabase/config.ts');
+          const config = await import('./src/lib/supabase/config.ts');
+          const getSupabaseEnv = config.getSupabaseEnv ?? config.default?.getSupabaseEnv;
+          assert.equal(typeof getSupabaseEnv, 'function');
           const { url, publishableKey } = getSupabaseEnv('www.moraltrade.org');
           assert.equal(new URL(url).hostname, 'jnpoxvalyjtdghnperyu.supabase.co');
           // Only the deployed source's public defaults are materialized. Nothing
