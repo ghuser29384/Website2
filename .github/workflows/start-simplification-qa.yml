@@ -1,0 +1,115 @@
+name: Simplified Start page exact-source QA
+on:
+  push:
+    branches: [ops/start-simplification-20260926]
+    paths: [.github/workflows/start-simplification-qa.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      candidate_sha: ${{ steps.candidate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a8e4bb98939374becdea7b3404c1a643ffddb27e
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          path: candidate
+          fetch-depth: 1
+      - name: Apply only the reviewed Start-page changes to the exact base
+        id: candidate
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          test -z "$(git ls-remote origin refs/heads/fix/start-simplification-20260926)"
+          python ../transport/.github/start-simplification-edit.py "$PWD"
+          git add -- src/app/start/page.tsx src/app/start/start.module.css src/lib/action-first-positioning.test.ts src/lib/public-route-smoke.test.ts src/lib/start-paths.test.ts src/lib/start-paths.ts tests/meta-explanatory-copy.spec.ts tests/pilot-copy.spec.ts tests/sitewide-canonical-visual-fidelity.spec.ts tests/start-page.spec.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 10
+          git diff --cached --check
+          git diff --cached --binary > /tmp/start-reviewed.patch
+          echo '8851c8555342677ac48720f46968d771777e470a9b62f061eb17ed1c23be4e44  /tmp/start-reviewed.patch' | sha256sum -c -
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Simplify Get Started into one compact action chooser'
+          git push origin HEAD:refs/heads/fix/start-simplification-20260926
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  qa:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_SHA: ${{ needs.prepare.outputs.candidate_sha }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.candidate_sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Record immutable source identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          mkdir -p start-evidence
+          git rev-parse HEAD > start-evidence/commit.txt
+          git rev-parse HEAD^{tree} > start-evidence/tree.txt
+          git diff HEAD^ --check
+          git diff HEAD^ --stat > start-evidence/diff-stat.txt
+          git diff HEAD^ --binary > start-evidence/source.patch
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Focused source contracts
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/start-paths.test.ts src/lib/action-first-positioning.test.ts src/lib/public-route-smoke.test.ts | tee start-evidence/focused-unit.log
+      - name: Complete repository tests
+        run: |
+          set -euo pipefail
+          npm test | tee start-evidence/unit.log
+      - name: Complete lint and typecheck
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee start-evidence/lint.log
+          npx tsc --noEmit 2>&1 | tee start-evidence/types.log
+      - name: Production build
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee start-evidence/build.log
+      - name: Install locked Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Rendered Start and existing entry-route checks
+        run: |
+          set -euo pipefail
+          npx playwright test tests/start-page.spec.ts tests/sitewide-canonical-visual-fidelity.spec.ts tests/pilot-copy.spec.ts tests/meta-explanatory-copy.spec.ts --workers=1 --reporter=line 2>&1 | tee start-evidence/focused-browser.log
+          mkdir -p start-evidence/screenshots
+          find test-results -name '*.png' -exec cp '{}' start-evidence/screenshots/ ';'
+      - name: Complete unchanged release browser suite
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee start-evidence/release-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simplified-start-${{ needs.prepare.outputs.candidate_sha }}
+          path: |
+            start-evidence
+            test-results
+          retention-days: 7
