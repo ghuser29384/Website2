@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "evidence-credibility-calibration-analysis-plan-v1",
+  "analysisPlanVersion": "evidence-credibility-calibration-analysis-v1.0.0",
+  "analysisPlanSha256": "3cecee47d8e60bd9dcf540ccad6e7023fe99ddbf199b359fc56e5d7ecf449302",
+  "exportSchemaVersion": "v1-blind-audit-jsonl",
+  "primaryMaterialTolerance": 0.05,
+  "sensitivityMaterialTolerances": [
+    0.025,
+    0.1
+  ],
+  "logLossClip": 0.01,
+  "calibrationBins": [
+    0,
+    0.2,
+    0.4,
+    0.6,
+    0.8,
+    1
+  ],
+  "primaryCohort": {
+    "selectedReasons": [
+      "random_selected",
+      "mandatory_zero_confidence_or_review_required"
+    ],
+    "requireCompleteBlinding": true,
+    "requireOriginalEligibleForModelComparison": true
+  },
+  "weighting": {
+    "method": "hajek_inverse_probability",
+    "maxInverseProbabilityWeight": null
+  },
+  "split": {
+    "targetHoldoutFraction": 0.25,
+    "minimumHoldoutRows": 50,
+    "maximumHoldoutFraction": 0.4,
+    "minimumFitRows": 200,
+    "primaryGrouping": "agreement_pair_reviewer",
+    "sensitivityGroupings": [
+      "agreement",
+      "agreement_pair",
+      "agreement_reviewer"
+    ]
+  },
+  "uncertainty": {
+    "method": "agreement_cluster_percentile_bootstrap",
+    "repetitions": 2000,
+    "confidenceLevel": 0.95,
+    "seed": "moral-trade-evidence-credibility-calibration-v1-bootstrap"
+  },
+  "candidateModels": [
+    "unweighted_global",
+    "role_dimension_smoothed",
+    "confidence_direct",
+    "confidence_isotonic",
+    "provenance_smoothed",
+    "current_heuristic_isotonic",
+    "confidence_provenance_interaction_ridge"
+  ],
+  "candidateSelection": {
+    "method": "deterministic_grouped_cross_validation",
+    "folds": 5,
+    "brierTieTolerance": 0.002,
+    "seed": "moral-trade-evidence-credibility-calibration-v1-selection"
+  },
+  "roleDimensionPriorEffectiveN": 20,
+  "provenancePriorEffectiveN": 20,
+  "subgroupMinimumRawN": 50,
+  "activationGates": {
+    "minimumResolvedOverall": 300,
+    "minimumDistinctParameterLabels": 50,
+    "maximumOverallCalibrationError": 0.1,
+    "maximumSubgroupCalibrationError": 0.15,
+    "maximumBrierWorsening": 0.01,
+    "maximumSubgroupBrierWorsening": 0.05
+  }
+}

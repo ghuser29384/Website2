@@ -1,0 +1,401 @@
+name: Evidence credibility shadow integration QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/evidence-credibility-shadow-integration-qa.yml
+      - .github/workflows/evidence-credibility-*-qa.yml
+      - analysis/evidence-credibility-calibration-v1/**
+      - docs/moral-trade/evidence-credibility-*.md
+      - package.json
+      - scripts/evidence-credibility-calibration-analysis.ts
+      - src/app/admin/evidence-calibration/**
+      - src/app/api/admin/evidence-calibration/**
+      - src/app/api/review/evidence-calibration/**
+      - src/app/evidence-credibility-*-actions.ts
+      - src/app/review/evidence-calibration/**
+      - src/lib/evidence-credibility-*.ts
+      - supabase/migrations/202608101600*_evidence_credibility_shadow_*.sql
+      - supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+      - supabase/migrations/2026081202200*_evidence_credibility_blind_audit_*.sql
+      - supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql
+      - supabase/tests/evidence_credibility_*.sql
+  push:
+    branches:
+      - release/evidence-credibility-shadow-current-main-20260812
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-credibility-shadow-integration-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  EXPECTED_BASE_SHA: b637a18e52a560b4bbd992eeca2891ed9af86fa6
+
+jobs:
+  source-and-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Guard exact current-main integration scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git cat-file -e "${EXPECTED_BASE_SHA}^{commit}"
+          test "$(git merge-base "$EXPECTED_BASE_SHA" HEAD)" = "$EXPECTED_BASE_SHA"
+
+          git diff --name-only "$EXPECTED_BASE_SHA"...HEAD | sort > /tmp/actual-files.txt
+          test "$(wc -l < /tmp/actual-files.txt)" -eq 60
+
+          if grep -Ev '^(\.github/workflows/evidence-credibility-.*-qa\.yml|analysis/evidence-credibility-calibration-v1/.*|docs/moral-trade/evidence-credibility-.*\.md|package\.json|scripts/evidence-credibility-calibration-analysis\.ts|src/app/(admin/evidence-calibration/.*|api/admin/evidence-calibration/.*|api/review/evidence-calibration/.*|evidence-credibility-.*-actions\.ts|review/evidence-calibration/.*)|src/lib/evidence-credibility-.*\.ts|supabase/migrations/202608(101600[0-9]{2}_evidence_credibility_shadow_.*|11170500_evidence_credibility_shadow_capture_queue|1202200[01]_evidence_credibility_blind_audit_.*|12043000_evidence_credibility_calibration_export_v1)\.sql|supabase/tests/evidence_credibility_.*\.sql)$' /tmp/actual-files.txt; then
+            echo "The integration candidate contains a file outside the frozen evidence-credibility scope."
+            exit 1
+          fi
+
+          test "$(grep -Ec '^\.github/workflows/evidence-credibility-.*-qa\.yml$' /tmp/actual-files.txt)" -eq 6
+          test "$(grep -Ec '^analysis/evidence-credibility-calibration-v1/' /tmp/actual-files.txt)" -eq 3
+          test "$(grep -Ec '^docs/moral-trade/evidence-credibility-.*\.md$' /tmp/actual-files.txt)" -eq 6
+          test "$(grep -Ec '^package\.json$' /tmp/actual-files.txt)" -eq 1
+          test "$(grep -Ec '^scripts/evidence-credibility-calibration-analysis\.ts$' /tmp/actual-files.txt)" -eq 1
+          test "$(grep -Ec '^src/app/' /tmp/actual-files.txt)" -eq 9
+          test "$(grep -Ec '^src/lib/evidence-credibility-.*\.ts$' /tmp/actual-files.txt)" -eq 6
+          test "$(grep -Ec '^supabase/migrations/' /tmp/actual-files.txt)" -eq 16
+          test "$(grep -Ec '^supabase/tests/evidence_credibility_.*\.sql$' /tmp/actual-files.txt)" -eq 12
+
+          test "$(find supabase/migrations -maxdepth 1 -type f -name '202608101600*_evidence_credibility_shadow_*.sql' | wc -l)" -eq 12
+          test -f supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+          test -f supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          test -f supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          test -f supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql
+          test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_*.sql' | wc -l)" -eq 12
+          test ! -e .github/workflows/repair-evidence-credibility-integration-plan-hash.yml
+
+          grep -q "mode.*shadow" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "milestone_cutover_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "public_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "ranking_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "eligibility_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "activationAuthorized: false" src/lib/evidence-credibility-calibration-analysis.ts
+
+          for file in supabase/tests/evidence_credibility_*.sql; do
+            grep -qi '^begin;' "$file"
+            grep -qi '^rollback;' "$file"
+          done
+          git diff --check
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Verify frozen analysis plan hash
+        run: cd analysis/evidence-credibility-calibration-v1 && sha256sum -c plan.sha256
+
+      - name: Run focused evidence-credibility contracts
+        run: |
+          node --import tsx --test \
+            src/lib/evidence-credibility-shadow-schema-contract.test.ts \
+            src/lib/evidence-credibility-capture-schema-contract.test.ts \
+            src/lib/evidence-credibility-blind-audit-schema-contract.test.ts \
+            src/lib/evidence-credibility-calibration-export-schema-contract.test.ts \
+            src/lib/evidence-credibility-calibration-analysis.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run repository-wide ESLint
+        run: npm run lint -- --quiet
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Prove credential-free offline CLI entrypoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u SUPABASE_SERVICE_ROLE_KEY \
+              -u NEXT_PUBLIC_SUPABASE_URL \
+              -u NEXT_PUBLIC_SUPABASE_ANON_KEY \
+              -u VERCEL_TOKEN \
+              node --import tsx scripts/evidence-credibility-calibration-analysis.ts --help \
+              > /tmp/evidence-credibility-analysis-help.txt
+          grep -q -- '--acknowledge-heldout-open' /tmp/evidence-credibility-analysis-help.txt
+
+      - name: Preserve exact-head source evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(git status --short)"
+          test -z "$status"
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/head-sha.txt
+          git rev-parse "$EXPECTED_BASE_SHA" > evidence/base-sha.txt
+          printf '%s' "$status" > evidence/status.txt
+          cp /tmp/actual-files.txt evidence/changed-files.txt
+          xargs -d '\n' sha256sum < /tmp/actual-files.txt > evidence/file-sha256.txt
+
+      - name: Upload exact-head source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-shadow-integration-source-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 30
+
+  isolated-database:
+    needs: source-and-contracts
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+
+      - name: Guard exact candidate and isolated QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Record isolated-QA baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p database-evidence
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/before-counts.txt
+          select 'active_events|' || count(*) from public.credibility_events
+          union all select 'active_aggregates|' || count(*) from public.credibility_public_aggregates
+          union all select 'active_restrictions|' || count(*) from public.credibility_restrictions
+          union all select 'evidence_decisions|' || count(*) from public.trade_evidence_decisions
+          union all select 'settlement_decisions|' || count(*) from public.trade_settlement_shadow_decisions
+          union all select 'shadow_events|' || count(*) from public.credibility_shadow_events
+          union all select 'restriction_signals|' || count(*) from public.credibility_shadow_restriction_signals
+          union all select 'shadow_aggregates|' || count(*) from public.credibility_shadow_aggregates
+          union all select 'capture_records|' || count(*) from public.trade_shadow_capture_records
+          union all select 'draws_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_draws')::text, '')
+          union all select 'exports_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_exports')::text, '')
+          order by 1;
+          SQL
+
+      - name: Verify persisted shadow and capture schema readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/persisted-schema-readback.txt
+          select 'control|' || mode || '|' || milestone_cutover_enabled || '|' || public_effects_enabled || '|' || ranking_effects_enabled || '|' || eligibility_effects_enabled
+          from public.credibility_shadow_controls
+          where control_key = 'evidence_decision_v2'
+          union all select 'evidence_decisions_table|' || (to_regclass('public.trade_evidence_decisions') is not null)
+          union all select 'settlement_decisions_table|' || (to_regclass('public.trade_settlement_shadow_decisions') is not null)
+          union all select 'shadow_events_table|' || (to_regclass('public.credibility_shadow_events') is not null)
+          union all select 'shadow_aggregates_table|' || (to_regclass('public.credibility_shadow_aggregates') is not null)
+          union all select 'capture_records_table|' || (to_regclass('public.trade_shadow_capture_records') is not null)
+          union all select 'evidence_capture_rpc|' || count(*)
+            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname = 'record_trade_evidence_shadow_capture_v1'
+          union all select 'settlement_capture_rpc|' || count(*)
+            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname = 'record_trade_settlement_shadow_capture_v1'
+          order by 1;
+          SQL
+
+          grep -qx 'control|shadow|false|false|false|false' database-evidence/persisted-schema-readback.txt
+          grep -qx 'evidence_decisions_table|true' database-evidence/persisted-schema-readback.txt
+          grep -qx 'settlement_decisions_table|true' database-evidence/persisted-schema-readback.txt
+          grep -qx 'shadow_events_table|true' database-evidence/persisted-schema-readback.txt
+          grep -qx 'shadow_aggregates_table|true' database-evidence/persisted-schema-readback.txt
+          grep -qx 'capture_records_table|true' database-evidence/persisted-schema-readback.txt
+          grep -Eq '^evidence_capture_rpc\|[1-9][0-9]*$' database-evidence/persisted-schema-readback.txt
+          grep -Eq '^settlement_capture_rpc\|[1-9][0-9]*$' database-evidence/persisted-schema-readback.txt
+
+      - name: Run persisted-schema rollback-only suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          for suite in \
+            evidence_credibility_shadow_core \
+            evidence_credibility_shadow_finality \
+            evidence_credibility_shadow_supersession \
+            evidence_credibility_shadow_settlement \
+            evidence_credibility_shadow_authorization \
+            evidence_credibility_shadow_active_compatibility \
+            evidence_credibility_shadow_capture_queue \
+            evidence_credibility_shadow_capture_authorization; do
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "supabase/tests/${suite}.sql" \
+              | tee "database-evidence/${suite}.log"
+          done
+
+      - name: Run blind-audit and export suites in rollback-only schema envelopes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for suite in \
+            evidence_credibility_blind_audit_core \
+            evidence_credibility_blind_audit_authorization \
+            evidence_credibility_calibration_export_core \
+            evidence_credibility_calibration_export_authorization; do
+            python3 - "$suite" <<'PY'
+          from pathlib import Path
+          import sys
+
+          suite = sys.argv[1]
+          lines = Path(f"supabase/tests/{suite}.sql").read_text(encoding="utf-8").splitlines()
+          if lines and lines[0].strip().startswith("--"):
+              comment = lines.pop(0)
+          else:
+              comment = "-- normalized rollback-only suite"
+          while lines and not lines[0].strip():
+              lines.pop(0)
+          if not lines or lines[0].strip().lower() != "begin;":
+              raise SystemExit(f"{suite}: missing leading begin")
+          lines.pop(0)
+          while lines and not lines[-1].strip():
+              lines.pop()
+          if not lines or lines[-1].strip().lower() != "rollback;":
+              raise SystemExit(f"{suite}: missing trailing rollback")
+          lines.pop()
+          Path(f"/tmp/{suite}-body.sql").write_text(
+              comment + "\n" + "\n".join(lines) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+            cat > "/tmp/${suite}-wrapper.sql" <<SQL
+          \set ON_ERROR_STOP on
+          begin;
+          \i supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          \i supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          \i supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql
+          \i /tmp/${suite}-body.sql
+          rollback;
+          SQL
+
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "/tmp/${suite}-wrapper.sql" \
+              | tee "database-evidence/${suite}.log"
+          done
+
+      - name: Prove zero residue, active-pipeline isolation, and fail-closed controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/after-counts.txt
+          select 'active_events|' || count(*) from public.credibility_events
+          union all select 'active_aggregates|' || count(*) from public.credibility_public_aggregates
+          union all select 'active_restrictions|' || count(*) from public.credibility_restrictions
+          union all select 'evidence_decisions|' || count(*) from public.trade_evidence_decisions
+          union all select 'settlement_decisions|' || count(*) from public.trade_settlement_shadow_decisions
+          union all select 'shadow_events|' || count(*) from public.credibility_shadow_events
+          union all select 'restriction_signals|' || count(*) from public.credibility_shadow_restriction_signals
+          union all select 'shadow_aggregates|' || count(*) from public.credibility_shadow_aggregates
+          union all select 'capture_records|' || count(*) from public.trade_shadow_capture_records
+          union all select 'draws_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_draws')::text, '')
+          union all select 'exports_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_exports')::text, '')
+          order by 1;
+          SQL
+          diff -u database-evidence/before-counts.txt database-evidence/after-counts.txt
+
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 \
+            --command "select mode || '|' || milestone_cutover_enabled || '|' || public_effects_enabled || '|' || ranking_effects_enabled || '|' || eligibility_effects_enabled from public.credibility_shadow_controls where control_key='evidence_decision_v2'" \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/fail-closed-controls.txt
+          grep -qx 'shadow|false|false|false|false' database-evidence/fail-closed-controls.txt
+
+          git rev-parse HEAD > database-evidence/head-sha.txt
+          sha256sum \
+            supabase/migrations/202608101600*_evidence_credibility_shadow_*.sql \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql \
+            supabase/migrations/2026081202200*_evidence_credibility_blind_audit_*.sql \
+            supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql \
+            supabase/tests/evidence_credibility_*.sql \
+            > database-evidence/file-sha256.txt
+
+      - name: Upload isolated-database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-shadow-integration-database-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          path: database-evidence
+          if-no-files-found: error
+          retention-days: 30

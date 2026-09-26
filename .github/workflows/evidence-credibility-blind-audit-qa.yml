@@ -1,0 +1,385 @@
+name: Evidence credibility blind audit QA
+
+on:
+  pull_request:
+    branches:
+      - feature/evidence-credibility-capture-queue-20260811
+    paths:
+      - .github/workflows/evidence-credibility-blind-audit-qa.yml
+      - docs/moral-trade/evidence-credibility-blind-audit-v1.md
+      - src/app/admin/evidence-calibration/audits/page.tsx
+      - src/app/api/review/evidence-calibration/file/route.ts
+      - src/app/evidence-credibility-audit-actions.ts
+      - src/app/review/evidence-calibration/page.tsx
+      - src/lib/evidence-credibility-blind-audit-schema-contract.test.ts
+      - supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+      - supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+      - supabase/tests/evidence_credibility_blind_audit_authorization.sql
+      - supabase/tests/evidence_credibility_blind_audit_core.sql
+  push:
+    branches:
+      - feature/evidence-credibility-blind-audit-v1-20260812
+    paths:
+      - .github/workflows/evidence-credibility-blind-audit-qa.yml
+      - docs/moral-trade/evidence-credibility-blind-audit-v1.md
+      - src/app/admin/evidence-calibration/audits/page.tsx
+      - src/app/api/review/evidence-calibration/file/route.ts
+      - src/app/evidence-credibility-audit-actions.ts
+      - src/app/review/evidence-calibration/page.tsx
+      - src/lib/evidence-credibility-blind-audit-schema-contract.test.ts
+      - supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+      - supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+      - supabase/tests/evidence_credibility_blind_audit_authorization.sql
+      - supabase/tests/evidence_credibility_blind_audit_core.sql
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-credibility-blind-audit-qa-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  STACK_BASE_SHA: 7832089200c5ea746d50c869f83e15baee420ecf
+
+jobs:
+  source-and-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Guard exact durable scope and shadow boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git cat-file -e "${STACK_BASE_SHA}^{commit}"
+
+          cat > /tmp/expected-files.txt <<'EOF'
+          .github/workflows/evidence-credibility-blind-audit-qa.yml
+          docs/moral-trade/evidence-credibility-blind-audit-v1.md
+          src/app/admin/evidence-calibration/audits/page.tsx
+          src/app/api/review/evidence-calibration/file/route.ts
+          src/app/evidence-credibility-audit-actions.ts
+          src/app/review/evidence-calibration/page.tsx
+          src/lib/evidence-credibility-blind-audit-schema-contract.test.ts
+          supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          supabase/tests/evidence_credibility_blind_audit_authorization.sql
+          supabase/tests/evidence_credibility_blind_audit_core.sql
+          EOF
+          sed -i 's/^          //' /tmp/expected-files.txt
+          git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/actual-files.txt
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          test "$(wc -l < /tmp/actual-files.txt)" -eq 11
+          test -f supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          test -f supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_blind_audit_*.sql' | wc -l)" -eq 2
+
+          for controller in \
+            .github/workflows/harden-blind-audit-validation.yml \
+            .github/workflows/harden-blind-audit-validation-v2.yml \
+            .github/workflows/harden-blind-audit-validation-v3.yml \
+            .github/workflows/repair-blind-audit-migration.yml \
+            .github/workflows/harden-blind-audit-scope-guard.yml \
+            .github/workflows/finalize-blind-audit-hardening.yml \
+            .github/workflows/finalize-blind-audit-hardening-v2.yml \
+            .github/workflows/cleanup-blind-audit-hardening-controllers.yml \
+            .github/workflows/cleanup-blind-audit-hardening-controllers-v2.yml \
+            .github/workflows/cleanup-blind-audit-hardening-controllers-v3.yml; do
+            test ! -e "$controller"
+          done
+
+          for file in supabase/tests/evidence_credibility_blind_audit_*.sql; do
+            grep -qi '^begin;' "$file"
+            grep -qi '^rollback;' "$file"
+          done
+
+          if grep -R "jnpoxvalyjtdghnperyu" \
+            docs/moral-trade/evidence-credibility-blind-audit-v1.md \
+            src/app/admin/evidence-calibration/audits/page.tsx \
+            src/app/api/review/evidence-calibration/file/route.ts \
+            src/app/evidence-credibility-audit-actions.ts \
+            src/app/review/evidence-calibration/page.tsx \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql \
+            supabase/tests/evidence_credibility_blind_audit_*.sql; then
+            echo "Production project reference found in a runtime or durable policy file."
+            exit 1
+          fi
+
+          if grep -Eqi \
+            "update[[:space:]]+public\.credibility_shadow_controls|insert[[:space:]]+into[[:space:]]+public\.credibility_events|insert[[:space:]]+into[[:space:]]+public\.credibility_restrictions" \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql; then
+            echo "A blind-audit migration contains an active-effect write."
+            exit 1
+          fi
+
+          grep -q "control.mode = 'shadow'" \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          grep -q "not control.milestone_cutover_enabled" \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          grep -q "not control.public_effects_enabled" \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          grep -q "not control.ranking_effects_enabled" \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          grep -q "not control.eligibility_effects_enabled" \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          grep -q "calibration_draw_is_current_v1" \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          grep -q "calibration_conflicted_reviewer_ids_v1" \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          grep -q "calibration_projected_receipt_id_v1" \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          grep -q "reconcile_evidence_credibility_calibration_assignments_v1" \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          git diff --check
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run blind-audit source contract
+        run: node --import tsx --test src/lib/evidence-credibility-blind-audit-schema-contract.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run repository-wide ESLint
+        run: npm run lint -- --quiet
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Preserve exact-head source evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(git status --short)"
+          test -z "$status"
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/head-sha.txt
+          git rev-parse "$STACK_BASE_SHA" > evidence/stack-base-sha.txt
+          printf '%s' "$status" > evidence/status.txt
+          git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > evidence/changed-files.txt
+          sha256sum \
+            .github/workflows/evidence-credibility-blind-audit-qa.yml \
+            docs/moral-trade/evidence-credibility-blind-audit-v1.md \
+            src/app/admin/evidence-calibration/audits/page.tsx \
+            src/app/api/review/evidence-calibration/file/route.ts \
+            src/app/evidence-credibility-audit-actions.ts \
+            src/app/review/evidence-calibration/page.tsx \
+            src/lib/evidence-credibility-blind-audit-schema-contract.test.ts \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql \
+            supabase/tests/evidence_credibility_blind_audit_authorization.sql \
+            supabase/tests/evidence_credibility_blind_audit_core.sql \
+            > evidence/file-sha256.txt
+
+      - name: Upload exact-head source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-blind-audit-source-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 30
+
+  isolated-database:
+    needs: source-and-contracts
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+
+      - name: Guard exact candidate and isolated QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit(
+                  "Refusing a database URL outside the exact TLS-only MoralTrade QA target."
+              )
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Record isolated-QA baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p database-evidence
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/before-counts.txt
+          select 'active_events|' || count(*) from public.credibility_events
+          union all select 'active_aggregates|' || count(*) from public.credibility_public_aggregates
+          union all select 'active_restrictions|' || count(*) from public.credibility_restrictions
+          union all select 'evidence_decisions|' || count(*) from public.trade_evidence_decisions
+          union all select 'settlement_decisions|' || count(*) from public.trade_settlement_shadow_decisions
+          union all select 'capture_records|' || count(*) from public.trade_shadow_capture_records
+          union all select 'sampling_runs_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_sampling_runs')::text, '')
+          union all select 'draws_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_draws')::text, '')
+          union all select 'assignments_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_audit_assignments')::text, '')
+          union all select 'events_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_assignment_events')::text, '')
+          union all select 'labels_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_labels')::text, '')
+          order by 1;
+          SQL
+
+      - name: Run both rollback-only blind-audit SQL suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_core="supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql"
+          migration_hardening="supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql"
+          for suite in \
+            evidence_credibility_blind_audit_core \
+            evidence_credibility_blind_audit_authorization; do
+            python3 - "$suite" <<'PY'
+          from pathlib import Path
+          import sys
+
+          suite = sys.argv[1]
+          source_path = Path(f"supabase/tests/{suite}.sql")
+          lines = source_path.read_text(encoding="utf-8").splitlines()
+          if lines[0].strip().startswith("--"):
+              comment = lines.pop(0)
+          else:
+              comment = "-- normalized rollback-only suite"
+          while lines and not lines[0].strip():
+              lines.pop(0)
+          if not lines or lines[0].strip().lower() != "begin;":
+              raise SystemExit(f"{suite}: missing leading begin")
+          lines.pop(0)
+          while lines and not lines[-1].strip():
+              lines.pop()
+          if not lines or lines[-1].strip().lower() != "rollback;":
+              raise SystemExit(f"{suite}: missing trailing rollback")
+          lines.pop()
+          Path(f"/tmp/{suite}-body.sql").write_text(
+              comment + "\n" + "\n".join(lines) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+            cat > "/tmp/${suite}-wrapper.sql" <<SQL
+          \set ON_ERROR_STOP on
+          begin;
+          \i ${migration_core}
+          \i ${migration_hardening}
+          \i /tmp/${suite}-body.sql
+          rollback;
+          SQL
+
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "/tmp/${suite}-wrapper.sql" \
+              | tee "database-evidence/${suite}.log"
+          done
+
+      - name: Prove zero residue and active-pipeline isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/after-counts.txt
+          select 'active_events|' || count(*) from public.credibility_events
+          union all select 'active_aggregates|' || count(*) from public.credibility_public_aggregates
+          union all select 'active_restrictions|' || count(*) from public.credibility_restrictions
+          union all select 'evidence_decisions|' || count(*) from public.trade_evidence_decisions
+          union all select 'settlement_decisions|' || count(*) from public.trade_settlement_shadow_decisions
+          union all select 'capture_records|' || count(*) from public.trade_shadow_capture_records
+          union all select 'sampling_runs_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_sampling_runs')::text, '')
+          union all select 'draws_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_draws')::text, '')
+          union all select 'assignments_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_audit_assignments')::text, '')
+          union all select 'events_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_assignment_events')::text, '')
+          union all select 'labels_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_labels')::text, '')
+          order by 1;
+          SQL
+          diff -u database-evidence/before-counts.txt database-evidence/after-counts.txt
+
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 \
+            --command "select mode || '|' || milestone_cutover_enabled || '|' || public_effects_enabled || '|' || ranking_effects_enabled || '|' || eligibility_effects_enabled from public.credibility_shadow_controls where control_key='evidence_decision_v2'" \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/fail-closed-controls.txt
+          grep -qx 'shadow|false|false|false|false' database-evidence/fail-closed-controls.txt
+
+          git rev-parse HEAD > database-evidence/head-sha.txt
+          sha256sum \
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql \
+            supabase/tests/evidence_credibility_blind_audit_authorization.sql \
+            supabase/tests/evidence_credibility_blind_audit_core.sql \
+            > database-evidence/file-sha256.txt
+
+      - name: Upload isolated-database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-blind-audit-database-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          path: database-evidence
+          if-no-files-found: error
+          retention-days: 30

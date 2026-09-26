@@ -24,7 +24,8 @@
     "test:discover-cofund": "node --import tsx --test src/lib/discover-search.test.ts",
     "test:discover-live-search": "node --test scripts/discover-live-only-contract.test.mjs && node --import tsx --test src/lib/discover-search.test.ts src/lib/discover-live-directory.test.ts && node --check public/moral-trade-discover-search.js",
     "test:e2e:release": "playwright test --config=playwright.release.config.ts",
-    "test:e2e:authenticated": "playwright test tests/feed-create-phase1-authenticated.spec.ts"
+    "test:e2e:authenticated": "playwright test tests/feed-create-phase1-authenticated.spec.ts",
+    "analyze:evidence-credibility": "node --import tsx scripts/evidence-credibility-calibration-analysis.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
