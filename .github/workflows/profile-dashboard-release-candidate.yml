@@ -1,0 +1,133 @@
+name: Profile Dashboard release candidate QA
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/workflows/profile-dashboard-release-candidate.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3d87b0de33e711e8dc5b81f484d49c771484b90d
+          fetch-depth: 2
+      - name: Update only the obsolete Feed-to-Profile landing assertion
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = 3d87b0de33e711e8dc5b81f484d49c771484b90d
+          test "$(git hash-object tests/exact-live-now-recommendations.spec.ts)" = 69179c3d7d186963b4f805b344323c4e412401c2
+          python <<'PY'
+          from pathlib import Path
+          path = Path('tests/exact-live-now-recommendations.spec.ts')
+          text = path.read_text()
+          old = '''    const evidence = page.locator(".header-more").getByRole("link", { name: "Profile", exact: true });
+              await expect(evidence).toBeVisible();
+              const overflow = await page.evaluate(
+                () => document.documentElement.scrollWidth - window.innerWidth,
+              );
+              expect(overflow).toBeLessThanOrEqual(1);
+
+              await evidence.click();
+              await expect(page).toHaveURL(/\\/profile$/);
+              await expect(
+              page.getByRole("heading", {
+                level: 1,
+                name: "Your profile",
+                exact: true,
+              }),
+            ).toBeVisible();'''
+          # The Python heredoc itself is indented by YAML; normalize only the
+          # known indentation added to this guarded multiline source template.
+          old = old.replace('\n          ', '\n')
+          new = '''    const profile = page.locator(".header-more").getByRole("link", { name: "Profile", exact: true });
+              await expect(profile).toBeVisible();
+              await expect(profile).toHaveAttribute("href", "/dashboard");
+              const overflow = await page.evaluate(
+                () => document.documentElement.scrollWidth - window.innerWidth,
+              );
+              expect(overflow).toBeLessThanOrEqual(1);
+
+              await profile.click();
+              await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/dashboard");
+              await expect(page.getByRole("heading", { level: 1, name: "Welcome back", exact: true })).toBeVisible();'''
+          new = new.replace('\n          ', '\n')
+          assert text.count(old) == 1, 'Stop rather than change an unexpected test'
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Publish the test-only follow-up
+        id: commit
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/exact-live-now-recommendations.spec.ts
+          test "$(git diff --cached --name-only)" = tests/exact-live-now-recommendations.spec.ts
+          git commit -m 'Follow the canonical Dashboard destination from the Feed profile link'
+          git push origin HEAD:refs/heads/fix/profile-dashboard-canonical-20260926
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  public:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      VERCEL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Preserve exact identity and fixture equivalence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/profile-dashboard-candidate-qa
+          test "$(git diff --name-only 885104e888a209c9dc2d385bb898a0209a66a97f HEAD | sort)" = $'tests/exact-live-now-recommendations.spec.ts\ntests/refined-header.spec.ts'
+          git diff 885104e888a209c9dc2d385bb898a0209a66a97f HEAD > /tmp/profile-dashboard-candidate-qa/test-only-followups.patch
+          git rev-parse HEAD > /tmp/profile-dashboard-candidate-qa/commit.txt
+          gh api repos/ghuser29384/Website2/actions/jobs/108510526458 > /tmp/profile-dashboard-candidate-qa/passed-fixture-job.json
+          jq -e '.conclusion == "success" and .name == "fixture" and .run_id == 36280219680' /tmp/profile-dashboard-candidate-qa/passed-fixture-job.json
+          git diff --check HEAD^
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Source tests
+        run: npm test > /tmp/profile-dashboard-candidate-qa/tests.log 2>&1
+      - name: Lint and types
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet > /tmp/profile-dashboard-candidate-qa/lint.log 2>&1
+          npx tsc --noEmit --pretty false > /tmp/profile-dashboard-candidate-qa/types.log 2>&1
+      - name: Production build
+        run: npm run build > /tmp/profile-dashboard-candidate-qa/build.log 2>&1
+      - run: npx playwright install --with-deps chromium
+      - name: Targeted canonical route and navigation browser checks
+        run: npx playwright test tests/profile-dashboard-redirect.spec.ts tests/profile-priorities-access.spec.ts tests/refined-header.spec.ts tests/exact-live-now-recommendations.spec.ts --workers=1 --reporter=line > /tmp/profile-dashboard-candidate-qa/targeted-browser.log 2>&1
+      - name: Complete unchanged release browser gate
+        run: npm run test:e2e:release -- --reporter=line > /tmp/profile-dashboard-candidate-qa/release-browser.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-candidate-qa
+          path: |
+            /tmp/profile-dashboard-candidate-qa
+            test-results
+          retention-days: 7
