@@ -76,6 +76,20 @@ const DEFERRED_SCRIPT = `  <script defer src="/moral-trade-create/participant-pi
   <script defer src="/moral-trade-create/ui-repairs.js"></script>
 `;
 
+const AUTOCOMPLETE_ESCAPE_HANDLER = [
+  `      if (event.key === "Escape" && autocompleteState.open) {
+        event.preventDefault();
+        closeSuggestions();
+        return;
+      }`,
+  `      if (event.key === "Escape" && autocompleteState.open) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeSuggestions();
+        return;
+      }`,
+] as const;
+
 function occurrenceCount(source: string, value: string) {
   return source.split(value).length - 1;
 }
@@ -144,6 +158,12 @@ export function integrateCommonGroundCreateSource(source: string) {
     '  <script>\n    "use strict";',
     `${DEFERRED_SCRIPT}  <script>\n    "use strict";`,
     "deferred-script insertion",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    AUTOCOMPLETE_ESCAPE_HANDLER[0],
+    AUTOCOMPLETE_ESCAPE_HANDLER[1],
+    "autocomplete Escape handling",
   );
 
   return integrated;
