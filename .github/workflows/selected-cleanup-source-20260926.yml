@@ -116,6 +116,16 @@ jobs:
               'src/components/layout/site-route-link.tsx', 'src/lib/selected-cleanup.test.ts',
               'tests/selected-cleanup.spec.ts',
           }
+          # The /contact shell has a 2px gap and the refined header has no link padding.
+          # Keep the four selected links readable without restyling that page.
+          topbar = native['src/components/layout/site-topbar.tsx']
+          assert topbar['after'] == '75107c269eeba97fdadc87ea3ac43e51cae944f6'
+          topbar['edits'].append([197, 198, '      <div\n        className="topbar-links"\n        data-mt-primary-links={refinedHeader ? "true" : undefined}\n        style={refinedHeader ? { columnGap: "clamp(12px, 2.4vw, 42px)" } : undefined}\n      >\n'])
+          topbar['after'] = '99a7bd1710cee45eab123589b080b579b344a714'
+          browser = native['tests/selected-cleanup.spec.ts']
+          assert browser['after'] == '7e2cd3012822892425fe1a05bbd944b30598f799'
+          browser['edits'].insert(0, [18, 18, '    const primaryBounds = await header.locator("[data-mt-primary-links] > a").evaluateAll((links) =>\n      links.map((link) => { const { left, right } = link.getBoundingClientRect(); return { left, right }; }),\n    );\n    for (let index = 1; index < primaryBounds.length; index += 1) {\n      expect(primaryBounds[index].left - primaryBounds[index - 1].right).toBeGreaterThanOrEqual(11);\n    }\n'])
+          browser['after'] = 'c45c486f16234a7762a372effb6cd2e43bc6141c'
           apply_batch(native)
           for name, spec in native.items():
               final_scope[name] = {'before': final_scope.get(name, {}).get('before'), 'after': spec['after']}
