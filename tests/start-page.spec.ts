@@ -79,7 +79,8 @@ for (const width of [1440, 390, 320]) {
     await expect(intro.getByRole("status")).toContainText("Select a proposal");
     await intro.getByRole("button", { name: "Skip the example" }).click();
     await browse.click();
-    await expect(page).toHaveURL(/\/discover$/);
+    // The directory may append its canonical view parameters after navigation.
+    await expect(page).toHaveURL(url => url.pathname === "/discover");
     await expect(page.getByRole("heading", { level: 1, name: "Browse trades" })).toBeVisible();
     expect(errors).toEqual([]);
   });
