@@ -20,7 +20,7 @@ env:
   RELEASE_WORKFLOW: vercel-release.yml
   RELEASE_REF: main
   RELEASE_TARGET: production
-  EXPECTED_TRIGGER_PARENT: 86eaafba5559eab8ac5f45f436a293258aca2c38
+  EXPECTED_TRIGGER_PARENT: 541ac787f2125cf7788aa7b2386e996ce903fe82
 
 jobs:
   dispatch:
@@ -43,7 +43,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "$GITHUB_REF" = 'refs/heads/main'
           test "$(git rev-parse HEAD^)" = "$EXPECTED_TRIGGER_PARENT"
-          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          changed="$(git diff --name-only HEAD^ HEAD | sed '/^$/d')"
           test "$changed" = "$CONTROLLER_PATH"
           test "$RELEASE_TARGET" = 'production'
           test "$RELEASE_REF" = 'main'
