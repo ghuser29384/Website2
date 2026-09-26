@@ -1,0 +1,84 @@
+name: Isolate and verify selected shared UI cleanup
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/selected-ui-cleanup-controller.yml'
+      - '.github/selected-ui-cleanup/**'
+permissions:
+  contents: write
+concurrency:
+  group: selected-ui-cleanup-extraction-20260926
+  cancel-in-progress: false
+jobs:
+  isolate-and-verify:
+    if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ops/selected-ui-cleanup-20260926-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      BASE_SHA: ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf
+      PRODUCT_BRANCH: cleanup/selected-shared-ui-only-20260926
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL: '1'
+      VERCEL_ENV: preview
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Isolate the selected changes without any other PR 832 work
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
+          test -z "$(git ls-remote --heads origin "refs/heads/$PRODUCT_BRANCH")"
+          git worktree add --detach "$RUNNER_TEMP/selected-ui-candidate" "$BASE_SHA"
+          python3 .github/selected-ui-cleanup/prepare.py "$RUNNER_TEMP/selected-ui-candidate"
+          cd "$RUNNER_TEMP/selected-ui-candidate"
+          git config user.name 'ghuser29384'
+          git config user.email '262476329+ghuser29384@users.noreply.github.com'
+          git switch -c "$PRODUCT_BRANCH"
+          git commit -m 'Apply only the selected shared navigation search and copy cleanup'
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
+          git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+          mkdir -p "$RUNNER_TEMP/selected-ui-evidence"
+          git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/selected-cleanup.patch"
+          git diff --stat "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/scope.txt"
+          printf 'base=%s\nhead=%s\ntree=%s\n' "$BASE_SHA" "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee "$RUNNER_TEMP/selected-ui-evidence/source.txt"
+          git diff --name-only --diff-filter=ACM "$BASE_SHA" HEAD | zip "$RUNNER_TEMP/selected-ui-evidence/changed-source.zip" -@
+      - name: Install the existing locked dependencies
+        working-directory: ${{ runner.temp }}/selected-ui-candidate
+        run: npm ci
+      - name: Complete unit, lint, typecheck and build gates
+        working-directory: ${{ runner.temp }}/selected-ui-candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/unit.log"
+          npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/lint.log"
+          npx tsc --noEmit 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/types.log"
+          npm run build 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/build.log"
+      - name: Actual production-server browser checks
+        working-directory: ${{ runner.temp }}/selected-ui-candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npx playwright test tests/refined-header.spec.ts tests/selected-ui-cleanup.spec.ts --workers=1 --reporter=line 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/browser.log"
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/release-browser.log"
+          git diff --exit-code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selected-ui-cleanup-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/selected-ui-evidence
+            ${{ runner.temp }}/selected-ui-candidate/test-results
+          if-no-files-found: warn
+          retention-days: 14
