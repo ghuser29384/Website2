@@ -20,7 +20,7 @@ jobs:
       EXPECTED_SHA: f58ee041dfd909cad7699ed67485cc0a7db95933
       EXPECTED_TREE: 551e46f7870aa537e44a9b8ec99675bb51a0b423
       BASE_SHA: 464e61299896216ddc77e65bfa2211664aa875ee
-      EVIDENCE_DIR: ${{ runner.temp }}/selected-ui-production-evidence
+      EVIDENCE_DIR: ${{ github.workspace }}/selected-ui-production-evidence
     steps:
       - name: Check out only the exact merged product
         uses: actions/checkout@v4
@@ -133,6 +133,6 @@ jobs:
         if: always()
         with:
           name: selected-ui-production-${{ github.run_id }}
-          path: ${{ runner.temp }}/selected-ui-production-evidence
+          path: ${{ github.workspace }}/selected-ui-production-evidence
           if-no-files-found: warn
           retention-days: 14
