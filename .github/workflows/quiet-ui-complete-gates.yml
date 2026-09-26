@@ -1,0 +1,120 @@
+name: Quiet UI complete release readiness
+on:
+  push:
+    branches: [ops/quiet-ui-20260926]
+    paths: [.github/workflows/quiet-ui-complete-gates.yml]
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.stage.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/quiet-ui-20260926
+          path: candidate
+          fetch-depth: 20
+      - name: Stage only the reviewed directory and header-retirement contracts
+        id: stage
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = 212316ab2c11b84245eb2f618d982f9a77ffa7db
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = 212316ab2c11b84245eb2f618d982f9a77ffa7db
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          python ../transport/.github/quiet-ui-contracts.py
+          git diff --check
+          git add public/moral-trade-discover.css tests/discover-home-visual-alignment.spec.ts tests/exact-live-local-time.spec.ts tests/returning-homepage-timezone.spec.ts tests/returning-homepage.spec.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 5
+          git diff --cached --check
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git commit -m 'Unify directory surfaces and preserve header-free hydration behavior'
+          git diff --check 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          test "$(git diff --name-only 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9 | wc -l)" -eq 25
+          git push origin HEAD:refs/heads/fix/quiet-ui-20260926
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  quality:
+    needs: stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL: '1'
+      VERCEL_ENV: production
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.stage.outputs.sha }}
+          persist-credentials: false
+          fetch-depth: 20
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Record exact application source
+        run: |
+          mkdir -p /tmp/quiet-ui-ready
+          git rev-parse HEAD > /tmp/quiet-ui-ready/commit.txt
+          git diff --check 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          git diff --stat 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9 > /tmp/quiet-ui-ready/diff-stat.txt
+          git archive --format=tar.gz HEAD > /tmp/quiet-ui-ready/source.tar.gz
+      - run: npm ci
+      - name: Repository tests
+        run: |
+          npm test > /tmp/quiet-ui-ready/unit.log 2>&1 || { tail -100 /tmp/quiet-ui-ready/unit.log; exit 1; }
+          tail -12 /tmp/quiet-ui-ready/unit.log
+      - name: Lint and TypeScript
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet > /tmp/quiet-ui-ready/lint.log 2>&1 || { cat /tmp/quiet-ui-ready/lint.log; exit 1; }
+          npx tsc --noEmit > /tmp/quiet-ui-ready/types.log 2>&1 || { cat /tmp/quiet-ui-ready/types.log; exit 1; }
+      - name: Build production app
+        id: build
+        run: |
+          npm run build > /tmp/quiet-ui-ready/build.log 2>&1 || { tail -120 /tmp/quiet-ui-ready/build.log; exit 1; }
+          tail -20 /tmp/quiet-ui-ready/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Focused directory and header-retirement interactions
+        run: |
+          npx playwright test --config=playwright.release.config.ts tests/discover-home-visual-alignment.spec.ts tests/exact-live-local-time.spec.ts tests/returning-homepage-timezone.spec.ts tests/returning-homepage.spec.ts tests/quiet-ui.spec.ts --reporter=line > /tmp/quiet-ui-ready/focused-browser.log 2>&1 || { tail -200 /tmp/quiet-ui-ready/focused-browser.log; exit 1; }
+          tail -25 /tmp/quiet-ui-ready/focused-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-ready-focused-${{ needs.stage.outputs.sha }}
+          path: |
+            /tmp/quiet-ui-ready
+            test-results
+          retention-days: 7
+      - name: Complete release browser suite
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          npm run test:e2e:release -- --reporter=line > /tmp/quiet-ui-ready/release-browser.log 2>&1 || { tail -250 /tmp/quiet-ui-ready/release-browser.log; exit 1; }
+          tail -20 /tmp/quiet-ui-ready/release-browser.log
+      - name: Preserve Commitments session and streaming behavior
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          npx playwright test --config=playwright.commitments.config.ts --reporter=line > /tmp/quiet-ui-ready/commitments-browser.log 2>&1 || { tail -140 /tmp/quiet-ui-ready/commitments-browser.log; exit 1; }
+          tail -20 /tmp/quiet-ui-ready/commitments-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-ready-complete-${{ needs.stage.outputs.sha }}
+          path: |
+            /tmp/quiet-ui-ready
+            test-results
+          retention-days: 7
