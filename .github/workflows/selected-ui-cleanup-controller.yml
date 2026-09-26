@@ -1,4 +1,4 @@
-name: Verify selected shared UI cleanup
+name: Integrate and verify selected shared UI cleanup
 on:
   pull_request:
     paths:
@@ -13,10 +13,10 @@ jobs:
   verify-selected:
     if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ops/selected-ui-cleanup-20260926-v1'
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 90
     env:
-      BASE_SHA: ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf
-      PRODUCT_SHA: 38ce90c158b3665590e0c873f78054fd4151dafe
+      BASE_SHA: 464e61299896216ddc77e65bfa2211664aa875ee
+      PRODUCT_SHA: 316d4a523cf81d3e4dafff07e4b07c2cc34de76b
       PRODUCT_BRANCH: cleanup/selected-shared-ui-only-20260926
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -33,21 +33,55 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Reconcile only superseded navigation and footer test expectations
+      - name: Preserve concurrent main work and prove only the selected release delta
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
           test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
           git worktree add --detach "$RUNNER_TEMP/selected-ui-candidate" "$PRODUCT_SHA"
-          python3 .github/selected-ui-cleanup/repair-tests.py "$RUNNER_TEMP/selected-ui-candidate"
           cd "$RUNNER_TEMP/selected-ui-candidate"
           git config user.name 'ghuser29384'
           git config user.email '262476329+ghuser29384@users.noreply.github.com'
           git switch -c "$PRODUCT_BRANCH"
-          git commit -m 'Align navigation and footer contracts with the selected cleanup'
+          mkdir -p "$RUNNER_TEMP/selected-ui-evidence"
+          if ! git merge --no-ff --no-commit "$BASE_SHA"; then
+            git diff --cc > "$RUNNER_TEMP/selected-ui-evidence/conflicts.patch"
+            python3 - <<'PY'
+          from pathlib import Path
+          import os,subprocess
+          conflicts=subprocess.check_output(['git','diff','--name-only','--diff-filter=U'],text=True).splitlines()
+          assert conflicts == ['src/lib/action-first-positioning.test.ts'], conflicts
+          p=Path(conflicts[0]); s=subprocess.check_output(['git','show',os.environ['BASE_SHA']+':'+str(p)],text=True)
+          changes=[
+            ('import test from "node:test";', 'import test from "node:test";\nimport { getTopbarActions } from "./site";'),
+            (r'assert.match(site, /href: "\/trades\/new", label: "Create"/);', 'assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });'),
+            (r'assert.match(site, /href: "\/worked-examples", label: "Worked examples"/);', r'assert.doesNotMatch(site, /href: "\/worked-examples"/);'+'\n  assert.ok(readFileSync("src/app/worked-examples/page.tsx", "utf8").length > 0);'),
+          ]
+          for before,after in changes:
+            assert s.count(before)==1,before
+            s=s.replace(before,after,1)
+          p.write_text(s)
+          subprocess.run(['git','add','--',str(p)],check=True)
+          PY
+          fi
+          python3 - <<'PY'
+          import os,subprocess
+          expected=['public/moral-trade-live-navigation.js','public/moral-trade-discover.html',
+          'src/app/layout.tsx','src/components/layout/site-footer.tsx','src/components/layout/site-topbar.tsx',
+          'src/components/search/smart-query-auto-enhancer.tsx','src/lib/site.ts','src/lib/refined-header.ts',
+          'src/lib/refined-header.test.ts','src/lib/selected-ui-cleanup.test.ts','tests/refined-header.spec.ts','tests/selected-ui-cleanup.spec.ts',
+          *['src/lib/'+f+'.test.ts' for f in ['action-first-positioning','live-discover-navigation','production-feature-cleanup','public-route-smoke','site','trade-controls-route-contract']]]
+          actual=subprocess.check_output(['git','diff','--cached','--name-only',os.environ['BASE_SHA']],text=True).splitlines()
+          assert sorted(actual)==sorted(expected),actual
+          for p in ['src/app/about/page.tsx','src/app/sitemap.ts','src/app/start/page.tsx','public/moral-trade-refined-header.css','public/moral-trade-account-identity.js','.github/workflows/vercel-release.yml']:
+            subprocess.run(['git','diff','--cached','--exit-code',os.environ['BASE_SHA'],'--',p],check=True)
+          print('Exact eighteen-path selected delta; concurrent Start/account behavior, About, sitemap, styling and release gates preserved.')
+          PY
+          git diff --cached --check
+          git commit -m 'Integrate current main without expanding the selected UI cleanup'
           test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
           git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
-          mkdir -p "$RUNNER_TEMP/selected-ui-evidence"
           git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/selected-cleanup.patch"
           git diff --stat "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/scope.txt"
           printf 'base=%s\nhead=%s\ntree=%s\n' "$BASE_SHA" "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee "$RUNNER_TEMP/selected-ui-evidence/source.txt"
@@ -55,15 +89,18 @@ jobs:
       - name: Install the existing locked dependencies
         working-directory: ${{ runner.temp }}/selected-ui-candidate
         run: npm ci
-      - name: Complete unit, lint, typecheck and build gates
+      - name: Complete unit tests
         working-directory: ${{ runner.temp }}/selected-ui-candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm test 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/unit.log"
-          npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/lint.log"
-          npx tsc --noEmit 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/types.log"
-          npm run build 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/build.log"
+        run: set -o pipefail; npm test 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/unit.log"
+      - name: Complete lint
+        working-directory: ${{ runner.temp }}/selected-ui-candidate
+        run: set -o pipefail; npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/lint.log"
+      - name: Complete TypeScript check
+        working-directory: ${{ runner.temp }}/selected-ui-candidate
+        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/types.log"
+      - name: Optimized production build
+        working-directory: ${{ runner.temp }}/selected-ui-candidate
+        run: set -o pipefail; npm run build 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/build.log"
       - name: Actual production-server browser checks
         working-directory: ${{ runner.temp }}/selected-ui-candidate
         shell: bash
@@ -71,6 +108,7 @@ jobs:
           set -euo pipefail
           npx playwright install --with-deps chromium
           npx playwright test tests/refined-header.spec.ts tests/selected-ui-cleanup.spec.ts --workers=1 --reporter=line 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/browser.log"
+          cp -R test-results "$RUNNER_TEMP/selected-ui-evidence/selected-browser-results"
           npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/release-browser.log"
           git diff --exit-code
       - uses: actions/upload-artifact@v4
