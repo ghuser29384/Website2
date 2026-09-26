@@ -1,0 +1,27 @@
+name: PR 851 production release dispatch
+on:
+  push:
+    branches: [ops/pr851-fluorescent-yellow-qa-20260925]
+    paths: [.github/workflows/pr851-production-release-dispatch.yml]
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard merged source and dispatch canonical release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: af0d9ce2ad6e284d28e2d587a729340b599a8926
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          repo='repos/ghuser29384/Website2'
+          test "$(gh api "$repo/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_SHA"
+          gh api "$repo/pulls/851" | jq -e --arg sha "$EXPECTED_SHA" '.merged == true and .merge_commit_sha == $sha and .base.ref == "main"' >/dev/null
+          gh api "$repo/actions/runs/36213277933" | jq -e '.status == "completed" and .conclusion == "success"' >/dev/null
+          jq -n --arg sha "$EXPECTED_SHA" '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$sha}}'             | gh api --method POST "$repo/actions/workflows/vercel-release.yml/dispatches" --input -
