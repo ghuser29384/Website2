@@ -61,6 +61,20 @@ jobs:
           assert spec['edits'][0][2].count(old) == 1
           spec['edits'][0][2] = spec['edits'][0][2].replace(old, new)
           spec['after'] = '4e4da7642049816bb19b0d9a61d441de67073b24'
+          # Retain the learning routes and safeguards, but no longer require demo footer links.
+          edits.update({
+              'src/lib/action-first-positioning.test.ts': {
+                  'before': 'a80bdc4dcd772c20f98285152167087743237a3c',
+                  'after': '881e3655844e35e713be07966c23c96b5c217556',
+                  'edits': [[86, 87, '  assert.doesNotMatch(site, /href: "\\/worked-examples"/);\n  assert.match(readFileSync("src/app/worked-examples/page.tsx", "utf8"), /export default/);\n']],
+              },
+              'src/lib/trade-controls-route-contract.test.ts': {
+                  'before': '3f7ab87ce7b8ed83f52969d39194f488b1243ffd',
+                  'after': 'f380a33dec1b36ada9c98e3e76907b62db53cd27',
+                  'edits': [[72, 73, '  assert.doesNotMatch(siteSource, /href: "\\/trade-controls"/);\n']],
+              },
+          })
+          assert len(edits) == 26
           for name, spec in edits.items():
               path = Path(name)
               assert not path.is_absolute() and '..' not in path.parts
