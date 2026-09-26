@@ -68,6 +68,15 @@ test("full proposal titles wrap and primary actions retain a usable target", () 
   assert.match(participant, /\{isOwner \? "Manage" : "Respond"\}/);
 });
 
+test("clarifications and expanded terms are not confined to a narrow action column", () => {
+  assert.match(rule(directoryCss, ".directoryForm :global(.smart-query-clarification)"), /grid-column: 1 \/ -1/);
+  const expanded = rule(participantCss, ".disclosure[open]");
+  assert.match(expanded, /grid-column: 1 \/ -1/);
+  assert.match(expanded, /width: 100%/);
+  assert.match(rule(directoryCss, ".workspace .resultsStage"), /padding: 0/);
+  assert.match(rule(directoryCss, ".workspace .resultsStage"), /margin: 0/);
+});
+
 test("live counts, error and empty states, and exact terms remain distinct", () => {
   assert.equal(page.match(/data-authoritative-directory="true"/g)?.length, 1);
   assert.equal(page.match(/data-directory-state="unavailable"/g)?.length, 1);
