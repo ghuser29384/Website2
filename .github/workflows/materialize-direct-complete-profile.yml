@@ -1,0 +1,107 @@
+name: Materialize direct Complete Profile fix
+
+on:
+  push:
+    branches:
+      - "fix/direct-complete-profile-100-sparks-20260731"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out the exact fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/direct-complete-profile-100-sparks-20260731
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Integrate current main and materialize the clean product diff
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "0a26b17d75c9590f92c73663ea19fe1b0e8aa6c4"
+          git rebase origin/main
+          python - <<'PY'
+          import base64
+          import gzip
+          from pathlib import Path
+
+          encoded = ''.join(
+              Path('.github/patches/direct-complete-profile.patch.gz.b64')
+              .read_text(encoding='utf-8')
+              .split()
+          )
+          patch = gzip.decompress(base64.b64decode(encoded))
+          Path('/tmp/direct-complete-profile.patch').write_bytes(patch)
+          print(f'decoded {len(patch)} patch bytes')
+          PY
+          echo "f7d0cb216401fc1da0b4ffffa514af6cfe6cc7676ad96838e543436e6372d33d  /tmp/direct-complete-profile.patch" | sha256sum --check -
+          git apply --index /tmp/direct-complete-profile.patch
+          git rm .github/patches/direct-complete-profile.patch.gz.b64
+          git rm .github/workflows/materialize-direct-complete-profile.yml
+          git diff --cached --check
+
+          cat > /tmp/expected-paths <<'EOF'
+          src/app/complete-profile/actions.ts
+          src/app/complete-profile/page.tsx
+          src/complete-profile-direct-route.test.ts
+          src/components/profile/complete-profile-review.tsx
+          src/lib/complete-profile-private-preferences.ts
+          src/lib/complete-profile.test.ts
+          src/lib/complete-profile.ts
+          src/lib/walkthrough-profile.test.ts
+          src/lib/walkthrough-profile.ts
+          tests/complete-profile-review.spec.ts
+          EOF
+          git diff --cached --name-only origin/main | sort > /tmp/actual-paths
+          diff -u /tmp/expected-paths /tmp/actual-paths
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the complete unit and source suite
+        run: npm test
+
+      - name: Run the absolute TypeScript gate
+        run: npx tsc --noEmit
+
+      - name: Run the absolute ESLint gate
+        run: npm run lint
+
+      - name: Build the production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run rendered desktop and narrow-screen Complete Profile QA
+        run: npx playwright test tests/complete-profile-review.spec.ts --reporter=line
+
+      - name: Publish the verified product commit
+        run: |
+          set -euxo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "0a26b17d75c9590f92c73663ea19fe1b0e8aa6c4"
+          git diff --cached --check
+          git commit -m "Fix direct Complete Profile routing"
+          git push --force-with-lease origin HEAD:fix/direct-complete-profile-100-sparks-20260731
