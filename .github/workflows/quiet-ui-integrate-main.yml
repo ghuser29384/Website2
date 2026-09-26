@@ -76,7 +76,9 @@ jobs:
             tests/homepage-narrow-header.spec.ts \
             tests/returning-homepage.spec.ts
           do
-            git checkout --ours -- "$path"
+            if git diff --name-only --diff-filter=U -- "$path" | grep -q .; then
+              git checkout --ours -- "$path"
+            fi
           done
 
           python3 <<'PY'
@@ -109,21 +111,42 @@ jobs:
                'const actions = (label = \'Create offer\') => `<div class="h mt-feed-actions">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;'),
           ]
           for old, new in replacements:
-              if core.count(old) != 1:
-                  raise RuntimeError(f"{core_path}: expected exactly one match for {old!r}, found {core.count(old)}")
-              core = core.replace(old, new, 1)
+              old_count = core.count(old)
+              new_count = core.count(new)
+              if old_count == 1 and new_count == 0:
+                  core = core.replace(old, new, 1)
+              elif old_count == 0 and new_count == 1:
+                  pass
+              else:
+                  raise RuntimeError(
+                      f"{core_path}: ambiguous palette replacement {old!r}; old={old_count}, new={new_count}"
+                  )
           write(core_path, core)
 
           canonical_path = "src/app/canonical-visual-system.css"
           canonical = read(canonical_path)
-          if canonical.count("--mt-lime: #a2aa16;") != 1:
-              raise RuntimeError("canonical lime variable not found exactly once")
-          canonical = canonical.replace("--mt-lime: #a2aa16;", "--mt-sage: #526b58;", 1)
+          old_variable = "--mt-lime: #a2aa16;"
+          new_variable = "--mt-sage: #526b58;"
+          if canonical.count(old_variable) == 1 and canonical.count(new_variable) == 0:
+              canonical = canonical.replace(old_variable, new_variable, 1)
+          elif canonical.count(old_variable) == 0 and canonical.count(new_variable) == 1:
+              pass
+          else:
+              raise RuntimeError(
+                  f"canonical palette variable is ambiguous; old={canonical.count(old_variable)}, new={canonical.count(new_variable)}"
+              )
+
           old_success = ".status-banner-success {\n  border-color: #7e8d2d;\n  background: #eef0d7;\n  color: #4c5913;\n}"
           new_success = ".status-banner-success {\n  border-color: #526b58;\n  background: #e7efe5;\n  color: #365244;\n}"
-          if canonical.count(old_success) != 1:
-              raise RuntimeError("canonical success banner block not found exactly once")
-          write(canonical_path, canonical.replace(old_success, new_success, 1))
+          if canonical.count(old_success) == 1 and canonical.count(new_success) == 0:
+              canonical = canonical.replace(old_success, new_success, 1)
+          elif canonical.count(old_success) == 0 and canonical.count(new_success) == 1:
+              pass
+          else:
+              raise RuntimeError(
+                  f"canonical success banner is ambiguous; old={canonical.count(old_success)}, new={canonical.count(new_success)}"
+              )
+          write(canonical_path, canonical)
 
           for test_path in [
               "tests/homepage-narrow-header.spec.ts",
