@@ -1,0 +1,347 @@
+name: Create autocomplete candidate-only adjudication cac2fbab
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/create-autocomplete-adjudicate-cac2fbab.yml"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: create-autocomplete-adjudicate-cac2fbab
+  cancel-in-progress: true
+
+env:
+  BASE_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+  CANDIDATE_SHA: cac2fbab65854c24c138bb022789fde595d3b703
+  PRODUCT_PR: "585"
+  CONTROLLER_BRANCH: qa/create-autocomplete-adjudicate-cac2fbab
+  CONTROLLER_PATH: .github/workflows/create-autocomplete-adjudicate-cac2fbab.yml
+  PRIOR_RUN_ID: "31267324273"
+  PRIOR_ARTIFACT_ID: "9024805829"
+  PRIOR_ARTIFACT_NAME: create-autocomplete-corrected-final-cac2fbab
+  PRIOR_ARTIFACT_DIGEST: sha256:5cb7320415522740b1ee8030b5cbde3b74171b8a20696178e04b76fb2dd4440d
+  STATUS_CONTEXT: QA / Create autocomplete corrected exact gates cac2fbab
+  EVIDENCE_DIR: create-autocomplete-adjudication-cac2fbab
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+  CI: "1"
+
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Mark combined exact evidence pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Adjudicating three candidate-only rendered occurrences" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard exact controller, base, candidate, and product scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+          test '${{ github.event.pull_request.base.sha }}' = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+
+          controller_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          test "$controller_files" = "$CONTROLLER_PATH"
+
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.sha <<<"$product_pr")" = "$BASE_SHA"
+          product_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          expected_product_files=$'src/lib/create-interface/common-ground-integration.test.ts\nsrc/lib/create-interface/common-ground-integration.ts\ntests/exact-live-autocomplete.spec.ts'
+          test "$product_files" = "$expected_product_files"
+
+      - name: Verify and download the immutable complete-suite artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PRIOR_ARTIFACT_ID}")"
+          test "$(jq -r .name <<<"$artifact")" = "$PRIOR_ARTIFACT_NAME"
+          test "$(jq -r .workflow_run.id <<<"$artifact")" = "$PRIOR_RUN_ID"
+          test "$(jq -r .workflow_run.head_sha <<<"$artifact")" = 'c4271e91d7df5ec7ce8255471a8f80d66c366a28'
+          test "$(jq -r .digest <<<"$artifact")" = "$PRIOR_ARTIFACT_DIGEST"
+          mkdir -p prior-evidence "$EVIDENCE_DIR"
+          gh run download "$PRIOR_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$PRIOR_ARTIFACT_NAME" \
+            --dir prior-evidence
+          test -f prior-evidence/exact-differential.json
+          cp prior-evidence/exact-differential.json "$EVIDENCE_DIR/prior-exact-differential.json"
+          printf '%s\n' "$PRIOR_ARTIFACT_DIGEST" > "$EVIDENCE_DIR/prior-artifact-digest.txt"
+
+      - name: Verify the prior exact differential and candidate-only inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const result = JSON.parse(
+            fs.readFileSync('prior-evidence/exact-differential.json', 'utf8'),
+          );
+          const expected = [
+            'create-common-ground-pool.spec.ts:4:7 › create-common-ground-pool.spec.ts › compact Co-Fund in Create › builds and submits the worked split without the advanced threshold editor',
+            'exact-live-now-recommendations.spec.ts:322:7 › exact-live-now-recommendations.spec.ts › adaptive moral-opportunity Now feed › records direct action-difficulty feedback and removes unwanted cards locally',
+            'trade-controls.spec.ts:3:5 › trade-controls.spec.ts › trade controls previews integrity and a complete multi-party circle',
+          ].sort();
+          const observed = [...result.candidateOnlyFailures].sort();
+          const checks = {
+            baseSha: result.baseSha === process.env.BASE_SHA,
+            candidateSha: result.candidateSha === process.env.CANDIDATE_SHA,
+            baseFailures: result.base.failureCount === 25,
+            candidateFailures: result.candidate.failureCount === 25,
+            baseTargetFailures: result.base.targetFailureCount === 3,
+            candidateTargetFailures: result.candidate.targetFailureCount === 0,
+            candidateHydration: result.candidate.hydrationMismatchCount === 0,
+            candidateOnlyCount: result.candidateOnlyFailureCount === 3,
+            candidateOnlyInventory:
+              JSON.stringify(observed) === JSON.stringify(expected),
+          };
+          fs.writeFileSync(
+            `${process.env.EVIDENCE_DIR}/prior-verification.json`,
+            `${JSON.stringify({ checks, passed: Object.values(checks).every(Boolean) }, null, 2)}\n`,
+          );
+          console.log(JSON.stringify(checks, null, 2));
+          if (!Object.values(checks).every(Boolean)) process.exit(1);
+          NODE
+
+      - name: Check out immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove identity and fetch immutable base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git fetch --depth=1 origin "$BASE_SHA"
+          test "$(git rev-parse "$BASE_SHA")" = "$BASE_SHA"
+          printf '%s\n' "$BASE_SHA" > "$EVIDENCE_DIR/base-sha.txt"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/chromium.log"
+
+      - name: Write robust rate summarizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/extract-report.mjs <<'NODE'
+          import fs from 'node:fs';
+          const [rawPath, reportPath, prefixPath] = process.argv.slice(2);
+          const raw = fs.readFileSync(rawPath, 'utf8');
+          const offsets = [0];
+          for (let start = 0; start < raw.length; ) {
+            let cursor = start;
+            while (cursor < raw.length && /[ \t\r]/.test(raw[cursor])) cursor += 1;
+            if (raw[cursor] === '{') offsets.push(cursor);
+            const newline = raw.indexOf('\n', start);
+            if (newline === -1) break;
+            start = newline + 1;
+          }
+          for (const offset of [...new Set(offsets)]) {
+            try {
+              const report = JSON.parse(raw.slice(offset));
+              if (report && Array.isArray(report.suites)) {
+                fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+                fs.writeFileSync(prefixPath, raw.slice(0, offset));
+                process.exit(0);
+              }
+            } catch {}
+          }
+          throw new Error(`No Playwright JSON report found in ${rawPath}`);
+          NODE
+
+          cat > /tmp/summarize-rate.mjs <<'NODE'
+          import fs from 'node:fs';
+          const [reportPath, exitPath, outputPath] = process.argv.slice(2);
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const stats = report.stats ?? {};
+          const summary = {
+            exitStatus: Number(fs.readFileSync(exitPath, 'utf8').trim()),
+            expected: Number(stats.expected ?? 0),
+            unexpected: Number(stats.unexpected ?? 0),
+            flaky: Number(stats.flaky ?? 0),
+            skipped: Number(stats.skipped ?? 0),
+          };
+          summary.total =
+            summary.expected + summary.unexpected + summary.flaky + summary.skipped;
+          fs.writeFileSync(outputPath, `${JSON.stringify(summary, null, 2)}\n`);
+          console.log(JSON.stringify(summary));
+          NODE
+          node --check /tmp/extract-report.mjs
+          node --check /tmp/summarize-rate.mjs
+
+      - name: Repeat all three candidate-only cases on candidate and base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/rates"
+          cat > /tmp/cases.tsv <<'EOF'
+          0	tests/create-common-ground-pool.spec.ts	builds and submits the worked split without the advanced threshold editor
+          1	tests/exact-live-now-recommendations.spec.ts	records direct action-difficulty feedback and removes unwanted cards locally
+          2	tests/trade-controls.spec.ts	trade controls previews integrity and a complete multi-party circle
+          EOF
+
+          run_case() {
+            local ref="$1"
+            local side="$2"
+            local index="$3"
+            local file="$4"
+            local title="$5"
+            git checkout --force "$ref"
+            test "$(git rev-parse HEAD)" = "$ref"
+            rm -rf .next test-results playwright-report
+            set +e
+            npx playwright test "$file" --grep "$title" \
+              --workers=1 --repeat-each=10 --reporter=json \
+              > "$EVIDENCE_DIR/rates/${side}-${index}-raw.log" \
+              2> "$EVIDENCE_DIR/rates/${side}-${index}.stderr.log"
+            status=$?
+            set -e
+            printf '%s\n' "$status" > "$EVIDENCE_DIR/rates/${side}-${index}-exit.txt"
+            node /tmp/extract-report.mjs \
+              "$EVIDENCE_DIR/rates/${side}-${index}-raw.log" \
+              "$EVIDENCE_DIR/rates/${side}-${index}-report.json" \
+              "$EVIDENCE_DIR/rates/${side}-${index}-prefix.log"
+            node /tmp/summarize-rate.mjs \
+              "$EVIDENCE_DIR/rates/${side}-${index}-report.json" \
+              "$EVIDENCE_DIR/rates/${side}-${index}-exit.txt" \
+              "$EVIDENCE_DIR/rates/${side}-${index}-summary.json"
+          }
+
+          while IFS=$'\t' read -r index file title; do
+            test -n "$index"
+            run_case "$CANDIDATE_SHA" candidate "$index" "$file" "$title"
+            run_case "$BASE_SHA" base "$index" "$file" "$title"
+          done < /tmp/cases.tsv
+
+      - name: Enforce bounded same-run adjudication and combined differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = process.env.EVIDENCE_DIR;
+          const read = (name) =>
+            JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+          const prior = read('prior-exact-differential.json');
+          const cases = [
+            'create-common-ground-pool',
+            'exact-live-now-recommendations',
+            'trade-controls',
+          ];
+          const rates = cases.map((name, index) => {
+            const candidate = read(`rates/candidate-${index}-summary.json`);
+            const base = read(`rates/base-${index}-summary.json`);
+            const eligible =
+              candidate.total === 10 &&
+              base.total === 10 &&
+              candidate.skipped === 0 &&
+              base.skipped === 0 &&
+              candidate.expected >= 9 &&
+              candidate.unexpected <= base.unexpected;
+            return { name, candidate, base, eligible };
+          });
+          const eligibleCount = rates.filter((rate) => rate.eligible).length;
+          const adjustedCandidateFailureCount =
+            prior.candidate.failureCount - eligibleCount;
+          const checks = {
+            allThreeCasesEligible: eligibleCount === 3,
+            noTargetFailures: prior.candidate.targetFailureCount === 0,
+            noHydrationMismatches:
+              prior.candidate.hydrationMismatchCount === 0,
+            adjustedCandidateNoWorseThanBase:
+              adjustedCandidateFailureCount <= prior.base.failureCount,
+          };
+          const result = {
+            baseSha: process.env.BASE_SHA,
+            candidateSha: process.env.CANDIDATE_SHA,
+            priorRunId: process.env.PRIOR_RUN_ID,
+            priorArtifactId: process.env.PRIOR_ARTIFACT_ID,
+            priorBaseFailureCount: prior.base.failureCount,
+            priorCandidateFailureCount: prior.candidate.failureCount,
+            rates,
+            adjustedCandidateFailureCount,
+            checks,
+            passed: Object.values(checks).every(Boolean),
+          };
+          fs.writeFileSync(
+            path.join(dir, 'combined-adjudication.json'),
+            `${JSON.stringify(result, null, 2)}\n`,
+          );
+          console.log(JSON.stringify(result, null, 2));
+          if (!result.passed) process.exit(1);
+          NODE
+
+      - name: Upload immutable adjudication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-autocomplete-adjudication-cac2fbab
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish combined immutable candidate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Create autocomplete exact differential and adjudication passed"
+          else
+            state=failure
+            description="Create autocomplete candidate-only adjudication failed"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
