@@ -1,0 +1,51 @@
+name: Quiet UI pinned source review
+
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-source-review.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quiet-ui-source-review
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Package the exact existing candidate and current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/quiet-ui-review"
+          main=f58ee041dfd909cad7699ed67485cc0a7db95933
+          head=1994d490e51d11fd9677a1b10346c8713928e815
+          git cat-file -e "$main^{commit}"
+          git cat-file -e "$head^{commit}"
+          base=$(git merge-base "$main" "$head")
+          printf 'main=%s\nhead=%s\nbase=%s\n' "$main" "$head" "$base" | tee "$RUNNER_TEMP/quiet-ui-review/revisions.txt"
+          git branch export-quiet-ui-main "$main"
+          git branch export-quiet-ui-head "$head"
+          git bundle create "$RUNNER_TEMP/quiet-ui-review/source.bundle" export-quiet-ui-main export-quiet-ui-head
+          git diff --stat "$base" "$main" > "$RUNNER_TEMP/quiet-ui-review/main-diffstat.txt"
+          git diff --stat "$base" "$head" > "$RUNNER_TEMP/quiet-ui-review/head-diffstat.txt"
+          git diff "$base" "$main" > "$RUNNER_TEMP/quiet-ui-review/main.patch"
+          git diff "$base" "$head" > "$RUNNER_TEMP/quiet-ui-review/head.patch"
+          git log -12 --oneline "$main" > "$RUNNER_TEMP/quiet-ui-review/main-log.txt"
+          git log -8 --oneline "$head" > "$RUNNER_TEMP/quiet-ui-review/head-log.txt"
+          git ls-tree -r --name-only "$main" | grep -E '(^|/)AGENTS\.md$|(^|/)[^/]*(RELEASE|DEPLOY|QA_GATES|PARALLEL)[^/]*$' > "$RUNNER_TEMP/quiet-ui-review/guidance-paths.txt" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quiet-ui-pinned-source-review
+          path: ${{ runner.temp }}/quiet-ui-review/
+          retention-days: 3
+          if-no-files-found: error
