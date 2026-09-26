@@ -1,0 +1,143 @@
+name: Profile Dashboard canonical route QA
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/workflows/profile-dashboard-qa.yml]
+permissions:
+  contents: read
+concurrency:
+  group: profile-dashboard-qa-20260926
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Verify the exact patch and isolate it from operational files
+        env:
+          BASE_SHA: f58ee041dfd909cad7699ed67485cc0a7db95933
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/profile-dashboard-20260926
+          python <<'PY'
+          import base64, hashlib, zlib
+          from pathlib import Path
+          encoded = Path('.github/profile-dashboard.patch.b64').read_text().strip()
+          # Repair transport transcription only; the reviewed patch is pinned by its digest below.
+          encoded = encoded.replace('OHoPyi9cyca2zo', 'OHoPyi9ZLAuK/aKYCWZ+cslJ2lQFK2kWXUYJBrHVZtUpXNO/KpdFBZklQUiz3I0SYJCIyiDND7VCy7dvwd+My7cXpTa+O0dUs9qOTM2YFli4f/91hL4tSaiF4OaqzwLCqrXJwJ8Y8le6hAQjW6QRJhuWYPWUaCotzHC5iGHDi7KiShfWeeeeUxqLCnBpJZayADIhH2RZhkvRCuteQTd16sC6v09bgtiq1hlnuqlQ35LaqU6XSvPU7BIbUQQgl8X0uLnjYcrzF2nx3C+CmS1695n3xvry4q1iB/ziNbrNTe1LstJ6SMJYaztqVZI+FWqsMR0720ojcf/APzw5DF33JDzi4d6x2e/bDM1sTXa3p5gFluvuHteO3IAHt1zI/bDRrDNUi+KjmBcIXgwjYl1EN+jrCUhYsLQBUEfZaQMQCDQ/1yFhGTKgyQFqBZItK5Gpy45TN1HQz8vBLoH27Jzaq6weZvOcKpsn8yca2zo')
+          encoded = encoded.replace('GovRnY38VR3VR3SzJxzs9', 'GovRnY38VR3SzJxzs9')
+          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'f6a88c1e2a9de8f04665c8ea9514d8bb02bcb2f47108fc6484a495be857727fb'
+          Path('/tmp/profile-dashboard.patch').write_bytes(patch)
+          PY
+          git checkout -b fix/profile-dashboard-canonical-20260926 "$BASE_SHA"
+          git apply --check /tmp/profile-dashboard.patch
+          git apply /tmp/profile-dashboard.patch
+          git add next.config.ts public/moral-trade-discover.html public/moral-trade-live-navigation.js src/app/profile/page.tsx src/components/marketplace/marketplace-components.tsx src/components/trade-controls/trade-controls-workspace.tsx src/lib/dashboard-view.ts src/lib/profile-dashboard-redirect.test.ts src/lib/profile-priorities-access.test.ts src/lib/refined-header.test.ts src/lib/refined-header.ts src/lib/selected-ui-cleanup.test.ts tests/dashboard-sparks.spec.ts tests/profile-dashboard-redirect.spec.ts tests/profile-priorities-access.spec.ts tests/refined-header.spec.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 16
+          git diff --cached --check
+          git diff --cached --stat
+      - name: Publish only the scoped review candidate
+        id: commit
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Unify Profile with the canonical Dashboard account page'
+          git push origin HEAD:refs/heads/fix/profile-dashboard-canonical-20260926
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  public:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      VERCEL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: mkdir -p /tmp/profile-dashboard-qa && git rev-parse HEAD > /tmp/profile-dashboard-qa/commit.txt
+      - run: npm ci
+      - name: Focused tests
+        run: node --import tsx --test src/lib/profile-dashboard-redirect.test.ts src/lib/profile-priorities-access.test.ts src/lib/refined-header.test.ts src/lib/selected-ui-cleanup.test.ts > /tmp/profile-dashboard-qa/focused.log 2>&1
+      - name: Repository tests
+        run: npm test > /tmp/profile-dashboard-qa/tests.log 2>&1
+      - name: Lint and types
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet > /tmp/profile-dashboard-qa/lint.log 2>&1
+          npx tsc --noEmit --pretty false > /tmp/profile-dashboard-qa/types.log 2>&1
+      - name: Production build
+        run: npm run build > /tmp/profile-dashboard-qa/build.log 2>&1
+      - run: npx playwright install --with-deps chromium
+      - name: Redirect, navigation, and responsive browser checks
+        run: npx playwright test tests/profile-dashboard-redirect.spec.ts tests/profile-priorities-access.spec.ts tests/refined-header.spec.ts --workers=1 --reporter=line > /tmp/profile-dashboard-qa/targeted-browser.log 2>&1
+      - name: Complete release browser checks
+        run: npm run test:e2e:release -- --reporter=line > /tmp/profile-dashboard-qa/release-browser.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-public-qa
+          path: |
+            /tmp/profile-dashboard-qa
+            test-results
+          retention-days: 7
+  fixture:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: local-fixture-publishable-key-not-production
+      SUPABASE_SERVICE_ROLE_KEY: local-fixture-service-role-not-production
+      DASHBOARD_SPARKS_FIXTURE: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      VERCEL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: mkdir -p /tmp/profile-dashboard-fixture && git rev-parse HEAD > /tmp/profile-dashboard-fixture/commit.txt
+      - run: npm ci
+      - name: Build with loopback-only synthetic identity
+        run: npm run build > /tmp/profile-dashboard-fixture/build.log 2>&1
+      - run: npx playwright install --with-deps chromium
+      - name: Test actual Dashboard through both entry URLs, saving and controls
+        run: npx playwright test tests/dashboard-sparks.spec.ts --workers=1 --reporter=line > /tmp/profile-dashboard-fixture/browser.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-fixture-qa
+          path: |
+            /tmp/profile-dashboard-fixture
+            /tmp/dashboard-sparks-evidence
+            test-results
+          retention-days: 7
