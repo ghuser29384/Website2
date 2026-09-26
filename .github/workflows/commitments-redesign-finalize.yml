@@ -1,0 +1,56 @@
+name: Finalize Commitments candidate
+on:
+  push:
+    branches: [ops/commitments-redesign-release-20260926]
+    paths: [.github/workflows/commitments-redesign-finalize.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 0da73f93d0d62b52d0c9249fc4bac203c29f5de9
+          fetch-depth: 1
+      - name: Preserve loading assertions and match approved sidebar proportions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          test "$(git ls-remote origin refs/heads/redesign/commitments-balanced-layout-20260926 | cut -f1)" = 7956ef1ee91686ccabf1258f6158b4286772cf7a
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c work/commitments-redesign-final-20260926
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/commitments-loading.auth.ts')
+          source = path.read_text()
+          old = 'page.getByText("Track your commitments, proof, outcomes, and impact.", { exact: true })'
+          assert source.count(old) == 2
+          source = source.replace(old, 'page.locator(".commitments-center").getByText("Track your commitments, proof, outcomes, and impact.", { exact: true })')
+          path.write_text(source)
+          path = Path('tests/sitewide-canonical-visual-system.spec.ts')
+          source = path.read_text().replace('const BLUE = "rgb(36, 80, 255)";\n', '')
+          path.write_text(source)
+          path = Path('src/app/commitments/commitments-redesign.module.css')
+          source = path.read_text().replace('.shell > main {', '.shell.shell > main {')
+          old = '.shell:global(.marketplace-app-shell) :global(.mt-v75-side-link) {\n  border-radius: 9px !important;'
+          assert old in source
+          source = source.replace(old, '.shell:global(.marketplace-app-shell) :global(.mt-v75-side-link) {\n  width: 100%;\n  border-radius: 9px !important;')
+          path.write_text(source)
+          PY
+          git diff --check
+          git add src/app/commitments/commitments-redesign.module.css tests/commitments-loading.auth.ts tests/sitewide-canonical-visual-system.spec.ts
+          git commit -m 'Keep Commitments checks scoped to the resolved streamed page'
+          mkdir -p /tmp/commitments-final
+          git rev-parse HEAD | tee /tmp/commitments-final/candidate-sha.txt
+          git archive HEAD | gzip > /tmp/commitments-final/source.tar.gz
+          git push origin HEAD:refs/heads/work/commitments-redesign-final-20260926
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commitments-redesign-final-source
+          path: /tmp/commitments-final
+          if-no-files-found: error
+          retention-days: 7
