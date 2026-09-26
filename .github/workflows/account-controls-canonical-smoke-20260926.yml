@@ -69,6 +69,7 @@ jobs:
               const errors = [];
               const consoleMessages = [];
               const checks = [];
+              result.browsers.push({ width, height: 1000, checks, pageErrors: errors, consoleMessages });
               page.on('pageerror', error => errors.push(error.message));
               page.on('console', message => { if (['error', 'warning'].includes(message.type())) consoleMessages.push({ type: message.type(), text: message.text() }); });
               const open = async () => {
@@ -119,7 +120,8 @@ jobs:
                 await link.click();
                 await page.waitForURL(url => url.pathname === '/login');
                 assert.equal(new URL(page.url()).searchParams.get('returnTo'), returnTo);
-                assert.ok((await page.locator('body').innerText()).length > 50);
+                // App Router can commit the URL before streamed login content arrives.
+                await expect.poll(async () => (await page.locator('body').innerText()).length, { timeout: 30000 }).toBeGreaterThan(50);
                 checks.push(`${key}: actual login navigation preserves ${returnTo}`);
               }
               await open();
@@ -133,7 +135,6 @@ jobs:
               await expect(page.locator('body')).toContainText(/Terms/i);
               checks.push('terms: actual public document navigation');
               assert.deepEqual(errors, [], 'JavaScript page errors');
-              result.browsers.push({ width, height: 1000, checks, pageErrors: errors, consoleMessages });
               await context.close();
             }
             result.completedAt = new Date().toISOString();
