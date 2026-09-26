@@ -1,0 +1,191 @@
+name: Repair PR 689 compact-mobile DAC title
+
+on:
+  push:
+    branches:
+      - ops/pr689-isolated-qa-preview-uat-20260814
+    paths:
+      - ".github/workflows/repair-pr689-mobile-dac-title-20260816.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pr689-mobile-dac-title-20260816
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HEAD_SHA: 04cf9466be288f92c7569f8c871c711269e40ded
+  TARGET_BRANCH: integration/mpgf-dac-lifecycle-current-main-20260814
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+
+    steps:
+      - name: Check out exact PR 689 head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Verify exact starting head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+
+      - name: Apply bounded compact-mobile title repair and regression coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          css_path = Path("src/app/globals.css")
+          css = css_path.read_text(encoding="utf-8")
+          css_old = """@media (max-width: 560px) {
+            .mpgf-kpi-grid,"""
+          css_new = """@media (max-width: 560px) {
+            .mpgf-hero-copy h1 {
+              max-width: 100%;
+              font-size: clamp(2.45rem, 13.5vw, 3rem);
+              overflow-wrap: anywhere;
+            }
+
+            .mpgf-kpi-grid,"""
+          if css.count(css_old) != 1:
+              raise SystemExit(f"Expected one compact-mobile MPGF media block, found {css.count(css_old)}")
+          css_path.write_text(css.replace(css_old, css_new, 1), encoding="utf-8")
+
+          contract_path = Path("src/lib/mpgf/dac-product-lifecycle.test.ts")
+          contract = contract_path.read_text(encoding="utf-8")
+          paths_old = """  workflow: \".github/workflows/mpgf-dac-product-lifecycle-gates.yml\",
+          } as const;"""
+          paths_new = """  workflow: \".github/workflows/mpgf-dac-product-lifecycle-gates.yml\",
+            styles: \"src/app/globals.css\",
+          } as const;"""
+          if contract.count(paths_old) != 1:
+              raise SystemExit(f"Expected one lifecycle path table marker, found {contract.count(paths_old)}")
+          contract = contract.replace(paths_old, paths_new, 1)
+
+          test_marker = """function countOccurrences(source: string, fragment: string) {
+            return source.split(fragment).length - 1;
+          }
+
+          """
+          test_insert = """function countOccurrences(source: string, fragment: string) {
+            return source.split(fragment).length - 1;
+          }
+
+          test(\"compact-mobile DAC hero titles wrap instead of clipping operative text\", async () => {
+            const styles = await read(paths.styles);
+
+            assert.match(
+              styles,
+              /@media \\(max-width: 560px\\) \\{[\\s\\S]*?\\.mpgf-hero-copy h1 \\{[\\s\\S]*?font-size: clamp\\(2\\.45rem, 13\\.5vw, 3rem\\);[\\s\\S]*?overflow-wrap: anywhere;/,
+            );
+          });
+
+          """
+          if contract.count(test_marker) != 1:
+              raise SystemExit(f"Expected one lifecycle helper marker, found {contract.count(test_marker)}")
+          contract_path.write_text(contract.replace(test_marker, test_insert, 1), encoding="utf-8")
+
+          browser_path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
+          browser = browser_path.read_text(encoding="utf-8")
+          viewport_old = """  const desktop = { width: 1440, height: 1000 };
+            const mobile = { width: 390, height: 844 };
+            let context: BrowserContext | null = null;"""
+          viewport_new = """  const desktop = { width: 1440, height: 1000 };
+            const mobile = { width: 390, height: 844 };
+            const compactMobile = { width: 320, height: 568 };
+            let context: BrowserContext | null = null;"""
+          if browser.count(viewport_old) != 1:
+              raise SystemExit(f"Expected one viewport declaration block, found {browser.count(viewport_old)}")
+          browser = browser.replace(viewport_old, viewport_new, 1)
+
+          mobile_old = """  await screenshot(page, \"10-lapse-mobile\");
+            await closeContext(context);
+
+            qaCheckpoint(\"Complete rendered DAC lifecycle proof passed without payment execution.\");"""
+          mobile_new = """  await screenshot(page, \"10-lapse-mobile\");
+            await closeContext(context);
+            context = null;
+
+            context = await browserContext(browser, { viewport: compactMobile });
+            page = await context.newPage();
+            await gotoReady(page, ROUTES.open);
+            const compactHeading = page.getByRole(\"heading\", {
+              name: \"QA DAC open for conditional pledges\",
+            });
+            await expect(compactHeading).toBeVisible();
+            const compactHeadingMetrics = await compactHeading.evaluate((element) => ({
+              clientWidth: element.clientWidth,
+              scrollWidth: element.scrollWidth,
+            }));
+            expect(compactHeadingMetrics.scrollWidth).toBeLessThanOrEqual(
+              compactHeadingMetrics.clientWidth,
+            );
+            await screenshot(page, \"11-open-anonymous-compact-mobile\");
+            await closeContext(context);
+
+            qaCheckpoint(\"Complete rendered DAC lifecycle proof passed without payment execution.\");"""
+          if browser.count(mobile_old) != 1:
+              raise SystemExit(f"Expected one mobile lifecycle tail, found {browser.count(mobile_old)}")
+          browser_path.write_text(browser.replace(mobile_old, mobile_new, 1), encoding="utf-8")
+          PY
+
+          git diff --check
+          test "$(git diff --name-only | sort)" = $'src/app/globals.css\nsrc/lib/mpgf/dac-product-lifecycle.test.ts\ntests/mpgf-dac-product-lifecycle.spec.ts'
+          git diff -- src/app/globals.css src/lib/mpgf/dac-product-lifecycle.test.ts tests/mpgf-dac-product-lifecycle.spec.ts
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused lifecycle source contract
+        run: node --import tsx --test src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint -- --quiet
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build with all payment rails disabled
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+        run: npm run build
+
+      - name: Commit and push only the demonstrated repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          test "$(git diff --name-only | sort)" = $'src/app/globals.css\nsrc/lib/mpgf/dac-product-lifecycle.test.ts\ntests/mpgf-dac-product-lifecycle.spec.ts'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/globals.css src/lib/mpgf/dac-product-lifecycle.test.ts tests/mpgf-dac-product-lifecycle.spec.ts
+          git commit -m "fix(mpgf): keep compact-mobile DAC titles readable"
+          git push origin "HEAD:${TARGET_BRANCH}"

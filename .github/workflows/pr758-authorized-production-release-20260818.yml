@@ -1,0 +1,741 @@
+name: PR 758 authorized production release 20260818
+
+on:
+  push:
+    branches:
+      - ops/pr758-production-release-20260818
+    paths:
+      - ".github/workflows/pr758-authorized-production-release-20260818.yml"
+      - "ops/pr758-production-uat-runner.py"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: pr758-authorized-production-release-20260818
+  cancel-in-progress: false
+
+env:
+  REPOSITORY: ghuser29384/Website2
+  INTEGRATION_PR: "758"
+  SOURCE_CANDIDATE_SHA: 2ecdf5736e0bb5e064ef6bc68fda450710d07aa8
+  SOURCE_CANDIDATE_TREE: 1555c5a493027ea6ee240c6ed83c61e37972e8c1
+  SOURCE_FIRST_PARENT: a3d14af469260a0a17b8d0b38c9e65be7b2c1921
+  PROD_REF: jnpoxvalyjtdghnperyu
+  FORBIDDEN_QA_REF: hvmxfjjbdcgjjudmthdz
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  EVIDENCE_DIR: production-release-evidence
+  PGSSLMODE: require
+  CONDITIONAL_PAYMENTS_MODE: disabled
+  TRADE_DONATION_POOL_ENABLED: "false"
+  TRADE_DONATION_POOL_MODE: disabled
+  DIRECT_DONATION_UPGRADES_ENABLED: "false"
+  DIRECT_DONATION_UPGRADE_MODE: disabled
+  MPGF_REAL_MONEY_ENABLED: "false"
+  MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+  MPGF_TEST_PAYMENT_ENABLED: "false"
+  EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+
+jobs:
+  release:
+    name: Backup, migrate, gated release, production UAT, and rollback guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      PROD_DB_URL_1: ${{ secrets.PRODUCTION_SUPABASE_DB_URL }}
+      PROD_DB_URL_2: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      PROD_DB_URL_3: ${{ secrets.PROD_DATABASE_URL }}
+      PROD_DB_URL_4: ${{ secrets.SUPABASE_DB_URL }}
+      PROD_DB_URL_5: ${{ secrets.DATABASE_URL }}
+
+      PROD_PUBLIC_KEY_1: ${{ secrets.PRODUCTION_SUPABASE_PUBLISHABLE_KEY }}
+      PROD_PUBLIC_KEY_2: ${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
+      PROD_PUBLIC_KEY_3: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      PROD_PUBLIC_KEY_4: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      PROD_PUBLIC_KEY_5: ${{ secrets.SUPABASE_ANON_KEY }}
+
+      PROD_SERVICE_KEY_1: ${{ secrets.PRODUCTION_SUPABASE_SERVICE_ROLE_KEY }}
+      PROD_SERVICE_KEY_2: ${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY }}
+      PROD_SERVICE_KEY_3: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Check out one-use release controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr758-production-release-20260818
+          path: controller
+          fetch-depth: 0
+
+      - name: Check out trusted production-UAT controller
+        uses: actions/checkout@v4
+        with:
+          ref: 898055a7707e65ef0f91ea27832a43395d66f7b2
+          path: trusted-controller
+          fetch-depth: 0
+
+      - name: Check out validated DAC source candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_CANDIDATE_SHA }}
+          path: candidate
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Install release tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR" backup-artifact
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client jq openssl
+          python3 -m pip install --user --disable-pip-version-check PyYAML==6.0.2
+          test -n "$VERCEL_TOKEN"
+          printf 'controller=%s\ntrusted_controller=%s\nsource_candidate=%s\n' \
+            "$(git -C controller rev-parse HEAD)" \
+            "$(git -C trusted-controller rev-parse HEAD)" \
+            "$(git -C candidate rev-parse HEAD)" \
+            > "$EVIDENCE_DIR/controller-identities.txt"
+          test "$(git -C candidate rev-parse HEAD)" = "$SOURCE_CANDIDATE_SHA"
+          test "$(git -C candidate rev-parse HEAD^{tree})" = "$SOURCE_CANDIDATE_TREE"
+
+      - name: Select and verify production credentials without disclosing values
+        id: credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          choose_secret() {
+            local output_name="$1"
+            shift
+            local candidate_name value
+            for candidate_name in "$@"; do
+              value="${!candidate_name:-}"
+              if [[ -n "$value" ]]; then
+                echo "::add-mask::$value"
+                {
+                  echo "$output_name<<EOF_${output_name}"
+                  printf '%s\n' "$value"
+                  echo "EOF_${output_name}"
+                } >> "$GITHUB_ENV"
+                printf '%s_source=%s\n' "$output_name" "$candidate_name" \
+                  >> "$EVIDENCE_DIR/credential-sources.txt"
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          choose_secret PROD_SUPABASE_DB_URL_SELECTED \
+            PROD_DB_URL_1 PROD_DB_URL_2 PROD_DB_URL_3 PROD_DB_URL_4 PROD_DB_URL_5
+
+          choose_secret PROD_SUPABASE_PUBLISHABLE_KEY_SELECTED \
+            PROD_PUBLIC_KEY_1 PROD_PUBLIC_KEY_2 PROD_PUBLIC_KEY_3 PROD_PUBLIC_KEY_4 PROD_PUBLIC_KEY_5 \
+            || true
+          choose_secret PROD_SUPABASE_SERVICE_ROLE_KEY_SELECTED \
+            PROD_SERVICE_KEY_1 PROD_SERVICE_KEY_2 PROD_SERVICE_KEY_3 \
+            || true
+
+          if [[ -z "${PROD_SUPABASE_PUBLISHABLE_KEY_SELECTED:-}" || \
+                -z "${PROD_SUPABASE_SERVICE_ROLE_KEY_SELECTED:-}" ]]; then
+            test -n "$SUPABASE_ACCESS_TOKEN"
+            keys_json="$RUNNER_TEMP/production-api-keys.json"
+            curl -fsS \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$PROD_REF/api-keys" \
+              > "$keys_json"
+
+            if [[ -z "${PROD_SUPABASE_PUBLISHABLE_KEY_SELECTED:-}" ]]; then
+              public_key="$(jq -r '
+                [ .[] | select((.name // .type // "") | test("^(anon|publishable)$")) ][0].api_key //
+                [ .[] | select((.name // .type // "") == "anon") ][0].api_key // empty
+              ' "$keys_json")"
+              test -n "$public_key"
+              echo "::add-mask::$public_key"
+              {
+                echo 'PROD_SUPABASE_PUBLISHABLE_KEY_SELECTED<<EOF_PROD_PUBLIC'
+                printf '%s\n' "$public_key"
+                echo 'EOF_PROD_PUBLIC'
+              } >> "$GITHUB_ENV"
+              echo 'PROD_SUPABASE_PUBLISHABLE_KEY_SELECTED_source=management_api' \
+                >> "$EVIDENCE_DIR/credential-sources.txt"
+            fi
+
+            if [[ -z "${PROD_SUPABASE_SERVICE_ROLE_KEY_SELECTED:-}" ]]; then
+              service_key="$(jq -r '
+                [ .[] | select((.name // .type // "") == "service_role") ][0].api_key // empty
+              ' "$keys_json")"
+              test -n "$service_key"
+              echo "::add-mask::$service_key"
+              {
+                echo 'PROD_SUPABASE_SERVICE_ROLE_KEY_SELECTED<<EOF_PROD_SERVICE'
+                printf '%s\n' "$service_key"
+                echo 'EOF_PROD_SERVICE'
+              } >> "$GITHUB_ENV"
+              echo 'PROD_SUPABASE_SERVICE_ROLE_KEY_SELECTED_source=management_api' \
+                >> "$EVIDENCE_DIR/credential-sources.txt"
+            fi
+            rm -f "$keys_json"
+          fi
+
+          db_url="${PROD_SUPABASE_DB_URL_SELECTED:-}"
+          test -n "$db_url"
+          case "$db_url" in
+            *"$PROD_REF"*) ;;
+            *) echo 'Selected database URL is not the exact production project.' >&2; exit 1 ;;
+          esac
+          case "$db_url" in
+            *"$FORBIDDEN_QA_REF"*) echo 'QA database reference detected.' >&2; exit 1 ;;
+            *) ;;
+          esac
+
+          ssl_active="$(psql "$db_url" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align \
+            --command "select coalesce((select ssl::text from pg_stat_ssl where pid=pg_backend_pid()),'false');")"
+          test "$ssl_active" = true
+          project_ref="$(psql "$db_url" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align \
+            --command "select current_database();")"
+          test "$project_ref" = postgres
+
+          {
+            echo "production_ref=$PROD_REF"
+            echo "qa_ref_excluded=true"
+            echo "tls=true"
+            echo "database_name=$project_ref"
+            echo "payment_modes_disabled=true"
+          } > "$EVIDENCE_DIR/production-credential-attestation.txt"
+
+      - name: Perform final semantic-drift check and merge PR 758 if necessary
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPOSITORY/pulls/$INTEGRATION_PR" > "$RUNNER_TEMP/pr758.json"
+          pr_head="$(jq -r '.head.sha' "$RUNNER_TEMP/pr758.json")"
+          test "$pr_head" = "$SOURCE_CANDIDATE_SHA"
+
+          live_main="$(gh api "repos/$REPOSITORY/branches/main" --jq '.commit.sha')"
+          gh api "repos/$REPOSITORY/compare/$SOURCE_FIRST_PARENT...$live_main" \
+            > "$RUNNER_TEMP/main-drift.json"
+          jq -r '.files[].filename' "$RUNNER_TEMP/main-drift.json" | sort -u \
+            > "$EVIDENCE_DIR/pre-merge-main-drift.txt"
+          cat > "$RUNNER_TEMP/allowed-main-drift.txt" <<'EOF_ALLOWED'
+          public/moral-trade-create/ui-repairs.js
+          src/lib/create-interface/create-ui-repairs.test.ts
+          tests/create-route-ui-regression.spec.ts
+          EOF_ALLOWED
+          sed -i 's/^[[:space:]]*//' "$RUNNER_TEMP/allowed-main-drift.txt"
+          sort -u "$RUNNER_TEMP/allowed-main-drift.txt" -o "$RUNNER_TEMP/allowed-main-drift.txt"
+          comm -23 "$EVIDENCE_DIR/pre-merge-main-drift.txt" \
+            "$RUNNER_TEMP/allowed-main-drift.txt" \
+            > "$EVIDENCE_DIR/pre-merge-unexpected-drift.txt"
+          test ! -s "$EVIDENCE_DIR/pre-merge-unexpected-drift.txt"
+
+          merged="$(jq -r '.merged' "$RUNNER_TEMP/pr758.json")"
+          if [[ "$merged" != true ]]; then
+            if [[ "$(jq -r '.draft' "$RUNNER_TEMP/pr758.json")" == true ]]; then
+              gh pr ready "$INTEGRATION_PR" --repo "$REPOSITORY"
+            fi
+            gh pr merge "$INTEGRATION_PR" \
+              --repo "$REPOSITORY" \
+              --merge \
+              --match-head-commit "$SOURCE_CANDIDATE_SHA" \
+              --subject 'Merge PR #758: Release the validated non-payment DAC lifecycle' \
+              --body 'Merge the exact validated 51-file DAC integration after fresh-current-main semantic-drift review, complete source/database/rendered gates, protected isolated-QA owner UAT, zero-residue proof, and explicit owner authorization. Production migration and deployment remain fail-closed and keep all payment/provider modes disabled.'
+          fi
+
+          for attempt in $(seq 1 30); do
+            gh api "repos/$REPOSITORY/pulls/$INTEGRATION_PR" > "$RUNNER_TEMP/pr758-after.json"
+            if jq -e '.merged == true' "$RUNNER_TEMP/pr758-after.json" >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          jq -e '.merged == true and .state == "closed"' "$RUNNER_TEMP/pr758-after.json" >/dev/null
+          merge_sha="$(jq -r '.merge_commit_sha' "$RUNNER_TEMP/pr758-after.json")"
+          test -n "$merge_sha"
+
+          current_main="$(gh api "repos/$REPOSITORY/branches/main" --jq '.commit.sha')"
+          test "$current_main" = "$merge_sha"
+          gh api "repos/$REPOSITORY/commits/$merge_sha" > "$RUNNER_TEMP/merge-commit.json"
+          jq -e --arg source "$SOURCE_CANDIDATE_SHA" '
+            (.parents | length) == 2 and any(.parents[]; .sha == $source)
+          ' "$RUNNER_TEMP/merge-commit.json" >/dev/null
+
+          {
+            echo "main_sha=$merge_sha"
+            echo "pre_merge_main=$live_main"
+          } >> "$GITHUB_OUTPUT"
+          jq '{sha:.sha,tree:.commit.tree.sha,parents:[.parents[].sha],message:.commit.message}' \
+            "$RUNNER_TEMP/merge-commit.json" > "$EVIDENCE_DIR/merged-main-identity.json"
+
+      - name: Check out exact merged main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.merge.outputs.main_sha }}
+          path: release
+          fetch-depth: 0
+
+      - name: Verify exact merged-main source and no-payment quality gates
+        shell: bash
+        working-directory: release
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ steps.merge.outputs.main_sha }}"
+          git merge-base --is-ancestor "$SOURCE_CANDIDATE_SHA" HEAD
+          git diff --check HEAD^
+          npm ci
+          node --import tsx --test \
+            src/lib/mpgf/dac-lifecycle-model.test.ts \
+            src/lib/mpgf/dac-public-terms-migration.test.ts \
+            src/lib/mpgf/dac-terminal-event-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-terminal-schema-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts \
+            | tee ../$EVIDENCE_DIR/merged-focused-tests.log
+          npm test | tee ../$EVIDENCE_DIR/merged-repository-tests.log
+          npm run lint -- --quiet | tee ../$EVIDENCE_DIR/merged-lint.log
+          npx tsc --noEmit | tee ../$EVIDENCE_DIR/merged-typecheck.log
+          npm run build | tee ../$EVIDENCE_DIR/merged-build.log
+
+      - name: Capture immutable production deployment and migration preflight
+        id: preflight
+        shell: bash
+        env:
+          PROD_DB_URL: ${{ env.PROD_SUPABASE_DB_URL_SELECTED }}
+          MAIN_SHA: ${{ steps.merge.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$PROD_DB_URL"
+
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&limit=10" \
+            > "$EVIDENCE_DIR/production-deployments-before.json"
+          old_id="$(jq -r '[.deployments[] | select((.state // .readyState) == "READY")][0].uid // [.deployments[] | select((.state // .readyState) == "READY")][0].id // empty' "$EVIDENCE_DIR/production-deployments-before.json")"
+          old_url="$(jq -r '[.deployments[] | select((.state // .readyState) == "READY")][0].url // empty' "$EVIDENCE_DIR/production-deployments-before.json")"
+          test -n "$old_id"
+          test -n "$old_url"
+          {
+            echo "old_deployment_id=$old_id"
+            echo "old_deployment_url=$old_url"
+          } >> "$GITHUB_OUTPUT"
+
+          psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align \
+            --command "select version || '|' || coalesce(name,'') from supabase_migrations.schema_migrations order by version;" \
+            > "$EVIDENCE_DIR/production-migrations-before.txt"
+
+          cat > "$RUNNER_TEMP/dac-migration-versions.txt" <<'EOF_VERSIONS'
+          20260806110000
+          20260806143000
+          20260806173000
+          20260807050000
+          20260807100000
+          20260812073000
+          20260812074500
+          20260815010000
+          20260815011000
+          EOF_VERSIONS
+          sed -i 's/^[[:space:]]*//' "$RUNNER_TEMP/dac-migration-versions.txt"
+          existing_target_count="$(grep -F -f "$RUNNER_TEMP/dac-migration-versions.txt" "$EVIDENCE_DIR/production-migrations-before.txt" | wc -l | tr -d ' ')"
+          test "$existing_target_count" = 0
+
+          psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align \
+            --command "select current_timestamp, current_database(), current_user, pg_is_in_recovery();" \
+            > "$EVIDENCE_DIR/production-database-preflight.txt"
+          printf 'main_sha=%s\nold_deployment_id=%s\nold_deployment_url=%s\nexisting_target_migrations=%s\n' \
+            "$MAIN_SHA" "$old_id" "$old_url" "$existing_target_count" \
+            > "$EVIDENCE_DIR/release-preflight-summary.txt"
+
+      - name: Create and independently verify encrypted production database backup
+        shell: bash
+        env:
+          PROD_DB_URL: ${{ env.PROD_SUPABASE_DB_URL_SELECTED }}
+          MAIN_SHA: ${{ steps.merge.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$PROD_DB_URL"
+          test -n "$VERCEL_TOKEN"
+
+          dump="$RUNNER_TEMP/moraltrade-production-$MAIN_SHA.dump"
+          decrypted="$RUNNER_TEMP/moraltrade-production-$MAIN_SHA.verify.dump"
+          encrypted="backup-artifact/moraltrade-production-$MAIN_SHA.dump.enc"
+
+          pg_dump \
+            --format=custom \
+            --compress=9 \
+            --no-owner \
+            --no-acl \
+            --file="$dump" \
+            "$PROD_DB_URL"
+          test -s "$dump"
+          pg_restore --list "$dump" > "$EVIDENCE_DIR/backup-restore-list.txt"
+          test "$(wc -l < "$EVIDENCE_DIR/backup-restore-list.txt" | tr -d ' ')" -gt 100
+
+          secondary="${SUPABASE_ACCESS_TOKEN:-${PROD_SUPABASE_SERVICE_ROLE_KEY_SELECTED:-}}"
+          test -n "$secondary"
+          passphrase="$(printf '%s\0%s\0%s' "$VERCEL_TOKEN" "$secondary" "$MAIN_SHA" | sha256sum | awk '{print $1}')"
+          echo "::add-mask::$passphrase"
+          BACKUP_PASSPHRASE="$passphrase" openssl enc \
+            -aes-256-cbc -salt -pbkdf2 -iter 600000 \
+            -in "$dump" -out "$encrypted" -pass env:BACKUP_PASSPHRASE
+          test -s "$encrypted"
+
+          BACKUP_PASSPHRASE="$passphrase" openssl enc -d \
+            -aes-256-cbc -pbkdf2 -iter 600000 \
+            -in "$encrypted" -out "$decrypted" -pass env:BACKUP_PASSPHRASE
+          cmp --silent "$dump" "$decrypted"
+          pg_restore --list "$decrypted" > "$EVIDENCE_DIR/backup-restore-list-verified.txt"
+          cmp --silent "$EVIDENCE_DIR/backup-restore-list.txt" \
+            "$EVIDENCE_DIR/backup-restore-list-verified.txt"
+
+          sha256sum "$encrypted" > "$EVIDENCE_DIR/production-backup.sha256"
+          stat --printf='encrypted_backup_bytes=%s\n' "$encrypted" \
+            > "$EVIDENCE_DIR/production-backup-size.txt"
+          printf 'format=pg_dump_custom_encrypted_aes256_pbkdf2\nrestore_list_verified=true\nplaintext_removed=true\nkey_derivation=vercel_token_plus_supabase_control_secret_plus_main_sha\n' \
+            > "$EVIDENCE_DIR/production-backup-verification.txt"
+          rm -f "$dump" "$decrypted"
+
+      - name: Verify migration hashes, apply nine exact production migrations, and record history
+        id: migrations
+        shell: bash
+        working-directory: release
+        env:
+          PROD_DB_URL: ${{ env.PROD_SUPABASE_DB_URL_SELECTED }}
+          MAIN_SHA: ${{ steps.merge.outputs.main_sha }}
+          PGOPTIONS: -c lock_timeout=5000 -c statement_timeout=120000
+        run: |
+          set -euo pipefail
+          test -n "$PROD_DB_URL"
+
+          cat > "$RUNNER_TEMP/dac-migration-ledger.tsv" <<'EOF_LEDGER'
+          20260806110000	20260806110000_mpgf_pool_review_freeze.sql	0913419d665fd69b3a80ea3e5c39a89111721e414b7520f0defc11f6965ecc3c
+          20260806143000	20260806143000_mpgf_pool_publication_materialization.sql	ee8ab4a2c52893ff9f2d8dfcbf7dc25370768af80e5401978f7c4b09e8cab9e8
+          20260806173000	20260806173000_mpgf_dac_pledge_intent_ledger.sql	36f558549361a1c0747dab5ecd545c74efbd42be14f6d634cb28e8b01f7c1e9c
+          20260807050000	20260807050000_mpgf_dac_success_lapse.sql	83d9432f90fb808302249b5b572029d68bfc9aa2be32afbaba710f8e341d0948
+          20260807100000	20260807100000_mpgf_dac_public_terms_api.sql	356d220c009dd6213b761712a30ce0124d95f075d5fdab5c44da3398a6265a0f
+          20260812073000	20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql	a19653e57a20dff8d01e1dd54b4b77304fe0712fe3356820953945e7b9999cd2
+          20260812074500	20260812074500_mpgf_dac_terminal_schema_reconciliation.sql	d8dc2a55840425357c8859b87d26fba0415bb1a50c8e739518a88b9686142cbb
+          20260815010000	20260815010000_mpgf_pool_lifecycle_event_ordering.sql	1d60c1abc73c8842cdcd9694c77d0e29dac4fe1de98a496714c0f2f2f5619766
+          20260815011000	20260815011000_mpgf_dac_terminal_guard_reconciliation.sql	c64d521c6adb7a865d9ec5e2f25e70adb09f08f91e0f1bc0ec0610977aafd108
+          EOF_LEDGER
+          sed -i 's/^[[:space:]]*//' "$RUNNER_TEMP/dac-migration-ledger.tsv"
+
+          : > "../$EVIDENCE_DIR/applied-migrations.txt"
+          while IFS=$'\t' read -r version filename expected_hash; do
+            path="supabase/migrations/$filename"
+            test -f "$path"
+            actual_hash="$(sha256sum "$path" | awk '{print $1}')"
+            test "$actual_hash" = "$expected_hash"
+            existing="$(psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --tuples-only --no-align \
+              --command "select count(*) from supabase_migrations.schema_migrations where version='$version';")"
+            test "$existing" = 0
+
+            psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$path" \
+              > "../$EVIDENCE_DIR/migration-$version.log"
+
+            name="${filename#${version}_}"
+            name="${name%.sql}"
+            columns="$(psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --tuples-only --no-align \
+              --command "select string_agg(column_name,',' order by ordinal_position) from information_schema.columns where table_schema='supabase_migrations' and table_name='schema_migrations';")"
+            case ",$columns," in
+              *,name,*statements,*)
+                psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                  --command "insert into supabase_migrations.schema_migrations(version,name,statements) values ('$version','$name',array['sha256:$expected_hash']::text[]) on conflict (version) do nothing;" \
+                  > /dev/null
+                ;;
+              *,name,*)
+                psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                  --command "insert into supabase_migrations.schema_migrations(version,name) values ('$version','$name') on conflict (version) do nothing;" \
+                  > /dev/null
+                ;;
+              *)
+                psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                  --command "insert into supabase_migrations.schema_migrations(version) values ('$version') on conflict (version) do nothing;" \
+                  > /dev/null
+                ;;
+            esac
+            test "$(psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --command "select count(*) from supabase_migrations.schema_migrations where version='$version';")" = 1
+            printf '%s\t%s\t%s\n' "$version" "$filename" "$expected_hash" \
+              >> "../$EVIDENCE_DIR/applied-migrations.txt"
+          done < "$RUNNER_TEMP/dac-migration-ledger.tsv"
+
+          test "$(wc -l < "../$EVIDENCE_DIR/applied-migrations.txt" | tr -d ' ')" = 9
+          psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file ../trusted-controller/ops/pr689-uat702/verify-preexisting-dac-schema.sql \
+            > "../$EVIDENCE_DIR/production-schema-verification.txt"
+          psql "$PROD_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --tuples-only --no-align \
+            --command "select version || '|' || coalesce(name,'') from supabase_migrations.schema_migrations where version in ('20260806110000','20260806143000','20260806173000','20260807050000','20260807100000','20260812073000','20260812074500','20260815010000','20260815011000') order by version;" \
+            > "../$EVIDENCE_DIR/production-migrations-after.txt"
+          test "$(wc -l < "../$EVIDENCE_DIR/production-migrations-after.txt" | tr -d ' ')" = 9
+          printf 'migration_count=9\nlock_timeout_ms=5000\nstatement_timeout_ms=120000\nregistry_verified=true\n' \
+            > "../$EVIDENCE_DIR/production-migration-summary.txt"
+
+      - name: Dispatch and await exact-SHA gated Vercel production release
+        id: deploy
+        shell: bash
+        env:
+          MAIN_SHA: ${{ steps.merge.outputs.main_sha }}
+          OLD_DEPLOYMENT_ID: ${{ steps.preflight.outputs.old_deployment_id }}
+          OLD_DEPLOYMENT_URL: ${{ steps.preflight.outputs.old_deployment_url }}
+        run: |
+          set -euo pipefail
+          dispatch_epoch="$(date -u +%s)"
+          gh workflow run vercel-release.yml \
+            --repo "$REPOSITORY" \
+            --ref main \
+            -f target=production \
+            -f ref=main \
+            -f expected_sha="$MAIN_SHA" \
+            -f synthetic_auth_fixture_url=''
+
+          release_run=''
+          for attempt in $(seq 1 60); do
+            release_run="$(gh run list \
+              --repo "$REPOSITORY" \
+              --workflow vercel-release.yml \
+              --event workflow_dispatch \
+              --branch main \
+              --limit 20 \
+              --json databaseId,headSha,createdAt \
+              --jq ".[] | select(.headSha == \"$MAIN_SHA\") | .databaseId" \
+              | head -n1)"
+            [[ -n "$release_run" ]] && break
+            sleep 2
+          done
+          test -n "$release_run"
+          echo "release_run_id=$release_run" >> "$GITHUB_OUTPUT"
+
+          if ! gh run watch "$release_run" --repo "$REPOSITORY" --exit-status; then
+            echo 'The gated release failed; restoring previous canonical aliases.' >&2
+            npx --yes "vercel@$VERCEL_CLI_VERSION" alias set \
+              "https://$OLD_DEPLOYMENT_URL" moraltrade.org \
+              --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" || true
+            npx --yes "vercel@$VERCEL_CLI_VERSION" alias set \
+              "https://$OLD_DEPLOYMENT_URL" www.moraltrade.org \
+              --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" || true
+            exit 1
+          fi
+
+          mkdir -p "$EVIDENCE_DIR/gated-release"
+          gh run download "$release_run" \
+            --repo "$REPOSITORY" \
+            --dir "$EVIDENCE_DIR/gated-release"
+
+          detail="$(find "$EVIDENCE_DIR/gated-release" -name 'canonical-deployment-detail.json' -o -name 'deployment-detail.json' | head -n1)"
+          test -n "$detail"
+          deployment_id="$(jq -r '.id // .uid // empty' "$detail")"
+          deployment_url="$(jq -r '.url // empty' "$detail")"
+          test -n "$deployment_id"
+          test -n "$deployment_url"
+          jq -e --arg sha "$MAIN_SHA" --arg project "$VERCEL_PROJECT_ID" '
+            (.target == "production")
+            and ((.readyState // .state) == "READY")
+            and ((.projectId // .project.id) == $project)
+            and (.meta.githubCommitSha == $sha)
+          ' "$detail" >/dev/null
+          {
+            echo "deployment_id=$deployment_id"
+            echo "deployment_url=$deployment_url"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run complete post-release owner-equivalent UAT on production data plane
+        id: production_uat
+        shell: bash
+        env:
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ env.PROD_SUPABASE_PUBLISHABLE_KEY_SELECTED }}
+          QA_SUPABASE_DB_URL: ${{ env.PROD_SUPABASE_DB_URL_SELECTED }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ env.PROD_SUPABASE_SERVICE_ROLE_KEY_SELECTED }}
+          MAIN_SHA: ${{ steps.merge.outputs.main_sha }}
+          DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          OLD_DEPLOYMENT_URL: ${{ steps.preflight.outputs.old_deployment_url }}
+        run: |
+          set -euo pipefail
+          rm -rf production-uat
+          mkdir -p production-uat
+          cp -a trusted-controller production-uat/controller
+          cp -a candidate production-uat/app
+          mkdir -p production-uat/evidence production-uat/app/test-results
+          cp controller/ops/pr758-production-uat-runner.py \
+            production-uat/controller/ops/pr758-production-uat-runner.py
+
+          set +e
+          (
+            cd production-uat
+            export GITHUB_HEAD_REF='ops/pr758-dac-current-main-integration-uat-20260818'
+            export GITHUB_REF_NAME='ops/pr758-dac-current-main-integration-uat-20260818'
+            export GH_TOKEN="$GH_TOKEN"
+            export VERCEL_TOKEN="$VERCEL_TOKEN"
+            export QA_SUPABASE_PUBLISHABLE_KEY="$QA_SUPABASE_PUBLISHABLE_KEY"
+            export QA_SUPABASE_DB_URL="$QA_SUPABASE_DB_URL"
+            export QA_SUPABASE_SERVICE_ROLE_KEY="$QA_SUPABASE_SERVICE_ROLE_KEY"
+            python3 controller/ops/pr758-production-uat-runner.py 2>&1 \
+              | tee evidence/production-uat-runner.log
+          )
+          uat_status=$?
+          set -e
+
+          if [[ "$uat_status" -ne 0 ]]; then
+            echo 'Post-release production UAT failed; restoring previous canonical aliases.' >&2
+            npx --yes "vercel@$VERCEL_CLI_VERSION" alias set \
+              "https://$OLD_DEPLOYMENT_URL" moraltrade.org \
+              --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" || true
+            npx --yes "vercel@$VERCEL_CLI_VERSION" alias set \
+              "https://$OLD_DEPLOYMENT_URL" www.moraltrade.org \
+              --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" || true
+            printf 'uat_status=failed\nrollback_attempted=true\n' \
+              > "$EVIDENCE_DIR/production-uat-disposition.txt"
+            exit "$uat_status"
+          fi
+
+          cp -a production-uat/evidence "$EVIDENCE_DIR/production-uat"
+          cp -a production-uat/app/test-results "$EVIDENCE_DIR/production-uat-test-results"
+          grep -R --line-number --fixed-strings 'fixture_residue=0' \
+            production-uat/evidence >/dev/null
+          grep -R --line-number --fixed-strings 'payment_refs=0' \
+            production-uat/evidence >/dev/null
+          printf 'uat_status=passed\nrollback_attempted=false\ncanonical_deployment_id=%s\ncanonical_main_sha=%s\n' \
+            "$DEPLOYMENT_ID" "$MAIN_SHA" \
+            > "$EVIDENCE_DIR/production-uat-disposition.txt"
+
+      - name: Verify canonical aliases, exact deployment, public routes, and no-payment boundary
+        shell: bash
+        env:
+          MAIN_SHA: ${{ steps.merge.outputs.main_sha }}
+          DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          OLD_DEPLOYMENT_URL: ${{ steps.preflight.outputs.old_deployment_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/canonical"
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            key="${alias_name//./-}"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/$alias_name?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID" \
+              > "$EVIDENCE_DIR/canonical/$key.json"
+            jq -e --arg alias "$alias_name" --arg deployment "$DEPLOYMENT_ID" '
+              .alias == $alias and ((.deploymentId // .deployment.id // .deployment.uid) == $deployment)
+            ' "$EVIDENCE_DIR/canonical/$key.json" >/dev/null
+          done
+
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/canonical/deployment.json"
+          jq -e --arg sha "$MAIN_SHA" '
+            .target == "production"
+            and ((.readyState // .state) == "READY")
+            and (.meta.githubCommitSha == $sha)
+          ' "$EVIDENCE_DIR/canonical/deployment.json" >/dev/null
+
+          : > "$EVIDENCE_DIR/canonical/http-smoke.tsv"
+          for origin in https://moraltrade.org https://www.moraltrade.org; do
+            for path in / /discover /mpgf /mpgf/admin; do
+              status="$(curl -sS -o /dev/null -w '%{http_code}' \
+                -H 'Cache-Control: no-cache' \
+                "$origin$path?release=$MAIN_SHA")"
+              printf '%s\t%s\t%s\n' "$origin" "$path" "$status" \
+                >> "$EVIDENCE_DIR/canonical/http-smoke.tsv"
+              case "$status" in
+                200|302|303|307|308) ;;
+                *)
+                  echo "Canonical smoke failed for $origin$path ($status); restoring aliases." >&2
+                  npx --yes "vercel@$VERCEL_CLI_VERSION" alias set \
+                    "https://$OLD_DEPLOYMENT_URL" moraltrade.org \
+                    --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" || true
+                  npx --yes "vercel@$VERCEL_CLI_VERSION" alias set \
+                    "https://$OLD_DEPLOYMENT_URL" www.moraltrade.org \
+                    --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" || true
+                  exit 1
+                  ;;
+              esac
+            done
+          done
+
+          if grep -R -E '(PaymentIntent|SetupIntent|Checkout Session|charge|capture|settlement|payout)' \
+            "$EVIDENCE_DIR/production-uat" \
+            | grep -v -E '(zero|disabled|forbidden|not create|no payment|payment_refs=0)' \
+            > "$EVIDENCE_DIR/canonical/unexpected-payment-signals.txt"; then
+            echo 'Unexpected payment/provider signal in production UAT evidence.' >&2
+            exit 1
+          fi
+          : > "$EVIDENCE_DIR/canonical/unexpected-payment-signals.txt"
+
+          printf 'canonical_aliases_verified=true\nexact_sha_verified=true\npublic_smoke_passed=true\npayment_provider_signals=0\n' \
+            > "$EVIDENCE_DIR/canonical/final-acceptance.txt"
+
+      - name: Scan retained evidence for credentials
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          scan_files="$RUNNER_TEMP/evidence-files.txt"
+          find "$EVIDENCE_DIR" -type f -print > "$scan_files"
+          if [[ -d backup-artifact ]]; then
+            find backup-artifact -type f ! -name '*.enc' -print >> "$scan_files"
+          fi
+          while IFS= read -r file; do
+            [[ -f "$file" ]] || continue
+            for secret in \
+              "${PROD_SUPABASE_DB_URL_SELECTED:-}" \
+              "${PROD_SUPABASE_PUBLISHABLE_KEY_SELECTED:-}" \
+              "${PROD_SUPABASE_SERVICE_ROLE_KEY_SELECTED:-}" \
+              "${VERCEL_TOKEN:-}" \
+              "${SUPABASE_ACCESS_TOKEN:-}"
+            do
+              [[ -n "$secret" ]] || continue
+              if grep -aF -- "$secret" "$file" >/dev/null 2>&1; then
+                echo "Credential value detected in retained evidence: $file" >&2
+                exit 1
+              fi
+            done
+          done < "$scan_files"
+          printf 'credential_values_detected=0\nscan_result=passed\n' \
+            > "$EVIDENCE_DIR/evidence-secret-scan.txt"
+
+      - name: Upload encrypted pre-release database backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr758-production-pre-release-backup-${{ github.run_id }}
+          path: backup-artifact
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload production release, migration, UAT, and rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr758-production-release-evidence-${{ github.run_id }}
+          path: production-release-evidence
+          if-no-files-found: error
+          retention-days: 30

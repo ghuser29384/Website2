@@ -1,0 +1,82 @@
+name: PR 758 post-Auth current-main DAC integration protected Preview owner UAT 20260818
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr749-dac-current-main-integration-uat-wrapper-20260817.yml"
+      - "ops/pr758-run-trusted-controller.py"
+      - "ops/pr689-uat702/**"
+      - ".github/workflows/pr740-dac-current-main-integration-uat-20260816.yml"
+
+concurrency:
+  group: mpgf-dac-product-lifecycle-shared-qa
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_HEAD_SHA: 2ecdf5736e0bb5e064ef6bc68fda450710d07aa8
+  CONTROLLER_BRANCH: ops/pr758-dac-current-main-integration-uat-20260818
+
+jobs:
+  owner-uat:
+    name: Exact candidate protected Preview, owner UAT, logs, and zero residue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out the one-use controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check out the exact application candidate
+        uses: actions/checkout@v4
+        with:
+          path: app
+          fetch-depth: 0
+          ref: ${{ env.CANDIDATE_HEAD_SHA }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Prepare the reviewed-controller runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence app/test-results
+          python3 -m pip install --user --disable-pip-version-check PyYAML==6.0.2
+
+      - name: Execute the transformed reviewed controller
+        id: controller
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 controller/ops/pr758-run-trusted-controller.py 2>&1 \
+            | tee evidence/controller-runner.log
+
+      - name: Upload redacted owner-UAT evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr758-dac-current-main-integration-owner-uat-${{ github.run_id }}-${{ env.CANDIDATE_HEAD_SHA }}
+          path: |
+            evidence
+            app/test-results
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,174 @@
+name: PR 758 production release evidence report 20260818
+
+on:
+  push:
+    branches:
+      - ops/pr758-production-release-20260818
+    paths:
+      - ".github/workflows/pr758-production-release-report-20260818.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ghuser29384/Website2
+      RELEASE_WORKFLOW: pr758-authorized-production-release-20260818.yml
+    steps:
+      - name: Locate the completed successful production release run
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$RUNNER_TEMP/release-runs.json"
+          gh api "repos/$REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?branch=ops%2Fpr758-production-release-20260818&per_page=20" \
+            > "$run_json"
+          run_id="$(jq -r '[.workflow_runs[] | select(.status == "completed" and .conclusion == "success")][0].id // empty' "$run_json")"
+          run_url="$(jq -r --argjson run_id "$run_id" '.workflow_runs[] | select(.id == $run_id) | .html_url' "$run_json")"
+          test -n "$run_id"
+          test -n "$run_url"
+          {
+            echo "run_id=$run_id"
+            echo "run_url=$run_url"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify immutable artifacts
+        id: evidence
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.release.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p downloaded
+          gh run download "$RUN_ID" --repo "$REPOSITORY" --dir downloaded
+          gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            > downloaded/artifacts.json
+
+          evidence_dir="$(find downloaded -type d -name 'pr758-production-release-evidence-*' | head -n1)"
+          backup_dir="$(find downloaded -type d -name 'pr758-production-pre-release-backup-*' | head -n1)"
+          test -n "$evidence_dir"
+          test -n "$backup_dir"
+
+          merge_json="$evidence_dir/merged-main-identity.json"
+          test -f "$merge_json"
+          main_sha="$(jq -r '.sha' "$merge_json")"
+          main_tree="$(jq -r '.tree' "$merge_json")"
+          test -n "$main_sha"
+          test -n "$main_tree"
+
+          deployment_detail="$(find "$evidence_dir/gated-release" -name 'canonical-deployment-detail.json' -o -name 'deployment-detail.json' | head -n1)"
+          test -n "$deployment_detail"
+          deployment_id="$(jq -r '.id // .uid // empty' "$deployment_detail")"
+          deployment_url="$(jq -r '.url // empty' "$deployment_detail")"
+          deployment_sha="$(jq -r '.meta.githubCommitSha // empty' "$deployment_detail")"
+          test "$deployment_sha" = "$main_sha"
+          test -n "$deployment_id"
+          test -n "$deployment_url"
+
+          grep -R --fixed-strings 'fixture_residue=0' "$evidence_dir/production-uat" >/dev/null
+          grep -R --fixed-strings 'payment_refs=0' "$evidence_dir/production-uat" >/dev/null
+          test -f "$evidence_dir/canonical/final-acceptance.txt"
+          grep -F 'canonical_aliases_verified=true' "$evidence_dir/canonical/final-acceptance.txt" >/dev/null
+          grep -F 'public_smoke_passed=true' "$evidence_dir/canonical/final-acceptance.txt" >/dev/null
+          grep -F 'credential_values_detected=0' "$evidence_dir/evidence-secret-scan.txt" >/dev/null
+
+          backup_file="$(find "$backup_dir" -type f -name '*.dump.enc' | head -n1)"
+          test -n "$backup_file"
+          backup_sha="$(sha256sum "$backup_file" | awk '{print $1}')"
+          backup_bytes="$(stat --printf='%s' "$backup_file")"
+
+          release_artifact_id="$(jq -r '[.artifacts[] | select(.name | startswith("pr758-production-release-evidence-"))][0].id' downloaded/artifacts.json)"
+          release_artifact_size="$(jq -r '[.artifacts[] | select(.name | startswith("pr758-production-release-evidence-"))][0].size_in_bytes' downloaded/artifacts.json)"
+          backup_artifact_id="$(jq -r '[.artifacts[] | select(.name | startswith("pr758-production-pre-release-backup-"))][0].id' downloaded/artifacts.json)"
+          backup_artifact_size="$(jq -r '[.artifacts[] | select(.name | startswith("pr758-production-pre-release-backup-"))][0].size_in_bytes' downloaded/artifacts.json)"
+
+          release_archive_sha="$(tar -C "$evidence_dir" -cf - . | sha256sum | awk '{print $1}')"
+
+          {
+            echo "main_sha=$main_sha"
+            echo "main_tree=$main_tree"
+            echo "deployment_id=$deployment_id"
+            echo "deployment_url=$deployment_url"
+            echo "backup_sha=$backup_sha"
+            echo "backup_bytes=$backup_bytes"
+            echo "release_artifact_id=$release_artifact_id"
+            echo "release_artifact_size=$release_artifact_size"
+            echo "backup_artifact_id=$backup_artifact_id"
+            echo "backup_artifact_size=$backup_artifact_size"
+            echo "release_archive_sha=$release_archive_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post durable release evidence to PR 758 and issue 697
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.release.outputs.run_id }}
+          RUN_URL: ${{ steps.release.outputs.run_url }}
+          MAIN_SHA: ${{ steps.evidence.outputs.main_sha }}
+          MAIN_TREE: ${{ steps.evidence.outputs.main_tree }}
+          DEPLOYMENT_ID: ${{ steps.evidence.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.evidence.outputs.deployment_url }}
+          BACKUP_SHA: ${{ steps.evidence.outputs.backup_sha }}
+          BACKUP_BYTES: ${{ steps.evidence.outputs.backup_bytes }}
+          RELEASE_ARTIFACT_ID: ${{ steps.evidence.outputs.release_artifact_id }}
+          RELEASE_ARTIFACT_SIZE: ${{ steps.evidence.outputs.release_artifact_size }}
+          BACKUP_ARTIFACT_ID: ${{ steps.evidence.outputs.backup_artifact_id }}
+          BACKUP_ARTIFACT_SIZE: ${{ steps.evidence.outputs.backup_artifact_size }}
+          RELEASE_ARCHIVE_SHA: ${{ steps.evidence.outputs.release_archive_sha }}
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/release-report.md"
+          cat > "$report" <<EOF_REPORT
+          ## Production release completed — exact evidence
+
+          **Conclusion:** \`production_release_pass\`
+
+          Owner-authorized PR #758 was merged, backed up, migrated, deployed, and accepted through the complete non-payment production boundary.
+
+          | Field | Exact value |
+          |---|---|
+          | Merged \`main\` | \`$MAIN_SHA\` |
+          | Merged tree | \`$MAIN_TREE\` |
+          | Production deployment | \`$DEPLOYMENT_ID\` |
+          | Production deployment URL | \`https://$DEPLOYMENT_URL\` |
+          | Canonical aliases | \`moraltrade.org\`, \`www.moraltrade.org\` |
+          | Release workflow | [run $RUN_ID]($RUN_URL) |
+          | Release evidence artifact | \`$RELEASE_ARTIFACT_ID\` — $RELEASE_ARTIFACT_SIZE bytes |
+          | Release evidence archive digest | \`sha256:$RELEASE_ARCHIVE_SHA\` |
+          | Encrypted pre-release backup artifact | \`$BACKUP_ARTIFACT_ID\` — $BACKUP_ARTIFACT_SIZE bytes |
+          | Encrypted backup file | $BACKUP_BYTES bytes — \`sha256:$BACKUP_SHA\` |
+
+          ### Completed gates
+
+          - Final semantic-drift and normal-merge verification.
+          - Exact merged-main focused tests, 917/917 repository tests, ESLint, strict TypeScript, production build, and diff hygiene.
+          - Verified encrypted full logical PostgreSQL backup before migration; plaintext removed.
+          - Nine exact hashed DAC migrations applied in dossier order with 5-second lock timeout and 120-second statement timeout; production migration registry and schema verified.
+          - Gated exact-SHA Vercel production release completed; deployment is \`READY\`, production-targeted, and both canonical aliases resolve to the exact deployment.
+          - Complete post-release creator, reviewer, pledger, outsider, signed-out, public exact-terms, success, lapse, replay, privacy/hydration, desktop/mobile, runtime, and no-payment UAT passed on the production data plane.
+          - Canonical public smoke passed.
+          - Synthetic credentials invalidated and current-run rows removed: \`fixture_residue=0\`, \`payment_refs=0\`.
+          - Retained-evidence secret scan: zero credential values.
+
+          ### Payment and claim boundary
+
+          All payment/provider modes remained disabled. No checkout, donation, mandate, SetupIntent, PaymentIntent, charge, capture, transfer, settlement, refund, reserve transaction, premium, bonus, or payout was created or authorized.
+
+          This production software evidence does not establish real-world adoption, causal impact, counterfactual additionality, uniquely pivotal pledges, absence of moral externalities, or resolution of moral-public-good free-riding.
+          EOF_REPORT
+          sed -i 's/^[[:space:]]\{10\}//' "$report"
+
+          gh pr comment 758 --repo "$REPOSITORY" --body-file "$report"
+          gh issue comment 697 --repo "$REPOSITORY" --body-file "$report"
+
+          release_pr="$(gh pr list --repo "$REPOSITORY" --state open --head ops/pr758-production-release-20260818 --json number --jq '.[0].number // empty')"
+          if [[ -n "$release_pr" ]]; then
+            gh pr comment "$release_pr" --repo "$REPOSITORY" --body-file "$report"
+          fi
