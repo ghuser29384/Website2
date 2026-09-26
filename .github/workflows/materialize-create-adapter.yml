@@ -1,0 +1,179 @@
+name: Materialize exact Moral Trade Create adapter candidate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - ops/materialize-create-adapter-20260727
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-create-adapter-20260727
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' && github.head_ref == 'ops/materialize-create-adapter-20260727') ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/ops/materialize-create-adapter-20260727'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PRODUCT_BRANCH: feature/moral-trade-create-interface-adapter-20260727
+      EXPECTED_PRODUCT_BASE: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
+      PAYLOAD_TGZ_SHA256: 3111c714d486b3ae005ef162bfa3b38fa0ce1339752b5e721d57e36dd99661e2
+
+    steps:
+      - name: Check out exact temporary operator head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and validate immutable payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload_tgz="$RUNNER_TEMP/create-adapter-product.tar.gz"
+          SOURCE=.github/create-adapter-payload/product.b64 OUTPUT="$payload_tgz" python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          source = Path(os.environ["SOURCE"]).read_bytes()
+          payload = source if source.startswith(b"\x1f\x8b") else base64.b64decode(source)
+          Path(os.environ["OUTPUT"]).write_bytes(payload)
+          PY
+          echo "${PAYLOAD_TGZ_SHA256}  ${payload_tgz}" | sha256sum --check --strict
+
+          PAYLOAD_TGZ="$payload_tgz" python3 - <<'PY'
+          import os
+          import tarfile
+          from pathlib import PurePosixPath
+
+          expected = [
+              ".github/workflows/moral-trade-create-adapter-gates.yml",
+              "docs/moral-trade-create-interface-adapter.md",
+              "public/moral-trade-create/index.html",
+              "src/app/api/create/publish/route.ts",
+              "src/app/create/submissions/[submissionId]/page.tsx",
+              "src/app/trades/new/page.tsx",
+              "src/components/create/create-interface-frame.tsx",
+              "src/lib/create-interface/formula.test.ts",
+              "src/lib/create-interface/formula.ts",
+              "src/lib/create-interface/persistence.ts",
+              "src/lib/create-interface/source-contract.test.ts",
+              "src/lib/create-interface/types.ts",
+              "src/lib/create-interface/validation.test.ts",
+              "src/lib/create-interface/validation.ts",
+              "src/lib/public-route-smoke.test.ts",
+              "supabase/migrations/20260727041000_moral_trade_create_interface_adapter.sql",
+              "supabase/migrations/20260727042000_moral_trade_create_adapter_offer_mode_fix.sql",
+              "supabase/migrations/20260727043000_moral_trade_create_service_rpc_hardening.sql",
+              "supabase/migrations/20260727044000_moral_trade_create_adapter_idempotency_guard.sql",
+              "supabase/tests/moral_trade_create_interface_adapter.sql",
+          ]
+          with tarfile.open(os.environ["PAYLOAD_TGZ"], "r:gz") as archive:
+              members = archive.getmembers()
+              names = [member.name for member in members]
+              if names != expected:
+                  raise SystemExit(f"Unexpected payload members: {names!r}")
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  if not member.isfile() or path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"Unsafe payload member: {member.name}")
+          PY
+          cp "$payload_tgz" "$RUNNER_TEMP/create-adapter-product.validated.tar.gz"
+
+      - name: Check out and guard exact MPGF candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin "$EXPECTED_PRODUCT_BASE"
+          git checkout --detach "$EXPECTED_PRODUCT_BASE"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_BASE"
+          if git ls-remote --exit-code --heads origin "$PRODUCT_BRANCH" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing product branch $PRODUCT_BRANCH." >&2
+            exit 1
+          fi
+
+      - name: Materialize exact product files
+        shell: bash
+        run: |
+          set -euo pipefail
+          PAYLOAD_TGZ="$RUNNER_TEMP/create-adapter-product.validated.tar.gz" ROOT="$GITHUB_WORKSPACE" python3 - <<'PY'
+          import os
+          import shutil
+          import tarfile
+          from pathlib import Path, PurePosixPath
+
+          root = Path(os.environ["ROOT"]).resolve()
+          with tarfile.open(os.environ["PAYLOAD_TGZ"], "r:gz") as archive:
+              for member in archive.getmembers():
+                  path = PurePosixPath(member.name)
+                  target = (root / Path(*path.parts)).resolve()
+                  if root not in target.parents:
+                      raise SystemExit(f"Payload escapes workspace: {member.name}")
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  source = archive.extractfile(member)
+                  if source is None:
+                      raise SystemExit(f"Missing payload body: {member.name}")
+                  with target.open("wb") as output:
+                      shutil.copyfileobj(source, output)
+          PY
+
+          expected="$RUNNER_TEMP/expected-files.txt"
+          cat > "$expected" <<'FILES'
+          .github/workflows/moral-trade-create-adapter-gates.yml
+          docs/moral-trade-create-interface-adapter.md
+          public/moral-trade-create/index.html
+          src/app/api/create/publish/route.ts
+          src/app/create/submissions/[submissionId]/page.tsx
+          src/app/trades/new/page.tsx
+          src/components/create/create-interface-frame.tsx
+          src/lib/create-interface/formula.test.ts
+          src/lib/create-interface/formula.ts
+          src/lib/create-interface/persistence.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/types.ts
+          src/lib/create-interface/validation.test.ts
+          src/lib/create-interface/validation.ts
+          src/lib/public-route-smoke.test.ts
+          supabase/migrations/20260727041000_moral_trade_create_interface_adapter.sql
+          supabase/migrations/20260727042000_moral_trade_create_adapter_offer_mode_fix.sql
+          supabase/migrations/20260727043000_moral_trade_create_service_rpc_hardening.sql
+          supabase/migrations/20260727044000_moral_trade_create_adapter_idempotency_guard.sql
+          supabase/tests/moral_trade_create_interface_adapter.sql
+          FILES
+          sed -i 's/^          //' "$expected"
+          actual="$RUNNER_TEMP/actual-files.txt"
+          git status --porcelain=v1 | sed -E 's/^.. //' | sort > "$actual"
+          sort -o "$expected" "$expected"
+          diff -u "$expected" "$actual"
+          git diff --check
+
+      - name: Create one product commit directly above exact base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add --all
+          git commit -m "Implement interface-preserving Moral Trade Create adapter"
+          product_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PRODUCT_BASE"
+          test "$(git rev-list --count "$EXPECTED_PRODUCT_BASE..HEAD")" = "1"
+          git diff --check "$EXPECTED_PRODUCT_BASE" HEAD
+          git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+          {
+            echo "### Product candidate materialized"
+            echo
+            echo "- base: \`$EXPECTED_PRODUCT_BASE\`"
+            echo "- head: \`$product_sha\`"
+            echo "- branch: \`$PRODUCT_BRANCH\`"
+            echo "- product commits above base: 1"
+          } >> "$GITHUB_STEP_SUMMARY"

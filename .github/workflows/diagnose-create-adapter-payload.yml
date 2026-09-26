@@ -1,0 +1,46 @@
+name: Diagnose Create-adapter payload
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/materialize-create-adapter-20260727'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect payload representation
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=.github/create-adapter-payload/product.b64 OUTPUT=payload-diagnostic.txt python3 - <<'PY'
+          import base64
+          import hashlib
+          import os
+          from pathlib import Path
+
+          source = Path(os.environ['SOURCE']).read_bytes()
+          mode = 'gzip' if source.startswith(b'\x1f\x8b') else 'base64'
+          payload = source if mode == 'gzip' else base64.b64decode(source)
+          Path(os.environ['OUTPUT']).write_text(
+              f'mode={mode}\n'
+              f'source_size={len(source)}\n'
+              f'source_sha256={hashlib.sha256(source).hexdigest()}\n'
+              f'payload_size={len(payload)}\n'
+              f'payload_sha256={hashlib.sha256(payload).hexdigest()}\n'
+              f'payload_magic={payload[:8].hex()}\n'
+          )
+          PY
+          cat payload-diagnostic.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: create-adapter-payload-diagnostic-${{ github.run_id }}
+          path: payload-diagnostic.txt
+          retention-days: 7
