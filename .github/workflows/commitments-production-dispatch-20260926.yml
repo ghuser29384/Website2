@@ -1,0 +1,201 @@
+name: Release approved Commitments fix
+
+on:
+  push:
+    branches: [ops/commitments-production-release-20260926]
+    paths: [.github/workflows/commitments-production-dispatch-20260926.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitments-approved-release-20260926
+  cancel-in-progress: false
+
+env:
+  RELEASE_SHA: 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+  CANDIDATE_SHA: ff39d48418b81af398fda952eff67c13ec014403
+  CANDIDATE_QA_RUN: '36209392398'
+  RELEASE_WORKFLOW_BLOB: e219e99d25279161b89eee80fc410912c3561a19
+
+jobs:
+  dispatch:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384' && github.ref == 'refs/heads/ops/commitments-production-release-20260926'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    outputs:
+      release_run_id: ${{ steps.dispatch.outputs.release_run_id }}
+    steps:
+      - name: Check immutable authorization, source and exact-candidate QA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          gh api "repos/$GITHUB_REPOSITORY/pulls/831" > /tmp/commitments-pr.json
+          jq -e --arg head "$CANDIDATE_SHA" --arg merged "$RELEASE_SHA" \
+            '.merged == true and .head.sha == $head and .merge_commit_sha == $merged and .base.ref == "main"' \
+            /tmp/commitments-pr.json >/dev/null
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$RELEASE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_QA_RUN" > /tmp/commitments-qa.json
+          jq -e --arg head "$CANDIDATE_SHA" \
+            '.head_sha == $head and .event == "pull_request" and .path == ".github/workflows/commitments-performance-gates.yml" and .status == "completed" and .conclusion == "success"' \
+            /tmp/commitments-qa.json >/dev/null
+          test "$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/vercel-release.yml?ref=$RELEASE_SHA" --jq '.sha')" = "$RELEASE_WORKFLOW_BLOB"
+          merge_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$RELEASE_SHA" --jq '.tree.sha')"
+          candidate_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$CANDIDATE_SHA" --jq '.tree.sha')"
+          test "$merge_tree" = "$candidate_tree"
+      - name: Dispatch the unchanged gated workflow once or reuse its exact run
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          runs_url="repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&head_sha=$RELEASE_SHA&per_page=100"
+          gh api "$runs_url" > /tmp/commitments-existing-runs.json
+          count="$(jq '.workflow_runs | length' /tmp/commitments-existing-runs.json)"
+          if [ "$count" -gt 1 ]; then
+            echo 'More than one release exists for this commit; inspect before retrying.' >&2
+            exit 1
+          fi
+          if [ "$count" -eq 1 ]; then
+            jq -e '.workflow_runs[0] | .status != "completed" or .conclusion == "success"' /tmp/commitments-existing-runs.json >/dev/null
+            run_id="$(jq -r '.workflow_runs[0].id' /tmp/commitments-existing-runs.json)"
+          else
+            test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$RELEASE_SHA"
+            jq -n --arg sha "$RELEASE_SHA" \
+              '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+              | gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" --input -
+            run_id=''
+            for attempt in $(seq 1 30); do
+              gh api "$runs_url" > /tmp/commitments-existing-runs.json
+              count="$(jq '.workflow_runs | length' /tmp/commitments-existing-runs.json)"
+              test "$count" -le 1
+              if [ "$count" -eq 1 ]; then
+                run_id="$(jq -r '.workflow_runs[0].id' /tmp/commitments-existing-runs.json)"
+                break
+              fi
+              sleep 3
+            done
+            test -n "$run_id"
+          fi
+          echo "release_run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf 'Exact gated production release: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$run_id" >> "$GITHUB_STEP_SUMMARY"
+
+  canonical-smoke:
+    needs: dispatch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Wait for the exact gated release to succeed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ needs.dispatch.outputs.release_run_id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 150); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" > /tmp/commitments-release.json
+            jq -e --arg sha "$RELEASE_SHA" '.head_sha == $sha and .path == ".github/workflows/vercel-release.yml"' /tmp/commitments-release.json >/dev/null
+            status="$(jq -r '.status' /tmp/commitments-release.json)"
+            if [ "$status" = completed ]; then
+              jq -e '.conclusion == "success"' /tmp/commitments-release.json >/dev/null
+              exit 0
+            fi
+            sleep 20
+          done
+          echo 'Release has not finished; no production result is assumed.' >&2
+          exit 1
+      - name: Check out the exact released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked browser test dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Verify live signed-out Commitments on desktop and mobile
+        run: |
+          set -euo pipefail
+          cat > .commitments-production-smoke.mjs <<'JS'
+          import assert from 'node:assert/strict';
+          import { mkdir, writeFile } from 'node:fs/promises';
+          import { chromium, expect } from '@playwright/test';
+          
+          const origin = 'https://www.moraltrade.org';
+          const out = 'commitments-production-evidence';
+          await mkdir(out, { recursive: true });
+          const browser = await chromium.launch();
+          const report = { checkedAt: new Date().toISOString(), expectedCommit: process.env.RELEASE_SHA, accounts: 'signed-out only; no real private account accessed', views: [] };
+          try {
+            for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+              const context = await browser.newContext({ viewport });
+              await context.addCookies([{ name: 'mt_analytics_opt_out', value: '1', domain: 'www.moraltrade.org', path: '/', secure: true, sameSite: 'Lax' }]);
+              const page = await context.newPage();
+              const errors = [], consoleMessages = [];
+              page.on('pageerror', error => errors.push(error.message));
+              page.on('console', message => { if (['error', 'warning'].includes(message.type())) consoleMessages.push({ level: message.type(), text: message.text() }); });
+              const response = await page.goto(`${origin}/commitments`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+              assert.equal(response.status(), 200);
+              await expect(page).toHaveTitle(/Commitments/);
+              await expect(page.locator('#commitments-heading')).toBeVisible();
+              await expect(page.getByRole('heading', { name: 'Sign in to view your commitments.' })).toBeVisible();
+              await expect(page.locator('[aria-label="Commitment summary"]')).toHaveCount(0);
+              await expect(page.getByRole('status').filter({ hasText: 'Loading your commitments' })).toHaveCount(0);
+              const html = await response.text();
+              assert.doesNotMatch(await page.locator('body').innerText(), /Application error:|Internal Server Error|Auth Resolution QA|Example: animal welfare/);
+              const tabs = page.getByRole('navigation', { name: 'Commitments sections' });
+              const transitions = [];
+              for (const label of ['Ledger', 'Completed', 'Calendar', 'Portfolio']) {
+                await tabs.getByRole('link', { name: label, exact: true }).click();
+                await expect(tabs.getByRole('link', { name: label, exact: true })).toHaveAttribute('aria-current', 'page');
+                await expect(page.getByRole('heading', { name: 'Sign in to view your commitments.' })).toBeVisible();
+                const url = new URL(page.url());
+                assert.equal(url.origin, origin);
+                assert.equal(url.pathname, '/commitments');
+                assert.equal(url.searchParams.get('tab'), label === 'Portfolio' ? null : label.toLowerCase());
+                await expect(page.locator('[aria-label="Commitment summary"]')).toHaveCount(0);
+                transitions.push({ tab: label, url: page.url(), privateSummaryAbsent: true });
+              }
+              await page.screenshot({ path: `${out}/commitments-signed-out-${viewport.width}.png`, fullPage: true });
+              const overflow = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+              await page.getByRole('link', { name: 'Sign in to continue' }).click();
+              await expect(page).toHaveURL(/\/login\?returnTo=(?:%2F|\/)commitments/);
+              assert.equal(new URL(page.url()).searchParams.get('returnTo'), '/commitments');
+              await expect(page.locator('main')).toBeVisible();
+              assert.deepEqual(errors, []);
+              report.views.push({ viewport, status: response.status(), cacheControl: response.headers()['cache-control'], streamingMarkupPresent: html.includes('Loading your commitments'), transitions, loginUrl: page.url(), overflow, pageErrors: errors, consoleMessages });
+              await context.close();
+            }
+            report.result = 'pass';
+          } catch (error) {
+            report.result = 'fail';
+            report.error = error.stack ?? String(error);
+            throw error;
+          } finally {
+            await writeFile(`${out}/report.json`, JSON.stringify(report, null, 2));
+            console.log(JSON.stringify(report, null, 2));
+            await browser.close();
+          }
+          JS
+          node .commitments-production-smoke.mjs
+      - name: Preserve canonical browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-production-${{ env.RELEASE_SHA }}
+          path: commitments-production-evidence
+          if-no-files-found: warn
+          retention-days: 14
