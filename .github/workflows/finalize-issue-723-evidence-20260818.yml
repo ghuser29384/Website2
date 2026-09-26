@@ -1,0 +1,131 @@
+name: Finalize issue 723 evidence record
+
+on:
+  push:
+    branches:
+      - fix/723-donation-confirmation-authenticated-caller
+    paths:
+      - .github/workflows/finalize-issue-723-evidence-20260818.yml
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: finalize-issue-723-evidence
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SELF: .github/workflows/finalize-issue-723-evidence-20260818.yml
+      PRODUCT_BRANCH: fix/723-donation-confirmation-authenticated-caller
+      STACK_BRANCH: qa/723-authenticated-confirmation-integration-20260817
+      WORKFLOW_PATH: .github/workflows/pooled-settlement-authenticated-caller-integration-20260817.yml
+    steps:
+      - name: Check out product branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 20
+
+      - name: Resolve exact current heads and exact-head QA evidence
+        id: evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_head="$(gh api "repos/${GITHUB_REPOSITORY}/branches/${PRODUCT_BRANCH}" --jq .commit.sha)"
+          stack_head="$(gh api "repos/${GITHUB_REPOSITORY}/branches/${STACK_BRANCH}" --jq .commit.sha)"
+          pr_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/750" --jq .head.sha)"
+          test "$stack_head" = "$pr_head"
+
+          runs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${STACK_BRANCH}&per_page=100")"
+          run_id="$(jq -r --arg sha "$stack_head" --arg path "$WORKFLOW_PATH" '[.workflow_runs[] | select(.head_sha == $sha and .path == $path and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+          if test -z "$run_id"; then
+            latest="$(jq -r --arg sha "$stack_head" --arg path "$WORKFLOW_PATH" '[.workflow_runs[] | select(.head_sha == $sha and .path == $path and .status == "completed")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            if test -n "$latest"; then
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${latest}/rerun"
+              for attempt in $(seq 1 120); do
+                sleep 10
+                run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${latest}")"
+                status="$(jq -r .status <<<"$run")"
+                conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+                if test "$status" = completed; then
+                  test "$conclusion" = success
+                  run_id="$latest"
+                  break
+                fi
+              done
+            fi
+          fi
+          test -n "$run_id"
+
+          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+          test "$(jq -r .head_sha <<<"$run")" = "$stack_head"
+          test "$(jq -r .conclusion <<<"$run")" = success
+          jobs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100")"
+          source_job="$(jq -r '[.jobs[] | select(.name == "Exact stacked source and fail-closed preflight" and .conclusion == "success")] | last | .id // empty' <<<"$jobs")"
+          matrix_job="$(jq -r '[.jobs[] | select(.name == "Authenticated 19-case matrix with caller repair" and .conclusion == "success")] | last | .id // empty' <<<"$jobs")"
+          test -n "$source_job"
+          test -n "$matrix_job"
+          artifacts="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+          artifact_id="$(jq -r '[.artifacts[] | select(.expired == false and (.name | startswith("pooled-settlement-authenticated-caller-qa-")))] | last | .id // empty' <<<"$artifacts")"
+          test -n "$artifact_id"
+
+          echo "product_head=$product_head" >> "$GITHUB_OUTPUT"
+          echo "stack_head=$stack_head" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "source_job=$source_job" >> "$GITHUB_OUTPUT"
+          echo "matrix_job=$matrix_job" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Record the exact decision-ready evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_HEAD: ${{ steps.evidence.outputs.product_head }}
+          STACK_HEAD: ${{ steps.evidence.outputs.stack_head }}
+          RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          SOURCE_JOB: ${{ steps.evidence.outputs.source_job }}
+          MATRIX_JOB: ${{ steps.evidence.outputs.matrix_job }}
+          ARTIFACT_ID: ${{ steps.evidence.outputs.artifact_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(cat <<EOF
+          ## Issue #723 exact-head QA completion
+
+          The authenticated-caller repair and stacked pooled-settlement QA sequence completed on exact immutable evidence.
+
+          - Corrected product head: \\`${PRODUCT_HEAD}\`
+          - Exact stacked PR #750 head: \\`${STACK_HEAD}\`
+          - Permanent workflow run: ${RUN_ID}
+          - Source/preflight job: ${SOURCE_JOB} — success
+          - Authenticated 19-case matrix job: ${MATRIX_JOB} — success
+          - Sanitized evidence artifact: ${ARTIFACT_ID}
+
+          The run proved the isolated-QA project, authenticated-only confirmation privilege tuple, unauthenticated/actor-mismatched/service-role denials, separate participant sessions, canonical milestone-manifest finalization and bilateral review, all 19 pooled-settlement scenarios, balanced ledger and atomic activation contracts, cleanup, and zero current-run residue.
+
+          No production database, production migration, deployment, alias, feature flag, live Stripe/Every.org rail, Every.org donation, or real funds were touched. PRs #745, #750, #700, and #208 remain draft and unmerged; this evidence does not authorize merge or production release.
+          EOF
+          )
+          for number in 723 745 750 700 208; do
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" -f body="$body"
+          done
+
+      - name: Remove the temporary finalizer and preserve the three-file product scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm "$SELF"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Record issue 723 exact-head QA evidence"
+          git push origin "HEAD:$PRODUCT_BRANCH"

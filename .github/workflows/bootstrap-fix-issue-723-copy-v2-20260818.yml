@@ -1,0 +1,92 @@
+name: Complete issue 723 copy cleanup
+
+on:
+  push:
+    branches:
+      - fix/723-donation-confirmation-authenticated-caller
+    paths:
+      - .github/workflows/bootstrap-fix-issue-723-copy-v2-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-issue-723-copy-cleanup
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BASE_MAIN: c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3
+      BRANCH: fix/723-donation-confirmation-authenticated-caller
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out current product branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 20
+
+      - name: Verify and repair exact product scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$BASE_MAIN" HEAD
+          unexpected="$(git diff --name-only "$BASE_MAIN" HEAD | grep -Ev '^(src/app/trade-donation-actions-base\.ts|src/lib/moral-trade/trade-donation-confirmation-authenticated-caller\.test\.ts|supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller\.sql|\.github/workflows/bootstrap-fix-issue-723-copy(-v2)?-20260818\.yml)$' || true)"
+          test -z "$unexpected"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("src/app/trade-donation-actions-base.ts")
+          text = path.read_text()
+          old = '''      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence befor final completion.",
+     );'''
+          new = '''      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence before final completion.",
+    );'''
+          if text.count(old) != 1:
+              raise SystemExit("Expected the exact one-off copy regression once.")
+          path.write_text(text.replace(old, new))
+          PY
+          rm -f \
+            .github/workflows/bootstrap-fix-issue-723-copy-20260818.yml \
+            .github/workflows/bootstrap-fix-issue-723-copy-v2-20260818.yml
+          git diff --check
+          actual="$(git diff --name-only "$BASE_MAIN" HEAD | LC_ALL=C sort | tr '\n' ' ')"
+          expected="src/app/trade-donation-actions-base.ts src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql "
+          test "$actual" = "$expected"
+          grep -Fq 'before final completion.' src/app/trade-donation-actions-base.ts
+          ! grep -Fq 'befor final completion.' src/app/trade-donation-actions-base.ts
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run exact source and build gates
+        run: |
+          node --import tsx --test src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts
+          npm test
+          npx tsc --noEmit
+          npm run lint -- --quiet
+          CONDITIONAL_PAYMENTS_MODE=disabled \
+          TRADE_DONATION_POOL_ENABLED=false \
+          TRADE_DONATION_POOL_MODE=disabled \
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED=false \
+          NEXT_PUBLIC_SITE_URL=https://www.moraltrade.org \
+          VERCEL=1 VERCEL_ENV=preview \
+          npm run build
+
+      - name: Publish corrected three-file product candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Restore completion copy after authenticated-caller repair"
+          git push origin "HEAD:$BRANCH"

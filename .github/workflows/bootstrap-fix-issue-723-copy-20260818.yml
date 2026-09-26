@@ -1,0 +1,102 @@
+name: Bootstrap issue 723 copy cleanup
+
+on:
+  push:
+    branches:
+      - fix/723-donation-confirmation-authenticated-caller
+    paths:
+      - .github/workflows/bootstrap-fix-issue-723-copy-20260818.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-issue-723-copy-cleanup
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_PARENT: ec59737e66aa6135b822446e4cb4a82372e0b39b
+      BRANCH: fix/723-donation-confirmation-authenticated-caller
+      BOOTSTRAP: .github/workflows/bootstrap-fix-issue-723-copy-20260818.yml
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 2
+
+      - name: Verify immutable starting point
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git diff --name-only "$EXPECTED_PARENT" HEAD)" = "$BOOTSTRAP"
+
+      - name: Restore exact completion copy and indentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("src/app/trade-donation-actions-base.ts")
+          text = path.read_text()
+          old = '''      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence befor final completion.",
+     );'''
+          new = '''      "The provider donation activates this trade but does not prove the reciprocal action. Submit and accept separate performance evidence before final completion.",
+    );'''
+          if text.count(old) != 1:
+              raise SystemExit("Expected the exact one-off copy regression once.")
+          path.write_text(text.replace(old, new))
+          PY
+          git diff --check
+          test "$(git diff --name-only "$EXPECTED_PARENT" HEAD | grep -v -F "$BOOTSTRAP" | LC_ALL=C sort | tr '\n' ' ')" = "src/app/trade-donation-actions-base.ts src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql "
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused authenticated-caller contracts
+        run: node --import tsx --test src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- --quiet
+
+      - name: Build with payment features disabled
+        env:
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Publish ordinary successor without bootstrap transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm "$BOOTSTRAP"
+          git diff --check
+          test "$(git diff --name-only "$EXPECTED_PARENT" HEAD | LC_ALL=C sort | tr '\n' ' ')" = "src/app/trade-donation-actions-base.ts src/lib/moral-trade/trade-donation-confirmation-authenticated-caller.test.ts supabase/migrations/20260817113000_authenticate_trade_donation_confirmation_caller.sql "
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Restore completion copy after authenticated-caller repair"
+          git push origin "HEAD:$BRANCH"
