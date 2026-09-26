@@ -6,11 +6,11 @@
   font-display: swap;
 }
 :root {
-  --paper: #f5f2e9;
-  --paper-strong: #fffdf8;
+  --paper: #f7f8fa;
+  --paper-strong: #ffffff;
   --ink: #111;
-  --muted: #5e5c56;
-  --line: #c7c5bd;
+  --muted: #606773;
+  --line: #e0e3e8;
   --blue: #154cff;
   --sans: Metropolis, Arial, sans-serif;
 }
@@ -35,7 +35,7 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 .discover-main { max-width: 1184px; margin: 0 auto; padding: 52px 32px 28px; }
 .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; margin-bottom: 30px; }
 h1, h2, h3, p { margin: 0; }
-h1 { font: 400 clamp(36px, 4.5vw, 54px)/1.08 Georgia, serif; letter-spacing: -0.035em; margin-bottom: 14px; }
+h1 { font: 600 clamp(28px, 2.5vw, 32px)/1.2 var(--sans); letter-spacing: -0.035em; margin-bottom: 14px; }
 .page-heading p { max-width: 690px; color: var(--muted); }
 .page-heading > a { margin-top: 8px; flex-shrink: 0; }
 .primary-btn, .outline-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 11px 20px; border: 1px solid var(--blue); color: white; background: var(--blue); font-size: 14px; font-weight: 600; line-height: 1.35; text-decoration: none; }

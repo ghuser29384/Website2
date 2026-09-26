@@ -70,6 +70,15 @@ function NavItem({ href, label, className }: { href: string; label: string; clas
   const pathname = usePathname();
   const isActive = isHrefActive(pathname, href) || (href === "/feed" && pathname === "/");
 
+  // Standalone HTML shells must use document navigation, not an RSC request.
+  if (href === "/feed" || href === "/discover") {
+    return (
+      <a aria-current={isActive ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
+        {label}
+      </a>
+    );
+  }
+
   return (
     <Link prefetch={false} aria-current={isActive ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
       {label}

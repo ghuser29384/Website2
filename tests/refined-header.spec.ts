@@ -91,3 +91,25 @@ test("the directory masthead keeps native page links usable without JavaScript",
   // directory navigation itself must still perform a native document request.
   await context.close();
 });
+
+for (const target of ["/feed", "/discover"]) {
+  test(`React header uses a document request for standalone ${target}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    const rscRequests: string[] = [];
+    await page.route(url => ["/feed", "/discover"].includes(url.pathname) && url.searchParams.has("_rsc"), route => {
+      rscRequests.push(route.request().url());
+      return route.abort();
+    });
+    await page.goto("/contact");
+    const summary = page.locator(".mt-refined-header summary").filter({ hasText: "More" });
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("link", { name: "Messages", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === target);
+    await page.locator(`[data-mt-primary-links] a[href="${target}"]`).click();
+    await navigation;
+    await expect.poll(() => new URL(page.url()).pathname).toBe(target);
+    expect(rscRequests).toEqual([]);
+  });
+}
