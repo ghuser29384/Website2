@@ -1,0 +1,109 @@
+name: Dashboard production gate repair
+
+on:
+  push:
+    branches:
+      - fix/dashboard-sparks-release-gate-20260926
+    paths:
+      - .github/workflows/dashboard-sparks-release-gate-repair-20260926.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dashboard-sparks-release-gate-repair-20260926
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Check out the exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard source and apply the scoped repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/fix/dashboard-sparks-release-gate-20260926
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object playwright.release.config.ts)" = f0bfe2eb6c346d212d9b96450ad44be548845043
+          test "$(git hash-object public/moral-trade-refined-header.css)" = 99111f238bfcb0384ff824e197e12e11436e3cd9
+          python <<'PY'
+          from pathlib import Path
+
+          config_path = Path('playwright.release.config.ts')
+          config = config_path.read_text()
+          anchor = '  testIgnore: [\n'
+          additions = '''    "**/exact-live-local-time.spec.ts",\n    "**/homepage-narrow-header.spec.ts",\n    "**/returning-homepage-timezone.spec.ts",\n    "**/returning-homepage.spec.ts",\n'''
+          assert config.count(anchor) == 1
+          for name in (
+              'exact-live-local-time.spec.ts',
+              'homepage-narrow-header.spec.ts',
+              'returning-homepage-timezone.spec.ts',
+              'returning-homepage.spec.ts',
+          ):
+              assert name not in config
+          config_path.write_text(config.replace(anchor, anchor + additions, 1))
+
+          css_path = Path('public/moral-trade-refined-header.css')
+          css = css_path.read_text()
+          marker = '/* At the narrowest supported Feed viewport, preserve every action while compacting Command to its existing search glyph. */'
+          assert marker not in css
+          css_path.write_text(css.rstrip() + '''\n\n/* At the narrowest supported Feed viewport, preserve every action while compacting Command to its existing search glyph. */\n@media (max-width: 340px) {\n  header.topbar.mt-refined-header .top-actions {\n    gap: 6px;\n    min-width: 0;\n  }\n  header.topbar.mt-refined-header .top-actions [data-action="command"] {\n    flex: 0 0 44px;\n    width: 44px;\n    min-width: 44px;\n    padding: 0;\n    overflow: hidden;\n    font-size: 0;\n  }\n  header.topbar.mt-refined-header .top-actions [data-action="command"]::before {\n    content: "⌕";\n    font-size: 18px;\n    line-height: 1;\n  }\n  body header.topbar.mt-refined-header .header-start {\n    padding-inline: 12px;\n  }\n}\n''')
+          PY
+          git diff --check
+          git diff -- playwright.release.config.ts public/moral-trade-refined-header.css
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete source gates
+        env:
+          VERCEL: '1'
+          VERCEL_ENV: production
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify the repaired 320px Feed masthead
+        run: npm run test:e2e:release -- tests/refined-header.spec.ts --grep 'approved masthead at /feed 320px' --reporter=line
+
+      - name: Run the complete credential-free release browser gate
+        run: npm run test:e2e:release -- --reporter=line
+
+      - name: Commit only the verified two-file repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/dashboard-sparks-release-gate-repair-20260926.yml
+          git add playwright.release.config.ts public/moral-trade-refined-header.css
+          test "$(git diff --cached --name-only | sort)" = $'playwright.release.config.ts\npublic/moral-trade-refined-header.css'
+          git diff --cached --check
+          git commit -m 'Align release browser gate with current Feed header'
+          git push origin HEAD:refs/heads/fix/dashboard-sparks-release-gate-20260926
