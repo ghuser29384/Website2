@@ -12,13 +12,6 @@
     'nav[aria-label="Primary navigation"]',
   ];
 
-  function normalizeLabel(element) {
-    return String(element.textContent || "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
-  }
-
   function createDocumentHeading() {
     const heading = document.createElement("h1");
     heading.id = "mt-live-document-heading";
@@ -85,170 +78,73 @@
     ensureDocumentHeading();
   }
 
-  function findFeedControl(nav) {
-    return Array.from(nav.querySelectorAll("a, button")).find((candidate) => {
-      const label = normalizeLabel(candidate);
-      return label === "now" || label === "feed";
-    });
-  }
-
-  function prepareFeedControl(control) {
-    control.textContent = "Feed";
-    control.setAttribute("aria-label", "Open personalized feed");
-    control.setAttribute("data-mt-feed-link", "true");
-
-    if (control instanceof HTMLAnchorElement) {
-      control.href = "/feed";
-    }
-  }
-
-  function openDiscover(event) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    window.location.assign("/discover");
-  }
-
-  function openEvidence(event) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    window.location.assign("/evidence");
-  }
-
-  function prepareDiscoverControl(control) {
-    control.setAttribute("data-mt-discover-link", "true");
-    control.removeAttribute("aria-current");
-    control.removeAttribute("data-page");
-    control.removeAttribute("data-action");
-    control.removeAttribute("data-view");
-    control.classList.remove("active");
-
-    if (control instanceof HTMLAnchorElement) {
-      control.href = "/discover";
-    } else if (control instanceof HTMLButtonElement) {
-      control.type = "button";
-    }
-
-    control.addEventListener("click", openDiscover, true);
-  }
-
-  function prepareEvidenceControl(control) {
-    control.setAttribute("data-mt-evidence-link", "true");
-    control.setAttribute("aria-label", "Open Evidence");
-    control.removeAttribute("aria-current");
-    control.removeAttribute("data-page");
-    control.removeAttribute("data-action");
-    control.removeAttribute("data-view");
-    control.classList.remove("active");
-
-    if (control instanceof HTMLAnchorElement) {
-      control.href = "/evidence";
-    } else if (control instanceof HTMLButtonElement) {
-      control.type = "button";
-    }
-
-    control.addEventListener("click", openEvidence, true);
-  }
-
-  function createDiscoverControl(nav, template) {
-    const tagName = template instanceof HTMLAnchorElement ? "a" : "button";
-    const control = document.createElement(tagName);
-    control.className = template.className;
-    control.textContent = "Discover";
-    control.setAttribute("aria-label", "Open Discover");
-    prepareDiscoverControl(control);
-
-    const feedControl = findFeedControl(nav);
-
-    if (feedControl?.nextSibling) {
-      nav.insertBefore(control, feedControl.nextSibling);
-    } else if (feedControl) {
-      nav.appendChild(control);
-    } else {
-      nav.insertBefore(control, nav.firstChild);
-    }
-
-    return control;
-  }
-
-  function createEvidenceControl(nav, template, commitmentsControl) {
-    const tagName = template instanceof HTMLAnchorElement ? "a" : "button";
-    const control = document.createElement(tagName);
-    control.className = template.className;
-    control.textContent = "Evidence";
-    prepareEvidenceControl(control);
-
-    if (commitmentsControl?.nextSibling) {
-      nav.insertBefore(control, commitmentsControl.nextSibling);
-    } else {
-      nav.appendChild(control);
-    }
-  }
-
   function patchNavigation() {
-    const navs = [
-      ...new Set(
-        navSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]),
-      ),
-    ];
+    const navs = [...new Set(navSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]))];
     let patched = false;
-
     for (const nav of navs) {
-      const existingFeedControl = findFeedControl(nav);
-      if (existingFeedControl && !existingFeedControl.hasAttribute("data-mt-feed-link")) {
-        prepareFeedControl(existingFeedControl);
+      // React owns native headers; never replace a hydrated component's children.
+      if (nav.closest(".mt-site-topbar")) continue;
+      const header = nav.closest("header");
+      if (!header) continue;
+      if (nav.dataset.mtPrimaryLinks === "true") { patched = true; continue; }
+      const links = [
+        ["/feed", "Home", "data-mt-feed-link"],
+        ["/discover", "Trades", "data-mt-discover-link"],
+        ["/commitments", "Commitments", ""],
+        ["/profile", "Profile", ""],
+      ];
+      const fragment = document.createDocumentFragment();
+      const path = window.location.pathname;
+      for (const [href, label, marker] of links) {
+        const link = document.createElement("a");
+        link.href = href;
+        link.textContent = label;
+        if (marker) link.setAttribute(marker, "true");
+        if (path === href || (href === "/feed" && path === "/")) link.setAttribute("aria-current", "page");
+        fragment.appendChild(link);
       }
-
-      const controls = [...nav.querySelectorAll("a, button")];
-      let discoverControl = controls.find((control) => normalizeLabel(control) === "discover");
-
-      if (discoverControl) {
-        if (!discoverControl.hasAttribute("data-mt-discover-link")) {
-          prepareDiscoverControl(discoverControl);
+      nav.replaceChildren(fragment);
+      nav.setAttribute("aria-label", "Primary navigation");
+      nav.dataset.mtPrimaryLinks = "true";
+      header.classList.add("mt-refined-header");
+      const brand = header.querySelector("a.brand");
+      if (brand) brand.setAttribute("href", "/");
+      const actions = header.querySelector(".top-actions");
+      if (actions && !actions.querySelector(".header-more")) {
+        const more = document.createElement("details");
+        more.className = "header-more";
+        const trigger = document.createElement("summary");
+        trigger.className = "text-btn";
+        trigger.textContent = "More";
+        const panel = document.createElement("div");
+        panel.className = "header-more-links";
+        for (const [href, label] of [
+          ["/dashboard", "Dashboard"], ["/trades/new", "Create a trade"],
+          ["/messages", "Messages"], ["/cart", "Saved offers"],
+          ["/invite", "Invite someone"], ["/walkthrough", "How it works"], ["/safety", "Safety"],
+        ]) {
+          const link = document.createElement("a");
+          link.href = href;
+          link.textContent = label;
+          panel.appendChild(link);
         }
-      } else {
-        const template = findFeedControl(nav) || controls[0];
-        if (!template) continue;
-
-        discoverControl = createDiscoverControl(nav, template);
-      }
-
-      // Remove legacy simulator navigation, not real safety enforcement.
-      for (const control of nav.querySelectorAll("a, button")) {
-        if (normalizeLabel(control) === "controls") control.remove();
-      }
-
-      const finalControls = [...nav.querySelectorAll("a, button")];
-      const evidenceControl = finalControls.find(
-        (control) => normalizeLabel(control) === "evidence",
-      );
-
-      if (evidenceControl) {
-        if (!evidenceControl.hasAttribute("data-mt-evidence-link")) {
-          prepareEvidenceControl(evidenceControl);
-        }
-      } else {
-        const commitmentsControl = finalControls.find((control) => {
-          const label = normalizeLabel(control);
-          return label === "commitments" || label === "activity";
+        more.append(trigger, panel);
+        more.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") { more.open = false; trigger.focus(); }
         });
-        const template = commitmentsControl || findFeedControl(nav) || finalControls[0];
-        if (template) createEvidenceControl(nav, template, commitmentsControl);
+        more.addEventListener("focusout", (event) => {
+          if (!more.contains(event.relatedTarget)) more.open = false;
+        });
+        actions.prepend(more);
+        // This is an entry link, not an authentication assertion or a new signup flow.
+        const start = document.createElement("a");
+        start.className = "header-start";
+        start.href = "/start";
+        start.textContent = "Get Started";
+        actions.appendChild(start);
       }
-
-      if (!nav.querySelector('[data-mt-optional-tour]')) {
-        const tour = document.createElement("a");
-        tour.className = (findFeedControl(nav) || finalControls[0])?.className || "";
-        tour.classList.remove("active");
-        tour.href = "/walkthrough";
-        tour.textContent = "Tour";
-        tour.setAttribute("aria-label", "Open optional walkthrough");
-        tour.setAttribute("data-mt-optional-tour", "true");
-        nav.appendChild(tour);
-      }
-
       patched = true;
     }
-
     return patched;
   }
 

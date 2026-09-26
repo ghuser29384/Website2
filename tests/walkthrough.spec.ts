@@ -30,7 +30,10 @@ test("a first homepage visit offers a voluntary walkthrough without diverting th
   await expect(page).toHaveURL(/\/\?utm_source=invite$/);
   await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toBeVisible();
   expect((await context.cookies()).find((cookie) => cookie.name === "mt_walkthrough_seen")).toBeUndefined();
-  await page.getByRole("link", { name: "Open optional walkthrough" }).click();
+  await page.locator(".header-more > summary").click();
+  const walkthrough = page.locator(".header-more").getByRole("link", { name: "How it works", exact: true });
+  await expect(walkthrough).toHaveAttribute("href", "/walkthrough");
+  await walkthrough.click();
   await expect(page).toHaveURL(/\/walkthrough$/);
   await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
   expect((await context.cookies()).find((cookie) => cookie.name === "mt_walkthrough_seen")).toMatchObject({ httpOnly: true, value: "1" });

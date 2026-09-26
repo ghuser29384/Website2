@@ -51,7 +51,7 @@ async function expectHeaderAcrossLiveViews(
     await page.locator(`[data-now="${section}"]`).click();
     await expectLocalHeader(page, expected);
   }
-  await page.locator('.topbar nav button[data-page="activity"]').click();
+  await page.locator('.topbar nav a[href="/commitments"]').click();
   await expect(page).toHaveURL(/\/commitments$/);
   await expect(page.locator("#commitments-heading")).toBeVisible();
   await expect(page.locator(".head .date")).toHaveCount(0);

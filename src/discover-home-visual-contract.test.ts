@@ -9,7 +9,7 @@ test("Discover keeps the canonical masthead and accessible two-sided list", () =
   for (const path of ["/feed", "/discover", "/trade-controls", "/trades/new", "/commitments", "/evidence"]) {
     assert.ok(shell.includes(`href="${path}"`));
   }
-  assert.match(shell, /aria-current="page">Discover/);
+  assert.match(shell, /aria-current="page">Trades/);
   assert.match(shell, /Skip to trades/);
   assert.match(shell, /role="search"/);
   assert.match(shell, /aria-live="polite"/);

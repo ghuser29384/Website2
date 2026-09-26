@@ -35,7 +35,8 @@ for (const viewport of viewports) {
         return { top: rect.top, bottom: rect.bottom };
       }),
     );
-    expect(linkBounds).toHaveLength(8);
+    expect(linkBounds).toHaveLength(4);
+    await expect(links.locator(":scope > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
     const navBounds = await nav.boundingBox();
     expect(navBounds).not.toBeNull();
     for (const bounds of linkBounds) {
@@ -43,8 +44,12 @@ for (const viewport of viewports) {
       expect(bounds.bottom).toBeLessThanOrEqual(navBounds!.y + navBounds!.height);
     }
 
-    // Native focus must reveal the link text; browsers may leave padding clipped.
-    const safety = links.getByRole("link", { name: "Safety", exact: true });
+    // Safety remains keyboard-accessible through the compact utility menu.
+    const more = nav.locator("summary").filter({ hasText: "More" });
+    await more.focus();
+    await page.keyboard.press("Enter");
+    const safety = nav.getByRole("link", { name: "Safety", exact: true });
+    await expect(safety).toBeVisible();
     await safety.focus();
     await expect(safety).toBeFocused();
     const safetyBounds = await safety.evaluate((element) => {
@@ -53,10 +58,11 @@ for (const viewport of viewports) {
       const rect = range.getBoundingClientRect();
       return { x: rect.x, width: rect.width };
     });
-    const rowBounds = await links.boundingBox();
-    expect(safetyBounds.x).toBeGreaterThanOrEqual(rowBounds!.x - 1);
-    expect(safetyBounds.x + safetyBounds.width)
-      .toBeLessThanOrEqual(rowBounds!.x + rowBounds!.width + 1);
+    expect(safetyBounds.x).toBeGreaterThanOrEqual(0);
+    expect(safetyBounds.x + safetyBounds.width).toBeLessThanOrEqual(viewport.width + 1);
+    await page.keyboard.press("Escape");
+    await expect(more).toBeFocused();
+    await expect(safety).not.toBeVisible();
 
     await page.getByRole("link", { name: "Skip to main content", exact: true }).focus();
     await page.keyboard.press("Enter");
