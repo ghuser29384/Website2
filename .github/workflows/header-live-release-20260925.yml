@@ -1,0 +1,42 @@
+name: Release approved masthead merge
+on:
+  push:
+    branches: [ops/header-source-qa-20260925]
+    paths: [.github/workflows/header-live-release-20260925.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA: ef3b1b595f6bddd1e660e3215ca19e57254234f3
+      CANDIDATE_SHA: 396cb51dd88e348261a3e8943c3de808b142c094
+    steps:
+      - name: Verify exact protected merge, successful QA and unchanged release policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          repo="repos/$GITHUB_REPOSITORY"
+          gh api "$repo/pulls/839" > /tmp/pr.json
+          jq -e --arg sha "$EXPECTED_SHA" --arg head "$CANDIDATE_SHA" '.merged == true and .merge_commit_sha == $sha and .head.sha == $head and .base.ref == "main"' /tmp/pr.json
+          test "$(gh api "$repo/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_SHA"
+          test "$(gh api "$repo/actions/runs/36202230051" --jq '.conclusion')" = success
+          candidate_tree="$(gh api "$repo/git/commits/$CANDIDATE_SHA" --jq '.tree.sha')"
+          merged_tree="$(gh api "$repo/git/commits/$EXPECTED_SHA" --jq '.tree.sha')"
+          test "$candidate_tree" = "$merged_tree"
+          base_policy="$(gh api "$repo/contents/.github/workflows/vercel-release.yml?ref=deff62e0877e014bee49edab96c996aae448cbc8" --jq '.sha')"
+          merged_policy="$(gh api "$repo/contents/.github/workflows/vercel-release.yml?ref=$EXPECTED_SHA" --jq '.sha')"
+          test "$base_policy" = "$merged_policy"
+          echo "Verified merged source tree $merged_tree and unchanged release workflow $merged_policy."
+      - name: Invoke the standard gated production release, without deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_SHA"
+          jq -n --arg sha "$EXPECTED_SHA" '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$sha,synthetic_auth_fixture_url:""}}' > /tmp/dispatch.json
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" --input /tmp/dispatch.json
+          echo "Dispatched the existing gated release for $EXPECTED_SHA. This dispatch is not proof of deployment completion."
