@@ -1,82 +1,123 @@
 import { expect, test } from "@playwright/test";
 
-const expectedPaths = [
-  { title: "Make a donation", href: "/donate" },
-  { title: "Create a trade", href: "/signup?returnTo=/create" },
-  { title: "Explore funding pools", href: "/pools" },
-  { title: "Browse trades", href: "/offers?view=live" },
-];
-
 test.beforeEach(async ({ context, baseURL }) => {
-  if (!baseURL) throw new Error("The Start page tests require the configured app origin.");
+  if (!baseURL) throw new Error("The Start page tests need the configured app origin.");
   await context.addCookies([{ name: "mt_analytics_opt_out", value: "1", url: baseURL, sameSite: "Lax" }]);
 });
 
 for (const width of [1440, 390, 320]) {
-  test(`the compact Start chooser is readable and keyboard-operable at ${width}px`, async ({ page }, testInfo) => {
+  test(`the short walkthrough works end to end at ${width}px`, async ({ page }, testInfo) => {
     const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
-    page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-    await page.setViewportSize({ width, height: 900 });
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+    await page.setViewportSize({ width, height: width === 1440 ? 1050 : 844 });
     const response = await page.goto("/start");
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("Get started | Moral Trade");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Get started");
-    const main = page.getByRole("main");
-    const choices = page.getByRole("navigation", { name: "Ways to get started" });
-    await expect(choices.getByRole("link")).toHaveCount(4);
-    for (const path of expectedPaths) {
-      const link = choices.getByRole("link", { name: path.title, exact: true });
-      await expect(link).toHaveAttribute("href", path.href);
-      await expect(link).toBeVisible();
-      const box = await link.boundingBox();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
-      expect(box!.x).toBeGreaterThanOrEqual(0);
-      expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
-    }
-    await expect(page.getByRole("complementary", { name: "Current service state" })).toHaveCount(0);
-    await expect(page.locator(".growth-progress-card, .growth-start-grid, .mt-site-footer")).toHaveCount(0);
-    await expect(main).not.toContainText("Four live paths");
-    await expect(main).not.toContainText("Use the strongest current route");
-    expect((await main.innerText()).split(/\s+/).length).toBeLessThan(100);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    const intro = page.getByTestId("quick-walkthrough");
+    const heading = intro.getByRole("heading", { level: 1 });
+    const checkWidth = async () => expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    const capture = async (state: string) => {
+      await page.evaluate(() => document.fonts.ready);
+      await checkWidth();
+      await page.screenshot({ path: testInfo.outputPath(`start-${state}-${width}.png`), fullPage: true });
+    };
+    await expect(heading).toHaveText("Different priorities. A better trade.");
+    await expect(intro).toContainText("Illustrative example. No payment or commitment is created.");
+    await expect(intro.getByRole("region", { name: "Example exchange" }).locator("article")).toHaveCount(2);
     await expect(page.locator("nextjs-portal")).toHaveCount(0);
-
-    const details = main.locator("details");
-    const summary = details.locator("summary");
-    const serviceLink = details.getByRole("link", { name: "Review service boundaries" });
-    await expect(serviceLink).toBeHidden();
-    await page.screenshot({ path: testInfo.outputPath(`start-${width}.png`), fullPage: true });
-    await summary.focus();
+    await capture("exchange");
+    await intro.getByRole("button", { name: "Without a trade", exact: true }).click();
+    await expect(intro).toContainText("No additional donation");
+    await expect(intro).toContainText("No additional dietary change");
+    await expect(intro.getByRole("status")).toContainText("Neither additional contribution happens.");
+    await intro.getByRole("button", { name: "With a trade", exact: true }).click();
+    await expect(intro).toContainText("Donate $20 to poverty relief");
+    await expect(intro).toContainText("Eat vegetarian for 30 days");
+    await intro.getByRole("button", { name: "Try different terms" }).focus();
     await page.keyboard.press("Enter");
-    await expect(serviceLink).toBeVisible();
-    await expect(details).toContainText("Moral Trade does not hold funds");
-    await expect(details).toContainText("cancellation rules before accepting");
-    await expect(details).toContainText("not automatically reviewed or verified");
+    await expect(heading).toHaveText("Find terms that work for both.");
+    await expect(heading).toBeFocused();
+    await expect(intro.getByRole("status")).toContainText("Select a proposal");
+    const a = intro.getByRole("button", { name: /^Proposal A/ });
+    await a.click();
+    await expect(a).toHaveAttribute("aria-pressed", "true");
+    await expect(intro.getByRole("status")).toContainText("Rae would decline");
+    await intro.getByRole("button", { name: /^Proposal B/ }).click();
+    await expect(a).toHaveAttribute("aria-pressed", "false");
+    await expect(intro.getByRole("status")).toContainText("You would decline");
+    const c = intro.getByRole("button", { name: /^Proposal C/ });
+    await c.focus();
+    await page.keyboard.press("Space");
+    await expect(c).toHaveAttribute("aria-pressed", "true");
+    await expect(intro.getByRole("status")).toContainText("A trade both would choose.");
+    await capture("terms");
+    await intro.getByRole("button", { name: "See your next steps" }).click();
+    await expect(heading).toHaveText("Start with your own trade.");
+    const create = intro.getByRole("link", { name: "Create a trade", exact: true });
+    await expect(create).toHaveAttribute("href", "/signup?returnTo=/create");
+    const browse = intro.getByRole("link", { name: "Browse trades", exact: true });
+    await expect(browse).toHaveAttribute("href", "/discover");
+    await expect(intro.getByRole("link", { name: "Explore the full walkthrough" })).toHaveAttribute("href", "/walkthrough");
+    await expect(intro).toContainText("The example is not copied into your proposal");
+    await capture("next");
+    const other = intro.locator("details");
+    await other.locator("summary").click();
+    await expect(other.getByRole("link", { name: "Make a donation" })).toHaveAttribute("href", "/donate");
+    await expect(other.getByRole("link", { name: "Explore funding pools" })).toHaveAttribute("href", "/pools");
+    await other.locator("summary").click();
+    const safeguards = page.locator("main > details");
+    await safeguards.locator("summary").focus();
     await page.keyboard.press("Enter");
-    await expect(serviceLink).toBeHidden();
-
-    const browse = choices.getByRole("link", { name: "Browse trades", exact: true });
-    await browse.focus();
+    await expect(safeguards.getByRole("link", { name: "Review service boundaries" })).toBeVisible();
+    await expect(safeguards).toContainText("does not hold funds");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/discover(?:\?|$)/);
+    await expect(safeguards.getByRole("link", { name: "Review service boundaries" })).toBeHidden();
+    await intro.getByRole("button", { name: "Replay the example" }).click();
+    await expect(heading).toHaveText("Different priorities. A better trade.");
+    await intro.getByRole("button", { name: "Try different terms" }).click();
+    await expect(intro.getByRole("status")).toContainText("Select a proposal");
+    await intro.getByRole("button", { name: "Skip the example" }).click();
+    await browse.click();
+    await expect(page).toHaveURL(/\/discover$/);
     await expect(page.getByRole("heading", { level: 1, name: "Browse trades" })).toBeVisible();
     expect(errors).toEqual([]);
   });
 }
 
-test("the four paths and safeguards work without client JavaScript", async ({ browser, baseURL }) => {
+test("the example can be skipped without choosing terms and does not save trial choices", async ({ page, context }) => {
+  await page.goto("/start");
+  const startingCookies = await context.cookies();
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (request.method() !== "GET" && request.method() !== "HEAD") writes.push(request.url());
+  });
+  const intro = page.getByTestId("quick-walkthrough");
+  await intro.getByRole("button", { name: "Skip the example" }).click();
+  await expect(intro.getByRole("link", { name: "Create a trade" })).toBeVisible();
+  await intro.getByRole("button", { name: "Replay the example" }).click();
+  await intro.getByRole("button", { name: "Try different terms" }).click();
+  await intro.getByRole("button", { name: /^Proposal C/ }).click();
+  await page.reload();
+  await expect(intro).toHaveAttribute("data-step", "0");
+  await intro.getByRole("button", { name: "Try different terms" }).click();
+  await expect(intro.getByRole("status")).toContainText("Select a proposal");
+  expect(writes).toEqual([]);
+  expect((await context.cookies()).map(x => [x.name, x.value]).sort()).toEqual(startingCookies.map(x => [x.name, x.value]).sort());
+});
+
+test("read-only content and direct entry links work without client JavaScript", async ({ browser, baseURL }) => {
   const context = await browser.newContext({ javaScriptEnabled: false, baseURL });
   try {
     const page = await context.newPage();
     await page.goto("/start");
-    const choices = page.getByRole("navigation", { name: "Ways to get started" });
-    await expect(choices.getByRole("link")).toHaveCount(4);
+    await expect(page.getByRole("heading", { level: 1, name: "Different priorities. A better trade." })).toBeVisible();
+    const fallback = page.getByRole("region", { name: "Continue without the interactive example" });
+    await expect(fallback).toBeVisible();
+    await expect(page.getByTestId("quick-walkthrough").getByRole("button")).toHaveCount(0);
     await page.getByText("Before you commit", { exact: true }).click();
     await expect(page.getByRole("link", { name: "Review service boundaries" })).toBeVisible();
-    await choices.getByRole("link", { name: "Create a trade", exact: true }).click();
+    await fallback.getByRole("link", { name: "Create a trade", exact: true }).click();
     await expect(page).toHaveURL(/\/signup\?returnTo=\/create$/);
-  } finally {
-    await context.close();
-  }
+  } finally { await context.close(); }
 });

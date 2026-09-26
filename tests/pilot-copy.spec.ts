@@ -6,7 +6,7 @@ test.describe("Legacy pilot route", () => {
 
     await expect(page).toHaveURL(/\/start(?:\?.*)?$/);
     await expect(
-      page.getByRole("heading", { name: "Get started" }),
+      page.getByRole("heading", { name: "Different priorities. A better trade." }),
     ).toBeVisible();
     await expect(page.getByText(/founding-user pilot/i)).toHaveCount(0);
     await expect(page.getByText(/prototype/i)).toHaveCount(0);

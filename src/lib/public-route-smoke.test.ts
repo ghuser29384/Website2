@@ -505,18 +505,19 @@ test("visitor router exposes four live action paths before deeper marketplace me
   const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
-  assert.match(startPage, /<h1>Get started<\/h1>/);
-  assert.match(startPage, /Ways to get started/);
+  assert.match(startPage, /<QuickWalkthrough/);
   assert.match(startPage, /Donations are completed on Every\.org/);
   assert.match(startPage, /Moral Trade does not hold funds, offer escrow/);
   assert.doesNotMatch(startPage, /getMarketplaceOverview|growth-progress-card/);
-  assert.match(startPage, /START_PATHS\.map/);
+  const introSource = readRepoFile("src/components/walkthrough/quick-walkthrough.tsx");
+  assert.match(introSource, /Different priorities. A better trade/);
+  assert.match(introSource, /Find terms that work for both/);
+  assert.match(introSource, /Skip the example/);
+  for (const href of ["/discover", "/walkthrough", "/donate", "/pools"]) {
+    assert.ok(introSource.includes(`href="${href}"`));
+  }
   const startPathsSource = readRepoFile("src/lib/start-paths.ts");
-  assert.match(startPathsSource, /VISITOR_PATHS\.map/);
-  assert.match(startPathsSource, /Make a donation/);
-  assert.match(startPathsSource, /Create a trade/);
-  assert.match(startPathsSource, /Explore funding pools/);
-  assert.match(startPathsSource, /Browse trades/);
+  assert.match(startPathsSource, /\/signup\?returnTo=\/create/);
   assert.match(visitorPathsSource, /key: "fund"/);
   assert.match(visitorPathsSource, /key: "create"/);
   assert.match(visitorPathsSource, /key: "pool"/);

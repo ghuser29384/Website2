@@ -35,28 +35,22 @@ async function expectNoHorizontalOverflow(page: Page) {
 test.describe.configure({ mode: "serial" });
 test.setTimeout(90_000);
 
-test("Start action choices render as distinct non-overlapping rows", async ({ page }, testInfo) => {
+test("Start example sides render as readable non-overlapping contributions", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const response = await page.goto("/start", { timeout: 60_000, waitUntil: "domcontentloaded" });
   expect(response?.status() ?? 200).toBeLessThan(400);
-  await expect(page.getByRole("heading", { level: 1, name: "Get started" })).toBeVisible();
-  const choices = page.getByRole("navigation", { name: "Ways to get started" });
-  const links = choices.getByRole("link");
-  await expect(links).toHaveCount(4);
+  await expect(page.getByRole("heading", { level: 1, name: "Different priorities. A better trade." })).toBeVisible();
+  const example = page.getByRole("region", { name: "Example exchange" });
+  const people = example.locator("article");
+  await expect(people).toHaveCount(2);
   await expect(page.getByRole("complementary", { name: "Current service state" })).toHaveCount(0);
-  const bounds = await rect(choices);
-  let previousBottom = bounds.top;
-  for (const link of await links.all()) {
-    await expect(link).toBeVisible();
-    const box = await rect(link);
-    expect(box.height).toBeGreaterThanOrEqual(44);
-    expect(box.left).toBeGreaterThanOrEqual(bounds.left);
-    expect(box.right).toBeLessThanOrEqual(bounds.right + 1);
-    expect(box.top).toBeGreaterThanOrEqual(previousBottom - 1);
-    previousBottom = box.bottom;
-  }
+  const left = await rect(people.nth(0));
+  const right = await rect(people.nth(1));
+  expect(left.right).toBeLessThanOrEqual(right.left + 1);
+  await expect(people.nth(0)).toContainText("Donate $20");
+  await expect(people.nth(1)).toContainText("30 days");
   await expectNoHorizontalOverflow(page);
-  await page.screenshot({ path: testInfo.outputPath("start-choices-1440.png"), fullPage: false });
+  await page.screenshot({ path: testInfo.outputPath("start-exchange-1440.png"), fullPage: false });
 });
 
 test("Complete Profile header actions remain separated on desktop and mobile", async ({ page }, testInfo) => {

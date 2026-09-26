@@ -44,7 +44,7 @@ test("primary acquisition routes lead with real actions instead of pilot languag
   assert.match(site, /href: "\/feed", label: "Feed"/);
   assert.match(site, /href: "\/discover", label: "Discover"/);
   assert.match(site, /href: "\/trades\/new", label: "Create"/);
-  assert.match(start, /START_PATHS/);
+  assert.match(start, /QuickWalkthrough/);
   assert.match(legacyPilot, /permanentRedirect\("\/start"\)/);
 });
 
@@ -52,7 +52,7 @@ test("the start route shows its action shell without waiting for optional market
   assert.match(start, /export default function StartPage\(\)/);
   assert.doesNotMatch(start, /export default async function StartPage/);
   assert.doesNotMatch(start, /getMarketplaceOverview|StartServiceSnapshot|createUnavailableMarketplaceOverview/);
-  assert.match(start, /<h1>Get started<\/h1>/);
+  assert.match(start, /<QuickWalkthrough/);
   assert.match(start, /<Suspense/);
   assert.match(start, /getStartCreateHref\(false\)/);
 });
