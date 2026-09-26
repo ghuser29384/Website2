@@ -32,7 +32,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Merge current main and resolve the five known overlaps
+      - name: Merge current main and resolve the known overlaps
         shell: bash
         run: |
           set -euo pipefail
@@ -49,6 +49,7 @@ jobs:
           actual_conflicts="$RUNNER_TEMP/actual-conflicts.txt"
           cat > "$allowed_conflicts" <<'EOF'
           public/moral-trade-live-core.txt
+          public/moral-trade-live-feed.css
           public/moral-trade-live.html
           src/app/canonical-visual-system.css
           tests/homepage-narrow-header.spec.ts
@@ -65,6 +66,8 @@ jobs:
               exit 1
             fi
           fi
+
+          git checkout --theirs -- public/moral-trade-live-feed.css
 
           for path in \
             public/moral-trade-live-core.txt \
@@ -86,12 +89,6 @@ jobs:
 
           def write(path: str, value: str) -> None:
               Path(path).write_text(value)
-
-          def replace_once(path: str, old: str, new: str) -> None:
-              value = read(path)
-              if value.count(old) != 1:
-                  raise RuntimeError(f"{path}: expected exactly one match for {old!r}, found {value.count(old)}")
-              write(path, value.replace(old, new, 1))
 
           core_path = "public/moral-trade-live-core.txt"
           core = read(core_path)
@@ -166,7 +163,6 @@ jobs:
           fi
 
           git diff --cached --check
-          test "$(git merge-base --is-ancestor origin/main HEAD; echo $?)" != "0" || true
 
       - name: Install dependencies
         run: npm ci
