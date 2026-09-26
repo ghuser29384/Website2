@@ -8,20 +8,33 @@ permissions:
 jobs:
   snapshot:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
           ref: f58ee041dfd909cad7699ed67485cc0a7db95933
           persist-credentials: false
-      - name: Archive tracked source only
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Prepare isolated source and locked packages only
+        env:
+          MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
         run: |
+          set -euo pipefail
           test "$(git rev-parse HEAD)" = f58ee041dfd909cad7699ed67485cc0a7db95933
           mkdir -p /tmp/audit-source
-          git archive --format=tar.gz HEAD src public tests scripts .github AGENTS.md package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs playwright.config.ts playwright.release.config.ts playwright.commitments.config.ts vercel.ts > /tmp/audit-source/source.tar.gz
-          sha256sum /tmp/audit-source/source.tar.gz > /tmp/audit-source/SHA256SUMS
+          git archive --format=tar.gz HEAD > /tmp/audit-source/full-source.tar.gz
+          git diff ed0bc4a53a2ea91cee1a66fef8831d3181f53f13 961695b103dd1750e2a3c0ed397c91379d811b52 > /tmp/audit-source/pr857.patch
+          npm ci --no-audit --no-fund
+          tar -czf /tmp/audit-source/locked-packages.tar.gz node_modules
+          cd /tmp/audit-source
+          sha256sum full-source.tar.gz locked-packages.tar.gz pr857.patch > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: audit-source-f58ee041
+          name: audit-workspace-f58ee041
           path: /tmp/audit-source
+          compression-level: 0
           retention-days: 3
