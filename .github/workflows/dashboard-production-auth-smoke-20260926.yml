@@ -1,0 +1,97 @@
+name: Dashboard exact production authenticated smoke 20260926
+on:
+  push:
+    branches: [ops/dashboard-auth-smoke-20260926-2350]
+    paths:
+      - .github/scripts/dashboard-production-auth-smoke.mjs
+      - .github/workflows/dashboard-production-auth-smoke-20260926.yml
+permissions:
+  contents: read
+concurrency:
+  group: dashboard-exact-production-auth-qa
+  cancel-in-progress: false
+jobs:
+  authenticated-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Guard controller-only scope and pin the already-live application
+        shell: bash
+        env:
+          CONTROLLER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/ops/dashboard-auth-smoke-20260926-2350'
+          base='f58ee041dfd909cad7699ed67485cc0a7db95933'
+          app='464e61299896216ddc77e65bfa2211664aa875ee'
+          git merge-base --is-ancestor "$base" "$CONTROLLER_SHA"
+          git merge-base --is-ancestor "$app" origin/main
+          git diff --check "$base" "$CONTROLLER_SHA"
+          git diff --name-only "$base" "$CONTROLLER_SHA" | sort > "$RUNNER_TEMP/actual-paths.txt"
+          printf '%s\n' '.github/scripts/dashboard-production-auth-smoke.mjs' '.github/workflows/dashboard-production-auth-smoke-20260926.yml' | sort > "$RUNNER_TEMP/expected-paths.txt"
+          diff -u "$RUNNER_TEMP/expected-paths.txt" "$RUNNER_TEMP/actual-paths.txt"
+          cp .github/scripts/dashboard-production-auth-smoke.mjs "$RUNNER_TEMP/dashboard-production-auth-smoke.mjs"
+          git checkout --detach "$app"
+          test "$(git rev-parse HEAD)" = "$app"
+          mkdir -p .qa-runtime
+          cp "$RUNNER_TEMP/dashboard-production-auth-smoke.mjs" .qa-runtime/dashboard-production-auth-smoke.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Validate runner and install locked browser dependencies
+        run: |
+          set -euo pipefail
+          node --check .qa-runtime/dashboard-production-auth-smoke.mjs
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+      - name: Read existing production credentials inside the trusted runner
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '%s\n' '{"orgId":"team_ySu6sF3Uho1E1GnJtCQPVEuJ","projectId":"prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7"}' > .vercel/project.json
+          npx --yes vercel@50.38.1 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          chmod 600 .vercel/.env.production.local
+      - name: Verify real authentication, Dashboard save and both live domains
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node .qa-runtime/dashboard-production-auth-smoke.mjs
+      - name: Always retry exact-run cleanup and retain a non-secret recovery identifier
+        if: always()
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if test -f "$RUNNER_TEMP/dashboard-auth-private.json" && test -f .vercel/.env.production.local; then
+            node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const state = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/dashboard-auth-private.json`, 'utf8'));
+          fs.mkdirSync('dashboard-auth-evidence', {recursive: true});
+          fs.writeFileSync('dashboard-auth-evidence/cleanup-target.json', JSON.stringify({userId: state.userId, scope: state.scope, runId: state.runId}));
+          NODE
+            node .qa-runtime/dashboard-production-auth-smoke.mjs --cleanup-only
+          fi
+      - name: Retain only redacted evidence, never credentials or session files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-production-auth-evidence-${{ github.run_id }}
+          path: |
+            dashboard-auth-evidence/*.json
+            dashboard-auth-evidence/*.png
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove runner-local credentials
+        if: always()
+        run: |
+          rm -f .vercel/.env.production.local
+          rm -f "$RUNNER_TEMP/dashboard-auth-private.json"
