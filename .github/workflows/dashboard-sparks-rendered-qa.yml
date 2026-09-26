@@ -10,8 +10,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     defaults:
       run:
         shell: bash
@@ -26,31 +26,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: dbdcc1d87d77cacf89fe1f36787c7a6921826cc0
+          ref: d7f36e9340b75d3b772dca7b7466a49b30fc66a4
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Verify exact scope
+      - name: Verify exact scope and unchanged production policies
         run: |
           set -euo pipefail
           mkdir -p /tmp/dashboard-sparks-evidence/source
-          test "$(git rev-parse HEAD)" = dbdcc1d87d77cacf89fe1f36787c7a6921826cc0
-          git diff --check 079d5bbc6224bc6e9770d33622f6cab7e4baac01
-          git diff --name-only 079d5bbc6224bc6e9770d33622f6cab7e4baac01 > /tmp/dashboard-sparks-evidence/changed-files.txt
+          test "$(git rev-parse HEAD)" = d7f36e9340b75d3b772dca7b7466a49b30fc66a4
+          git merge-base --is-ancestor ef3b1b595f6bddd1e660e3215ca19e57254234f3 HEAD
+          git diff --check ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          git diff --name-only ef3b1b595f6bddd1e660e3215ca19e57254234f3 > /tmp/dashboard-sparks-evidence/changed-files.txt
           python3 - <<'PY'
           from pathlib import Path
           actual = set(Path('/tmp/dashboard-sparks-evidence/changed-files.txt').read_text().splitlines())
-          expected = {'src/app/dashboard/page.tsx', 'src/app/profile/priorities/page.tsx', 'src/components/profile/profile-priorities-view.tsx', 'src/components/profile/profile-priority-editor.tsx', 'src/components/dashboard/dashboard-tools.tsx', 'src/components/dashboard/dashboard-tools.module.css', 'src/lib/dashboard-view.ts', 'src/lib/dashboard-view.test.ts', 'src/lib/dashboard-loading.test.ts', 'tests/dashboard-sparks.spec.ts'}
+          expected = {'src/app/dashboard/page.tsx', 'src/app/dashboard/loading.tsx', 'src/app/dashboard/dashboard-account-security.css', 'src/app/profile/priorities/page.tsx', 'src/components/profile/profile-priorities-view.tsx', 'src/components/profile/profile-priority-editor.tsx', 'src/components/dashboard/dashboard-tools.tsx', 'src/components/dashboard/dashboard-tools.module.css', 'src/lib/dashboard-view.ts', 'src/lib/dashboard-view.test.ts', 'src/lib/dashboard-loading.test.ts', 'tests/dashboard-sparks.spec.ts', 'src/dashboard-account-security-visibility.test.ts', '.github/workflows/dashboard-account-security-hotfix-gates.yml'}
           assert actual == expected, actual ^ expected
           PY
+          git diff --exit-code ef3b1b595f6bddd1e660e3215ca19e57254234f3 -- .github/workflows/vercel-release.yml src/lib/supabase src/app/profile/priorities/actions.ts supabase package.json package-lock.json src/lib/app-data.ts
           git rev-parse HEAD > /tmp/dashboard-sparks-evidence/commit.txt
-          git diff 079d5bbc6224bc6e9770d33622f6cab7e4baac01 > /tmp/dashboard-sparks-evidence/source.patch
+          git diff ef3b1b595f6bddd1e660e3215ca19e57254234f3 > /tmp/dashboard-sparks-evidence/source.patch
           while IFS= read -r file; do cp --parents "$file" /tmp/dashboard-sparks-evidence/source/; done < /tmp/dashboard-sparks-evidence/changed-files.txt
       - run: npm ci
       - name: Focused regressions
-        run: node --import tsx --test src/lib/dashboard-view.test.ts src/lib/dashboard-loading.test.ts src/lib/profile-priorities.test.ts | tee /tmp/dashboard-sparks-evidence/focused-tests.log
+        run: node --import tsx --test src/dashboard-account-security-visibility.test.ts src/proxy.test.ts src/lib/dashboard-view.test.ts src/lib/dashboard-loading.test.ts src/lib/profile-priorities.test.ts > /tmp/dashboard-sparks-evidence/focused-tests.log 2>&1
       - name: Full repository tests
         run: npm test > /tmp/dashboard-sparks-evidence/full-tests.log 2>&1
       - name: Lint
