@@ -49,6 +49,18 @@ jobs:
           assert len(edits) == 24
           def blob(raw):
               return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+          # React may reorder form attributes. Check their values, not their order.
+          spec = edits['src/lib/selected-cleanup.test.ts']
+          assert spec['after'] == '390466d7809c13e6fcc43d8a4be3ecde14ec91e5'
+          old = '    assert.match(html, /<form action="\\/offers" class="topbar-search" method="get" role="search">/);'
+          new = '''    const form = html.match(/<form\\b[^>]*>/)?.[0];
+              assert.ok(form);
+              for (const attribute of ['action="/offers"', 'class="topbar-search"', 'method="get"', 'role="search"']) {
+                assert.ok(form.includes(attribute));
+              }'''
+          assert spec['edits'][0][2].count(old) == 1
+          spec['edits'][0][2] = spec['edits'][0][2].replace(old, new)
+          spec['after'] = '4e4da7642049816bb19b0d9a61d441de67073b24'
           for name, spec in edits.items():
               path = Path(name)
               assert not path.is_absolute() and '..' not in path.parts
