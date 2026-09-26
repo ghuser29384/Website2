@@ -21,7 +21,7 @@ env:
   RELEASE_WORKFLOW: vercel-release.yml
   RELEASE_REF: main
   RELEASE_TARGET: production
-  EXPECTED_TRIGGER_PARENT: c5ee0fad82f3e211a7954f6bcaa5e34fbaad86a9
+  EXPECTED_TRIGGER_PARENT: 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48
 
 jobs:
   dispatch:
