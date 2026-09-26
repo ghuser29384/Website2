@@ -1,0 +1,118 @@
+name: Quiet UI current-main integration v6
+on:
+  push:
+    branches: [ops/quiet-ui-20260926]
+    paths: [.github/workflows/quiet-ui-integrated-ready-v6.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      actions: read
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL: '1'
+      VERCEL_ENV: production
+      PLAYWRIGHT_HTML_OPEN: never
+      MAIN_HEAD: ed0bc4a53a2ea91cee1a66fef8831d3181f53f13
+      QUIET_HEAD: c7a90bcff9f9db593108c977bda3d64289d08cdb
+      SOURCE_COMMIT: 92f7794987efbfff283787182cc6146242370cbc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+      - name: Guard exact repository state
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$MAIN_HEAD"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_HEAD"
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = "$QUIET_HEAD"
+      - uses: actions/download-artifact@v4
+        with:
+          name: quiet-ui-final-92f7794987efbfff283787182cc6146242370cbc
+          path: /tmp/quiet-ui-artifact
+          github-token: ${{ github.token }}
+          repository: ghuser29384/Website2
+          run-id: 36218844042
+      - name: Restore candidate and preserve current-main files
+        id: candidate
+        run: |
+          set -euo pipefail
+          ARTIFACT_DIR=/tmp/quiet-ui-artifact/tmp/quiet-ui-final
+          test "$(cat "$ARTIFACT_DIR/commit.txt")" = "$SOURCE_COMMIT"
+          test -f "$ARTIFACT_DIR/source.tar.gz"
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git rm -r --ignore-unmatch . >/dev/null
+          tar -xzf "$ARTIFACT_DIR/source.tar.gz" -C .
+          git checkout "$MAIN_HEAD" -- scripts/vercel-project-config.d.mts
+          git add -A
+          git diff --cached --check
+          git commit -m 'Integrate quiet UI with current main'
+          git diff --check "$MAIN_HEAD"
+          test "$(git diff --name-only "$MAIN_HEAD" -- scripts/vercel-project-config.d.mts)" = ""
+          mkdir -p /tmp/quiet-ui-final
+          git rev-parse HEAD | tee /tmp/quiet-ui-final/commit.txt
+          git diff --stat "$MAIN_HEAD" > /tmp/quiet-ui-final/diff-stat.txt
+          git diff --name-status "$MAIN_HEAD" > /tmp/quiet-ui-final/changed-files.txt
+          git archive --format=tar.gz HEAD > /tmp/quiet-ui-final/source.tar.gz
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Unit tests, lint, and TypeScript
+        run: |
+          set -euo pipefail
+          npm test > /tmp/quiet-ui-final/unit.log 2>&1 || { tail -180 /tmp/quiet-ui-final/unit.log; exit 1; }
+          tail -20 /tmp/quiet-ui-final/unit.log
+          npm run lint -- --quiet > /tmp/quiet-ui-final/lint.log 2>&1 || { cat /tmp/quiet-ui-final/lint.log; exit 1; }
+          npx tsc --noEmit --pretty false > /tmp/quiet-ui-final/types.log 2>&1 || { cat /tmp/quiet-ui-final/types.log; exit 1; }
+      - name: Production build
+        run: |
+          npm run build > /tmp/quiet-ui-final/build.log 2>&1 || { tail -200 /tmp/quiet-ui-final/build.log; exit 1; }
+          tail -24 /tmp/quiet-ui-final/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Focused desktop and mobile UI QA
+        run: |
+          npx playwright test --config=playwright.release.config.ts \
+            tests/quiet-ui.spec.ts \
+            tests/homepage-narrow-header.spec.ts \
+            tests/create-route-ui-regression.spec.ts \
+            tests/discover-home-visual-alignment.spec.ts \
+            tests/exact-live-local-time.spec.ts \
+            tests/returning-homepage-timezone.spec.ts \
+            tests/returning-homepage.spec.ts \
+            tests/sitewide-canonical-visual-system.spec.ts \
+            --reporter=line > /tmp/quiet-ui-final/focused-browser.log 2>&1 || { tail -360 /tmp/quiet-ui-final/focused-browser.log; exit 1; }
+          tail -42 /tmp/quiet-ui-final/focused-browser.log
+      - name: Complete release browser suite
+        run: |
+          npm run test:e2e:release -- --reporter=line > /tmp/quiet-ui-final/release-browser.log 2>&1 || { tail -400 /tmp/quiet-ui-final/release-browser.log; exit 1; }
+          tail -42 /tmp/quiet-ui-final/release-browser.log
+      - name: Commitments session and streaming regression suite
+        run: |
+          npx playwright test --config=playwright.commitments.config.ts --reporter=line > /tmp/quiet-ui-final/commitments-browser.log 2>&1 || { tail -260 /tmp/quiet-ui-final/commitments-browser.log; exit 1; }
+          tail -34 /tmp/quiet-ui-final/commitments-browser.log
+      - name: Publish the exact verified candidate
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_HEAD"
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = "$QUIET_HEAD"
+          git push --force-with-lease=refs/heads/fix/quiet-ui-20260926:$QUIET_HEAD origin HEAD:refs/heads/fix/quiet-ui-20260926
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-final-${{ steps.candidate.outputs.sha }}
+          path: |
+            /tmp/quiet-ui-final
+            test-results
+          retention-days: 7
