@@ -1,0 +1,63 @@
+name: Prepare Commitments redesign candidate
+on:
+  push:
+    branches: [ops/commitments-redesign-release-20260926]
+    paths: [.github/workflows/commitments-redesign-prepare.yml]
+permissions:
+  contents: write
+concurrency:
+  group: commitments-redesign-prepare-20260926
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 961695b103dd1750e2a3c0ed397c91379d811b52
+          fetch-depth: 0
+      - name: Preserve current main and repair route-local CSS ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          test "$(git ls-remote origin refs/heads/redesign/commitments-balanced-layout-20260926 | cut -f1)" = 961695b103dd1750e2a3c0ed397c91379d811b52
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c work/commitments-redesign-release-20260926
+          git merge --no-edit f58ee041dfd909cad7699ed67485cc0a7db95933
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          css_path = Path('src/app/commitments/commitments-redesign.module.css')
+          css = css_path.read_text()
+          css, count = re.subn(r':global\(\.marketplace-app-shell:has\(\.commitments-center\) ([^\n]+)\)', r'.shell:global(.marketplace-app-shell) :global(\1)', css)
+          assert count == 9, count
+          css = css.replace('border-left-color: var(--commitments-redesign-blue) !important;', 'border-left-color: #2858ff !important;')
+          css = css.replace('.page :global(.commitments-center) {', '.page:global(.commitments-center) {')
+          css_path.write_text(css)
+          page_path = Path('src/app/commitments/page.tsx')
+          page = page_path.read_text()
+          old = '<div className="page-shell marketplace-app-shell">'
+          assert page.count(old) == 1
+          page_path.write_text(page.replace(old, '<div className={`${redesignStyles.shell} page-shell marketplace-app-shell`}>'))
+          test_path = Path('src/commitments-redesign-contract.test.ts')
+          with test_path.open('a') as handle:
+            handle.write('''\n// Every shell override must have a local CSS-module owner. The previous\n// entirely-global selectors fail the clean production CSS-module build.\ntest("Commitments shell overrides have a local owner and cannot leak to other routes", () => {\n  assert.ok(page.includes("${redesignStyles.shell} page-shell marketplace-app-shell"));\n  assert.doesNotMatch(css, /:global\\(\\.marketplace-app-shell:has/);\n  assert.equal((css.match(/\\.shell:global\\(\\.marketplace-app-shell\\)/g) ?? []).length, 9);\n});\n''')
+          PY
+          git diff --check
+          git add src/app/commitments/commitments-redesign.module.css src/app/commitments/page.tsx src/commitments-redesign-contract.test.ts
+          git commit -m 'Fix Commitments CSS module scope on current main'
+          git diff --stat f58ee041dfd909cad7699ed67485cc0a7db95933
+          mkdir -p /tmp/commitments-candidate
+          git rev-parse HEAD | tee /tmp/commitments-candidate/candidate-sha.txt
+          git diff f58ee041dfd909cad7699ed67485cc0a7db95933 > /tmp/commitments-candidate/commitments.patch
+          git archive HEAD | gzip > /tmp/commitments-candidate/source.tar.gz
+          git push origin HEAD:refs/heads/work/commitments-redesign-release-20260926
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commitments-redesign-candidate
+          path: /tmp/commitments-candidate
+          if-no-files-found: error
+          retention-days: 7
