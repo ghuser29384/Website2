@@ -1,0 +1,176 @@
+{
+  "bundleSchemaVersion": "moral-trade-impact-methodology-bundle-v2",
+  "generatedAtUtc": "2026-08-10T16:00:00Z",
+  "status": "founder_review_remediated_current_main_synced_ci_enforced_not_approved_not_active",
+  "sourceRepository": "ghuser29384/Website2",
+  "sourcePullRequest": 534,
+  "sourcePullRequestHeadBeforeRemediation": "e06333b26170a34c56d3d5101ad61acb464f37a3",
+  "currentMainAtPreparation": "72729d80bec2e4ffa147d6dc56ae703fb3e79293",
+  "currentMainMergeCommit": "e06333b26170a34c56d3d5101ad61acb464f37a3",
+  "founderReview": {
+    "reviewId": 4897881155,
+    "decision": "changes_required",
+    "priorHashesApproved": false,
+    "remediationStatus": "implemented_exact_head_ci_required"
+  },
+  "globalApprovalBlockers": [
+    "a selected founder account must be configured as an authenticated active impact-model approver",
+    "the founder must substantively review and approve each new exact methodology hash",
+    "causal-identification designs and empirical calibration evidence must be validated",
+    "provisional confidence thresholds must be validated before any high-confidence label",
+    "modeled components must remain withheld until the exact active model has current passing health",
+    "production migrations and deployment require a separately authorized controlled release"
+  ],
+  "qaRlsHardening": {
+    "projectRef": "hvmxfjjbdcgjjudmthdz",
+    "environment": "qa_only",
+    "migrationVersion": "20260808174259",
+    "migrationName": "mpgf_public_goods_public_read_rls",
+    "normalizedSourceSha256": "33bc1fefed0298a1643bd37956b9c8850ccffd8805d66403439e4c1ab60e5bf4",
+    "status": "applied_and_verified",
+    "productionApplied": false
+  },
+  "currentStageApprovalSecurity": {
+    "mfaRequired": false,
+    "mfaDeferredUntil": "site_high_leverage",
+    "approverRequirement": "authenticated_active_allowlisted_account",
+    "productionApplied": false
+  },
+  "methodologies": [
+    {
+      "mechanismFamily": "trade",
+      "modelKey": "commitments-reciprocal-trade-v2",
+      "version": 2,
+      "lifecycleStatus": "under_review",
+      "methodologyHash": "sha256:f1d496d5d4c03197711fd683837ea4b2958e0ac8af2e7e0b2d97c54233c0cef9",
+      "materialChangeFromMethodologyHash": "sha256:bff759b15853ebb0d8870a24cba0665870d2e2ba285f1eb7f8551573559bfa3f",
+      "approvalBlockers": [
+        "founder_exact_hash_approval_not_recorded",
+        "founder_approver_account_not_yet_configured",
+        "causal_identification_design_not_validated",
+        "empirical_calibration_evidence_not_registered",
+        "provisional_confidence_thresholds_not_validated",
+        "model_health_not_passing"
+      ],
+      "methodologyFile": "trade.json"
+    },
+    {
+      "mechanismFamily": "co_fund",
+      "modelKey": "commitments-co-fund-v2",
+      "version": 2,
+      "lifecycleStatus": "under_review",
+      "methodologyHash": "sha256:785eb7a87e2dce2b3009f1fb063d1cf65aa2f47ba39dc690a36ab953b6b75108",
+      "materialChangeFromMethodologyHash": "sha256:c1f759e224712a07b30bc28a3be6fd714a0a21c32ee8c0a822779f9f706946ef",
+      "approvalBlockers": [
+        "founder_exact_hash_approval_not_recorded",
+        "founder_approver_account_not_yet_configured",
+        "causal_identification_design_not_validated",
+        "empirical_calibration_evidence_not_registered",
+        "provisional_confidence_thresholds_not_validated",
+        "model_health_not_passing"
+      ],
+      "methodologyFile": "co_fund.json"
+    },
+    {
+      "mechanismFamily": "threshold_funding",
+      "modelKey": "commitments-threshold-funding-v2",
+      "version": 2,
+      "lifecycleStatus": "under_review",
+      "methodologyHash": "sha256:e21419076cc2beca7b1e6cfb31bec2376098da117d5cffea0fb1bd4d71c7c066",
+      "materialChangeFromMethodologyHash": "sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c",
+      "approvalBlockers": [
+        "founder_exact_hash_approval_not_recorded",
+        "founder_approver_account_not_yet_configured",
+        "causal_identification_design_not_validated",
+        "empirical_calibration_evidence_not_registered",
+        "provisional_confidence_thresholds_not_validated",
+        "model_health_not_passing"
+      ],
+      "methodologyFile": "threshold_funding.json"
+    },
+    {
+      "mechanismFamily": "donation_upgrade",
+      "modelKey": "commitments-donation-upgrade-v2",
+      "version": 2,
+      "lifecycleStatus": "under_review",
+      "methodologyHash": "sha256:0666a06be19229e86bf776ab1b43ef8083d577acbbbed090804cbeab02067eac",
+      "materialChangeFromMethodologyHash": "sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463",
+      "approvalBlockers": [
+        "founder_exact_hash_approval_not_recorded",
+        "founder_approver_account_not_yet_configured",
+        "causal_identification_design_not_validated",
+        "empirical_calibration_evidence_not_registered",
+        "provisional_confidence_thresholds_not_validated",
+        "model_health_not_passing"
+      ],
+      "methodologyFile": "donation_upgrade.json"
+    },
+    {
+      "mechanismFamily": "threshold_sign_on",
+      "modelKey": "commitments-threshold-sign-on-v2",
+      "version": 2,
+      "lifecycleStatus": "under_review",
+      "methodologyHash": "sha256:d23f1c812d62ad5c6437c90a8cccb40d3d1516fa7b977d89502df874fbc77555",
+      "materialChangeFromMethodologyHash": "sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff",
+      "approvalBlockers": [
+        "founder_exact_hash_approval_not_recorded",
+        "founder_approver_account_not_yet_configured",
+        "causal_identification_design_not_validated",
+        "empirical_calibration_evidence_not_registered",
+        "provisional_confidence_thresholds_not_validated",
+        "model_health_not_passing"
+      ],
+      "methodologyFile": "threshold_sign_on.json"
+    },
+    {
+      "mechanismFamily": "donation_redirect",
+      "modelKey": "commitments-donation-redirect-v2",
+      "version": 2,
+      "lifecycleStatus": "under_review",
+      "methodologyHash": "sha256:af2366a1c6292cb27043cdfe68037be2f8f1e234ac5d8e85bb672be8c0a74c24",
+      "materialChangeFromMethodologyHash": "sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a",
+      "approvalBlockers": [
+        "founder_exact_hash_approval_not_recorded",
+        "founder_approver_account_not_yet_configured",
+        "causal_identification_design_not_validated",
+        "empirical_calibration_evidence_not_registered",
+        "provisional_confidence_thresholds_not_validated",
+        "model_health_not_passing"
+      ],
+      "methodologyFile": "donation_redirect.json"
+    }
+  ],
+  "methodologyReviewRemediation": {
+    "projectRef": "hvmxfjjbdcgjjudmthdz",
+    "environment": "qa_only",
+    "migrationVersion": "20260810150350",
+    "migrationName": "commitments_impact_methodology_review_remediation",
+    "normalizedSourceSha256": "1117861781bb1e3a22a619e5c3f17af5bcd4bf3d352227c41bf513f5850cd34b",
+    "status": "applied_and_verified",
+    "productionApplied": false
+  },
+  "methodologyReviewRemediationPrivileges": {
+    "projectRef": "hvmxfjjbdcgjjudmthdz",
+    "environment": "qa_only",
+    "migrationVersion": "20260810151733",
+    "migrationName": "commitments_impact_methodology_remediation_privileges",
+    "normalizedSourceSha256": "eb69557921cb0c774417cdf5b7cfd83a1f1d75705965af141691438db0a3d9cb",
+    "status": "applied_and_verified",
+    "productionApplied": false
+  },
+  "snapshotOverlapAliasFix": {
+    "projectRef": "hvmxfjjbdcgjjudmthdz",
+    "environment": "qa_only",
+    "migrationVersion": "20260810152035",
+    "migrationName": "commitments_impact_snapshot_overlap_alias_fix",
+    "normalizedSourceSha256": "8e228fef725277da803d29b491b1f7de2cbc87b6fb59805a58e43942d6a92e5c",
+    "status": "applied_and_verified",
+    "productionApplied": false
+  },
+  "qualityGatePolicy": {
+    "requiredBeforeMerge": true,
+    "statusSource": "GitHub Actions on the exact pull-request head",
+    "methodologyApprovalBlocker": false,
+    "reason": "Exact-head CI is release evidence enforced outside the methodology payload; it is not a substantive methodology approval blocker."
+  }
+}

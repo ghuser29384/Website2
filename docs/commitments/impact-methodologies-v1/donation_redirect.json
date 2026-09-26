@@ -1,0 +1,222 @@
+{
+  "mechanismFamily": "donation_redirect",
+  "modelKey": "commitments-donation-redirect-v2",
+  "version": 2,
+  "lifecycleStatus": "under_review",
+  "methodologyHash": "sha256:af2366a1c6292cb27043cdfe68037be2f8f1e234ac5d8e85bb672be8c0a74c24",
+  "materialChangeFromMethodologyHash": "sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a",
+  "approvedAt": null,
+  "activatedAt": null,
+  "approvalBlockers": [
+    "founder_exact_hash_approval_not_recorded",
+    "founder_approver_account_not_yet_configured",
+    "causal_identification_design_not_validated",
+    "empirical_calibration_evidence_not_registered",
+    "provisional_confidence_thresholds_not_validated",
+    "model_health_not_passing"
+  ],
+  "methodology": {
+    "schemaVersion": "moral-trade-impact-model-methodology-v1",
+    "mechanismFamily": "donation_redirect",
+    "modelKey": "commitments-donation-redirect-v2",
+    "displayName": "Donation Redirect cancellation, redirection, and top-up methodology v2",
+    "estimands": [
+      "baseline_redirected",
+      "success_case_additional",
+      "expected_additional",
+      "direct_causal_attribution",
+      "verified_outcome"
+    ],
+    "estimandDefinitions": {
+      "baseline_redirected": "The original planned amounts shown by reviewed evidence to have been canceled or not paid to their original destinations and instead completed at the shared destination. These are redirected baseline resources.",
+      "success_case_additional": "A genuinely new top-up or match absent from both frozen original plans.",
+      "expected_additional": "The validated change in probability of the genuinely new top-up or match under the redirect agreement versus no agreement.",
+      "direct_causal_attribution": "The participant-specific marginal cancellation, redirection, or top-up effect under the validated reciprocal design. It defaults to non-additive.",
+      "verified_outcome": "Shared-destination payments and, separately, cancellation or nonpayment evidence for original plans. A shared receipt alone does not establish cancellation or additionality."
+    },
+    "baselineDefinition": "Before acceptance, freeze both original plans, amounts, destinations, timing, confidence and evidence, matching ratio, shared destination, fallback, optional top-up, and cancellation-evidence standard.",
+    "causalIdentificationPolicy": {
+      "estimand": "The causal estimand is the difference in cancellation, shared-destination payment, and genuine top-up outcomes under the redirect agreement versus the two frozen no-agreement plans.",
+      "designStatus": "specified_not_validated",
+      "admissibleDesigns": [
+        "randomized eligible-pair invitation or randomized offer timing",
+        "pre-specified quasi-experimental matching rule with defensible exchangeability"
+      ],
+      "interferencePolicy": "Model bilateral dependence and any effect on related donation campaigns. Do not assume cancellation and payment events are independent.",
+      "overlapAndPositivityPolicy": "Estimate causal effects only in states with empirical support for both the with-participant and without-participant conditions. Fail closed when overlap or positivity is materially violated.",
+      "sensitivityAnalysisPolicy": "Report pre-specified sensitivity analyses for unmeasured confounding, baseline misclassification, and interference. Withhold causal components when conclusions are not robust to the approved bounds.",
+      "noDefensibleDesignAction": "withhold_causal_components"
+    },
+    "evidenceSemanticsPolicy": {
+      "outcomeEvidenceLabel": "verified_outcome",
+      "additionalityLabel": "assessed_additionality",
+      "receiptAloneEstablishesAdditionality": false,
+      "publicCopyRule": "Evidence may establish that an outcome occurred and its quantity. It must not be described as verified impact or verified additionality; causal additionality remains an assessed model output."
+    },
+    "strategicBehaviorPolicy": {
+      "baselineAntecedenceRule": "A baseline can support additionality only when its material evidence predates the participant-facing offer or commitment and survives post-resolution consistency checks.",
+      "strategicTimingRule": "Freeze both plans before exposure and detect selective pairing, post-offer edits, delayed payments, and dual completion.",
+      "interferenceRule": "Model bilateral dependence and any effect on related donation campaigns. Do not assume cancellation and payment events are independent.",
+      "perverseIncentiveRule": "Reject mechanisms that reward creating more extreme opposed plans or threats to make the default worse.",
+      "manipulationChecks": [
+        "dual-plan antecedence check",
+        "original-payment noncompletion check",
+        "shared-payment verification",
+        "cross-payment deduplication"
+      ]
+    },
+    "algorithmDescription": "Require reviewed evidence of both shared-destination payment and cancellation or nonpayment of the original plans before labeling amounts baseline redirected. Treat only top-ups absent from both baselines as success-case additional. Estimate agreement effects only under a validated reciprocal design; otherwise show outcomes and withhold causal components.",
+    "referenceClassPolicy": {
+      "strategy": "hierarchical",
+      "narrowFields": [
+        "opposition or priority relation",
+        "dual-baseline evidence tier",
+        "amount-ratio band",
+        "deadline band",
+        "destination class",
+        "top-up present"
+      ],
+      "broadeningOrder": [
+        "opposition relation",
+        "destination class",
+        "deadline band",
+        "amount-ratio band",
+        "mechanism family"
+      ],
+      "minimumSampleSize": 50,
+      "noDefensibleClassAction": "withhold",
+      "uncertaintyExpansionRule": "Reference classes support outcome prediction, not causal identification. Expand the 80% predictive interval at every approved broadening step and withhold when no defensible class remains."
+    },
+    "uncertaintyPolicy": {
+      "intervalLevelBps": 8000,
+      "method": "Use a pre-specified hierarchical predictive model and propagate parameter, outcome, baseline, interference, and measurement uncertainty by posterior or repeated-sampling simulation.",
+      "confidencePolicy": "The initial sample-size and calibration cutoffs are provisional governance floors. Low or moderate confidence may be shown only after a current health pass. High confidence is forbidden until temporal or otherwise independent holdout validation and uncertainty-aware calibration criteria are approved.",
+      "drivers": [
+        "causal-design validity",
+        "reference-class fit",
+        "baseline credibility",
+        "interference and strategic response",
+        "outcome measurement",
+        "state freshness"
+      ]
+    },
+    "validationPolicy": {
+      "thresholdStatus": "provisional",
+      "highConfidenceAllowed": false,
+      "requiredBeforeHighConfidence": [
+        "pre-registered temporal or otherwise independent holdout evaluation",
+        "uncertainty intervals for calibration intercept, slope, and interval coverage",
+        "out-of-sample sample-size and reference-class justification",
+        "documented robustness to approved confounding and interference sensitivity analyses"
+      ]
+    },
+    "freshnessPolicy": {
+      "maxAgeSeconds": 3600,
+      "requireStateHash": true,
+      "requiredStateFields": [
+        "both original plans",
+        "amounts and currencies",
+        "original and shared destinations",
+        "matching ratio",
+        "deadline",
+        "top-up terms",
+        "cancellation and payment evidence"
+      ],
+      "invalidateOnLifecycleStates": [
+        "completed",
+        "expired",
+        "cancelled",
+        "defaulted",
+        "reversed",
+        "superseded"
+      ]
+    },
+    "healthPolicy": {
+      "requiredCalibrationMetrics": [
+        "eligible resolved-observation count",
+        "out-of-sample 80% interval coverage with uncertainty",
+        "out-of-sample probability calibration intercept and slope with uncertainty",
+        "out-of-sample Brier or proper scoring-rule result",
+        "causal-design status and sensitivity-analysis result",
+        "overlap or positivity diagnostics",
+        "out-of-domain input rate",
+        "required-state-field missingness rate"
+      ],
+      "blockedConditions": [
+        "no current exact-hash methodology approval",
+        "no current passing model-health snapshot",
+        "causal identification design is not validated",
+        "empirical calibration evidence is absent or ineligible",
+        "required state is missing or does not match the immutable state hash",
+        "input is outside the approved domain",
+        "unresolved evidence-integrity, duplication, or overlap failure",
+        "available modeled component would be published under blocked, warning, or stale health"
+      ],
+      "warningConditions": [
+        "reference class broadened beyond the narrowest approved class",
+        "provisional confidence thresholds remain unvalidated",
+        "material reliance on participant attestation rather than independent outcome evidence",
+        "calibration drift remains within a non-blocking warning band"
+      ]
+    },
+    "sourceDataRequirements": [
+      "immutable pre-offer original plans and supporting evidence",
+      "matching ratio, shared destination, fallback, and top-up terms",
+      "cancellation or nonpayment evidence for each original plan",
+      "shared-destination provider events or reviewed receipts",
+      "refund, reversal, default, and amendment history",
+      "stable deduplication keys across original, redirected, and top-up payments"
+    ],
+    "conceptualBasisRefs": [
+      "source:toby-ord-moral-trade-2015",
+      "source:forethought-convergence-and-compromise-2025",
+      "source:forethought-moral-public-goods-2026"
+    ],
+    "calibrationEvidenceRefs": [],
+    "knownFailureModes": [
+      "shared receipt is treated as proof that original plans were canceled",
+      "one or both original plans were manufactured",
+      "participants complete both original and redirected payments",
+      "redirected baseline is mislabeled additional",
+      "same redirected dollar is additively attributed twice",
+      "value improvement is asserted without a conversion model"
+    ],
+    "outOfDomainConditions": [
+      "either original plan cannot be evidenced before exposure",
+      "political or regulated donation exchange lacks jurisdiction-specific approval",
+      "shared destination cannot be verified",
+      "currency conversion lacks immutable snapshot",
+      "agreement contains coercive threats or harmful baseline incentives",
+      "no defensible reciprocal causal design"
+    ],
+    "materialChangeTriggers": [
+      "cancellation evidence standard changes",
+      "matching or fallback semantics change",
+      "regulated-donation support introduced",
+      "causal-identification design or sensitivity-analysis policy changes",
+      "evidence semantics or public outcome-label changes",
+      "strategic-behavior or interference policy changes",
+      "provisional validation thresholds or high-confidence rule changes"
+    ],
+    "aggregationPolicy": {
+      "directAndCooperativeNeverSummed": true,
+      "heterogeneousNativeUnitsRemainSeparate": true,
+      "directMarginalEffectsDefaultNonAdditive": true,
+      "additiveClaimRequirement": "A causal component may enter an additive caused-total only when every underlying resource or action has a stable unique claim reference and no claim reference appears in another additive component.",
+      "overlapHandling": "Outcome quantities may appear in explanatory views but verified outcomes are not caused totals. Direct marginal effects default to non-additive. Cooperative allocation is an alternative lens. Any additive causal aggregate requires unique claim references and must reject overlap."
+    },
+    "shapleyPolicy": {
+      "enabled": false,
+      "characteristicFunctionDefinition": "Not used for this methodology.",
+      "maximumExactPlayers": null,
+      "approximationMethod": null
+    },
+    "parameters": {
+      "minimumEligibleResolvedObservations": 50,
+      "minimumSampleStatus": "provisional_governance_floor",
+      "publicationRule": "render deterministic terms and verified outcomes when valid; withhold every modeled causal component unless the exact active model has a current passing health snapshot",
+      "onlyTopUpsAbsentFromBothBaselinesAreAdditional": true,
+      "sharedReceiptAloneProvesCancellation": false
+    }
+  }
+}

@@ -1,0 +1,223 @@
+{
+  "mechanismFamily": "donation_upgrade",
+  "modelKey": "commitments-donation-upgrade-v2",
+  "version": 2,
+  "lifecycleStatus": "under_review",
+  "methodologyHash": "sha256:0666a06be19229e86bf776ab1b43ef8083d577acbbbed090804cbeab02067eac",
+  "materialChangeFromMethodologyHash": "sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463",
+  "approvedAt": null,
+  "activatedAt": null,
+  "approvalBlockers": [
+    "founder_exact_hash_approval_not_recorded",
+    "founder_approver_account_not_yet_configured",
+    "causal_identification_design_not_validated",
+    "empirical_calibration_evidence_not_registered",
+    "provisional_confidence_thresholds_not_validated",
+    "model_health_not_passing"
+  ],
+  "methodology": {
+    "schemaVersion": "moral-trade-impact-model-methodology-v1",
+    "mechanismFamily": "donation_upgrade",
+    "modelKey": "commitments-donation-upgrade-v2",
+    "displayName": "Donation Upgrade outcome, matcher-baseline, and additionality methodology v2",
+    "estimands": [
+      "success_case_additional",
+      "expected_additional",
+      "direct_causal_attribution",
+      "verified_outcome",
+      "baseline_redirected"
+    ],
+    "estimandDefinitions": {
+      "success_case_additional": "The genuinely new matcher or top-up amount absent from both the original donor's frozen plan and the matcher's frozen no-offer plan.",
+      "expected_additional": "The validated change in probability of the genuinely new matcher or top-up donation caused by the upgrade offer, multiplied by that amount. It excludes redirected baseline money.",
+      "direct_causal_attribution": "A role-specific marginal effect under the validated offer-versus-no-offer design. It defaults to non-additive and does not give both participants caused-total credit for the same donation.",
+      "verified_outcome": "The original and matcher payments shown by authenticated provider events or reviewed evidence to have reached the frozen destination, net of reversals. This verifies payment, not additionality.",
+      "baseline_redirected": "The original donor's frozen planned amount completed at the upgraded destination rather than the fallback. It is redirected baseline money, not a new dollar."
+    },
+    "baselineDefinition": "Before publication, freeze the original donor's plan and fallback plus the matcher's no-offer plan, amount, destination, timing, backup state, deadline, roles, and evidence standard.",
+    "causalIdentificationPolicy": {
+      "estimand": "The causal estimand is the change in probability and amount of matcher or top-up payment under the exact upgrade offer versus the matcher's frozen no-offer state.",
+      "designStatus": "specified_not_validated",
+      "admissibleDesigns": [
+        "randomized eligible-donor invitation or randomized matcher offer",
+        "pre-specified quasi-experimental offer eligibility rule with defensible exchangeability"
+      ],
+      "interferencePolicy": "Account for competition among matchers, backup promotion, and any effect of one offer on other donors or matchers. Do not treat provider events as independent when they share a campaign.",
+      "overlapAndPositivityPolicy": "Estimate causal effects only in states with empirical support for both the with-participant and without-participant conditions. Fail closed when overlap or positivity is materially violated.",
+      "sensitivityAnalysisPolicy": "Report pre-specified sensitivity analyses for unmeasured confounding, baseline misclassification, and interference. Withhold causal components when conclusions are not robust to the approved bounds.",
+      "noDefensibleDesignAction": "withhold_causal_components"
+    },
+    "evidenceSemanticsPolicy": {
+      "outcomeEvidenceLabel": "verified_outcome",
+      "additionalityLabel": "assessed_additionality",
+      "receiptAloneEstablishesAdditionality": false,
+      "publicCopyRule": "Evidence may establish that an outcome occurred and its quantity. It must not be described as verified impact or verified additionality; causal additionality remains an assessed model output."
+    },
+    "strategicBehaviorPolicy": {
+      "baselineAntecedenceRule": "A baseline can support additionality only when its material evidence predates the participant-facing offer or commitment and survives post-resolution consistency checks.",
+      "strategicTimingRule": "Freeze both baselines before offer exposure and detect backup promotion, deadline manipulation, and selective offer issuance.",
+      "interferenceRule": "Account for competition among matchers, backup promotion, and any effect of one offer on other donors or matchers. Do not treat provider events as independent when they share a campaign.",
+      "perverseIncentiveRule": "Reject incentives to invent a donation plan or delay a donation to become eligible for matching.",
+      "manipulationChecks": [
+        "dual-baseline timestamp check",
+        "provider replay protection",
+        "same-payment deduplication",
+        "selective-offer diagnostic"
+      ]
+    },
+    "algorithmDescription": "Separate original baseline redirection from genuinely new matcher or top-up money. Predict branch completion, but estimate matcher additionality only through an approved offer-versus-no-offer design that uses both frozen baselines. Record provider-verified payments as outcomes and never infer a universal two-times value multiplier.",
+    "referenceClassPolicy": {
+      "strategy": "hierarchical",
+      "narrowFields": [
+        "role",
+        "donor baseline tier",
+        "matcher baseline tier",
+        "amount band",
+        "deadline band",
+        "destination class",
+        "backup state"
+      ],
+      "broadeningOrder": [
+        "destination class",
+        "deadline band",
+        "amount band",
+        "privacy mode",
+        "mechanism family"
+      ],
+      "minimumSampleSize": 50,
+      "noDefensibleClassAction": "withhold",
+      "uncertaintyExpansionRule": "Reference classes support outcome prediction, not causal identification. Expand the 80% predictive interval at every approved broadening step and withhold when no defensible class remains."
+    },
+    "uncertaintyPolicy": {
+      "intervalLevelBps": 8000,
+      "method": "Use a pre-specified hierarchical predictive model and propagate parameter, outcome, baseline, interference, and measurement uncertainty by posterior or repeated-sampling simulation.",
+      "confidencePolicy": "The initial sample-size and calibration cutoffs are provisional governance floors. Low or moderate confidence may be shown only after a current health pass. High confidence is forbidden until temporal or otherwise independent holdout validation and uncertainty-aware calibration criteria are approved.",
+      "drivers": [
+        "causal-design validity",
+        "reference-class fit",
+        "baseline credibility",
+        "interference and strategic response",
+        "outcome measurement",
+        "state freshness"
+      ]
+    },
+    "validationPolicy": {
+      "thresholdStatus": "provisional",
+      "highConfidenceAllowed": false,
+      "requiredBeforeHighConfidence": [
+        "pre-registered temporal or otherwise independent holdout evaluation",
+        "uncertainty intervals for calibration intercept, slope, and interval coverage",
+        "out-of-sample sample-size and reference-class justification",
+        "documented robustness to approved confounding and interference sensitivity analyses"
+      ]
+    },
+    "freshnessPolicy": {
+      "maxAgeSeconds": 3600,
+      "requireStateHash": true,
+      "requiredStateFields": [
+        "original donor plan",
+        "matcher no-offer plan",
+        "fallback and upgraded destination",
+        "amounts",
+        "roles",
+        "deadline",
+        "backup state",
+        "provider state"
+      ],
+      "invalidateOnLifecycleStates": [
+        "completed",
+        "defaulted",
+        "expired",
+        "cancelled",
+        "reversed",
+        "superseded"
+      ]
+    },
+    "healthPolicy": {
+      "requiredCalibrationMetrics": [
+        "eligible resolved-observation count",
+        "out-of-sample 80% interval coverage with uncertainty",
+        "out-of-sample probability calibration intercept and slope with uncertainty",
+        "out-of-sample Brier or proper scoring-rule result",
+        "causal-design status and sensitivity-analysis result",
+        "overlap or positivity diagnostics",
+        "out-of-domain input rate",
+        "required-state-field missingness rate"
+      ],
+      "blockedConditions": [
+        "no current exact-hash methodology approval",
+        "no current passing model-health snapshot",
+        "causal identification design is not validated",
+        "empirical calibration evidence is absent or ineligible",
+        "required state is missing or does not match the immutable state hash",
+        "input is outside the approved domain",
+        "unresolved evidence-integrity, duplication, or overlap failure",
+        "available modeled component would be published under blocked, warning, or stale health"
+      ],
+      "warningConditions": [
+        "reference class broadened beyond the narrowest approved class",
+        "provisional confidence thresholds remain unvalidated",
+        "material reliance on participant attestation rather than independent outcome evidence",
+        "calibration drift remains within a non-blocking warning band"
+      ]
+    },
+    "sourceDataRequirements": [
+      "immutable original donor plan and fallback",
+      "immutable matcher no-offer plan with contemporaneous evidence",
+      "exact provider destination and participant-specific payment references",
+      "authenticated provider event with replay protection",
+      "backup, refund, reversal, and default history",
+      "audited resolved Donation Upgrade outcomes"
+    ],
+    "conceptualBasisRefs": [
+      "source:toby-ord-moral-trade-2015",
+      "source:forethought-convergence-and-compromise-2025",
+      "source:forethought-moral-public-goods-2026"
+    ],
+    "calibrationEvidenceRefs": [],
+    "knownFailureModes": [
+      "matcher payment would have occurred without the offer",
+      "original or matcher baseline is fabricated after exposure",
+      "provider event proves payment but not additionality",
+      "baseline redirected dollars are labeled additional",
+      "both participants receive additive caused-total credit for the same payment",
+      "a universal two-times value claim is inferred"
+    ],
+    "outOfDomainConditions": [
+      "either baseline is missing or not antecedent",
+      "recipient identity cannot be verified",
+      "custodial, pooled, or split settlement by Moral Trade",
+      "provider event cannot be authenticated",
+      "no defensible offer-versus-no-offer design"
+    ],
+    "materialChangeTriggers": [
+      "matcher baseline definition changes",
+      "backup or provider semantics change",
+      "participant attribution ownership changes",
+      "causal-identification design or sensitivity-analysis policy changes",
+      "evidence semantics or public outcome-label changes",
+      "strategic-behavior or interference policy changes",
+      "provisional validation thresholds or high-confidence rule changes"
+    ],
+    "aggregationPolicy": {
+      "directAndCooperativeNeverSummed": true,
+      "heterogeneousNativeUnitsRemainSeparate": true,
+      "directMarginalEffectsDefaultNonAdditive": true,
+      "additiveClaimRequirement": "A causal component may enter an additive caused-total only when every underlying resource or action has a stable unique claim reference and no claim reference appears in another additive component.",
+      "overlapHandling": "Outcome quantities may appear in explanatory views but verified outcomes are not caused totals. Direct marginal effects default to non-additive. Cooperative allocation is an alternative lens. Any additive causal aggregate requires unique claim references and must reject overlap."
+    },
+    "shapleyPolicy": {
+      "enabled": false,
+      "characteristicFunctionDefinition": "Not used for this methodology.",
+      "maximumExactPlayers": null,
+      "approximationMethod": null
+    },
+    "parameters": {
+      "minimumEligibleResolvedObservations": 50,
+      "minimumSampleStatus": "provisional_governance_floor",
+      "publicationRule": "render deterministic terms and verified outcomes when valid; withhold every modeled causal component unless the exact active model has a current passing health snapshot",
+      "onlyMoneyAbsentFromBothBaselinesIsAdditional": true,
+      "universalTwoTimesValueClaimPermitted": false
+    }
+  }
+}
