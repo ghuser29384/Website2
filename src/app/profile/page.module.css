@@ -1,0 +1,197 @@
+.account {
+  min-width: 0;
+  padding-top: 24px;
+  border-top: 1px solid #e1e5ec;
+  color: #18223b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.accountHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  padding-bottom: 20px;
+}
+
+.account .accountHeader h2 {
+  margin: 0;
+  color: #18223b;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.4;
+}
+
+.account .session {
+  margin: 4px 0 0;
+  color: #526078;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.account .settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 16px;
+  border: 1px solid #cbd2de;
+  border-radius: 8px;
+  background: #fff;
+  color: #26334c;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.account .settings:hover {
+  border-color: #8693a8;
+  background: #f6f8fb;
+  color: #18223b;
+}
+
+.secondary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 24px;
+  border-top: 1px solid #edf0f4;
+  padding-top: 8px;
+}
+
+.roleDetails {
+  min-width: 0;
+}
+
+.roleDetails > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 44px;
+  max-width: 100%;
+  color: #526078;
+  font: inherit;
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+}
+
+.roleDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.roleDetails > summary:hover {
+  color: #18223b;
+}
+
+.roleDetails > summary svg {
+  flex-shrink: 0;
+}
+
+.roleDetails[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.detailContent {
+  max-width: 640px;
+  padding: 8px 0 4px;
+}
+
+.account .history {
+  margin: 0 0 6px;
+  color: #526078;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.account .explanation {
+  margin: 0 0 16px;
+  color: #526078;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.facts {
+  margin: 0;
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 1.2fr);
+  gap: 8px 20px;
+  padding: 10px 0;
+  border-top: 1px solid #edf0f4;
+}
+
+.account .facts dt,
+.account .facts dd {
+  margin: 0;
+  color: #526078;
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: normal;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+.account .facts dd {
+  color: #26334c;
+}
+
+.account .back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: #526078;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  text-underline-offset: 4px;
+}
+
+.account .back:hover {
+  color: #18223b;
+  text-decoration: underline;
+}
+
+.account .settings:focus-visible,
+.account .back:focus-visible,
+.roleDetails > summary:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #2445c7;
+  outline-offset: 4px;
+}
+
+@media (max-width: 540px) {
+  .account {
+    padding-top: 20px;
+  }
+
+  .accountHeader {
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .secondary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .account .back {
+    justify-self: start;
+  }
+
+  .facts > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 12px 0;
+  }
+}

@@ -64,3 +64,53 @@ test("Profile displays returned priority feedback", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: message })).toBeVisible();
   await expect(page.getByTestId("profile-priorities-card")).toBeVisible();
 });
+
+for (const width of [1440, 390, 320]) {
+  test(`Profile account section stays compact and role details remain accessible at ${width}px`, async ({ page, context }, testInfo) => {
+    await context.clearCookies();
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+    await page.goto("/profile");
+    await expect(page).toHaveTitle("Profile | Moral Trade");
+    const account = page.getByTestId("profile-account");
+    const heading = account.getByRole("heading", { name: "Account", exact: true });
+    await expect(heading).toBeVisible();
+    await expect(heading).toHaveCSS("font-size", "18px");
+    const details = account.locator("details");
+    const summary = details.locator("summary");
+    await expect(summary).toHaveText("Role details");
+    expect(await details.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
+    await expect(account.getByText("Trust data unavailable", { exact: true })).not.toBeVisible();
+    await expect(account.locator(".deal-economics-grid, .commitment-status, .button-primary")).toHaveCount(0);
+    const settings = account.getByRole("link", { name: "Sign in to continue", exact: true });
+    await expect(settings).toHaveAttribute("href", "/login?returnTo=/profile");
+    await expect(settings).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(account.getByRole("link", { name: "Back to offers", exact: true })).toHaveAttribute("href", "/offers");
+    expect((await settings.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await account.boundingBox())!.height).toBeLessThan(width > 540 ? 180 : 280);
+    const priorities = await page.getByTestId("profile-priorities-card").boundingBox();
+    expect((await account.boundingBox())!.y).toBeGreaterThan(priorities!.y + priorities!.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath(`profile-account-${width}-collapsed.png`), fullPage: true });
+    await account.screenshot({ path: testInfo.outputPath(`account-${width}-collapsed.png`) });
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(details).toHaveAttribute("open", "");
+    await expect(account.getByText("Trust data unavailable", { exact: true })).toBeVisible();
+    await expect(account.getByText("Not used", { exact: true })).toBeVisible();
+    await expect(account.getByText("Review when creating", { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await account.screenshot({ path: testInfo.outputPath(`account-${width}-expanded.png`) });
+    await page.keyboard.press("Space");
+    expect(await details.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
+    await settings.click();
+    await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/profile");
+    await expect(page.locator("nextjs-portal")).toHaveCount(0);
+    await writeFile(testInfo.outputPath("account-browser-errors.json"), JSON.stringify(errors, null, 2));
+    expect(errors).toEqual([]);
+  });
+}
