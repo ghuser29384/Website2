@@ -105,14 +105,14 @@ function SummaryMetric({
 }: {
   label: string;
   value: React.ReactNode;
-  detail: React.ReactNode;
+  detail?: React.ReactNode;
   emphasis?: "blue" | "green" | "orange";
 }) {
   return (
     <div className={styles.summaryMetric} data-emphasis={emphasis ?? "none"}>
       <span>{label}</span>
       <strong>{value}</strong>
-      <small>{detail}</small>
+      {detail ? <small>{detail}</small> : null}
     </div>
   );
 }
@@ -184,8 +184,7 @@ function PortfolioView({
     <>
       <section className={styles.sectionHeader}>
         <div>
-          <span>Allocation</span>
-          <h2>Where your commitments are allocated.</h2>
+          <h2>Your commitments</h2>
         </div>
         <nav className={styles.groupSwitch} aria-label="Group portfolio by">
           {(Object.keys(GROUP_LABELS) as PortfolioGroupMode[]).map((option) => (
@@ -206,15 +205,17 @@ function PortfolioView({
               <section className={styles.groupSection} key={entry.label}>
                 <header>
                   <div>
-                    <span>{GROUP_LABELS[group]}</span>
                     <h2>{entry.label}</h2>
                   </div>
-                  <dl>
-                    <div><dt>Records</dt><dd>{entry.records.length}</dd></div>
-                    <div><dt>You committed</dt><dd><QuantityList quantities={committed} /></dd></div>
-                    <div><dt>Total coordinated</dt><dd><QuantityList quantities={coordinated} /></dd></div>
-                    <div><dt>Attributed additional</dt><dd><QuantityList quantities={attributed} empty="Not attributed" /></dd></div>
-                  </dl>
+                  <details className={styles.groupTotals}>
+                    <summary>{entry.records.length} record{entry.records.length === 1 ? "" : "s"} · Group totals</summary>
+                    <dl>
+                      <div><dt>Records</dt><dd>{entry.records.length}</dd></div>
+                      <div><dt>You committed</dt><dd><QuantityList quantities={committed} /></dd></div>
+                      <div><dt>Total coordinated</dt><dd><QuantityList quantities={coordinated} /></dd></div>
+                      <div><dt>Attributed additional</dt><dd><QuantityList quantities={attributed} empty="Not attributed" /></dd></div>
+                    </dl>
+                  </details>
                 </header>
                 <div>{entry.records.map((record) => <RecordRow key={record.id} record={record} />)}</div>
               </section>
@@ -225,7 +226,7 @@ function PortfolioView({
         <div className={styles.guidedEmpty}>
           <div>
             <h2>No commitments yet.</h2>
-            <p>Published examples, searches, and marketplace previews are not counted as commitments. Binding records appear after an accepted agreement, saved threshold pledge, or completed redirect creates a participant-scoped record.</p>
+            <p>Accepted agreements, saved threshold pledges, and completed redirects appear here.</p>
           </div>
           <div className={styles.emptyActions}>
             <Link className="button button-primary" href="/trades/new">Create an offer</Link>
@@ -238,7 +239,7 @@ function PortfolioView({
       {data.openOffers.length ? (
         <section className={styles.openOffers}>
           <div className={styles.sectionHeader}>
-            <div><span>Open offers</span><h2>Published, not yet binding.</h2></div>
+            <div><h2>Open offers</h2><p>Not yet binding.</p></div>
           </div>
           <div className={styles.offerRows}>
             {data.openOffers.map((offer) => (
@@ -258,7 +259,7 @@ function LedgerView({ data }: { data: Awaited<ReturnType<typeof loadCommitmentsP
   return (
     <section>
       <div className={styles.sectionHeader}>
-        <div><span>Double-entry record</span><h2>Every material commitment event.</h2></div>
+        <div><h2>Commitment history</h2></div>
       </div>
       {data.events.length ? (
         <ol className={styles.timeline}>
@@ -289,7 +290,7 @@ function CompletedView({ data }: { data: Awaited<ReturnType<typeof loadCommitmen
     <>
       <section className={styles.impactProfile}>
         <header>
-          <div><span>Impact profile</span><h2>Additional resources attributed to your completed commitments.</h2></div>
+          <div><h2>Attributed impact</h2></div>
           <ImpactShareButton className="button button-secondary" title="Moral Trade impact summary" text={shareSummary} />
         </header>
         <div className={styles.windowGrid}>
@@ -306,7 +307,7 @@ function CompletedView({ data }: { data: Awaited<ReturnType<typeof loadCommitmen
 
       <section>
         <div className={styles.sectionHeader}>
-          <div><span>Completed</span><h2>Outcomes, returns, and causal accounting.</h2></div>
+          <div><h2>Completed commitments</h2></div>
         </div>
         {completed.length ? (
           <div className={styles.completedList}>
@@ -337,7 +338,7 @@ function CalendarView({ data, showAll }: { data: Awaited<ReturnType<typeof loadC
   return (
     <section>
       <div className={styles.sectionHeader}>
-        <div><span>Calendar</span><h2>Deadlines and expected commitment events.</h2></div>
+        <div><h2>Upcoming dates</h2></div>
         <nav className={styles.groupSwitch} aria-label="Calendar scope">
           <CommitmentsDocumentLink aria-current={!showAll ? "page" : undefined} href="/commitments?tab=calendar">Action needed</CommitmentsDocumentLink>
           <CommitmentsDocumentLink aria-current={showAll ? "page" : undefined} href="/commitments?tab=calendar&calendar=all">All dates</CommitmentsDocumentLink>
@@ -393,7 +394,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
   const verifiedCoordinated = aggregateRecordQuantities(verifiedRecords, (record) => record.totalCoordinated);
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className={`${styles.shell} page-shell marketplace-app-shell`}>
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
@@ -405,17 +406,17 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <MarketplaceRouteShell active="track">
+        <MarketplaceRouteShell active="track" compact>
           <section className={`${styles.page} v72-private-surface commitments-center mt-v75-route-card`} aria-labelledby="commitments-heading">
             <header className={styles.hero}>
               <div>
-                <h1 id="commitments-heading">Additional resources you caused.</h1>
-                <p>Commitments, proof, outcomes, and causal attribution in one participant-scoped record.</p>
+                <h1 id="commitments-heading">Commitments</h1>
+                <p>Track commitments, evidence, and outcomes.</p>
               </div>
               {data ? (
                 <div className={styles.heroAside}>
                   <CommitmentsLocalGreeting className={styles.greeting} name={data.displayName} />
-                  <Link className="button button-primary" href="/trades/new">+ Create offer</Link>
+                  <Link className="button button-primary" href="/trades/new">Create offer</Link>
                 </div>
               ) : null}
             </header>
@@ -431,43 +432,57 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
             {!supabaseReady ? (
               <div className={styles.unavailable}>
                 <h2>Commitment data unavailable.</h2>
-                <p>The authenticated data service is not configured in this environment. No sample values or synthetic commitments are substituted.</p>
+                <p>The data service is unavailable. No sample records are shown.</p>
               </div>
             ) : !viewer ? (
               <div className={styles.guidedEmpty}>
-                <div><h2>Sign in to view your commitments.</h2><p>Commitments and causal-impact records are private to the participant unless a separate record has been explicitly made public.</p></div>
+                <div><h2>Sign in to view your commitments.</h2><p>Your commitments and impact records are private unless explicitly shared.</p></div>
                 <Link className="button button-primary" href="/login?returnTo=/commitments">Sign in to continue</Link>
               </div>
             ) : data ? (
               <>
-                <section className={styles.summary} aria-label="Commitment summary">
-                  <div className={styles.lifecycleMetric}>
-                    <span>Current positions</span>
-                    <strong><QuantityList quantities={activeCommitted} empty={`${activeRecords.length} active`} /></strong>
-                    <small>{activeRecords.length} binding commitment{activeRecords.length === 1 ? "" : "s"}</small>
-                  </div>
-                  <SummaryMetric label="Active commitments" value={activeRecords.length} detail={`${new Set(activeRecords.map((record) => record.mechanism)).size} mechanisms`} />
-                  <SummaryMetric label="Action needed" value={actionNeeded} detail="Deadlines, evidence, payment, or review" emphasis="blue" />
-                  <SummaryMetric label="Activated this month" value={<QuantityList quantities={activatedCommitted} empty={String(activatedThisMonth.length)} />} detail={`${activatedThisMonth.length} commitment${activatedThisMonth.length === 1 ? "" : "s"}`} emphasis="green" />
-                  <SummaryMetric label="Verified to date" value={<QuantityList quantities={verifiedAttributed} empty={String(verifiedRecords.length)} />} detail={<><QuantityList quantities={verifiedCoordinated} empty="No verified resources" /> coordinated</>} emphasis="orange" />
-                </section>
-
-                <section className={styles.cartProjection}>
-                  <div>
-                    <span>If everything succeeds</span>
-                    <strong><QuantityList quantities={data.cartProjection.projectedAdditionalResources} empty={`${data.cartProjection.projectedCounterpartyActions} counterparty actions`} /></strong>
-                    <small>{data.cartProjection.itemCount} item{data.cartProjection.itemCount === 1 ? "" : "s"} in your cart</small>
-                  </div>
-                  <p>{data.cartProjection.assumption}</p>
-                  <Link href="/saved-offers">Review cart →</Link>
-                </section>
-
                 {data.warnings.length ? (
                   <details className={styles.warnings}>
-                    <summary>Some connected record types could not be loaded</summary>
+                    <summary>Some records unavailable — totals may be incomplete</summary>
                     <ul>{data.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
                   </details>
                 ) : null}
+
+                <section className={styles.summary} aria-label="Commitment summary">
+                  <SummaryMetric label="Active" value={activeRecords.length} />
+                  <SummaryMetric label="Need action" value={actionNeeded} emphasis="blue" />
+                  <SummaryMetric label="Activated this month" value={activatedThisMonth.length} />
+                  <SummaryMetric label="Verified outcomes" value={verifiedRecords.length} />
+                </section>
+
+                <div className={styles.utilityBar}>
+                  <details className={styles.resourceDetails}>
+                    <summary>Resource totals</summary>
+                    <dl>
+                      <div><dt>Active commitments</dt><dd><QuantityList quantities={activeCommitted} empty="No recorded resources" /></dd></div>
+                      <div><dt>Activated this month</dt><dd><QuantityList quantities={activatedCommitted} empty="No recorded resources" /></dd></div>
+                      <div><dt>Verified additional resources</dt><dd><QuantityList quantities={verifiedAttributed} empty="Not attributed" /></dd></div>
+                      <div><dt>Verified coordinated resources</dt><dd><QuantityList quantities={verifiedCoordinated} empty="No verified resources" /></dd></div>
+                    </dl>
+                  </details>
+
+                  <section className={styles.cartProjection} aria-label="Cart projection">
+                    <div className={styles.cartOverview}>
+                      <div>
+                        <span>{data.cartProjection.itemCount} item{data.cartProjection.itemCount === 1 ? "" : "s"} in cart</span>
+                        {data.cartProjection.itemCount > 0 ? (
+                          <strong><QuantityList quantities={data.cartProjection.projectedAdditionalResources} empty={`${data.cartProjection.projectedCounterpartyActions} counterparty actions`} /></strong>
+                        ) : null}
+                        {data.cartProjection.itemCount > 0 ? <small>If everything succeeds</small> : null}
+                      </div>
+                      <Link href="/saved-offers" prefetch={false}>Review cart →</Link>
+                    </div>
+                    <details className={styles.calculationDetails}>
+                      <summary>How this is calculated</summary>
+                      <p>{data.cartProjection.assumption}</p>
+                    </details>
+                  </section>
+                </div>
 
                 <div className={styles.contentGrid}>
                   <div className={styles.primaryContent}>
@@ -477,7 +492,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
                     {tab === "calendar" ? <CalendarView data={data} showAll={showAllCalendar} /> : null}
                   </div>
                   <aside className={styles.activityRail}>
-                    <header><div><span>Recent activity</span><h2>Latest updates.</h2></div><CommitmentsDocumentLink href="/commitments?tab=ledger">View all →</CommitmentsDocumentLink></header>
+                    <header><div><h2>Recent activity</h2></div><CommitmentsDocumentLink href="/commitments?tab=ledger">View all →</CommitmentsDocumentLink></header>
                     {data.recentActivity.length ? (
                       <ol>
                         {data.recentActivity.map((event) => (

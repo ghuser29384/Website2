@@ -12,7 +12,7 @@ export default function CommitmentsLoading() {
         <Link href="/discover" prefetch={false}>Discover opportunities</Link>
       </header>
       <main className={styles.main} id="main-content" tabIndex={-1}>
-        <h1>Additional resources you caused.</h1>
+        <h1>Commitments</h1>
         <p className={styles.status} role="status">Loading your commitments…</p>
         <div aria-hidden="true">
           <div className={styles.summary}>

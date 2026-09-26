@@ -652,9 +652,11 @@ function selectPrimaryBrowseDeal(deals: readonly MarketplaceDeal[], zeroLive: bo
 function MarketplaceSideNav({
   active = "browse",
   createHref,
+  compact = false,
 }: {
   active?: "browse" | "plan" | "track" | "messages" | "profile";
   createHref?: string;
+  compact?: boolean;
 }) {
   const items = [
     { key: "browse", href: "/offers", label: "Browse", icon: "browse" },
@@ -666,12 +668,12 @@ function MarketplaceSideNav({
 
   return (
     <aside className="mt-v75-side-nav" data-marketplace-left-nav aria-label="Marketplace sections">
-      <Link className="mt-v75-side-brand" href="/offers" prefetch={false}>
+      {!compact ? <Link className="mt-v75-side-brand" href="/offers" prefetch={false}>
         <span className="mt-v77-brand-wordmark">
           <MoralTradeWordmark />
           <small>Coordination network</small>
         </span>
-      </Link>
+      </Link> : null}
       <nav>
         {items.map((item) => (
           <Link
@@ -692,7 +694,7 @@ function MarketplaceSideNav({
           Create offer
         </Link>
       ) : null}
-      <div className="mt-v75-side-plan">
+      {!compact ? <div className="mt-v75-side-plan">
         <strong>0 in planner</strong>
         <span>
           <em>Exposure</em>
@@ -705,7 +707,7 @@ function MarketplaceSideNav({
         <Link className="button button-primary button-mini" href="/saved-offers">
           Review & plan
         </Link>
-      </div>
+      </div> : null}
     </aside>
   );
 }
@@ -713,13 +715,15 @@ function MarketplaceSideNav({
 export function MarketplaceRouteShell({
   active,
   children,
+  compact = false,
 }: {
   active: "browse" | "plan" | "track" | "messages" | "profile";
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
     <div className="mt-v75-route-board">
-      <MarketplaceSideNav active={active} />
+      <MarketplaceSideNav active={active} compact={compact} />
       <div className="mt-v75-route-workspace">{children}</div>
     </div>
   );
