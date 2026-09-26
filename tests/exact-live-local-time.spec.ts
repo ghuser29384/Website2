@@ -29,7 +29,7 @@ async function expectLocalHeader(
   page: Page,
   expected: { dateTime: string; dateLabel: string; greeting: string },
 ) {
-  const localHeader = page.locator(".head .date");
+  const localHeader = page.locator(".head .date, .h .date");
   await expect(localHeader).toHaveAttribute("data-mt-local-date-time", expected.dateTime);
   await expect(localHeader.locator('time[data-mt-local-date="true"]')).toHaveAttribute(
     "datetime",
@@ -54,7 +54,7 @@ async function expectHeaderAcrossLiveViews(
   await page.locator('.topbar nav a[href="/commitments"]').click();
   await expect(page).toHaveURL(/\/commitments$/);
   await expect(page.locator("#commitments-heading")).toBeVisible();
-  await expect(page.locator(".head .date")).toHaveCount(0);
+  await expect(page.locator(".head .date, .h .date")).toHaveCount(0);
 }
 
 test.describe("exact live interface local time", () => {

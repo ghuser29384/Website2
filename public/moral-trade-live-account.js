@@ -107,7 +107,7 @@
   }
 
   function patchGreeting() {
-    const greeting = document.querySelector(".head .date span.muted");
+    const greeting = document.querySelector(".head .date span.muted, .h .date span.muted");
     if (!greeting) return;
 
     const suffix = account.authenticated && account.firstName ? `, ${account.firstName}.` : ".";

@@ -146,7 +146,7 @@
 
   function patchLegacyGreetings() {
     const greetingPattern = /^Good (morning|afternoon|evening), Alex\.$/;
-    document.querySelectorAll("header p,header span,.head .date span.muted").forEach((element) => {
+    document.querySelectorAll("header p,header span,.head .date span.muted,.h .date span.muted").forEach((element) => {
       const current = String(element.textContent || "").trim();
       const match = current.match(greetingPattern);
       if (!match) return;
