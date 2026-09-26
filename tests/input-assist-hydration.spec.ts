@@ -10,7 +10,7 @@ interface HydrationScenario {
 const cases: readonly HydrationScenario[] = [
   {
     route: "/paid-action-offers",
-    control: 'input[placeholder="Search offers, people, pools, or evidence"]',
+    control: 'input[placeholder="Search offers"]',
     context: "search",
   },
   {
