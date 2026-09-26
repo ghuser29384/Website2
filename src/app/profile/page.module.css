@@ -1,6 +1,6 @@
 .account {
   min-width: 0;
-  padding-top: 24px;
+  padding: 24px;
   border-top: 1px solid #e1e5ec;
   color: #18223b;
   font-size: 14px;
@@ -172,7 +172,7 @@
 
 @media (max-width: 540px) {
   .account {
-    padding-top: 20px;
+    padding: 20px 18px;
   }
 
   .accountHeader {
