@@ -1,0 +1,167 @@
+name: Dashboard production read-only verification 20260926
+on:
+  push:
+    branches: [ops/dashboard-live-verification-20260926-1839]
+    paths: [.github/workflows/dashboard-live-verification-20260926-1839.yml]
+permissions:
+  contents: read
+concurrency:
+  group: dashboard-production-readonly-20260926-1839
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf
+          persist-credentials: false
+      - name: Guard exact released source
+        run: |
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf
+          git diff --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - name: Check live canonical pages with no authentication or writes
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          mkdir -p /tmp/dashboard-live-evidence
+          cat > .dashboard-live-readonly.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import { expect } from '@playwright/test';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          import assert from 'node:assert/strict';
+          const sha = 'ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf';
+          const deploymentId = 'dpl_2ETaptdLZ1UnCotfBrKf7F2xDka5';
+          const team = 'team_ySu6sF3Uho1E1GnJtCQPVEuJ';
+          const root = '/tmp/dashboard-live-evidence';
+          const report = { sha, deploymentId, startedAt: new Date().toISOString(), authenticatedProduction: 'not tested: no authorized production test-account session supplied', productionMutations: 0, checks: [], failures: [] };
+          const token = process.env.VERCEL_TOKEN;
+          delete process.env.VERCEL_TOKEN;
+          async function aliases(phase) {
+            assert(token, 'Existing VERCEL_TOKEN is required for read-only alias identity verification');
+            for (const host of ['moraltrade.org', 'www.moraltrade.org']) {
+              const response = await fetch(`https://api.vercel.com/v4/aliases/${host}?teamId=${team}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30000) });
+              assert.equal(response.status, 200, `Alias GET ${host}: HTTP ${response.status}`);
+              const data = await response.json();
+              assert.equal(data.deploymentId ?? data.deployment?.id, deploymentId, `Alias changed for ${host}`);
+              report.checks.push({ kind: 'alias', phase, host, deploymentId, status: 'passed' });
+            }
+          }
+          let browser;
+          try {
+            await aliases('before');
+            for (const host of ['moraltrade.org', 'www.moraltrade.org']) {
+              for (const file of ['moral-trade-live-core.txt', 'moral-trade-live.html', 'moral-trade-live-feed.css']) {
+                const response = await fetch(`https://${host}/${file}`, { signal: AbortSignal.timeout(30000) });
+                assert.equal(response.status, 200);
+                const remoteHash = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
+                const sourceHash = createHash('sha256').update(readFileSync(`public/${file}`)).digest('hex');
+                assert.equal(remoteHash, sourceHash, `Published asset differs: ${host}/${file}`);
+                report.checks.push({ kind: 'asset', host, file, sha256: remoteHash, status: 'passed' });
+              }
+            }
+            browser = await chromium.launch();
+            for (const host of ['moraltrade.org', 'www.moraltrade.org']) {
+              for (const width of [1440, 320]) {
+                const context = await browser.newContext({ viewport: { width, height: 950 }, serviceWorkers: 'block' });
+                await context.addCookies([{ name: 'mt_analytics_opt_out', value: '1', url: `https://${host}` }]);
+                const blocked = [];
+                await context.route('**/*', async route => {
+                  const request = route.request();
+                  if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
+                    blocked.push({ method: request.method(), path: new URL(request.url()).pathname });
+                    await route.abort('blockedbyclient');
+                    return;
+                  }
+                  await route.continue();
+                });
+                const page = await context.newPage();
+                const errors = [];
+                page.on('pageerror', error => errors.push(error.message));
+                for (const path of ['/', '/feed', '/profile']) {
+                  const startErrors = errors.length;
+                  const label = `${host.replaceAll('.', '-')}-${path === '/' ? 'home' : path.slice(1)}-${width}`;
+                  try {
+                    const response = await page.goto(`https://${host}${path}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                    assert(response && response.status() < 400, `Route failed: ${path}`);
+                    const header = page.locator('.mt-refined-header').first();
+                    const nav = header.locator('[data-mt-primary-links]');
+                    await expect(nav.locator(':scope > a')).toHaveText(['Home', 'Trades', 'Commitments', 'Profile'], { timeout: 30000 });
+                    await expect(nav.getByText('100 Sparks', { exact: true })).toHaveCount(0);
+                    await page.evaluate(() => document.fonts.ready);
+                    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth), { timeout: 10000 }).toBeLessThanOrEqual(1);
+                    for (const link of await nav.locator(':scope > a').all()) {
+                      const box = await link.boundingBox();
+                      assert(box && box.x >= -1 && box.x + box.width <= width + 1 && box.height >= 44, 'Navigation target is clipped or too short');
+                    }
+                    if (path !== '/profile') {
+                      await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible({ timeout: 30000 });
+                      await expect(page.getByRole('heading', { level: 1, name: /^(What needs you now\.|Feed|Dashboard)$/ })).toHaveCount(0);
+                      await expect(page.locator('button[data-now="focus"]')).toBeVisible();
+                      await expect(page.locator('button[data-now="plan"]')).toBeVisible();
+                      await expect(page.locator('.mt-feed-actions .date time')).toBeVisible();
+                    } else {
+                      const priorities = page.getByRole('link', { name: /Adjust priorities/ });
+                      await expect(priorities).toBeVisible();
+                      await expect(priorities).toHaveAttribute('href', /profile\/priorities/);
+                    }
+                    const summary = header.locator('summary').filter({ hasText: 'More' });
+                    await summary.focus();
+                    await page.keyboard.press('Enter');
+                    await expect(header.getByRole('link', { name: 'Messages', exact: true })).toBeVisible();
+                    await page.keyboard.press('Escape');
+                    await expect(summary).toBeFocused();
+                    await expect(header.getByRole('link', { name: 'Messages', exact: true })).not.toBeVisible();
+                    assert.deepEqual(errors.slice(startErrors), [], 'Uncaught page errors');
+                    report.checks.push({ kind: 'rendered', host, path, width, status: 'passed' });
+                  } catch (error) {
+                    report.failures.push({ host, path, width, message: error.message });
+                  } finally {
+                    await page.screenshot({ path: `${root}/${label}.png`, fullPage: true }).catch(() => {});
+                  }
+                }
+                for (const path of ['/dashboard', '/dashboard?view=controls', '/profile/priorities', '/100-sparks']) {
+                  try {
+                    await page.goto(`https://${host}${path}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                    await expect.poll(() => new URL(page.url()).pathname, { timeout: 30000 }).toBe('/login');
+                    const current = new URL(page.url());
+                    const returnTo = current.searchParams.get('returnTo') ?? current.searchParams.get('next');
+                    assert(returnTo && returnTo.startsWith(path === '/100-sparks' ? '/profile/priorities' : path), `Missing protected-route return path: ${path}`);
+                    report.checks.push({ kind: 'signed-out-auth-boundary', host, path, width, status: 'passed' });
+                  } catch (error) {
+                    report.failures.push({ host, path, width, message: error.message });
+                  }
+                }
+                report.checks.push({ kind: 'write-blocking', host, width, blockedRequests: blocked, productionMutations: 0 });
+                await context.close();
+              }
+            }
+            await aliases('after');
+          } catch (error) {
+            report.failures.push({ phase: 'verification', message: error.message });
+          } finally {
+            if (browser) await browser.close();
+            report.finishedAt = new Date().toISOString();
+            writeFileSync(`${root}/report.json`, JSON.stringify(report, null, 2));
+            console.log(JSON.stringify(report, null, 2));
+          }
+          if (report.failures.length) process.exitCode = 1;
+          JS
+          node --check .dashboard-live-readonly.mjs
+          node .dashboard-live-readonly.mjs
+      - name: Preserve read-only live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-live-readonly-evidence
+          path: /tmp/dashboard-live-evidence
+          retention-days: 7
