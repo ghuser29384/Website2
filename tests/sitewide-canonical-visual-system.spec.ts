@@ -219,7 +219,7 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
   } else {
     const topbar = page.locator(".mt-site-topbar").first();
     if (await topbar.isVisible().catch(() => false)) {
-      await expect(topbar).toHaveCSS("background-color", BLACK);
+      await expect(topbar).toHaveCSS("background-color", await topbar.evaluate((el) => el.classList.contains("mt-refined-header")) ? "rgb(17, 18, 20)" : BLACK);
       await expect(topbar).toHaveCSS("border-radius", "0px");
     }
   }
@@ -340,7 +340,7 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await page.goto("/", { timeout: 60_000, waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("banner")).toBeVisible({ timeout: 45_000 });
-  await expect(page.getByRole("banner")).toHaveCSS("background-color", BLACK);
+  await expect(page.getByRole("banner")).toHaveCSS("background-color", "rgb(17, 18, 20)");
   await expect(page.getByRole("link", { exact: true, name: "Moral Trade, home" })).toBeVisible();
   await expect(page.getByRole("heading", { exact: true, level: 1, name: "What needs you now." })).toBeVisible();
   await expect(page.getByRole("button", { exact: true, name: "Focus" })).toBeVisible();

@@ -615,9 +615,10 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await page.goto("/feed", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/feed$/);
-    await expect(page.getByRole("button", { name: "Open personalized feed" })).toHaveText(
-      "Feed",
-    );
+    const home = page.locator('[data-mt-primary-links] a[data-mt-feed-link="true"]');
+    await expect(home).toHaveText("Home");
+    await expect(home).toHaveAttribute("href", "/feed");
+    await expect(home).toHaveAttribute("aria-current", "page");
     const feed = page.locator('[data-mt-live-now="adaptive"]');
     await expect(feed).toHaveAttribute("data-mt-live-now-state", "no_matches");
     const owned = feed.getByRole("region", { name: "Your live listings" });
@@ -632,7 +633,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(feed.getByRole("button", { name: "Hard for me" })).toHaveCount(0);
   });
 
-  test("exposes Evidence as a first-class destination after Commitments", async ({ page }) => {
+  test("keeps the masthead focused and links to the existing Profile priority controls", async ({ page }) => {
     await page.setViewportSize({ width: 1230, height: 900 });
     await page.route("**/api/live-now", (route) =>
       route.fulfill({
@@ -660,15 +661,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     const navigation = page.locator(".topbar nav").first();
     await expect(navigation.locator("button, a")).toHaveText([
-      "Feed",
-      "Discover",
-      "Trade",
+      "Home",
+      "Trades",
       "Commitments",
-      "Evidence",
-      "Tour",
+      "Profile",
     ]);
 
-    const evidence = navigation.getByRole("button", { name: "Open Evidence" });
+    const evidence = navigation.getByRole("link", { name: "Profile", exact: true });
     await expect(evidence).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
@@ -676,11 +675,11 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     expect(overflow).toBeLessThanOrEqual(1);
 
     await evidence.click();
-    await expect(page).toHaveURL(/\/evidence$/);
+    await expect(page).toHaveURL(/\/profile$/);
     await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "Verified outcomes, without public evidence dossiers.",
+      name: "Your profile",
       exact: true,
     }),
   ).toBeVisible();
