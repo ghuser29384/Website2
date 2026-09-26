@@ -1,0 +1,152 @@
+name: PR 827 current production selection verification v3
+
+on:
+  push:
+    branches: [ops/pr827-selection-validation-20260925]
+    paths: [.github/workflows/pr827-production-selection-check-v3.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          persist-credentials: false
+      - name: Guard current production source and inherited fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          test "$(git rev-parse HEAD:src/app/readability-cleanup.css)" = bc2e8acdf9bbfda54ddc0b78de28aa3687cdeb74
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Verify canonical production selection at desktop and mobile widths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr827-production-v3"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium } from '@playwright/test';
+
+          const out = `${process.env.RUNNER_TEMP}/pr827-production-v3`;
+          const evidence = { source: 'ef3b1b595f6bddd1e660e3215ca19e57254234f3', results: [], passed: false };
+          const browser = await chromium.launch();
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 1000 } });
+              await context.addCookies([
+                { name: 'mt_analytics_opt_out', value: '1', url: 'https://www.moraltrade.org', sameSite: 'Lax' },
+                { name: 'mt_walkthrough_seen', value: '1', url: 'https://www.moraltrade.org', sameSite: 'Lax' },
+              ]);
+              const page = await context.newPage();
+              const result = { width, pageErrors: [] };
+              evidence.results.push(result);
+              page.on('pageerror', error => result.pageErrors.push(error.message));
+
+              const response = await page.goto('https://www.moraltrade.org/offers?view=live', {
+                waitUntil: 'domcontentloaded',
+                timeout: 60000,
+              });
+              assert.equal(response.status(), 200);
+
+              const heading = page.locator('[data-participant-offer] h4')
+                .filter({ hasText: 'Counterparty-selected learning or attention' })
+                .first();
+              await heading.waitFor({ state: 'visible', timeout: 45000 });
+              await page.evaluate(() => document.fonts.ready);
+              await heading.scrollIntoViewIfNeeded();
+              const row = heading.locator('xpath=ancestor::section[@data-participant-offer][1]');
+
+              const before = await heading.evaluate(element => {
+                const r = element.getBoundingClientRect();
+                const s = getComputedStyle(element);
+                return { x:r.x+scrollX, y:r.y+scrollY, width:r.width, height:r.height, background:s.backgroundColor, color:s.color };
+              });
+
+              await row.screenshot({ path: `${out}/offers-${width}-ordinary.png` });
+
+              result.selection = await heading.evaluate(element => {
+                const probe = document.createElement('span');
+                probe.textContent = 'probe';
+                probe.style.cssText = 'position:absolute;left:-99999px;top:-99999px;background:var(--accent-soft);color:var(--ink)';
+                element.parentElement.appendChild(probe);
+                const ps = getComputedStyle(probe);
+                const expected = { background: ps.backgroundColor, color: ps.color };
+                probe.remove();
+
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                const range = document.createRange();
+                range.selectNodeContents(element);
+                sel.addRange(range);
+                const ss = getComputedStyle(element, '::selection');
+                return {
+                  expected,
+                  actual: { background:ss.backgroundColor, color:ss.color },
+                  text: sel.toString(),
+                  heading: element.textContent,
+                };
+              });
+
+              assert.equal(result.selection.actual.background, result.selection.expected.background);
+              assert.equal(result.selection.actual.color, result.selection.expected.color);
+              assert.notEqual(result.selection.actual.background, 'rgb(225, 246, 91)');
+              assert.notEqual(result.selection.actual.background, 'rgba(0, 0, 0, 0)');
+              assert.equal(result.selection.text, result.selection.heading);
+
+              const selectedGeometry = await heading.evaluate(element => {
+                const r = element.getBoundingClientRect();
+                const s = getComputedStyle(element);
+                return { x:r.x+scrollX, y:r.y+scrollY, width:r.width, height:r.height, background:s.backgroundColor, color:s.color };
+              });
+              assert.deepEqual(selectedGeometry, before);
+              await row.screenshot({ path: `${out}/offers-${width}-selected.png` });
+              await heading.screenshot({ path: `${out}/title-${width}-selected.png` });
+
+              await heading.click();
+              assert.equal(await page.evaluate(() => window.getSelection().toString()), '');
+              const after = await heading.evaluate(element => {
+                const r = element.getBoundingClientRect();
+                const s = getComputedStyle(element);
+                return { x:r.x+scrollX, y:r.y+scrollY, width:r.width, height:r.height, background:s.backgroundColor, color:s.color };
+              });
+              assert.deepEqual(after, before);
+
+              const details = row.locator('[data-proposal-disclosure]');
+              const summary = details.locator('summary');
+              await summary.focus();
+              await page.keyboard.press('Enter');
+              assert.equal(await details.evaluate(e => e.open), true);
+              await page.keyboard.press('Enter');
+              assert.equal(await details.evaluate(e => e.open), false);
+              assert.equal(await summary.evaluate(e => document.activeElement === e && e.matches(':focus-visible')), true);
+
+              assert.deepEqual(result.pageErrors, []);
+              result.passed = true;
+              await context.close();
+            }
+            evidence.passed = true;
+          } finally {
+            evidence.checkedAt = new Date().toISOString();
+            await writeFile(`${out}/production-selection.json`, JSON.stringify(evidence, null, 2));
+            await browser.close();
+          }
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr827-production-selection-v3-${{ github.run_id }}
+          path: ${{ runner.temp }}/pr827-production-v3
+          if-no-files-found: error
+          retention-days: 7
