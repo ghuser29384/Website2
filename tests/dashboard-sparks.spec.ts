@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
 import { createServer, type Server } from "node:http";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import {
   PROFILE_PRIORITY_OPTIONS,
   buildPersistedProfilePriorities,
@@ -87,6 +87,9 @@ test.describe("Dashboard 100 Sparks with a loopback-only account fixture", () =>
     requests.length = 0;
     saved.set(a, buildPersistedProfilePriorities(allocation(4)));
     saved.set(b, buildPersistedProfilePriorities(allocation(2)));
+  });
+  test.afterEach(({}, testInfo) => {
+    writeFileSync(`/tmp/dashboard-sparks-evidence/fixture-requests-${testInfo.title.replace(/[^a-z0-9]/gi, "-")}.json`, JSON.stringify(requests, null, 2));
   });
 
   for (const width of [1440, 390, 320]) {
@@ -185,7 +188,18 @@ test.describe("Dashboard 100 Sparks with a loopback-only account fixture", () =>
     await page.goto(`${origin}/dashboard#payment-setup`);
     await expect(page).toHaveURL(/\/dashboard\?view=controls#payment-setup$/);
     await expect(page.locator("#payment-setup")).toBeVisible();
-    expect(requests.some((request) => request.method !== "GET" && request.method !== "OPTIONS")).toBe(false);
+    // Existing getViewer bootstrap claims unclaimed guest interests belonging to
+    // this authenticated email. Permit only that exact, unchanged owner-bound
+    // bootstrap operation; navigation must never write settings or allocations.
+    const mutations = requests.filter((request) => request.method !== "GET" && request.method !== "OPTIONS");
+    for (const request of mutations) {
+      expect(request.method).toBe("PATCH");
+      expect(request.path).toBe("/rest/v1/guest_interests");
+      expect(request.body).toEqual({ claimed_by_profile_id: a });
+      const filters = new URLSearchParams(request.search);
+      expect(filters.get("claimed_by_profile_id")).toBe("is.null");
+      expect(filters.get("contact_email")).toBe(`ilike.${user(a).email}`);
+    }
   });
 
   test("separate accounts and the original priorities route keep their own saved values", async ({ browser, page, context }) => {
