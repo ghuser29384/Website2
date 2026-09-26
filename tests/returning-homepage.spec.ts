@@ -34,7 +34,7 @@ test.describe("Adaptive homepage", () => {
     await expect(page.locator("#mt-live-document-heading")).toHaveText(
       "Current opportunities and next actions",
     );
-    await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toHaveCount(0);
 
     const primary = page.locator("header.topbar nav");
     await expect(primary).toBeVisible();
@@ -128,7 +128,7 @@ test.describe("Adaptive homepage", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openHome(page);
 
-    await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toHaveCount(0);
     await expect(page.locator("header.topbar nav")).toBeVisible();
     await expect(page.locator('button[data-action="create"]')).toBeVisible();
     await expect(page.locator('[data-mt-live-now-state="signed_out"]')).toBeVisible();
