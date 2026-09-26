@@ -95,13 +95,20 @@ jobs:
                     assert(response && response.status() < 400, `Route failed: ${path}`);
                     const header = page.locator('.mt-refined-header').first();
                     const nav = header.locator('[data-mt-primary-links]');
+                    // Streamed Next content can have text while its suspense container is still hidden.
+                    // Do not measure that inactive DOM as though it were the rendered page.
+                    await expect(header).toBeVisible({ timeout: 30000 });
+                    await expect(nav).toBeVisible({ timeout: 30000 });
                     await expect(nav.locator(':scope > a')).toHaveText(['Home', 'Trades', 'Commitments', 'Profile'], { timeout: 30000 });
                     await expect(nav.getByText('100 Sparks', { exact: true })).toHaveCount(0);
                     await page.evaluate(() => document.fonts.ready);
                     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth), { timeout: 10000 }).toBeLessThanOrEqual(1);
                     for (const link of await nav.locator(':scope > a').all()) {
-                      const box = await link.boundingBox();
-                      assert(box && box.x >= -1 && box.x + box.width <= width + 1 && box.height >= 44, 'Navigation target is clipped or too short');
+                      await expect(link).toBeVisible();
+                      await expect.poll(async () => {
+                        const box = await link.boundingBox();
+                        return Boolean(box && box.x >= -1 && box.x + box.width <= width + 1 && box.height >= 44);
+                      }, { timeout: 10000, message: 'Visible navigation target must be inside the viewport and at least 44px tall' }).toBe(true);
                     }
                     if (path !== '/profile') {
                       await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible({ timeout: 30000 });
