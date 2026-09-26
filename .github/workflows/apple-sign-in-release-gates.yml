@@ -1,0 +1,243 @@
+name: Apple sign-in release gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/components/auth/**"
+      - "src/app/auth/confirm/route.ts"
+      - "src/lib/apple-sign-in*"
+      - "src/lib/supabase/**"
+      - "next.config.ts"
+      - ".github/workflows/apple-sign-in-release-gates.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/components/auth/**"
+      - "src/app/auth/confirm/route.ts"
+      - "src/lib/apple-sign-in*"
+      - "src/lib/supabase/**"
+      - "next.config.ts"
+      - ".github/workflows/apple-sign-in-release-gates.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-sign-in-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "1"
+      NODE_OPTIONS: "--max-old-space-size=6144"
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify the patch is whitespace-clean
+        run: git diff --check
+
+      - name: Run focused Apple sign-in tests
+        run: node --import tsx --test src/lib/apple-sign-in.test.ts
+
+      - name: Run the complete application test suite
+        run: npm test
+
+      - name: Run ESLint as an absolute gate
+        run: npm run lint -- --quiet
+
+      - name: Build the production application
+        run: npm run build
+
+      - name: Install Chromium for rendered QA
+        run: npx playwright install --with-deps chromium
+
+      - name: Create the rendered Apple sign-in smoke test
+        shell: bash
+        run: |
+          mkdir -p artifacts/apple-sign-in .tmp
+          cat > .tmp/apple-sign-in-smoke.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import { chromium } from "@playwright/test";
+
+          const appUrl = "http://127.0.0.1:3000";
+          const appleScriptUrl =
+            "https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js";
+          const expectedSupabaseCallback =
+            "https://jnpoxvalyjtdghnperyu.supabase.co/auth/v1/callback";
+          const variants = [
+            { name: "desktop", viewport: { width: 1440, height: 1000 } },
+            { name: "mobile", viewport: { width: 390, height: 844 } },
+          ];
+
+          const browser = await chromium.launch();
+          try {
+            for (const variant of variants) {
+              const context = await browser.newContext({ viewport: variant.viewport });
+              const page = await context.newPage();
+              const consoleProblems = [];
+              let legacyAppleOauthRequests = 0;
+
+              page.on("console", (message) => {
+                if (message.type() === "error" || message.type() === "warning") {
+                  consoleProblems.push(`${message.type()}: ${message.text()}`);
+                }
+              });
+              page.on("pageerror", (error) => {
+                consoleProblems.push(`pageerror: ${error.message}`);
+              });
+
+              await page.route(appleScriptUrl, async (route) => {
+                await route.fulfill({
+                  contentType: "application/javascript; charset=utf-8",
+                  body: `
+                    window.__appleMock = { init: null, signInCalls: 0 };
+                    window.AppleID = {
+                      auth: {
+                        init(config) {
+                          window.__appleMock.init = config;
+                        },
+                        signIn() {
+                          window.__appleMock.signInCalls += 1;
+                          return Promise.reject({ error: "popup_closed_by_user" });
+                        }
+                      }
+                    };
+                  `,
+                });
+              });
+              await page.route("**/auth/v1/authorize?provider=apple**", async (route) => {
+                legacyAppleOauthRequests += 1;
+                await route.fulfill({
+                  status: 599,
+                  contentType: "text/plain",
+                  body: "The legacy Apple OAuth endpoint must not be called.",
+                });
+              });
+
+              const response = await page.goto(
+                `${appUrl}/login?returnTo=%2Foffers%2Fnew`,
+                { waitUntil: "domcontentloaded" },
+              );
+              assert.ok(response, `${variant.name}: login did not return a response`);
+              assert.equal(response.status(), 200, `${variant.name}: login did not return 200`);
+              assert.match(await page.title(), /Moral Trade/i, `${variant.name}: wrong page title`);
+
+              const appleButton = page.getByRole("button", { name: "Continue with Apple" });
+              await appleButton.waitFor({ state: "visible" });
+
+              const bodyText = await page.locator("body").innerText();
+              assert.match(bodyText, /Continue with Apple/);
+              assert.doesNotMatch(
+                bodyText,
+                /Application error|Internal Server Error|Unhandled Runtime Error/i,
+              );
+              assert.equal(
+                await page.locator("nextjs-portal, [data-nextjs-dialog-overlay]").count(),
+                0,
+                `${variant.name}: framework error overlay rendered`,
+              );
+
+              await page.waitForFunction(() => {
+                const button = Array.from(document.querySelectorAll("button")).find((candidate) =>
+                  candidate.textContent?.includes("Continue with Apple"),
+                );
+                return button instanceof HTMLButtonElement && !button.disabled;
+              });
+              assert.ok(
+                await appleButton.boundingBox(),
+                `${variant.name}: Apple button has no layout box`,
+              );
+
+              await appleButton.click();
+              const alert = page.getByRole("alert");
+              await alert.waitFor({ state: "visible" });
+              assert.match(
+                await alert.innerText(),
+                /Sign-in was cancelled\. Try again when you are ready\./,
+              );
+
+              const mock = await page.evaluate(() => window.__appleMock);
+              assert.ok(mock?.init, `${variant.name}: Apple SDK init was not called`);
+              assert.equal(mock.signInCalls, 1, `${variant.name}: Apple SDK signIn call count`);
+              assert.equal(mock.init.clientId, "org.moraltrade.web");
+              assert.equal(mock.init.scope, "name email");
+              assert.equal(mock.init.redirectURI, expectedSupabaseCallback);
+              assert.equal(mock.init.usePopup, true);
+              assert.match(mock.init.state, /^[0-9a-f-]{36}$/i);
+              assert.match(mock.init.nonce, /^[0-9a-f-]{36}$/i);
+              assert.notEqual(mock.init.state, mock.init.nonce);
+              assert.equal(legacyAppleOauthRequests, 0);
+              assert.match(page.url(), /\/login\?returnTo=%2Foffers%2Fnew$/);
+
+              await page.screenshot({
+                path: `artifacts/apple-sign-in/${variant.name}.png`,
+                fullPage: false,
+              });
+
+              assert.deepEqual(
+                consoleProblems,
+                [],
+                `${variant.name}: browser console or page errors were emitted`,
+              );
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+          EOF
+
+      - name: Start the production server
+        shell: bash
+        run: |
+          nohup npm run start -- --hostname 127.0.0.1 --port 3000 >/tmp/apple-next.log 2>&1 &
+          echo $! >/tmp/apple-next.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/login >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/apple-next.log
+          exit 1
+
+      - name: Run desktop and mobile rendered QA
+        run: node .tmp/apple-sign-in-smoke.mjs
+
+      - name: Stop the production server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/apple-next.pid ]]; then
+            kill "$(cat /tmp/apple-next.pid)" 2>/dev/null || true
+          fi
+          rm -rf .tmp
+
+      - name: Upload rendered evidence and server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-sign-in-release-evidence
+          path: |
+            artifacts/apple-sign-in
+            /tmp/apple-next.log
+          if-no-files-found: warn
+          retention-days: 14
