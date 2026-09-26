@@ -1,0 +1,178 @@
+name: Get Started live release integration QA
+
+on:
+  push:
+    branches: [ops/get-started-live-release-20260926]
+    paths:
+      - .github/get-started-live-integration.py
+      - .github/workflows/get-started-live-release-qa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: get-started-live-release-20260926
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: ed0bc4a53a2ea91cee1a66fef8831d3181f53f13
+  EXPECTED_PR_HEAD: de1fc6f59ac395f8b81ff1e3fba15b2dff6e7ab9
+  CANDIDATE_BRANCH: fix/get-started-choice-router-20260926
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    outputs:
+      candidate_sha: ${{ steps.integrate.outputs.sha }}
+    steps:
+      - name: Check out exact transport source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: transport
+          persist-credentials: false
+
+      - name: Check out the reviewed candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_BRANCH }}
+          path: candidate
+          fetch-depth: 0
+
+      - name: Merge current main and add guest-only header behavior
+        id: integrate
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PR_HEAD"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          remote_candidate="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+          test "$remote_candidate" = "$EXPECTED_PR_HEAD"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch --no-tags origin "$EXPECTED_MAIN_SHA"
+          git merge --no-ff --no-edit "$EXPECTED_MAIN_SHA"
+          python ../transport/.github/get-started-live-integration.py "$PWD"
+          git add -- \
+            public/moral-trade-account-identity.js \
+            public/moral-trade-discover.html \
+            public/moral-trade-live-navigation.js \
+            public/moral-trade-refined-header.css \
+            src/sitewide-account-identity.test.ts \
+            tests/helpers/discover.ts \
+            tests/refined-header.spec.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 7
+          git diff --cached --check
+          git commit -m 'Show Get Started only to signed-out visitors'
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  qa:
+    needs: integrate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_SHA: ${{ needs.integrate.outputs.candidate_sha }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Check out exact integrated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.integrate.outputs.candidate_sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Record immutable source evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          mkdir -p get-started-release-evidence
+          git rev-parse HEAD > get-started-release-evidence/commit.txt
+          git rev-parse HEAD^{tree} > get-started-release-evidence/tree.txt
+          git diff "$EXPECTED_MAIN_SHA" --check
+          git diff "$EXPECTED_MAIN_SHA" --stat > get-started-release-evidence/diff-stat.txt
+          git diff "$EXPECTED_MAIN_SHA" --binary > get-started-release-evidence/source.patch
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Focused source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/start-entry-router.test.ts \
+            src/lib/action-first-positioning.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/sitewide-account-identity.test.ts \
+            2>&1 | tee get-started-release-evidence/focused-unit.log
+
+      - name: Complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee get-started-release-evidence/unit.log
+
+      - name: Complete lint and typecheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee get-started-release-evidence/lint.log
+          npx tsc --noEmit 2>&1 | tee get-started-release-evidence/types.log
+
+      - name: Production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee get-started-release-evidence/build.log
+
+      - name: Install locked Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Render Get Started and header behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/start-entry-router.spec.ts \
+            tests/refined-header.spec.ts \
+            tests/sitewide-canonical-visual-fidelity.spec.ts \
+            tests/pilot-copy.spec.ts \
+            tests/meta-explanatory-copy.spec.ts \
+            --workers=1 --reporter=line \
+            2>&1 | tee get-started-release-evidence/focused-browser.log
+          mkdir -p get-started-release-evidence/screenshots
+          find test-results -name '*.png' -exec cp '{}' get-started-release-evidence/screenshots/ ';'
+
+      - name: Complete unchanged release browser suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line \
+            2>&1 | tee get-started-release-evidence/release-browser.log
+
+      - name: Upload exact release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: get-started-live-release-${{ needs.integrate.outputs.candidate_sha }}
+          path: |
+            get-started-release-evidence
+            test-results
+          retention-days: 14
