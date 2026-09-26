@@ -1,0 +1,83 @@
+name: PR 851 sitewide color QA
+on:
+  push:
+    branches: [ops/pr851-fluorescent-yellow-qa-20260925]
+    paths: [.github/workflows/pr851-sitewide-color-qa.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CANDIDATE_SHA: cac29bef411d7209e9681ca370c173731df915f2
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cac29bef411d7209e9681ca370c173731df915f2
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard exact candidate and color contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git diff --check 9a9d5db28cd447426c3ae124ddfe5d7d8da6e9f4 HEAD
+          ! grep -RniE '#e1f65b|var\(--signal|--signal(-ink)?[[:space:]]*:' src/app src/components
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run repository quality gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/text-selection-style.test.ts
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Render representative affected surfaces
+        shell: bash
+        env:
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3210 > "$RUNNER_TEMP/server.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:3210/ >/dev/null && break
+            sleep 2
+          done
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { chromium } from '@playwright/test';
+          const browser = await chromium.launch();
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport:{ width, height:1000 } });
+              await context.addCookies([{ name:'mt_walkthrough_seen', value:'1', url:'http://127.0.0.1:3210', sameSite:'Lax' }]);
+              const page = await context.newPage();
+              for (const route of ['/', '/offers?view=live', '/moral-goods-group-buying']) {
+                const response = await page.goto('http://127.0.0.1:3210'+route,{waitUntil:'domcontentloaded',timeout:60000});
+                assert.ok((response?.status() ?? 200) < 400);
+                const scan = await page.evaluate(() => {
+                  const all = [...document.querySelectorAll('*')];
+                  return all.map(el => {
+                    const s=getComputedStyle(el);
+                    return {bg:s.backgroundColor,color:s.color,border:s.borderColor,outline:s.outlineColor};
+                  }).filter(x => Object.values(x).some(v => v === 'rgb(225, 246, 91)'));
+                });
+                assert.equal(scan.length,0, route+' must not render legacy fluorescent yellow');
+              }
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+          NODE
