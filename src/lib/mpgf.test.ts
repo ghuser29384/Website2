@@ -2211,7 +2211,7 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
     userRef: "private-every-org-user-001",
     pledgeIntentId: "pledge-intent-private-every-org-001",
     amountCents: 12_500,
-    webhookToken: "public-webhook-token-demo",
+    donateLinkWebhookToken: "public-webhook-token-demo",
   });
   const unclaimedDonateLink = buildMpgfEveryOrgDonateLink({
     campaignId: "campaign-animal-welfare-transition",
@@ -2306,7 +2306,7 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.equal(donateLink.webhookRequiredBeforeCounting, true);
   assert.equal(donateLink.reviewRequiredBeforeCounting, true);
   assert.equal(donateLink.finalPayoutAuthorized, false);
-  assert.equal(donateLink.webhookTokenIncluded, true);
+  assert.equal(donateLink.donateLinkWebhookTokenIncluded, true);
   assert.match(donateLink.partnerDonationId, /^mpgf_/);
   assert.match(donateLink.partnerDonationIdHash, /^sha256:/);
   assert.match(donateLink.calcHash, /^sha256:/);
@@ -2361,9 +2361,15 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(donateLinkRoute, /contribution_route_selected/);
   assert.match(donateLinkRoute, /every_org_fast_route/);
   assert.match(donateLinkRoute, /provider_link_created/);
-  assert.match(donateLinkRoute, /MPGF_EVERY_ORG_PUBLIC_WEBHOOK_TOKEN/);
+  assert.match(donateLinkRoute, /getEveryOrgCredentialConfiguration/);
+  assert.match(donateLinkRoute, /donateLinkWebhookToken/);
   assert.match(donateLinkRoute, /pending_webhook_not_counted/);
-  assert.match(webhookRoute, /MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET/);
+  assert.match(webhookRoute, /authenticateEveryOrgPartnerWebhookRequest/);
+  assert.doesNotMatch(webhookRoute, /MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET/);
+  assert.doesNotMatch(
+    webhookRoute,
+    /headers\.get\(|Bearer\s|mpgf-every-org-webhook-secret/i,
+  );
   assert.match(webhookRoute, /recordMpgfEveryOrgPartnerWebhook/);
   assert.match(webhookRoute, /createServiceClient/);
   assert.match(webhookRoute, /MpgfEveryOrgPartnerEventInsert/);

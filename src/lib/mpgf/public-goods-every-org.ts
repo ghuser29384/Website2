@@ -72,7 +72,7 @@ export interface MpgfEveryOrgDonateLink {
   manualEvidenceFallbackPath: "/api/mpgf/evidence/manual";
   everyOrgDonateLinkDocs: typeof MPGF_PUBLIC_GOODS_EVERY_ORG_DONATE_LINK_DOCS;
   everyOrgPartnerWebhookDocs: typeof MPGF_PUBLIC_GOODS_EVERY_ORG_PARTNER_WEBHOOK_DOCS;
-  webhookTokenIncluded: boolean;
+  donateLinkWebhookTokenIncluded: boolean;
   calcHash: string;
 }
 
@@ -288,7 +288,7 @@ export function buildMpgfEveryOrgDonateLink({
   successUrl,
   target,
   userRef,
-  webhookToken,
+  donateLinkWebhookToken,
 }: {
   amountCents?: number;
   campaignId: string;
@@ -302,7 +302,7 @@ export function buildMpgfEveryOrgDonateLink({
   successUrl?: string;
   target?: EveryOrgDonationTarget;
   userRef?: string;
-  webhookToken?: string;
+  donateLinkWebhookToken?: string;
 }): MpgfEveryOrgDonateLink {
   if (roundId !== round.id) {
     throw new Error("MPGF Every.org Donate Link targets an unknown round.");
@@ -358,7 +358,7 @@ export function buildMpgfEveryOrgDonateLink({
     partner_metadata: partnerMetadataBase64,
     suggestedAmounts,
     success_url: pendingUrl,
-    webhook_token: webhookToken?.trim() || undefined,
+    webhook_token: donateLinkWebhookToken?.trim() || undefined,
   });
   const partnerDonationIdHash = hashScoped("partner-donation-id", partnerDonationId);
   const calc = {
@@ -368,7 +368,9 @@ export function buildMpgfEveryOrgDonateLink({
     partnerMetadata,
     roundId,
     targetId: resolvedTarget.id,
-    webhookTokenIncluded: Boolean(webhookToken?.trim()),
+    donateLinkWebhookTokenIncluded: Boolean(
+      donateLinkWebhookToken?.trim(),
+    ),
   };
 
   return {
@@ -398,7 +400,9 @@ export function buildMpgfEveryOrgDonateLink({
     manualEvidenceFallbackPath: "/api/mpgf/evidence/manual",
     everyOrgDonateLinkDocs: MPGF_PUBLIC_GOODS_EVERY_ORG_DONATE_LINK_DOCS,
     everyOrgPartnerWebhookDocs: MPGF_PUBLIC_GOODS_EVERY_ORG_PARTNER_WEBHOOK_DOCS,
-    webhookTokenIncluded: Boolean(webhookToken?.trim()),
+    donateLinkWebhookTokenIncluded: Boolean(
+      donateLinkWebhookToken?.trim(),
+    ),
     calcHash: calcHash(calc),
   };
 }

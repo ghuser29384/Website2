@@ -34,6 +34,19 @@ test("the integration preserves the static source and adds the compact funding c
   assert.match(integrated, /Donation Upgrade/);
   assert.doesNotMatch(integrated, />Conditional donation</);
   assert.doesNotMatch(integrated, /Set up a conditional donation\./);
+  assert.match(
+    integrated,
+    /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation&rail=direct"\)/,
+  );
+  assert.match(integrated, /Set up direct Donation Upgrade →/);
+  assert.match(
+    integrated,
+    /href="\/trades\/new\?structure=conditional-donation" target="_top">\s*Managed conditional donation →/,
+  );
+  assert.match(
+    integrated,
+    /Each exact donation leg is later completed directly through Every\.org\./,
+  );
   assert.match(integrated, /Co-Fund/);
   assert.match(integrated, /Are you participating in this Co-Fund\?/);
   assert.match(integrated, /Search Moral Trade accounts by username or display name\./);

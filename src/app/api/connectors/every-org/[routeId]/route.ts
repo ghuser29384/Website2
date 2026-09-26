@@ -1,7 +1,15 @@
 import {
+  getDirectDonationUpgradeConfig,
+  type EveryOrgPartnerWebhookPayload as DirectEveryOrgPartnerWebhookPayload,
+} from "@/lib/direct-donation-upgrade";
+import { handleDirectDonationUpgradeEveryOrgWebhook } from "@/lib/direct-donation-upgrade-webhook";
+import {
+  authenticateEveryOrgPartnerWebhookRequest,
+  resolveEveryOrgSharedConnector,
+} from "@/lib/every-org-partner-webhook-auth";
+import {
   evaluateEveryOrgTradeDonationWebhook,
   getTradeDonationProviderConfig,
-  secureWebhookPathMatches,
   type EveryOrgPartnerWebhookPayload,
   type TradeDonationIntentRow,
   type TradeDonationTermRow,
@@ -26,8 +34,7 @@ async function notifyActivated(input: {
   targetName: string;
   amountCents: number;
   intentId: string;
-}) {
-  const supabase = createServiceClient() as any;
+}, supabase: any) {
   const href = `/trade-agreements/${input.agreementId}`;
   const amount = `$${(input.amountCents / 100).toFixed(2)}`;
   const participantIds = [input.proposerId, input.responderId].filter(Boolean);
@@ -84,28 +91,73 @@ async function notifyActivated(input: {
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ secret: string }> },
+  context: { params: Promise<{ routeId: string }> },
 ) {
-  const config = getTradeDonationProviderConfig();
-  const { secret } = await context.params;
-  if (!config.ready || !secureWebhookPathMatches(secret, config.webhookPathSecret)) {
+  const authorization = authenticateEveryOrgPartnerWebhookRequest(request.headers);
+
+  if (!authorization.authorized) {
     return Response.json({ ok: false }, { status: 401 });
   }
+
+  const directConfig = getDirectDonationUpgradeConfig();
+  const pledgeConfig = getTradeDonationProviderConfig();
+  const { routeId } = await context.params;
+  const connector = resolveEveryOrgSharedConnector(routeId, [
+    {
+      mechanism: "direct_donation_upgrade",
+      enabled:
+        directConfig.requestedEnabled && directConfig.mode !== "disabled",
+      ready: directConfig.readyForCheckout,
+      environment: directConfig.environment,
+      webhookRouteId: directConfig.webhookRouteId,
+    },
+    {
+      mechanism: "pledge_donation",
+      enabled: pledgeConfig.requestedEnabled,
+      ready: pledgeConfig.ready,
+      environment: pledgeConfig.environment,
+      webhookRouteId: pledgeConfig.webhookRouteId,
+    },
+  ]);
+
+  if (!connector.accepted) {
+    return Response.json({ ok: false }, { status: 401 });
+  }
+
+  const directPathAccepted = connector.mechanisms.includes(
+    "direct_donation_upgrade",
+  );
+  const pledgePathAccepted = connector.mechanisms.includes("pledge_donation");
 
   const rawBody = await request.text();
   if (!rawBody || Buffer.byteLength(rawBody, "utf8") > MAX_WEBHOOK_BYTES) {
     return Response.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
 
-  let payload: EveryOrgPartnerWebhookPayload;
+  let payload: EveryOrgPartnerWebhookPayload & DirectEveryOrgPartnerWebhookPayload;
   try {
-    payload = JSON.parse(rawBody) as EveryOrgPartnerWebhookPayload;
+    payload = JSON.parse(rawBody) as EveryOrgPartnerWebhookPayload & DirectEveryOrgPartnerWebhookPayload;
   } catch {
     return Response.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
   const partnerDonationId = String(payload.partnerDonationId ?? "").trim();
   if (!partnerDonationId) {
     return Response.json({ ok: false, error: "missing_partner_donation_id" }, { status: 400 });
+  }
+
+  if (directPathAccepted) {
+    const directResult = await handleDirectDonationUpgradeEveryOrgWebhook({
+      payload,
+      rawBody,
+      config: directConfig,
+    });
+    if (directResult.handled) {
+      return Response.json(directResult.body, { status: directResult.status });
+    }
+  }
+
+  if (!pledgePathAccepted) {
+    return Response.json({ ok: true, outcome: "unknown_intent" });
   }
 
   const supabase = createServiceClient() as any;
@@ -142,7 +194,7 @@ export async function POST(
     rawBody,
     intent,
     term,
-    metadataSecret: config.metadataSecret,
+    metadataSecret: pledgeConfig.metadataSecret,
   });
 
   const { data: completionData, error: completionError } = await supabase.rpc(
@@ -180,7 +232,7 @@ export async function POST(
       targetName: term.target_name,
       amountCents: term.amount_cents,
       intentId: intent.id,
-    });
+    }, supabase);
   }
 
   return Response.json({ ok: true, outcome });

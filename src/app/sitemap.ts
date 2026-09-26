@@ -200,6 +200,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     },
     {
+      url: getAbsoluteUrl("/donation-upgrades"),
+      lastModified: now,
+      changeFrequency: "daily",
+      priority: 0.86,
+    },
+    {
       url: getAbsoluteUrl("/paid-action-offers"),
       lastModified: now,
       changeFrequency: "monthly",

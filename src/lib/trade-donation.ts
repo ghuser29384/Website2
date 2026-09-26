@@ -2,6 +2,12 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { getSiteUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import {
+  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,
+  getEveryOrgCredentialConfiguration,
+  isValidEveryOrgWebhookRouteId,
+  type EveryOrgRuntimeEnvironment,
+} from "@/lib/every-org-partner-webhook-auth";
 
 export const MIN_TRADE_DONATION_CENTS = 100;
 export const MAX_TRADE_DONATION_CENTS = 50_000;
@@ -67,8 +73,11 @@ export interface TradeDonationProviderConfig {
   requestedEnabled: boolean;
   ready: boolean;
   environment: EveryOrgEnvironment;
-  webhookToken: string;
-  webhookPathSecret: string;
+  donateLinkWebhookToken: string;
+  partnerWebhookAuthorizationTokenConfigured: boolean;
+  partnerWebhookAuthorizationContract:
+    typeof EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS;
+  webhookRouteId: string;
   metadataSecret: string;
   blockers: string[];
 }
@@ -173,28 +182,43 @@ export interface EvaluatedEveryOrgWebhook {
   paymentMethod: string;
 }
 
-function envText(name: string) {
-  return String(process.env[name] ?? "").trim();
+function envText(environment: EveryOrgRuntimeEnvironment, name: string) {
+  return String(environment[name] ?? "").trim();
 }
 
-export function getTradeDonationProviderConfig(): TradeDonationProviderConfig {
-  const requestedEnabled = envText("EVERY_ORG_PLEDGE_DONATIONS_ENABLED").toLowerCase() === "true";
+export function getTradeDonationProviderConfig(
+  runtimeEnvironment: EveryOrgRuntimeEnvironment = process.env,
+): TradeDonationProviderConfig {
+  const requestedEnabled =
+    envText(runtimeEnvironment, "EVERY_ORG_PLEDGE_DONATIONS_ENABLED").toLowerCase() ===
+    "true";
   const environment: EveryOrgEnvironment =
-    envText("EVERY_ORG_ENVIRONMENT").toLowerCase() === "live" ? "live" : "staging";
-  const webhookToken = envText("EVERY_ORG_WEBHOOK_TOKEN");
-  const webhookPathSecret = envText("EVERY_ORG_WEBHOOK_PATH_SECRET");
-  const metadataSecret = envText("EVERY_ORG_PARTNER_METADATA_SECRET");
+    envText(runtimeEnvironment, "EVERY_ORG_ENVIRONMENT").toLowerCase() === "live"
+      ? "live"
+      : "staging";
+  const credentialConfiguration = getEveryOrgCredentialConfiguration(
+    runtimeEnvironment,
+  );
+  const webhookRouteId = envText(
+    runtimeEnvironment,
+    "EVERY_ORG_WEBHOOK_ROUTE_ID",
+  );
+  const metadataSecret = envText(
+    runtimeEnvironment,
+    "EVERY_ORG_PARTNER_METADATA_SECRET",
+  );
   const blockers: string[] = [];
 
   const configuredHostname = (() => {
     try {
-      return new URL(envText("NEXT_PUBLIC_SITE_URL")).hostname;
+      return new URL(envText(runtimeEnvironment, "NEXT_PUBLIC_SITE_URL")).hostname;
     } catch {
       return "";
     }
   })();
-  const canonicalProduction = process.env.VERCEL_ENV
-    ? process.env.VERCEL_ENV === "production"
+  const vercelEnvironment = envText(runtimeEnvironment, "VERCEL_ENV");
+  const canonicalProduction = vercelEnvironment
+    ? vercelEnvironment === "production"
     : /(^|\.)moraltrade\.org$/i.test(configuredHostname);
 
   if (!requestedEnabled) blockers.push("The pledge-donation connector is disabled.");
@@ -204,16 +228,25 @@ export function getTradeDonationProviderConfig(): TradeDonationProviderConfig {
   if (environment === "live" && !canonicalProduction) {
     blockers.push("Live Every.org donations are restricted to the canonical production site.");
   }
-  if (!webhookToken) blockers.push("Every.org webhook token is missing.");
-  if (webhookPathSecret.length < 32) blockers.push("Every.org webhook path secret must be at least 32 characters.");
+  blockers.push(...credentialConfiguration.blockers);
+  if (!isValidEveryOrgWebhookRouteId(webhookRouteId)) {
+    blockers.push(
+      "Every.org webhook route ID must be 32-128 URL-safe characters.",
+    );
+  }
   if (metadataSecret.length < 32) blockers.push("Every.org metadata signing secret must be at least 32 characters.");
 
   return {
     requestedEnabled,
     ready: requestedEnabled && blockers.length === 0,
     environment,
-    webhookToken,
-    webhookPathSecret,
+    donateLinkWebhookToken:
+      credentialConfiguration.donateLinkWebhookToken,
+    partnerWebhookAuthorizationTokenConfigured:
+      credentialConfiguration.partnerWebhookAuthorizationTokenConfigured,
+    partnerWebhookAuthorizationContract:
+      credentialConfiguration.partnerWebhookAuthorizationContract,
+    webhookRouteId,
     metadataSecret,
     blockers,
   };
@@ -466,7 +499,10 @@ export function buildEveryOrgTradeDonationUrl(input: {
   );
   url.searchParams.set("partner_donation_id", input.intent.partner_donation_id);
   url.searchParams.set("partner_metadata", Buffer.from(JSON.stringify(metadata), "utf8").toString("base64"));
-  url.searchParams.set("webhook_token", input.config.webhookToken);
+  url.searchParams.set(
+    "webhook_token",
+    input.config.donateLinkWebhookToken,
+  );
   url.searchParams.set("share_info", "false");
   url.hash = "donate";
   return url.toString();
