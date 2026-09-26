@@ -125,7 +125,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const state = { page: (location.hash || '#now').slice(1), now: 'focus' };
 const date = () => '<div class="date"><b>Today</b>Loading local date…<br><span class="muted">Good morning.</span></div>';
-const actions = (label = 'Create offer') => `<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+const actions = (label = 'Create offer') => `<div class="h mt-feed-actions">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
 const tab = (items, key, attr) => `<div class="tabs">${items.map(item => `<button class="${state[key] === item[0] ? 'active' : ''}" data-${attr}="${item[0]}">${item[1]}</button>`).join('')}</div>`;
 const pageHead = (title, subtitle, cta) => `<div class="head"><div><h1>${title}</h1><div class="subtitle">${subtitle}</div></div>${actions(cta)}</div>`;
 

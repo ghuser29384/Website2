@@ -12,8 +12,8 @@ for (const width of [1440, 320, 360, 390]) {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible({ timeout: 30_000 });
-    const date = page.locator(".head .date");
-    const create = page.locator('.head button[data-action="create"]');
+    const date = page.locator(".page .date");
+    const create = page.locator('.page button[data-action="create"]');
     const tour = page.locator(".header-more").getByRole("link", { name: "How it works", exact: true, includeHidden: true });
     await expect(date.locator("time")).toHaveText("Wednesday, September 23, 2026");
     await expect(create).toContainText("Create offer");

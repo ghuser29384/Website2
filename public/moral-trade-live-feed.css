@@ -929,3 +929,23 @@
     transition: none;
   }
 }
+
+/* The compact date and Create row must wrap independently of the removed intro. */
+.mt-feed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mt-feed-actions .date {
+  min-width: 0;
+  text-align: left;
+}
+
+.mt-feed-actions > .btn {
+  max-width: 100%;
+  white-space: normal;
+}
