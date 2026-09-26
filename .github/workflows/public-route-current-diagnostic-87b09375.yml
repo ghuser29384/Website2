@@ -1,0 +1,77 @@
+name: Public route current diagnostic 87b09375
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/public-route-current-diagnostic-87b09375.yml"
+      - "tests/public-route-current-diagnostic-87b09375.spec.ts"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: public-route-current-diagnostic-87b09375
+  cancel-in-progress: false
+
+env:
+  PRODUCT_SHA: 87b093751a4c2de909555abdb7f181061bb36390
+  CONTROLLER_SHA: dcb6e85129d814c0321b27a3124bc20c701ad27c
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out temporary diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Guard exact product and diagnostic scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD^)" = "$CONTROLLER_SHA"
+          git fetch --depth=1 origin "$PRODUCT_SHA"
+          actual="$(git diff --name-only "$PRODUCT_SHA" HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/public-route-current-diagnostic-87b09375.yml' \
+            'tests/public-route-current-diagnostic-87b09375.spec.ts' | sort)"
+          test "$actual" = "$expected"
+          git diff --check "$PRODUCT_SHA" HEAD
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the bounded DOM diagnostic
+        shell: bash
+        run: >-
+          npx playwright test
+          tests/public-route-current-diagnostic-87b09375.spec.ts
+          --workers=1
+          --reporter=line
+
+      - name: Upload immutable diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-route-current-diagnostic-87b09375
+          path: test-results
+          if-no-files-found: error
+          retention-days: 14
