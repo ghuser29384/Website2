@@ -16,20 +16,22 @@
   <script defer src="/moral-trade-account-identity.js?v=20260923"></script>
   <script defer src="/moral-trade-discover-search.js?v=20260923"></script>
   <script defer src="/moral-trade-input-assist.js?v=20260923"></script>
+  <link rel="stylesheet" href="/moral-trade-refined-header.css">
 </head>
 <body>
   <a class="skip-link" href="#discover-main">Skip to trades</a>
-  <header class="app-header">
+  <header class="app-header mt-refined-header">
     <a class="brand" href="/" aria-label="Moral Trade home">Moral Trade</a>
-    <nav class="top-nav" aria-label="Primary navigation">
-      <a href="/feed">Feed</a>
-      <a href="/discover" class="active" aria-current="page">Discover</a>
-      <a href="/trades/new">Trade</a>
+    <nav class="top-nav" aria-label="Primary navigation" data-mt-primary-links="true">
+      <a href="/feed">Home</a>
+      <a href="/discover" aria-current="page">Trades</a>
       <a href="/commitments">Commitments</a>
-      <a href="/evidence">Evidence</a>
-      <a href="/walkthrough" aria-label="Open optional walkthrough">Tour</a>
+      <a href="/profile">Profile</a>
     </nav>
+    <div class="header-actions">
+    <a class="header-start" href="/start">Get Started</a>
     <a class="avatar" href="/profile" aria-label="Account"><span data-mt-account-avatar="true">•</span></a>
+    </div>
   </header>
   <main id="discover-main" class="discover-main">
     <div class="page-heading">
@@ -66,6 +68,7 @@
     </section>
     <noscript><p class="notice">JavaScript is needed to check current listings here. <a href="/offers?view=live">Open the live trade directory</a> or <a href="/worked-examples">read worked examples</a>.</p></noscript>
     <footer class="discover-footer">
+      <p><a href="/dashboard">Dashboard</a> · <a href="/messages">Messages</a> · <a href="/walkthrough">How it works</a> · <a href="/evidence">Public evidence</a> · <a href="/safety">Safety</a></p>
       <p>New to moral trade? <a href="/worked-examples">Read worked examples</a>—illustrations, not available listings.</p>
       <p>Not finding the right exchange? <a href="/trades/new">Post a proposal</a> or <a href="/invite">invite a counterparty</a>.</p>
       <p class="helper">Review each listing’s evidence, availability, and conditions before making a commitment. Browsing does not create an agreement or authorize a payment.</p>

@@ -112,14 +112,15 @@ const feedFixture = {
 };
 
 test.describe("Home, Trade, and Create entry routing", () => {
-  test("keeps the root route on the live Feed and opens Create from Trade", async ({ page }) => {
+  test("keeps the root route on the live Feed and opens Create from secondary navigation", async ({ page }) => {
     await completeMandatoryWalkthrough(page);
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/$/);
     await expectCanonicalFavicon(page);
     await expect(page.locator('[data-create-interface-frame="true"]')).toHaveCount(0);
-    const tradeEntry = page.locator('[data-page="trade"]');
+    await page.locator(".header-more > summary").click();
+    const tradeEntry = page.locator(".header-more").getByRole("link", { name: "Create a trade", exact: true });
     await expect(tradeEntry).toBeVisible();
 
     await tradeEntry.click();

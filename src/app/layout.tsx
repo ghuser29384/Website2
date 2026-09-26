@@ -17,6 +17,7 @@ import "./search-bar-polish.css";
 import "./canonical-visual-system.css";
 import "./canonical-visual-fidelity-fixes.css";
 import "./canonical-visual-system-remediation.css";
+import "../../public/moral-trade-refined-header.css";
 
 const SITE_FAVICON_PATH = `${SITE_IMAGE_PATH}?v=20260730`;
 

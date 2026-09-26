@@ -11,10 +11,10 @@ for (const [width, height] of [[1440, 1000], [390, 844], [320, 568]]) {
     await page.goto("/discover");
     await expect(page.locator('[data-live-record="true"]')).toHaveCount(1);
     await expect(page).toHaveTitle("Browse trades · Moral Trade");
-    await expect(page.locator(".app-header")).toHaveCSS("background-color", "rgb(5, 5, 5)");
+    await expect(page.locator(".app-header")).toHaveCSS("background-color", "rgb(17, 18, 20)");
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(245, 242, 233)");
-    await expect(page.locator(".top-nav a")).toHaveText(["Feed", "Discover", "Trade", "Commitments", "Evidence", "Tour"]);
-    await expect(page.locator('.top-nav a[aria-current="page"]')).toHaveText("Discover");
+    await expect(page.locator(".top-nav a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
+    await expect(page.locator('.top-nav a[aria-current="page"]')).toHaveText("Trades");
     const geometry = await page.evaluate(() => ({ width: innerWidth, document: document.documentElement.scrollWidth }));
     expect(geometry.document).toBeLessThanOrEqual(geometry.width + 1);
     const provided = await page.locator('[data-exchange-side="offer"]').boundingBox();
