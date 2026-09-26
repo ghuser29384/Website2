@@ -19,3 +19,8 @@ source = source.replace('    new = transform(old)\n    assert new != old, f\'No 
 ''')
 source = source.replace("Path('/tmp/quiet-ui-files.txt').write_text", "assert not errors, errors\nPath('/tmp/quiet-ui-files.txt').write_text")
 exec(compile(source, 'quiet-ui-reviewed-transform', 'exec'))
+
+for filename in changed:
+    if filename.endswith('.css'):
+        css = Path(filename)
+        css.write_text('\n'.join(line.rstrip() for line in css.read_text().splitlines()) + '\n')
