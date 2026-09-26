@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+// QA-only: register the pooled-settlement contracts in the existing no-secrets CI runner.
+import "../trade-donation-pool-source-contract.test";
+import "../trade-donation-pool.test";
+
 const mandates = readFileSync("src/lib/payments/conditional-mandates.ts", "utf8");
 const workspace = readFileSync("src/app/donation-offsets/payments/page.tsx", "utf8");
 const environmentExample = readFileSync(".env.example", "utf8");
