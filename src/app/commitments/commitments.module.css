@@ -3,7 +3,7 @@
   --commitments-muted: #6d6961;
   --commitments-rule: rgba(20, 19, 16, 0.18);
   --commitments-blue: #1652f0;
-  --commitments-green: #719b05;
+  --commitments-green: #526b58;
   --commitments-orange: #ef5a12;
   background:
     linear-gradient(rgba(32, 30, 24, 0.035) 1px, transparent 1px),
@@ -344,7 +344,7 @@
   min-height: 76px;
 }
 
-.mechanismMark[data-mechanism="threshold-funding"] { background: #edf3a2; border-color: #9ab500; }
+.mechanismMark[data-mechanism="threshold-funding"] { background: #e7efe5; border-color: #526b58; }
 .mechanismMark[data-mechanism="redirect"] { background: #ffd1ae; border-color: var(--commitments-orange); }
 .mechanismMark[data-mechanism="donation-upgrade"] { background: #e8d8ff; border-color: #7d45bd; }
 .mechanismMark[data-mechanism="co-fund"] { background: #d5f0e4; border-color: #267a56; }
