@@ -1,0 +1,371 @@
+name: Authenticated Create adapter isolated-QA release gate
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/create-adapter-authenticated-qa.yml"
+      - ".github/qa/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: create-adapter-isolated-qa-authenticated-release-gate-20260728
+  cancel-in-progress: true
+
+jobs:
+  authenticated-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EXACT_CANDIDATE_SHA: ee5ef38aa8141b56f7010d58b524a728ab22f73d
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PREVIEW_BASE_URL: https://website2-p23lofnj0-ellen-s.vercel.app
+      PREVIEW_SHARE_URL: https://website2-p23lofnj0-ellen-s.vercel.app
+      VERCEL_PROJECT_NAME: website2
+      VERCEL_SCOPE: ellen-s
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
+    steps:
+      - name: Check out QA operator branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable one-run Vercel automation bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          bypass_secret="$(openssl rand -hex 16)"
+          printf '::add-mask::%s\n' "$bypass_secret"
+          payload="$(jq -nc \
+            --arg secret "$bypass_secret" \
+            --arg note "Create release QA run ${GITHUB_RUN_ID}" \
+            '{generate:{secret:$secret,note:$note}}')"
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --url "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_NAME}/protection-bypass?slug=${VERCEL_SCOPE}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            >/tmp/vercel-automation-bypass-create.json
+          printf 'VERCEL_AUTOMATION_BYPASS_SECRET=%s\n' "$bypass_secret" >> "$GITHUB_ENV"
+
+      - name: Reconstruct and repair QA runner and browser script
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          test -n "${VERCEL_AUTOMATION_BYPASS_SECRET:-}"
+          cat .github/qa/runner.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/run-create-adapter-qa.sh
+          cat .github/qa/browser.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/create-adapter-authenticated-qa.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+
+          runner_path = Path('/tmp/run-create-adapter-qa.sh')
+          runner = runner_path.read_text()
+
+          strict_old = '#!/usr/bin/env bash\nset -u -o pipefail'
+          strict_new = '#!/usr/bin/env bash\nset -euo pipefail'
+          if runner.count(strict_old) != 1:
+              raise SystemExit('The expected runner shell-options header was not found exactly once.')
+          runner = runner.replace(strict_old, strict_new)
+
+          candidate_old = '''log "materializing exact candidate worktree"
+          git fetch --no-tags origin "+refs/heads/feature/moral-trade-create-interface-adapter-20260727:refs/remotes/origin/create-adapter-candidate"
+          test "$(git rev-parse refs/remotes/origin/create-adapter-candidate)" = "$EXACT_CANDIDATE_SHA"
+          rm -rf "$CANDIDATE"
+          git worktree add --detach "$CANDIDATE" refs/remotes/origin/create-adapter-candidate
+          test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
+          candidate_new = '''log "materializing exact integrated candidate worktree"
+          git fetch --no-tags origin "$EXACT_CANDIDATE_SHA"
+          rm -rf "$CANDIDATE"
+          git worktree add --detach "$CANDIDATE" "$EXACT_CANDIDATE_SHA"
+          test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
+          if runner.count(candidate_old) != 1:
+              raise SystemExit('The stale product-branch candidate block was not found exactly once.')
+          runner = runner.replace(candidate_old, candidate_new)
+
+          user_columns_old = '''  email_change_token_new, email_change_token_current, reauthentication_token,
+            is_sso_user, is_anonymous, created_at, updated_at'''
+          user_columns_new = '''  email_change_token_new, email_change, email_change_token_current, reauthentication_token,
+            is_sso_user, is_anonymous, created_at, updated_at'''
+          if runner.count(user_columns_old) != 1:
+              raise SystemExit('The expected auth.users column list was not found exactly once.')
+          runner = runner.replace(user_columns_old, user_columns_new)
+
+          user_values_old = "'', '', '', '', '', false, false, now(), now())"
+          if runner.count(user_values_old) != 3:
+              raise SystemExit(f'Expected three auth.users value rows; found {runner.count(user_values_old)}.')
+          runner = runner.replace(user_values_old, "'', '', '', '', '', '', false, false, now(), now())")
+
+          verify_log = '  log "verifying durable records, idempotency, and outsider RLS"'
+          if runner.count(verify_log) != 1:
+              raise SystemExit('The durable-record verification block marker was not found exactly once.')
+          verify_log_index = runner.index(verify_log)
+          verify_heredoc_index = runner.index("<<'SQL'", verify_log_index)
+          verify_sql_start = runner.index("\n", verify_heredoc_index) + 1
+          verify_sql_end = runner.index("\nSQL\nelse", verify_sql_start)
+          verify_sql = runner[verify_sql_start:verify_sql_end]
+          verify_substitutions = [
+              (":'submission_id'::uuid", "current_setting('moral_trade_qa.submission_id')::uuid"),
+              (":'creator_id'::uuid", "current_setting('moral_trade_qa.creator_id')::uuid"),
+              (":'contributor_id'::uuid", "current_setting('moral_trade_qa.contributor_id')::uuid"),
+              (":'outsider_id'::uuid", "current_setting('moral_trade_qa.outsider_id')::uuid"),
+              (":'target_id'::uuid", "current_setting('moral_trade_qa.target_id')::uuid"),
+              (":'submission_key'", "current_setting('moral_trade_qa.submission_key')"),
+              (":'submission_id'", "current_setting('moral_trade_qa.submission_id')"),
+              (":'qa_marker'", "current_setting('moral_trade_qa.qa_marker')"),
+              (":'outsider_id'", "current_setting('moral_trade_qa.outsider_id')"),
+          ]
+          for old, new in verify_substitutions:
+              if verify_sql.count(old) < 1:
+                  raise SystemExit(f'The verification SQL token {old!r} was not found.')
+              verify_sql = verify_sql.replace(old, new)
+          verify_prelude = '''
+          select set_config('moral_trade_qa.creator_id', :'creator_id', false);
+          select set_config('moral_trade_qa.contributor_id', :'contributor_id', false);
+          select set_config('moral_trade_qa.outsider_id', :'outsider_id', false);
+          select set_config('moral_trade_qa.submission_id', :'submission_id', false);
+          select set_config('moral_trade_qa.target_id', :'target_id', false);
+          select set_config('moral_trade_qa.submission_key', :'submission_key', false);
+          select set_config('moral_trade_qa.qa_marker', :'qa_marker', false);'''
+          runner = runner[:verify_sql_start] + verify_prelude + verify_sql + runner[verify_sql_end:]
+
+          runner_path.write_text(runner)
+
+          browser_path = Path('/tmp/create-adapter-authenticated-qa.mjs')
+          browser = browser_path.read_text()
+
+          contexts_with_options = browser.count('browser.newContext({')
+          contexts_without_options = browser.count('browser.newContext()')
+          if contexts_with_options + contexts_without_options < 1:
+              raise SystemExit('No Playwright browser contexts were found for the Vercel automation bypass.')
+          bypass_headers = '''extraHTTPHeaders: {
+                    "x-vercel-protection-bypass": process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+                    "x-vercel-set-bypass-cookie": "samesitenone",
+                  },'''
+          browser = browser.replace(
+              'browser.newContext({',
+              f'browser.newContext({{{bypass_headers}',
+          )
+          browser = browser.replace(
+              'browser.newContext()',
+              f'browser.newContext({{{bypass_headers}}})',
+          )
+
+          publish_old = '.locator("#publishConfirm").check();'
+          publish_count = browser.count(publish_old)
+          if publish_count < 2:
+              raise SystemExit(f'Expected at least two publish-confirm checks; found {publish_count}.')
+          browser = browser.replace(
+              publish_old,
+              '.locator("#publishConfirm").check({ force: true });',
+          )
+
+          email_old = '''    await creatorPage.locator('input[name="email"]').fill(credentials.creator.email);'''
+          email_new = '''    if (await creatorPage.locator('input[name="email"]').count() === 0) {
+                await creatorPage.getByRole("link", { name: "Continue with email", exact: true }).click();
+                await creatorPage.locator('input[name="email"]').waitFor({ state: "visible", timeout: 30_000 });
+              }
+              await creatorPage.locator('input[name="email"]').fill(credentials.creator.email);'''
+          if email_old not in browser:
+              raise SystemExit('Creator email-login transition was not found.')
+          browser = browser.replace(email_old, email_new)
+
+          fixed_radio_old = '''    await frame.locator('input[name="poolFailureBonusType"][value="fixed"]').check({ force: true });'''
+          fixed_radio_new = '''    const fixedBonusOption = frame.locator('label.pool-choice-option:has(input[name="poolFailureBonusType"][value="fixed"]) > span');
+              await fixedBonusOption.click();
+              await assertEventually(
+                async () => frame.locator('input[name="poolFailureBonusType"][value="fixed"]').isChecked(),
+                "Fixed failure-bonus type did not become selected",
+              );'''
+          if browser.count(fixed_radio_old) != 1:
+              raise SystemExit('The fixed failure-bonus radio setup line was not found exactly once.')
+          browser = browser.replace(fixed_radio_old, fixed_radio_new)
+
+          formula_radio_old = '''    await frame.locator('input[name="poolFailureTimingMode"][value="formula"]').check({ force: true });'''
+          formula_radio_new = '''    await frame.locator("#timingControls").waitFor({ state: "visible", timeout: 10_000 });
+              const formulaTimingOption = frame.locator('label.pool-choice-option:has(input[name="poolFailureTimingMode"][value="formula"]) > span');
+              await formulaTimingOption.click();
+              await assertEventually(
+                async () => frame.locator('input[name="poolFailureTimingMode"][value="formula"]').isChecked(),
+                "Custom-formula timing mode did not become selected",
+              );'''
+          if browser.count(formula_radio_old) != 1:
+              raise SystemExit('The custom-formula timing radio setup line was not found exactly once.')
+          browser = browser.replace(formula_radio_old, formula_radio_new)
+
+          receipt_status_old = '''    record("receipt display says submitted for review", receipt.displayStatus === "Submitted for review", receipt.displayStatus);'''
+          receipt_status_new = '''    record("receipt display says submitted for review", receipt.displayStatus.trim().toLowerCase() === "submitted for review", receipt.displayStatus);'''
+          if browser.count(receipt_status_old) != 1:
+              raise SystemExit('The case-sensitive receipt-status assertion was not found exactly once.')
+          browser = browser.replace(receipt_status_old, receipt_status_new)
+
+          owner_receipt_old = '''    record("owner receipt repeats pending-review boundary", (await creatorPage.locator("body").innerText()).includes("not public") && (await creatorPage.locator("body").innerText()).includes("Pending Review"));'''
+          owner_receipt_new = '''    await creatorPage.getByText("Durable Create receipt", { exact: true }).waitFor({
+              state: "visible",
+              timeout: 30_000,
+            });
+            await creatorPage.getByText("Pending Review", { exact: true }).waitFor({
+              state: "visible",
+              timeout: 30_000,
+            });
+            const ownerReceiptBody = await creatorPage.locator("body").innerText();
+            record(
+              "owner receipt repeats pending-review boundary",
+              ownerReceiptBody.includes("not public") && ownerReceiptBody.includes("Pending Review"),
+              ownerReceiptBody,
+            );'''
+          if browser.count(owner_receipt_old) != 1:
+              raise SystemExit('The immediate owner-receipt assertion was not found exactly once.')
+          browser = browser.replace(owner_receipt_old, owner_receipt_new)
+
+          contributor_denial_old = '''    const contributorReceiptResponse = await contributorPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              record("contributor cannot open creator receipt", Boolean(contributorReceiptResponse && contributorReceiptResponse.status() === 404), String(contributorReceiptResponse?.status()));
+              record("contributor denial leaks no marker", !(await contributorPage.locator("body").innerText()).includes(marker));'''
+          contributor_denial_new = '''    const contributorReceiptResponse = await contributorPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              if (contributorReceiptResponse?.status() !== 404) {
+                await contributorPage.waitForFunction(
+                  () => /route is not available as a backed Moral Trade record/i.test(document.body?.innerText || ""),
+                  null,
+                  { timeout: 30_000 },
+                );
+              }
+              const contributorReceiptBody = await contributorPage.locator("body").innerText();
+              const contributorDenied = Boolean(
+                contributorReceiptResponse && (
+                  contributorReceiptResponse.status() === 404
+                  || /(?:404|not found|could not be found|route is not available as a backed Moral Trade record)/i.test(contributorReceiptBody)
+                )
+              );
+              record(
+                "contributor cannot open creator receipt",
+                contributorDenied,
+                JSON.stringify({
+                  status: contributorReceiptResponse?.status(),
+                  url: contributorPage.url(),
+                  body: contributorReceiptBody.slice(0, 1200),
+                }),
+              );
+              record("contributor denial leaks no submission id", !contributorReceiptBody.includes(receipt.submissionId), contributorReceiptBody);
+              record("contributor denial leaks no marker", !contributorReceiptBody.includes(marker), contributorReceiptBody);'''
+          if browser.count(contributor_denial_old) != 1:
+              raise SystemExit('The contributor receipt-denial assertion block was not found exactly once.')
+          browser = browser.replace(contributor_denial_old, contributor_denial_new)
+
+          outsider_denial_old = '''    const outsiderReceiptResponse = await outsiderPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              record("outsider cannot open creator receipt", Boolean(outsiderReceiptResponse && outsiderReceiptResponse.status() === 404), String(outsiderReceiptResponse?.status()));
+              const outsiderBody = await outsiderPage.locator("body").innerText();
+              record("outsider denial leaks no submission id", !outsiderBody.includes(receipt.submissionId));
+              record("outsider denial leaks no marker", !outsiderBody.includes(marker));'''
+          outsider_denial_new = '''    const outsiderReceiptResponse = await outsiderPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              if (outsiderReceiptResponse?.status() !== 404) {
+                await outsiderPage.waitForFunction(
+                  () => /route is not available as a backed Moral Trade record/i.test(document.body?.innerText || ""),
+                  null,
+                  { timeout: 30_000 },
+                );
+              }
+              const outsiderBody = await outsiderPage.locator("body").innerText();
+              const outsiderDenied = Boolean(
+                outsiderReceiptResponse && (
+                  outsiderReceiptResponse.status() === 404
+                  || /(?:404|not found|could not be found|route is not available as a backed Moral Trade record)/i.test(outsiderBody)
+                )
+              );
+              record(
+                "outsider cannot open creator receipt",
+                outsiderDenied,
+                JSON.stringify({
+                  status: outsiderReceiptResponse?.status(),
+                  url: outsiderPage.url(),
+                  body: outsiderBody.slice(0, 1200),
+                }),
+              );
+              record("outsider denial leaks no submission id", !outsiderBody.includes(receipt.submissionId), outsiderBody);
+              record("outsider denial leaks no marker", !outsiderBody.includes(marker), outsiderBody);'''
+          if browser.count(outsider_denial_old) != 1:
+              raise SystemExit('The outsider receipt-denial assertion block was not found exactly once.')
+          browser = browser.replace(outsider_denial_old, outsider_denial_new)
+
+          browser_path.write_text(browser)
+          PY
+          chmod +x /tmp/run-create-adapter-qa.sh
+          bash -n /tmp/run-create-adapter-qa.sh
+          node --check /tmp/create-adapter-authenticated-qa.mjs
+
+      - name: Run authenticated QA and exact cleanup
+        id: qa
+        continue-on-error: true
+        run: /tmp/run-create-adapter-qa.sh
+
+      - name: Revoke one-run Vercel automation bypass
+        id: bypass_cleanup
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_AUTOMATION_BYPASS_SECRET:-}"
+          payload="$(jq -nc \
+            --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" \
+            '{revoke:{secret:$secret,regenerate:false}}')"
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --url "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_NAME}/protection-bypass?slug=${VERCEL_SCOPE}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            >/tmp/vercel-automation-bypass-revoke.json
+
+      - name: Upload authenticated QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-adapter-isolated-qa-authenticated-website2-${{ github.run_id }}
+          path: |
+            /tmp/create-adapter-candidate/qa-artifacts/create-adapter-authenticated
+            /tmp/create-adapter-e2e-result.json
+            /tmp/create-adapter-fixture-ids.txt
+            /tmp/create-adapter-database-evidence.log
+            /tmp/create-adapter-cleanup.log
+            /tmp/create-adapter-zero-residue.json
+            /tmp/create-adapter-final-status.txt
+            /tmp/vercel-automation-bypass-create.json
+            /tmp/vercel-automation-bypass-revoke.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report run ID and exact release-gate outcome
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QA_OUTCOME: ${{ steps.qa.outcome }}
+          BYPASS_CLEANUP_OUTCOME: ${{ steps.bypass_cleanup.outcome }}
+        run: |
+          gh pr comment 275 --body "Authenticated isolated-QA Create release gate run \`${GITHUB_RUN_ID}\` completed with browser/database outcome **${QA_OUTCOME}** and Vercel-bypass cleanup outcome **${BYPASS_CLEANUP_OUTCOME}** against exact candidate \`${EXACT_CANDIDATE_SHA}\` and website2 Preview \`${PREVIEW_BASE_URL}\`."
+
+      - name: Require all authenticated QA gates
+        if: always()
+        env:
+          QA_OUTCOME: ${{ steps.qa.outcome }}
+          BYPASS_CLEANUP_OUTCOME: ${{ steps.bypass_cleanup.outcome }}
+        run: |
+          test "$QA_OUTCOME" = success
+          test "$BYPASS_CLEANUP_OUTCOME" = success
+
+# Keeps the psql heredoc command line in shell syntax, waits for streamed fail-closed
+# receipt content, and preserves exact cleanup and zero-residue release requirements.

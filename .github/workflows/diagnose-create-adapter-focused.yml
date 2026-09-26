@@ -1,0 +1,63 @@
+name: Diagnose Create adapter focused gate
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/diagnose-create-adapter-focused.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out QA operator branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/create-adapter-authenticated-qa-20260728
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Correct the verification heredoc boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/create-adapter-authenticated-qa.yml')
+          text = path.read_text()
+          old = '''          verify_sql_start = verify_heredoc_index + len("<<'SQL'")'''
+          new = '''          verify_sql_start = runner.index("\\n", verify_heredoc_index) + 1'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one heredoc-start calculation; found {text.count(old)}.')
+          path.write_text(text.replace(old, new))
+          PY
+          git diff --check
+          git diff -- .github/workflows/create-adapter-authenticated-qa.yml
+
+      - name: Commit and push the exact correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/create-adapter-authenticated-qa.yml
+          git commit -m "Keep the psql heredoc pipeline outside verification SQL"
+          git push origin HEAD:ops/create-adapter-authenticated-qa-20260728
+          echo "PATCHED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Report patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment 275 --body "Patched the authenticated Create QA runner at \`${PATCHED_SHA}\` so the psql heredoc pipeline remains shell syntax rather than SQL."

@@ -1,0 +1,64 @@
+name: Report current Create QA workflow runs
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/report-create-adapter-qa-runs.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Report recent branch runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          runs="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch ops/create-adapter-authenticated-qa-20260728 \
+            --limit 50 \
+            --json databaseId,workflowName,status,conclusion,headSha,event,createdAt,updatedAt,url)"
+          body="$(python3 - "$runs" <<'PY'
+          import json, sys
+          rows = json.loads(sys.argv[1])
+          lines = ["Current Create QA branch workflow inventory:", "", "```text"]
+          for row in rows:
+              lines.append(
+                  f"{row['databaseId']} | {row['workflowName']} | {row['status']} | "
+                  f"{row.get('conclusion') or '-'} | {row['headSha']} | {row['event']} | {row['updatedAt']}"
+              )
+          lines.append("```")
+          exact = [
+              row for row in rows
+              if row['workflowName'] == 'Authenticated Create adapter isolated-QA release gate'
+              and row['headSha'] == '7fdadf036e079d115736458916828a6fba7a6be7'
+          ]
+          if exact:
+              latest = exact[0]
+              lines.extend([
+                  "",
+                  "Latest exact authenticated gate:",
+                  f"- run `{latest['databaseId']}`",
+                  f"- status **{latest['status']}**",
+                  f"- conclusion **{latest.get('conclusion') or 'pending'}**",
+                  f"- URL: {latest['url']}",
+              ])
+          else:
+              lines.extend(["", "No exact authenticated gate was found for `7fdadf036e079d115736458916828a6fba7a6be7`."])
+          print("\n".join(lines))
+          PY
+          )"
+          gh pr comment 273 --body "$body"
+
+# Re-triggered to report the current exact release gate.

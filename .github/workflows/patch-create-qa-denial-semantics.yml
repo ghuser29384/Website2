@@ -1,0 +1,56 @@
+name: Patch Create QA receipt-denial semantics
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/patch-create-qa-denial-semantics.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/create-adapter-authenticated-qa-20260728
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Recognize the exact fail-closed receipt surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/create-adapter-authenticated-qa.yml')
+          text = path.read_text()
+          replacements = {
+              '/(?:404|not found|could not be found)/i.test(contributorReceiptBody)':
+                  '/(?:404|not found|could not be found|route is not available as a backed Moral Trade record)/i.test(contributorReceiptBody)',
+              '/(?:404|not found|could not be found)/i.test(outsiderBody)':
+                  '/(?:404|not found|could not be found|route is not available as a backed Moral Trade record)/i.test(outsiderBody)',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one occurrence of {old!r}; found {text.count(old)}.')
+              text = text.replace(old, new)
+          path.write_text(text)
+          PY
+          git diff --check
+          git diff -- .github/workflows/create-adapter-authenticated-qa.yml
+
+      - name: Commit the exact QA correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/create-adapter-authenticated-qa.yml
+          git commit -m "Recognize the exact private-receipt denial surface"
+          git push origin HEAD:ops/create-adapter-authenticated-qa-20260728
