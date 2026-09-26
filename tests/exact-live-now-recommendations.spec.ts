@@ -96,7 +96,10 @@ function recommendationFixture({
         learnedActionSignalCount: 0,
         saved: false,
         score: 100,
-        metadata,
+        metadata: {
+          mechanism: opportunityType === "donation_pool" ? "donation_offset_pool" : "published_offer",
+          ...metadata,
+        },
       },
     ],
     status: "ready",
@@ -128,7 +131,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(personalized.getByRole("heading", { name: "Animal welfare" })).toBeVisible();
     await expect(personalized).toContainText("Do not eat meat for one month");
     await expect(personalized).toContainText("Matches your Animal welfare priority");
-    await expect(personalized).toContainText("Why this match");
+    await expect(personalized).toContainText("Why this appears");
     await expect(personalized.locator('a[href="/offers/animal-offer"]')).toHaveCount(1);
     const tuneRecommendation = personalized.locator(
       'summary[aria-label="Tune this recommendation"]',
@@ -351,13 +354,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
       "aria-pressed",
       "true",
     );
-    await card.getByRole("button", { name: "Less like this" }).click();
+    await card.getByRole("button", { name: "Show fewer like this" }).click();
     await expect(card).toBeHidden();
     await expect.poll(() => payloads.join("\n")).toContain('"eventType":"hard"');
     await expect.poll(() => payloads.join("\n")).toContain('"eventType":"not_for_me"');
   });
 
-  test("rolls back Save, difficulty, and Show less when the API accepts zero events", async ({
+  test("keeps canonical bookmark failures separate from explicit feedback failures", async ({
     page,
   }) => {
     await page.route("**/api/live-now", (route) =>
@@ -374,6 +377,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
         ),
       }),
     );
+    await page.route("**/api/saved-offers", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Synthetic bookmark failure" }),
+      }),
+    );
     await page.route("**/api/live-now/feedback", (route) =>
       route.fulfill({
         contentType: "application/json",
@@ -383,17 +393,15 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await page.goto("/feed", { waitUntil: "domcontentloaded" });
     const feed = page.locator('[data-mt-live-now="adaptive"]');
+    await expect(feed).toHaveAttribute("data-bound", "true");
     const card = feed.locator('[data-opportunity-id="rollback-offer"]');
-    const save = card.getByRole("button", { name: "Save opportunity" });
+    const save = card.locator('button[data-action="save"]');
 
+    await expect(save).toHaveAttribute("aria-label", "Save offer");
     await save.click();
-    await expect(card.getByRole("button", { name: "Save opportunity" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    await expect(feed.getByRole("status")).toContainText(
-      "Could not save that change. Your feed was not updated.",
-    );
+    await expect(save).toHaveAttribute("aria-pressed", "false");
+    await expect(save).toHaveAttribute("aria-label", "Save offer");
+    await expect(feed.getByRole("status")).toContainText("Could not update saved offers.");
 
     await card.locator('summary[aria-label="Tune this recommendation"]').click();
     const hard = card.getByRole("button", { name: "Hard for me" });
@@ -403,12 +411,79 @@ test.describe("adaptive moral-opportunity Now feed", () => {
       "Could not save that rating. Your feed was not updated.",
     );
 
-    await card.getByRole("button", { name: "Less like this" }).click();
+    await card.getByRole("button", { name: "Show fewer like this" }).click();
     await expect(card).toBeVisible();
     await expect(feed.locator(".mt-feed-empty-inline")).toHaveCount(0);
     await expect(feed.getByRole("status")).toContainText(
       "Could not hide that opportunity. Your feed was not updated.",
     );
+  });
+
+  test("saves a published offer through the canonical bookmark endpoint only", async ({ page }) => {
+    const bookmarkRequests: Array<{ method: string; body: string | null }> = [];
+    const feedbackPayloads: string[] = [];
+    await page.route("**/api/live-now", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(
+          recommendationFixture({
+            cause: "Animal welfare",
+            id: "saved-offer",
+            offeredCause: "Animal welfare",
+            requestedCause: "Research review",
+          }),
+        ),
+      }),
+    );
+    await page.route("**/api/saved-offers", async (route) => {
+      bookmarkRequests.push({
+        method: route.request().method(),
+        body: route.request().postData(),
+      });
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: true, offerId: "saved-offer", saved: true }),
+      });
+    });
+    await page.route("**/api/live-now/feedback", async (route) => {
+      feedbackPayloads.push(route.request().postData() ?? "");
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: true, acceptedEventCount: 1 }),
+      });
+    });
+
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
+    const card = page.locator('[data-opportunity-id="saved-offer"]');
+    const save = card.locator('button[data-action="save"]');
+    await expect(save).toHaveAttribute("aria-label", "Save offer");
+    await save.click();
+    await expect(save).toHaveAttribute("aria-pressed", "true");
+    await expect(save).toHaveAttribute("aria-label", "Remove saved offer");
+    await expect(page.getByRole("status")).toContainText("Saved to your offers.");
+    expect(bookmarkRequests).toEqual([
+      { method: "POST", body: JSON.stringify({ offerId: "saved-offer" }) },
+    ]);
+    expect(feedbackPayloads.some((payload) => /"eventType":"save"/.test(payload))).toBe(false);
+  });
+
+  test("omits bookmark and feedback controls for unsupported added mechanisms", async ({ page }) => {
+    const payload = recommendationFixture({
+      cause: "Global health",
+      id: "upgrade-1",
+      opportunityType: "donation_redirect",
+      offeredCause: "Global health",
+      requestedCause: "Conditional donation",
+      metadata: { mechanism: "donation_upgrade" },
+    });
+    await page.route("**/api/live-now", (route) =>
+      route.fulfill({ contentType: "application/json", body: JSON.stringify(payload) }),
+    );
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
+    const card = page.locator('[data-opportunity-id="upgrade-1"]');
+    await expect(card.getByRole("button", { name: /Save offer/ })).toHaveCount(0);
+    await expect(card.locator('summary[aria-label="Tune this recommendation"]')).toHaveCount(0);
+    await expect(card).toContainText("Why this appears");
   });
 
   test("shows a truthful signed-out state with no demo recommendations", async ({ page }) => {
@@ -540,9 +615,10 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await page.goto("/feed", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/feed$/);
-    await expect(page.getByRole("button", { name: "Open personalized feed" })).toHaveText(
-      "Feed",
-    );
+    const home = page.locator('[data-mt-primary-links] a[data-mt-feed-link="true"]');
+    await expect(home).toHaveText("Home");
+    await expect(home).toHaveAttribute("href", "/feed");
+    await expect(home).toHaveAttribute("aria-current", "page");
     const feed = page.locator('[data-mt-live-now="adaptive"]');
     await expect(feed).toHaveAttribute("data-mt-live-now-state", "no_matches");
     const owned = feed.getByRole("region", { name: "Your live listings" });
@@ -557,7 +633,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(feed.getByRole("button", { name: "Hard for me" })).toHaveCount(0);
   });
 
-  test("exposes Evidence as a first-class destination after Commitments", async ({ page }) => {
+  test("keeps the masthead focused and links to the existing Profile priority controls", async ({ page }) => {
     await page.setViewportSize({ width: 1230, height: 900 });
     await page.route("**/api/live-now", (route) =>
       route.fulfill({
@@ -585,15 +661,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     const navigation = page.locator(".topbar nav").first();
     await expect(navigation.locator("button, a")).toHaveText([
-      "Feed",
-      "Discover",
-      "Controls",
-      "Trade",
+      "Home",
+      "Trades",
       "Commitments",
-      "Evidence",
+      "Profile",
     ]);
 
-    const evidence = navigation.getByRole("button", { name: "Open Evidence" });
+    const evidence = navigation.getByRole("link", { name: "Profile", exact: true });
     await expect(evidence).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
@@ -601,7 +675,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     expect(overflow).toBeLessThanOrEqual(1);
 
     await evidence.click();
-    await expect(page).toHaveURL(/\/evidence$/);
-    await expect(page.getByRole("heading", { name: "Evidence", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/profile$/);
+    await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Your profile",
+      exact: true,
+    }),
+  ).toBeVisible();
   });
 });

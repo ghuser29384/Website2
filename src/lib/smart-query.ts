@@ -489,8 +489,19 @@ export function getSmartQueryCauseAliases(id: string) {
   return cause ? [cause.label, ...cause.aliases] : [id];
 }
 
+function isCoFundQuery(query: string) {
+  const normalized = normalizeSmartQueryText(query);
+  return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(normalized);
+}
+
+function isStandalonePoolQuery(query: string) {
+  const normalized = normalizeSmartQueryText(query);
+  return /\b(pool|pools|threshold|conditional funding)\b|\b(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?)\b/.test(normalized);
+}
+
 function inferIntent(query: string, surface: SmartQuerySurface): SmartQueryIntent {
   if (surface !== "global") return surface;
+  if (isCoFundQuery(query)) return "offers";
   if (/\b(member|members|person|people|participant|participants|counterparties|counterparty|who)\b/.test(query)) {
     return "people";
   }
@@ -501,7 +512,7 @@ function inferIntent(query: string, surface: SmartQuerySurface): SmartQueryInten
   if (/\b(mpgf|moral public goods fund|consensus good|hybrid good)\b/.test(query)) {
     return "mpgf_pools";
   }
-  if (/\b(pool|pools|threshold|conditional funding|group buying|group-buying)\b/.test(query)) {
+  if (isStandalonePoolQuery(query)) {
     return "pools";
   }
   return "offers";
@@ -749,7 +760,10 @@ export function parseSmartQuery(
     ["pledge", /\b(pledge|pledges|pledge swap|reciprocal action|commitment swap)\b/i],
     ["payment", /\b(paid action|payment|payments|pay someone|payment-supported)\b/i],
     ["offset", /\b(offset|offsets|donation offset|redirected donation|opposed donation)\b/i],
-    ["pool", /\b(pool|pools|threshold pool|conditional funding|group buying|group-buying)\b/i],
+    [
+      "pool",
+      /\b(pool|pools|threshold pool|conditional funding|(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?))\b/i,
+    ],
   ];
   for (const [type, pattern] of actionPatterns) {
     const match = working.match(pattern);
@@ -936,7 +950,9 @@ export function buildSmartQueryTarget(interpretation: SmartQueryInterpretation) 
   serializeSmartQueryFacets(params, interpretation.facets);
   if (interpretation.intent === "offers") params.set("view", "live");
   if (interpretation.intent === "discover") {
-    params.set("domain", interpretation.facets.actionTypes.includes("pool") ? "pools" : "offers");
+    const coFund = isCoFundQuery(interpretation.normalizedQuery);
+    params.set("domain", coFund ? "offers" : interpretation.facets.actionTypes.includes("pool") ? "pools" : "offers");
+    if (coFund) params.set("offerKind", "co-fund");
   }
   return `${interpretation.route}?${params.toString()}`;
 }

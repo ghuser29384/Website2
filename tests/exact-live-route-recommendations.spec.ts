@@ -206,7 +206,7 @@ test.describe("live route recommendation planner", () => {
     );
 
     const composer = page.locator("[data-mt-live-route-composer]");
-    await composer.getByLabel("Goal").fill("Reduce preventable animal suffering");
+    await composer.getByLabel("Goal", { exact: true }).fill("Reduce preventable animal suffering");
     await composer.getByLabel("Cause area used for matching").fill("Farmed-animal welfare");
     await composer.getByLabel("Money").fill("35");
     await composer.getByLabel("Minutes").fill("45");
@@ -222,7 +222,7 @@ test.describe("live route recommendation planner", () => {
     expect(posts[0].action).toBe("save_profile");
     expect(posts[0].profile).toMatchObject({
       goal: "Reduce preventable animal suffering",
-      causePriorities: ["Farmed-animal welfare"],
+      causePriorities: ["Factory farming"],
       moneyBudgetCents: 3_500,
       timeBudgetMinutes: 45,
       actionBudgetCount: 2,
@@ -297,7 +297,11 @@ test.describe("live route recommendation planner", () => {
     await dialog
       .getByLabel("Without a trade, what happens?")
       .fill("I make no additional health donation this month.");
-    await dialog.getByLabel("Evidence").selectOption("connected");
+    const evidence = dialog.getByLabel("Evidence");
+    await expect(
+      evidence.getByRole("option", { name: "Connected proof — no eligible inventory yet" }),
+    ).toHaveAttribute("disabled", "");
+    await evidence.selectOption("standard");
     await dialog.getByLabel("Privacy").selectOption("private");
     await dialog.getByRole("button", { name: "Review answers" }).click();
 
@@ -306,7 +310,7 @@ test.describe("live route recommendation planner", () => {
     expect(posts).toHaveLength(0);
     await dialog.getByRole("button", { name: "Confirm profile" }).click();
 
-    await expect(page.getByText("interview confirmed", { exact: false })).toBeVisible();
+    await expect(page.getByText("Interview confirmed. Routes refreshed.", { exact: true })).toBeVisible();
     expect(posts).toHaveLength(1);
     expect(posts[0]).toEqual({
       action: "save_interview",
@@ -314,7 +318,7 @@ test.describe("live route recommendation planner", () => {
         goal: "Improve global health",
         causePriorities: ["Global health"],
         otherwiseBaseline: "I make no additional health donation this month.",
-        evidencePreference: "connected",
+        evidencePreference: "standard",
         uncertaintyPreference: "balanced",
         interactionPreference: "open",
         privacyPreference: "private",

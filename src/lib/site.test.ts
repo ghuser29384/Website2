@@ -38,13 +38,13 @@ test("links to Feed and Discover from the marketplace footer group", () => {
 
 test("links to Trade controls without adding another primary navigation item", () => {
   const safetyGroup = FOOTER_LINK_GROUPS.find(
-    (group) => group.title === "Safety & transparency",
+    (group) => group.title === "Learn",
   );
 
   assert.ok(safetyGroup);
   assert.ok(
     safetyGroup.links.some(
-      (link) => link.href === "/trade-controls" && link.label === "Trade controls",
+      (link) => link.href === "/trade-controls" && link.label === "Safeguard demonstrations",
     ),
   );
   assert.ok(getPrimaryNavLinks(false).every((link) => link.href !== "/trade-controls"));
@@ -54,7 +54,7 @@ test("makes all ten coordination and safety controls discoverable in site search
   const tradeControls = SITE_SEARCH_ITEMS.find((item) => item.href === "/trade-controls");
 
   assert.ok(tradeControls);
-  assert.equal(tradeControls.label, "Trade controls");
+  assert.equal(tradeControls.label, "Safeguard demonstrations");
 
   for (const keyword of [
     "counterfactual integrity",

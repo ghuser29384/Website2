@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { CredibilityPassport } from "@/components/credibility/credibility-passport";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { formatPublicProfileLocation, getPublicProfilePageData, getViewer } from "@/lib/app-data";
+import { formatPublicProfileLocation, getPublicProfileSummary, getViewer } from "@/lib/app-data";
 import {
   CREDIBILITY_CATEGORIES,
   CREDIBILITY_ROLES,
@@ -58,20 +58,20 @@ function contextHref(profileId: string, role?: CredibilityRole, category?: Credi
 
 export async function generateMetadata({ params }: ProfileCredibilityPageProps): Promise<Metadata> {
   const { profileId } = await params;
-  const data = await getPublicProfilePageData(profileId);
+  const profile = await getPublicProfileSummary(profileId);
 
   return {
-    title: data.profile ? `${data.profile.resolvedName} credibility` : "Profile credibility",
-    description: data.profile
+    title: profile ? `${profile.resolvedName} credibility` : "Profile credibility",
+    description: profile
       ? truncateDescription(
-          `Context-specific transaction reliability and evidence confidence for ${data.profile.resolvedName}.`,
+          `Context-specific transaction reliability and evidence confidence for ${profile.resolvedName}.`,
         )
       : "Context-specific Moral Trade credibility profile.",
     alternates: {
       canonical: `/people/${profileId}/credibility`,
     },
     openGraph: {
-      title: data.profile ? `${data.profile.resolvedName} credibility` : "Profile credibility",
+      title: profile ? `${profile.resolvedName} credibility` : "Profile credibility",
       description:
         "Evidence-weighted transaction reliability, explicit uncertainty, and separate safety status.",
       url: getAbsoluteUrl(`/people/${profileId}/credibility`),
@@ -88,17 +88,16 @@ export default async function ProfileCredibilityPage({
   const resolvedSearchParams = await searchParams;
   const role = roleFrom(first(resolvedSearchParams.role));
   const category = categoryFrom(first(resolvedSearchParams.category));
-  const [viewer, data, summary] = await Promise.all([
+  const [viewer, profile, summary] = await Promise.all([
     getViewer(),
-    getPublicProfilePageData(profileId),
+    getPublicProfileSummary(profileId),
     getPublicCredibilitySummary(profileId, { role, category }),
   ]);
 
-  if (!data.profile) {
+  if (!profile) {
     notFound();
   }
 
-  const profile = data.profile;
   const location = formatPublicProfileLocation(profile);
 
   return (

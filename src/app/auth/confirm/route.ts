@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ensureAccountRowsForUser, getViewer } from "@/lib/app-data";
 import { buildAuthPath, normalizeAuthMode } from "@/lib/auth-routes";
 import { getSafeInternalPath } from "@/lib/paths";
+import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -43,12 +44,19 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      let destination = next;
       if (data.user) {
-        await ensureAccountRowsForUser(data.user, supabase);
+        const { profile } = await ensureAccountRowsForUser(data.user, supabase);
+        if (profileNeedsUsername(profile)) {
+          destination = buildUsernameCompletionPath(next);
+        }
       } else {
-        await getViewer();
+        const viewer = await getViewer();
+        if (viewer && profileNeedsUsername(viewer.profile)) {
+          destination = buildUsernameCompletionPath(next);
+        }
       }
-      return NextResponse.redirect(new URL(next, origin));
+      return NextResponse.redirect(new URL(destination, origin));
     }
 
     const loginUrl = new URL(authPath, origin);
@@ -67,12 +75,19 @@ export async function GET(request: NextRequest) {
     });
 
     if (!error) {
+      let destination = next;
       if (data.user) {
-        await ensureAccountRowsForUser(data.user, supabase);
+        const { profile } = await ensureAccountRowsForUser(data.user, supabase);
+        if (profileNeedsUsername(profile)) {
+          destination = buildUsernameCompletionPath(next);
+        }
       } else {
-        await getViewer();
+        const viewer = await getViewer();
+        if (viewer && profileNeedsUsername(viewer.profile)) {
+          destination = buildUsernameCompletionPath(next);
+        }
       }
-      return NextResponse.redirect(new URL(next, origin));
+      return NextResponse.redirect(new URL(destination, origin));
     }
   }
 

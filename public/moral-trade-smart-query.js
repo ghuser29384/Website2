@@ -149,13 +149,22 @@
     form.insertAdjacentElement("afterend", panel);
   }
 
+  function isCoFundQuery(query) {
+    return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(String(query || "").toLowerCase());
+  }
+
+  function isStandalonePoolQuery(query) {
+    return /\b(pool|pools|threshold|conditional funding)\b|\b(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?)\b/.test(String(query || "").toLowerCase());
+  }
+
   function inferDiscoverDomain(interpretation, target) {
     const targetUrl = new URL(target, location.origin);
     const fromTarget = targetUrl.searchParams.get("domain");
     const query = interpretation.normalizedQuery || "";
     const facets = interpretation.facets || {};
+    if (isCoFundQuery(query)) return "offers";
     if (Array.isArray(facets.actionTypes) && facets.actionTypes.includes("pool")) return "pools";
-    if (/\b(pool|pools|threshold|conditional funding|group buying|group-buying)\b/.test(query)) {
+    if (isStandalonePoolQuery(query)) {
       return "pools";
     }
     if (
@@ -194,18 +203,21 @@
     const facets = interpretation.facets || {};
     const domain = inferDiscoverDomain(interpretation, target);
     const params = new URLSearchParams();
+    const coFund = isCoFundQuery(interpretation.normalizedQuery);
     params.set("domain", domain);
-    params.set("q", interpretation.originalQuery || "");
+    params.set("query", interpretation.originalQuery || "");
     params.set("smart", "1");
+    if (coFund) params.set("offerKind", "co-fund");
 
     const broadOpportunitySearch =
       domain === "offers" &&
+      !coFund &&
       (!Array.isArray(facets.actionTypes) || facets.actionTypes.length === 0) &&
       /\b(find|search|show|opportunity|opportunities)\b/.test(interpretation.normalizedQuery || "");
     params.set("view", broadOpportunitySearch ? "value" : "list");
 
     if (Array.isArray(facets.causes) && facets.causes.length) {
-      params.set("causes", facets.causes.join(","));
+      params.set("causeFilter", facets.causes.join(","));
     }
     if (facets.verified === true) params.set("verified", "1");
     if (facets.verified === false) params.set("verified", "0");
@@ -224,7 +236,7 @@
     if (mechanisms.length) params.set("mechanisms", [...new Set(mechanisms)].join(","));
 
     if (Array.isArray(interpretation.residualTerms) && interpretation.residualTerms.length) {
-      params.set("terms", interpretation.residualTerms.join(" "));
+      params.set("terms", interpretation.residualTerms.join(","));
     }
     params.set("sort", discoverSort(facets.sort, domain));
     return `/discover?${params.toString()}`;

@@ -6,6 +6,12 @@
  * column, no text-only pseudo-buttons, and no two-column data definitions inside narrow cards.
  */
 
+/* Keep selected text legible without the legacy fluorescent yellow signal colour. */
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
 .page-shell,
 .page-shell main,
 .page-shell section,

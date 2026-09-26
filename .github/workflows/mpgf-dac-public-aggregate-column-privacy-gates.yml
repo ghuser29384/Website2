@@ -1,0 +1,304 @@
+name: MPGF DAC public aggregate column privacy gates
+
+on:
+  pull_request:
+    branches:
+      - fix/dac-public-goods-foundation-reconciliation-20260818
+      - main
+    paths:
+      - ".github/workflows/mpgf-dac-public-aggregate-column-privacy-gates.yml"
+      - "src/lib/mpgf/dac-public-aggregate-column-privacy-migration.test.ts"
+      - "supabase/migrations/20260818174000_mpgf_dac_public_aggregate_column_privacy.sql"
+  push:
+    branches:
+      - fix/dac-public-aggregate-column-privacy-20260818
+    paths:
+      - ".github/workflows/mpgf-dac-public-aggregate-column-privacy-gates.yml"
+      - "src/lib/mpgf/dac-public-aggregate-column-privacy-migration.test.ts"
+      - "supabase/migrations/20260818174000_mpgf_dac_public_aggregate_column_privacy.sql"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mpgf-dac-public-aggregate-column-privacy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  MIGRATION_PATH: supabase/migrations/20260818174000_mpgf_dac_public_aggregate_column_privacy.sql
+  SOURCE_TEST_PATH: src/lib/mpgf/dac-public-aggregate-column-privacy-migration.test.ts
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+  EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+
+jobs:
+  source-gates:
+    name: Exact-head source, repository, lint, TypeScript, build, and diff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_BASE_REF: ${{ github.event.pull_request.base.ref || 'fix/dac-public-goods-foundation-reconciliation-20260818' }}
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+      MPGF_REAL_MONEY_ENABLED: "false"
+      MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+      MPGF_TEST_PAYMENT_ENABLED: "false"
+      EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate and three-file repair scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git fetch origin "$EXPECTED_BASE_REF"
+          base="$(git merge-base HEAD "origin/$EXPECTED_BASE_REF")"
+          git diff --check "$base" HEAD
+          git diff --name-only "$base" HEAD | sort > actual-files.txt
+          cat > expected-files.txt <<'EOF'
+          .github/workflows/mpgf-dac-public-aggregate-column-privacy-gates.yml
+          src/lib/mpgf/dac-public-aggregate-column-privacy-migration.test.ts
+          supabase/migrations/20260818174000_mpgf_dac_public_aggregate_column_privacy.sql
+          EOF
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
+          {
+            printf 'head=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'base=%s\n' "$base"
+            sha256sum "$MIGRATION_PATH" "$SOURCE_TEST_PATH"
+          } | tee exact-head.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused migration contract
+        run: node --import tsx --test "$SOURCE_TEST_PATH" | tee focused.log
+
+      - name: Run complete repository tests
+        run: npm test | tee repository-tests.log
+
+      - name: Run repository lint
+        run: npm run lint -- --quiet | tee lint.log
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit --pretty false | tee typecheck.log
+
+      - name: Build production application with every payment rail disabled
+        run: npm run build | tee build.log
+
+      - name: Upload source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-public-aggregate-column-privacy-source-${{ github.run_id }}
+          path: |
+            actual-files.txt
+            expected-files.txt
+            exact-head.txt
+            focused.log
+            repository-tests.log
+            lint.log
+            typecheck.log
+            build.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  isolated-qa-rollback:
+    name: Transactional isolated-QA column privilege and zero-data proof
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Validate exact TLS-only Moral Trade QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$QA_SUPABASE_DB_URL"
+          URL_TO_CHECK="$QA_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid =
+            ["postgres:", "postgresql:"].includes(url.protocol) &&
+            decodeURIComponent(url.username).includes(process.env.EXPECTED_QA_REF) &&
+            url.hostname === process.env.EXPECTED_QA_POOLER_HOST &&
+            url.port === "5432" &&
+            url.pathname === "/postgres" &&
+            (url.searchParams.get("sslmode") ?? "require") === "require" &&
+            Boolean(url.password) &&
+            !url.href.includes("jnpoxvalyjtdghnperyu");
+          if (!valid) throw new Error("Refusing a database URL outside exact isolated QA.");
+          NODE
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Build rollback-only direct-data-plane privacy proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("supabase/migrations/20260818174000_mpgf_dac_public_aggregate_column_privacy.sql")
+          source = path.read_text()
+          lines = source.splitlines(keepends=True)
+          meaningful = [i for i, line in enumerate(lines) if line.strip() and not line.lstrip().startswith("--")]
+          if not meaningful or lines[meaningful[0]].strip().lower() != "begin;":
+              raise SystemExit("Migration must begin transactionally.")
+          if lines[meaningful[-1]].strip().lower() != "commit;":
+              raise SystemExit("Migration must commit transactionally.")
+          lines[meaningful[0]] = "\n"
+          lines[meaningful[-1]] = "\n"
+          body = "".join(lines)
+
+          proof = r'''\set ON_ERROR_STOP on
+          begin;
+          set local lock_timeout = '5s';
+          set local statement_timeout = '120s';
+
+          create temporary table public_aggregate_counts_before as
+          select
+            (select count(*) from public.mpgf_public_goods_campaigns) as campaigns,
+            (select count(*) from public.mpgf_dac_campaign_outcomes) as outcomes,
+            (select count(*) from public.mpgf_public_goods_pledges
+              where payment_intent_ref is not null) as payment_refs;
+          ''' + body + r'''
+
+          set local role anon;
+          select
+            id, round_id, slug, title, destination_type, destination_ref,
+            cause_tags, public_summary, threshold_amount_cents,
+            threshold_supporters, deadline_at, verification_method,
+            baseline_rule, exit_rule, review_status, pool_proposal_id,
+            threshold_visibility, progress_visibility,
+            published_terms_version, published_terms_sha256, published_at,
+            created_at
+          from public.mpgf_public_goods_campaigns
+          limit 0;
+          select
+            id, campaign_id, pool_proposal_id, terms_version, terms_sha256,
+            outcome_status, eligible_amount_cents, eligible_supporter_count,
+            threshold_amount_cents, threshold_supporters, deadline_at,
+            evaluated_at, outcome_sha256, created_at
+          from public.mpgf_dac_campaign_outcomes
+          limit 0;
+          reset role;
+
+          set local role authenticated;
+          select
+            id, round_id, slug, title, destination_type, destination_ref,
+            cause_tags, public_summary, threshold_amount_cents,
+            threshold_supporters, deadline_at, verification_method,
+            baseline_rule, exit_rule, review_status, pool_proposal_id,
+            threshold_visibility, progress_visibility,
+            published_terms_version, published_terms_sha256, published_at,
+            created_at
+          from public.mpgf_public_goods_campaigns
+          limit 0;
+          select
+            id, campaign_id, pool_proposal_id, terms_version, terms_sha256,
+            outcome_status, eligible_amount_cents, eligible_supporter_count,
+            threshold_amount_cents, threshold_supporters, deadline_at,
+            evaluated_at, outcome_sha256, created_at
+          from public.mpgf_dac_campaign_outcomes
+          limit 0;
+          reset role;
+
+          do $proof$
+          declare
+            before_row public_aggregate_counts_before%rowtype;
+          begin
+            select * into before_row from public_aggregate_counts_before;
+            if before_row.campaigns <> (select count(*) from public.mpgf_public_goods_campaigns)
+               or before_row.outcomes <> (select count(*) from public.mpgf_dac_campaign_outcomes)
+               or before_row.payment_refs <> (
+                 select count(*) from public.mpgf_public_goods_pledges
+                 where payment_intent_ref is not null
+               ) then
+              raise exception 'The public aggregate privacy migration changed QA data.';
+            end if;
+
+            if has_column_privilege(
+              'anon', 'public.mpgf_public_goods_campaigns', 'published_by', 'SELECT'
+            ) or has_column_privilege(
+              'authenticated', 'public.mpgf_public_goods_campaigns', 'published_by', 'SELECT'
+            ) or has_column_privilege(
+              'anon', 'public.mpgf_dac_campaign_outcomes', 'finalized_by', 'SELECT'
+            ) or has_column_privilege(
+              'authenticated', 'public.mpgf_dac_campaign_outcomes', 'outcome_json', 'SELECT'
+            ) then
+              raise exception 'A public role retains a private aggregate column.';
+            end if;
+          end;
+          $proof$;
+
+          select jsonb_build_object(
+            'safeCampaignColumnsReadable', true,
+            'safeOutcomeColumnsReadable', true,
+            'privateCampaignColumnsReadable', false,
+            'privateOutcomeColumnsReadable', false,
+            'rowCountsPreserved', true,
+            'paymentReferencesCreated', 0
+          );
+          rollback;
+          '''
+          Path("qa-public-aggregate-column-privacy-rollback.sql").write_text(proof)
+          PY
+
+      - name: Execute rollback-only privacy proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file qa-public-aggregate-column-privacy-rollback.sql \
+            2>&1 | tee qa-public-aggregate-column-privacy.log
+          grep -q '"safeCampaignColumnsReadable": true' qa-public-aggregate-column-privacy.log
+          grep -q '"privateCampaignColumnsReadable": false' qa-public-aggregate-column-privacy.log
+          grep -q '"rowCountsPreserved": true' qa-public-aggregate-column-privacy.log
+          grep -q '"paymentReferencesCreated": 0' qa-public-aggregate-column-privacy.log
+
+      - name: Upload database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-public-aggregate-column-privacy-qa-${{ github.run_id }}
+          path: |
+            qa-public-aggregate-column-privacy-rollback.sql
+            qa-public-aggregate-column-privacy.log
+          if-no-files-found: warn
+          retention-days: 30

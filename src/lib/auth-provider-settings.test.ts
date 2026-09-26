@@ -5,6 +5,7 @@ import {
   getEnabledOAuthProviders,
   isOAuthProviderEnabled,
 } from "@/lib/auth-provider-settings";
+import { getSupabaseEnv } from "@/lib/supabase/config";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -25,28 +26,30 @@ function restoreEnv(
   }
 }
 
-test("Supabase OAuth provider settings fail closed without Supabase env", async () => {
+test("Supabase OAuth provider settings use the checked-in public defaults without env overrides", async () => {
   const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const previousKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  let fetched = false;
+  const requests: string[] = [];
 
   delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  globalThis.fetch = async () => {
-    fetched = true;
-    return new Response("{}");
+  const defaults = getSupabaseEnv();
+  globalThis.fetch = async (input, init) => {
+    requests.push(input.toString());
+    assert.equal((init?.headers as Record<string, string>).apikey, defaults.publishableKey);
+    return new Response(JSON.stringify({ external: { twitter: true } }), { status: 200 });
   };
 
   try {
-    assert.deepEqual(await getEnabledOAuthProviders(), []);
-    assert.equal(fetched, false);
+    assert.deepEqual(await getEnabledOAuthProviders(), ["twitter"]);
+    assert.deepEqual(requests, [`${defaults.url}/auth/v1/settings`]);
   } finally {
     globalThis.fetch = ORIGINAL_FETCH;
     restoreEnv(previousUrl, previousKey);
   }
 });
 
-test("Supabase OAuth provider settings mirror enabled external providers", async () => {
+test("Supabase OAuth provider settings omit product-disabled providers", async () => {
   const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const previousKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
@@ -56,7 +59,7 @@ test("Supabase OAuth provider settings mirror enabled external providers", async
     assert.equal(input, "https://example.supabase.co/auth/v1/settings");
     assert.equal((init?.headers as Record<string, string>).apikey, "publishable-test-key");
     return new Response(
-      JSON.stringify({ external: { google: true, apple: false, facebook: true } }),
+      JSON.stringify({ external: { google: true, apple: true, facebook: true } }),
       { status: 200 },
     );
   };

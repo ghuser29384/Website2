@@ -1,3 +1,10 @@
+import {
+  buildProvisionalFailureBonusSuccessPremiumAssumptions,
+  quoteFailureBonusSuccessPremiumSchedule,
+  type FailureBonusSuccessPremiumPricing,
+  type FailureBonusSuccessPremiumPayer,
+} from "./failure-bonus-success-premium";
+
 export const MORAL_PUBLIC_GOODS_LABS_ROUTE = "/labs/moral-public-goods/global-biosecurity-coordination" as const;
 
 export const MORAL_PUBLIC_GOODS_LABS_REFUND_BONUS_FEATURE_FLAG =
@@ -49,6 +56,13 @@ export interface MoralPublicGoodsLabsPool {
     readonly suggestedMaxCents: 10000;
     readonly bonusCopy: "small backed bonus";
     readonly bonusReserveState: "backed";
+    readonly successPremiumPayer: FailureBonusSuccessPremiumPayer;
+    readonly successPremiumPricing: FailureBonusSuccessPremiumPricing;
+    readonly netRecipientThresholds: readonly [{
+      readonly thresholdId: "global-biosecurity-threshold-1";
+      readonly thresholdIndex: 1;
+      readonly cumulativeNetRecipientThresholdCents: 1_000_000;
+    }];
   };
   readonly platformTiers: readonly MoralPublicGoodsLabsPlatformTier[];
 }
@@ -112,6 +126,20 @@ export const MORAL_PUBLIC_GOODS_LABS_POOL: MoralPublicGoodsLabsPool = {
     suggestedMaxCents: 10000,
     bonusCopy: "small backed bonus",
     bonusReserveState: "backed",
+    successPremiumPayer: "pool_creator_or_sponsor",
+    successPremiumPricing: {
+      mode: "experience_rated",
+      assumptions: buildProvisionalFailureBonusSuccessPremiumAssumptions(1_000),
+      provisional: true,
+      rationale: "Illustrative Labs quote pending Moral Trade portfolio claims data.",
+    },
+    netRecipientThresholds: [
+      {
+        thresholdId: "global-biosecurity-threshold-1",
+        thresholdIndex: 1,
+        cumulativeNetRecipientThresholdCents: 1_000_000,
+      },
+    ],
   },
   platformTiers: [
     { tierIndex: 1, thresholdCents: 100_000, forecastProbabilityBps: 7_500, platformMatchRateBps: 500 },
@@ -121,6 +149,13 @@ export const MORAL_PUBLIC_GOODS_LABS_POOL: MoralPublicGoodsLabsPool = {
     { tierIndex: 5, thresholdCents: 2_500_000, forecastProbabilityBps: 1_000, platformMatchRateBps: 3_500 },
   ],
 };
+
+export const MORAL_PUBLIC_GOODS_LABS_SUCCESS_PREMIUM_SCHEDULE =
+  quoteFailureBonusSuccessPremiumSchedule({
+    thresholds: MORAL_PUBLIC_GOODS_LABS_POOL.refundBonus.netRecipientThresholds,
+    defaultPricing: MORAL_PUBLIC_GOODS_LABS_POOL.refundBonus.successPremiumPricing,
+    premiumPayer: MORAL_PUBLIC_GOODS_LABS_POOL.refundBonus.successPremiumPayer,
+  });
 
 export const MORAL_PUBLIC_GOODS_LABS_VIEWPOINT_OPTIONS = [
   "Humanitarian",
@@ -161,6 +196,11 @@ export const MORAL_PUBLIC_GOODS_LABS_ORDINARY_COPY = [
   "Routes verified",
   "Progress sealed",
   "Reserve backed",
+  "Common Failure Bonus Reserve",
+  "Successful pools replenish the reserve through a disclosed success premium.",
+  "The net recipient threshold excludes the success premium.",
+  "Illustrative success premium: 2.01% ($201 on a $10,000 net recipient threshold).",
+  "Gross success requirement: $10,201 before separately disclosed payment fees.",
   "Labs mechanism — Non-MVP. Real-money use is disabled unless this feature is explicitly promoted.",
   "Choose your funding rule",
   "Two ways to support this pool. Learn more about how they work.",
@@ -229,6 +269,8 @@ export function getMoralPublicGoodsLabsSidebarNotes(mechanism: MoralPublicGoodsL
     return [
       "Non-MVP feature. May be simulation-only.",
       "Failure bonus is conditional and backed.",
+      "Successful pools replenish the common reserve through a disclosed success premium.",
+      "The premium is separate from the net recipient threshold.",
       "No bonus for blocked, unsafe, ineligible, duplicate, payment-failed, or abuse-flagged pledges.",
       "Exact progress is hidden until the round closes.",
     ] as const;

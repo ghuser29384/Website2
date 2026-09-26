@@ -1,0 +1,389 @@
+name: Verify A1 natural production cron 2026-07-30
+
+on:
+  schedule:
+    - cron: '37 12 30 7 *'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: verify-a1-natural-production-cron-20260730
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET_DATE: '2026-07-30'
+      WINDOW_START: '2026-07-30T12:25:00Z'
+      WINDOW_END: '2026-07-30T12:45:00Z'
+      VERIFY_DEADLINE: '2026-07-30T12:50:00Z'
+      EXPECTED_OBJECTIVE: pareto_safe_additionality
+      EXPECTED_ALGORITHM: pareto-causal-v1
+      EXPECTED_SLOT: pareto-causal-v1:2026-07-30:12:30Z
+      CANONICAL_VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      WEBSITE2_VERCEL_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      PGCONNECT_TIMEOUT: '10'
+      PGOPTIONS: '-c default_transaction_read_only=on -c statement_timeout=30000'
+    steps:
+      - name: Determine whether this is the one authorized observation date
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(date -u +%F)" = "$TARGET_DATE" ]; then
+            echo 'active=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'active=false' >> "$GITHUB_OUTPUT"
+            echo "No-op: this observer is restricted to $TARGET_DATE UTC."
+          fi
+
+      - name: Check out the deployed repository state
+        if: steps.target.outputs.active == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          show-progress: false
+
+      - name: Validate permanent inputs and single-project cron ownership
+        if: steps.target.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p verification-evidence
+
+          if [ -z "${PROD_SUPABASE_DB_URL:-}" ]; then
+            echo '::error::The permanent PROD_SUPABASE_DB_URL repository secret is missing.'
+            exit 1
+          fi
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+
+          URL_TO_CHECK="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid =
+            ["postgres:", "postgresql:"].includes(url.protocol) &&
+            decodeURIComponent(url.username) === process.env.PROD_POOLER_USER &&
+            url.hostname === process.env.PROD_POOLER_HOST &&
+            url.port === "5432" &&
+            url.pathname === "/postgres" &&
+            url.searchParams.get("sslmode") === "require" &&
+            Boolean(url.password);
+          if (!valid) {
+            console.error("PROD_SUPABASE_DB_URL is not the production-only session-pooler URL.");
+            process.exit(1);
+          }
+          NODE
+
+          node --input-type=module <<'NODE' > verification-evidence/project-cron-config.json
+          import {
+            CANONICAL_MORAL_TRADE_PROJECT_ID,
+            DUPLICATE_WEBSITE2_PROJECT_ID,
+            RECOMMENDATION_TRAINING_PATH,
+            RECOMMENDATION_TRAINING_SCHEDULE,
+            buildVercelProjectConfig,
+          } from './scripts/vercel-project-config.mjs';
+
+          const matching = (projectId) => buildVercelProjectConfig({ projectId }).crons.filter(
+            (cron) => cron.path === RECOMMENDATION_TRAINING_PATH,
+          );
+          console.log(JSON.stringify({
+            canonicalProjectId: CANONICAL_MORAL_TRADE_PROJECT_ID,
+            website2ProjectId: DUPLICATE_WEBSITE2_PROJECT_ID,
+            expectedSchedule: RECOMMENDATION_TRAINING_SCHEDULE,
+            canonicalTrainingCrons: matching(CANONICAL_MORAL_TRADE_PROJECT_ID),
+            website2TrainingCrons: matching(DUPLICATE_WEBSITE2_PROJECT_ID),
+          }));
+          NODE
+
+          jq -e --arg canonical "$CANONICAL_VERCEL_PROJECT_ID" \
+                --arg duplicate "$WEBSITE2_VERCEL_PROJECT_ID" \
+                --arg schedule '30 12 * * *' '
+            .canonicalProjectId == $canonical and
+            .website2ProjectId == $duplicate and
+            .expectedSchedule == $schedule and
+            (.canonicalTrainingCrons | length) == 1 and
+            .canonicalTrainingCrons[0].schedule == $schedule and
+            (.website2TrainingCrons | length) == 0
+          ' verification-evidence/project-cron-config.json >/dev/null
+
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+          psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc \
+            "select jsonb_build_object('connected', true, 'current_user', current_user, 'read_only', current_setting('default_transaction_read_only'), 'checked_at', now())::text" \
+            > verification-evidence/connection-preflight.json
+          jq -e --arg user "$PROD_POOLER_USER" \
+            '.connected == true and .current_user == $user and .read_only == "on"' \
+            verification-evidence/connection-preflight.json >/dev/null
+
+      - name: Verify exactly one natural canonical 12:30 UTC training run
+        if: steps.target.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          query_state() {
+            local output="$1"
+            psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atq > "$output" <<'SQL'
+          with window_runs as (
+            select r.*
+            from public.recommendation_training_runs r
+            where r.started_at >= timestamptz '2026-07-30 12:25:00+00'
+              and r.started_at <  timestamptz '2026-07-30 12:45:00+00'
+            order by r.started_at
+          ), run_details as (
+            select
+              r.id::text as run_id,
+              r.status as run_status,
+              r.stage as run_stage,
+              r.objective,
+              coalesce(r.error_code, '') as error_code,
+              coalesce(r.error_detail, '') as error_detail,
+              r.started_at,
+              r.completed_at,
+              r.counts,
+              r.model_version_id::text,
+              r.scheduled_slot,
+              r.source_project_id,
+              r.source_deployment_id,
+              r.execution_class,
+              r.duplicate_of::text,
+              m.id::text as model_id,
+              m.model_key,
+              m.status as model_status,
+              m.algorithm_version,
+              m.trained_at,
+              m.sample_count,
+              m.profile_count,
+              m.opportunity_count,
+              m.proposal_count,
+              m.acceptance_count,
+              m.completion_count,
+              m.outcome_feedback_count,
+              g.id::text as guardrail_id,
+              g.exposure_count as guardrail_exposure_count,
+              g.stop_experiment,
+              s.status as slot_status,
+              s.run_id::text as slot_run_id,
+              s.model_version_id::text as slot_model_id,
+              s.attempt_count as slot_attempt_count
+            from window_runs r
+            left join public.recommendation_model_versions m on m.id = r.model_version_id
+            left join public.recommendation_guardrail_snapshots g on g.training_run_id = r.id
+            left join public.recommendation_training_slots s on s.slot_key = r.scheduled_slot
+          ), synthetic_auth_users as (
+            select id from auth.users
+            where coalesce(email, '') ilike any(array['%a1-prod-smoke%', '%synthetic%'])
+          ), synthetic_profiles as (
+            select id from public.profiles
+            where id in (select id from synthetic_auth_users)
+               or coalesce(display_name, '') ilike any(array['%a1 smoke%', '%synthetic%'])
+               or coalesce(email, '') ilike any(array['%a1-prod-smoke%', '%synthetic%'])
+               or coalesce(bio, '') ilike any(array['%a1-prod-smoke%', '%synthetic%'])
+          ), synthetic_offers as (
+            select id from public.offers
+            where concat_ws(
+              ' ', owner_alias, offered_cause, requested_cause, offer_action,
+              request_action, compromise_cause, verification, notes, no_trade_baseline,
+              exit_conditions, maximum_burden, privacy_scope, submission_key
+            ) ilike any(array['%a1-prod-smoke%', '%synthetic%'])
+          ), synthetic_agreements as (
+            select id from public.agreements
+            where proposer_id in (select id from synthetic_profiles)
+               or responder_id in (select id from synthetic_profiles)
+               or offer_id in (select id from synthetic_offers)
+               or coalesce(notes, '') ilike any(array['%a1-prod-smoke%', '%synthetic%'])
+          ), synthetic_exposures as (
+            select id from public.recommendation_exposures
+            where profile_id in (select id from synthetic_profiles)
+               or opportunity_id in (select id::text from synthetic_offers)
+               or coalesce(feature_snapshot::text, '') ilike any(array['%a1-prod-smoke%', '%synthetic%'])
+          ), synthetic_feedback as (
+            select agreement_id, profile_id from public.recommendation_outcome_feedback
+            where profile_id in (select id from synthetic_profiles)
+               or agreement_id in (select id from synthetic_agreements)
+          )
+          select jsonb_build_object(
+            'verified_at', now(),
+            'window_start', '2026-07-30T12:25:00Z',
+            'window_end', '2026-07-30T12:45:00Z',
+            'run_count', (select count(*) from window_runs),
+            'successful_complete_count', (
+              select count(*) from window_runs
+              where status = 'succeeded' and stage = 'complete' and completed_at is not null
+                and coalesce(error_code, '') = '' and coalesce(error_detail, '') = ''
+            ),
+            'failed_count', (
+              select count(*) from window_runs
+              where status = 'failed' or stage = 'failed'
+                 or coalesce(error_code, '') <> '' or coalesce(error_detail, '') <> ''
+            ),
+            'unfinished_count', (
+              select count(*) from window_runs where completed_at is null or status = 'running'
+            ),
+            'runs', coalesce(
+              (select jsonb_agg(to_jsonb(run_details) order by started_at) from run_details),
+              '[]'::jsonb
+            ),
+            'current_real_state', jsonb_build_object(
+              'exposures', (select count(*) from public.recommendation_exposures),
+              'assignments', (select count(*) from public.recommendation_experiment_assignments),
+              'outcomes', (select count(*) from public.recommendation_outcomes),
+              'feedback', (select count(*) from public.recommendation_outcome_feedback),
+              'models', (select count(*) from public.recommendation_model_versions),
+              'training_runs', (select count(*) from public.recommendation_training_runs),
+              'guardrails', (select count(*) from public.recommendation_guardrail_snapshots)
+            ),
+            'synthetic_residue', jsonb_build_object(
+              'auth_users', (select count(*) from synthetic_auth_users),
+              'profiles', (select count(*) from synthetic_profiles),
+              'offers', (select count(*) from synthetic_offers),
+              'agreements', (select count(*) from synthetic_agreements),
+              'exposures', (select count(*) from synthetic_exposures),
+              'feedback', (select count(*) from synthetic_feedback)
+            )
+          )::text;
+          SQL
+          }
+
+          passes() {
+            jq -e --arg objective "$EXPECTED_OBJECTIVE" \
+                  --arg algorithm "$EXPECTED_ALGORITHM" \
+                  --arg slot "$EXPECTED_SLOT" \
+                  --arg canonical "$CANONICAL_VERCEL_PROJECT_ID" '
+              .run_count == 1 and
+              .successful_complete_count == 1 and
+              .failed_count == 0 and
+              .unfinished_count == 0 and
+              (.runs | length) == 1 and
+              .runs[0].run_status == "succeeded" and
+              .runs[0].run_stage == "complete" and
+              .runs[0].objective == $objective and
+              .runs[0].error_code == "" and
+              .runs[0].error_detail == "" and
+              .runs[0].model_id == .runs[0].model_version_id and
+              .runs[0].algorithm_version == $algorithm and
+              (.runs[0].model_status == "cold_start" or
+               .runs[0].model_status == "shadow" or
+               .runs[0].model_status == "active") and
+              .runs[0].guardrail_id != null and
+              .runs[0].scheduled_slot == $slot and
+              .runs[0].source_project_id == $canonical and
+              .runs[0].execution_class == "canonical" and
+              .runs[0].duplicate_of == null and
+              .runs[0].slot_status == "succeeded" and
+              .runs[0].slot_run_id == .runs[0].run_id and
+              .runs[0].slot_model_id == .runs[0].model_id and
+              (.runs[0].slot_attempt_count | tonumber) == 1 and
+              (.runs[0].counts.exposures | tonumber) == (.runs[0].sample_count | tonumber) and
+              (.runs[0].counts.profiles | tonumber) == (.runs[0].profile_count | tonumber) and
+              (.runs[0].counts.opportunities | tonumber) == (.runs[0].opportunity_count | tonumber) and
+              (.runs[0].counts.feedback | tonumber) == (.runs[0].outcome_feedback_count | tonumber) and
+              ([.synthetic_residue[]] | all(. == 0))
+            ' "$1" >/dev/null
+          }
+
+          deadline_epoch="$(date -u -d "$VERIFY_DEADLINE" +%s)"
+          while true; do
+            query_state verification-evidence/current.json
+            if passes verification-evidence/current.json; then
+              cp verification-evidence/current.json verification-evidence/final.json
+              break
+            fi
+            if [ "$(date -u +%s)" -ge "$deadline_epoch" ]; then
+              cp verification-evidence/current.json verification-evidence/final.json
+              jq . verification-evidence/final.json
+              echo '::error::Exactly one successful canonical A1 training run was not observed by the deadline.'
+              exit 1
+            fi
+            sleep 15
+          done
+
+          jq --arg observer_commit "$GITHUB_SHA" \
+             --arg workflow "$GITHUB_WORKFLOW" '
+            . + {observer: {
+              write_operations_performed: false,
+              temporary_credentials_used: false,
+              synthetic_fixtures_created: false,
+              production_connection_secret: "PROD_SUPABASE_DB_URL",
+              observer_commit: $observer_commit,
+              workflow: $workflow
+            }}
+          ' verification-evidence/final.json > verification-evidence/result.json
+
+          {
+            echo '### A1 natural production cron verification passed'
+            echo
+            echo "- Training run: $(jq -r '.runs[0].run_id' verification-evidence/result.json)"
+            echo "- Model: $(jq -r '.runs[0].model_id' verification-evidence/result.json) ($(jq -r '.runs[0].model_status' verification-evidence/result.json))"
+            echo "- Durable slot: $(jq -r '.runs[0].scheduled_slot' verification-evidence/result.json)"
+            echo "- Canonical project: $(jq -r '.runs[0].source_project_id' verification-evidence/result.json)"
+            echo "- Real exposures used: $(jq -r '.runs[0].sample_count' verification-evidence/result.json)"
+            echo '- website2 A1 cron configured: no'
+            echo '- Temporary credentials used: no'
+            echo '- Synthetic fixtures or residue: none'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload read-only verification evidence
+        if: always() && steps.target.outputs.active == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: a1-natural-production-cron-20260730-${{ github.run_id }}
+          path: verification-evidence
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record successful verification on the ownership fix
+        if: success() && steps.target.outputs.active == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/a1-verification-comment.md <<EOF
+          Natural production verification passed for the 2026-07-30 12:30 UTC A1 schedule.
+
+          - exactly one canonical database training run completed;
+          - the durable scheduled-slot claim linked the run, model, and guardrail;
+          - the programmatic Vercel configuration gives the A1 cron to \`moraltrade-site\` and no A1 cron to \`website2\`;
+          - the run used real production state;
+          - the observer used only permanent \`PROD_SUPABASE_DB_URL\` in read-only mode;
+          - no temporary credentials or synthetic fixtures were used;
+          - all synthetic-residue checks remained zero.
+
+          Evidence artifact: \`a1-natural-production-cron-20260730-${GITHUB_RUN_ID}\`.
+          EOF
+          gh pr comment 279 --repo "$GITHUB_REPOSITORY" --body-file /tmp/a1-verification-comment.md
+
+      - name: Record failed verification on the ownership fix
+        if: failure() && steps.target.outputs.active == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 279 --repo "$GITHUB_REPOSITORY" --body \
+            "The read-only observer did not verify one canonical natural A1 run on 2026-07-30. Inspect Actions run ${GITHUB_RUN_ID} and its evidence artifact. The observer did not invoke the endpoint or create fixtures."
+
+      - name: Remove the one-date observer after success
+        if: success() && steps.target.outputs.active == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          path='.github/workflows/verify-a1-natural-cron-20260730.yml'
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=main" --jq '.sha')"
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+            -f message='Remove completed A1 natural cron observer' \
+            -f sha="$sha" \
+            -f branch='main'

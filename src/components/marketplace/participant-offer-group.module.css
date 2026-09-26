@@ -1,0 +1,405 @@
+.group {
+  min-width: 0;
+  border-top: 1px solid var(--offers-ink);
+  border-bottom: 1px solid var(--offers-ink);
+  background: var(--offers-surface);
+}
+
+.groupHeader {
+  display: flex;
+  min-height: 3.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--offers-rule);
+}
+
+.identity {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.identity h3,
+.offerHeading h4 {
+  margin: 0;
+  color: var(--offers-ink);
+  font-family: var(--font-heading);
+  font-weight: 400;
+}
+
+.identity h3 {
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.kicker {
+  margin: 0 0 0.25rem;
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.proposalCount {
+  flex-shrink: 0;
+  margin: 0;
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.offerList,
+.actionOfferList {
+  display: grid;
+  min-width: 0;
+}
+
+.actionGroup {
+  min-width: 0;
+}
+
+.actionGroup + .actionGroup {
+  border-top: 1px solid var(--offers-rule-strong);
+}
+
+.actionGroupHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--offers-rule);
+  background: color-mix(in srgb, var(--offers-surface) 96%, var(--offers-ink) 4%);
+}
+
+.actionGroupHeader > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+
+.actionGroupHeader .kicker {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.actionGroupHeader strong {
+  display: block;
+  max-width: 80ch;
+  color: var(--offers-ink);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.actionGroupHeader > span {
+  flex: 0 0 auto;
+  max-width: 14rem;
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.offer {
+  display: grid;
+  min-width: 0;
+  gap: 0.4rem;
+  padding: 0.58rem 0.85rem 0.52rem;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 7.6rem;
+}
+
+.offer + .offer {
+  border-top: 1px solid var(--offers-rule);
+}
+
+.offerHeading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+}
+
+.offerHeading > div {
+  min-width: 0;
+}
+
+/* The requested cause is often at the end: never clamp it out of the row. */
+.offerHeading h4 {
+  display: block;
+  font-size: 1.0625rem;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.primaryAction {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--offers-action);
+  border-radius: 0;
+  background: transparent;
+  color: var(--offers-action);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+.primaryAction:hover {
+  border-color: var(--offers-action-hover);
+  background: var(--offers-action);
+  color: #ffffff;
+}
+
+.primaryAction:focus-visible,
+.disclosure summary:focus-visible,
+.actions a:focus-visible,
+.actions button:focus-visible {
+  outline: 2px solid var(--offers-action);
+  outline-offset: 3px;
+}
+
+.meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  list-style: none;
+}
+
+.meta li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meta li:not(:last-child)::after {
+  margin: 0 0.5rem;
+  color: var(--offers-rule-strong);
+  content: "·";
+}
+
+.disclosure {
+  min-width: 0;
+}
+
+.disclosure summary {
+  display: flex;
+  width: fit-content;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--offers-action);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  list-style: none;
+}
+
+.disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure summary::before {
+  display: inline-block;
+  width: 0.75rem;
+  content: "+";
+}
+
+.disclosure[open] summary::before {
+  content: "−";
+}
+
+.disclosureBody {
+  display: grid;
+  gap: 1rem;
+  padding: 0.85rem 0 0.5rem;
+  border-top: 1px solid var(--offers-rule);
+}
+
+.disclosure:not([open]) > .disclosureBody {
+  display: none;
+}
+
+.exactTerms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+  margin: 0;
+}
+
+.exactTerms div {
+  min-width: 0;
+}
+
+.exactTerms dt {
+  margin-bottom: 0.25rem;
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.exactTerms dd {
+  margin: 0;
+  color: var(--offers-ink);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--offers-rule);
+}
+
+.actions form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.actions a,
+.actions button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--offers-action);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.actions a:hover,
+.actions button:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.detailLink {
+  margin-left: auto;
+}
+
+.truthNote {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--offers-rule);
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+@media (min-width: 681px) {
+  .offer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .offerHeading {
+    grid-column: 1 / -1;
+  }
+
+  .meta {
+    grid-column: 1;
+  }
+
+  .disclosure {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .disclosure[open] {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 680px) {
+  .groupHeader,
+  .actionGroupHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.85rem;
+  }
+
+  .actionGroupHeader > div {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .proposalCount,
+  .actionGroupHeader > span {
+    max-width: none;
+    text-align: left;
+  }
+
+  .offer {
+    padding-block: 0.85rem;
+  }
+
+  .offerHeading {
+    align-items: start;
+    gap: 0.65rem;
+  }
+
+  .offerHeading h4 {
+    font-size: 1rem;
+  }
+
+  .primaryAction {
+    padding-inline: 0.7rem;
+  }
+
+  .meta {
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  .meta li:not(:last-child)::after {
+    content: none;
+  }
+
+  .exactTerms {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detailLink {
+    width: 100%;
+    margin-left: 0;
+  }
+}

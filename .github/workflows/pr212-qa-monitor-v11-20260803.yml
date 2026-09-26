@@ -1,0 +1,144 @@
+name: PR 212 exact-head QA monitor v11
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/pr212-qa-monitor-v11-trigger.txt
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-qa-monitor-v11-20260803
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    if: contains(github.event.head_commit.message, 'Trigger PR 212 QA monitor v11')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feat/institutional-trade-system
+      EXPECTED_HEAD: 0f5c352cafaa6225665049a44f492ebad5ea2e4d
+      QA_WORKFLOW_NAME: Institutional trade QA
+      TRIGGER_PATH: .github/pr212-qa-monitor-v11-trigger.txt
+    steps:
+      - name: Confirm the exact draft PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr="$(gh api repos/$GITHUB_REPOSITORY/pulls/212)"
+          [[ "$(jq -r .state <<<"$pr")" == "open" ]]
+          [[ "$(jq -r .draft <<<"$pr")" == "true" ]]
+          [[ "$(jq -r .head.ref <<<"$pr")" == "$TARGET_BRANCH" ]]
+          [[ "$(jq -r .head.sha <<<"$pr")" == "$EXPECTED_HEAD" ]]
+
+      - name: Locate and wait for exact-head institutional QA
+        id: qa
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json=''
+          run_id=''
+          conclusion=''
+          for attempt in $(seq 1 390); do
+            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --branch "$TARGET_BRANCH" --limit 100 --json databaseId,name,headSha,status,conclusion,url,createdAt)"
+            run_json="$(jq -c --arg sha "$EXPECTED_HEAD" --arg name "$QA_WORKFLOW_NAME" '[.[] | select(.headSha == $sha and .name == $name)] | sort_by(.createdAt) | reverse | .[0] // empty' <<<"$runs")"
+            if [[ -n "$run_json" ]]; then
+              run_id="$(jq -r .databaseId <<<"$run_json")"
+              status="$(jq -r .status <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+              echo "Institutional QA $run_id: status=$status conclusion=${conclusion:-pending}"
+              if [[ "$status" == "completed" ]]; then break; fi
+            fi
+            sleep 15
+          done
+          [[ -n "$run_id" ]] || { echo "No institutional QA run appeared for $EXPECTED_HEAD." >&2; exit 1; }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$(jq -r .url <<<"$run_json")" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          if [[ "$conclusion" != "success" ]]; then
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/pr212-qa-failed.log 2>&1 || true
+            tail -c 18000 /tmp/pr212-qa-failed.log || true
+            exit 1
+          fi
+
+      - name: Download and verify exact-head QA evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id='${{ steps.qa.outputs.run_id }}'
+          rm -rf /tmp/pr212-qa-evidence
+          mkdir -p /tmp/pr212-qa-evidence
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --dir /tmp/pr212-qa-evidence
+          differential="$(find /tmp/pr212-qa-evidence -type f -name full-tests-differential.json -print -quit)"
+          residue="$(find /tmp/pr212-qa-evidence -type f -name post-suite-residue.txt -print -quit)"
+          trigger="$(find /tmp/pr212-qa-evidence -type f -name institutional-pool-trigger-definition.sql -print -quit)"
+          test -s "$differential"
+          test -s "$residue"
+          test -s "$trigger"
+          jq -e '.feature_only_failure_count == 0 and .feature_summary.tests >= .base_summary.tests and .base_summary.cancelled == 0 and .feature_summary.cancelled == 0' "$differential"
+          grep -Eq 'auth\.users[[:space:]]*\|[[:space:]]*0' "$residue"
+          grep -Eq 'public\.profiles[[:space:]]*\|[[:space:]]*0' "$residue"
+          grep -Fq "to_jsonb(new)->>'status'" "$trigger"
+          if grep -Eiq '(^|[^[:alnum:]_])new\.status([^[:alnum:]_]|$)' "$trigger"; then
+            echo "Downloaded trigger evidence contains direct NEW.status access." >&2
+            exit 1
+          fi
+          files="$(find /tmp/pr212-qa-evidence -type f | wc -l | tr -d ' ')"
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+
+      - name: Publish passing evidence
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-qa-monitor-v11-success -->
+          ## PR #212 durable exact-head QA
+
+          - Exact head: \`$EXPECTED_HEAD\`
+          - Institutional QA run: [${{ steps.qa.outputs.run_id }}](${{ steps.qa.outputs.run_url }}) — **passed**
+          - Ordered base + additive migration replay: **passed**
+          - Record-safe pool-trigger definition from isolated QA: **passed**
+          - Exact-base differential suite: **zero feature-only failures; no test-count reduction**
+          - Application TypeScript, ESLint, production build, authenticated organization workflow, independent-person workflow, negative authorization matrix, targeted regression, and cleanup gates: **passed**
+          - Synthetic QA identity residue: **zero**
+          - Downloaded evidence files: **${{ steps.evidence.outputs.files }}**
+          - PR #212 remains **draft** and unmerged. Production database state, custody, payouts, and institutional feature flags were not changed."
+
+      - name: Publish failing evidence
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-qa-monitor-v11-failure -->
+          ## PR #212 exact-head QA remains blocked
+
+          - Exact head: \`$EXPECTED_HEAD\`
+          - Institutional QA run: [${{ steps.qa.outputs.run_id }}](${{ steps.qa.outputs.run_url }})
+          - Conclusion: **${{ steps.qa.outputs.conclusion }}**
+          - Monitor run: [$GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
+          - PR #212 remains draft and unmerged. No production database migration, custody, payout, or institutional feature activation occurred."
+
+      - name: Remove temporary trigger from main
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set +e
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$TRIGGER_PATH?ref=main" --jq .sha 2>/dev/null)"
+          if [[ -n "$sha" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$TRIGGER_PATH" \
+              -f message="Remove temporary $(basename "$TRIGGER_PATH")" \
+              -f sha="$sha" \
+              -f branch=main >/dev/null
+          fi
+          exit 0

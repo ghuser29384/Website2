@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
-import { HomePage } from "@/components/home/home-page";
-import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
-import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 const homeDescription = truncateDescription(
-  "Moral Trade is a marketplace and coordination mechanism for completing real donations through reviewed payment routes, swapping commitments, redirecting offsets, and joining conditional funding pools.",
+  "Moral Trade helps people propose reciprocal commitments, review their terms, and track evidence.",
 );
 
 export const metadata: Metadata = {
@@ -29,16 +26,8 @@ export const metadata: Metadata = {
   },
 };
 
-function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
-  return cookieStore
-    .getAll()
-    .some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
-}
-
-export default async function Page() {
-  const cookieStore = await cookies();
-  const viewer =
-    hasSupabaseEnv() && hasSupabaseAuthCookie(cookieStore) ? await getViewer() : null;
-
-  return <HomePage displayName={viewer?.displayName ?? null} />;
+// The proxy owns first-visit routing and the live homepage rewrite.
+// A direct App Router fallback must not revive the retired mock experience.
+export default function Page() {
+  redirect("/feed");
 }

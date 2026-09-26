@@ -1,0 +1,147 @@
+name: Commitments Pro Sprint specification gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/commitments-pro-sprint-specification-gates.yml
+      - docs/commitments/**
+      - scripts/commitments/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/commitments-pro-sprint-specification-gates.yml
+      - docs/commitments/**
+      - scripts/commitments/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitments-pro-sprint-specification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  specification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Establish immutable source identity
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          test "$actual_head" = "$EXPECTED_HEAD_SHA"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_sha="$PR_BASE_SHA"
+          else
+            base_sha="$PUSH_BEFORE_SHA"
+          fi
+          test -n "$base_sha"
+          test "$base_sha" != "0000000000000000000000000000000000000000"
+          git cat-file -e "$base_sha^{commit}"
+
+          initial_materialization=false
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REF" = "docs/commitments-pro-sprint-materialization-v1-20260818" ]; then
+            initial_materialization=true
+          fi
+
+          evidence_dir="$RUNNER_TEMP/commitments-pro-sprint-evidence"
+          mkdir -p "$evidence_dir"
+          printf '%s\n' "$base_sha" > "$evidence_dir/base-sha.txt"
+          printf '%s\n' "$actual_head" > "$evidence_dir/head-sha.txt"
+          git rev-parse HEAD^{tree} > "$evidence_dir/head-tree.txt"
+          git diff --name-only "$base_sha...$actual_head" | LC_ALL=C sort > "$evidence_dir/changed-files.txt"
+          {
+            printf 'BASE_SHA=%s\n' "$base_sha"
+            printf 'HEAD_SHA=%s\n' "$actual_head"
+            printf 'INITIAL_MATERIALIZATION=%s\n' "$initial_materialization"
+          } >> "$GITHUB_ENV"
+
+      - name: Parse JSON and workflow YAML
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { readFileSync, readdirSync } = require('node:fs');
+          const { join } = require('node:path');
+          const dir = 'docs/commitments';
+          for (const name of readdirSync(dir).filter((value) => value.endsWith('.json'))) {
+            JSON.parse(readFileSync(join(dir, name), 'utf8'));
+          }
+          NODE
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/commitments-pro-sprint-specification-gates.yml", aliases: true)'
+
+      - name: Validate contracts and SHA-256 bindings
+        run: |
+          set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/commitments-pro-sprint-evidence"
+          evidence="$evidence_dir/commitments-pro-sprint-materialization-sha256.json"
+          validator_args=(--write-evidence "$evidence")
+          if [ "$INITIAL_MATERIALIZATION" = "true" ]; then
+            validator_args+=(--check-diff "$BASE_SHA")
+          fi
+          node scripts/commitments/validate-pro-sprint-materialization.mjs "${validator_args[@]}" \
+            | tee "$evidence_dir/validator.log"
+          node --test scripts/commitments/pro-sprint-materialization.test.mjs \
+            | tee "$evidence_dir/tests.log"
+
+      - name: Enforce clean patch and initial materialization scope
+        run: |
+          set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/commitments-pro-sprint-evidence"
+          git diff --check "$BASE_SHA...$HEAD_SHA" | tee "$evidence_dir/diff-check.log"
+
+          if [ "$INITIAL_MATERIALIZATION" = "true" ]; then
+            if grep -E '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel|\.env)' "$evidence_dir/changed-files.txt"; then
+              echo "Runtime, database, dependency, provider, or deployment path entered the repository-only materialization." >&2
+              exit 1
+            fi
+            if grep -E '^\.github/(materialization|scripts)/|^\.github/workflows/apply-|materialization-smoke' "$evidence_dir/changed-files.txt"; then
+              echo "Temporary transport, smoke, or write-enabled controller entered the permanent materialization." >&2
+              exit 1
+            fi
+            test "$(wc -l < "$evidence_dir/changed-files.txt" | tr -d ' ')" = "13"
+          fi
+
+      - name: Record validation and epistemic boundary
+        run: |
+          set -euo pipefail
+          if [ "$INITIAL_MATERIALIZATION" = "true" ]; then
+            release_class="repository_only"
+          else
+            release_class="not_assessed_by_this_workflow"
+          fi
+          cat > "$RUNNER_TEMP/commitments-pro-sprint-evidence/boundary.json" <<JSON
+          {
+            "schema_version": "moral-trade-commitments-pro-sprint-boundary-v1",
+            "base_sha": "$BASE_SHA",
+            "head_sha": "$HEAD_SHA",
+            "initial_materialization_candidate": $INITIAL_MATERIALIZATION,
+            "candidate_release_class": "$release_class",
+            "validated_package_runtime_effect": false,
+            "validated_package_database_effect": false,
+            "validated_package_provider_or_money_effect": false,
+            "validated_package_participant_or_research_effect": false,
+            "qri_implementation_claimed": false,
+            "pilot_authorized": false
+          }
+          JSON
+
+      - name: Upload immutable specification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-pro-sprint-specification-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/commitments-pro-sprint-evidence
+          if-no-files-found: error
+          retention-days: 30

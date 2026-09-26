@@ -1,0 +1,65 @@
+{
+  "fixtureSchemaVersion": "moral-trade-canonical-json-parity-v2",
+  "fixtures": [
+    {
+      "key": "object_key_order",
+      "inputJson": "{\"b\":2,\"a\":1}",
+      "valid": true,
+      "canonicalJson": "{\"a\":1,\"b\":2}",
+      "sha256": "sha256:43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777"
+    },
+    {
+      "key": "nested_arrays",
+      "inputJson": "{\"z\":[3,{\"b\":false,\"a\":null}],\"a\":\"x\"}",
+      "valid": true,
+      "canonicalJson": "{\"a\":\"x\",\"z\":[3,{\"a\":null,\"b\":false}]}",
+      "sha256": "sha256:a66b8db42d40689e0b56ff1b8c70ace39d4f9550b11a9897c5aad23a068081dd"
+    },
+    {
+      "key": "unicode_chinese",
+      "inputJson": "{\"text\":\"道德贸易\",\"kind\":\"synthetic\"}",
+      "valid": true,
+      "canonicalJson": "{\"kind\":\"synthetic\",\"text\":\"道德贸易\"}",
+      "sha256": "sha256:b4f50929c642e38fff79c4ed47660773d923263e20fa0793898015cb11f3fabb"
+    },
+    {
+      "key": "whitespace_string",
+      "inputJson": "{\"text\":\"  line 1\\nline 2\\t \",\"ok\":true}",
+      "valid": true,
+      "canonicalJson": "{\"ok\":true,\"text\":\"  line 1\\nline 2\\t \"}",
+      "sha256": "sha256:65257c8e6da64cea55c7af62522e450d7c6a362697dbf0ff9407bd5728f095a5"
+    },
+    {
+      "key": "numeric_normalization",
+      "inputJson": "{\"integer\":1.0,\"negativeZero\":-0,\"minimumDecimal\":0.000001,\"safeInteger\":9007199254740991}",
+      "valid": true,
+      "canonicalJson": "{\"integer\":1,\"minimumDecimal\":0.000001,\"negativeZero\":0,\"safeInteger\":9007199254740991}",
+      "sha256": "sha256:004a64378a386bbffd79726dce3062f99356324f5c9e568d3a33337790791e41"
+    },
+    {
+      "key": "array_order",
+      "inputJson": "{\"items\":[3,2,1],\"name\":\"ordered\"}",
+      "valid": true,
+      "canonicalJson": "{\"items\":[3,2,1],\"name\":\"ordered\"}",
+      "sha256": "sha256:b21a1b747fc08235506d817e3b034409935a84f08af7ae93f197fe8010e530e2"
+    },
+    {
+      "key": "reject_exponential_small",
+      "inputJson": "{\"value\":0.0000001}",
+      "valid": false,
+      "expectedError": "unsupported_canonical_input"
+    },
+    {
+      "key": "reject_unsafe_integer",
+      "inputJson": "{\"value\":9007199254740992}",
+      "valid": false,
+      "expectedError": "unsupported_canonical_input"
+    },
+    {
+      "key": "reject_non_ascii_key",
+      "inputJson": "{\"é\":1}",
+      "valid": false,
+      "expectedError": "unsupported_canonical_input"
+    }
+  ]
+}

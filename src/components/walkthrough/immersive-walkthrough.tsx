@@ -16,6 +16,7 @@ import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 type ConceptId = "two-moves" | "crowd" | "redirect" | "mix" | "match";
 type OfferType = "Money" | "Time" | "A pledge";
 type MixId = "one" | "two" | "three";
+type CoalitionRule = "pre-agree" | "vote";
 
 interface MatchDeal {
   counterpart: string;
@@ -49,7 +50,7 @@ const concepts = [
     id: "redirect" as const,
     short: "Redirect",
     title: "Redirect",
-    caption: "Turn opposed spending into shared impact",
+    caption: "Rescue waste, then group-buy more impact",
   },
   {
     id: "mix" as const,
@@ -390,7 +391,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
   const [moves, setMoves] = useState<string[]>([]);
   const [amount, setAmount] = useState<number | null>(null);
   const [crowdGrowing, setCrowdGrowing] = useState(false);
-  const [sharedCause, setSharedCause] = useState<string | null>(null);
+  const [coalitionRule, setCoalitionRule] = useState<CoalitionRule | null>(null);
   const [mix, setMix] = useState<MixId | null>(null);
   const [offer, setOffer] = useState<OfferType | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
@@ -417,7 +418,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
     setMoves([]);
     setAmount(null);
     setCrowdGrowing(false);
-    setSharedCause(null);
+    setCoalitionRule(null);
     setMix(null);
     setOffer(null);
     setSelectedMatch(null);
@@ -764,20 +765,24 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
     if (step === 0) {
       return (
         <div className="mtw-scene mtw-stream-stage">
-          <StepMark current={0} total={3} />
+          <StepMark current={0} total={7} />
           <div className="mtw-stream mtw-stream-a">
-            <div className="mtw-stream-label"><strong>$100</strong><span>Democrats</span></div>
+            <div className="mtw-stream-label"><strong>$10</strong><span>Democrat · environment</span></div>
           </div>
           <div className="mtw-stream mtw-stream-b">
-            <div className="mtw-stream-label"><strong>$100</strong><span>Republicans</span></div>
+            <div className="mtw-stream-label"><strong>$10</strong><span>Republican · environment</span></div>
           </div>
-          <div className="mtw-collision">Opposite<br />directions</div>
+          <div className="mtw-collision">Mostly<br />cancel out</div>
           <div className="mtw-stream-copy">
-            <div className="mtw-scene-prompt">Click to intervene</div>
+            <div className="mtw-scene-prompt">Donation Redirect</div>
             <h1 className="mtw-scene-title" tabIndex={-1}>
-              Two donations. Pulling against each other.
+              Two political donations. Almost no shared impact.
             </h1>
-            <PrimaryAction onClick={() => setStep(1)}>Pause the tug-of-war</PrimaryAction>
+            <p className="mtw-scene-line">
+              Both donors care most about protecting the environment, but their $10 donations pull
+              in opposite directions.
+            </p>
+            <PrimaryAction onClick={() => setStep(1)}>Redirect the matched $20</PrimaryAction>
           </div>
         </div>
       );
@@ -785,32 +790,24 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
 
     if (step === 1) {
       return (
-        <div className="mtw-scene">
-          <StepMark current={1} total={3} />
-          <div className="mtw-scene-head">
-            <div className="mtw-scene-prompt">Choose a shared destination</div>
-            <h1 className="mtw-scene-title" tabIndex={-1}>
-              Where would both donors rather create $200 of impact?
-            </h1>
+        <div className="mtw-scene mtw-stream-stage is-redirected">
+          <StepMark current={1} total={7} />
+          <div className="mtw-stream mtw-stream-a">
+            <div className="mtw-stream-label"><strong>$20</strong><span>matched amount</span></div>
           </div>
-          <div className="mtw-shared-causes">
-            {[
-              ["+", "Malaria prevention"],
-              ["⌁", "Disaster response"],
-              ["✦", "Open science"],
-            ].map(([icon, label]) => (
-              <button
-                className="mtw-shared-cause"
-                key={label}
-                type="button"
-                onClick={() => {
-                  setSharedCause(label);
-                  setStep(2);
-                }}
-              >
-                <span aria-hidden="true">{icon}</span>{label}
-              </button>
-            ))}
+          <div className="mtw-stream mtw-stream-b" />
+          <div className="mtw-redirect-target">
+            <div><strong>$20</strong><span>to environmental protection</span></div>
+          </div>
+          <div className="mtw-stream-copy">
+            <div className="mtw-scene-prompt">First gain · rescue the waste</div>
+            <h1 className="mtw-scene-title" tabIndex={-1}>
+              The matched money now creates shared impact.
+            </h1>
+            <p className="mtw-scene-line">
+              Neither donor changes political beliefs. Their opposed spending simply stops fighting.
+            </p>
+            <PrimaryAction onClick={() => setStep(2)}>See how one $10 can go further</PrimaryAction>
           </div>
         </div>
       );
@@ -818,37 +815,189 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
 
     if (step === 2) {
       return (
-        <div className="mtw-scene mtw-stream-stage is-redirected">
-          <StepMark current={2} total={3} />
-          <div className="mtw-stream mtw-stream-a">
-            <div className="mtw-stream-label"><strong>$200</strong><span>matched amount</span></div>
-          </div>
-          <div className="mtw-stream mtw-stream-b" />
-          <div className="mtw-redirect-target">
-            <div><strong>$200</strong><span>to {sharedCause}</span></div>
-          </div>
-          <div className="mtw-stream-copy">
-            <div className="mtw-scene-prompt">Same beliefs · same budget</div>
+        <div className="mtw-scene mtw-redirect-comparison-scene">
+          <StepMark current={2} total={7} />
+          <div className="mtw-scene-head">
+            <div className="mtw-scene-prompt">Redirect scheduled · users notified</div>
             <h1 className="mtw-scene-title" tabIndex={-1}>
-              Now the matched money moves together.
+              The $10 redirect is already scheduled.
             </h1>
-            <PrimaryAction onClick={() => setStep(3)}>See the result</PrimaryAction>
+            <p className="mtw-scene-line">
+              In 7 days, the Republican environmentalist&apos;s $10 goes to an environmental protection
+              organization. Moral Trade notifies users now; they may propose a trade she values more
+              for the same $10. Without an accepted and completed trade, the donation proceeds automatically.
+            </p>
+          </div>
+          <div className="mtw-impact-options" aria-label="Compare uses of ten dollars">
+            <article className="mtw-impact-option">
+              <span>Scheduled redirect</span>
+              <strong>$10</strong>
+              <b>Environmental organization</b>
+              <small>Donated automatically in 7 days unless an accepted trade is completed.</small>
+            </article>
+            <article className="mtw-impact-option">
+              <span>One-to-one proposal</span>
+              <strong>1 × 10 weeks</strong>
+              <b>10 person-weeks</b>
+              <small>One person avoids buying single-use plastic bags.</small>
+            </article>
+            <article className="mtw-impact-option is-group-buy">
+              <span>Group-buy proposal</span>
+              <strong>100 × 2.1 days</strong>
+              <b>210 person-days · 30 person-weeks</b>
+              <small>Equivalent to 30 people for one week.</small>
+            </article>
+          </div>
+          <p className="mtw-example-note">
+            Here, she prefers 210 verified person-days to the scheduled $10 donation.
+          </p>
+          <PrimaryAction onClick={() => setStep(3)}>See a notified user start a coalition</PrimaryAction>
+        </div>
+      );
+    }
+
+    if (step === 3) {
+      return (
+        <div className="mtw-scene mtw-coalition-scene">
+          <StepMark current={3} total={7} />
+          <div className="mtw-coalition-layout">
+            <div>
+              <div className="mtw-scene-prompt">Platform notification · 7 days remaining</div>
+              <h1 className="mtw-scene-title" tabIndex={-1}>
+                A notified user finds 99 close matches.
+              </h1>
+              <p className="mtw-scene-line">
+                She uses Moral Trade to find 99 users whose priorities are as similar as possible and
+                whose small actions can add up.
+              </p>
+              <PrimaryAction onClick={() => setStep(4)}>Form the 100-person coalition</PrimaryAction>
+            </div>
+            <div className="mtw-coalition-card">
+              <div className="mtw-coalition-profile">
+                <span>Lead member&apos;s priorities</span>
+                <strong>Future-focused coalition</strong>
+              </div>
+              <div className="mtw-priority-list" aria-label="Lead member priority allocation">
+                <div><span>Future flourishing</span><b>60 / 100</b><i><em style={{ width: "60%" }} /></i></div>
+                <div><span>Existential risk</span><b>25 / 100</b><i><em style={{ width: "25%" }} /></i></div>
+                <div><span>Other priorities</span><b>15 / 100</b><i><em style={{ width: "15%" }} /></i></div>
+              </div>
+              <div className="mtw-coalition-dots" aria-hidden="true">
+                {Array.from({ length: 100 }, (_, index) => <i key={index} />)}
+              </div>
+              <div className="mtw-coalition-math">
+                <strong>100 × 2.1 days</strong>
+                <span>= 210 verified person-days</span>
+              </div>
+            </div>
           </div>
         </div>
       );
     }
 
+    if (step === 4) {
+      return (
+        <div className="mtw-scene mtw-group-deal-scene">
+          <StepMark current={4} total={7} />
+          <div className="mtw-scene-head">
+            <div className="mtw-scene-prompt">A coalition can trade as one counterparty</div>
+            <h1 className="mtw-scene-title" tabIndex={-1}>
+              The coalition becomes one offer.
+            </h1>
+          </div>
+          <div className="mtw-group-deal-board">
+            <article className="mtw-group-deal-card">
+              <span>Environmentalist Republican gives</span>
+              <strong>$10 coalition payment</strong>
+              <small>Released only after the group&apos;s verified completion.</small>
+            </article>
+            <div className="mtw-group-deal-arrow" aria-hidden="true">↔</div>
+            <article className="mtw-group-deal-card is-coalition">
+              <span>100-person coalition gives</span>
+              <strong>210 person-days without buying single-use plastic bags</strong>
+              <small>Each member commits 2.1 days.</small>
+            </article>
+          </div>
+          <p className="mtw-fallback-note">
+            If the coalition does not form or complete, the scheduled environmental donation proceeds
+            after 7 days.
+          </p>
+          <PrimaryAction onClick={() => setStep(5)}>Accept the group trade</PrimaryAction>
+        </div>
+      );
+    }
+
+    if (step === 5) {
+      const releaseLabel = coalitionRule === "vote"
+        ? "Open the member vote"
+        : coalitionRule === "pre-agree"
+          ? "Release $10 to the pre-agreed destination"
+          : "Choose how the coalition will allocate $10";
+
+      return (
+        <div className="mtw-scene mtw-coalition-settlement-scene">
+          <StepMark current={5} total={7} />
+          <div className="mtw-settlement-layout">
+            <div>
+              <div className="mtw-scene-prompt">Completion verified</div>
+              <h1 className="mtw-scene-title" tabIndex={-1}>
+                100 members complete 2.1 days each.
+              </h1>
+              <div className="mtw-coalition-progress" role="progressbar" aria-label="Coalition completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={100}>
+                <div><strong>100 / 100</strong><span>members verified</span></div>
+                <i><em /></i>
+              </div>
+            </div>
+            <div className="mtw-governance-panel">
+              <span>How should the coalition use the $10?</span>
+              <div className="mtw-governance-choices" role="group" aria-label="Choose the coalition allocation rule">
+                <button
+                  aria-pressed={coalitionRule === "pre-agree"}
+                  type="button"
+                  onClick={() => setCoalitionRule("pre-agree")}
+                >
+                  <strong>Pre-agree the destination</strong>
+                  <small>Send the full $10 to the coalition&apos;s chosen future-focused fund.</small>
+                </button>
+                <button
+                  aria-pressed={coalitionRule === "vote"}
+                  type="button"
+                  onClick={() => setCoalitionRule("vote")}
+                >
+                  <strong>Vote after completion</strong>
+                  <small>One verified member, one vote on the full $10.</small>
+                </button>
+              </div>
+              <button className="mtw-primary-action" disabled={!coalitionRule} type="button" onClick={() => setStep(6)}>
+                <span>{releaseLabel}</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const coalitionSettlement = coalitionRule === "vote"
+      ? "A one-member-one-vote decision now allocates the coalition's $10."
+      : "The coalition's $10 goes to its pre-agreed future-focused destination.";
+
     return (
-      <div className="mtw-scene mtw-success-scene">
-        <StepMark current={2} total={3} />
-        <Burst count={28} />
+      <div className="mtw-scene mtw-success-scene mtw-redirect-amplified-success">
+        <StepMark current={6} total={7} />
+        <Burst count={32} />
         <div className="mtw-success-copy">
-          <div className="mtw-scene-prompt">Donation offset</div>
+          <div className="mtw-scene-prompt">Donation redirected · impact amplified</div>
           <h1 className="mtw-scene-title" tabIndex={-1}>
-            Keep your beliefs. Redirect the matched part.
+            One $10 bought 30 person-weeks of environmental action.
           </h1>
           <p className="mtw-scene-line">
-            Opposed donors can move the amount they match to something both value.
+            The environmentalist gets 210 verified person-days. The coalition gets the same $10 for
+            its shared priorities. {coalitionSettlement}
+          </p>
+          <p className="mtw-example-note">
+            Money moved where it was scarcer; small actions moved where they were cheaper. Both
+            sides prefer this outcome to the scheduled donation.
           </p>
           <ConversionDeck
             primary="join"

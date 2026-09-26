@@ -1,0 +1,179 @@
+{
+  "studyKey": "synthetic:trade-bilateral-encouragement-planning-v1",
+  "studyVersion": 1,
+  "mechanismFamily": "trade",
+  "studyVariant": "graph_cluster_role_2x2_encouragement",
+  "protocolKey": "commitments-causal-identification-and-calibration-master-v2",
+  "protocolPayloadHash": "sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a",
+  "templateKey": "commitments-trade-study-template-v2",
+  "templatePayloadHash": "sha256:cf0a7a96294b431dcd79879fa01b7d1031ea50a842cebca6986e13351bcbb1e1",
+  "evidenceToProductMappingHash": "sha256:eb4aadae8491c1a6924fca03acdeb9157b07a1439098e736c88e549db16b59b8",
+  "studyInstanceSchemaHash": "sha256:a8650788ed3e0ab6749dcd86342fd9c39dfc829ec23a4afe00d34bd28fa2a859",
+  "eligiblePopulationSnapshotHash": "sha256:6c87918124ccf404708c747a1c548fa989e949dbf18dcddaeac2f324da6b7a37",
+  "eligibilityRules": [
+    "planning envelope contains synthetic assumptions only and no actual user or opportunity record",
+    "a later execution candidate must freeze eligible directed dyads before any assignment seed is generated",
+    "both roles must independently satisfy the approved trade eligibility and harmful-offer rules"
+  ],
+  "exclusionRules": [
+    "exclude any real-person identifier from this planning artifact",
+    "exclude any dyad crossing a frozen graph partition if that would create unsupported exposure probabilities",
+    "exclude any offer with unresolved safety, legality, consent, or baseline-manufacture concerns"
+  ],
+  "assignmentUnit": "pre-randomization graph cluster",
+  "exposureUnit": "frozen eligible directed dyad opportunity",
+  "outcomeUnit": "frozen dyad outcome",
+  "analysisUnit": "independent randomized graph cluster",
+  "interferenceClusterDefinition": "connected components or a prespecified graph partition that contains repeated counterparties and material multi-hop spillovers; actual diagnostics are not completed",
+  "assignmentDesign": "proposed stratified blocked four-arm graph-cluster 2x2 bilateral encouragement policy; synthetic planning only",
+  "assignmentProbabilities": [
+    {
+      "armKey": "neither_role",
+      "probability": "0.25"
+    },
+    {
+      "armKey": "role_a_only",
+      "probability": "0.25"
+    },
+    {
+      "armKey": "role_b_only",
+      "probability": "0.25"
+    },
+    {
+      "armKey": "both_roles",
+      "probability": "0.25"
+    }
+  ],
+  "blockingAndStratificationVariables": [
+    "cluster_size_band",
+    "baseline_completion_risk_band",
+    "opportunity_type_band"
+  ],
+  "exposureMapping": "map frozen cluster assignment and observed delivery to one of the four registered bilateral encouragement cells; withhold the estimand for unsupported contamination states",
+  "supportedExposureCells": [
+    "neither_role",
+    "role_a_only",
+    "role_b_only",
+    "both_roles"
+  ],
+  "emptyExposureCellAction": "no_launch",
+  "primaryEstimand": {
+    "estimandKey": "bilateral_encouragement_policy_itt",
+    "estimandType": "assignment_policy_itt",
+    "claimScope": "policy_level"
+  },
+  "potentialOutcomeContrast": "mean reviewed counterparty completion under assignment to both_roles minus mean under assignment to neither_role in the frozen eligible graph-cluster population",
+  "targetPopulation": "a future, separately approved frozen population of eligible directed trade opportunities; this artifact contains no such population",
+  "primaryOutcome": {
+    "outcomeKey": "counterparty_reviewed_completion",
+    "outcomeKind": "scalar_native_unit",
+    "nativeUnit": "reviewed_completion_indicator",
+    "role": "primary"
+  },
+  "outcomeRegistry": [
+    {
+      "outcomeKey": "counterparty_reviewed_completion",
+      "outcomeKind": "scalar_native_unit",
+      "nativeUnit": "reviewed_completion_indicator",
+      "role": "primary"
+    },
+    {
+      "outcomeKey": "platform_delivery_cost",
+      "outcomeKind": "scalar_native_unit",
+      "nativeUnit": "usd_cents",
+      "role": "safety_cost"
+    }
+  ],
+  "outcomeWindow": "proposed fixed 30-day resolution window after assigned invitation delivery; not approved for execution",
+  "estimator": {
+    "estimatorKey": "cluster_hajek_policy_itt_v1",
+    "family": "cluster-level Horvitz-Thompson or Hájek with randomization inference",
+    "designBased": true
+  },
+  "varianceProcedure": {
+    "procedureKey": "cluster_ratio_residual_variance_v1",
+    "designBased": true
+  },
+  "finiteSampleInference": {
+    "methodKey": "monte_carlo_cluster_randomization_test_v1",
+    "randomizationBased": true
+  },
+  "unequalClusterSizeHandling": "use the frozen dyad-weighted Hájek ratio, report cluster-count and dyad-count denominators, and run leave-largest-cluster-out sensitivity",
+  "covariateAdjustmentPolicy": "unadjusted design-based estimate is primary; any frozen pre-assignment covariate adjustment is precision-only and must not change the estimand",
+  "missingnessEstimand": "unresolved evidence remains an explicit outcome state; do not silently drop unresolved dyads",
+  "attritionBounds": "report arm-specific resolution rates and worst-case bounds that assign unresolved dyads to both outcome extremes",
+  "sensitivityAnalyses": [
+    "repeat analysis after excluding each of the five largest clusters in turn",
+    "repeat under contamination rates from zero through the prespecified maximum",
+    "report worst-case unresolved-evidence bounds by arm",
+    "report estimates separately across prespecified baseline-risk and cluster-size strata",
+    "bind interpretation to precision report sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f"
+  ],
+  "graphDiagnostics": {
+    "status": "required_not_completed",
+    "noLaunchIfInadequate": true
+  },
+  "precisionSimulation": {
+    "status": "passed",
+    "noLaunchDetermination": "no_launch"
+  },
+  "fixedHorizonOrSequentialDesign": "proposed fixed horizon with no optional stopping; the candidate remains non-executing",
+  "ethicsDetermination": {
+    "status": "required_not_completed",
+    "independentRequired": true,
+    "gatekeeperPermissionIsConsent": false
+  },
+  "participantDefinition": "if ever executed, both users in an eligible dyad may be research participants because assignment can alter invitations and relational outcomes; no real participant exists in this artifact",
+  "consentOrWaiver": {
+    "status": "not_determined",
+    "independentlyApproved": false
+  },
+  "controlConditionJustification": "not approved; a future ethics review must determine whether withholding an invitation removes any entitlement or creates differential risk",
+  "vulnerableParticipantProtections": "exclude minors and any user facing material hierarchical, economic, social, or relational pressure unless independently approved safeguards exist",
+  "debriefingPolicy": "not determined; required before execution review if assignment is not fully transparent at enrollment",
+  "adverseEventMonitoring": "monitor every blocking safety outcome continuously and suspend assignment immediately on any observed or unresolved veto",
+  "stopAndSuspensionRules": [
+    "no launch without adequate independent graph clusters and supported exposure probabilities",
+    "suspend on any harmful offer, threat, coercion, retaliation, identity exposure, or baseline manufacture signal",
+    "suspend if differential evidence resolution or contamination exceeds its frozen bound",
+    "cancel if assignment integrity, eligibility immutability, or code-hash provenance fails"
+  ],
+  "privacyRetentionAndDeletion": "not approved for real data; a future plan must minimize identity data, separate research keys, bind retention periods, and honor deletion and legal constraints",
+  "accessControl": "planning files are repository-readable; any future assignment manifest must use least-privilege service access with no client write path",
+  "incidentResponse": "fail closed, stop assignment, preserve append-only audit evidence, notify the designated owner and independent reviewer, and do not resume without a new exact authorization",
+  "entropySource": "no assignment entropy generated for this planning-only candidate",
+  "seedGenerationProcedure": "after eligibility and graph diagnostics are irreversibly frozen, obtain independently logged entropy once; seed shopping and rerandomization are prohibited",
+  "seedCommitment": "sha256:9280b2110fb71e983ac1487ea104170b7d3ca9ac365633b620600179c6b23125",
+  "constrainedRandomizationRule": "within each frozen stratum, require complete blocks of four clusters and assign exactly one cluster to each arm; an incomplete block is a no-launch error",
+  "assignmentConcealment": "no assignments exist; a future manifest must remain concealed until eligibility is irreversible and delivery is due",
+  "outcomeAdjudicatorBlinding": "reviewers should be blinded to assignment where feasible and every unblinding must be append-only logged",
+  "unblindingLog": [],
+  "postAssignmentEligibilityChangeLog": [],
+  "differentialEvidenceResolutionAudit": "compare resolution, missingness, and adjudicator-unblinding rates by arm before interpreting any outcome contrast",
+  "blockingSafetyOutcomes": [
+    "harmful_offer_or_threat",
+    "baseline_manufacture_or_worsening",
+    "harm_shifted_to_nonparticipants",
+    "coercion_harassment_identity_exposure_or_retaliation",
+    "concentration_or_exclusion_effect",
+    "off_platform_substitution",
+    "duplicate_or_overlapping_resource_claim"
+  ],
+  "contaminationAndSpilloverMonitoring": "measure cross-cluster invitations, repeated counterparties, off-platform communication, and multi-hop exposure; unsupported exposure states withhold the estimand",
+  "offPlatformSubstitutionAudit": "compare reviewed off-platform completion and substitution signals by arm without treating absence of evidence as no substitution",
+  "resourceClaimDeduplication": "assign each reviewed outcome a stable claim key and prohibit the same claim from entering more than one additive aggregate",
+  "evidenceReferenceSchemes": [
+    "qa-evidence://synthetic/"
+  ],
+  "assignmentCodeHash": "sha256:0f12661ba6f959299cd85da38646477c70899aca0a9b25d23b35c056fd97911e",
+  "analysisCodeHash": "sha256:7106516340686b7f93df9f19dcdd1c82bde8134e693be65690ab0925644bf45f",
+  "appendOnlyRegistryRecord": "qa-registry://synthetic/not-registered/trade-bilateral-encouragement-planning-v1",
+  "protectedTagOrEquivalent": "github://ghuser29384/Website2/commit/2c51f6b6460a6679037d11c49ef63119ddf17f00",
+  "amendmentLog": [],
+  "deviationLog": [],
+  "instrumentationEnvironment": "qa",
+  "subjectMode": "synthetic_only",
+  "executionAuthorized": false,
+  "realUserAssignmentAllowed": false,
+  "studyInstancePayloadHash": "sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2"
+}

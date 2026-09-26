@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
-import { gunzipSync } from "node:zlib";
 
 const loader = readFileSync("public/moral-trade-live.html", "utf8");
+const core = readFileSync("public/moral-trade-live-core.txt", "utf8");
 const bridge = readFileSync("public/moral-trade-live-now.js", "utf8");
 const feedStyles = readFileSync("public/moral-trade-live-feed.css", "utf8");
 const routeBridge = readFileSync("public/moral-trade-live-route-recommendations.js", "utf8");
@@ -17,6 +18,14 @@ const tracker = readFileSync(
   "utf8",
 );
 
+test("the live loader accepts the exact checked-in core asset", () => {
+  const expectedDigest = loader.match(/digest !== '([a-f0-9]{64})'/)?.[1];
+  const actualDigest = createHash("sha256")
+    .update(readFileSync("public/moral-trade-live-core.txt"))
+    .digest("hex");
+  assert.equal(expectedDigest, actualDigest);
+});
+
 test("the live shell fetches private profile recommendations before rendering", () => {
   assert.match(loader, /fetch\('\/api\/live-now'/);
   assert.match(loader, /credentials: 'same-origin'/);
@@ -25,13 +34,13 @@ test("the live shell fetches private profile recommendations before rendering", 
   assert.match(loader, /moral-trade-live-feed\.css/);
   assert.match(loader, /moral-trade-live-route-recommendations\.js/);
   assert.match(loader, /moral-trade-live-route-recommendations\.css/);
-  assert.match(loader, /stripLegacyNowFocus/);
-  assert.match(loader, /No generic or demo suggestions are shown/);
+  assert.match(loader, /moral-trade-live-core\.txt/);
+  assert.match(core, /No generic or demo suggestions are shown/);
   assert.match(loader, /unavailableLiveNow/);
   assert.match(loader, /routePlanner:[\s\S]*status: 'unavailable'/);
   assert.match(
-    loader,
-    /loadingPlan[\s\S]*class="plan-grid"[\s\S]*class="panel plan-control"[\s\S]*class="panel route"[\s\S]*class="stack"/,
+    core,
+    /function nowPlan[\s\S]*class="plan-grid"[\s\S]*class="panel plan-control"[\s\S]*class="panel route"[\s\S]*class="stack"/,
     "the fail-closed Plan shell must retain every mount point used by the recommendation UI",
   );
 });
@@ -142,44 +151,14 @@ test("fallback states explicitly refuse generic or fabricated suggestions", () =
   }
 });
 
-test("the loader removes legacy feed and route suggestions before first render", () => {
-  const names = [
-    "0a",
-    "0b",
-    "0c",
-    "0d",
-    "1",
-    "2",
-    "3",
-    "4a",
-    "4b",
-    "4c",
-    "4d",
-    "5a",
-    "5b",
-    "5c",
-    "5d",
-  ];
-  const encoded = names
-    .map((name) => readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, "utf8"))
-    .join("");
-  const legacySource = gunzipSync(Buffer.from(encoded, "base64")).toString("utf8");
-  const start = legacySource.indexOf("function nowFocus(){");
-  const end = legacySource.indexOf("\nfunction story(", start);
-
-  assert.ok(start >= 0 && end > start, "legacy nowFocus boundaries should remain identifiable");
-  assert.match(legacySource.slice(start, end), /Counteroffer from Mina/);
-
-  const withoutFocus = `${legacySource.slice(0, start)}function nowFocus(){return "Loading profile";}${legacySource.slice(end)}`;
-  const planStart = withoutFocus.indexOf("function nowPlan(){");
-  const planEnd = withoutFocus.indexOf("\nfunction field(", planStart);
-  assert.ok(planStart >= 0 && planEnd > planStart, "legacy nowPlan boundaries should remain identifiable");
-  assert.match(withoutFocus.slice(planStart, planEnd), /Recommended mixed route/);
-  const deliveredSource = `${withoutFocus.slice(0, planStart)}function nowPlan(){return "Loading routes";}${withoutFocus.slice(planEnd)}`;
-  assert.doesNotMatch(deliveredSource, /Counteroffer from Mina|AI-safety research under \$100/);
-  assert.doesNotMatch(deliveredSource, /Recommended mixed route|Redirect \$20 of political donations/);
-  assert.match(deliveredSource, /function story\(/);
-  assert.match(deliveredSource, /function field\(/);
+test("the delivered core contains only loading states, never legacy feed or route suggestions", () => {
+  assert.match(core, /function nowFocus\(/);
+  assert.match(core, /function nowPlan\(/);
+  assert.match(core, /data-mt-live-now-state="loading"/);
+  assert.match(core, /data-mt-live-route-planner="loading"/);
+  assert.doesNotMatch(core, /Counteroffer from Mina|AI-safety research under \$100/);
+  assert.doesNotMatch(core, /Recommended mixed route|Redirect \$20 of political donations/);
+  assert.doesNotMatch(core, /function nowRules|function activityPage|function exportCSV/);
 });
 
 test("the browser bridge renders only fixture profile data and escapes opportunity fields", () => {
@@ -347,7 +326,7 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
   assert.match(context.rendered, /Your contribution joins the group route/);
   assert.doesNotMatch(context.rendered, /the shared threshold/);
   assert.match(context.rendered, /<details class="mt-feed-details">/);
-  assert.match(context.rendered, /Why this match/);
+  assert.match(context.rendered, /Why this appears/);
   assert.match(context.rendered, /Meal photo or counterparty confirmation/);
   assert.match(context.rendered, /Your live routes/);
   assert.match(context.rendered, /Shown here as your own listing, not as a match/);
@@ -356,6 +335,76 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
   assert.doesNotMatch(context.rendered, /You unlock the shared threshold/);
   assert.doesNotMatch(context.rendered, /legacy feed|Counteroffer from Mina/);
   assert.doesNotMatch(context.rendered, /<script>alert\(1\)<\/script>/);
+});
+
+function renderFeedSnapshot(recommendations: unknown[], status = "ready") {
+  const window = {
+    __MT_LIVE_NOW_BOOTSTRAP__: {
+      authenticated: true,
+      status,
+      profile: { causes: ["Animal welfare"] },
+      recommendations,
+    },
+    location: { pathname: "/feed" },
+    dispatchEvent() {},
+    nowFocus: () => "",
+  };
+  runInNewContext(bridge, {
+    window,
+    document: { documentElement: { setAttribute() {} } },
+    CustomEvent: class {},
+    URLSearchParams,
+  });
+  return window.nowFocus();
+}
+
+const publishedFixture = {
+  id: "participant-offer",
+  offeredCause: "Participant supplied animal welfare opportunity",
+  requestedCause: "Research feedback",
+  offerAction: "Publish the participant's research brief",
+  requestAction: "Review a bounded research question",
+  metadata: { mechanism: "published_offer" },
+};
+const atlasFixture = {
+  ...publishedFixture,
+  id: "synth:digital-minds-animal-welfare-science:animal-welfare",
+  offeredCause: "Digital-mind welfare research",
+  metadata: { origin: "platform_generated" },
+};
+
+test("mixed snapshots render only participant inventory and count only those cards", () => {
+  const rendered = renderFeedSnapshot([
+    atlasFixture,
+    publishedFixture,
+    { ...atlasFixture, id: "legacy-generated-id", offeredCause: "Better high-stakes decisions" },
+    { ...atlasFixture, metadata: {} },
+  ]);
+  assert.match(rendered, /data-mt-live-now-state="ready"/);
+  assert.match(rendered, /1 live opportunity/);
+  assert.match(rendered, /Participant supplied animal welfare opportunity/);
+  assert.match(rendered, /Publish the participant&#39;s research brief/);
+  assert.equal((rendered.match(/data-mt-live-now-recommendation=/g) ?? []).length, 1);
+  assert.doesNotMatch(rendered, /Digital-mind welfare research|Better high-stakes decisions|Potential trade|generated possibilit/);
+});
+
+test("legacy template-only snapshots cannot become feed inventory", () => {
+  const rendered = renderFeedSnapshot([atlasFixture]);
+  assert.match(rendered, /Your recommendation feed could not load/);
+  assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=|Digital-mind welfare research/);
+});
+
+test("empty inventory displays no matches without substituting Atlas templates", () => {
+  const rendered = renderFeedSnapshot([], "no_matches");
+  assert.match(rendered, /No open opportunity currently matches your profile/);
+  assert.match(rendered, /No filler suggestions were added/);
+  assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=/);
+});
+
+test("unavailable inventory stays unavailable even with legacy suggestions", () => {
+  const rendered = renderFeedSnapshot([atlasFixture], "unavailable");
+  assert.match(rendered, /Your recommendation feed could not load/);
+  assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=|Digital-mind welfare research/);
 });
 
 test("the mixed visual feed is compact, truthful, reversible, private, and mobile-safe", () => {
@@ -389,8 +438,8 @@ test("the mixed visual feed is compact, truthful, reversible, private, and mobil
   assert.match(bridge, /Number\(result\.acceptedEventCount\) >= 1/);
   assert.match(bridge, /Easy for me/);
   assert.match(bridge, /Hard for me/);
-  assert.match(bridge, /Less like this/);
-  assert.match(bridge, /Could not save that change/);
+  assert.match(bridge, /Show fewer like this/);
+  assert.match(bridge, /Could not update saved offers/);
   assert.match(bridge, /Could not save that rating/);
   assert.match(bridge, /Could not hide that opportunity/);
   assert.match(bridge, /card\.hidden = false/);

@@ -19,8 +19,10 @@ import {
   summarizeMpgfPublicGoodsReviewConsole,
 } from "@/lib/mpgf/mechanism";
 import { getMpgfPublicGoodsAdminConsole } from "@/lib/mpgf/public-goods-admin-consoles";
+import { loadPendingMpgfFailureBonusSchedules } from "@/lib/mpgf/failure-bonus-operator";
 import type { MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode } from "@/lib/mpgf/types";
 import {
+  approveMpgfFailureBonusScheduleAction,
   approveMpgfRealMoneyGateAction,
   recordMpgfAdminApprovalRecordAction,
   recordMpgfPublicGoodsReviewAction,
@@ -166,6 +168,11 @@ const adminApprovalControls: Record<string, Array<{
 
 const productionVerificationControls = new Set(["launch", "incidents", "conformance"]);
 
+function formatBasisPointsPercent(value: number) {
+  const rounded = (value / 100).toFixed(2);
+  return `${rounded.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}%`;
+}
+
 const publicGoodsDefaultReasonByAction: Record<MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode> = {
   approve: "destination_verified",
   needs_evidence: "needs_destination_evidence",
@@ -194,6 +201,19 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
   const approvalControls = adminApprovalControls[section] ?? [];
   const operatorConsole = getMpgfPublicGoodsAdminConsole(section);
   const publicGoodsReviewConsole = section === "public-goods" ? summarizeMpgfPublicGoodsReviewConsole() : null;
+  let failureBonusScheduleQueue: Awaited<ReturnType<typeof loadPendingMpgfFailureBonusSchedules>> = {
+    pending: [],
+    blocked: [],
+  };
+  let failureBonusScheduleLoadError: string | null = null;
+  if (section === "failure-bonus" && adminAccess.allowed) {
+    try {
+      failureBonusScheduleQueue = await loadPendingMpgfFailureBonusSchedules();
+    } catch (error) {
+      failureBonusScheduleLoadError =
+        error instanceof Error ? error.message : "Pending failure-bonus schedules could not be loaded.";
+    }
+  }
 
   return (
     <MpgfPageFrame
@@ -288,6 +308,135 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                       </button>
                     </form>
                   ))}
+                </div>
+              </div>
+            ) : null}
+            {section === "failure-bonus" ? (
+              <div className="mpgf-admin-action-panel">
+                <p className="eyebrow">Atomic schedule review</p>
+                <h3>Failure Bonus Reserve premium quotes</h3>
+                <p>
+                  Review the complete one-to-ten-threshold contract. Approval finalizes every current
+                  tranche together; no individual threshold can be approved separately, and approval is
+                  blocked after the first accepted pledge.
+                </p>
+                <div className="mpgf-control-summary">
+                  <div>
+                    <span>Pending schedules</span>
+                    <strong>{failureBonusScheduleQueue.pending.length}</strong>
+                  </div>
+                  <div>
+                    <span>Approval mode</span>
+                    <strong>atomic complete schedule</strong>
+                  </div>
+                  <div>
+                    <span>Premium payer</span>
+                    <strong>creator or sponsor</strong>
+                  </div>
+                  <div>
+                    <span>Recipient threshold</span>
+                    <strong>premium excluded</strong>
+                  </div>
+                </div>
+                {failureBonusScheduleLoadError ? (
+                  <div className="mpgf-threshold-errors" role="alert">
+                    <strong>Schedule queue unavailable</strong>
+                    <p>{failureBonusScheduleLoadError}</p>
+                  </div>
+                ) : null}
+                <div className="mpgf-gate-list">
+                  {failureBonusScheduleQueue.blocked.map((item) => (
+                    <article key={item.proposalId} className="mpgf-gate-row">
+                      <div>
+                        <p className="eyebrow">blocked schedule record</p>
+                        <h3>{item.title}</h3>
+                        <p>
+                          Proposal {item.proposalId} cannot be approved until its stored schedule is repaired.
+                        </p>
+                        <div className="mpgf-threshold-errors" role="alert">
+                          <strong>Server validation failed</strong>
+                          <p>{item.reason}</p>
+                        </div>
+                      </div>
+                      <span className="mpgf-gate-status mpgf-gate-status-blocked">blocked</span>
+                    </article>
+                  ))}
+                  {failureBonusScheduleQueue.pending.map((item) => {
+                    const finalThreshold = item.schedule.thresholds.at(-1)!;
+                    return (
+                      <article key={item.proposalId} className="mpgf-gate-row">
+                        <div>
+                          <p className="eyebrow">{item.proposalStatus.replaceAll("_", " ")}</p>
+                          <h3>{item.title}</h3>
+                          <p>
+                            Pool-wide failure bonus {formatBasisPointsPercent(item.failureBonusRateBps)};
+                            {" "}{item.eligibilityPolicy.maxParticipants} maximum eligible participants;
+                            {" "}{formatUsd(item.eligibilityPolicy.maxBonusPerParticipantCents)} maximum bonus per participant.
+                          </p>
+                          <p>
+                            Final cumulative net {formatUsd(finalThreshold.cumulativeNetRecipientThresholdCents)};
+                            {" "}cumulative premium {formatUsd(finalThreshold.cumulativeSuccessPremiumCents)};
+                            {" "}gross success requirement {formatUsd(finalThreshold.grossSuccessRequirementCents)}.
+                          </p>
+                          <div className="mpgf-table-wrap">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th scope="col">Threshold</th>
+                                  <th scope="col">Cumulative net</th>
+                                  <th scope="col">Incremental net</th>
+                                  <th scope="col">Success estimate</th>
+                                  <th scope="col">Failure fill</th>
+                                  <th scope="col">Premium rate</th>
+                                  <th scope="col">Cumulative premium</th>
+                                  <th scope="col">Gross</th>
+                                  <th scope="col">Cumulative exposure</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {item.schedule.thresholds.map((threshold) => (
+                                  <tr key={threshold.thresholdId}>
+                                    <th scope="row">{threshold.thresholdIndex}</th>
+                                    <td>{formatUsd(threshold.cumulativeNetRecipientThresholdCents)}</td>
+                                    <td>{formatUsd(threshold.incrementalNetRecipientCents)}</td>
+                                    <td>{formatBasisPointsPercent(threshold.assumptions?.successProbabilityBps ?? 0)}</td>
+                                    <td>{formatBasisPointsPercent(threshold.assumptions?.expectedEligibleFailureFillBps ?? 0)}</td>
+                                    <td>{formatBasisPointsPercent(threshold.premiumRateBps)}</td>
+                                    <td>{formatUsd(threshold.cumulativeSuccessPremiumCents)}</td>
+                                    <td>{formatUsd(threshold.grossSuccessRequirementCents)}</td>
+                                    <td>{formatUsd(threshold.maximumFailureBonusExposureCents ?? 0)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <form className="stacked-form" action={approveMpgfFailureBonusScheduleAction}>
+                            <input name="proposal_id" type="hidden" value={item.proposalId} />
+                            <label>
+                              Operator rationale for the complete schedule
+                              <textarea
+                                minLength={20}
+                                name="rationale"
+                                required
+                                placeholder="Explain why the risk assumptions, caps, eligibility policy, and all tranche premiums are acceptable."
+                              />
+                            </label>
+                            <button className="button button-secondary" type="submit">
+                              Approve all {item.schedule.thresholds.length} threshold quote{item.schedule.thresholds.length === 1 ? "" : "s"}
+                            </button>
+                          </form>
+                        </div>
+                        <span className="mpgf-gate-status mpgf-gate-status-pending_review">
+                          pending review
+                        </span>
+                      </article>
+                    );
+                  })}
+                  {!failureBonusScheduleLoadError &&
+                  failureBonusScheduleQueue.pending.length === 0 &&
+                  failureBonusScheduleQueue.blocked.length === 0 ? (
+                    <p className="mpgf-small">No submitted failure-bonus schedule is awaiting approval.</p>
+                  ) : null}
                 </div>
               </div>
             ) : null}

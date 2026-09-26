@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 
 import {
+  MORAL_PUBLIC_GOODS_LABS_SUCCESS_PREMIUM_SCHEDULE,
   MORAL_PUBLIC_GOODS_LABS_VIEWPOINT_OPTIONS,
   estimateLabsFeeCents,
   formatUsd,
@@ -131,6 +132,7 @@ export default function MoralPublicGoodsLabsClient({
   const platformMatchCents = roundHalfUpBasisPoints(platformCents, selectedTier.platformMatchRateBps);
   const pledgeFeesCents = estimateLabsFeeCents(pledgeCents);
   const pledgeNetCents = Math.max(0, pledgeCents - pledgeFeesCents);
+  const successPremiumThreshold = MORAL_PUBLIC_GOODS_LABS_SUCCESS_PREMIUM_SCHEDULE.thresholds[0]!;
   const sidebarNotes = useMemo(() => getMoralPublicGoodsLabsSidebarNotes(mechanism), [mechanism]);
 
   useEffect(() => {
@@ -325,6 +327,7 @@ export default function MoralPublicGoodsLabsClient({
                   <h3>If the pool clears</h3>
                   <p>You may be charged up to {formatUsd(pledgeCents)}.</p>
                   <p>Net funds go to the reviewed projects.</p>
+                  <p>Separately, the pool creator or sponsor pays the disclosed success premium into the common reserve.</p>
                 </article>
                 <article>
                   <h3>If the pool misses the support threshold</h3>
@@ -483,6 +486,37 @@ export default function MoralPublicGoodsLabsClient({
             </ul>
           </section>
 
+          {mechanism === "refund_bonus" ? (
+            <section className={styles.sidebarCard} aria-labelledby="failure-bonus-reserve-heading">
+              <h2 id="failure-bonus-reserve-heading">Common Failure Bonus Reserve</h2>
+              <p>Successful pools replenish the reserve. Failed pools do not owe a success premium.</p>
+              <dl className={styles.poolFacts}>
+                <div>
+                  <dt>Net recipient threshold</dt>
+                  <dd>{formatUsd(successPremiumThreshold.cumulativeNetRecipientThresholdCents)}</dd>
+                </div>
+                <div>
+                  <dt>Illustrative success premium</dt>
+                  <dd>
+                    {formatPercent(successPremiumThreshold.premiumRateBps)} ({formatUsd(successPremiumThreshold.successPremiumCents)})
+                  </dd>
+                </div>
+                <div>
+                  <dt>Gross success requirement</dt>
+                  <dd>{formatUsd(successPremiumThreshold.grossSuccessRequirementCents)}</dd>
+                </div>
+                <div>
+                  <dt>Premium payer</dt>
+                  <dd>Pool creator or sponsor</dd>
+                </div>
+              </dl>
+              <p className={styles.footerNote}>
+                The success premium is outside the net recipient threshold and excludes separately disclosed payment fees.
+                This rate is a provisional Labs quote, not a live underwriting decision.
+              </p>
+            </section>
+          ) : null}
+
           <section className={styles.sidebarCard} aria-labelledby="progress-heading">
             <div className={styles.sidebarHeaderRow}>
               <h2 id="progress-heading">Qualitative progress (sealed)</h2>
@@ -571,6 +605,21 @@ export default function MoralPublicGoodsLabsClient({
                   <div>
                     <dt>Estimated net sent to projects if charged</dt>
                     <dd>{formatUsd(pledgeNetCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Success premium paid by creator or sponsor</dt>
+                    <dd>
+                      {formatPercent(successPremiumThreshold.premiumRateBps)} — {formatUsd(successPremiumThreshold.successPremiumCents)}
+                      into the common reserve if the threshold clears
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Net recipient threshold</dt>
+                    <dd>{formatUsd(successPremiumThreshold.cumulativeNetRecipientThresholdCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Gross success requirement</dt>
+                    <dd>{formatUsd(successPremiumThreshold.grossSuccessRequirementCents)} before payment fees</dd>
                   </div>
                   <div>
                     <dt>Failure-participation bonus</dt>
@@ -770,6 +819,10 @@ function DetailDrawer({
             <section>
               <h3>When pool clears</h3>
               <p>You may be charged only after close and only if all review, payment, and safety gates pass.</p>
+              <p>
+                The creator or sponsor separately pays the disclosed success premium into the common Failure Bonus Reserve.
+                It is not deducted from the net recipient threshold.
+              </p>
             </section>
             <section>
               <h3>When support threshold is missed</h3>

@@ -2,12 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-
-const projectRoot = process.cwd();
-
-function readPublicFile(filename: string) {
-  return readFileSync(join(projectRoot, "public", filename), "utf8");
-}
+const readPublicFile = (name: string) => readFileSync(join(process.cwd(), "public", name), "utf8");
 
 test("the exact live loader injects the Discover navigation bridge", () => {
   const loader = readPublicFile("moral-trade-live.html");
@@ -16,50 +11,26 @@ test("the exact live loader injects the Discover navigation bridge", () => {
   assert.match(loader, /accountAwareSource\.replace\('<\/body>'/);
 });
 
-test("the live navigation bridge exposes Feed, Discover, Controls, and the global Evidence ledger", () => {
+test("the live navigation bridge exposes four real destinations and keeps tools secondary", () => {
   const bridge = readPublicFile("moral-trade-live-navigation.js");
-
-  assert.match(bridge, /control\.textContent = "Feed"/);
+  for (const [href, label] of [["/feed", "Home"], ["/discover", "Trades"], ["/commitments", "Commitments"], ["/profile", "Profile"]]) {
+    assert.ok(bridge.includes(`"${href}", "${label}"`));
+  }
   assert.match(bridge, /data-mt-feed-link/);
-  assert.match(bridge, /Open personalized feed/);
-  assert.match(bridge, /window\.location\.assign\("\/discover"\)/);
   assert.match(bridge, /data-mt-discover-link/);
-  assert.match(bridge, /control\.textContent = "Discover"/);
-  assert.match(bridge, /window\.location\.assign\("\/trade-controls"\)/);
-  assert.match(bridge, /data-mt-controls-link/);
-  assert.match(bridge, /control\.textContent = "Controls"/);
-  assert.match(bridge, /normalizeLabel\(control\) === "controls"/);
-  assert.match(bridge, /window\.location\.assign\("\/evidence"\)/);
-  assert.match(bridge, /data-mt-evidence-link/);
-  assert.match(bridge, /control\.textContent = "Evidence"/);
-  assert.match(bridge, /normalizeLabel\(control\) === "evidence"/);
-  assert.match(bridge, /label === "commitments" \|\| label === "activity"/);
+  assert.match(bridge, /nav\.closest\("\.mt-site-topbar"\)/);
+  assert.match(bridge, /header-more/);
+  assert.match(bridge, /"\/walkthrough", "How it works"/);
+  assert.doesNotMatch(bridge, /stopImmediatePropagation|preventDefault|window\.location\.assign|100 Sparks/);
+  assert.match(bridge, /normalizeLiveLandmarks/);
+  assert.match(bridge, /mtNestedMainNormalized/);
 });
 
-test("the Discover loader reconnects product navigation and value-field hover details", () => {
-  const loader = readPublicFile("moral-trade-discover.html");
-  const navigationBridge = readPublicFile("moral-trade-discover-navigation.js");
-
-  assert.match(loader, /moral-trade-discover-navigation\.js/);
-  assert.match(loader, /moral-trade-discover-value-hover\.js/);
-  assert.match(loader, /<\/scr' \+ 'ipt>/);
-  assert.doesNotMatch(loader, /moral-trade-discover-navigation\.js"><\\\\\/script>/);
-  assert.doesNotMatch(loader, /moral-trade-discover-value-hover\.js"><\\\\\/script>/);
-  assert.match(navigationBridge, /\["now", "\/"\]/);
-  assert.match(navigationBridge, /\["offer", "\/trades\/new"\]/);
-  assert.match(navigationBridge, /\["activity", "\/commitments"\]/);
-  assert.match(navigationBridge, /\["evidence", "\/evidence"\]/);
-  assert.match(navigationBridge, /control\.textContent = "Evidence"/);
-});
-
-test("value-field copy appears only after a half-second mouse hover", () => {
-  const hoverBridge = readPublicFile("moral-trade-discover-value-hover.js");
-
-  assert.match(hoverBridge, /const HOVER_DELAY_MS = 500/);
-  assert.match(hoverBridge, /document\.addEventListener\("pointerover"/);
-  assert.match(hoverBridge, /document\.addEventListener\("pointerout"/);
-  assert.match(hoverBridge, /point\.matches\(":hover"\)/);
-  assert.match(hoverBridge, /\.value-point \.point-title/);
-  assert.match(hoverBridge, /\.value-point \.point-meta/);
-  assert.match(hoverBridge, /tooltip\.setAttribute\("role", "tooltip"\)/);
+test("Discover uses ordinary canonical navigation without a graph or navigation patcher", () => {
+  const shell = readPublicFile("moral-trade-discover.html");
+  for (const href of ["/feed", "/discover", "/walkthrough", "/trades/new", "/commitments", "/evidence"]) {
+    assert.ok(shell.includes(`href="${href}"`));
+  }
+  assert.match(shell, /aria-current="page">Trades/);
+  assert.doesNotMatch(shell, /moral-trade-discover-navigation|moral-trade-discover-value-hover/);
 });

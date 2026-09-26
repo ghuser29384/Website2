@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
 
+import {
+  FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+  getHighestClearedThresholdIndex,
+  getSuccessPremiumDueForClearedThreshold,
+  type FailureBonusSuccessPremiumPayer,
+  type FailureBonusSuccessPremiumScheduleQuote,
+} from "./failure-bonus-success-premium";
+
 export const REFUND_BONUS_FEATURE_KEY = "cgpp_refund_bonus_non_mvp_v0_1" as const;
 export const REFUND_BONUS_LIVE_MONEY_FLAG = "refund_bonus_live_money_enabled" as const;
 export const REFUND_BONUS_DEPLOYMENT_MODE = "refund_bonus_non_mvp_labs" as const;
@@ -226,6 +234,10 @@ export interface RefundBonusPledgePool {
   sponsorMatchCapCents?: number;
   refundBonusEnabled: boolean;
   refundBonusReserveId?: string;
+  successPremiumEnabled?: boolean;
+  successPremiumPayer?: FailureBonusSuccessPremiumPayer;
+  successPremiumPolicyVersion?: typeof FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION;
+  successPremiumIncludedInNetRecipientThreshold?: false;
   bonusCalculationMode: "fixed_cents" | "percentage_of_pledge_capped" | "none";
   fixedBonusCents?: number;
   bonusRatioBps?: number;
@@ -309,6 +321,7 @@ export interface RefundBonusReserve {
   paidCents: number;
   heldCents: number;
   releasedUnusedCents: number;
+  successPremiumCreditedCents?: number;
   backingState: "funded" | "escrowed" | "contractually_committed" | "unbacked" | "dev_simulated";
   legalComplianceState: "approved" | "review" | "blocked";
   payoutProviderReady: boolean;
@@ -563,6 +576,27 @@ export interface RefundBonusOutcome {
   recomputedAfterAuthorization: boolean;
 }
 
+export interface RefundBonusReserveLedgerEntry {
+  id: string;
+  roundId: string;
+  poolId: string;
+  reserveId: string;
+  thresholdId?: string;
+  eventType:
+    | "success_premium_credit"
+    | "failure_bonus_debit"
+    | "reserve_expense_debit"
+    | "bonus_exposure_release";
+  cashDeltaCents: number;
+  exposureDeltaCents: number;
+  currency: "usd";
+  policyVersion: typeof FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION;
+  sourceRef: string;
+  idempotencyKey: string;
+  eventHash: string;
+  createdAt: string;
+}
+
 export interface RefundBonusPayoutOperation {
   id: string;
   roundId: string;
@@ -645,6 +679,10 @@ export interface RefundBonusAuditReport {
   countedCents: number;
   matchEligibleCents: number;
   sponsorBaseMatchCents: number;
+  successPremiumCents: number;
+  successPremiumPayer?: FailureBonusSuccessPremiumPayer;
+  grossSuccessRequirementCents: number;
+  successPremiumPolicyVersion?: typeof FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION;
   bonusReserveBackedCents: number;
   bonusExposureReservedCents: number;
   bonusLiabilityCents: number;
@@ -673,6 +711,10 @@ export interface RefundBonusPublicReportJson {
   countedCents: number;
   matchEligibleCents: number;
   sponsorBaseMatchCents: number;
+  successPremiumCents: number;
+  successPremiumPayer?: FailureBonusSuccessPremiumPayer;
+  grossSuccessRequirementCents: number;
+  successPremiumPolicyVersion?: typeof FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION;
   bonusReserveBackedCents: number;
   bonusExposureReservedCents: number;
   bonusLiabilityCents: number;
@@ -688,6 +730,7 @@ export interface RefundBonusPublicReportJson {
 export interface RefundBonusSettlementPlan {
   settlementRows: RefundBonusPoolSettlementRow[];
   payoutOperations: RefundBonusPayoutOperation[];
+  reserveLedgerEntries: RefundBonusReserveLedgerEntry[];
   auditReport: RefundBonusAuditReport;
   blockedReasonCodes: string[];
 }
@@ -2463,6 +2506,9 @@ export function planRefundBonusSettlement({
   roundPaused = false,
   bonusReservePaused = false,
   payoutRailPaused = false,
+  successPremiumSchedule,
+  clearedThresholdIndex,
+  successPremiumFundingConfirmed = false,
 }: {
   round: RefundBonusRound;
   pool: RefundBonusPledgePool;
@@ -2477,6 +2523,9 @@ export function planRefundBonusSettlement({
   roundPaused?: boolean;
   bonusReservePaused?: boolean;
   payoutRailPaused?: boolean;
+  successPremiumSchedule?: FailureBonusSuccessPremiumScheduleQuote;
+  clearedThresholdIndex?: number;
+  successPremiumFundingConfirmed?: boolean;
 }): RefundBonusSettlementPlan {
   const blockedReasonCodes: string[] = [];
   const qualifyingFailurePredicatePassed = didRefundBonusQualifyingFailurePredicatePass(outcome, pool);
@@ -2487,6 +2536,78 @@ export function planRefundBonusSettlement({
   if (bonusReservePaused) blockedReasonCodes.push("bonus_reserve_pause_active");
   if (payoutRailPaused) blockedReasonCodes.push("payout_rail_pause_active");
   if (!isRefundBonusReserveBacked(reserve, round, pool)) blockedReasonCodes.push("bonus_reserve_unbacked");
+
+  const successPremiumConfigured = pool.successPremiumEnabled === true;
+  let successPremiumDue = {
+    clearedThresholdIndex: 0,
+    netRecipientThresholdCents: 0,
+    successPremiumCents: 0,
+    grossSuccessRequirementCents: 0,
+  };
+  let successPremiumThresholdId: string | undefined;
+
+  if (outcome.status === "cleared" && successPremiumConfigured) {
+    if (!successPremiumSchedule) {
+      blockedReasonCodes.push("success_premium_quote_missing");
+    } else {
+      if (successPremiumSchedule.policyVersion !== FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION) {
+        blockedReasonCodes.push("success_premium_policy_version_mismatch");
+      }
+      if (successPremiumSchedule.premiumIncludedInNetRecipientThreshold !== false) {
+        blockedReasonCodes.push("success_premium_must_be_outside_net_threshold");
+      }
+      if (pool.successPremiumIncludedInNetRecipientThreshold !== false) {
+        blockedReasonCodes.push("pool_success_premium_threshold_boundary_missing");
+      }
+      if (pool.successPremiumPayer !== successPremiumSchedule.premiumPayer) {
+        blockedReasonCodes.push("success_premium_payer_mismatch");
+      }
+      if (pool.successPremiumPolicyVersion !== successPremiumSchedule.policyVersion) {
+        blockedReasonCodes.push("pool_success_premium_policy_version_mismatch");
+      }
+
+      try {
+        const firstQuotedThreshold = successPremiumSchedule.thresholds[0];
+        if (
+          !firstQuotedThreshold ||
+          firstQuotedThreshold.cumulativeNetRecipientThresholdCents !== pool.thresholdNetRecipientCents
+        ) {
+          blockedReasonCodes.push("success_premium_threshold_mismatch");
+        }
+
+        const highestClearedThresholdIndex = getHighestClearedThresholdIndex(
+          successPremiumSchedule,
+          outcome.netRecipientCents,
+        );
+        if (highestClearedThresholdIndex === 0) {
+          blockedReasonCodes.push("success_premium_no_threshold_cleared");
+        }
+        if (
+          clearedThresholdIndex != null &&
+          clearedThresholdIndex !== highestClearedThresholdIndex
+        ) {
+          blockedReasonCodes.push("success_premium_cleared_threshold_mismatch");
+        }
+
+        successPremiumDue = getSuccessPremiumDueForClearedThreshold(
+          successPremiumSchedule,
+          highestClearedThresholdIndex,
+        );
+        successPremiumThresholdId =
+          successPremiumSchedule.thresholds[highestClearedThresholdIndex - 1]?.thresholdId;
+        if (successPremiumDue.netRecipientThresholdCents > outcome.netRecipientCents) {
+          blockedReasonCodes.push("success_premium_threshold_not_funded");
+        }
+      } catch {
+        blockedReasonCodes.push("success_premium_cleared_threshold_invalid");
+      }
+    }
+
+    if (!simulationOnly && !successPremiumFundingConfirmed) {
+      blockedReasonCodes.push("success_premium_funding_not_confirmed");
+    }
+  }
+
   if (outcome.status === "cleared") {
     if (!canRefundBonusCaptureSuccessCharge(roundStatus)) {
       blockedReasonCodes.push("round_not_payable");
@@ -2570,11 +2691,21 @@ export function planRefundBonusSettlement({
     ? outcome.eligiblePledges.reduce((sum, row) => sum + row.bonusEligibleCents, 0)
     : 0;
   const bonusPaidCents = payoutOperations.reduce((sum, operation) => sum + operation.bonusNetCents, 0);
+  const bonusPayoutFeeCents = payoutOperations.reduce(
+    (sum, operation) => sum + operation.payoutFeeCents,
+    0,
+  );
   const bonusUnclaimedCents = Math.max(0, bonusLiabilityCents - bonusPaidCents);
   const success = outcome.status === "cleared" && blockedReasonCodes.length === 0;
   const feeCents = success ? outcome.eligiblePledges.reduce((sum, row) => sum + row.pledge.feeCents, 0) : 0;
   const grossCapturedCents = success ? outcome.grossExposureCents : 0;
   const netRecipientDisbursedCents = success ? outcome.netRecipientCents : 0;
+  const successPremiumCents = success && successPremiumConfigured ? successPremiumDue.successPremiumCents : 0;
+  const grossSuccessRequirementCents = success
+    ? successPremiumConfigured
+      ? successPremiumDue.grossSuccessRequirementCents
+      : netRecipientDisbursedCents
+    : 0;
   const countedCents = success ? outcome.eligiblePledges.reduce((sum, row) => sum + row.countedCents, 0) : 0;
   const matchEligibleCents = success
     ? outcome.eligiblePledges.reduce((sum, row) => sum + row.matchEligibleCents, 0)
@@ -2607,6 +2738,81 @@ export function planRefundBonusSettlement({
       : payoutOperations.length > 0 && bonusUnclaimedCents === 0
         ? "qualifying_failed_bonus_paid"
         : "qualifying_failed_bonus_payable";
+  const reserveLedgerEntryDrafts: Array<Omit<RefundBonusReserveLedgerEntry, "eventHash">> = [];
+
+  if (successPremiumCents > 0) {
+    reserveLedgerEntryDrafts.push({
+      id: `${round.id}:${pool.id}:success-premium-credit`,
+      roundId: round.id,
+      poolId: pool.id,
+      reserveId: reserve.id,
+      thresholdId: successPremiumThresholdId,
+      eventType: "success_premium_credit",
+      cashDeltaCents: successPremiumCents,
+      exposureDeltaCents: 0,
+      currency: "usd",
+      policyVersion: FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+      sourceRef: `pool-success:${round.id}:${pool.id}`,
+      idempotencyKey: `failure-bonus-reserve:success-premium:${round.id}:${pool.id}:${successPremiumThresholdId ?? "threshold"}`,
+      createdAt,
+    });
+  }
+
+  if (bonusPaidCents > 0) {
+    reserveLedgerEntryDrafts.push({
+      id: `${round.id}:${pool.id}:failure-bonus-debit`,
+      roundId: round.id,
+      poolId: pool.id,
+      reserveId: reserve.id,
+      eventType: "failure_bonus_debit",
+      cashDeltaCents: -bonusPaidCents,
+      exposureDeltaCents: -bonusPaidCents,
+      currency: "usd",
+      policyVersion: FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+      sourceRef: `qualifying-failure:${round.id}:${pool.id}`,
+      idempotencyKey: `failure-bonus-reserve:failure-debit:${round.id}:${pool.id}`,
+      createdAt,
+    });
+  }
+
+  if (bonusUnearnedReleasedCents > 0 && blockedReasonCodes.length === 0) {
+    reserveLedgerEntryDrafts.push({
+      id: `${round.id}:${pool.id}:bonus-exposure-release`,
+      roundId: round.id,
+      poolId: pool.id,
+      reserveId: reserve.id,
+      eventType: "bonus_exposure_release",
+      cashDeltaCents: 0,
+      exposureDeltaCents: -bonusUnearnedReleasedCents,
+      currency: "usd",
+      policyVersion: FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+      sourceRef: `settlement-release:${round.id}:${pool.id}`,
+      idempotencyKey: `failure-bonus-reserve:exposure-release:${round.id}:${pool.id}`,
+      createdAt,
+    });
+  }
+
+  if (bonusPayoutFeeCents > 0) {
+    reserveLedgerEntryDrafts.push({
+      id: `${round.id}:${pool.id}:reserve-expense-debit`,
+      roundId: round.id,
+      poolId: pool.id,
+      reserveId: reserve.id,
+      eventType: "reserve_expense_debit",
+      cashDeltaCents: -bonusPayoutFeeCents,
+      exposureDeltaCents: 0,
+      currency: "usd",
+      policyVersion: FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+      sourceRef: `qualifying-failure-fees:${round.id}:${pool.id}`,
+      idempotencyKey: `failure-bonus-reserve:expense-debit:${round.id}:${pool.id}`,
+      createdAt,
+    });
+  }
+
+  const reserveLedgerEntries: RefundBonusReserveLedgerEntry[] = reserveLedgerEntryDrafts.map((entry) => ({
+    ...entry,
+    eventHash: hashValue(entry),
+  }));
   const payoutByPledgeId = new Map(payoutOperations.map((operation) => [operation.pledgeId, operation]));
   const settlementRows: RefundBonusPoolSettlementRow[] = outcome.eligiblePledges.map((row) => {
     const payoutOperation = payoutByPledgeId.get(row.pledge.id);
@@ -2653,6 +2859,7 @@ export function planRefundBonusSettlement({
   return {
     settlementRows,
     payoutOperations,
+    reserveLedgerEntries,
     blockedReasonCodes,
     auditReport: {
       id: `${round.id}:${pool.id}:refund-bonus-audit`,
@@ -2670,12 +2877,18 @@ export function planRefundBonusSettlement({
       countedCents,
       matchEligibleCents,
       sponsorBaseMatchCents: success ? outcome.sponsorMatchCents : 0,
+      successPremiumCents,
+      successPremiumPayer: successPremiumConfigured ? pool.successPremiumPayer : undefined,
+      grossSuccessRequirementCents,
+      successPremiumPolicyVersion: successPremiumConfigured
+        ? FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION
+        : undefined,
       bonusReserveBackedCents: reserve.backedCents,
       bonusExposureReservedCents: outcome.bonusExposureReservedCents,
       bonusLiabilityCents,
       bonusHeldCents: reserve.heldCents,
       bonusPaidCents,
-      bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.payoutFeeCents, 0),
+      bonusPayoutFeeCents,
       bonusUnclaimedCents,
       bonusUnearnedReleasedCents,
       verifiedSupporterCount: outcome.verifiedSupporterCount,
@@ -2697,12 +2910,18 @@ export function planRefundBonusSettlement({
         countedCents,
         matchEligibleCents,
         sponsorBaseMatchCents: success ? outcome.sponsorMatchCents : 0,
+        successPremiumCents,
+        successPremiumPayer: successPremiumConfigured ? pool.successPremiumPayer : undefined,
+        grossSuccessRequirementCents,
+        successPremiumPolicyVersion: successPremiumConfigured
+          ? FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION
+          : undefined,
         bonusReserveBackedCents: reserve.backedCents,
         bonusExposureReservedCents: outcome.bonusExposureReservedCents,
         bonusLiabilityCents,
         bonusHeldCents: reserve.heldCents,
         bonusPaidCents,
-        bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.payoutFeeCents, 0),
+        bonusPayoutFeeCents,
         bonusUnclaimedCents,
         bonusUnearnedReleasedCents,
         finalStatus,

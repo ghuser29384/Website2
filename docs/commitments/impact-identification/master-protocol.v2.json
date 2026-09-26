@@ -1,0 +1,375 @@
+{
+  "artifactSchemaVersion": "moral-trade-impact-identification-artifact-v2",
+  "artifactKind": "master_protocol",
+  "protocolKey": "commitments-causal-identification-and-calibration-master-v2",
+  "version": 2,
+  "status": "under_review",
+  "payloadSha256": "sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a",
+  "payload": {
+    "protocolKey": "commitments-causal-identification-and-calibration-master-v2",
+    "protocolStatus": "under_review",
+    "preparedAgainst": {
+      "repository": "ghuser29384/Website2",
+      "pullRequest": 606,
+      "priorProtocolHead": "e630d6bf0927a456e39e81b7787d3b60fcfb15c3",
+      "currentMainAtRemediation": "4c013d87990a5f5bfed36662b2cbace81843a740",
+      "pr534ReviewedHead": "101ffbf45571a0e7b1a50e41a55a27d699abaf83",
+      "founderReviewId": 4905684444,
+      "founderReviewDecision": "changes_required"
+    },
+    "purpose": "Define fail-closed, reproducible, ethics-gated, interference-aware evidence contracts for policy-level causal studies and predictive calibration without authorizing participant-specific causal credit or any live experiment.",
+    "executionAuthorization": {
+      "authorized": false,
+      "environment": "none",
+      "prohibitedActions": [
+        "assign a real user",
+        "instrument production treatment assignment",
+        "change matching, bonus, payment, invitation, or reveal terms for research",
+        "approve or activate a PR #534 methodology",
+        "publish participant expected additional or direct causal attribution",
+        "apply a database migration",
+        "merge or deploy on the basis of this under-review protocol"
+      ]
+    },
+    "sourceBoundary": {
+      "conceptualBasisRefs": [
+        "source:toby-ord-moral-trade-2015",
+        "source:forethought-convergence-and-compromise-2025",
+        "source:forethought-moral-public-goods-2026"
+      ],
+      "statisticalMethodRefs": [
+        {
+          "citation": "Hudgens and Halloran (2008), Toward Causal Inference With Interference",
+          "identifier": "doi:10.1198/016214508000000292",
+          "role": "partial-interference estimands and two-stage randomized designs"
+        },
+        {
+          "citation": "Aronow and Samii (2017), Estimating Average Causal Effects Under General Interference",
+          "identifier": "doi:10.1214/16-AOAS1005",
+          "role": "joint specification of design, exposure mapping, and estimand under interference"
+        },
+        {
+          "citation": "Kang and Imbens (2016), Peer Encouragement Designs in Causal Inference with Partial Interference",
+          "identifier": "arxiv:1609.04464",
+          "role": "peer encouragement, noncompliance, and local-effect limits"
+        },
+        {
+          "citation": "Jiang, Imai, and Malani (2023), Statistical Inference and Power Analysis for Direct and Spillover Effects in Two-Stage Randomized Experiments",
+          "identifier": "doi:10.1111/biom.13782",
+          "role": "design-based inference and power analysis for two-stage experiments"
+        },
+        {
+          "citation": "Steyerberg et al. (2010), Assessing the Performance of Prediction Models",
+          "identifier": "doi:10.1097/EDE.0b013e3181c30fb2",
+          "role": "separation of calibration, discrimination, and overall predictive performance"
+        },
+        {
+          "citation": "Van Calster et al. (2016), A Calibration Hierarchy for Risk Models",
+          "identifier": "doi:10.1016/j.jclinepi.2015.12.005",
+          "role": "calibration-in-the-large, slope, and flexible calibration"
+        }
+      ],
+      "calibrationEvidenceRefs": [],
+      "rule": "Conceptual sources and methods literature define concerns and design principles; they are not empirical evidence about Moral Trade users, outcomes, or model calibration."
+    },
+    "evidenceStreams": {
+      "outcomePrediction": {
+        "purpose": "predict outcome risk or quantity",
+        "requiredValidation": [
+          "time-respecting development",
+          "untouched later-time or otherwise independent holdout",
+          "proper scoring rules",
+          "calibration and interval diagnostics with uncertainty"
+        ],
+        "doesNotValidate": [
+          "causal identification",
+          "participant impact",
+          "transportability"
+        ]
+      },
+      "causalIdentification": {
+        "purpose": "identify an exact assignment-policy or separately approved participant-action estimand",
+        "primaryDefault": "assignment_policy_itt",
+        "requiredValidation": [
+          "design, exposure mapping, and estimand specified together",
+          "design-based estimator and variance",
+          "interference and contamination handling",
+          "overlap or positivity where relevant",
+          "prespecified sensitivity analyses"
+        ],
+        "doesNotValidate": [
+          "outcome-model calibration",
+          "future-population transportability"
+        ]
+      },
+      "transportability": {
+        "purpose": "bound generalization from study population and policy to a named target population and later period",
+        "requiredValidation": [
+          "target population and period",
+          "effect-modifier support",
+          "population overlap",
+          "temporal drift",
+          "replication or prospective external validation"
+        ],
+        "doesNotValidate": [
+          "invalid randomization",
+          "invalid evidence",
+          "unidentified individual effects"
+        ]
+      }
+    },
+    "productClaimPolicy": {
+      "evidenceToProductMappingFile": "evidence-to-product-mapping.v2.json",
+      "policyLevelEvidenceMaySupportPolicyClaims": true,
+      "policyLevelEvidenceAuthorizesParticipantCausalCredit": false,
+      "localEffectsArePopulationSpecific": true,
+      "localEffectsAreNonAdditive": true,
+      "participantExpectedAdditionalDefault": "withheld",
+      "participantDirectCausalAttributionDefault": "withheld",
+      "verifiedOutcomeEstablishesCounterfactual": false,
+      "highConfidenceAllowed": false
+    },
+    "masterStudyInstanceContract": {
+      "requiredBindingNames": [
+        "studyKey",
+        "studyVersion",
+        "mechanismFamily",
+        "studyVariant",
+        "eligiblePopulationSnapshotHash",
+        "eligibilityRules",
+        "exclusionRules",
+        "assignmentUnit",
+        "exposureUnit",
+        "outcomeUnit",
+        "analysisUnit",
+        "interferenceClusterDefinition",
+        "assignmentDesign",
+        "assignmentProbabilities",
+        "blockingAndStratificationVariables",
+        "exposureMapping",
+        "supportedExposureCells",
+        "emptyExposureCellAction",
+        "primaryEstimand",
+        "potentialOutcomeContrast",
+        "targetPopulation",
+        "primaryOutcome",
+        "outcomeWindow",
+        "estimator",
+        "varianceProcedure",
+        "finiteSampleInference",
+        "unequalClusterSizeHandling",
+        "covariateAdjustmentPolicy",
+        "missingnessEstimand",
+        "attritionBounds",
+        "sensitivityAnalyses",
+        "graphDiagnostics",
+        "precisionSimulation",
+        "fixedHorizonOrSequentialDesign",
+        "ethicsDetermination",
+        "participantDefinition",
+        "consentOrWaiver",
+        "controlConditionJustification",
+        "vulnerableParticipantProtections",
+        "debriefingPolicy",
+        "adverseEventMonitoring",
+        "stopAndSuspensionRules",
+        "privacyRetentionAndDeletion",
+        "accessControl",
+        "incidentResponse",
+        "entropySource",
+        "seedGenerationProcedure",
+        "seedCommitment",
+        "constrainedRandomizationRule",
+        "assignmentConcealment",
+        "outcomeAdjudicatorBlinding",
+        "unblindingLog",
+        "postAssignmentEligibilityChangeLog",
+        "differentialEvidenceResolutionAudit",
+        "blockingSafetyOutcomes",
+        "contaminationAndSpilloverMonitoring",
+        "offPlatformSubstitutionAudit",
+        "resourceClaimDeduplication",
+        "analysisCodeHash",
+        "protocolPayloadHash",
+        "templatePayloadHash",
+        "studyInstancePayloadHash",
+        "appendOnlyRegistryRecord",
+        "protectedTagOrEquivalent",
+        "amendmentLog",
+        "deviationLog"
+      ],
+      "ethicsGovernance": {
+        "independentDeterminationRequired": true,
+        "gatekeeperPermissionIsNotParticipantConsent": true,
+        "requiredDeterminations": [
+          "who counts as a research participant",
+          "whether informed consent is required",
+          "whether a waiver or alteration is independently permissible and justified by minimal risk and infeasibility",
+          "whether the control condition withholds an entitlement",
+          "jurisdiction and institution-specific obligations"
+        ],
+        "requiredProtections": [
+          "minors and vulnerable users",
+          "hierarchical, social, economic, or relational pressure",
+          "debriefing where applicable",
+          "adverse-event monitoring",
+          "prespecified stop or suspension rules",
+          "privacy, retention, access, deletion, and incident response"
+        ],
+        "status": "required_not_completed"
+      },
+      "allocationConcealment": {
+        "eligibilityFrozenBeforeSeedGeneration": true,
+        "entropySourceMustBeFrozen": true,
+        "seedShoppingProhibited": true,
+        "undisclosedRerandomizationProhibited": true,
+        "constrainedRandomizationRequiresFrozenAdmissibleSetAndSelectionRule": true,
+        "assignmentConcealedUntilEligibilityIrreversible": true,
+        "outcomeAdjudicatorBlindingRequiredWhereFeasible": true,
+        "allUnblindingAndPostAssignmentEligibilityChangesLogged": true,
+        "differentialEvidenceResolutionAuditedByArm": true
+      },
+      "precisionAndStopping": {
+        "provisionalObservationFloorsAreNotStudySampleSizes": true,
+        "simulationRequiredBeforeLaunch": true,
+        "requiredInputs": [
+          "number of independent randomized clusters",
+          "cluster-size distribution",
+          "assignment and saturation probabilities",
+          "supported exposure-cell probabilities",
+          "intracluster correlation",
+          "spillover strength",
+          "noncompliance",
+          "contamination",
+          "attrition",
+          "cluster-size imbalance"
+        ],
+        "requiredOutputs": [
+          "effective sample size",
+          "expected exposure-cell counts",
+          "interval-width or decision-loss target",
+          "simulation code hash and seed",
+          "sensitivity grid",
+          "no-launch determination"
+        ],
+        "optionalStoppingProhibited": true,
+        "fixedHorizonOrValidSequentialDesignRequired": true,
+        "scientificIntervalLevelBps": 9500,
+        "productPredictiveIntervalLevelBps": 8000
+      },
+      "safetyVetoPolicy": {
+        "safetyOutcomesAreVetoes": true,
+        "noImplicitMoralAggregation": true,
+        "requiredBlockingOutcomes": [
+          "harmful-offer or threat indicator",
+          "baseline manufacture or worsening after eligibility becomes salient",
+          "harm shifted to nonparticipants",
+          "coercion, harassment, identity exposure, or retaliation",
+          "concentration or exclusion effect",
+          "off-platform substitution",
+          "duplicate or overlapping resource claim"
+        ],
+        "prohibitedStudyArms": [
+          "illegal, violent, deceptive, coercive, or harassing offer",
+          "disabled harmful-offer enforcement",
+          "reward for manufacturing a worse baseline",
+          "encouragement to create harm so another party will pay to stop it",
+          "suppression of required safety information",
+          "identity disclosure contrary to frozen mechanism terms"
+        ]
+      },
+      "provenanceAndImmutability": {
+        "canonicalPayloadHashRequired": true,
+        "signedProtectedTagOrEquivalentRequiredBeforeApproval": true,
+        "appendOnlyRegistryRequiredBeforeAssignment": true,
+        "registryMustBind": [
+          "protocol payload hash",
+          "template payload hash",
+          "study-instance payload hash",
+          "founder approval record",
+          "eligible-population snapshot hash",
+          "assignment-code hash",
+          "analysis-code hash",
+          "seed commitment",
+          "ethics determination reference",
+          "amendment log"
+        ],
+        "preAssignmentAmendmentsAndPostAssignmentDeviationsSeparated": true
+      },
+      "primaryOutcomeRule": "Exactly one scalar native-unit primary outcome or one fully prespecified multivariate global test per immutable study instance.",
+      "missingnessRule": "Resolution failure, attrition, and missing outcome evidence are reported by assignment arm and cannot be silently dropped.",
+      "covariateAdjustmentRule": "Covariate adjustment is frozen before assignment and used for precision only unless a separate exact identification argument is approved.",
+      "noLaunchRule": "If independent clusters, supported exposure cells, ethics, concealment, precision, safety, or provenance gates are inadequate, the study is not launched."
+    },
+    "templateManifest": [
+      {
+        "mechanismFamily": "trade",
+        "templateKey": "commitments-trade-study-template-v2",
+        "file": "study-templates/trade.v2.json",
+        "payloadSha256": "sha256:cf0a7a96294b431dcd79879fa01b7d1031ea50a842cebca6986e13351bcbb1e1",
+        "status": "under_review",
+        "executionAuthorized": false
+      },
+      {
+        "mechanismFamily": "co_fund",
+        "templateKey": "commitments-co-fund-study-template-v2",
+        "file": "study-templates/co_fund.v2.json",
+        "payloadSha256": "sha256:441c6e82335c851e7e5ba80e291473caaf23600af7ca695849f994bc4867195c",
+        "status": "under_review",
+        "executionAuthorized": false
+      },
+      {
+        "mechanismFamily": "threshold_funding",
+        "templateKey": "commitments-threshold-funding-study-template-v2",
+        "file": "study-templates/threshold_funding.v2.json",
+        "payloadSha256": "sha256:44f934b72fb31f0fb2c2c01235bafffbe6dadc229062ee19da4c7858e70c344a",
+        "status": "under_review",
+        "executionAuthorized": false
+      },
+      {
+        "mechanismFamily": "donation_upgrade",
+        "templateKey": "commitments-donation-upgrade-study-template-v2",
+        "file": "study-templates/donation_upgrade.v2.json",
+        "payloadSha256": "sha256:a0c6ea80a989558070869d87aae41aabe7d34a8e011f41e53427015fc0e95512",
+        "status": "under_review",
+        "executionAuthorized": false
+      },
+      {
+        "mechanismFamily": "threshold_sign_on",
+        "templateKey": "commitments-threshold-sign-on-study-template-v2",
+        "file": "study-templates/threshold_sign_on.v2.json",
+        "payloadSha256": "sha256:dec601d3f34a3015cc7829d7a860a37b7f1be7b41112aec6a700833fc24890e8",
+        "status": "under_review",
+        "executionAuthorized": false
+      },
+      {
+        "mechanismFamily": "donation_redirect",
+        "templateKey": "commitments-donation-redirect-study-template-v2",
+        "file": "study-templates/donation_redirect.v2.json",
+        "payloadSha256": "sha256:f7486aa6d6532a316b2cc7e075dcb6b6e8a1ffe0c85dea345a1d2c6d4fbd756c",
+        "status": "under_review",
+        "executionAuthorized": false
+      }
+    ],
+    "schemaFile": "protocol.schema.json",
+    "validatorFile": "scripts/validate-commitments-impact-identification.mjs",
+    "qualityGatePolicy": {
+      "validatorRequired": true,
+      "negativeSelfTestRequired": true,
+      "exactDiffCheckRequired": true,
+      "runtimeBuildRequired": false,
+      "reason": "The tranche is repository-only but must prove that required protocol fields cannot be omitted."
+    },
+    "approvalBlockers": [
+      "founder_exact_protocol_review_not_approved",
+      "machine_readable_study_instance_registry_not_implemented",
+      "independent_ethics_determination_not_completed",
+      "design_specific_precision_simulation_not_completed",
+      "assignment_and_analysis_code_not_frozen",
+      "no_real_empirical_calibration_evidence",
+      "no_transportability_validation",
+      "no_live_experiment_authorization",
+      "pr534_methodologies_remain_under_review"
+    ]
+  }
+}

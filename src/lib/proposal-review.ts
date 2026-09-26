@@ -45,7 +45,10 @@ export interface OfferReviewWorkflowCard {
     | "participant_relative_scores"
     | "appeal_scope";
   label: string;
+  /** Internal screening readiness; never a completed-review attestation. */
   status: MoralTradeVerificationStepStatus;
+  assessmentLabel: string;
+  assessmentReason: string;
   statusReasonCode: string;
   statusReason: string;
   factorCodes: string[];
@@ -1922,7 +1925,7 @@ function workflowStatusFromCurrentStatus(status: string | null | undefined): Mor
 
 function workflowStatusFromBaseline(confidence: BaselineConfidence): MoralTradeVerificationStepStatus {
   if (confidence === "Strong" || confidence === "Moderate") {
-    return "pass";
+    return "human_review";
   }
 
   if (confidence === "Weak") {
@@ -1940,7 +1943,7 @@ function workflowStatusFromEvidence(input: ProposalReviewInput): MoralTradeVerif
   }
 
   if (input.evidenceUrl && input.moderationStatus === "clear") {
-    return "pass";
+    return "human_review";
   }
 
   if (/(receipt|audit|payment|pledge|witness|manual review|evidence-gated)/.test(verification)) {
@@ -1950,18 +1953,10 @@ function workflowStatusFromEvidence(input: ProposalReviewInput): MoralTradeVerif
   return "needs_input";
 }
 
-function workflowStatusFromExternality(input: ProposalReviewInput): MoralTradeVerificationStepStatus {
+function hasExternalityReviewTrigger(input: ProposalReviewInput): boolean {
   const causes = [input.offeredCause, input.requestedCause].filter(Boolean).join(" ").toLowerCase();
-
-  if (POLITICAL_ADJACENT_CAUSES.some((cause) => causes.includes(cause))) {
-    return "human_review";
-  }
-
-  if (input.mode === "offset" || input.mode === "payment") {
-    return "human_review";
-  }
-
-  return "pass";
+  return input.mode === "offset" || input.mode === "payment" ||
+    POLITICAL_ADJACENT_CAUSES.some((cause) => causes.includes(cause));
 }
 
 function workflowStatusReason(
@@ -1983,7 +1978,8 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
   const baselineEvidence = getBaselineEvidenceSummary(input);
   const baselineStatus = workflowStatusFromBaseline(baselineConfidence);
   const externalityReview = getExternalityReviewSummary(input);
-  const externalityStatus = workflowStatusFromExternality(input);
+  const externalityTriggerDetected = hasExternalityReviewTrigger(input);
+  const externalityStatus: MoralTradeVerificationStepStatus = "human_review";
   const scoreConfidence = getScoreConfidence(input);
   const currentStatusWorkflowStatus = workflowStatusFromCurrentStatus(currentStatus);
   const currentStatusBlockerExplanation =
@@ -2002,23 +1998,21 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
         ? "the visible status says required review information is missing or unresolved."
         : "the visible status is still a review state, not completion, custody, enforceability, or moral endorsement.";
   const evidenceStatusReason =
-    evidenceStatus === "pass"
-      ? "a named proof method and clear evidence locator are present for reviewer inspection."
+    input.evidenceUrl && evidenceStatus === "human_review"
+      ? "a named proof method and clear evidence locator are available for inspection; no completed evidence review is established here."
       : evidenceStatus === "human_review"
         ? "a proof method is named, but the artifact still needs reviewer inspection before reliance."
         : "no reviewable proof method or evidence locator is attached yet.";
   const baselineStatusReason =
-    baselineStatus === "pass"
-      ? "the baseline is stated with enough support to enter counterfactual review."
-      : baselineStatus === "needs_input"
-        ? "the baseline is weak and needs dated no-trade evidence."
-        : "the baseline has not been assessed enough to clear counterfactual review.";
+    baselineStatus === "needs_input"
+      ? "the baseline is weak and needs dated no-trade evidence."
+      : "a confidence heuristic is not a completed counterfactual review; a reviewer must inspect the dated no-trade evidence.";
   const externalityStatusReason =
-    externalityStatus === "pass"
+    !externalityTriggerDetected
       ? "no offset, payment, or political-adjacent trigger was detected."
       : "the mode or causes can affect third parties, incentives, or unrepresented values.";
 
-  return [
+  const cards = [
     {
       key: "current_status",
       label: "Status card",
@@ -2044,7 +2038,7 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       factorCodes: ["evidence_rule_named", "evidence_sufficiency"],
       summary:
         evidenceStatus === "needs_input"
-          ? REVIEW_WORKFLOW_PARTICIPANT_COPY.needsEvidenceStatusCopy
+          ? "No reviewable proof method is specified in this record."
           : actionEvidence,
       nextStep:
         "Attach or inspect one scoped artifact for each factual action claim before relying on the record.",
@@ -2096,6 +2090,21 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       nextStep: REVIEW_WORKFLOW_PARTICIPANT_COPY.appealCopy,
     },
   ];
+  return cards.map((card) => {
+    const key = card.key as OfferReviewWorkflowCard["key"];
+    const status = card.status as MoralTradeVerificationStepStatus;
+    const assessmentLabel = status === "blocked" ? "Blocked"
+      : status === "needs_input" ? "Information needed"
+      : key === "externality_review" && !externalityTriggerDetected ? "No listed trigger detected"
+      : key === "participant_relative_scores" ? "Participant-stated context"
+      : key === "appeal_scope" ? "Review scope information"
+      : key === "baseline_confidence" && baselineConfidence === "Not assessed" ? "Not assessed"
+      : "Awaiting reviewer";
+    const assessmentReason = key === "externality_review" && !externalityTriggerDetected
+      ? "Automatic screening found no listed trigger. This does not establish that third-party harms were reviewed or ruled out."
+      : card.statusReason.replace(/^[^:]+: /, "");
+    return { ...card, key, status, assessmentLabel, assessmentReason };
+  });
 }
 
 export const MARKETPLACE_REVIEW_FACTOR_PRIORITY = [

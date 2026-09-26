@@ -66,9 +66,9 @@ const NODE_CONFIG: ReadonlyArray<{
 }> = [
   { href: "#terms", icon: "document", label: "Terms" },
   { href: "#terms", icon: "user", label: "Accepted" },
-  { href: "#evidence", icon: "handshake", label: "Commitments" },
-  { href: "#evidence", icon: "evidence", label: "Evidence" },
-  { href: "#completion", icon: "check", label: "Complete" },
+  { href: "#milestones", icon: "handshake", label: "Milestones" },
+  { href: "#milestones", icon: "evidence", label: "Evidence" },
+  { href: "#milestones", icon: "check", label: "Outcome" },
 ];
 
 const NODE_POSITION_CLASSES = [
@@ -114,7 +114,7 @@ function nodeDetail(
     return `${props.evidenceCount} submitted`;
   }
   if (props.lifecycleStatus === "completed") return "Final";
-  return `${props.completionConfirmationCount} / 2 confirmed`;
+  return "Awaiting final review";
 }
 
 function liveCopy(props: TradeAgreementStageProps): LiveCopy {
@@ -124,9 +124,9 @@ function liveCopy(props: TradeAgreementStageProps): LiveCopy {
       detailRows: [
         ["Completed", formatDate(props.completedAt)],
         ["Accepted evidence", String(props.acceptedEvidenceCount)],
-        ["Completion confirmations", `${props.completionConfirmationCount} / 2`],
+        ["Final graded milestones", String(props.acceptedEvidenceCount)],
       ],
-      intro: "The frozen terms, accepted evidence, and both completion confirmations are retained in the final record.",
+      intro: "Frozen milestone terms, private evidence history, neutral decisions, and external-payment records are retained.",
       kicker: "Final record · Both completed",
       title: "Trade completed.",
     };
@@ -181,7 +181,7 @@ function liveCopy(props: TradeAgreementStageProps): LiveCopy {
       ["Evidence due", formatDate(props.evidenceDueAt)],
       ["Accepted evidence", String(props.acceptedEvidenceCount)],
     ],
-    intro: "Both participants confirmed the same immutable version. No payment or custody occurs on this route.",
+    intro: "Both participants confirmed the same immutable version. Any resulting payment happens externally; Moral Trade does not hold funds.",
     kicker: "Active deal · Both accepted",
     title: "Trade is live.",
   };
@@ -303,7 +303,7 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
           </div>
           <div className={styles.noCustody}>
             <TradeFlowIcon name="shield" />
-            No payment or custody on this route
+            No custody · external payment records only
           </div>
         </div>
         <PartyPanel party={props.responder} side="request" />

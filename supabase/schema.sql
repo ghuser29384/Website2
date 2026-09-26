@@ -3234,11 +3234,12 @@ alter table public.priority_cause_area_feedback enable row level security;
 grant select on public.wish_profile_previews to anon, authenticated;
 
 drop policy if exists "profiles_public_read" on public.profiles;
-create policy "profiles_public_read"
+drop policy if exists "profiles_self_select" on public.profiles;
+create policy "profiles_self_select"
 on public.profiles
 for select
-to anon, authenticated
-using (true);
+to authenticated
+using (id = (select auth.uid()));
 
 drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own"

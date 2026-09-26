@@ -96,6 +96,7 @@ import {
   type BackgroundPurposeBinding,
 } from "@/lib/background-purpose-registry";
 import { getSafeInternalPath } from "@/lib/paths";
+import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";
 import {
   getBaselineBondAppealWindowEndsAt,
   getBaselineBondStatusAfterAccepted,
@@ -1246,7 +1247,7 @@ async function queueEmailOutbox({
     return;
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { error } = await supabase.from("email_outbox").insert({
     profile_id: profileId,
     recipient_email: recipientEmail,
@@ -3282,11 +3283,15 @@ export async function signInAction(formData: FormData) {
     redirectWithMessage(loginPath, "error", error.message);
   }
 
+  let destination = next;
   if (data.user) {
-    await ensureAccountRowsForUser(data.user, supabase);
+    const { profile } = await ensureAccountRowsForUser(data.user, supabase);
+    if (profileNeedsUsername(profile)) {
+      destination = buildUsernameCompletionPath(next);
+    }
   }
 
-  redirect(next);
+  redirect(destination);
 }
 
 export async function oauthSignInAction(formData: FormData) {
@@ -10602,7 +10607,11 @@ export async function addOfferCommentAction(formData: FormData) {
   revalidatePath("/people");
   revalidatePath(`/people/${viewer.authUser.id}`);
   revalidatePath(`/offers/${offerId}`);
-  redirectWithMessage(returnTo, "message", "Comment posted.");
+  const successMessage =
+    readOptional(formData, "submission_kind") === "question"
+      ? "Question posted."
+      : "Comment posted.";
+  redirectWithMessage(returnTo, "message", successMessage);
 }
 
 export async function voteCommentAction(formData: FormData) {
@@ -10768,69 +10777,36 @@ export async function acceptInterestAction(formData: FormData) {
     takerPerformanceBond = takerBondResult.data as PerformanceBondRow | null;
   }
 
-  const { error: acceptError } = await supabase
-    .from("interests")
-    .update({
-      status: "accepted",
-    })
-    .eq("id", interestId);
-
-  if (acceptError) {
-    logSupabaseActionError("Failed to accept interest", acceptError, {
-      interestId,
-      offerId,
-      ownerId: viewer.authUser.id,
-    });
-    redirectWithMessage(returnTo, "error", acceptError.message);
-  }
-
-  const { error: declineOthersError } = await supabase
-    .from("interests")
-    .update({
-      status: "declined",
-    })
-    .eq("offer_id", offerId)
-    .neq("id", interestId)
-    .eq("status", "pending");
-
-  if (declineOthersError) {
-    logSupabaseActionError("Failed to decline competing interests", declineOthersError, {
-      offerId,
-      acceptedInterestId: interestId,
-    });
-  }
-
-  const { data: agreement, error: agreementError } = await supabase.from("agreements").upsert(
+  const { data: acceptanceResult, error: acceptanceError } = await (supabase as any).rpc(
+    "accept_marketplace_interest_v1",
     {
-      offer_id: offerId,
-      interest_id: interestId,
-      proposer_id: viewer.authUser.id,
-      responder_id: interest.user_id,
-      status: "active",
-      notes,
-      source: "offer",
-      structured_terms: `${offer.offer_action} for ${offer.request_action}`,
-      duration_terms: offer.duration,
-      evidence_rule: offer.verification,
-      no_trade_baseline: offererPerformanceBond?.no_trade_baseline ?? "",
-      counterfactual_declaration: offererPerformanceBond?.additionality_statement ?? "",
-      privacy_scope: "Agreement participants can see this room. Broader publication waits for reviewed completion.",
-      disclosure_scope: "Share only the details needed to verify this agreement and resolve disputes.",
-      completion_state: "pending_evidence",
+      p_interest_id: interestId,
+      p_offer_id: offerId,
+      p_notes: notes,
     },
-    {
-      onConflict: "interest_id",
-    },
-  ).select("*").single();
+  );
 
-  if (agreementError || !agreement) {
-    logSupabaseActionError("Failed to create agreement after accepting interest", agreementError, {
-      offerId,
-      interestId,
-      proposerId: viewer.authUser.id,
-      responderId: interest.user_id,
-    });
-    redirectWithMessage(returnTo, "error", agreementError?.message ?? "Unable to create agreement.");
+  const acceptancePayload = acceptanceResult as
+    | { agreement?: AgreementRow; created?: boolean }
+    | null;
+  const agreement = acceptancePayload?.agreement;
+
+  if (acceptanceError || !agreement) {
+    logSupabaseActionError(
+      "Failed to atomically accept interest and create agreement",
+      acceptanceError,
+      {
+        offerId,
+        interestId,
+        proposerId: viewer.authUser.id,
+        responderId: interest.user_id,
+      },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      acceptanceError?.message ?? "Unable to accept interest and create agreement.",
+    );
   }
 
   if (offer.mode === "pledge" && (offererPerformanceBond || takerPerformanceBond)) {
@@ -11082,77 +11058,36 @@ export async function acceptGuestInterestAction(formData: FormData) {
     redirectWithMessage(returnTo, "message", "This offer already has an agreement.");
   }
 
-  const { error: acceptError } = await supabase
-    .from("guest_interests")
-    .update({
-      status: "accepted",
-    })
-    .eq("id", guestInterestId);
+  const { data: acceptanceResult, error: acceptanceError } = await (supabase as any).rpc(
+    "accept_marketplace_guest_interest_v1",
+    {
+      p_guest_interest_id: guestInterestId,
+      p_offer_id: offerId,
+      p_notes: notes,
+    },
+  );
 
-  if (acceptError) {
-    logSupabaseActionError("Failed to accept guest response", acceptError, {
-      guestInterestId,
-      offerId,
-      ownerId: viewer.authUser.id,
-    });
-    redirectWithMessage(returnTo, "error", acceptError.message);
-  }
+  const acceptancePayload = acceptanceResult as
+    | { agreement?: AgreementRow; created?: boolean }
+    | null;
 
-  const { error: declineGuestError } = await supabase
-    .from("guest_interests")
-    .update({
-      status: "declined",
-    })
-    .eq("offer_id", offerId)
-    .neq("id", guestInterestId)
-    .eq("status", "pending");
-
-  if (declineGuestError) {
-    logSupabaseActionError("Failed to decline competing guest responses", declineGuestError, {
-      offerId,
-      acceptedGuestInterestId: guestInterestId,
-    });
-  }
-
-  const { error: declineMemberError } = await supabase
-    .from("interests")
-    .update({
-      status: "declined",
-    })
-    .eq("offer_id", offerId)
-    .eq("status", "pending");
-
-  if (declineMemberError) {
-    logSupabaseActionError("Failed to decline competing member interests after guest acceptance", declineMemberError, {
-      offerId,
-      acceptedGuestInterestId: guestInterestId,
-    });
-  }
-
-  const { error: agreementError } = await supabase.from("agreements").insert({
-    offer_id: offerId,
-    interest_id: null,
-    proposer_id: viewer.authUser.id,
-    responder_id: guestInterest.claimed_by_profile_id,
-    status: "active",
-    notes,
-    source: "offer",
-    structured_terms: `${offer.offer_action} for ${offer.request_action}`,
-    duration_terms: offer.duration,
-    evidence_rule: offer.verification,
-    privacy_scope: "Agreement participants can see this room. Broader publication waits for reviewed completion.",
-    disclosure_scope: "Share only the details needed to verify this agreement and resolve disputes.",
-    completion_state: "pending_evidence",
-  });
-
-  if (agreementError) {
-    logSupabaseActionError("Failed to create agreement after accepting guest response", agreementError, {
-      offerId,
-      guestInterestId,
-      proposerId: viewer.authUser.id,
-      responderId: guestInterest.claimed_by_profile_id,
-    });
-    redirectWithMessage(returnTo, "error", agreementError.message);
+  if (acceptanceError || !acceptancePayload?.agreement) {
+    logSupabaseActionError(
+      "Failed to atomically accept guest response and create agreement",
+      acceptanceError,
+      {
+        offerId,
+        guestInterestId,
+        proposerId: viewer.authUser.id,
+        responderId: guestInterest.claimed_by_profile_id,
+      },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      acceptanceError?.message ??
+        "Unable to accept the guest response and create an agreement.",
+    );
   }
 
   if (offer.mode === "offset") {

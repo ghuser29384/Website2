@@ -1,0 +1,327 @@
+/* Create-route repairs for selection affordances, contrast, sticky-header anchoring, and bounded autocomplete geometry. */
+
+html {
+  scroll-padding-top: calc(var(--header-h) + 16px);
+}
+
+/* The request form is a content panel, not a primary action button. Keep its text and surfaces explicit. */
+.request-primary {
+  border-color: var(--line-strong) !important;
+  background: #fffdf8 !important;
+  color: #111111 !important;
+}
+
+.request-primary:hover {
+  background: #fffdf8 !important;
+}
+
+.request-entry-head label {
+  color: #111111 !important;
+}
+
+.request-entry-head span {
+  color: #4d4b46 !important;
+}
+
+.request-input-row,
+.suggestions {
+  background: #fffdf8 !important;
+  color: #111111 !important;
+}
+
+.suggestions {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.suggestion-option,
+.suggestion-option span:last-child {
+  background: #fffdf8 !important;
+  color: #111111 !important;
+}
+
+.suggestion-option:hover,
+.suggestion-option.active,
+.suggestion-option[aria-selected="true"] {
+  background: #e4eaff !important;
+  color: #111111 !important;
+}
+
+.suggestion-option:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+.suggestions[data-placement="above"] {
+  top: auto !important;
+  bottom: calc(14px + 63px);
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 0;
+}
+
+/* The chosen cause sits on a light strip inside the dark intro column. Do not inherit white text. */
+.chosen-strip {
+  background: #fffdf8 !important;
+  color: #111111 !important;
+}
+
+.chosen-strip strong {
+  color: #111111 !important;
+}
+
+/* Use a conventional radio/check affordance instead of an external-link arrow. */
+.cause-choice::after {
+  content: "";
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font: 700 12px/1 var(--mono);
+  opacity: .46;
+  transform: none;
+}
+
+.cause-choice:hover::after {
+  opacity: 1;
+  transform: none;
+}
+
+.cause-choice.selected::after {
+  content: "✓";
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--tone);
+  opacity: 1;
+}
+
+.other-cause-submit:disabled {
+  border-left-color: #b8b5ad !important;
+  background: #d8d5cc !important;
+  color: #706d67 !important;
+  cursor: not-allowed !important;
+}
+
+/* The desktop progress control names each step while preserving the compact bar grammar. */
+.topbar .progress {
+  align-items: stretch;
+  gap: 10px;
+  padding: 0;
+}
+
+.topbar .progress span {
+  position: relative;
+  width: 78px !important;
+  height: 28px !important;
+  padding-top: 12px;
+  background: transparent !important;
+  color: #87847d;
+  font: 700 8px/1 var(--mono);
+  letter-spacing: .08em;
+  opacity: 1 !important;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topbar .progress span::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: #5d5b57;
+}
+
+.topbar .progress span::after {
+  content: attr(data-step-label);
+}
+
+.topbar .progress span.done {
+  background: transparent !important;
+  color: #aeb8e4;
+}
+
+.topbar .progress span.done::before {
+  background: #2450ff;
+}
+
+.topbar .progress span.active {
+  background: transparent !important;
+  color: #ffffff;
+}
+
+.topbar .progress span.active::before {
+  background: #ffffff;
+}
+
+.topbar .progress span[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .topbar .progress span {
+    width: 48px !important;
+    font-size: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .suggestions,
+  .suggestions[data-placement="above"] {
+    position: static;
+    top: auto !important;
+    bottom: auto;
+    max-height: min(240px, 40dvh) !important;
+    border-top: 0;
+  }
+}
+
+/* Cause selection is a form, not a poster. Keep this repair local to step one. */
+#screenCause .stage {
+  min-height: 0;
+  grid-template-columns: minmax(260px, .7fr) minmax(0, 1.7fr);
+  gap: 0;
+  align-items: stretch;
+}
+
+#screenCause .intro {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 0;
+  padding: clamp(24px, 2.5vw, 36px);
+  border-right: 1px solid var(--ink);
+}
+
+#screenCause .step-label {
+  margin-bottom: 16px;
+}
+
+#screenCause #causeHeading {
+  max-width: 12ch;
+  font-size: clamp(2.25rem, 3.4vw, 3.5rem);
+  line-height: 1.08 !important; /* Override the canonical poster leading. */
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+#screenCause .intro-copy {
+  max-width: 32ch;
+  margin-top: 20px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+#screenCause .cause-panel {
+  padding: clamp(16px, 2vw, 28px);
+}
+
+#screenCause .cause-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#screenCause .cause-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 100px;
+  padding: 16px;
+}
+
+#screenCause .cause-choice::before {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+#screenCause .cause-choice strong {
+  max-width: 100%;
+  font-size: clamp(15px, 1.2vw, 18px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+#screenCause .other-cause-form {
+  margin-top: 16px;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+}
+
+#screenCause .other-cause-submit {
+  min-width: 112px;
+}
+
+@media (max-width: 1180px) {
+  #screenCause .cause-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #screenCause .other-cause-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #screenCause .other-cause-form label {
+    grid-column: 1 / -1;
+    min-height: 36px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 900px) {
+  #screenCause .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #screenCause .intro {
+    min-height: 0 !important; /* Do not inherit the canonical 310px mobile hero. */
+    padding: 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  #screenCause #causeHeading {
+    max-width: 22ch;
+    font-size: clamp(2rem, 5.5vw, 3rem);
+  }
+
+  #screenCause .intro-copy {
+    max-width: 48ch;
+    margin-top: 16px;
+  }
+
+  #screenCause .cause-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #screenCause .cause-choice {
+    min-height: 88px;
+    padding: 12px;
+  }
+
+  #screenCause .cause-choice::before {
+    margin-bottom: 14px;
+  }
+
+  #screenCause .other-cause-form input {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 359px) {
+  #screenCause .cause-grid,
+  #screenCause .other-cause-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #screenCause .other-cause-submit {
+    min-height: 48px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}

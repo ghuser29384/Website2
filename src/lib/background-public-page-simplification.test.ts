@@ -79,16 +79,18 @@ test("bg85 background explainer defaults to the five-step model and hides techni
   const defaultSource = visibleDefaultSource(
     source,
     "<header className=\"hero\">",
-    "id=\"background-technical-details\"",
+    "id=\"concierge-intake\"",
   );
 
-  assert.match(source, /BACKGROUND_PUBLIC_BACKGROUND_HERO/);
-  assert.match(source, /BACKGROUND_PUBLIC_PROMISE/);
-  assert.match(source, /BACKGROUND_PUBLIC_SAFETY_CARDS/);
-  assert.match(source, /BACKGROUND_PUBLIC_MENTAL_MODEL_STEPS/);
-  assert.match(source, /BACKGROUND_PUBLIC_PILOT_STATUS/);
-  assert.match(source, /Technical details/);
-  assert.match(source, /BACKGROUND_PUBLIC_TECHNICAL_LINKS/);
+  assert.equal((source.match(/number: "0[1-5]"/g) ?? []).length, 5);
+  assert.match(source, /Create a broad preview/);
+  assert.match(source, /Choose the audience/);
+  assert.match(source, /Request a reviewed search/);
+  assert.match(source, /Review a possible opportunity/);
+  assert.match(source, /Disclose only after consent/);
+  assert.match(source, /Compatibility is not consent/);
+  assert.match(source, /No autonomous outreach/);
+  assert.doesNotMatch(source, /background-technical-details|BACKGROUND_PUBLIC_TECHNICAL_LINKS/);
 
   for (const term of BACKGROUND_PUBLIC_FORBIDDEN_DEFAULT_TERMS) {
     assert.doesNotMatch(defaultSource, new RegExp(escapeRegExp(term), "i"), term);
@@ -114,22 +116,23 @@ test("bg85 wish registry is broad-preview browsing without implied contact or ra
   assert.doesNotMatch(defaultSource, /getWishRegistryCompatibilityBand/);
 });
 
-test("bg85 trust pages lead with concise background summaries and technical detail links", () => {
+test("bg85 trust pages lead with concise background summaries and preserve technical detail access", () => {
   const pages = [
-    ["src/app/privacy/page.tsx", "privacy"],
-    ["src/app/safety/page.tsx", "safety"],
-    ["src/app/measurement/page.tsx", "measurement"],
-    ["src/app/transparency/page.tsx", "transparency"],
-    ["src/app/accessibility/page.tsx", "accessibility"],
+    ["src/app/privacy/page.tsx", /Private details remain participant-controlled/, /details-panel/],
+    ["src/app/safety/page.tsx", /Safety rules for voluntary moral trade/, /operational controls|health/],
+    ["src/app/measurement/page.tsx", /Measure useful cooperation, not moral worth/, /details-panel/],
+    ["src/app/transparency/page.tsx", /Public counts without public case files/, /BACKGROUND_PUBLIC_TECHNICAL_LINKS/],
+    ["src/app/accessibility/page.tsx", /Accessible review is part of trust/, /known limitations|test every review/i],
   ] as const;
 
-  for (const [path, key] of pages) {
+  for (const [path, heading, technicalAccess] of pages) {
     const source = pageSource(path);
-    const summary = BACKGROUND_PUBLIC_PAGE_SUMMARIES[key];
+    assert.match(source, heading, path);
+    assert.match(source, /private matching|Background networking|broad preview|consent|privacy-safe|review/i, path);
+    assert.match(source, technicalAccess, path);
+  }
 
-    assert.match(source, new RegExp(`BACKGROUND_PUBLIC_PAGE_SUMMARIES\\.${key}`), path);
-    assert.match(source, /BACKGROUND_PUBLIC_TECHNICAL_LINKS/, path);
-    assert.match(source, /details-panel/, path);
-    assert.ok(summary.summary.length < 240, key);
+  for (const summary of Object.values(BACKGROUND_PUBLIC_PAGE_SUMMARIES)) {
+    assert.ok(summary.summary.length < 240, summary.heading);
   }
 });

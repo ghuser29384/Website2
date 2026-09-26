@@ -1,0 +1,355 @@
+{
+  "schemaVersion": "commitments-trade-precision-report-v1",
+  "studyVariant": "graph_cluster_role_2x2_encouragement",
+  "primaryEstimand": "policy-level assignment-policy ITT",
+  "primaryContrast": "both_roles_minus_neither_role",
+  "scientificIntervalLevelBps": 9500,
+  "simulationSpecHash": "sha256:58b6908206c0a7c92e0dda98bf68533da2e5575796343412ba5f4168469390a9",
+  "simulationSeedCommitment": "sha256:53db64708e7657f91bd8901bf033ba8b1969f219a8165977584e336c9774cc75",
+  "replicatesPerScenario": 400,
+  "scenarioCount": 60,
+  "planningTarget": {
+    "baselineCompletionRate": 0.05,
+    "absolutePolicyEffect": 0.03,
+    "maximumIntraclusterCorrelation": 0.05,
+    "minimumPower": 0.8,
+    "maximumMedianHalfWidth95": 0.03,
+    "maximumTypeIError": 0.08
+  },
+  "planningCandidatesByClusterCount": [
+    {
+      "clustersPerArm": 50,
+      "totalClusters": 200,
+      "requiredIccGrid": [
+        0.01,
+        0.05
+      ],
+      "worstPower": 0.2,
+      "worstPowerMonteCarloInterval95": [
+        0.16373705973387687,
+        0.24197031686670106
+      ],
+      "worstPowerIcc": 0.05,
+      "widestMedianHalfWidth95": 0.04275507030147058,
+      "widestIntervalIcc": 0.05,
+      "meetsPlanningTarget": false
+    },
+    {
+      "clustersPerArm": 100,
+      "totalClusters": 400,
+      "requiredIccGrid": [
+        0.01,
+        0.05
+      ],
+      "worstPower": 0.2575,
+      "worstPowerMonteCarloInterval95": [
+        0.21709827513471777,
+        0.302515187617416
+      ],
+      "worstPowerIcc": 0.05,
+      "widestMedianHalfWidth95": 0.030408009511326328,
+      "widestIntervalIcc": 0.05,
+      "meetsPlanningTarget": false
+    },
+    {
+      "clustersPerArm": 200,
+      "totalClusters": 800,
+      "requiredIccGrid": [
+        0.01,
+        0.05
+      ],
+      "worstPower": 0.51,
+      "worstPowerMonteCarloInterval95": [
+        0.46114904250821503,
+        0.558660711605099
+      ],
+      "worstPowerIcc": 0.05,
+      "widestMedianHalfWidth95": 0.021205573737869514,
+      "widestIntervalIcc": 0.05,
+      "meetsPlanningTarget": false
+    },
+    {
+      "clustersPerArm": 400,
+      "totalClusters": 1600,
+      "requiredIccGrid": [
+        0.01,
+        0.05
+      ],
+      "worstPower": 0.7875,
+      "worstPowerMonteCarloInterval95": [
+        0.7447739406814161,
+        0.8247564900763634
+      ],
+      "worstPowerIcc": 0.05,
+      "widestMedianHalfWidth95": 0.015098102728482159,
+      "widestIntervalIcc": 0.05,
+      "meetsPlanningTarget": false
+    },
+    {
+      "clustersPerArm": 800,
+      "totalClusters": 3200,
+      "requiredIccGrid": [
+        0.01,
+        0.05
+      ],
+      "worstPower": 0.9625,
+      "worstPowerMonteCarloInterval95": [
+        0.9390561575554867,
+        0.9771449701852891
+      ],
+      "worstPowerIcc": 0.05,
+      "widestMedianHalfWidth95": 0.010682301004301818,
+      "widestIntervalIcc": 0.05,
+      "meetsPlanningTarget": true
+    }
+  ],
+  "smallestPlanningCandidate": {
+    "clustersPerArm": 800,
+    "totalClusters": 3200,
+    "requiredIccGrid": [
+      0.01,
+      0.05
+    ],
+    "worstPower": 0.9625,
+    "worstPowerMonteCarloInterval95": [
+      0.9390561575554867,
+      0.9771449701852891
+    ],
+    "worstPowerIcc": 0.05,
+    "widestMedianHalfWidth95": 0.010682301004301818,
+    "widestIntervalIcc": 0.05,
+    "meetsPlanningTarget": true
+  },
+  "typeIErrorPointWithinTolerance": true,
+  "typeIErrorMonteCarloUpperWithinTolerance": false,
+  "scenarioGridDigest": "sha256:060b34b3a1818d0c3335677f890c692fb888232eed2dbc5b533bf21cda38469f",
+  "nullDiagnosticsByClusterCount": [
+    {
+      "clustersPerArm": 50,
+      "worstPointTypeIError": 0.0675,
+      "worstPointIcc": 0.05,
+      "worstMonteCarloUpper95": 0.09642666543540682,
+      "worstUpperIcc": 0.05
+    },
+    {
+      "clustersPerArm": 100,
+      "worstPointTypeIError": 0.0675,
+      "worstPointIcc": 0.05,
+      "worstMonteCarloUpper95": 0.09642666543540682,
+      "worstUpperIcc": 0.05
+    },
+    {
+      "clustersPerArm": 200,
+      "worstPointTypeIError": 0.055,
+      "worstPointIcc": 0.05,
+      "worstMonteCarloUpper95": 0.08186744780797323,
+      "worstUpperIcc": 0.05
+    },
+    {
+      "clustersPerArm": 400,
+      "worstPointTypeIError": 0.045,
+      "worstPointIcc": 0.01,
+      "worstMonteCarloUpper95": 0.07000472919032381,
+      "worstUpperIcc": 0.01
+    },
+    {
+      "clustersPerArm": 800,
+      "worstPointTypeIError": 0.0525,
+      "worstPointIcc": 0.05,
+      "worstMonteCarloUpper95": 0.07892197507127496,
+      "worstUpperIcc": 0.05
+    }
+  ],
+  "selectedScenarioSummaries": [
+    {
+      "clustersPerArm": 800,
+      "baselineCompletionRate": 0.05,
+      "absolutePolicyEffect": 0,
+      "intraclusterCorrelation": 0.05,
+      "totalClusters": 3200,
+      "intendedAbsolutePolicyEffect": 0,
+      "effectiveIttEffectAfterDilution": 0,
+      "simulatedPowerOrTypeIError": 0.0525,
+      "simulatedPowerOrTypeIErrorMonteCarloInterval95": [
+        0.034591528357920405,
+        0.07892197507127496
+      ],
+      "empiricalCoverage95": 0.9475,
+      "empiricalCoverageMonteCarloInterval95": [
+        0.921078024928725,
+        0.9654084716420795
+      ],
+      "medianEstimate": -0.0004196997687740747,
+      "estimateQuantiles": {
+        "p05": -0.00884596391060548,
+        "p50": -0.0004196997687740747,
+        "p95": 0.007742517249895536
+      },
+      "medianStandardError": 0.004946799373572008,
+      "medianConfidenceHalfWidth95": 0.009710257802938948,
+      "medianObservedDyadsInPrimaryContrast": 11492.5
+    },
+    {
+      "clustersPerArm": 800,
+      "baselineCompletionRate": 0.05,
+      "absolutePolicyEffect": 0.02,
+      "intraclusterCorrelation": 0.05,
+      "totalClusters": 3200,
+      "intendedAbsolutePolicyEffect": 0.02,
+      "effectiveIttEffectAfterDilution": 0.014249999999999999,
+      "simulatedPowerOrTypeIError": 0.7575,
+      "simulatedPowerOrTypeIErrorMonteCarloInterval95": [
+        0.7131775779269679,
+        0.7969235904908692
+      ],
+      "empiricalCoverage95": 0.9525,
+      "empiricalCoverageMonteCarloInterval95": [
+        0.9270084505901734,
+        0.9693829230372881
+      ],
+      "medianEstimate": 0.013997163123368458,
+      "estimateQuantiles": {
+        "p05": 0.005909742482922607,
+        "p50": 0.013997163123368458,
+        "p95": 0.02307822725719078
+      },
+      "medianStandardError": 0.005292973097058444,
+      "medianConfidenceHalfWidth95": 0.010389775172819535,
+      "medianObservedDyadsInPrimaryContrast": 11476.5
+    },
+    {
+      "clustersPerArm": 800,
+      "baselineCompletionRate": 0.05,
+      "absolutePolicyEffect": 0.03,
+      "intraclusterCorrelation": 0.01,
+      "totalClusters": 3200,
+      "intendedAbsolutePolicyEffect": 0.03,
+      "effectiveIttEffectAfterDilution": 0.021374999999999998,
+      "simulatedPowerOrTypeIError": 0.9975,
+      "simulatedPowerOrTypeIErrorMonteCarloInterval95": [
+        0.9859767149241766,
+        0.9995585522131983
+      ],
+      "empiricalCoverage95": 0.94,
+      "empiricalCoverageMonteCarloInterval95": [
+        0.9122771510995438,
+        0.9593520298862752
+      ],
+      "medianEstimate": 0.02085164520985804,
+      "estimateQuantiles": {
+        "p05": 0.013876266319220083,
+        "p50": 0.02085164520985804,
+        "p95": 0.03003708532128675
+      },
+      "medianStandardError": 0.0046782999215731,
+      "medianConfidenceHalfWidth95": 0.009183210170325012,
+      "medianObservedDyadsInPrimaryContrast": 11480.5
+    },
+    {
+      "clustersPerArm": 800,
+      "baselineCompletionRate": 0.05,
+      "absolutePolicyEffect": 0.03,
+      "intraclusterCorrelation": 0.05,
+      "totalClusters": 3200,
+      "intendedAbsolutePolicyEffect": 0.03,
+      "effectiveIttEffectAfterDilution": 0.021374999999999998,
+      "simulatedPowerOrTypeIError": 0.9625,
+      "simulatedPowerOrTypeIErrorMonteCarloInterval95": [
+        0.9390561575554867,
+        0.9771449701852891
+      ],
+      "empiricalCoverage95": 0.9475,
+      "empiricalCoverageMonteCarloInterval95": [
+        0.921078024928725,
+        0.9654084716420795
+      ],
+      "medianEstimate": 0.02150318352545332,
+      "estimateQuantiles": {
+        "p05": 0.011679494972328761,
+        "p50": 0.02150318352545332,
+        "p95": 0.02963194744076845
+      },
+      "medianStandardError": 0.0054419976265093735,
+      "medianConfidenceHalfWidth95": 0.010682301004301818,
+      "medianObservedDyadsInPrimaryContrast": 11488.5
+    },
+    {
+      "clustersPerArm": 800,
+      "baselineCompletionRate": 0.05,
+      "absolutePolicyEffect": 0.03,
+      "intraclusterCorrelation": 0.15,
+      "totalClusters": 3200,
+      "intendedAbsolutePolicyEffect": 0.03,
+      "effectiveIttEffectAfterDilution": 0.021374999999999998,
+      "simulatedPowerOrTypeIError": 0.8925,
+      "simulatedPowerOrTypeIErrorMonteCarloInterval95": [
+        0.8583265694191717,
+        0.9192062795284055
+      ],
+      "empiricalCoverage95": 0.97,
+      "empiricalCoverageMonteCarloInterval95": [
+        0.9483014642909042,
+        0.9827569790348569
+      ],
+      "medianEstimate": 0.021038690787413435,
+      "estimateQuantiles": {
+        "p05": 0.01050000442785773,
+        "p50": 0.021038690787413435,
+        "p95": 0.03128906870315347
+      },
+      "medianStandardError": 0.007017560388239398,
+      "medianConfidenceHalfWidth95": 0.013775032171618542,
+      "medianObservedDyadsInPrimaryContrast": 11483
+    },
+    {
+      "clustersPerArm": 800,
+      "baselineCompletionRate": 0.05,
+      "absolutePolicyEffect": 0.05,
+      "intraclusterCorrelation": 0.05,
+      "totalClusters": 3200,
+      "intendedAbsolutePolicyEffect": 0.05,
+      "effectiveIttEffectAfterDilution": 0.035625000000000004,
+      "simulatedPowerOrTypeIError": 1,
+      "simulatedPowerOrTypeIErrorMonteCarloInterval95": [
+        0.9904877056657034,
+        0.9999999999999999
+      ],
+      "empiricalCoverage95": 0.95,
+      "empiricalCoverageMonteCarloInterval95": [
+        0.9240363649362803,
+        0.9674025701628527
+      ],
+      "medianEstimate": 0.035629845860617106,
+      "estimateQuantiles": {
+        "p05": 0.02617788339112544,
+        "p50": 0.035629845860617106,
+        "p95": 0.04541097665882673
+      },
+      "medianStandardError": 0.005712883182085791,
+      "medianConfidenceHalfWidth95": 0.011214032409014116,
+      "medianObservedDyadsInPrimaryContrast": 11505.5
+    }
+  ],
+  "executionDecision": {
+    "determination": "no_launch",
+    "reasons": [
+      "No frozen real eligible-population graph snapshot or completed graph diagnostics exist.",
+      "No independent ethics determination or consent/waiver decision exists.",
+      "The numerical planning target is a design aid, not an approved product confidence threshold.",
+      "Assignment and analysis code are frozen for synthetic review only; real-user execution is not authorized."
+    ]
+  },
+  "evidenceBoundary": {
+    "supports": [
+      "design-specific planning for a graph-cluster bilateral encouragement study",
+      "selection of a candidate independent-cluster range for later graph diagnostics"
+    ],
+    "doesNotSupport": [
+      "a claim that Moral Trade invitations cause outcomes in real users",
+      "participant expected additional impact",
+      "participant direct causal attribution",
+      "empirical calibration of any PR #534 methodology"
+    ]
+  },
+  "reportPayloadHash": "sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f"
+}

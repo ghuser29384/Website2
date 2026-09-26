@@ -2,93 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#050505">
-  <meta name="description" content="Explore Moral Trade offers, threshold pools, and trusted counterparties through transparent, inspectable discovery views.">
+  <meta name="description" content="Browse current Moral Trade listings. Compare what you provide, what the counterparty provides, and the published terms.">
   <link rel="canonical" href="https://moraltrade.org/discover">
-  <title>Moral Trade — Discover</title>
-  <style>
-    html,body{margin:0;min-height:100%;background:#f7f5ef;color:#0b0b0a;font-family:system-ui,sans-serif}
-    main{min-height:100vh;display:grid;place-items:center;padding:24px}
-    p{max-width:42rem;line-height:1.5}
-  </style>
+  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <title>Browse trades · Moral Trade</title>
+  <link rel="stylesheet" href="/moral-trade-discover.css?v=20260923">
+  <link rel="stylesheet" href="/moral-trade-input-assist.css?v=20260923">
+  <script defer src="/moral-trade-brand.js?v=20260923"></script>
+  <script defer src="/moral-trade-account-identity.js?v=20260923"></script>
+  <script defer src="/moral-trade-discover-search.js?v=20260923"></script>
+  <script defer src="/moral-trade-input-assist.js?v=20260923"></script>
+  <link rel="stylesheet" href="/moral-trade-refined-header.css">
 </head>
 <body>
-  <main><p id="loading">Loading Discover…</p></main>
-  <script src="/moral-trade-discover-local-time.js"></script>
-  <script>
-    (async () => {
-      try {
-        const paths = [
-          "/discover/payload/0.txt",
-          "/discover/payload/1.txt",
-          "/discover/payload/2.txt",
-          "/discover/payload/3.txt",
-          "/discover/payload/4.txt",
-          "/discover/payload/5.txt",
-          "/discover/payload/6.txt",
-        ];
-        const accountPromise = fetch("/api/live-account", {
-          credentials: "same-origin",
-          headers: { Accept: "application/json" },
-        })
-          .then((response) => (response.ok ? response.json() : { authenticated: false }))
-          .catch(() => ({ authenticated: false }));
-        const [parts, liveAccount] = await Promise.all([
-          Promise.all(
-            paths.map(async (path) => {
-              const response = await fetch(path, { cache: "force-cache" });
-              if (!response.ok) throw new Error(`Discover payload ${path} returned ${response.status}`);
-              return response.text();
-            }),
-          ),
-          accountPromise,
-        ]);
-        const bytes = Uint8Array.from(atob(parts.join("")), (character) => character.charCodeAt(0));
-        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-        const source = await new Response(stream).text();
-        const localTimeRuntime = window.MoralTradeDiscoverLocalTime;
-        if (!localTimeRuntime) throw new Error("Discover local-time runtime did not load");
-        const localizedSource = localTimeRuntime.transformSource(source);
-        const accountJson = JSON.stringify(liveAccount)
-          .replace(/</g, "\\u003c")
-          .replace(/>/g, "\\u003e")
-          .replace(/&/g, "\\u0026")
-          .replace(/\u2028/g, "\\u2028")
-          .replace(/\u2029/g, "\\u2029");
-        const headScripts = [
-          '<link rel="stylesheet" href="/moral-trade-input-assist.css">',
-          '<script src="/moral-trade-discover-local-time.js"></scr' + 'ipt>',
-          `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};</scr` + 'ipt>',
-          '<script src="/moral-trade-account-identity.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-live-account.js"></scr' + 'ipt>',
-        ].join("");
-        if (!localizedSource.includes("</head>")) {
-          throw new Error("Discover payload is missing its closing head tag");
-        }
-        const replacementSource = localizedSource.replace("</head>", `${headScripts}</head>`);
-        const enhancementScripts = [
-          '<script src="/moral-trade-discover-navigation.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-discover-value-hover.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-brand.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-requester-identity.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-input-assist.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-smart-query.js"></scr' + 'ipt>',
-        ].join("");
-        const enhancedSource = replacementSource.includes("</body>")
-          ? replacementSource.replace("</body>", `${enhancementScripts}</body>`)
-          : `${replacementSource}${enhancementScripts}`;
-
-        document.open();
-        document.write(enhancedSource);
-        document.close();
-      } catch (error) {
-        const loading = document.getElementById("loading");
-        if (loading) loading.textContent = "Unable to load Discover. Please refresh.";
-        console.error(error);
-      }
-    })();
-  </script>
-  <noscript><main><p>JavaScript is required to use Discover.</p></main></noscript>
+  <a class="skip-link" href="#discover-main">Skip to trades</a>
+  <header class="app-header mt-refined-header">
+    <a class="brand" href="/" aria-label="Moral Trade home">Moral Trade</a>
+    <nav class="top-nav" aria-label="Primary navigation" data-mt-primary-links="true">
+      <a href="/feed">Home</a>
+      <a href="/discover" aria-current="page">Trades</a>
+      <a href="/commitments">Commitments</a>
+      <a href="/profile">Profile</a>
+    </nav>
+    <div class="header-actions">
+    <a class="header-start" href="/start">Get Started</a>
+    <a class="avatar" href="/profile" aria-label="Account"><span data-mt-account-avatar="true">•</span></a>
+    </div>
+  </header>
+  <main id="discover-main" class="discover-main">
+    <div class="page-heading">
+      <div><h1>Browse trades</h1><p>Compare what you provide, what the counterparty provides, and the published terms.</p></div>
+      <a class="primary-btn" href="/trades/new">Post a trade</a>
+    </div>
+    <form id="command-form" class="search-form" role="search" aria-label="Search current trades">
+      <label for="command-input">Find a trade</label>
+      <div class="search-row">
+        <input id="command-input" name="q" type="search" data-mt-submit-search="true" maxlength="500" placeholder="Search by cause, action, or what you can offer" autocomplete="off">
+        <button class="primary-btn" type="submit">Search</button>
+      </div>
+      <div class="filter-row">
+        <div><label for="offer-kind">Trade type</label><select id="offer-kind" name="offerKind"><option value="all">All trades</option><option value="individual">Individual trades</option><option value="co-fund">Co-Funds</option></select></div>
+        <div><label for="maximum-offer">Maximum you provide (USD)</label><input id="maximum-offer" name="max" type="number" min="0" max="100000000" step="0.01" inputmode="decimal" placeholder="No limit" aria-describedby="amount-help"></div>
+        <button type="button" id="clear-search" class="text-btn">Clear all</button>
+      </div>
+      <p id="amount-help" class="helper">Co-Funds are trades funded by a contributor group. Amount filters use published USD amounts, not currency conversions.</p>
+    </form>
+    <div id="legacy-notice" class="notice" hidden></div>
+    <section id="discover-live-search-state" data-testid="discover-live-search-state" aria-label="Search status">
+      <p id="search-status" role="status" aria-live="polite">Checking current listings…</p>
+      <div id="search-constraints" class="constraint-row" aria-label="Applied search constraints"></div>
+      <div id="search-clarification" hidden></div>
+    </section>
+    <section id="results" aria-label="Current trade listings" aria-busy="true">
+      <div class="results-heading"><h2>Current listings</h2><p id="result-count" class="result-count"></p></div>
+      <div id="trade-results" class="transaction-list"></div>
+      <nav id="result-pages" class="pagination" aria-label="Trade result pages" hidden>
+        <button id="previous-page" type="button" class="outline-btn">Previous page</button>
+        <span id="page-label"></span>
+        <button id="next-page" type="button" class="outline-btn">Next page</button>
+      </nav>
+    </section>
+    <noscript><p class="notice">JavaScript is needed to check current listings here. <a href="/offers?view=live">Open the live trade directory</a> or <a href="/worked-examples">read worked examples</a>.</p></noscript>
+    <footer class="discover-footer">
+      <p><a href="/dashboard">Dashboard</a> · <a href="/messages">Messages</a> · <a href="/walkthrough">How it works</a> · <a href="/evidence">Public evidence</a> · <a href="/safety">Safety</a></p>
+      <p>New to moral trade? <a href="/worked-examples">Read worked examples</a>—illustrations, not available listings.</p>
+      <p>Not finding the right exchange? <a href="/trades/new">Post a proposal</a> or <a href="/invite">invite a counterparty</a>.</p>
+      <p class="helper">Review each listing’s evidence, availability, and conditions before making a commitment. Browsing does not create an agreement or authorize a payment.</p>
+    </footer>
+  </main>
 </body>
 </html>

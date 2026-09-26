@@ -14,15 +14,12 @@ import {
   type PublicProfileSummary,
 } from "@/lib/app-data";
 import { listPublicCredibilitySummaries } from "@/lib/credibility-data";
-import type { CredibilitySummary } from "@/lib/credibility";
 import {
   collectPeopleCauseOptions,
-  CREDIT_FILTER_OPTIONS,
   PEOPLE_DISCOVERY_SORT_OPTIONS,
   PEOPLE_KIND_FILTER_OPTIONS,
   PEOPLE_PARTICIPATION_FILTER_OPTIONS,
   PEOPLE_PAYMENT_FILTER_OPTIONS,
-  type CreditFilter,
   type PeopleDiscoveryFilters,
   type PeopleDiscoverySort,
   type PeopleKindFilter,
@@ -45,14 +42,14 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "People",
   description:
-    "Search opt-in Moral Trade member records and compare public transaction credit scores, reviewed evidence, open offers, and explicit uncertainty.",
+    "Find opt-in Moral Trade participants by public work, open offers, stated participation preferences, and reviewed evidence.",
   alternates: {
     canonical: "/people",
   },
   openGraph: {
     title: "People directory",
     description:
-      "Search opt-in Moral Trade member profiles and compare contextual transaction credit scores, reviewed proof, and public offers.",
+      "Find opt-in Moral Trade participants by public work, open offers, stated participation preferences, and reviewed evidence.",
     url: getAbsoluteUrl("/people"),
     type: "website",
   },
@@ -64,7 +61,6 @@ interface PeoplePageProps {
 
 interface PeopleFilterState {
   cause: string;
-  credit: CreditFilter;
   kind: PeopleKindFilter;
   participation: PeopleParticipationFilter;
   payment: PeoplePaymentFilter;
@@ -139,9 +135,6 @@ function buildPeopleHref({
   if (filters.kind !== "any") {
     params.set("kind", filters.kind);
   }
-  if (filters.credit !== "any") {
-    params.set("credit", filters.credit);
-  }
   if (page && page > 1) {
     params.set("page", String(page));
   }
@@ -158,19 +151,13 @@ function optionLabel<T extends string>(
 }
 
 function rankingDescription(sort: PeopleDiscoverySort, hasSearch: boolean) {
-  if (sort === "credit") {
-    return "Highest credit is an explicit alternate order. Unknown and low-confidence records remain conservative rather than receiving inferred scores.";
-  }
-  if (sort === "offers") {
-    return "Most open offers is activity-led; semantic fit and reviewed evidence break close results before the bounded credit signal.";
-  }
   if (sort === "newest") {
-    return "Newest is chronological; semantic fit and reviewed evidence break ties, with credit remaining a modest signal.";
+    return "Newest is chronological; relevance and reviewed public activity break close results.";
   }
   if (hasSearch) {
-    return "Hard constraints run first. Remaining members are ranked by semantic relevance (46%), reviewed evidence (20%), saved cause fit (16%), and a modest transaction-credit signal (8%). Member records have no deadline signal.";
+    return "Hard constraints run first. Remaining members are ranked by semantic relevance, reviewed public evidence, stated cause fit, and current offer availability.";
   }
-  return "Without a query, Best match preserves the established reviewed-activity and recency browse order; transaction credit remains bounded.";
+  return "Without a query, Best match uses reviewed public activity, recency, and current offer availability. It does not rank people by a general credibility score.";
 }
 
 function formatBadgeType(value: string) {
@@ -191,7 +178,13 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
     parsedInterpretation.facets,
     parseSerializedSmartQueryFacets(resolvedSearchParams),
   );
-  const interpretation = { ...parsedInterpretation, facets: smartFacets };
+  const requestedGeneralPersonRanking = Boolean(
+    readParam(resolvedSearchParams, "credit") ||
+      ["credit", "offers"].includes(readParam(resolvedSearchParams, "sort")) ||
+      smartFacets.minCredit !== null,
+  );
+  const peopleFacets = { ...smartFacets, minCredit: null };
+  const interpretation = { ...parsedInterpretation, facets: peopleFacets };
   const filters: PeopleFilterState = {
     cause: readParam(resolvedSearchParams, "cause").trim().slice(0, 120),
     payment: normalizeOption(
@@ -207,11 +200,6 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
     kind: normalizeOption(
       readParam(resolvedSearchParams, "kind"),
       PEOPLE_KIND_FILTER_OPTIONS,
-      "any",
-    ),
-    credit: normalizeOption(
-      readParam(resolvedSearchParams, "credit"),
-      CREDIT_FILTER_OPTIONS,
       "any",
     ),
     sort: normalizeOption(
@@ -243,7 +231,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   );
   const discoveryFilters: PeopleDiscoveryFilters = {
     cause: filters.cause,
-    credit: filters.credit,
+    credit: "any",
     kind: filters.kind,
     participation: filters.participation,
     payment: filters.payment,
@@ -271,13 +259,11 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
       ? optionLabel(filters.participation, PEOPLE_PARTICIPATION_FILTER_OPTIONS)
       : null,
     filters.kind !== "any" ? optionLabel(filters.kind, PEOPLE_KIND_FILTER_OPTIONS) : null,
-    filters.credit !== "any" ? optionLabel(filters.credit, CREDIT_FILTER_OPTIONS) : null,
-    smartFacets.verified === true ? "Reviewed evidence required" : null,
-    smartFacets.verified === false ? "No reviewed evidence" : null,
-    smartFacets.location ? `Location: ${smartFacets.location}` : null,
-    smartFacets.minCredit !== null ? `Credit ≥ ${smartFacets.minCredit}` : null,
+    peopleFacets.verified === true ? "Reviewed evidence required" : null,
+    peopleFacets.verified === false ? "No reviewed evidence" : null,
+    peopleFacets.location ? `Location: ${peopleFacets.location}` : null,
   ].filter((label, index, labels): label is string => Boolean(label) && labels.indexOf(label) === index);
-  const hasFilters = Boolean(search || activeFilterLabels.length || hasSmartQueryConstraints(smartFacets));
+  const hasFilters = Boolean(search || activeFilterLabels.length || hasSmartQueryConstraints(peopleFacets));
   const currentHref = buildPeopleHref({ filters, page, search });
   const peopleStructuredData = {
     "@context": "https://schema.org",
@@ -320,15 +306,16 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">People directory</p>
-            <h1>Search public members and compare their transaction credit scores.</h1>
+            <h1>Find people by what they can offer and what they are open to.</h1>
             <p className="hero-text">
-              Describe the member, cause, location, evidence state, or openness you need in ordinary
-              language. Hard constraints are applied before semantic fit, reviewed evidence, saved cause
-              priorities, and a modest transaction-credit signal. Sparse evidence remains visibly Unproven.
+              Search public work, causes, locations, open offers, and explicit participation preferences.
+              Reviewed evidence can help you inspect a potential counterparty, but the directory does not
+              turn context-specific transaction history into a general ranking of people. These are
+              not follower, karma, or comment leaderboards.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/credibility">
-                How credit scores are calculated
+                How contextual credibility works
               </Link>
             </div>
           </section>
@@ -339,22 +326,22 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Constraints first</strong>
-                  <p>Explicit cause, location, participation, evidence, and credit requirements are enforced before ranking.</p>
+                  <strong>Task constraints first</strong>
+                  <p>Cause, location, participation, participant type, and reviewed-evidence requirements are enforced before ranking.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Uncertainty stays visible</strong>
-                  <p>New participants are labelled Unproven rather than assigned a misleading number.</p>
+                  <strong>Evidence stays contextual</strong>
+                  <p>A general directory does not turn sparse or unrelated transaction history into a universal score.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Filters are explicit</strong>
-                  <p>Set cause, payment, participation, participant type, and minimum credit directly.</p>
+                  <strong>Availability is explicit</strong>
+                  <p>Filter by causes, payment openness, pledge openness, public evidence, and participant type.</p>
                 </div>
               </div>
             </div>
@@ -365,8 +352,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
       <main id="main-content" tabIndex={-1}>
         {!hasSupabaseEnv() ? (
           <div className="status-banner status-banner-error">
-            The public data service is unavailable. Credit scores fail closed to Unproven until the
-            connection is restored.
+            The public data service is unavailable. Participant search is paused until the
+            connection is restored; no fallback ranking is shown.
           </div>
         ) : null}
 
@@ -385,8 +372,9 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             <p className="eyebrow">Public directory</p>
             <h2>{hasFilters ? "Matching public members" : "Browse visible members"}</h2>
             <p>
-              Search public names, biographies, locations, collective names, and broad opt-in cause
-              previews. Credit changes ordering within a bounded ranking formula and remains filterable.
+              Search public names, biographies, locations, collective names, broad opt-in causes,
+              current offers, and stated participation preferences. Contextual credibility remains
+              available on individual profiles for transaction-specific review.
             </p>
           </div>
 
@@ -455,14 +443,6 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                   ))}
                 </select>
               </label>
-              <label className={filterStyles.field}>
-                <span>Credit score</span>
-                <select className={filterStyles.control} defaultValue={filters.credit} name="credit">
-                  {CREDIT_FILTER_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
             </div>
             <div className={filterStyles.actions}>
               <button className="button button-primary" type="submit">Apply filters</button>
@@ -472,7 +452,6 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                   href={buildPeopleHref({
                     filters: {
                       cause: "",
-                      credit: "any",
                       kind: "any",
                       participation: "any",
                       payment: "any",
@@ -484,6 +463,13 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                 </Link>
               ) : null}
             </div>
+            {requestedGeneralPersonRanking ? (
+              <p className={filterStyles.rankingNote}>
+                General person leaderboards by credit or raw offer count are not used in the People
+                directory. Use task filters here, then inspect contextual credibility for a specific
+                transaction role and category.
+              </p>
+            ) : null}
             <div className={filterStyles.filterMeta}>
               <div className={filterStyles.activeFilters} aria-live="polite">
                 <strong>{rankedProfiles.length} matching member(s)</strong>
@@ -501,10 +487,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             {profiles.length ? (
               profiles.map((profile) => {
                 const credibility = credibilityByProfile.get(profile.id);
-                const scoreLabel =
-                  credibility?.score !== null && credibility?.score !== undefined
-                    ? `Credit score ${credibility.score}/100 · ${credibility.level}`
-                    : `Credit score: ${credibility?.level ?? "Unproven"}`;
+                const reviewedEventCount = credibility?.eventCount ?? 0;
 
                 return (
                   <article key={profile.id} className="panel profile-card">
@@ -516,40 +499,38 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                           {profile.publicLocation || "Location not listed"}
                         </p>
                       </div>
-                      <span
-                        className="badge"
-                        title="Contextual transaction credibility, not a financial credit or moral-worth score"
-                      >
-                        {scoreLabel}
+                      <span className="badge">
+                        {profile.wishParticipantKind
+                          ? formatBadgeType(profile.wishParticipantKind)
+                          : "Public member"}
                       </span>
                     </div>
 
                     {profile.bio ? <p className="profile-bio">{profile.bio}</p> : null}
 
-                    {credibility ? (
-                      <div className="profile-preview-block">
-                        <p className="detail-kicker">Contextual credit score</p>
-                        <p className="route-text">{credibility.explanation}</p>
+                    <div className="profile-preview-block">
+                      <p className="detail-kicker">Reviewed transaction evidence</p>
+                      <p className="route-text">
+                        {reviewedEventCount > 0
+                          ? `${reviewedEventCount} reviewed transaction event(s) are available. Their relevance depends on the role and activity you are evaluating.`
+                          : "No reviewed transaction history yet. This is an absence of evidence, not a negative score."}
+                      </p>
+                      {credibility && reviewedEventCount > 0 ? (
                         <div className="tag-row">
-                          <span className="source-pill">{credibility.confidence} confidence</span>
+                          <span className="source-pill">{credibility.confidence} evidence confidence</span>
                           <span className="source-pill">
                             {credibility.effectiveObservations.toFixed(1)} effective observation(s)
                           </span>
-                          {credibility.estimatedProbability !== null ? (
-                            <span className="impact-pill">
-                              {Math.round(credibility.estimatedProbability * 100)}% estimated completion
-                            </span>
-                          ) : null}
                         </div>
-                        <Link className="text-button" href={`/people/${profile.id}/credibility`}>
-                          Open credibility passport
-                        </Link>
-                      </div>
-                    ) : null}
+                      ) : null}
+                      <Link className="text-button" href={`/people/${profile.id}/credibility`}>
+                        View contextual credibility details
+                      </Link>
+                    </div>
 
                     {profile.wishPreview || profile.wishCauses.length ? (
                       <div className="profile-preview-block">
-                        <p className="detail-kicker">Wish preview</p>
+                        <p className="detail-kicker">Published interests and availability</p>
                         <p className="route-text">
                           {profile.wishPreview || "Broad interests shared; exact wishes remain private."}
                         </p>
@@ -576,7 +557,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                         </span>
                       ))}
                       {profile.offerCount > 0 ? (
-                        <span className="source-pill">{profile.offerCount} open offer(s)</span>
+                        <span className="source-pill">Has current public offers</span>
                       ) : null}
                       {profile.ratingCount > 0 ? (
                         <span className="source-pill">
@@ -594,7 +575,11 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
 
                     <div className="offer-footer">
                       <div className="tag-row">
-                        <span>{credibility?.level ?? "Unproven"}</span>
+                        {profile.offerCount > 0 ? (
+                          <span>Current public offers available</span>
+                        ) : (
+                          <span>No current public offer</span>
+                        )}
                         {profile.verificationBadges.length ? (
                           <span>{profile.verificationBadges.length} reviewed badge(s)</span>
                         ) : null}
@@ -627,8 +612,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                   </strong>
                   <p>
                     {hasFilters
-                      ? "Broaden the cause, participation, payment, participant-type, or credit threshold. Only opt-in public profile fields are searchable."
-                      : "New participants begin as Unproven and can build a record through small, reviewable commitments with independent evidence."}
+                      ? "Broaden the cause, participation, payment, or participant-type filters. Only opt-in public profile fields are searchable."
+                      : "New participants can publish offers or opt into broad public availability without receiving a context-free score."}
                   </p>
                   <div className="hero-actions">
                     {hasFilters ? (
@@ -637,8 +622,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                         href={buildPeopleHref({
                           filters: {
                             cause: "",
-                            credit: "any",
-                            kind: "any",
+                                  kind: "any",
                             participation: "any",
                             payment: "any",
                             sort: filters.sort,

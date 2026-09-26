@@ -1,0 +1,19 @@
+.scope {
+  display: contents;
+}
+
+/*
+ * The marketplace app shell suppresses legacy `.section` blocks. Agreement
+ * records intentionally retain those blocks for the frozen terms, evidence,
+ * completion controls, and private outcome feedback. Restore the section
+ * inside this stage scope and the agreement-detail sections that follow it.
+ */
+.scope :global(.section),
+.scope ~ :global(.section) {
+  display: block !important;
+}
+
+.scope :global(.section[id]),
+.scope ~ :global(.section[id]) {
+  scroll-margin-top: 5rem;
+}

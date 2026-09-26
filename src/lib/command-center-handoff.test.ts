@@ -103,21 +103,20 @@ test("the handoff is bounded, ephemeral, and excludes the raw command", () => {
   assert.equal("rawCommand" in record, false);
 });
 
-test("Build and recent Run actions resolve the command from their own UI", () => {
+test("Build uses only the current input and never an invented recent command", () => {
   const handoff = loadCommandHandoffApi();
   const input = { value: "  $5 donation to animal welfare   if you eat 1 vegetarian meal  " };
   const drawer = { querySelector: () => input };
   const buildButton = {
     closest(selector: string) {
-      if (selector === ".setting") return null;
       if (selector === "#drawer") return drawer;
       return null;
     },
   };
-
-  const label = { textContent: "Counter Mina with 8 trips for $20" };
-  const setting = { querySelector: () => label };
-  const runButton = {
+  const setting = {
+    querySelector: () => ({ textContent: "Counter Mina with 8 trips for $20" }),
+  };
+  const retiredRunButton = {
     closest(selector: string) {
       return selector === ".setting" ? setting : null;
     },
@@ -127,9 +126,12 @@ test("Build and recent Run actions resolve the command from their own UI", () =>
     handoff.commandTextFor(buildButton),
     "$5 donation to animal welfare if you eat 1 vegetarian meal",
   );
-  assert.equal(
-    handoff.commandTextFor(runButton),
-    "Counter Mina with 8 trips for $20",
+  assert.equal(handoff.commandTextFor(retiredRunButton), "");
+  input.value = "  ";
+  assert.equal(handoff.commandTextFor(buildButton), "");
+  assert.doesNotMatch(
+    readRepoFile("public/moral-trade-live-core.txt"),
+    /Recent commands|Counter Mina|>Run<|value="Offer \$80/,
   );
 });
 
@@ -191,12 +193,14 @@ test("the live shell intercepts the false-success path and opens the real editor
   const script = readRepoFile("public/moral-trade-live-command-center.js");
   const shell = readRepoFile("public/moral-trade-live.html");
   const page = readRepoFile("src/app/trades/new/page.tsx");
+  const createRouter = readRepoFile("public/moral-trade-live-create-router.js");
   const workbench = readRepoFile(
     "src/components/core-trade/trade-draft-workbench.tsx",
   );
 
   assert.match(shell, /moral-trade-live-command-center\.js/);
   assert.match(script, /\[data-action="from-command"\]/);
+  assert.doesNotMatch(createRouter, /\[data-action="from-command"\]/);
   assert.match(script, /stopImmediatePropagation/);
   assert.match(script, /window\.sessionStorage\.setItem/);
   assert.match(

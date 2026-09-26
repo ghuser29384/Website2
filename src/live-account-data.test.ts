@@ -20,7 +20,7 @@ test("the live shell bootstraps authenticated account data before rendering", ()
   assert.match(shell, /__MT_LIVE_ACCOUNT_BOOTSTRAP__/);
   assert.match(shell, /moral-trade-live-account\.js/);
   assert.match(shell, /source\.replace\('<\/head>'/);
-  assert.match(shell, /moral-trade-live-verification\.js/);
+  assert.doesNotMatch(shell, /moral-trade-live-verification\.js/);
 
   for (const placeholder of retiredPlaceholders) {
     assert.doesNotMatch(shell, placeholder);
@@ -37,7 +37,7 @@ test("the live account endpoint reads real profile and agreement state", () => {
   assert.match(route, /eq\("status", "completed"\)/);
   assert.match(route, /from\("profile_payment_accounts"\)/);
   assert.match(route, /from\("wish_profiles"\)/);
-  assert.match(route, /Cache-Control.*private, no-store/s);
+  assert.match(route, /Cache-Control[\s\S]*private, no-store/);
 });
 
 test("the bridge removes the escrow claim and uses truthful missing states", () => {

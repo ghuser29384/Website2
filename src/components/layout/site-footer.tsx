@@ -7,7 +7,7 @@ export function SiteFooter() {
   return (
     <footer className="footer mt-site-footer">
       <div className="mt-footer-lead">
-        <Link aria-label="Moral Trade, home" className="mt-footer-brand" href="/">
+        <Link prefetch={false} aria-label="Moral Trade, home" className="mt-footer-brand" href="/">
           <MoralTradeWordmark />
         </Link>
         <MutualStepMark className="mt-footer-mark" />
@@ -34,7 +34,7 @@ export function SiteFooter() {
               <ul className="footer-links">
                 {group.links.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href}>{link.label}</Link>
+                    <Link prefetch={false} href={link.href}>{link.label}</Link>
                   </li>
                 ))}
               </ul>
@@ -51,10 +51,10 @@ export function SiteFooter() {
         </p>
         <p>© 2026 Moral Trade</p>
         <div className="mt-footer-legal">
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
-          <Link href="/accessibility">Accessibility</Link>
-          <Link href="/contact">Contact</Link>
+          <Link prefetch={false} href="/privacy">Privacy</Link>
+          <Link prefetch={false} href="/terms">Terms</Link>
+          <Link prefetch={false} href="/accessibility">Accessibility</Link>
+          <Link prefetch={false} href="/contact">Contact</Link>
         </div>
       </div>
     </footer>

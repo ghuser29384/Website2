@@ -19,6 +19,7 @@ import {
   getSmartSiteSearchTarget,
 } from "@/lib/site-search-smart";
 import { createClient } from "@/lib/supabase/browser";
+import { HEADER_UTILITY_LINKS, REFINED_HEADER_LINKS, usesDefaultHeader } from "@/lib/refined-header";
 
 interface NavRouteItem {
   href: string;
@@ -67,10 +68,10 @@ function isHrefActive(pathname: string | null, href: string) {
 
 function NavItem({ href, label, className }: { href: string; label: string; className?: string }) {
   const pathname = usePathname();
-  const isActive = isHrefActive(pathname, href);
+  const isActive = isHrefActive(pathname, href) || (href === "/feed" && pathname === "/");
 
   return (
-    <Link className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
+    <Link prefetch={false} aria-current={isActive ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
       {label}
     </Link>
   );
@@ -82,12 +83,14 @@ function NavMenu({
   label,
   onOpenChange,
   summary,
+  nativeDisclosure = false,
 }: {
   isOpen: boolean;
   items: NavRouteItem[];
   label: string;
   onOpenChange: (isOpen: boolean) => void;
   summary?: string;
+  nativeDisclosure?: boolean;
 }) {
   const pathname = usePathname();
   const hasActiveItem = items.some((item) => (item.href ? isHrefActive(pathname, item.href) : false));
@@ -95,15 +98,33 @@ function NavMenu({
   return (
     <details
       className={["topbar-menu", hasActiveItem ? "is-active" : ""].filter(Boolean).join(" ")}
-      open={isOpen}
+      open={nativeDisclosure ? undefined : isOpen}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
+          if (nativeDisclosure) event.currentTarget.open = false;
+          onOpenChange(false);
+          event.currentTarget.querySelector("summary")?.focus();
+        }
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          if (nativeDisclosure) event.currentTarget.open = false;
           onOpenChange(false);
         }
       }}
-      onToggle={(event) => onOpenChange(event.currentTarget.open)}
     >
-      <summary className="topbar-menu-trigger">
+      <summary
+        className="topbar-menu-trigger"
+        onClick={(event) => {
+          // Refined utilities use native disclosure before and after hydration.
+          // React must not reset an early keyboard activation to its initial state.
+          if (nativeDisclosure) return;
+          // Keep one state transition per click, including keyboard activation.
+          // Native toggle events must not race React's controlled open state.
+          event.preventDefault();
+          onOpenChange(!isOpen);
+        }}
+      >
         <span>{label}</span>
         <span aria-hidden="true" className="topbar-menu-caret">
           ▾
@@ -120,12 +141,18 @@ function NavMenu({
           return item.href ? (
             <Fragment key={`${item.href}-${item.label}`}>
               {showSection ? <div className="topbar-menu-section">{item.section}</div> : null}
-              <Link
+              <Link prefetch={false}
                 className={["topbar-menu-link", isHrefActive(pathname, item.href) ? "is-active" : ""]
                   .filter(Boolean)
                   .join(" ")}
                 href={item.href}
-                onClick={() => onOpenChange(false)}
+                onClick={(event) => {
+                  if (nativeDisclosure) {
+                    const menu = event.currentTarget.closest("details");
+                    if (menu) menu.open = false;
+                  }
+                  onOpenChange(false);
+                }}
               >
                 <span className="topbar-menu-icon" aria-hidden="true" />
                 <span className="topbar-menu-copy">
@@ -151,6 +178,8 @@ export function SiteTopbar({
   logoutRedirectTo = "/",
 }: SiteTopbarProps) {
   const router = useRouter();
+  const refinedHeader = usesDefaultHeader(links);
+  const headerLinks = refinedHeader ? REFINED_HEADER_LINKS : links;
   const searchInputId = useId();
   const searchResultsId = useId();
   const clarificationInputId = useId();
@@ -248,13 +277,13 @@ export function SiteTopbar({
   return (
     <nav
       aria-label="Primary"
-      className={showSearch ? "topbar mt-site-topbar topbar-with-search" : "topbar mt-site-topbar"}
+      className={["topbar mt-site-topbar", showSearch ? "topbar-with-search" : "", refinedHeader ? "mt-refined-header" : ""].filter(Boolean).join(" ")}
     >
-      <Link aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
+      <Link prefetch={false} aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
         <MoralTradeWordmark />
       </Link>
-      <div className="topbar-links">
-        {links.map((link) =>
+      <div className="topbar-links" data-mt-primary-links={refinedHeader ? "true" : undefined}>
+        {headerLinks.map((link) =>
           link.items?.length ? (
             <NavMenu
               isOpen={openMenuKey === `primary-${link.label}`}
@@ -372,7 +401,7 @@ export function SiteTopbar({
                 </div>
               ) : searchResults.length ? (
                 searchResults.map((result) => (
-                  <Link
+                  <Link prefetch={false}
                     className="topbar-search-result"
                     href={result.href}
                     key={`${result.kind}-${result.href}`}
@@ -393,17 +422,28 @@ export function SiteTopbar({
           ) : null}
         </form>
       ) : null}
-      {showLogout || authLink || primaryAction ? (
+      {refinedHeader || showLogout || authLink || primaryAction ? (
         <div className="topbar-actions">
+          {refinedHeader && !showLogout ? (
+            <NavMenu
+              isOpen={openMenuKey === "utilities"}
+              items={HEADER_UTILITY_LINKS}
+              label="More"
+              nativeDisclosure
+              onOpenChange={(isOpen) => handleMenuOpenChange("utilities", isOpen)}
+            />
+          ) : null}
           {showLogout ? (
             <NavMenu
               isOpen={openMenuKey === "account"}
               items={[
+                ...(refinedHeader ? HEADER_UTILITY_LINKS : []),
                 { href: "/dashboard#my-trades", label: "My trades", description: "Review owned and engaged offers." },
                 { href: "/dashboard#data-portability", label: "Profile data", description: "Export or import account data." },
                 { href: "/cart", label: "Favourites", description: "Watch offers for later review." },
               ]}
               label="Account"
+              nativeDisclosure={refinedHeader}
               summary="Manage your saved and private workspace."
               onOpenChange={(isOpen) => handleMenuOpenChange("account", isOpen)}
             />

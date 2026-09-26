@@ -1,107 +1,139 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const externalBase = (process.env.MORALTRADE_BASE_URL ?? "").replace(/\/$/, "");
 const route = (path: string) => `${externalBase}${path}`;
 
-test.describe("public evidence desk", () => {
-  test("serves the public directory and the clearly labeled example", async ({ page }) => {
-    await page.goto(route("/evidence"));
-    await expect(page.getByRole("heading", { name: "Evidence", exact: true })).toBeVisible();
-    await expect(page.getByTestId("evidence-product-shell")).toBeVisible();
-    await expect(page.getByRole("complementary", { name: "Evidence sections" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /All evidence/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    await expect(page.getByRole("link", { name: "Open illustrated viewer →" })).toBeVisible();
-    await expect(page.getByText("Interface guide · no live data")).toBeVisible();
-    const recordCards = page.getByTestId("evidence-record");
-    const emptyState = page.getByTestId("evidence-empty-state");
-    const unavailableState = page.getByTestId("evidence-unavailable-state");
-    await expect
-      .poll(async () =>
-        (await recordCards.count()) > 0
-          || (await emptyState.count()) > 0
-          || (await unavailableState.count()) > 0,
-      )
-      .toBe(true);
-    if (externalBase) {
-      await expect(unavailableState).toHaveCount(0);
-    }
-    if (await emptyState.count()) {
-      await expect(emptyState.getByRole("status")).toContainText(
-        "No evidence has been submitted yet.",
-      );
-    }
+const publishedFields = [
+  "Action category",
+  "Lifecycle status",
+  "Confidence band",
+  "Completion fraction",
+  "Payout percentage",
+  "Calendar date",
+] as const;
+
+async function openEvidenceRoute(page: Page, path: "/evidence" | "/evidence/example") {
+  const response = await page.goto(route(path), { waitUntil: "domcontentloaded" });
+  expect(response?.status() ?? 200).toBeLessThan(500);
+  await page.waitForLoadState("load").catch(() => undefined);
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Verified outcomes, without public evidence dossiers.",
+    }),
+  ).toBeVisible({ timeout: 15_000 });
+}
+
+async function expectPrivacySafeLedgerShell(page: Page) {
+  await expect(page.locator(".evidence-outcomes-shell")).toHaveCount(1);
+  await expect(page.getByText("Privacy-safe outcome ledger", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      /Original evidence, participant identities, private descriptions, amounts, currency, payment provider, receipts, links, files, and exact timestamps remain private\./,
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 2,
+      name: "Exactly six fields leave the private workflow.",
+    }),
+  ).toBeVisible();
+
+  const fieldLabels = await page.locator(".source-pill").allTextContents();
+  expect(fieldLabels.map((label) => label.trim())).toEqual(publishedFields);
+
+  await expect(page.locator("[data-stage-evidence-viewer]")).toHaveCount(0);
+  await expect(page.getByText("Interface guide · no live data", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Open illustrated viewer →" })).toHaveCount(0);
+  await expect(
+    page.locator(
+      'a[href*="green-table-receipt"], a[href*="meal-before"], a[href*="meal-after"]',
+    ),
+  ).toHaveCount(0);
+}
+
+async function expectLedgerResultState(page: Page) {
+  const recordCards = page.locator(".data-grid .data-card");
+  const emptyState = page.getByText("No finalized public outcomes yet.", { exact: true });
+  const unavailableState = page.getByRole("alert").filter({ hasText: "Outcome ledger unavailable" });
+
+  await expect
+    .poll(
+      async () =>
+        (await recordCards.count()) +
+        (await emptyState.count()) +
+        (await unavailableState.count()),
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThan(0);
+
+  if (externalBase) {
+    await expect(unavailableState).toHaveCount(0);
+  }
+}
+
+async function expectNoHorizontalOverflow(page: Page) {
+  const dimensions = await page.evaluate(() => ({
+    innerWidth: window.innerWidth,
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+
+  expect(dimensions.clientWidth).toBe(dimensions.innerWidth);
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1);
+}
+
+test.describe("public Evidence outcome ledger", () => {
+  test("serves only the privacy-safe outcome directory", async ({ page }) => {
+    await openEvidenceRoute(page, "/evidence");
+    await expectPrivacySafeLedgerShell(page);
+    await expectLedgerResultState(page);
+
+    await expect(
+      page.getByText("Individual public dossier links have been retired.", { exact: true }),
+    ).toHaveCount(0);
   });
 
-  test("switches dossier tabs and artifacts, then explains the public-safe copy", async ({ page }) => {
-    await page.goto(route("/evidence/example"));
-    const dossier = page.locator("[data-stage-evidence-viewer]");
-    await expect(dossier).toBeVisible();
+  test("retires record-specific public dossiers without exposing source artifacts", async ({
+    page,
+  }) => {
+    await openEvidenceRoute(page, "/evidence/example");
+    await expectPrivacySafeLedgerShell(page);
+    await expectLedgerResultState(page);
 
-    const evidenceTab = dossier.getByRole("tab", { exact: true, name: "Evidence" });
-    const termsTab = dossier.getByRole("tab", { exact: true, name: "Trade terms" });
-    const verificationTab = dossier.getByRole("tab", { exact: true, name: "Verification" });
-
-    await expect(evidenceTab).toHaveAttribute("aria-selected", "true");
-    await termsTab.click();
-    await expect(termsTab).toHaveAttribute("aria-selected", "true");
-    await expect(dossier.getByRole("tabpanel").getByText(/before-meal photo and itemized receipt/i)).toBeVisible();
-
-    await verificationTab.click();
-    await expect(verificationTab).toHaveAttribute("aria-selected", "true");
-    await expect(dossier.getByRole("tabpanel").getByText("Trade record created")).toBeVisible();
-
-    await evidenceTab.click();
-    await expect(evidenceTab).toHaveAttribute("aria-selected", "true");
-
-    const receiptArtifact = dossier.locator('[data-stage-artifact="receipt"]');
-    await receiptArtifact.click();
-    await expect(receiptArtifact).toHaveAttribute("aria-pressed", "true");
-    await expect(dossier.getByRole("heading", { name: "THE GREEN TABLE" })).toBeVisible();
-
-    await dossier.getByRole("button", { exact: true, name: "Privacy details" }).click();
-    const privacyDialog = page.locator("dialog").filter({ hasText: "Evidence-copy privacy" });
-    await expect(privacyDialog).toBeVisible();
-    await expect(privacyDialog.getByText("Order and payment identifiers are masked in the shared copy.")).toBeVisible();
-    await privacyDialog.getByRole("button", { name: "Done" }).click();
+    await expect(
+      page.getByText("Individual public dossier links have been retired.", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "The outcome ledger no longer exposes record identifiers or source artifacts. This page shows the privacy-safe aggregate record instead.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
-  test("keeps the directory readable on mobile without horizontal overflow", async ({ page }) => {
+  test("keeps the privacy-safe ledger readable on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(route("/evidence"));
-
-    await expect(page.getByTestId("evidence-product-shell")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Published evidence" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open illustrated viewer →" })).toBeVisible();
-
-    const dimensions = await page.evaluate(() => ({
-      innerWidth: window.innerWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-    }));
-    expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1);
+    await openEvidenceRoute(page, "/evidence");
+    await expectPrivacySafeLedgerShell(page);
+    await expectLedgerResultState(page);
+    await expectNoHorizontalOverflow(page);
   });
 
-  test("keeps the dossier tabs and artifacts usable on mobile without horizontal overflow", async ({ page }) => {
+  test("keeps the retired-record notice readable on mobile without artifact controls", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(route("/evidence/example"));
+    await openEvidenceRoute(page, "/evidence/example");
+    await expectPrivacySafeLedgerShell(page);
 
-    const dossier = page.locator("[data-stage-evidence-viewer]");
-    const afterArtifact = dossier.locator('[data-stage-artifact="after"]');
-    await afterArtifact.click();
-    await expect(afterArtifact).toHaveAttribute("aria-pressed", "true");
-
-    const termsTab = dossier.getByRole("tab", { exact: true, name: "Trade terms" });
-    await termsTab.click();
-    await expect(termsTab).toHaveAttribute("aria-selected", "true");
-    await dossier.getByRole("tab", { exact: true, name: "Evidence" }).click();
-    await expect(dossier.getByRole("button", { exact: true, name: "Privacy details" })).toBeVisible();
-
-    const dimensions = await page.evaluate(() => ({
-      innerWidth: window.innerWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-    }));
-    expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1);
+    await expect(
+      page.getByText("Individual public dossier links have been retired.", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    await expect(page.locator("[data-stage-artifact]")).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
   });
 });

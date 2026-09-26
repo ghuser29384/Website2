@@ -1,4 +1,7 @@
+import { notFound } from "next/navigation";
+
 import { OfferCredibilityLink } from "@/components/offer-credibility-link";
+import { isPostgresUuid } from "@/lib/uuid";
 
 export default async function OfferRecordLayout({
   children,
@@ -8,6 +11,10 @@ export default async function OfferRecordLayout({
   params: Promise<{ offerId: string }>;
 }>) {
   const { offerId } = await params;
+
+  if (!isPostgresUuid(offerId)) {
+    notFound();
+  }
 
   return (
     <>

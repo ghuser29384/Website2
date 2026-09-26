@@ -9,6 +9,8 @@ type SupabaseAuthSettingsResponse = {
   external?: Partial<Record<OAuthProvider, boolean>>;
 };
 
+const PRODUCT_DISABLED_OAUTH_PROVIDERS = new Set<OAuthProvider>(["apple"]);
+
 async function isXProviderEnabled(url: string, publishableKey: string) {
   const target = new URL(`${url}/auth/v1/authorize`);
   target.searchParams.set("provider", "x");
@@ -49,7 +51,9 @@ export async function getEnabledOAuthProviders(): Promise<OAuthProvider[]> {
     }
 
     const settings = (await response.json()) as SupabaseAuthSettingsResponse;
-    const providers = getEnabledOAuthProvidersFromSettings(settings.external);
+    const providers = getEnabledOAuthProvidersFromSettings(settings.external).filter(
+      (provider) => !PRODUCT_DISABLED_OAUTH_PROVIDERS.has(provider),
+    );
     if (!providers.includes("x") && settings.external?.twitter !== true) {
       try {
         if (await isXProviderEnabled(url, publishableKey)) {

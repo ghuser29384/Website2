@@ -1,0 +1,4 @@
+PR #212 exact-head institutional QA monitor v12
+Expected draft head: 32f177ec7b08ca44f3f564ad201d3b9cc716e578
+Purpose: verify the complete exact-head isolated-QA run and its downloaded evidence before preview, integration, or release decisions
+This marker is repository-only and will be removed in the final controller cleanup PR.

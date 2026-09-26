@@ -1,0 +1,132 @@
+{
+  "schemaVersion": "commitments-trade-real-graph-readiness-fixtures-v1",
+  "status": "synthetic_only",
+  "fixtures": [
+    {
+      "fixtureKey": "synthetic:readiness:empty-environment",
+      "profiles": [],
+      "offers": [],
+      "syntheticGraphSummary": null,
+      "expectedPartialRuntimeDirectedDyadCount": 0,
+      "expectedDataReadiness": "insufficient_real_eligible_graph",
+      "expectedExecutionDecision": "no_launch",
+      "realGraphRelabelingPermitted": false
+    },
+    {
+      "fixtureKey": "synthetic:readiness:one-profile-no-offer",
+      "profiles": [
+        "synthetic:profile:a"
+      ],
+      "offers": [],
+      "syntheticGraphSummary": null,
+      "expectedPartialRuntimeDirectedDyadCount": 0,
+      "expectedDataReadiness": "insufficient_real_eligible_graph",
+      "expectedExecutionDecision": "no_launch",
+      "realGraphRelabelingPermitted": false
+    },
+    {
+      "fixtureKey": "synthetic:readiness:multiple-profiles-one-offer",
+      "profiles": [
+        "synthetic:profile:a",
+        "synthetic:profile:b"
+      ],
+      "offers": [
+        {
+          "offerKey": "synthetic:offer:a",
+          "ownerKey": "synthetic:profile:a",
+          "workflowStatus": "published",
+          "status": "open",
+          "mode": "pledge",
+          "offeredCause": "synthetic:cause:animals",
+          "requestedCause": "synthetic:cause:poverty"
+        }
+      ],
+      "syntheticGraphSummary": null,
+      "expectedPartialRuntimeDirectedDyadCount": 0,
+      "expectedDataReadiness": "insufficient_real_eligible_graph",
+      "expectedExecutionDecision": "no_launch",
+      "realGraphRelabelingPermitted": false
+    },
+    {
+      "fixtureKey": "synthetic:readiness:two-nonreciprocal-offers",
+      "profiles": [
+        "synthetic:profile:a",
+        "synthetic:profile:b"
+      ],
+      "offers": [
+        {
+          "offerKey": "synthetic:offer:a",
+          "ownerKey": "synthetic:profile:a",
+          "workflowStatus": "published",
+          "status": "open",
+          "mode": "pledge",
+          "offeredCause": "synthetic:cause:animals",
+          "requestedCause": "synthetic:cause:poverty"
+        },
+        {
+          "offerKey": "synthetic:offer:b",
+          "ownerKey": "synthetic:profile:b",
+          "workflowStatus": "published",
+          "status": "open",
+          "mode": "pledge",
+          "offeredCause": "synthetic:cause:climate",
+          "requestedCause": "synthetic:cause:governance"
+        }
+      ],
+      "syntheticGraphSummary": null,
+      "expectedPartialRuntimeDirectedDyadCount": 0,
+      "expectedDataReadiness": "insufficient_real_eligible_graph",
+      "expectedExecutionDecision": "no_launch",
+      "realGraphRelabelingPermitted": false
+    },
+    {
+      "fixtureKey": "synthetic:readiness:minimal-reciprocal-pair",
+      "profiles": [
+        "synthetic:profile:a",
+        "synthetic:profile:b"
+      ],
+      "offers": [
+        {
+          "offerKey": "synthetic:offer:a",
+          "ownerKey": "synthetic:profile:a",
+          "workflowStatus": "published",
+          "status": "open",
+          "mode": "pledge",
+          "offeredCause": "synthetic:cause:animals",
+          "requestedCause": "synthetic:cause:poverty"
+        },
+        {
+          "offerKey": "synthetic:offer:b",
+          "ownerKey": "synthetic:profile:b",
+          "workflowStatus": "published",
+          "status": "open",
+          "mode": "pledge",
+          "offeredCause": "synthetic:cause:poverty",
+          "requestedCause": "synthetic:cause:animals"
+        }
+      ],
+      "syntheticGraphSummary": {
+        "independentClusterCount": 1,
+        "source": "synthetic_partial_runtime_matcher_only"
+      },
+      "expectedPartialRuntimeDirectedDyadCount": 2,
+      "expectedDataReadiness": "insufficient_real_eligible_graph",
+      "expectedExecutionDecision": "no_launch",
+      "realGraphRelabelingPermitted": false
+    },
+    {
+      "fixtureKey": "synthetic:readiness:reviewed-3200-cluster-fixture",
+      "profiles": [],
+      "offers": [],
+      "syntheticGraphSummary": {
+        "independentClusterCount": 3200,
+        "source": "merged_deterministic_synthetic_graph_fixture"
+      },
+      "expectedPartialRuntimeDirectedDyadCount": 0,
+      "expectedDataReadiness": "synthetic_only_not_real_evidence",
+      "expectedExecutionDecision": "no_launch",
+      "realGraphRelabelingPermitted": false
+    }
+  ],
+  "fixturesPayloadHash": "sha256:5e4f5e7e866acad263204c32314f47e481a85d758617cb4eef17002e38c617c1"
+}

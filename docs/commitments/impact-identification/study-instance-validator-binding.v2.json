@@ -1,0 +1,11 @@
+{
+  "bindingSchemaVersion": "moral-trade-impact-study-validator-binding-v2",
+  "schemaKey": "commitments-impact-study-instance-schema-v2",
+  "schemaPath": "docs/commitments/impact-identification/study-instance.schema.v2.json",
+  "schemaRawSha256": "sha256:a8650788ed3e0ab6749dcd86342fd9c39dfc829ec23a4afe00d34bd28fa2a859",
+  "validatorKey": "commitments-impact-study-instance-validator-v2",
+  "validatorPath": "scripts/validate-commitments-impact-study-instance.mjs",
+  "validatorRawSha256": "sha256:1381fd100964182e1de8c3b276624b2fe51ffbad512505166fed23a7b1396c85",
+  "evidenceToProductMappingHash": "sha256:eb4aadae8491c1a6924fca03acdeb9157b07a1439098e736c88e549db16b59b8",
+  "executionAuthorized": false
+}

@@ -1,0 +1,160 @@
+{
+  "schema_version": "moral-trade-zero-dollar-owner-uat-release-v1",
+  "status": "complete_contract_not_executed",
+  "roles": [
+    "operator",
+    "participant_a",
+    "participant_b",
+    "initial_reviewer",
+    "appeal_reviewer",
+    "outsider",
+    "administrator"
+  ],
+  "distinct_auth_identities": [
+    "participant_a",
+    "participant_b",
+    "initial_reviewer",
+    "appeal_reviewer",
+    "outsider",
+    "administrator"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 568
+    }
+  ],
+  "stages": [
+    "identity_environment_preflight",
+    "signed_out_discovery",
+    "participant_b_response",
+    "atomic_selection_competing_response",
+    "frozen_terms",
+    "comprehension",
+    "private_evidence",
+    "initial_factual_review",
+    "challenge_appeal",
+    "retained_audit_revocation",
+    "prospective_unilateral_exit",
+    "negative_controls",
+    "cleanup_postflight"
+  ],
+  "comprehension": {
+    "questions_per_participant": 7,
+    "participant_a_required_correct": 7,
+    "participant_b_required_correct": 7,
+    "incorrect_may_silently_proceed": false
+  },
+  "critical_counts": {
+    "canonical_agreements": 1,
+    "selected_responses_accepted": 1,
+    "competing_responses_declined": 1,
+    "duplicate_agreements": 0,
+    "exit_posts": 1,
+    "exit_http_status": 303,
+    "exit_notifications": 1
+  },
+  "authorization": {
+    "initial_reviewer_action": "AAL2",
+    "appeal_reviewer_action": "AAL2",
+    "administrator_action": "AAL2",
+    "outsider": "denied",
+    "revoked_reviewer_existing_AAL2": "denied",
+    "initial_and_appeal_reviewer_distinct": true
+  },
+  "no_money_counts": {
+    "maximum_financial_amount_minor": 0,
+    "performance_bonds": 0,
+    "external_payment_receipts": 0,
+    "provider_requests": 0,
+    "payment_methods": 0,
+    "mandates": 0,
+    "charges": 0,
+    "captures": 0,
+    "refunds": 0,
+    "transfers": 0,
+    "custody_balances": 0,
+    "payouts": 0,
+    "platform_funded_bonuses": 0
+  },
+  "cleanup_categories": [
+    "offers",
+    "responses_interests",
+    "agreements",
+    "agreement_versions",
+    "milestones",
+    "confirmations",
+    "evidence_bundles_items",
+    "initial_reviews",
+    "appeals",
+    "exit_requests",
+    "threads_messages",
+    "notifications",
+    "events",
+    "reviewer_roles_grants",
+    "profiles",
+    "private_accounts",
+    "auth_users",
+    "auth_identities",
+    "auth_sessions",
+    "auth_refresh_tokens",
+    "auth_mfa_factors",
+    "email_outbox",
+    "performance_bonds",
+    "external_payment_receipts",
+    "provider_requests"
+  ],
+  "pass_criteria": {
+    "all_critical_tasks_pass": true,
+    "P0_findings": 0,
+    "P1_findings": 0,
+    "all_required_viewports_pass": true,
+    "all_authorization_assertions_pass": true,
+    "all_no_money_counts_zero": true,
+    "cleanup_zero_first_run": true,
+    "cleanup_zero_second_run": true,
+    "artifact_secret_findings": 0,
+    "independent_review_complete": true,
+    "maximum_result": "uat_pass_not_pilot_authorized"
+  },
+  "release_states": [
+    "R0_specification_only",
+    "R1_Q_draft_accepted",
+    "R2_initial_R_draft_accepted",
+    "R3_I_proof_accepted",
+    "R4_Q_merge_authorized",
+    "R5_final_R_reconstructed",
+    "R6_final_R_exact_head_accepted",
+    "R7_protected_owner_UAT",
+    "R8_merge_ready_decision",
+    "R9_expected_head_merge",
+    "R10_production_release_preflight",
+    "R11_guarded_production_release",
+    "R12_post_release_verification",
+    "R13_recruitment_readiness",
+    "R14_pilot_launched"
+  ],
+  "authorization_flags": {
+    "runtime_implementation": false,
+    "Q_merge": false,
+    "runtime_merge": false,
+    "migration": false,
+    "preview_or_production_deployment": false,
+    "production_access": false,
+    "provider_or_money": false,
+    "recruitment": false,
+    "study": false
+  }
+}

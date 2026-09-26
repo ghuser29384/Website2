@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 
 import {
   CompleteProfileConnections,
@@ -9,23 +8,19 @@ import {
 import { CompleteProfileReview } from "@/components/profile/complete-profile-review";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { getSafeInternalPath } from "@/lib/paths";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import {
   getDisconnectedXProfileConnectorStatus,
   getXProfileConnectorStatus,
 } from "@/lib/x-profile-connector";
-import {
-  getWalkthroughProfileDraft,
-  type WalkthroughProfileDraft,
-  WALKTHROUGH_PROFILE_COOKIE_NAME,
-} from "@/lib/walkthrough-profile";
 
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
   title: "Complete your profile",
   description:
-    "Rank your priorities with a private, coarse 100-spark mosaic before saving your Moral Trade profile.",
+    "Set up an account independently, with optional private matching notes and priority preferences.",
   robots: {
     index: false,
     follow: false,
@@ -34,20 +29,6 @@ export const metadata: Metadata = {
 
 interface CompleteProfilePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function buildCompleteProfilePath(draft: WalkthroughProfileDraft) {
-  const query = new URLSearchParams({
-    source: "walkthrough",
-    cause_area: draft.causeArea,
-    walkthrough_cause: draft.originalCause,
-    offer_type: draft.offerType,
-    match_name: draft.matchName,
-    match_get: draft.matchGet,
-    match_give: draft.matchGive,
-  });
-
-  return `/complete-profile?${query.toString()}`;
 }
 
 function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
@@ -63,18 +44,14 @@ function readSearchParam(value: string | string[] | undefined) {
 export default async function CompleteProfilePage({ searchParams }: CompleteProfilePageProps) {
   const resolvedSearchParams = await searchParams;
   const cookieStore = await cookies();
-  const walkthroughDraft = getWalkthroughProfileDraft({
-    cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
-    searchParams: resolvedSearchParams,
-  });
-
-  if (!walkthroughDraft) {
-    redirect("/walkthrough");
-  }
-
+  const usernamePromptRequested =
+    readSearchParam(resolvedSearchParams.username_required) === "1";
   const supabaseReady = hasSupabaseEnv();
   const viewer =
     supabaseReady && hasSupabaseAuthCookie(cookieStore) ? await getViewer() : null;
+  const initialUsername = viewer?.profile.username ?? "";
+  const initialPublicInvitationMentionsEnabled =
+    viewer?.profile.public_invitation_mentions_enabled ?? true;
   const initialAffiliation = (
     viewer?.profile as unknown as { affiliation?: string | null } | undefined
   )?.affiliation ?? "";
@@ -88,7 +65,15 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
     retentionExpiresAt: xConnectorStatus.retentionExpiresAt,
     username: xConnectorStatus.username,
   };
-  const returnTo = buildCompleteProfilePath(walkthroughDraft);
+  const requestedSuccessTo = getSafeInternalPath(
+    readSearchParam(resolvedSearchParams.next),
+    "/discover",
+  );
+  const baseReturnTo = "/complete-profile";
+  const returnParams = new URLSearchParams();
+  if (usernamePromptRequested) returnParams.set("username_required", "1");
+  if (usernamePromptRequested || readSearchParam(resolvedSearchParams.next)) returnParams.set("next", requestedSuccessTo);
+  const returnTo = returnParams.size ? `${baseReturnTo}?${returnParams}` : baseReturnTo;
   const signupHref = `/signup?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const loginHref = `/login?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const initialConnectionsOpen =
@@ -96,8 +81,8 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
     readSearchParam(resolvedSearchParams.panel) === "connections";
 
   return (
-    <div className={styles.pageShell}>
-      <CompleteProfileConnections
+    <div className={styles.pageShell} data-mt-surface="complete-profile">
+      <div className={styles.sourcesBar}><CompleteProfileConnections
         feedback={formMessage}
         initialOpen={initialConnectionsOpen}
         isAuthenticated={Boolean(viewer)}
@@ -107,7 +92,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
         xAvailabilityReason={xConnectorStatus.availability.reason}
         xConnection={xConnection}
         xEnabled={xConnectorStatus.availability.enabled}
-      />
+      /></div>
 
       <main id="main-content" tabIndex={-1}>
         {!supabaseReady ? (
@@ -127,15 +112,26 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
           </div>
         ) : null}
 
+        {usernamePromptRequested && viewer && !initialUsername ? (
+          <div className={styles.statusBanner} role="status">
+            Choose a unique public username before continuing. Moral Trade does not generate one for existing accounts.
+          </div>
+        ) : null}
+
         <CompleteProfileReview
           accountEmail={viewer?.profile.email ?? ""}
-          draft={walkthroughDraft}
+          accountId={viewer?.authUser.id ?? null}
+          key={viewer?.authUser.id ?? "guest"}
+          initialBio={viewer?.profile.bio ?? ""}
+          storageAvailable={supabaseReady && viewer?.profileStatus !== "fallback"}
           initialAffiliation={initialAffiliation}
           initialDisplayName={viewer?.displayName ?? ""}
-          isAuthenticated={Boolean(viewer)}
+          initialUsername={initialUsername}
+          initialPublicInvitationMentionsEnabled={initialPublicInvitationMentionsEnabled}
           loginHref={loginHref}
           returnTo={returnTo}
           signupHref={signupHref}
+          successTo={requestedSuccessTo}
         />
       </main>
     </div>

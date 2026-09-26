@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { DashboardTools } from "@/components/dashboard/dashboard-tools";
+import { ProfilePrioritiesView } from "@/components/profile/profile-priorities-view";
+import { readDashboardView } from "@/lib/dashboard-view";
+
 import {
   addAgreementEventAction,
   addCollectiveMemberAction,
@@ -208,6 +212,11 @@ function readCandidateBudgetValue({
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const resolvedSearchParams = await searchParams;
+  // The default screen reads only priorities, not the 42-section controls loader.
+  if (readDashboardView(resolvedSearchParams.view) === "priorities") {
+    return <ProfilePrioritiesView searchParams={Promise.resolve(resolvedSearchParams)} dashboard />;
+  }
+
   const formMessage = getFormMessage(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
   const stripeReady = hasStripeEnv();
@@ -215,11 +224,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const backgroundRolloutPlan = getBackgroundNetworkingRolloutPlan();
   const backgroundRolloutValidation =
     validateBackgroundNetworkingRolloutPlan(backgroundRolloutPlan);
-  const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
-  const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
-  const accountSecuritySummary = viewer ? await loadBackgroundAccountSecuritySummary() : null;
-  const priorityFundSummary =
-    viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;
+  const viewer = supabaseReady ? await requireViewer("/dashboard?view=controls") : null;
+  const [dashboardData, accountSecuritySummary, priorityFundSummary] = await Promise.all([
+    viewer ? getDashboardData(viewer.authUser.id) : null,
+    viewer ? loadBackgroundAccountSecuritySummary() : null,
+    viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? getPriorityCorrectionSummary(viewer.authUser.id)
+      : null,
+  ]);
   const collectiveNameById = new Map(
     (dashboardData?.collectives ?? []).map((collective) => [collective.id, collective.name]),
   );
@@ -567,6 +579,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <DashboardTools active="controls" />
         <section className="v72-private-surface v72-account-surface" aria-labelledby="account-heading">
           <div className="v72-owner-strip">
             <h1 id="account-heading">Account</h1>
@@ -587,7 +600,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               { href: "/offers", label: "Browse", destination: "Offers" },
               { href: "/contact", label: "Support", destination: "Contact" },
             ].map((item) => (
-              <Link className="v72-shortcut-tile" href={item.href} key={item.label}>
+              <Link
+                className="v72-shortcut-tile"
+                href={item.href}
+                key={item.label}
+                prefetch={item.href === "/offers" ? false : undefined}
+              >
                 <strong>{item.label}</strong>
                 <span>{item.destination}</span>
               </Link>
@@ -660,12 +678,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white" id="payments-and-fund">
+        <details className="section section-white" id="payments-and-fund">
+          <summary>Separate experiment · Priority Correction Fund records</summary>
           <div className="section-head">
             <p className="eyebrow">Correction fund</p>
-            <h2>This month&apos;s pool</h2>
+            <h2>Published calculation</h2>
             <p>
-              Track the current fund, your share, and any arbiter role assigned to you.
+              Inspect experimental calculations and any recorded arbiter role. These are not payment authorizations or part of an ordinary trade.
             </p>
           </div>
 
@@ -688,7 +707,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     dateOnly
                   />.
                   {priorityFundSummary.viewerSnapshot
-                    ? ` Your current share this month is ${formatPaymentAmount(priorityFundSummary.viewerSnapshot.fund_share_cents, "usd")}.`
+                    ? ` Your recorded calculation this month is ${formatPaymentAmount(priorityFundSummary.viewerSnapshot.fund_share_cents, "usd")}.`
                     : " You do not have a current member snapshot yet."}
                 </p>
                 <p className="route-text">
@@ -711,7 +730,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
           </div>
-        </section>
+        </details>
 
         <section className="section section-white" id="payment-setup">
           <div className="section-head">
@@ -759,13 +778,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </p>
                 <div className="form-actions">
                   <form action={createStripeConnectAccountAction}>
-                    <input name="return_to" type="hidden" value="/dashboard" />
+                    <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                     <button className="button button-primary button-mini" type="submit">
                       Continue onboarding
                     </button>
                   </form>
                   <form action={refreshStripeConnectAccountAction}>
-                    <input name="return_to" type="hidden" value="/dashboard" />
+                    <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                     <button className="button button-secondary button-mini" type="submit">
                       Refresh status
                     </button>
@@ -778,7 +797,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   Connect a Stripe Express account before another party can route payment to you.
                 </p>
                 <form action={createStripeConnectAccountAction}>
-                  <input name="return_to" type="hidden" value="/dashboard" />
+                  <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                   <button className="button button-primary" type="submit">
                     Connect Stripe
                   </button>
@@ -1072,7 +1091,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
               </dl>
               <form action={saveCandidateInboundDelegateExposureAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Who may see a broad preview?</span>
                   <select name="inbound_delegate_discovery" defaultValue={candidateInboundDiscovery}>
@@ -1244,7 +1263,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 or push copy.
               </p>
               <form action={saveBackgroundNotificationPreferencesAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <div className="mini-list">
                   {BACKGROUND_NOTIFICATION_EVENT_KIND_OPTIONS.map((eventKind) => (
                     <div className="mini-list-item" key={eventKind.value}>
@@ -1314,7 +1333,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </p>
               ) : null}
               <form action={createProfileDataRightRequestAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <div className="field-grid">
                   <label className="field">
                     <span>Request</span>
@@ -1349,7 +1368,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </button>
               </form>
               <form action={deleteBackgroundNetworkingDataAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Self-serve deletion</span>
                   <input
@@ -1433,7 +1452,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span>Deletion effect: revocation stops future matching and AI shadow use.</span>
                   {connection.access_status === "revoked" ? null : (
                     <form action={revokeBackgroundSourceConnectionAction}>
-                      <input name="return_to" type="hidden" value="/dashboard#consent-center" />
+                      <input name="return_to" type="hidden" value="/dashboard?view=controls#consent-center" />
                       <input name="source_connection_id" type="hidden" value={connection.id} />
                       <button className="button button-secondary button-mini" type="submit">
                         Revoke source
@@ -1468,7 +1487,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span>Deletion effect: revocation removes future disclosure under this grant.</span>
                   {grant.status === "granted" ? (
                     <form action={revokePrivacyGrantAction}>
-                      <input name="return_to" type="hidden" value="/dashboard#consent-center" />
+                      <input name="return_to" type="hidden" value="/dashboard?view=controls#consent-center" />
                       <input name="grant_id" type="hidden" value={grant.id} />
                       <button className="button button-secondary button-mini" type="submit">
                         Revoke grant
@@ -1591,7 +1610,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             )}
             <div className="form-actions">
               <form action={refreshProfileSynthesisAction}>
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <button className="button button-secondary button-mini" type="submit">
                   Refresh synthesis and claims
                 </button>
@@ -1655,7 +1674,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <span className="source-pill">Receipts: {activeGrantReceiptCount}</span>
               </div>
               <form action={refreshBackgroundMatchesAction}>
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <button className="button button-primary button-mini" type="submit">
                   Run background scan now
                 </button>
@@ -1745,7 +1764,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     {brief.actions.length ? (
                       <div className="offer-actions">
                         <form action={updateOpportunityBriefStatusAction}>
-                          <input name="return_to" type="hidden" value="/dashboard" />
+                          <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                           <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                           <input name="status" type="hidden" value="opened" />
                           <button className="button button-secondary button-mini" type="submit">
@@ -1754,7 +1773,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         </form>
                         {brief.actions.includes("dismiss") ? (
                           <form action={updateOpportunityBriefStatusAction}>
-                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                             <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                             <input name="status" type="hidden" value="dismissed" />
                             <input name="feedback_outcome" type="hidden" value="dismissed" />
@@ -1776,7 +1795,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         ) : null}
                         {brief.actions.includes("request_more_detail") ? (
                           <form action={updateOpportunityBriefStatusAction}>
-                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                             <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                             <input name="status" type="hidden" value="interested" />
                             <input name="feedback_outcome" type="hidden" value="interested" />
@@ -1788,7 +1807,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         ) : null}
                         {brief.actions.includes("maybe_later") ? (
                           <form action={updateOpportunityBriefStatusAction}>
-                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                             <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                             <input name="status" type="hidden" value="maybe_later" />
                             <input name="feedback_outcome" type="hidden" value="maybe_later" />
@@ -1800,7 +1819,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         ) : null}
                         {brief.actions.includes("report_concern") ? (
                           <form action={updateOpportunityBriefStatusAction}>
-                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                             <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                             <input name="status" type="hidden" value="dismissed" />
                             <input name="feedback_outcome" type="hidden" value="dismissed" />
@@ -1818,7 +1837,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     )}
                     {brief.actions.includes("request_more_detail") ? (
                       <form action={createBackgroundIntroPacketAction} className="compact-form">
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                         <label className="field">
                           <span>Purpose for review</span>
@@ -1887,7 +1906,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               review before a mutual introduction is appropriate.
             </p>
             <form action={createMatchConciergeRequestAction} className="compact-form">
-              <input name="return_to" type="hidden" value="/dashboard" />
+              <input name="return_to" type="hidden" value="/dashboard?view=controls" />
               <div className="field-grid">
                 <label className="field">
                   <span>Route</span>
@@ -1986,7 +2005,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     !["requested", "under_review"].includes(request.appeal_status) ? (
                       <form action={requestMatchConciergeAppealAction} className="compact-form">
                         <input name="request_id" type="hidden" value={request.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <label className="field">
                           <span>Appeal reason</span>
                           <textarea
@@ -2031,7 +2050,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 on your behalf.
               </p>
               <form action={savePersonalDelegateAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Label</span>
                   <input
@@ -2150,7 +2169,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 ranking.
               </p>
               <form action={saveBackgroundSourceConnectionAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Provider</span>
                   <select name="provider" defaultValue="manual">
@@ -2290,7 +2309,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         </div>
                         {connection.access_status === "revoked" ? null : (
                           <form action={revokeBackgroundSourceConnectionAction}>
-                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                             <input
                               name="source_connection_id"
                               type="hidden"
@@ -2307,7 +2326,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </ul>
               ) : null}
               <form action={saveBackgroundSourceSummaryAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <p className="detail-kicker">Reviewed source summary</p>
                 <label className="field">
                   <span>Label</span>
@@ -2477,7 +2496,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <p className="route-text">No synthesis record yet.</p>
               )}
               <form action={refreshProfileSynthesisAction}>
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <button className="button button-secondary button-mini" type="submit">
                   Refresh synthesis
                 </button>
@@ -2494,7 +2513,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 payments, geography, outreach, saved searches, and risk filtering.
               </p>
               <form action={saveHelperStrategyAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Strategy</span>
                   <select name="helper_kind" defaultValue="cause_overlap">
@@ -2648,7 +2667,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       </span>
                       <form action={createAgreementRoomFromIntroductionPlanAction} className="compact-form">
                         <input name="plan_id" type="hidden" value={plan.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <button className="button button-primary button-mini" type="submit">
                           Open agreement room
                         </button>
@@ -2665,7 +2684,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                               {task.note ? <span>Note: {task.note}</span> : null}
                               <form action={updateIntroductionTaskAction} className="compact-form">
                                 <input name="task_id" type="hidden" value={task.id} />
-                                <input name="return_to" type="hidden" value="/dashboard" />
+                                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                                 <div className="field-grid">
                                   <label className="field">
                                     <span>Task status</span>
@@ -2713,7 +2732,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 requires an active MFA step-up from account security.
               </p>
               <form action={savePrivacyGrantAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Field</span>
                   <select name="field_key" defaultValue="exact_wish">
@@ -2814,7 +2833,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 answer, and only then create a matching grant.
               </p>
               <form action={createPrivacyAccessRequestAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Owner profile ID</span>
                   <input
@@ -2884,7 +2903,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       {request.justification ? <span>Why requested: {request.justification}</span> : null}
                       <form action={respondPrivacyAccessRequestAction} className="compact-form">
                         <input name="request_id" type="hidden" value={request.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <div className="field-grid">
                           <label className="field">
                             <span>Decision</span>
@@ -2943,7 +2962,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       {request.status === "pending" ? (
                         <form action={respondPrivacyAccessRequestAction} className="compact-form">
                           <input name="request_id" type="hidden" value={request.id} />
-                          <input name="return_to" type="hidden" value="/dashboard" />
+                          <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                           <input name="status" type="hidden" value="withdrawn" />
                           <button className="button button-secondary button-mini" type="submit">
                             Withdraw request
@@ -2966,7 +2985,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 pledge-like signal, not an automatic charge.
               </p>
               <form action={createBrokerageBountyAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Label</span>
                   <input name="label" placeholder="Find a serious digital minds counterparty" />
@@ -3042,7 +3061,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 group-level authority and verification.
               </p>
               <form action={createCollectiveAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Name</span>
                   <input name="name" placeholder="Research group, community, institution" />
@@ -3091,7 +3110,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </ul>
               ) : null}
               <form action={saveBackgroundCollectivePolicyAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Collective ID</span>
                   <input name="collective_id" placeholder="Paste a collective ID from your list above" />
@@ -3157,7 +3176,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 grants, and bounties.
               </p>
               <form action={addCollectiveMemberAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Collective ID</span>
                   <input name="collective_id" placeholder="Paste a collective ID from your list above" />
@@ -3240,7 +3259,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 Record lightweight group approvals for matches, privacy grants, bounties, and verification requests.
               </p>
               <form action={createCollectiveDecisionAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Collective ID</span>
                   <input name="collective_id" placeholder="Paste a collective ID from your list above" />
@@ -3293,7 +3312,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       </span>
                       <form action={respondCollectiveDecisionAction} className="compact-form">
                         <input name="decision_id" type="hidden" value={decision.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <div className="field-grid">
                           <label className="field">
                             <span>Your response</span>
@@ -3353,7 +3372,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 stores your note with a retention timer; it does not scrape or analyze the source.
               </p>
               <form action={saveProfileSourceAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Label</span>
                   <input name="source_label" placeholder="Public essay, profile, project page" />
@@ -3447,7 +3466,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 Save recurring search intent for scheduled, rate-limited matching.
               </p>
               <form action={saveSearchAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Label</span>
                   <input name="label" placeholder="Animal welfare payment trades" />
@@ -3515,7 +3534,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   .map((question) => (
                     <form action={answerClarificationQuestionAction} className="compact-form" key={question.id}>
                       <input name="question_id" type="hidden" value={question.id} />
-                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                       <p className="route-text">
                         <strong>{question.question}</strong>
                       </p>
@@ -3539,7 +3558,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <p className="route-text">No open clarification questions.</p>
               )}
               <form action={saveBackgroundProfileInterviewAnswerAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <input name="question_key" type="hidden" value="guided_wish_composer" />
                 <input
                   name="question_text"
@@ -3594,7 +3613,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 counterparties.
               </p>
               <form action={createNetworkInviteAction} className="compact-form">
-                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                 <label className="field">
                   <span>Target kind</span>
                   <select name="target_kind" defaultValue="person">
@@ -3766,7 +3785,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <form action={createPrivacyAccessRequestAction} className="compact-form">
                       <input name="owner_profile_id" type="hidden" value={match.counterpartyId} />
                       <input name="match_id" type="hidden" value={match.id} />
-                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                       <input name="requested_stage" type="hidden" value="consent" />
                       <div className="field">
                         <span>Ask for specific private fields</span>
@@ -3817,7 +3836,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       {!match.viewerConsented ? (
                         <form action={consentToMatchSuggestionAction}>
                           <input name="match_id" type="hidden" value={match.id} />
-                          <input name="return_to" type="hidden" value="/dashboard" />
+                          <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                           <label className="field compact-field">
                             <span>Optional introduction note</span>
                             <textarea
@@ -3832,14 +3851,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       ) : null}
                       <form action={dismissMatchSuggestionAction}>
                         <input name="match_id" type="hidden" value={match.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <button className="button button-secondary button-mini" type="submit">
                           Dismiss
                         </button>
                       </form>
                       <form action={reportMatchSuggestionAction} className="compact-form">
                         <input name="match_id" type="hidden" value={match.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <input name="reason" type="hidden" value="other" />
                         <input
                           name="details"
@@ -3906,7 +3925,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <div className="offer-footer">
                       <form action={markWishNotificationReadAction}>
                         <input name="notification_id" type="hidden" value={notification.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <button className="button button-secondary button-mini" type="submit">
                           Mark read
                         </button>
@@ -4166,12 +4185,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <span className="impact-pill">
                       {agreement.completion_state.replaceAll("_", " ")}
                     </span>
-                    <span className="source-pill">
-                      Evidence {agreement.evidenceItems.length}
-                    </span>
-                    <span className="source-pill">
-                      Review cases {agreement.reviewCases.length}
-                    </span>
+                    {agreement.legacyEvidenceReviewAvailable ? (
+                      <>
+                        <span className="source-pill">
+                          Evidence {agreement.evidenceItems.length}
+                        </span>
+                        <span className="source-pill">
+                          Review cases {agreement.reviewCases.length}
+                        </span>
+                      </>
+                    ) : null}
                     {agreement.viewerRating ? (
                       <span className="impact-pill">Your rating: {agreement.viewerRating.score}/10</span>
                     ) : null}
@@ -4227,7 +4250,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <h4>Payment and lifecycle</h4>
                     <form action={createAgreementPaymentCheckoutAction} className="stack-form compact-form">
                       <input name="agreement_id" type="hidden" value={agreement.id} />
-                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                       <div className="field-grid">
                         <label className="field">
                           <span>Amount</span>
@@ -4298,7 +4321,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
                     <form action={addAgreementEventAction} className="stack-form compact-form">
                       <input name="agreement_id" type="hidden" value={agreement.id} />
-                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                       <label className="field">
                         <span>Agreement update</span>
                         <select name="event_type" defaultValue="verification_submitted">
@@ -4325,14 +4348,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <div className="form-actions">
                       <form action={updateAgreementStatusAction}>
                         <input name="agreement_id" type="hidden" value={agreement.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <input name="status" type="hidden" value="completed" />
                         <input name="summary" type="hidden" value="Agreement marked completed by one party." />
                         <button className="text-button" type="submit">Mark complete</button>
                       </form>
                       <form action={updateAgreementStatusAction}>
                         <input name="agreement_id" type="hidden" value={agreement.id} />
-                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                         <input name="status" type="hidden" value="cancelled" />
                         <input name="summary" type="hidden" value="Agreement cancellation recorded by one party." />
                         <button className="text-button" type="submit">Cancel</button>
@@ -4357,7 +4380,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <form action={rateAgreementAction} className="stack-form compact-form">
                       <input name="agreement_id" type="hidden" value={agreement.id} />
                       <input name="rated_user_id" type="hidden" value={agreement.counterparty.id} />
-                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <input name="return_to" type="hidden" value="/dashboard?view=controls" />
                       <label className="field">
                         <span>Rate this transaction (1-10)</span>
                         <input

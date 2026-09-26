@@ -80,6 +80,10 @@ test("routes global queries to the relevant directory", () => {
   assert.equal(parseSmartQuery("people working on voting", { surface: "global" }).intent, "people");
   assert.equal(parseSmartQuery("accepted evidence receipts", { surface: "global" }).intent, "evidence");
   assert.equal(parseSmartQuery("conditional pools for public health", { surface: "global" }).intent, "pools");
+  assert.equal(parseSmartQuery("dominant assurance contracts", { surface: "global" }).intent, "pools");
+  assert.equal(parseSmartQuery("group-buying a moral trade", { surface: "global" }).intent, "offers");
+  assert.equal(parseSmartQuery("biosecurity Co-Funds", { surface: "global" }).intent, "offers");
+  assert.equal(parseSmartQuery("people joining biosecurity Co-Funds", { surface: "global" }).intent, "offers");
 });
 
 test("resolves common aliases and close typos semantically", () => {
@@ -92,6 +96,56 @@ test("resolves common aliases and close typos semantically", () => {
     { value: "Open civic infrastructure documentation for transparent local governance", weight: 1 },
   ]);
   assert.ok(score > 0.45);
+});
+
+test("serializes Discover Co-Funds under Offers rather than Pools", () => {
+  const interpretation = parseSmartQuery("verified biosecurity Co-Funds under $100", {
+    surface: "discover",
+    now: "2026-07-23T00:00:00Z",
+  });
+  const target = buildSmartQueryTarget(interpretation);
+  const url = new URL(target, "https://moraltrade.org");
+
+  assert.equal(interpretation.intent, "discover");
+  assert.ok(!interpretation.facets.actionTypes.includes("pool"));
+  assert.equal(url.pathname, "/discover");
+  assert.equal(url.searchParams.get("domain"), "offers");
+  assert.equal(url.searchParams.get("offerKind"), "co-fund");
+  assert.equal(url.searchParams.get("max_amount_cents"), "10000");
+});
+
+test("keeps standalone threshold funding under Pools", () => {
+  const interpretation = parseSmartQuery("verified threshold pools under $100", {
+    surface: "discover",
+  });
+  const target = buildSmartQueryTarget(interpretation);
+  const url = new URL(target, "https://moraltrade.org");
+
+  assert.ok(interpretation.facets.actionTypes.includes("pool"));
+  assert.equal(url.searchParams.get("domain"), "pools");
+  assert.equal(url.searchParams.get("offerKind"), null);
+});
+
+test("routes assurance-contract terminology to standalone Pools", () => {
+  for (const query of [
+    "dominant assurance contracts",
+    "dominant-assurance contract",
+    "assurance contracts",
+  ]) {
+    const interpretation = parseSmartQuery(query, { surface: "discover" });
+    const target = buildSmartQueryTarget(interpretation);
+    const url = new URL(target, "https://moraltrade.org");
+
+    assert.ok(interpretation.facets.actionTypes.includes("pool"), query);
+    assert.equal(url.searchParams.get("domain"), "pools", query);
+    assert.equal(url.searchParams.get("offerKind"), null, query);
+    assert.ok(
+      !interpretation.residualTerms.some((term) =>
+        ["dominant", "assurance", "contract", "contracts"].includes(term),
+      ),
+      query,
+    );
+  }
 });
 
 test("serializes a smart target and parses the facets back", () => {

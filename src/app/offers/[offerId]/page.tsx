@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import {
   acceptGuestInterestAction,
   acceptInterestAction,
-  addOfferCommentAction,
   addOfferRecommendationAction,
   expressInterestAction,
   removeOfferRecommendationAction,
@@ -18,13 +17,13 @@ import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-butto
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
+import { OfferQuestionForm } from "@/components/marketplace/offer-question-form";
+
 import {
-  CommitmentSheet,
   CommitmentTermsPanel,
   CompatibleAdditions,
   DealDetailObject,
   MarketplaceBottomNav,
-  ReviewPlanPanel,
 } from "@/components/marketplace/marketplace-components";
 import {
   getInterestForOffer,
@@ -68,7 +67,6 @@ import {
   getBaselineConfidence,
   getBaselineEvidenceSummary,
   getExternalityReviewSummary,
-  getOfferReviewWorkflowContract,
   getOfferReviewWorkflowCards,
   getScoreConfidence,
 } from "@/lib/proposal-review";
@@ -76,7 +74,6 @@ import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
-import { hasStripeEnv } from "@/lib/stripe";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
 interface OfferPageProps {
@@ -249,6 +246,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const viewer = await getViewer();
   const isOwner = viewer?.authUser.id === offer.owner_id;
   const formMessage = getFormMessage(resolvedSearchParams);
+  const questionResetToken = Array.isArray(resolvedSearchParams.question_posted)
+    ? resolvedSearchParams.question_posted[0] ?? ""
+    : resolvedSearchParams.question_posted ?? "";
   const [
     myInterest,
     incomingResponses,
@@ -387,8 +387,6 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const baselineEvidence = getBaselineEvidenceSummary(reviewInput);
   const externalityReview = getExternalityReviewSummary(reviewInput);
   const scoreConfidence = getScoreConfidence(reviewInput);
-  const reviewWorkflowContract = getOfferReviewWorkflowContract();
-  const participantReviewCopy = reviewWorkflowContract.participantCopyTemplates;
   const reviewWorkflowCards = getOfferReviewWorkflowCards({
     ...reviewInput,
     currentStatus: offer.status,
@@ -406,6 +404,29 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     : offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool"
       ? poolJoinHref ?? respondReturnTo
       : respondReturnTo;
+  const recordActions = (
+    <>
+      {!isOwner ? (
+        <Link className="button button-primary" href={commitmentHref}>
+          {viewer ? "Review response options" : "Sign in to respond"}
+        </Link>
+      ) : (
+        <Link className="button button-primary" href={respondReturnTo}>View responses</Link>
+      )}
+      {viewer && !isOwner ? (
+        <form action={toggleCartAction}>
+          <input name="offer_id" type="hidden" value={offer.id} />
+          <input name="return_to" type="hidden" value={offerReturnTo} />
+          <button className="button button-secondary" type="submit">
+            {cartState.isInCart ? "Remove saved offer" : "Save offer"}
+          </button>
+        </form>
+      ) : !viewer ? (
+        <Link className="button button-secondary" href={signInToOfferHref}>Sign in to save</Link>
+      ) : null}
+      <Link className="button button-secondary" href="/saved-offers">View saved offers</Link>
+    </>
+  );
   const offerStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -461,15 +482,6 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               <Link className="button button-secondary" href="/offers">
                 Back to offer marketplace
               </Link>
-              {viewer && !isOwner ? (
-                <form action={toggleCartAction}>
-                  <input name="offer_id" type="hidden" value={offer.id} />
-                  <input name="return_to" type="hidden" value={offerReturnTo} />
-                  <button className="button button-primary" type="submit">
-                    {cartState.isInCart ? "Remove saved offer" : "Save offer"}
-                  </button>
-                </form>
-              ) : null}
               {!isOwner ? (
                 <Link className="button button-secondary" href={authCreateSimilarHref}>
                   Create similar
@@ -578,16 +590,12 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               gates.
             </p>
           </div>
-          <div className="marketplace-detail-grid">
-            <DealDetailObject deal={marketplaceDeal} headingId="marketplace-detail-heading" />
-            <div className="marketplace-detail-side">
-              <ReviewPlanPanel deal={marketplaceDeal} />
-              <CommitmentSheet
-                commitHref={commitmentHref}
-                deal={marketplaceDeal}
-                paymentSupportAvailable={hasStripeEnv()}
-              />
-            </div>
+          <div className="marketplace-detail-grid marketplace-detail-single">
+            <DealDetailObject
+              deal={marketplaceDeal}
+              headingId="marketplace-detail-heading"
+              actions={recordActions}
+            />
           </div>
           <div className="marketplace-detail-grid marketplace-detail-grid-secondary">
             <CommitmentTermsPanel deal={marketplaceDeal} />
@@ -645,6 +653,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </section>
         ) : null}
 
+        <details className="v72-explain-row review-assessment-disclosure">
+          <summary>Screening and review context</summary>
         <section className="section section-white" aria-labelledby="review-workflow-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Review workflow</p>
@@ -657,17 +667,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           <div className="review-workflow-grid">
             {reviewWorkflowCards.map((card) => (
               <article
-                className={`panel review-workflow-card review-workflow-card-${card.status}`}
+                className={`panel review-workflow-card review-workflow-card-${card.status === "pass" ? "screening" : card.status}`}
                 key={card.key}
               >
                 <div className="review-workflow-card-head">
                   <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
-                  <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+                  <span className="review-workflow-status">{card.assessmentLabel}</span>
                 </div>
                 <h3>{card.label}</h3>
                 <p className="route-text">{card.summary}</p>
                 <p className="review-status-reason">
-                  <strong>Why this status:</strong> {card.statusReason}
+                  <strong>Why this status:</strong> {card.assessmentReason}
                 </p>
                 <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                   {card.factorCodes.map((factorCode) => (
@@ -680,38 +690,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               </article>
             ))}
           </div>
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Participant action guide</p>
-            <h3>What the review system will ask for next</h3>
+          <details className="v72-explain-row">
+            <summary>How to read these screening results</summary>
             <p>
-              These prompts are pulled from the public review-workflow contract, so the page shows
-              the same baseline, evidence, safety, score, and appeal instructions that validators
-              check.
+              These cards identify missing inputs and automatic screening results. They do not
+              certify completion, additionality, or safety. A completed review must be supported
+              by a scoped review record, not inferred from a URL, a score, or the absence of a flag.
             </p>
-          </div>
-          <div className="protocol-contract-grid" aria-label="Participant review action copy">
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Baseline helper</p>
-              <p>{participantReviewCopy.baselineHelperText}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Needs evidence status</p>
-              <p>{participantReviewCopy.needsEvidenceStatusCopy}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Safety boundary</p>
-              <p>{participantReviewCopy.safetyWarningCopy}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Participant importance</p>
-              <p>{participantReviewCopy.importanceScoreNote}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Appeal scope</p>
-              <p>{participantReviewCopy.appealCopy}</p>
-            </article>
-          </div>
+            <Link href="/reasoning-standards">Review standards and examples of review messages</Link>
+          </details>
         </section>
+        </details>
 
         <section className="section section-white">
           <div className="detail-grid detail-grid-wide">
@@ -1578,37 +1567,35 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section
+          aria-labelledby="discussion-heading"
+          className="section section-subtle"
+          id="discussion"
+        >
           <div className="section-head">
-            <p className="eyebrow">Public comments</p>
-            <h2>Structured discussion</h2>
+            <p className="eyebrow">Questions and discussion</p>
+            <h2 id="discussion-heading">Clarify the exact proposal before responding.</h2>
             <p>
-              Each offer has a public comment thread. Comments can be nested, voted on once per
-              user, and linked back to public member profiles.
+              Ask about evidence, the no-trade baseline, timing, limits, or externalities. Questions
+              and replies remain public and linked to member profiles.
             </p>
           </div>
 
+          {questionResetToken ? (
+            <div className="status-banner status-banner-success" role="status">
+              Question posted.
+            </div>
+          ) : null}
+
           {viewer ? (
-            <form action={addOfferCommentAction} className="stack-form comment-compose-form">
-              <input name="offer_id" type="hidden" value={offer.id} />
-              <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
-              <label className="field">
-                <span>Add a public comment</span>
-                <textarea
-                  name="body"
-                  placeholder="State a clarifying question, objection, or supporting premise."
-                  rows={4}
-                />
-              </label>
-              <div className="form-actions">
-                <button className="button button-primary" type="submit">
-                  Post comment
-                </button>
-              </div>
-            </form>
+            <OfferQuestionForm
+              offerId={offer.id}
+              resetToken={questionResetToken}
+              returnTo={`/offers/${offer.id}`}
+            />
           ) : (
             <div className="status-banner status-banner-success">
-              Log in to comment, reply, or vote on comments.
+              Log in to ask, reply, or vote on public questions.
             </div>
           )}
 

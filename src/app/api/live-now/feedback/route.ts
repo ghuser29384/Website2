@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
+import { getAtlasField } from "@/lib/bottleneck-atlas";
 import {
   getActionDescriptor,
   isRecommendationEventType,
@@ -9,6 +10,11 @@ import {
   type RecommendationEventType,
   type RecommendationOpportunityType,
 } from "@/lib/recommendation-learning";
+import {
+  OPPORTUNITY_SYNTHESIS_VERSION,
+  SYNTHESIZED_OPPORTUNITY_PREFIX,
+  parseSynthesizedOpportunityId,
+} from "@/lib/opportunity-synthesis";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,11 +23,23 @@ export const revalidate = 0;
 
 const MAX_EVENTS_PER_REQUEST = 20;
 const MAX_DWELL_MS = 30 * 60 * 1_000;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PASSIVE_EVENT_TYPES = new Set<RecommendationEventType>([
   "impression",
   "open",
   "dwell",
   "cause_view",
+]);
+const SYNTHESIZED_CANDIDATE_EVENT_TYPES = new Set<RecommendationEventType>([
+  "impression",
+  "open",
+  "dwell",
+  "save",
+  "unsave",
+  "hide",
+  "not_for_me",
+  "easy",
+  "hard",
 ]);
 const SAFE_SURFACES = new Set([
   "home_feed",
@@ -164,7 +182,16 @@ async function requireFeedbackViewer() {
 
 export async function POST(request: Request) {
   const viewer = await requireFeedbackViewer();
-  if (!viewer) return privateJson({ authenticated: false }, 401);
+  // Passive feed instrumentation is allowed to render for signed-out visitors,
+  // but no preference record exists to mutate. Treat it as a quiet no-op rather
+  // than generating an expected 401 in the browser console.
+  if (!viewer) {
+    return privateJson({
+      authenticated: false,
+      acceptedEventCount: 0,
+      learningEnabled: false,
+    });
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -184,15 +211,35 @@ export async function POST(request: Request) {
     ? Math.max(0, Math.min(30, requestedExploration))
     : null;
 
+  const { data: storedPreference, error: preferenceReadError } = await typedSupabase
+    .from("recommendation_preferences")
+    .select("learn_from_browsing,exploration_percent")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (preferenceReadError) {
+    console.error("[live-now-feedback] Failed to read learning preferences", {
+      message: preferenceReadError.message,
+      profileId,
+    });
+  }
+
+  const storedLearningEnabled =
+    !preferenceReadError && storedPreference?.learn_from_browsing === true;
+  const learningEnabled = requestedLearningEnabled ?? storedLearningEnabled;
+  let effectiveExplorationPercent =
+    Number.isInteger(Number(storedPreference?.exploration_percent))
+      ? Number(storedPreference.exploration_percent)
+      : 12;
+
   if (requestedLearningEnabled !== null || explorationPercent !== null) {
     const { error: preferenceError } = await typedSupabase
       .from("recommendation_preferences")
       .upsert(
         {
           profile_id: profileId,
-          ...(requestedLearningEnabled !== null
-            ? { learn_from_browsing: requestedLearningEnabled }
-            : {}),
+          // Always write the effective value so an exploration-only request
+          // cannot inherit the historical database default of true.
+          learn_from_browsing: learningEnabled,
           ...(explorationPercent !== null ? { exploration_percent: explorationPercent } : {}),
         },
         { onConflict: "profile_id" },
@@ -205,27 +252,17 @@ export async function POST(request: Request) {
       });
       return privateJson({ error: "Learning preferences could not be saved." }, 503);
     }
+    if (explorationPercent !== null) effectiveExplorationPercent = explorationPercent;
   }
-
-  const { data: preferenceData, error: preferenceReadError } = await typedSupabase
-    .from("recommendation_preferences")
-    .select("learn_from_browsing,exploration_percent")
-    .eq("profile_id", profileId)
-    .maybeSingle();
-  if (preferenceReadError) {
-    console.error("[live-now-feedback] Failed to read learning preferences", {
-      message: preferenceReadError.message,
-      profileId,
-    });
-  }
-  const learningEnabled =
-    requestedLearningEnabled ?? preferenceData?.learn_from_browsing ?? true;
 
   const rawEvents = Array.isArray(body.events) ? body.events.slice(0, MAX_EVENTS_PER_REQUEST) : [];
   const normalizedEvents = rawEvents
     .filter((event): event is FeedbackEventInput => Boolean(event) && typeof event === "object")
     .map(normalizeEvent)
     .filter((event): event is NormalizedFeedbackEvent => Boolean(event))
+    // Saving is handled by the canonical saved-offer store, not by learning
+    // history. Ignore legacy save/unsave feedback if an old client sends it.
+    .filter((event) => !["save", "unsave"].includes(event.eventType))
     .filter((event) => learningEnabled || !PASSIVE_EVENT_TYPES.has(event.eventType));
 
   if (!normalizedEvents.length) {
@@ -233,18 +270,26 @@ export async function POST(request: Request) {
       authenticated: true,
       acceptedEventCount: 0,
       learningEnabled,
-      explorationPercent: preferenceData?.exploration_percent ?? explorationPercent ?? 12,
+      explorationPercent: effectiveExplorationPercent,
     });
   }
 
   const offerIds = [...new Set(
     normalizedEvents
-      .filter((event) => event.opportunityType === "offer" || event.opportunityType === "donation_redirect")
+      .filter(
+        (event) =>
+          (event.opportunityType === "offer" || event.opportunityType === "donation_redirect") &&
+          !event.opportunityId.startsWith(SYNTHESIZED_OPPORTUNITY_PREFIX) &&
+          UUID_PATTERN.test(event.opportunityId),
+      )
       .map((event) => event.opportunityId),
   )];
   const poolIds = [...new Set(
     normalizedEvents
-      .filter((event) => event.opportunityType === "donation_pool")
+      .filter(
+        (event) =>
+          event.opportunityType === "donation_pool" && UUID_PATTERN.test(event.opportunityId),
+      )
       .map((event) => event.opportunityId),
   )];
 
@@ -313,6 +358,55 @@ export async function POST(request: Request) {
           dwell_ms: event.dwellMs,
           idempotency_key: event.idempotencyKey,
           metadata: { ...event.metadata, model_version: "adaptive-moral-feed-v1" },
+          occurred_at: occurredAt,
+        },
+      ];
+    }
+
+    const synthesized = parseSynthesizedOpportunityId(event.opportunityId);
+    if (synthesized) {
+      const canonicalType: RecommendationOpportunityType =
+        synthesized.template.id === "reciprocal-donation-redirect"
+          ? "donation_redirect"
+          : "offer";
+      if (event.opportunityType !== canonicalType) return [];
+      if (!SYNTHESIZED_CANDIDATE_EVENT_TYPES.has(event.eventType)) return [];
+
+      const sourceCauses = synthesized.template.sourceFieldIds.flatMap((fieldId) => {
+        const field = getAtlasField(fieldId);
+        return field ? [field.name, ...field.aliases.slice(0, 2)] : [];
+      });
+      const benefitCauses = uniqueCauses(
+        [synthesized.matchedCause, synthesized.template.offeredCause],
+        sourceCauses,
+      );
+      const actionCauses = uniqueCauses(
+        [synthesized.template.requestedCause],
+        sourceCauses,
+      );
+      const descriptor = getActionDescriptor({
+        actionText: synthesized.template.firstPartyGives,
+        actionCause: actionCauses[0] ?? synthesized.template.requestedCause,
+        mode: canonicalType === "donation_redirect" ? "offset" : "pledge",
+        opportunityType: canonicalType,
+      });
+      return [
+        {
+          profile_id: profileId,
+          opportunity_type: canonicalType,
+          opportunity_id: event.opportunityId,
+          event_type: event.eventType,
+          benefit_causes: benefitCauses,
+          action_causes: actionCauses,
+          action_key: descriptor.key,
+          action_label: descriptor.label,
+          inferred_difficulty: descriptor.defaultDifficulty,
+          dwell_ms: event.dwellMs,
+          idempotency_key: event.idempotencyKey,
+          metadata: {
+            ...event.metadata,
+            model_version: OPPORTUNITY_SYNTHESIS_VERSION,
+          },
           occurred_at: occurredAt,
         },
       ];
@@ -394,7 +488,7 @@ export async function POST(request: Request) {
       authenticated: true,
       acceptedEventCount: 0,
       learningEnabled,
-      explorationPercent: preferenceData?.exploration_percent ?? explorationPercent ?? 12,
+      explorationPercent: effectiveExplorationPercent,
     });
   }
 
@@ -417,7 +511,7 @@ export async function POST(request: Request) {
     authenticated: true,
     acceptedEventCount: rows.length,
     learningEnabled,
-    explorationPercent: preferenceData?.exploration_percent ?? explorationPercent ?? 12,
+    explorationPercent: effectiveExplorationPercent,
   });
 }
 
@@ -429,7 +523,8 @@ export async function DELETE() {
   const { error } = await (supabase as any)
     .from("recommendation_interactions")
     .delete()
-    .eq("profile_id", viewer.authUser.id);
+    .eq("profile_id", viewer.authUser.id)
+    .in("event_type", ["impression", "open", "dwell", "cause_view", "save", "unsave"]);
 
   if (error) {
     console.error("[live-now-feedback] Failed to clear learned signals", {
@@ -439,5 +534,10 @@ export async function DELETE() {
     return privateJson({ error: "Learned signals could not be cleared." }, 503);
   }
 
-  return privateJson({ authenticated: true, cleared: true });
+  return privateJson({
+    authenticated: true,
+    clearedBrowsingInferences: true,
+    preservedExplicitFeedback: true,
+    preservedExclusions: true,
+  });
 }
