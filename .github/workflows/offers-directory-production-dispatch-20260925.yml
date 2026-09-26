@@ -17,10 +17,11 @@ concurrency:
 
 env:
   CONTROLLER_PATH: .github/workflows/offers-directory-production-dispatch-20260925.yml
+  OFFERS_CSS_PATH: src/app/offers/offers-density.module.css
   RELEASE_WORKFLOW: vercel-release.yml
   RELEASE_REF: main
   RELEASE_TARGET: production
-  EXPECTED_TRIGGER_PARENT: 541ac787f2125cf7788aa7b2386e996ce903fe82
+  EXPECTED_TRIGGER_PARENT: 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48
 
 jobs:
   dispatch:
@@ -34,7 +35,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - name: Verify exact one-file trigger and production target
+      - name: Verify exact Offers fix release trigger
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -43,8 +44,9 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "$GITHUB_REF" = 'refs/heads/main'
           test "$(git rev-parse HEAD^)" = "$EXPECTED_TRIGGER_PARENT"
-          changed="$(git diff --name-only HEAD^ HEAD | sed '/^$/d')"
-          test "$changed" = "$CONTROLLER_PATH"
+          changed="$(git diff --name-only HEAD^ HEAD | sed '/^$/d' | sort)"
+          expected_changed="$(printf '%s\n' "$CONTROLLER_PATH" "$OFFERS_CSS_PATH" | sort)"
+          test "$changed" = "$expected_changed"
           test "$RELEASE_TARGET" = 'production'
           test "$RELEASE_REF" = 'main'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -59,4 +61,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          jq -n             --arg workflow_ref main             --arg release_ref "$RELEASE_REF"             --arg target "$RELEASE_TARGET"             --arg expected_sha "$GITHUB_SHA"             '{ref:$workflow_ref,inputs:{ref:$release_ref,target:$target,expected_sha:$expected_sha,synthetic_auth_fixture_url:""}}'             | gh api --method POST                 -H 'Accept: application/vnd.github+json'                 -H 'X-GitHub-Api-Version: 2022-11-28'                 "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches"                 --input - >/dev/null
+          payload="$(jq -n --arg workflow_ref main --arg release_ref "$RELEASE_REF" --arg target "$RELEASE_TARGET" --arg expected_sha "$GITHUB_SHA" '{ref:$workflow_ref,inputs:{ref:$release_ref,target:$target,expected_sha:$expected_sha,synthetic_auth_fixture_url:""}}')"
+          gh api --method POST             -H 'Accept: application/vnd.github+json'             -H 'X-GitHub-Api-Version: 2022-11-28'             "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches"             --input - <<<"$payload" >/dev/null
