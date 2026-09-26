@@ -1,6 +1,6 @@
 .main {
-  --pledge-signal: #dff0a8;
-  --pledge-signal-ink: #263900;
+  --pledge-signal: #e4eaff;
+  --pledge-signal-ink: #26376f;
   background: var(--surface);
 }
 
