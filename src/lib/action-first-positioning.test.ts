@@ -44,18 +44,17 @@ test("primary acquisition routes lead with real actions instead of pilot languag
   assert.match(site, /href: "\/feed", label: "Feed"/);
   assert.match(site, /href: "\/discover", label: "Discover"/);
   assert.match(site, /href: "\/trades\/new", label: "Create"/);
-  assert.match(start, /Make a financial contribution/);
+  assert.match(start, /START_PATHS/);
   assert.match(legacyPilot, /permanentRedirect\("\/start"\)/);
 });
 
-test("the start route streams its critical action shell before optional live state", () => {
+test("the start route shows its action shell without waiting for optional marketplace statistics", () => {
   assert.match(start, /export default function StartPage\(\)/);
   assert.doesNotMatch(start, /export default async function StartPage/);
-  assert.match(start, /createUnavailableMarketplaceOverview\(\)/);
-  assert.ok(
-    start.indexOf("<h1>Choose a real first action.</h1>") <
-      start.indexOf("<StartServiceSnapshot />"),
-  );
+  assert.doesNotMatch(start, /getMarketplaceOverview|StartServiceSnapshot|createUnavailableMarketplaceOverview/);
+  assert.match(start, /<h1>Get started<\/h1>/);
+  assert.match(start, /<Suspense/);
+  assert.match(start, /getStartCreateHref\(false\)/);
 });
 
 test("the financial action has a real external payment handoff and explicit boundaries", () => {
@@ -65,7 +64,7 @@ test("the financial action has a real external payment handoff and explicit boun
   assert.match(donate, /No Moral Trade custody/);
   assert.match(donateButton, /getEveryOrgDonationHref\(target\)/);
   assert.match(donateButton, /everyDotOrgDonateButton/);
-  assert.match(start, /No platform custody/);
+  assert.match(start, /Moral Trade does not hold funds, offer escrow, or decide tax treatment/);
 });
 
 test("the returning homepage delegates to real feed actions rather than a mock", () => {

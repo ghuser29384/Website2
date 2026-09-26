@@ -1,34 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { cache, Suspense, type ReactNode } from "react";
+import { cache, Suspense } from "react";
 
-import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { IconMark } from "@/components/ui/page-primitives";
-import {
-  getMarketplaceOverview,
-  getViewer,
-  type MarketplaceOverview,
-} from "@/lib/app-data";
-import {
-  createUnavailableMarketplaceOverview,
-  resolvePublicMarketplaceOverview,
-} from "@/lib/public-marketplace-overview";
+import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { VISITOR_PATHS } from "@/lib/visitor-paths";
+import { getStartCreateHref, START_PATHS } from "@/lib/start-paths";
+
+import styles from "./start.module.css";
+
+const description = "Browse trades, create a proposal, make a donation, or explore funding pools.";
 
 export const metadata: Metadata = {
-  title: "Start a Real Action",
-  description:
-    "Choose a live first step on Moral Trade: make a financial contribution, create a bounded trade, review conditional pools, or explore participant proposals.",
-  alternates: {
-    canonical: "/start",
-  },
+  title: "Get started",
+  description,
+  alternates: { canonical: "/start" },
   openGraph: {
-    title: "Start a real action on Moral Trade",
-    description:
-      "Fund a public good through a reviewed payment route, create a trade, review conditional pools, or explore current participant proposals.",
+    title: "Get started | Moral Trade",
+    description,
     url: getAbsoluteUrl("/start"),
     type: "website",
   },
@@ -39,7 +29,7 @@ const structuredData = {
   "@type": "ItemList",
   name: "Moral Trade action paths",
   url: getAbsoluteUrl("/start"),
-  itemListElement: VISITOR_PATHS.map((path, index) => ({
+  itemListElement: START_PATHS.map((path, index) => ({
     "@type": "ListItem",
     position: index + 1,
     name: path.title,
@@ -49,265 +39,105 @@ const structuredData = {
 };
 
 const getStartViewer = cache(() => getViewer());
-const getStartMarketplaceOverview = cache(() =>
-  resolvePublicMarketplaceOverview(getMarketplaceOverview()),
-);
 
-function formatOptionalCount(value: number | null) {
-  return value === null ? "—" : new Intl.NumberFormat("en-US").format(value);
-}
-
-function StartTopbarFallback() {
-  return (
-    <SiteTopbar
-      brandHref="/"
-      links={getPrimaryNavLinks(false)}
-      {...getTopbarActions(false)}
-      showLogout={false}
-    />
-  );
-}
-
-async function StartTopbar() {
-  const viewer = await getStartViewer();
-  const isAuthenticated = Boolean(viewer);
-
+function StartHeader({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   return (
     <SiteTopbar
       brandHref="/"
       links={getPrimaryNavLinks(isAuthenticated)}
-      {...getTopbarActions(isAuthenticated)}
+      authLink={getTopbarActions(isAuthenticated).authLink}
+      showSearch={false}
       showLogout={isAuthenticated}
     />
   );
 }
 
-interface StartCreateLinkProps {
-  children: ReactNode;
-  className: string;
+async function StartTopbar() {
+  return <StartHeader isAuthenticated={Boolean(await getStartViewer())} />;
 }
 
-function StartCreateLinkFallback({ children, className }: StartCreateLinkProps) {
-  return (
-    <Link className={className} href="/signup?returnTo=/create">
-      {children}
-    </Link>
-  );
-}
+type StartPath = (typeof START_PATHS)[number];
 
-async function StartCreateLink({ children, className }: StartCreateLinkProps) {
-  const viewer = await getStartViewer();
-
+function StartPathLink({ path, href = path.href }: { path: StartPath; href?: string }) {
   return (
     <Link
-      className={className}
-      href={viewer ? "/create" : "/signup?returnTo=/create"}
+      aria-describedby={`start-${path.key}-description`}
+      aria-labelledby={`start-${path.key}-title`}
+      className={styles.path}
+      data-start-path={path.key}
+      href={href}
+      prefetch={false}
     >
-      {children}
+      <span className={styles.pathCopy}>
+        <span className={styles.pathTitle} id={`start-${path.key}-title`}>{path.title}</span>
+        <span className={styles.pathDescription} id={`start-${path.key}-description`}>
+          {path.description}
+        </span>
+      </span>
+      <span aria-hidden="true" className={styles.arrow}>→</span>
     </Link>
   );
 }
 
-function StartServiceSnapshotPanel({
-  marketplaceOverview,
-}: {
-  marketplaceOverview: MarketplaceOverview;
-}) {
-  const serviceSnapshot = [
-    {
-      icon: "payment",
-      label: "Financial contribution",
-      value: "Available",
-    },
-    {
-      icon: "marketplace",
-      label: "Open proposals",
-      value: formatOptionalCount(marketplaceOverview.openOfferCount),
-    },
-    {
-      icon: "profile",
-      label: "Public profiles",
-      value: formatOptionalCount(marketplaceOverview.publicProfileCount),
-    },
-  ] as const;
-
-  return (
-    <aside className="growth-progress-card panel" aria-label="Current service state">
-      <p className="eyebrow">Available now</p>
-      {serviceSnapshot.map((item) => (
-        <div className="growth-progress-stat" key={item.label}>
-          <IconMark name={item.icon} />
-          <span>{item.label}</span>
-          <strong>{item.value}</strong>
-        </div>
-      ))}
-      <p className="hero-followup">
-        Donation payment is completed by the external provider. Moral Trade can import or review
-        evidence for a linked workflow, but does not hold the donation or claim escrow.
-      </p>
-    </aside>
-  );
-}
-
-async function StartServiceSnapshot() {
-  const marketplaceOverview = await getStartMarketplaceOverview();
-
-  return <StartServiceSnapshotPanel marketplaceOverview={marketplaceOverview} />;
+async function StartCreateLink({ path }: { path: StartPath }) {
+  const viewer = await getStartViewer();
+  return <StartPathLink path={path} href={getStartCreateHref(Boolean(viewer))} />;
 }
 
 export default function StartPage() {
   return (
-    <div className="page-shell">
+    <div className={`page-shell ${styles.shell}`}>
       <script
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         type="application/ld+json"
       />
-      <header className="hero">
-        <Suspense fallback={<StartTopbarFallback />}>
+      <header>
+        <Suspense fallback={<StartHeader />}>
           <StartTopbar />
         </Suspense>
-
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Start</p>
-            <h1>Choose a real first action.</h1>
-            <p className="hero-text">
-              The shortest financial path is available now: choose a reviewed destination and
-              complete payment through Every.org. You can also create a bounded trade, review live
-              pools, or respond to a participant proposal.
-            </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/donate">
-                Make a financial contribution
-              </Link>
-              <Suspense
-                fallback={
-                  <StartCreateLinkFallback className="button button-secondary">
-                    Create a proposal
-                  </StartCreateLinkFallback>
-                }
-              >
-                <StartCreateLink className="button button-secondary">
-                  Create a proposal
-                </StartCreateLink>
-              </Suspense>
-            </div>
-            <ul className="hero-signals" aria-label="Current action boundaries">
-              <li>Provider-hosted payment</li>
-              <li>Reviewed destinations</li>
-              <li>No platform custody</li>
-              <li>Bounded commitments</li>
-            </ul>
-          </section>
-
-          <Suspense
-            fallback={
-              <StartServiceSnapshotPanel
-                marketplaceOverview={createUnavailableMarketplaceOverview()}
-              />
-            }
-          >
-            <StartServiceSnapshot />
-          </Suspense>
-        </div>
       </header>
 
-      <main id="main-content" tabIndex={-1}>
-        <section
-          className="growth-start-section section section-white"
-          aria-labelledby="visitor-paths-heading"
-        >
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Four live paths</p>
-            <h2 id="visitor-paths-heading">Fund, create, pool, or explore</h2>
-            <p>
-              Each route lands on a concrete action. Terms, financial boundaries, evidence, and
-              recourse remain visible before anyone relies on a record.
-            </p>
-          </div>
+      <main className={styles.main} id="main-content" tabIndex={-1}>
+        <div className={styles.intro}>
+          <h1>Get started</h1>
+          <p>Choose a first step. Review the details before you commit.</p>
+        </div>
 
-          <div className="growth-start-grid">
-            {VISITOR_PATHS.map((path) => (
-              <Link className="growth-path-card panel" href={path.href} key={path.key}>
-                <IconMark name={path.icon} />
-                <div>
-                  <p className="detail-kicker">{path.title}</p>
-                  <h3>{path.homeTitle}</h3>
-                  <p>{path.description}</p>
-                  <p className="route-text">{path.fit}</p>
-                </div>
-                <span className="inline-link">{path.actionLabel}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="action-boundaries-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Before reliance</p>
-            <h2 id="action-boundaries-heading">What every action keeps visible</h2>
-            <p>
-              A financial or non-financial commitment is useful only when the route, maximum
-              exposure, evidence, review state, and exit behavior are explicit.
-            </p>
-          </div>
-          <div className="data-grid">
-            <article className="panel data-card">
-              <h3>Payment boundary</h3>
-              <p className="route-text">
-                The current donation route sends payment to Every.org. Moral Trade does not hold the
-                funds, offer escrow, or decide tax treatment.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Bounded exposure</h3>
-              <p className="route-text">
-                Money, time, action burden, duration, condition, and cancellation rules stay visible
-                before acceptance.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Reviewable evidence</h3>
-              <p className="route-text">
-                Submitted, imported, reviewed, disputed, and unavailable evidence remain separate
-                states rather than a single success claim.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section className="section section-white" aria-labelledby="visitor-actions-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Start now</p>
-            <h2 id="visitor-actions-heading">Use the strongest current route</h2>
-            <p>
-              Make a financial contribution through a reviewed provider route, or create a bounded
-              proposal when your use case needs a counterparty.
-            </p>
-          </div>
-          <div className="hero-actions">
-            <Link className="button button-primary" href="/donate">
-              Choose a funding route
-            </Link>
+        <nav aria-label="Ways to get started" className={styles.paths}>
+          {START_PATHS.map((path) => path.key === "create" ? (
             <Suspense
-              fallback={
-                <StartCreateLinkFallback className="button button-secondary">
-                  Create a trade
-                </StartCreateLinkFallback>
-              }
+              fallback={<StartPathLink path={path} href={getStartCreateHref(false)} />}
+              key={path.key}
             >
-              <StartCreateLink className="button button-secondary">
-                Create a trade
-              </StartCreateLink>
+              <StartCreateLink path={path} />
             </Suspense>
-            <Link className="button button-secondary" href="/status">
-              Review service boundaries
-            </Link>
+          ) : (
+            <StartPathLink key={path.key} path={path} />
+          ))}
+        </nav>
+
+        <p className={styles.note}>Choosing a path does not make a payment or accept a trade.</p>
+
+        <details className={styles.safeguards}>
+          <summary>Before you commit</summary>
+          <div className={styles.safeguardCopy}>
+            <p><strong>Payments.</strong> Donations are completed on Every.org. Moral Trade does not hold funds, offer escrow, or decide tax treatment.</p>
+            <p><strong>Your limits.</strong> Review the money, time, actions, deadlines, conditions, and cancellation rules before accepting.</p>
+            <p><strong>Evidence.</strong> Submitted or imported evidence is not automatically reviewed or verified. Disputed and unavailable evidence remain separate states.</p>
+            <Link href="/status" prefetch={false}>Review service boundaries</Link>
           </div>
-        </section>
+        </details>
       </main>
 
-      <SiteFooter />
+      <footer className={styles.footer}>
+        <span>© 2026 Moral Trade</span>
+        <nav aria-label="Footer">
+          <Link href="/privacy" prefetch={false}>Privacy</Link>
+          <Link href="/terms" prefetch={false}>Terms</Link>
+          <Link href="/accessibility" prefetch={false}>Accessibility</Link>
+          <Link href="/contact" prefetch={false}>Contact</Link>
+        </nav>
+      </footer>
     </div>
   );
 }

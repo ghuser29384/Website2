@@ -35,79 +35,28 @@ async function expectNoHorizontalOverflow(page: Page) {
 test.describe.configure({ mode: "serial" });
 test.setTimeout(90_000);
 
-test("Start service snapshot renders as distinct non-overlapping rows", async ({ page }, testInfo) => {
+test("Start action choices render as distinct non-overlapping rows", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const response = await page.goto("/start", { timeout: 60_000, waitUntil: "domcontentloaded" });
   expect(response?.status() ?? 200).toBeLessThan(400);
-  await expect(page.getByRole("heading", { level: 1, name: "Choose a real first action." })).toBeVisible();
-
-  // The resolved Suspense segment can briefly coexist in hidden transport DOM with the visible
-  // fallback. Target the accessible card so hidden streaming internals do not create a false
-  // strict-mode failure, while two genuinely visible cards still fail this assertion.
-  const card = page.getByRole("complementary", { name: "Current service state" });
-  const stats = card.locator(".growth-progress-stat");
-  const followup = card.locator(".hero-followup");
-  await expect(card).toHaveCount(1);
-  await expect(card).toBeVisible();
-  await expect(stats).toHaveCount(3);
-  await expect(followup).toBeVisible();
-
-  // React can replace the visible fallback with the resolved segment while the streamed response
-  // settles. Retry one synchronous geometry snapshot until the accessible card reaches a stable,
-  // non-zero layout; this still fails genuine overlap or collapsed-row regressions.
-  await expect
-    .poll(
-      () =>
-        card.evaluate((element) => {
-          const toRect = (target: Element) => {
-            const box = target.getBoundingClientRect();
-            return {
-              bottom: box.bottom,
-              height: box.height,
-              left: box.left,
-              right: box.right,
-              top: box.top,
-            };
-          };
-          const renderedStats = Array.from(element.querySelectorAll(".growth-progress-stat"));
-          const renderedFollowup = element.querySelector(".hero-followup");
-
-          if (renderedStats.length !== 3 || !renderedFollowup) {
-            return false;
-          }
-
-          const cardRect = toRect(element);
-          const statRects = renderedStats.map((stat) => toRect(stat));
-          const followupRect = toRect(renderedFollowup);
-
-          return (
-            statRects.every(
-              (item) =>
-                item.left >= cardRect.left - 1 &&
-                item.right <= cardRect.right + 1 &&
-                item.height > 44,
-            ) &&
-            statRects[0].bottom <= statRects[1].top + 1 &&
-            statRects[1].bottom <= statRects[2].top + 1 &&
-            statRects[2].bottom <= followupRect.top + 1
-          );
-        }),
-      {
-        intervals: [100, 250, 500],
-        timeout: 10_000,
-      },
-    )
-    .toBe(true);
-
-  for (const label of ["Financial contribution", "Open proposals", "Public profiles"]) {
-    await expect(card.getByText(label, { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Get started" })).toBeVisible();
+  const choices = page.getByRole("navigation", { name: "Ways to get started" });
+  const links = choices.getByRole("link");
+  await expect(links).toHaveCount(4);
+  await expect(page.getByRole("complementary", { name: "Current service state" })).toHaveCount(0);
+  const bounds = await rect(choices);
+  let previousBottom = bounds.top;
+  for (const link of await links.all()) {
+    await expect(link).toBeVisible();
+    const box = await rect(link);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.left).toBeGreaterThanOrEqual(bounds.left);
+    expect(box.right).toBeLessThanOrEqual(bounds.right + 1);
+    expect(box.top).toBeGreaterThanOrEqual(previousBottom - 1);
+    previousBottom = box.bottom;
   }
-
   await expectNoHorizontalOverflow(page);
-  await page.screenshot({
-    path: testInfo.outputPath("start-service-snapshot-1440.png"),
-    fullPage: false,
-  });
+  await page.screenshot({ path: testInfo.outputPath("start-choices-1440.png"), fullPage: false });
 });
 
 test("Complete Profile header actions remain separated on desktop and mobile", async ({ page }, testInfo) => {
