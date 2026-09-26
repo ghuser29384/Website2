@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 33593f75f3a11bd4b0674a6a7b937d4053675bfb
+          ref: 973391b668979dec6d8880a69bfb940fd0c4a99d
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -37,20 +37,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/dashboard-sparks-evidence/source
-          test "$(git rev-parse HEAD)" = 33593f75f3a11bd4b0674a6a7b937d4053675bfb
-          git merge-base --is-ancestor d4d4b25fdf7a46a247838482ce5225163e45a963 HEAD
-          git diff --check d4d4b25fdf7a46a247838482ce5225163e45a963
-          git diff --name-only d4d4b25fdf7a46a247838482ce5225163e45a963 > /tmp/dashboard-sparks-evidence/changed-files.txt
+          test "$(git rev-parse HEAD)" = 973391b668979dec6d8880a69bfb940fd0c4a99d
+          git merge-base --is-ancestor c5ee0fad82f3e211a7954f6bcaa5e34fbaad86a9 HEAD
+          git diff --check c5ee0fad82f3e211a7954f6bcaa5e34fbaad86a9
+          git diff --name-only c5ee0fad82f3e211a7954f6bcaa5e34fbaad86a9 > /tmp/dashboard-sparks-evidence/changed-files.txt
           python3 - <<'PY'
           from pathlib import Path
           actual = set(Path('/tmp/dashboard-sparks-evidence/changed-files.txt').read_text().splitlines())
           expected = {'src/app/dashboard/page.tsx', 'src/app/dashboard/loading.tsx', 'src/app/dashboard/dashboard-account-security.css', 'src/app/profile/priorities/page.tsx', 'src/components/profile/profile-priorities-view.tsx', 'src/components/profile/profile-priority-editor.tsx', 'src/components/dashboard/dashboard-tools.tsx', 'src/components/dashboard/dashboard-tools.module.css', 'src/lib/dashboard-view.ts', 'src/lib/dashboard-view.test.ts', 'src/lib/dashboard-loading.test.ts', 'tests/dashboard-sparks.spec.ts', 'src/dashboard-account-security-visibility.test.ts', 'tests/dashboard-account-security-visibility.spec.ts', '.github/workflows/dashboard-account-security-hotfix-gates.yml'}
           assert actual == expected, actual ^ expected
           PY
-          git diff --exit-code d4d4b25fdf7a46a247838482ce5225163e45a963 -- .github/workflows/vercel-release.yml src/lib/supabase src/app/profile/priorities/actions.ts supabase package.json package-lock.json src/lib/app-data.ts
-          git diff --exit-code b4390a3d022d67e86e702e67cda32e3b5dad6c4a -- $(cat /tmp/dashboard-sparks-evidence/changed-files.txt)
+          git diff --exit-code c5ee0fad82f3e211a7954f6bcaa5e34fbaad86a9 -- .github/workflows/vercel-release.yml src/lib/supabase src/app/profile/priorities/actions.ts supabase package.json package-lock.json src/lib/app-data.ts
+          git diff --exit-code 33593f75f3a11bd4b0674a6a7b937d4053675bfb -- $(cat /tmp/dashboard-sparks-evidence/changed-files.txt)
           git rev-parse HEAD > /tmp/dashboard-sparks-evidence/commit.txt
-          git diff d4d4b25fdf7a46a247838482ce5225163e45a963 > /tmp/dashboard-sparks-evidence/source.patch
+          git diff c5ee0fad82f3e211a7954f6bcaa5e34fbaad86a9 > /tmp/dashboard-sparks-evidence/source.patch
           while IFS= read -r file; do cp --parents "$file" /tmp/dashboard-sparks-evidence/source/; done < /tmp/dashboard-sparks-evidence/changed-files.txt
       - run: npm ci
       - name: Focused regressions
