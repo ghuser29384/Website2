@@ -5,6 +5,7 @@ on:
       - .github/workflows/selected-cleanup-source-20260926.yml
       - .github/selected-cleanup-edits.json.gz
       - .github/selected-cleanup-native-link-fixes.json
+      - .github/selected-cleanup-baseline.txt
 permissions:
   contents: write
 concurrency:
@@ -27,10 +28,19 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           path: controller
           persist-credentials: false
-      - name: Check out the current production baseline
+      - name: Read the explicitly pinned integration baseline
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(cat controller/.github/selected-cleanup-baseline.txt)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'BASE_SHA=%s\n' "$sha" >> "$GITHUB_ENV"
+      - name: Check out the integration baseline without deploying it
         uses: actions/checkout@v4
         with:
-          ref: 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          ref: ${{ steps.baseline.outputs.sha }}
           path: app
           fetch-depth: 0
           persist-credentials: false
@@ -39,7 +49,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
           mkdir -p "$GITHUB_WORKSPACE/evidence"
           python3 - <<'PY'
           from pathlib import Path
@@ -106,8 +116,7 @@ jobs:
                   path.write_bytes(after)
           apply_batch(edits)
           final_scope = {name: {'before': spec['before'], 'after': spec['after']} for name, spec in edits.items()}
-          # The rendered mobile gate exposed Next client navigation to static HTML.
-          # Fix only selected header/footer route links and keep exact document-request tests.
+          # Fix only selected header/footer static document links and their request tests.
           native_raw = Path('../controller/.github/selected-cleanup-native-link-fixes.json').read_bytes()
           assert hashlib.sha256(native_raw).hexdigest() == 'd43b21a680b532584778156145468b67e9cef8b49a1de7e0a35ea24d58b15562'
           native = json.loads(native_raw)
@@ -116,8 +125,7 @@ jobs:
               'src/components/layout/site-route-link.tsx', 'src/lib/selected-cleanup.test.ts',
               'tests/selected-cleanup.spec.ts',
           }
-          # The /contact shell has a 2px gap and the refined header has no link padding.
-          # Keep the four selected links readable without restyling that page.
+          # Keep the four selected links readable in the legacy /contact shell.
           topbar = native['src/components/layout/site-topbar.tsx']
           assert topbar['after'] == '75107c269eeba97fdadc87ea3ac43e51cae944f6'
           topbar['edits'].append([197, 198, '      <div\n        className="topbar-links"\n        data-mt-primary-links={refinedHeader ? "true" : undefined}\n        style={refinedHeader ? { columnGap: "clamp(12px, 2.4vw, 42px)" } : undefined}\n      >\n'])
@@ -188,12 +196,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh api repos/ghuser29384/Website2/git/ref/heads/main --jq .object.sha)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
-          test "$(git rev-parse HEAD^)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          # Publishing an isolated review branch does not merge or deploy main.
+          # Fresh main/production scope reconciliation remains required before release.
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
           test -z "$(git diff --name-only HEAD)"
+          branch="release/selected-shared-cleanup-20260926"
           credential="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $credential" push https://github.com/ghuser29384/Website2.git HEAD:refs/heads/release/selected-shared-cleanup-20260926
-          printf 'published=%s\nbranch=%s\n' "$(git rev-parse HEAD)" release/selected-shared-cleanup-20260926 > "$GITHUB_WORKSPACE/evidence/published.txt"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $credential" push https://github.com/ghuser29384/Website2.git "HEAD:refs/heads/$branch"
+          printf 'published=%s\nbranch=%s\n' "$(git rev-parse HEAD)" "$branch" > "$GITHUB_WORKSPACE/evidence/published.txt"
       - name: Preserve exact source, checks and rendered evidence
         if: always()
         uses: actions/upload-artifact@v4
