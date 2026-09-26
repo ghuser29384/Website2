@@ -1,0 +1,137 @@
+name: Align Commitments release with approved preview
+on:
+  push:
+    branches: [ops/commitments-redesign-release-20260926]
+    paths: [.github/workflows/commitments-redesign-polish.yml]
+permissions:
+  contents: write
+concurrency:
+  group: commitments-redesign-polish-20260926
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3791962860deea8845fa6d9ea75ec3d76e0a348d
+          fetch-depth: 0
+      - name: Apply scoped presentation and truthful disclosure changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          test "$(git ls-remote origin refs/heads/redesign/commitments-balanced-layout-20260926 | cut -f1)" = 3791962860deea8845fa6d9ea75ec3d76e0a348d
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c work/commitments-redesign-polished-20260926
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          css_path = Path('src/app/commitments/commitments-redesign.module.css')
+          css = css_path.read_text()
+          css = '''/* The approved workspace owns its geometry without restyling other routes. */
+          .shell.shell {
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+
+          .shell > main {
+            margin-top: 0;
+          }
+
+          ''' + css
+          css = css.replace('  min-height: 100%;\n', '  display: block;\n  border: 0 !important;\n  min-height: 100%;\n', 1)
+          old = '.shell:global(.marketplace-app-shell) :global(.mt-v75-route-board) {\n'
+          assert old in css
+          css = css.replace(old, old + '  border: 0 !important;\n  gap: 0;\n  width: 100%;\n  max-width: none;\n', 1)
+          css = css.replace('  margin-inline: 12px;', '  margin-inline: 0;')
+          # Existing base module remains imported for lower sections. Give the
+          # redesign deterministic precedence, independent of CSS chunk order.
+          css = re.sub(r'(?m)^(\s*)\.(hero|heroAside|greeting|tabs|summary)(?=[\s.{:\[])', r'\1.page .\2', css)
+          css = css.replace('.page :global(.button) {', '.shell.shell .page :global(.button) {')
+          css_path.write_text(css)
+          page_path = Path('src/app/commitments/page.tsx')
+          page = page_path.read_text()
+          assert '<MarketplaceRouteShell active="track">' in page
+          page = page.replace('<MarketplaceRouteShell active="track">', '<MarketplaceRouteShell active="track" hidePlannerSummary>')
+          old = '                      Connected record types\n'
+          assert old in page
+          page = page.replace(old, '                      {data.warnings.length ? `${data.warnings.length} source warning${data.warnings.length === 1 ? "" : "s"}` : "Connected record types"}\n')
+          page_path.write_text(page)
+          path = Path('src/components/marketplace/marketplace-components.tsx')
+          source = path.read_text()
+          old = '''function MarketplaceSideNav({
+            active = "browse",
+            createHref,
+          }: {
+            active?: "browse" | "plan" | "track" | "messages" | "profile";
+            createHref?: string;
+          }) {'''
+          new = old.replace('  createHref,', '  createHref,\n  hidePlannerSummary = false,').replace('  createHref?: string;', '  createHref?: string;\n  hidePlannerSummary?: boolean;')
+          assert old in source
+          source = source.replace(old, new, 1)
+          old = '        <strong>0 in planner</strong>\n        <span>'
+          assert source.count(old) == 1
+          source = source.replace(old, '        <strong>{hidePlannerSummary ? "Planner" : "0 in planner"}</strong>\n        {!hidePlannerSummary ? <>\n        <span>', 1)
+          old = '''          <b>$0.00</b>
+                  </span>
+                  <Link className="button button-primary button-mini" href="/saved-offers">'''
+          assert source.count(old) == 1
+          source = source.replace(old, old.replace('        <Link', '        </> : null}\n        <Link'), 1)
+          old = '''export function MarketplaceRouteShell({
+            active,
+            children,
+          }: {
+            active: "browse" | "plan" | "track" | "messages" | "profile";
+            children: ReactNode;
+          }) {'''
+          new = old.replace('  children,', '  children,\n  hidePlannerSummary = false,').replace('  children: ReactNode;', '  children: ReactNode;\n  hidePlannerSummary?: boolean;')
+          assert old in source
+          source = source.replace(old, new, 1)
+          assert source.count('<MarketplaceSideNav active={active} />') == 1
+          source = source.replace('<MarketplaceSideNav active={active} />', '<MarketplaceSideNav active={active} hidePlannerSummary={hidePlannerSummary} />')
+          path.write_text(source)
+          path = Path('tests/commitments-loading.auth.ts')
+          source = path.read_text()
+          old = '      await expect(page.getByText("Some connected record types could not be loaded")).toHaveCount(0);'
+          assert old in source
+          source = source.replace(old, old + '''
+                const disclosure = page.locator("details").filter({ has: page.getByText("Additional details", { exact: true }) });
+                await disclosure.locator("summary").click();
+                await expect(disclosure).toHaveAttribute("open", "");
+                await expect(disclosure).toContainText("not an expected-value estimate");
+                await disclosure.locator("summary").click();
+                await expect(disclosure).not.toHaveAttribute("open", "");
+                const headingSize = await page.locator("#commitments-heading").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+                expect(headingSize).toBeLessThanOrEqual(68);
+                if (viewport.width >= 980) {
+                  expect(await summary.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length)).toBe(5);
+                  await expect(page.getByRole("complementary", { name: "Marketplace sections" }).getByText("0 in planner")).toHaveCount(0);
+                }
+          ''')
+          path.write_text(source)
+          path = Path('src/commitments-redesign-contract.test.ts')
+          with path.open('a') as handle:
+            handle.write('''\ntest("Commitments keeps incomplete-source status visible and omits unsupported sidebar balances", () => {\n  assert.ok(page.includes('data.warnings.length ? `${data.warnings.length} source warning'));\n  assert.ok(page.includes('<MarketplaceRouteShell active="track" hidePlannerSummary>'));\n});\n''')
+          PY
+          git diff --check
+          git add src/app/commitments/commitments-redesign.module.css src/app/commitments/page.tsx src/components/marketplace/marketplace-components.tsx tests/commitments-loading.auth.ts src/commitments-redesign-contract.test.ts
+          git commit -m 'Match approved Commitments spacing and retain honest source status'
+          mkdir -p /tmp/commitments-polished
+          git rev-parse HEAD | tee /tmp/commitments-polished/candidate-sha.txt
+          git diff f58ee041dfd909cad7699ed67485cc0a7db95933 > /tmp/commitments-polished/commitments.patch
+          git archive HEAD | gzip > /tmp/commitments-polished/source.tar.gz
+          git push origin HEAD:refs/heads/work/commitments-redesign-polished-20260926
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commitments-redesign-polished
+          path: /tmp/commitments-polished
+          if-no-files-found: error
+          retention-days: 7
