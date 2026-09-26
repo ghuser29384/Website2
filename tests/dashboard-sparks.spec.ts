@@ -162,17 +162,30 @@ test.describe("Dashboard 100 Sparks with a loopback-only account fixture", () =>
     expect(requests.some((request) => request.path === "/rest/v1/cohort_onboarding_profiles")).toBe(false);
   });
 
-  test("More controls and legacy section links still reach the existing controls", async ({ page, context }) => {
+  test("every secondary toolbar destination and legacy section remains visible", async ({ page, context }) => {
     await signIn(context);
     await page.goto(`${origin}/dashboard`);
-    await page.getByRole("navigation", { name: "Dashboard controls" }).getByRole("link", { name: "More controls" }).click();
+    const tools = page.getByRole("navigation", { name: "Dashboard controls" });
+    await expect(tools.getByRole("link", { name: "Profile details" })).toHaveAttribute("href", "/complete-profile");
+    await tools.getByRole("link", { name: "More controls" }).click();
     await expect(page).toHaveURL(/\/dashboard\?view=controls$/);
     await expect(page.locator("#account-heading")).toBeVisible();
-    await page.getByRole("navigation", { name: "Dashboard controls" }).getByRole("link", { name: "100 Sparks" }).click();
+    await expect(page.locator("#account-security")).toBeVisible();
+    for (const [name, id] of [["Privacy", "privacy-controls"], ["Notifications", "notifications"]]) {
+      await tools.getByRole("link", { name, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/dashboard\\?view=controls#${id}$`));
+      await expect(page.locator(`#${id}`)).toBeVisible();
+    }
+    await tools.locator("summary").click();
+    await tools.getByRole("link", { name: "Payment setup", exact: true }).click();
+    await expect(page.locator("#payment-setup")).toBeVisible();
+    await page.screenshot({ path: "/tmp/dashboard-sparks-evidence/dashboard-payment-controls.png" });
+    await tools.getByRole("link", { name: "100 Sparks" }).click();
     await expect(page.getByRole("heading", { name: "Adjust your 100 sparks." })).toBeVisible();
     await page.goto(`${origin}/dashboard#payment-setup`);
     await expect(page).toHaveURL(/\/dashboard\?view=controls#payment-setup$/);
     await expect(page.locator("#payment-setup")).toBeVisible();
+    expect(requests.some((request) => request.method !== "GET" && request.method !== "OPTIONS")).toBe(false);
   });
 
   test("separate accounts and the original priorities route keep their own saved values", async ({ browser, page, context }) => {
