@@ -1,0 +1,215 @@
+name: Selected cleanup source snapshot
+on:
+  pull_request:
+    paths:
+      - .github/workflows/selected-cleanup-source-20260926.yml
+      - .github/selected-cleanup-edits.json.gz
+      - .github/selected-cleanup-native-link-fixes.json
+      - .github/selected-cleanup-baseline.txt
+permissions:
+  contents: write
+concurrency:
+  group: selected-cleanup-20260926
+  cancel-in-progress: true
+jobs:
+  verify-and-publish-candidate:
+    if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.ref == 'ops/selected-cleanup-source-20260926' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Read the exact operations manifest
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Read the explicitly pinned integration baseline
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(cat controller/.github/selected-cleanup-baseline.txt)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'BASE_SHA=%s\n' "$sha" >> "$GITHUB_ENV"
+      - name: Check out the integration baseline without deploying it
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.baseline.outputs.sha }}
+          path: app
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Apply only hash-checked selected edits
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          mkdir -p "$GITHUB_WORKSPACE/evidence"
+          python3 - <<'PY'
+          from pathlib import Path
+          import gzip, hashlib, json, subprocess
+          raw = gzip.decompress(Path('../controller/.github/selected-cleanup-edits.json.gz').read_bytes())
+          assert hashlib.sha256(raw).hexdigest() == 'e7b8da3ac8b392cc8acf0de23b45ee84a7362bf5ebb0aca2eed140f7dfb39686'
+          edits = json.loads(raw)
+          assert len(edits) == 24
+          def blob(raw):
+              return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+          # React may reorder form attributes. Check their values, not their order.
+          spec = edits['src/lib/selected-cleanup.test.ts']
+          assert spec['after'] == '390466d7809c13e6fcc43d8a4be3ecde14ec91e5'
+          old = '    assert.match(html, /<form action="\\/offers" class="topbar-search" method="get" role="search">/);'
+          new = '''    const form = html.match(/<form\\b[^>]*>/)?.[0];
+              assert.ok(form);
+              for (const attribute of ['action="/offers"', 'class="topbar-search"', 'method="get"', 'role="search"']) {
+                assert.ok(form.includes(attribute));
+              }'''
+          assert spec['edits'][0][2].count(old) == 1
+          spec['edits'][0][2] = spec['edits'][0][2].replace(old, new)
+          spec['after'] = '4e4da7642049816bb19b0d9a61d441de67073b24'
+          # Retain the learning routes and safeguards, but no longer require demo footer links.
+          edits.update({
+              'src/lib/action-first-positioning.test.ts': {
+                  'before': 'a80bdc4dcd772c20f98285152167087743237a3c',
+                  'after': '881e3655844e35e713be07966c23c96b5c217556',
+                  'edits': [[86, 87, '  assert.doesNotMatch(site, /href: "\\/worked-examples"/);\n  assert.match(readFileSync("src/app/worked-examples/page.tsx", "utf8"), /export default/);\n']],
+              },
+              'src/lib/trade-controls-route-contract.test.ts': {
+                  'before': '3f7ab87ce7b8ed83f52969d39194f488b1243ffd',
+                  'after': 'f380a33dec1b36ada9c98e3e76907b62db53cd27',
+                  'edits': [[72, 73, '  assert.doesNotMatch(siteSource, /href: "\\/trade-controls"/);\n']],
+              },
+              'tests/exact-live-now-recommendations.spec.ts': {
+                  'before': '2bc5b2f0c57b1501119606f5946e702b0bb26aa8',
+                  'after': '03c3acd752dca573dbaf683991c3a883fc82f713',
+                  'edits': [
+                      [618, 619, '    await expect(home).toHaveText("Feed");\n'],
+                      [663, 665, '      "Feed",\n      "Discover",\n      "Messages",\n'],
+                      [666, 667, ''],
+                      [669, 670, '    const menu = page.locator(".topbar .header-more");\n    await menu.locator("summary").click();\n    const evidence = menu.getByRole("link", { name: "Profile", exact: true });\n'],
+                  ],
+              },
+          })
+          assert len(edits) == 27
+          def apply_batch(batch):
+              for name, spec in batch.items():
+                  path = Path(name)
+                  assert not path.is_absolute() and '..' not in path.parts
+                  assert name not in {'src/app/about/page.tsx', 'src/app/sitemap.ts', 'next.config.ts', '.github/workflows/vercel-release.yml'}
+                  assert not name.startswith(('supabase/', 'src/app/api/', 'src/app/profile/'))
+                  before = path.read_bytes() if path.exists() else None
+                  assert (blob(before) if before is not None else None) == spec['before'], name
+                  if spec['after'] is None:
+                      path.unlink()
+                      continue
+                  lines = (before or b'').decode('utf-8').splitlines(keepends=True)
+                  for start, end, replacement in reversed(spec['edits']):
+                      lines[start:end] = replacement.splitlines(keepends=True)
+                  after = ''.join(lines).encode('utf-8')
+                  assert blob(after) == spec['after'], name
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_bytes(after)
+          apply_batch(edits)
+          final_scope = {name: {'before': spec['before'], 'after': spec['after']} for name, spec in edits.items()}
+          # Fix only selected header/footer static document links and their request tests.
+          native_raw = Path('../controller/.github/selected-cleanup-native-link-fixes.json').read_bytes()
+          assert hashlib.sha256(native_raw).hexdigest() == 'd43b21a680b532584778156145468b67e9cef8b49a1de7e0a35ea24d58b15562'
+          native = json.loads(native_raw)
+          assert set(native) == {
+              'src/components/layout/site-footer.tsx', 'src/components/layout/site-topbar.tsx',
+              'src/components/layout/site-route-link.tsx', 'src/lib/selected-cleanup.test.ts',
+              'tests/selected-cleanup.spec.ts',
+          }
+          # Keep the four selected links readable in the legacy /contact shell.
+          topbar = native['src/components/layout/site-topbar.tsx']
+          assert topbar['after'] == '75107c269eeba97fdadc87ea3ac43e51cae944f6'
+          topbar['edits'].append([197, 198, '      <div\n        className="topbar-links"\n        data-mt-primary-links={refinedHeader ? "true" : undefined}\n        style={refinedHeader ? { columnGap: "clamp(12px, 2.4vw, 42px)" } : undefined}\n      >\n'])
+          topbar['after'] = '99a7bd1710cee45eab123589b080b579b344a714'
+          browser = native['tests/selected-cleanup.spec.ts']
+          assert browser['after'] == '7e2cd3012822892425fe1a05bbd944b30598f799'
+          browser['edits'].insert(0, [18, 18, '    const primaryBounds = await header.locator("[data-mt-primary-links] > a").evaluateAll((links) =>\n      links.map((link) => { const { left, right } = link.getBoundingClientRect(); return { left, right }; }),\n    );\n    for (let index = 1; index < primaryBounds.length; index += 1) {\n      expect(primaryBounds[index].left - primaryBounds[index - 1].right).toBeGreaterThanOrEqual(11);\n    }\n'])
+          browser['after'] = 'c45c486f16234a7762a372effb6cd2e43bc6141c'
+          apply_batch(native)
+          for name, spec in native.items():
+              final_scope[name] = {'before': final_scope.get(name, {}).get('before'), 'after': spec['after']}
+          assert len(final_scope) == 28
+          subprocess.run(['git', 'add', '--', *final_scope], check=True)
+          actual = subprocess.check_output(['git','diff','--cached','--name-only'], text=True).splitlines()
+          assert set(actual) == set(final_scope)
+          Path('../evidence/selected-scope.json').write_text(json.dumps(final_scope, indent=2))
+          PY
+          git diff --cached --check
+          git diff --cached --binary > "$GITHUB_WORKSPACE/evidence/selected.patch"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Release selected navigation, search and footer cleanup'
+          git rev-parse HEAD HEAD^{tree} HEAD^ > "$GITHUB_WORKSPACE/evidence/identity.txt"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install exact application dependencies
+        working-directory: app
+        run: npm ci
+      - name: Test selected contracts and complete repository
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/selected-cleanup.test.ts src/lib/refined-header.test.ts src/lib/site.test.ts src/lib/live-discover-navigation.test.ts | tee "$GITHUB_WORKSPACE/evidence/focused-tests.log"
+          npm test | tee "$GITHUB_WORKSPACE/evidence/repository-tests.log"
+      - name: Lint, typecheck and build
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet | tee "$GITHUB_WORKSPACE/evidence/lint.log"
+          npx tsc --noEmit | tee "$GITHUB_WORKSPACE/evidence/typecheck.log"
+          npm run build | tee "$GITHUB_WORKSPACE/evidence/build.log"
+      - name: Install Chromium
+        working-directory: app
+        run: npx playwright install --with-deps chromium
+      - name: Verify actual desktop and mobile selected behavior
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test tests/selected-cleanup.spec.ts tests/refined-header.spec.ts tests/contact-page-layout.spec.ts --reporter=line --workers=1 | tee "$GITHUB_WORKSPACE/evidence/focused-browser.log"
+          cp -r test-results "$GITHUB_WORKSPACE/evidence/focused-test-results"
+      - name: Run the unchanged complete release browser suite
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line | tee "$GITHUB_WORKSPACE/evidence/release-browser.log"
+          git diff --check
+      - name: Publish the tested candidate branch only
+        working-directory: app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Publishing an isolated review branch does not merge or deploy main.
+          # Fresh main/production scope reconciliation remains required before release.
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test -z "$(git diff --name-only HEAD)"
+          branch="release/selected-shared-cleanup-20260926"
+          credential="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $credential" push https://github.com/ghuser29384/Website2.git "HEAD:refs/heads/$branch"
+          printf 'published=%s\nbranch=%s\n' "$(git rev-parse HEAD)" "$branch" > "$GITHUB_WORKSPACE/evidence/published.txt"
+      - name: Preserve exact source, checks and rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selected-cleanup-qa-${{ github.run_id }}
+          path: |
+            evidence
+            app/test-results
+          retention-days: 7
