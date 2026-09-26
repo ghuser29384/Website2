@@ -41,7 +41,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       await page.goto("/commitments");
       await expect(page).toHaveTitle(/Commitments/);
       await expect(page.getByRole("heading", { name: "Commitments", exact: true })).toBeVisible();
-      await expect(page.getByText("Track your commitments, proof, outcomes, and impact.", { exact: true })).toBeVisible();
+      await expect(page.locator(".commitments-center").getByText("Track your commitments, proof, outcomes, and impact.", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Sign in to view your commitments." })).toBeVisible();
       await expect(page.locator('[aria-label="Commitment summary"]')).toHaveCount(0);
       await expect(page.getByText("Auth Resolution QA", { exact: false })).toHaveCount(0);
@@ -59,7 +59,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       await page.goto("/commitments");
       await expect(page).toHaveTitle(/Commitments/);
       await expect(page.getByRole("heading", { name: "Commitments", exact: true })).toBeVisible();
-      await expect(page.getByText("Track your commitments, proof, outcomes, and impact.", { exact: true })).toBeVisible();
+      await expect(page.locator(".commitments-center").getByText("Track your commitments, proof, outcomes, and impact.", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "No commitments yet." })).toBeVisible();
 
       const summary = page.locator('[aria-label="Commitment summary"]');

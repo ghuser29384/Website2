@@ -2,7 +2,6 @@ import { expect, test, type ConsoleMessage, type Page, type TestInfo } from "@pl
 
 const PAPER = "rgb(245, 242, 233)";
 const BLACK = "rgb(5, 5, 5)";
-const BLUE = "rgb(36, 80, 255)";
 
 const publicEditorialRoutes = [
   "/about",
