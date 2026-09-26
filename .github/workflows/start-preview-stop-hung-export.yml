@@ -1,0 +1,26 @@
+name: Stop stalled Start preview export
+on:
+  push:
+    branches: [ops/start-simplification-20260926]
+    paths: [.github/workflows/start-preview-stop-hung-export.yml]
+permissions:
+  actions: write
+  contents: read
+jobs:
+  stop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Cancel only this session's known stalled preview run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          gh api repos/ghuser29384/Website2/actions/runs/36211222733 > /tmp/run.json
+          jq -e '.head_sha == "6342b80c6e4646c16097b482e4d1911fb8be6266" and .head_branch == "ops/start-simplification-20260926" and .path == ".github/workflows/start-guided-revision-qa.yml"' /tmp/run.json
+          if [ "$(jq -r .status /tmp/run.json)" = completed ]; then exit 0; fi
+          gh api repos/ghuser29384/Website2/actions/runs/36211222733/jobs > /tmp/jobs.json
+          jq -e '.jobs[] | select(.id == 108318040995) | .steps[] | select(.number == 12 and .status == "in_progress")' /tmp/jobs.json
+          gh api --method POST repos/ghuser29384/Website2/actions/runs/36211222733/cancel
+          echo 'Cancelled the stalled preview exporter. Existing failed assertions remain failed; no statuses or release gates were overridden.'
