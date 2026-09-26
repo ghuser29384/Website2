@@ -7,7 +7,7 @@ for (const width of [1440, 390]) {
     page.on("pageerror", error => errors.push(error.message));
     await page.goto("/");
     await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
-    await expect(page.getByRole("heading", { name: "What needs you now." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What needs you now." })).toHaveCount(0);
     await expect(page.locator('[data-now="rules"]')).toHaveCount(0);
     await expect(page.getByText("Recent commands", { exact: true })).toHaveCount(0);
     await page.locator('[data-now="plan"]').click();
