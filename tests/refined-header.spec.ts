@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { mockAccount, mockInventory, responseFor } from "./helpers/discover";
 
+// Profile is now a redirect. Safety retains the standard native header; Contact
+// has its own compact layout, and Complete Profile intentionally has no masthead.
 for (const width of [1728, 1440, 1024, 390, 320]) {
-  for (const route of ["/feed", "/discover", "/contact"]) {
+  for (const route of ["/feed", "/discover", "/safety"]) {
     test(`approved masthead at ${route} ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 950 });
       const errors: string[] = [];
@@ -15,7 +17,7 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
       await expect(nav.locator(":scope > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
       await expect(header).toHaveCSS("background-color", "rgb(17, 18, 20)");
       await expect(nav.getByText("100 Sparks")).toHaveCount(0);
-      await expect(nav.locator('[aria-current="page"]')).toHaveCount(route === "/contact" ? 0 : 1);
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(route === "/safety" ? 0 : 1);
       const hrefs = await nav.locator(":scope > a").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
       expect(hrefs).toEqual(["/feed", "/discover", "/messages", "/commitments"]);
       const brand = header.locator(".brand");
@@ -72,7 +74,7 @@ test("Profile owns priorities and a legacy Sparks URL preserves the authenticate
 for (const width of [1280, 390, 320]) {
   test(`secondary utilities support keyboard disclosure at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });
-    for (const route of ["/feed", "/complete-profile", "/contact"]) {
+    for (const route of ["/feed", "/safety", "/contact"]) {
       await page.goto(route);
       const header = page.locator(".mt-refined-header").first();
       const summary = header.locator("summary").filter({ hasText: "More" });
@@ -81,6 +83,11 @@ for (const width of [1280, 390, 320]) {
       await expect(summary).toBeFocused();
       await page.keyboard.press("Enter");
       await expect(header.getByRole("link", { name: "Evidence", exact: true })).toBeVisible();
+      const profile = header.getByRole("link", { name: "Profile", exact: true });
+      await expect(profile).toHaveCount(1);
+      await expect(profile).toBeVisible();
+      await expect(profile).toHaveAttribute("href", "/dashboard");
+      await expect(header.getByRole("link", { name: "Dashboard", exact: true })).toHaveCount(0);
       await page.keyboard.press("Escape");
       await expect(summary).toBeFocused();
       await expect(header.getByRole("link", { name: "Evidence", exact: true })).not.toBeVisible();
