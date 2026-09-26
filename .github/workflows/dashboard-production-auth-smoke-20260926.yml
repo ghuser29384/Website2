@@ -61,6 +61,25 @@ jobs:
           printf '%s\n' '{"orgId":"team_ySu6sF3Uho1E1GnJtCQPVEuJ","projectId":"prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7"}' > .vercel/project.json
           npx --yes vercel@50.38.1 pull --yes --environment=production --token="$VERCEL_TOKEN"
           chmod 600 .vercel/.env.production.local
+          node --import tsx --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import { parseEnv } from 'node:util';
+          const target = '.vercel/.env.production.local';
+          const env = parseEnv(fs.readFileSync(target, 'utf8'));
+          Object.assign(process.env, env);
+          const { getSupabaseEnv } = await import('./src/lib/supabase/config.ts');
+          const { url, publishableKey } = getSupabaseEnv('www.moraltrade.org');
+          assert.equal(new URL(url).hostname, 'jnpoxvalyjtdghnperyu.supabase.co');
+          // Only the deployed source's public defaults are materialized. Nothing
+          // is exported from the runner, and project environment records are unchanged.
+          fs.appendFileSync(target, `\nNEXT_PUBLIC_SUPABASE_URL=${JSON.stringify(url)}\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${JSON.stringify(publishableKey)}\n`);
+          const preflight = { publicConfigResolvedFromDeployedSource: true, serviceRolePresent: Boolean(env.SUPABASE_SERVICE_ROLE_KEY), checkedAt: new Date().toISOString(), noFixtureCreatedYet: true };
+          fs.mkdirSync('dashboard-auth-evidence', { recursive: true });
+          fs.writeFileSync('dashboard-auth-evidence/access-preflight.json', JSON.stringify(preflight, null, 2));
+          console.log(JSON.stringify(preflight));
+          assert.ok(preflight.serviceRolePresent, 'Existing production service-role credential is not present in the pulled environment.');
+          NODE
       - name: Verify real authentication, Dashboard save and both live domains
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
