@@ -62,7 +62,7 @@ function monitorBrowserFailures(page: Page) {
 
 async function openCommitments(page: Page, path = "/commitments") {
   await page.goto(path, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Additional resources you caused." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Commitments", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Commitments sections" })).toBeVisible();
 }
 

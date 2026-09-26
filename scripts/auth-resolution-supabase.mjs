@@ -1,6 +1,8 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import http from "node:http";
 
+import { createCommitmentsLayoutFixture } from "../tests/fixtures/commitments-layout.mjs";
+
 const host = process.env.AUTH_RESOLUTION_SUPABASE_HOST ?? "127.0.0.1";
 const port = Number(process.env.AUTH_RESOLUTION_SUPABASE_PORT ?? "3231");
 const publicOrigin = new URL(
@@ -11,6 +13,10 @@ const fixtureControlSecret = process.env.AUTH_RESOLUTION_FIXTURE_CONTROL_SECRET;
 if (!fixtureControlSecret) {
   throw new Error("AUTH_RESOLUTION_FIXTURE_CONTROL_SECRET is required.");
 }
+
+const layoutFixture = process.env.COMMITMENTS_LAYOUT_FIXTURE === "1"
+  ? createCommitmentsLayoutFixture()
+  : null;
 
 const USER_ID = "fa100000-0000-4000-8000-000000000630";
 const OTHER_USER_ID = "fa100000-0000-4000-8000-000000000631";
@@ -216,6 +222,8 @@ const server = http.createServer((request, response) => {
     json(response, 404, { message: "Auth-resolution fixture endpoint not found." });
     return;
   }
+
+  if (layoutFixture?.handle(request, response, url)) return;
 
   if (request.method === "GET" && url.pathname === "/") {
     json(response, 200, { ready: true });

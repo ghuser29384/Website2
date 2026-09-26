@@ -12,7 +12,8 @@
   gap: 12px;
   padding: 20px clamp(20px, 4vw, 64px);
   border-bottom: 1px solid #e2e7ed;
-  background: #fff;
+  background: #101112;
+  color: #fff;
 }
 
 .navigation a {
@@ -30,12 +31,12 @@
   width: min(1200px, 100%);
   box-sizing: border-box;
   margin-inline: auto;
-  padding: 48px 24px;
+  padding: 28px 24px;
 }
 
 .main h1 {
   margin: 0;
-  font-size: clamp(26px, 4vw, 38px);
+  font-size: clamp(26px, 3vw, 32px);
   line-height: 1.2;
 }
 
@@ -54,12 +55,12 @@
 .metric,
 .row,
 .activity {
-  border-radius: 12px;
+  border-radius: 4px;
   background: #e9edf2;
 }
 
 .metric {
-  min-height: 100px;
+  min-height: 80px;
 }
 
 .content {

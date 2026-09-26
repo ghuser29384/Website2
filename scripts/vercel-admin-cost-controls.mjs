@@ -34,7 +34,7 @@ export const PRODUCTION_ROUTE_CHECKS = Object.freeze([
     name: "portfolio",
     path: "/commitments",
     requiredText: Object.freeze([
-      "Additional resources you caused.",
+      "Commitments",
       "Sign in to view your commitments.",
       "Portfolio",
       "Ledger",
@@ -49,7 +49,7 @@ export const PRODUCTION_ROUTE_CHECKS = Object.freeze([
     name: "ledger",
     path: "/commitments?tab=ledger",
     requiredText: Object.freeze([
-      "Additional resources you caused.",
+      "Commitments",
       "Sign in to view your commitments.",
     ]),
     activeHref: "/commitments?tab=ledger",
@@ -60,7 +60,7 @@ export const PRODUCTION_ROUTE_CHECKS = Object.freeze([
     name: "completed",
     path: "/commitments?tab=completed",
     requiredText: Object.freeze([
-      "Additional resources you caused.",
+      "Commitments",
       "Sign in to view your commitments.",
     ]),
     activeHref: "/commitments?tab=completed",
@@ -71,7 +71,7 @@ export const PRODUCTION_ROUTE_CHECKS = Object.freeze([
     name: "calendar",
     path: "/commitments?tab=calendar",
     requiredText: Object.freeze([
-      "Additional resources you caused.",
+      "Commitments",
       "Sign in to view your commitments.",
     ]),
     activeHref: "/commitments?tab=calendar",

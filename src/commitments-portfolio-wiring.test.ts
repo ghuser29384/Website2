@@ -8,7 +8,7 @@ const share = readFileSync("src/components/commitments/impact-share-button.tsx",
 
 test("Commitments renders a live, cross-mechanism portfolio instead of the visual fixture", () => {
   for (const required of [
-    "Additional resources you caused.",
+    "Commitments",
     "Portfolio",
     "Ledger",
     "Completed",
@@ -63,4 +63,21 @@ test("Commitments dates are deterministic on the server and local to the visitor
   assert.ok(page.includes("LocalDateTime"));
   assert.equal(page.includes("Intl.DateTimeFormat"), false);
   assert.equal(page.includes("Date.now()"), false);
+});
+
+test("compact Commitments preserves summaries and accounting behind native disclosures", () => {
+  assert.match(page, /<h1 id="commitments-heading">Commitments<\/h1>/);
+  assert.ok(page.includes('Track commitments, evidence, and outcomes.'));
+  assert.ok(page.includes('<MarketplaceRouteShell active="track" compact>'));
+  assert.equal((page.match(/<SummaryMetric label=/g) ?? []).length, 4);
+  for (const label of ["Resource totals", "Group totals", "How this is calculated", "totals may be incomplete"]) {
+    assert.ok(page.includes(label));
+  }
+  assert.ok(page.indexOf('totals may be incomplete') < page.indexOf('aria-label="Commitment summary"'));
+  for (const value of ["activeCommitted", "activatedCommitted", "verifiedAttributed", "verifiedCoordinated", "data.cartProjection.assumption"]) {
+    assert.ok(page.includes(value));
+  }
+  assert.ok(page.includes("data.warnings.map"));
+  assert.equal(page.includes("Additional resources you caused."), false);
+  assert.equal(page.includes('"use client"'), false);
 });

@@ -25,6 +25,7 @@ export default defineConfig({
       env: {
         AUTH_RESOLUTION_FIXTURE_CONTROL_SECRET: "auth-resolution-local-control-fixture",
         AUTH_RESOLUTION_SUPABASE_PORT: "3231",
+        COMMITMENTS_LAYOUT_FIXTURE: "1",
       },
       reuseExistingServer: false,
       timeout: 30_000,

@@ -271,7 +271,7 @@ test("the deletion allowlist is narrow, immutable, and excludes live projects", 
 test("production route evaluation verifies exact tab state without retaining HTML", () => {
   const check = PRODUCTION_ROUTE_CHECKS.find((entry) => entry.name === "ledger");
   const html = `<!doctype html><html data-dpl-id="dpl_exact"><body>
-    <h1>Additional resources you caused.</h1>
+    <h1>Commitments</h1>
     <h2>Sign in to view your commitments.</h2>
     <a href="/commitments">Portfolio</a>
     <a aria-current="page" href="/commitments?tab=ledger">Ledger</a>
@@ -332,7 +332,7 @@ test("production smoke retries all canonical routes and requires one deployment"
       status === 402
         ? "Payment Required\nDEPLOYMENT_DISABLED"
         : `<!doctype html><html data-dpl-id="dpl_same"><body>
-            <h1>Additional resources you caused.</h1>
+            <h1>Commitments</h1>
             <h2>Sign in to view your commitments.</h2>
             <a aria-current="page" href="${href}">${label}</a>
             <span>Portfolio Ledger Completed Calendar</span>
