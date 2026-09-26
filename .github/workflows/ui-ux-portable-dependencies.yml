@@ -1,0 +1,56 @@
+name: UI/UX portable dependencies
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - design/moral-trade-institutional-redesign-20260818
+    paths:
+      - ".github/workflows/ui-ux-portable-dependencies.yml"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-ux-portable-dependencies
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Package portable dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ui-ux-dependencies
+          tar -C "$GITHUB_WORKSPACE" -czf "/tmp/ui-ux-dependencies/node-modules-${GITHUB_SHA}.tar.gz" node_modules
+          node --version | tee /tmp/ui-ux-dependencies/node-version.txt
+          npm --version | tee /tmp/ui-ux-dependencies/npm-version.txt
+          sha256sum /tmp/ui-ux-dependencies/*.tar.gz | tee /tmp/ui-ux-dependencies/archive-sha256.txt
+
+      - name: Upload portable dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: website2-dependencies-${{ github.sha }}
+          path: /tmp/ui-ux-dependencies
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3

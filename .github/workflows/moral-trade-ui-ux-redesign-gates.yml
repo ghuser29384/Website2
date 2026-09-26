@@ -1,0 +1,148 @@
+name: Moral Trade UI/UX redesign gates
+
+on:
+  push:
+    branches:
+      - design/moral-trade-institutional-redesign-20260818
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/capture-ui-ux-gallery.mjs"
+      - "docs/ui-ux/**"
+      - "artifacts/ui-ux/**"
+      - ".github/workflows/moral-trade-ui-ux-redesign-gates.yml"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: moral-trade-ui-ux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Archive exact Git workspace for independent implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude='./node_modules' \
+            --exclude='./.next' \
+            --exclude='./output' \
+            --exclude='./test-results' \
+            --exclude='./playwright-report' \
+            --exclude='*.icloud' \
+            -czf /tmp/repository-workspace.tar.gz .
+          git rev-parse HEAD > /tmp/workspace-head-sha.txt
+          git rev-parse HEAD^{tree} > /tmp/workspace-tree-sha.txt
+          git status --short --branch > /tmp/workspace-status.txt
+          sha256sum /tmp/repository-workspace.tar.gz > /tmp/repository-workspace.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repository-workspace-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/repository-workspace.tar.gz
+            /tmp/repository-workspace.sha256
+            /tmp/workspace-head-sha.txt
+            /tmp/workspace-tree-sha.txt
+            /tmp/workspace-status.txt
+          retention-days: 7
+
+  dependency-bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Install portable Chromium runtime
+        run: npx playwright install chromium
+      - name: Package portable dependencies and browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ui-ux-dependencies
+          tar -C "$GITHUB_WORKSPACE" -czf "/tmp/ui-ux-dependencies/node-modules-${GITHUB_SHA}.tar.gz" node_modules
+          tar -C "$HOME/.cache" -czf "/tmp/ui-ux-dependencies/ms-playwright-${GITHUB_SHA}.tar.gz" ms-playwright
+          node --version | tee /tmp/ui-ux-dependencies/node-version.txt
+          npm --version | tee /tmp/ui-ux-dependencies/npm-version.txt
+          sha256sum /tmp/ui-ux-dependencies/*.tar.gz | tee /tmp/ui-ux-dependencies/archive-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-ux-dependencies-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/ui-ux-dependencies
+          compression-level: 0
+          retention-days: 3
+
+  baseline-gallery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build authoritative pre-change head
+        run: npm run build
+      - name: Start authoritative pre-change head
+        run: |
+          npm run start -- -H 127.0.0.1 -p 3210 > /tmp/moral-trade-ui-ux-server.log 2>&1 &
+          echo $! > /tmp/moral-trade-ui-ux-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3210/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/moral-trade-ui-ux-server.log
+          exit 1
+      - name: Capture authoritative local baseline
+        env:
+          UI_UX_BASE_URL: http://127.0.0.1:3210
+          UI_UX_OUTPUT_DIR: artifacts/ui-ux/before/authoritative-local
+          UI_UX_SOURCE_KIND: authoritative-local-before
+          UI_UX_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/capture-ui-ux-gallery.mjs
+      - name: Capture production baseline
+        env:
+          UI_UX_BASE_URL: https://www.moraltrade.org
+          UI_UX_OUTPUT_DIR: artifacts/ui-ux/before/production
+          UI_UX_SOURCE_KIND: production-before
+          UI_UX_SOURCE_COMMIT: fd5588638fa2a15f55b9740a77eb96d87a0af5a6
+        run: node scripts/capture-ui-ux-gallery.mjs
+      - name: Preserve server log
+        if: always()
+        run: cp /tmp/moral-trade-ui-ux-server.log artifacts/ui-ux/before/server.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-ux-before-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/ui-ux/before
+          if-no-files-found: error
+          retention-days: 14
