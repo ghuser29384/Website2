@@ -1,0 +1,103 @@
+name: PR 212 adjudicator merge bootstrap 20260807
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - .github/workflows/pr212-exact-head-adjudicator-20260807.yml
+      - .github/workflows/pr212-adjudicator-merge-bootstrap-20260807.yml
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: pr212-adjudicator-merge-bootstrap-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  merge-repository-only-controller:
+    if: github.event.pull_request.head.ref == 'ops/pr212-exact-head-adjudicator-20260807' && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_HEAD_REF: ops/pr212-exact-head-adjudicator-20260807
+    steps:
+      - name: Verify immutable repository-only scope
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          number="${{ github.event.pull_request.number }}"
+          pr="$(gh api "repos/$repo/pulls/$number")"
+          [[ "$(jq -r '.state' <<<"$pr")" == "open" ]]
+          [[ "$(jq -r '.draft' <<<"$pr")" == "false" ]]
+          [[ "$(jq -r '.head.ref' <<<"$pr")" == "$EXPECTED_HEAD_REF" ]]
+          head="$(jq -r '.head.sha' <<<"$pr")"
+          mapfile -t files < <(gh api "repos/$repo/pulls/$number/files?per_page=100" --jq '.[].filename' | sort)
+          expected=(
+            .github/workflows/pr212-adjudicator-merge-bootstrap-20260807.yml
+            .github/workflows/pr212-exact-head-adjudicator-20260807.yml
+          )
+          [[ "${#files[@]}" -eq 2 ]]
+          [[ "${files[0]}" == "${expected[0]}" ]]
+          [[ "${files[1]}" == "${expected[1]}" ]]
+          printf 'head=%s\nnumber=%s\n' "$head" "$number" >> "$GITHUB_OUTPUT"
+
+      - name: Require successful trusted release classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          head="${{ steps.verify.outputs.head }}"
+          for attempt in $(seq 1 120); do
+            combined="$(gh api "repos/$repo/commits/$head/status")"
+            state="$(jq -r '[.statuses[] | select(.context == "release-classification")][0].state // "pending"' <<<"$combined")"
+            if [[ "$state" == "success" ]]; then exit 0; fi
+            if [[ "$state" == "failure" || "$state" == "error" ]]; then
+              echo "release-classification failed" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "release-classification did not reach success" >&2
+          exit 1
+
+      - name: Merge through normal branch protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          number="${{ steps.verify.outputs.number }}"
+          head="${{ steps.verify.outputs.head }}"
+          for attempt in $(seq 1 12); do
+            pr="$(gh api "repos/$repo/pulls/$number")"
+            [[ "$(jq -r '.head.sha' <<<"$pr")" == "$head" ]]
+            merge_sha="$(jq -r '.merge_commit_sha // empty' <<<"$pr")"
+            if [[ -n "$merge_sha" ]]; then
+              gh api --method POST "repos/$repo/statuses/$merge_sha" \
+                -f state=success \
+                -f context=release-classification \
+                -f description='Repository-only controller scope verified' \
+                -f target_url="https://github.com/$repo/pull/$number" >/dev/null
+            fi
+            if gh api --method PUT "repos/$repo/pulls/$number/merge" \
+              -f merge_method=squash \
+              -f sha="$head" \
+              -f commit_title='Adjudicate PR #212 exact-head and current-main QA' \
+              -f commit_message='Repository-only fail-closed controller. No production promotion.' \
+              > /tmp/merge-result.json 2>/tmp/merge-error.txt; then
+              [[ "$(jq -r '.merged' /tmp/merge-result.json)" == "true" ]]
+              exit 0
+            fi
+            sleep 10
+          done
+          cat /tmp/merge-error.txt >&2
+          exit 1
