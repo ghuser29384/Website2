@@ -12,12 +12,12 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
       const header = page.locator(".mt-refined-header").first();
       const nav = header.locator("[data-mt-primary-links]");
-      await expect(nav.locator(":scope > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
+      await expect(nav.locator(":scope > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
       await expect(header).toHaveCSS("background-color", "rgb(17, 18, 20)");
       await expect(nav.getByText("100 Sparks")).toHaveCount(0);
-      await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(route === "/profile" ? 0 : 1);
       const hrefs = await nav.locator(":scope > a").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
-      expect(hrefs).toEqual(["/feed", "/discover", "/commitments", "/profile"]);
+      expect(hrefs).toEqual(["/feed", "/discover", "/messages", "/commitments"]);
       const brand = header.locator(".brand");
       await expect(brand).toBeVisible();
       await expect(brand).toHaveCSS("color", "rgb(255, 255, 255)");
@@ -82,10 +82,10 @@ for (const width of [1280, 390, 320]) {
       await summary.focus();
       await expect(summary).toBeFocused();
       await page.keyboard.press("Enter");
-      await expect(header.getByRole("link", { name: "Messages", exact: true })).toBeVisible();
+      await expect(header.getByRole("link", { name: "Evidence", exact: true })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(summary).toBeFocused();
-      await expect(header.getByRole("link", { name: "Messages", exact: true })).not.toBeVisible();
+      await expect(header.getByRole("link", { name: "Evidence", exact: true })).not.toBeVisible();
       const trades = header.locator('[data-mt-primary-links] a[href="/discover"]');
       await trades.click();
       await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
@@ -97,13 +97,13 @@ test("the directory masthead keeps native page links usable without JavaScript",
   const context = await browser.newContext({ baseURL, javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   await page.goto("/discover");
-  const profile = page.locator('[data-mt-primary-links] a[href="/profile"]');
+  const profile = page.locator('[data-mt-primary-links] a[href="/feed"]');
   await expect(profile).toBeVisible();
-  await expect(profile).toHaveAccessibleName("Profile");
+  await expect(profile).toHaveAccessibleName("Feed");
   await expect(page.locator("[data-mt-primary-links] > a")).toHaveCount(4);
   await profile.click();
-  await expect(page).toHaveURL(/\/profile$/);
-  // The pre-existing streamed Profile application requires JavaScript; the
+  await expect(page).toHaveURL(/\/feed$/);
+  // The pre-existing Feed application requires JavaScript; the
   // directory navigation itself must still perform a native document request.
   await context.close();
 });
