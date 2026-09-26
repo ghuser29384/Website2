@@ -6,6 +6,7 @@
 
   const ENDPOINT = "/api/live-account";
   const ROOT_SELECTOR = '.topbar,[role="banner"],header';
+  const GUEST_ONLY_SELECTOR = '[data-mt-guest-only="true"]';
   const LEGACY_INITIALS = "AJ";
   const LEGACY_DISPLAY_NAME = "Alex Johnson";
   const hasBootstrap = Object.prototype.hasOwnProperty.call(
@@ -16,6 +17,7 @@
   let identity = normalizeIdentity(
     hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { authenticated: false },
   );
+  let identityResolved = hasBootstrap;
   let scheduled = false;
 
   function stringOrNull(value) {
@@ -133,6 +135,15 @@
     });
   }
 
+  function patchGuestOnlyActions() {
+    const shouldShow = identityResolved && !identity.authenticated;
+
+    document.querySelectorAll(GUEST_ONLY_SELECTOR).forEach((element) => {
+      element.hidden = !shouldShow;
+      element.toggleAttribute("aria-hidden", !shouldShow);
+    });
+  }
+
   function patchLegacyGreetings() {
     const greetingPattern = /^Good (morning|afternoon|evening), Alex\.$/;
     document.querySelectorAll("header p,header span,.head .date span.muted").forEach((element) => {
@@ -147,6 +158,7 @@
   }
 
   function patchAll() {
+    patchGuestOnlyActions();
     patchAvatarCandidates();
     patchLegacyDisplayNames();
     patchLegacyGreetings();
@@ -180,6 +192,7 @@
       .catch(() => ({ authenticated: false }))
       .then((payload) => {
         identity = normalizeIdentity(payload);
+        identityResolved = true;
         schedulePatch();
       });
   }
