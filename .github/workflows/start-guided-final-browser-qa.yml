@@ -1,0 +1,59 @@
+name: Guided Start corrected browser contract
+on:
+  push:
+    branches: [ops/start-simplification-20260926]
+    paths: [.github/workflows/start-guided-final-browser-qa.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      VERCEL: '1'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7768496dccfd0ebb90904363dcb89e16c55c336e
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify exact source and test-only change
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 7768496dccfd0ebb90904363dcb89e16c55c336e
+          test "$(git rev-parse HEAD^)" = f90f750f67de4e8dbb69fd2ad56d12b57717ac15
+          test "$(git diff HEAD^ --name-only)" = tests/start-page.spec.ts
+          git diff HEAD^ --check
+          mkdir -p final-start-evidence
+          git diff HEAD^ > final-start-evidence/test-only.patch
+          git rev-parse HEAD > final-start-evidence/commit.txt
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check corrected test syntax and lint
+        run: npx eslint tests/start-page.spec.ts
+      - name: Build the actual application
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee final-start-evidence/build.log
+      - name: Install locked Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run all ten affected browser cases
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          npx playwright test tests/start-page.spec.ts tests/sitewide-canonical-visual-fidelity.spec.ts tests/pilot-copy.spec.ts tests/meta-explanatory-copy.spec.ts --workers=1 --reporter=line 2>&1 | tee final-start-evidence/browser.log
+          mkdir -p final-start-evidence/screenshots
+          find test-results -name '*.png' -exec cp '{}' final-start-evidence/screenshots/ ';'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guided-start-final-7768496dccfd0ebb90904363dcb89e16c55c336e
+          path: final-start-evidence
+          retention-days: 7
