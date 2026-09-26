@@ -1,0 +1,77 @@
+name: Read-only Commitments resource verification
+on:
+  push:
+    branches: [ops/commitments-production-release-20260926]
+    paths: [.github/workflows/commitments-canonical-read-check-20260926.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked browser dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Collect response identities without account access or mutations
+        run: |
+          set -euo pipefail
+          mkdir -p commitments-resource-evidence
+          cat > .commitments-resources.mjs <<'JS'
+          import { chromium, expect } from '@playwright/test';
+          import { writeFile } from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const browser = await chromium.launch();
+          const results = [];
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 1000 } });
+              await context.addCookies([{name:'mt_analytics_opt_out',value:'1',domain:'www.moraltrade.org',path:'/',secure:true,sameSite:'Lax'}]);
+              const page = await context.newPage();
+              const badResponses = [], consoleMessages = [], pageErrors = [];
+              page.on('response', response => {
+                if (response.status() >= 400) badResponses.push({status:response.status(),url:response.url(),type:response.request().resourceType()});
+              });
+              page.on('console', message => {
+                if (['error','warning'].includes(message.type())) consoleMessages.push({level:message.type(),text:message.text(),location:message.location()});
+              });
+              page.on('pageerror', error => pageErrors.push(error.message));
+              await page.goto('https://www.moraltrade.org/commitments', { waitUntil: 'networkidle', timeout: 60000 });
+              await expect(page.getByRole('heading',{name:'Sign in to view your commitments.'})).toBeVisible();
+              for (const label of ['Ledger','Completed','Calendar','Portfolio']) {
+                const link=page.getByRole('navigation',{name:'Commitments sections'}).getByRole('link',{name:label,exact:true});
+                await link.click();
+                await expect(link).toHaveAttribute('aria-current','page');
+                await expect(page.getByRole('heading',{name:'Sign in to view your commitments.'})).toBeVisible();
+              }
+              await page.getByRole('link',{name:'Sign in to continue'}).click();
+              await expect(page).toHaveURL(/\/login\?returnTo=(?:%2F|\/)commitments/);
+              await page.waitForLoadState('networkidle');
+              assert.deepEqual(pageErrors,[]);
+              results.push({width,badResponses,consoleMessages,pageErrors});
+              await context.close();
+            }
+          } finally {
+            await writeFile('commitments-resource-evidence/report.json',JSON.stringify({checkedAt:new Date().toISOString(),results},null,2));
+            console.log(JSON.stringify(results,null,2));
+            await browser.close();
+          }
+          JS
+          node .commitments-resources.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: commitments-resource-verification
+          path: commitments-resource-evidence
+          if-no-files-found: warn
+          retention-days: 7
