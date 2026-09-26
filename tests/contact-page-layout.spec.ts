@@ -36,7 +36,7 @@ for (const viewport of viewports) {
       }),
     );
     expect(linkBounds).toHaveLength(4);
-    await expect(links.locator(":scope > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
+    await expect(links.locator(":scope > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
     const navBounds = await nav.boundingBox();
     expect(navBounds).not.toBeNull();
     for (const bounds of linkBounds) {
