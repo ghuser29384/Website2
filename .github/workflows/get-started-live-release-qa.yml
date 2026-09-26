@@ -15,7 +15,7 @@ concurrency:
 
 env:
   EXPECTED_MAIN_SHA: ed0bc4a53a2ea91cee1a66fef8831d3181f53f13
-  EXPECTED_OLD_CANDIDATE_SHA: a9c64c7a2831762aacebc9eb00ec7329036aca3c
+  EXPECTED_OLD_CANDIDATE_SHA: f30b9c53e5849933cfe2e5fd6e119a825580bb57
   CANDIDATE_BRANCH: fix/get-started-choice-router-20260926
   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
   SITE_URL: http://127.0.0.1:3210
@@ -37,7 +37,7 @@ jobs:
           ref: ${{ env.EXPECTED_OLD_CANDIDATE_SHA }}
           fetch-depth: 2
 
-      - name: Fix the narrow Feed header without weakening the browser check
+      - name: Repair the exact rendered Feed date and greeting hooks
         id: fix
         shell: bash
         run: |
@@ -51,38 +51,74 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("public/moral-trade-live-feed.css")
-          css = path.read_text()
-          marker = "/* Keep the legacy Feed heading and create action inside narrow viewports. */"
-          if marker in css:
-              raise SystemExit("mobile Feed header fix already present")
-          css = css.rstrip() + """
+          def replace(path, old, new, expected=1):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f"{path}: expected {expected} occurrences of {old!r}, found {count}")
+              file.write_text(text.replace(old, new))
 
-          @media (max-width: 420px) {
-            /* Keep the legacy Feed heading and create action inside narrow viewports. */
-            main#app > .page > .h {
-              flex-wrap: wrap;
-            }
-
-            main#app > .page > .h > .date {
-              flex: 1 1 130px;
-              min-width: 0;
-            }
-
-            main#app > .page > .h > .btn {
-              flex: 0 1 auto;
-              max-width: 100%;
-            }
-          }
-          """
-          path.write_text(css)
+          replace(
+              "public/moral-trade-live-local-time.js",
+              'document.querySelectorAll(".head .date")',
+              'document.querySelectorAll(".head .date, .h .date")',
+          )
+          replace(
+              "public/moral-trade-live-account.js",
+              'document.querySelector(".head .date span.muted")',
+              'document.querySelector(".head .date span.muted, .h .date span.muted")',
+          )
+          replace(
+              "public/moral-trade-account-identity.js",
+              'document.querySelectorAll("header p,header span,.head .date span.muted")',
+              'document.querySelectorAll("header p,header span,.head .date span.muted,.h .date span.muted")',
+          )
+          replace(
+              "tests/exact-live-local-time.spec.ts",
+              'page.locator(".head .date")',
+              'page.locator(".head .date, .h .date")',
+              expected=2,
+          )
+          replace(
+              "tests/returning-homepage-timezone.spec.ts",
+              'page.locator(".head .date")',
+              'page.locator(".head .date, .h .date")',
+              expected=2,
+          )
+          replace(
+              "tests/returning-homepage.spec.ts",
+              'page.locator(".head .date")',
+              'page.locator(".head .date, .h .date")',
+          )
+          replace(
+              "tests/homepage-narrow-header.spec.ts",
+              'page.locator(".head .date")',
+              'page.locator(".head .date, .h .date")',
+          )
+          replace(
+              "tests/homepage-narrow-header.spec.ts",
+              'page.locator(\'.head button[data-action="create"]\')',
+              'page.locator(\'.head button[data-action="create"], .h button[data-action="create"]\')',
+          )
           PY
           git diff --check
-          test "$(git diff --name-only | sed '/^$/d')" = public/moral-trade-live-feed.css
+          changed="$(git diff --name-only | sed '/^$/d')"
+          test "$(printf '%s\n' "$changed" | wc -l)" -eq 7
+          for required in \
+            public/moral-trade-account-identity.js \
+            public/moral-trade-live-account.js \
+            public/moral-trade-live-local-time.js \
+            tests/exact-live-local-time.spec.ts \
+            tests/homepage-narrow-header.spec.ts \
+            tests/returning-homepage-timezone.spec.ts \
+            tests/returning-homepage.spec.ts; do
+            printf '%s\n' "$changed" | grep -Fx "$required" >/dev/null
+          done
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- public/moral-trade-live-feed.css
-          git commit -m 'Keep the Feed header inside narrow viewports'
+          git add -- $changed
+          git commit -m 'Restore live Feed date and greeting updates'
           git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
@@ -175,6 +211,10 @@ jobs:
             tests/sitewide-canonical-visual-fidelity.spec.ts \
             tests/pilot-copy.spec.ts \
             tests/meta-explanatory-copy.spec.ts \
+            tests/exact-live-local-time.spec.ts \
+            tests/homepage-narrow-header.spec.ts \
+            tests/returning-homepage-timezone.spec.ts \
+            tests/returning-homepage.spec.ts \
             --workers=1 --reporter=line \
             2>&1 | tee get-started-release-evidence/focused-browser.log
           mkdir -p get-started-release-evidence/screenshots
