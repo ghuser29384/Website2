@@ -23,7 +23,7 @@ jobs:
         with:
           ref: fix/quiet-ui-20260926
           path: candidate
-          fetch-depth: 0
+          fetch-depth: 1
       - name: Apply the reviewed scoped source transformations
         id: patch
         working-directory: candidate
@@ -32,7 +32,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = ghuser29384/Website2
           test "$(git rev-parse HEAD)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
           test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
-          python ../transport/.github/quiet-ui-20260926.py
+          python ../transport/.github/quiet-ui-corrections-20260926.py
           git diff --check
           git add --pathspec-from-file=/tmp/quiet-ui-files.txt
           test "$(git diff --cached --name-only | wc -l)" -eq 20
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.sha }}
-          fetch-depth: 0
+          fetch-depth: 2
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
