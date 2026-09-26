@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/reciprocal-trade-research-eligibility-input.v1.json",
+  "title": "Reciprocal Trade research eligibility normalized input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "evaluatorVersion", "policySourceManifestHash", "effectiveAt", "subjectMode", "studyAuthorization", "provenance", "sourceOffer", "targetOffer", "pair"],
+  "properties": {
+    "schemaVersion": { "type": "string", "pattern": "^reciprocal-trade-research-eligibility-input-v[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "Version mismatches are schema-valid diagnostic states and fail in the evaluator." },
+    "evaluatorVersion": { "type": "string", "pattern": "^reciprocal-trade-research-eligibility-v[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "Version mismatches are schema-valid diagnostic states and fail in the evaluator." },
+    "policySourceManifestHash": { "$ref": "#/$defs/sha256", "description": "Manifest-hash mismatches are schema-valid diagnostic states and fail in the evaluator." },
+    "effectiveAt": { "$ref": "#/$defs/requiredTimestamp" },
+    "subjectMode": { "enum": ["synthetic", "protected"] },
+    "studyAuthorization": { "$ref": "#/$defs/studyAuthorization" },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "sourceOffer": { "$ref": "#/$defs/offer" },
+    "targetOffer": { "$ref": "#/$defs/offer" },
+    "pair": { "$ref": "#/$defs/pair" }
+  },
+  "$defs": {
+    "timestamp": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "requiredTimestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "safeKey": {
+      "type": "string",
+      "pattern": "^(synthetic:[a-z0-9][a-z0-9_-]{0,63}|pseudonym:sha256:[a-f0-9]{64})$"
+    },
+    "studyAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protectedDataExportAuthorized", "privacyReviewStatus", "ethicsDeterminationStatus", "consentOrWaiverStatus", "assignmentAuthorized", "participantContactAuthorized"],
+      "properties": {
+        "protectedDataExportAuthorized": { "type": "boolean" },
+        "privacyReviewStatus": { "enum": ["approved", "required_not_completed", "rejected", "unknown"] },
+        "ethicsDeterminationStatus": { "enum": ["approved", "required_not_completed", "rejected", "unknown"] },
+        "consentOrWaiverStatus": { "enum": ["approved", "required_not_completed", "rejected", "unknown"] },
+        "assignmentAuthorized": { "type": "boolean" },
+        "participantContactAuthorized": { "type": "boolean" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boundBaseCommit", "sourceKind", "snapshotKey", "snapshotSha256", "syntheticClusterCountMetadata", "clusterCountEvidenceKind", "containsRealRows", "recommendationEdgeUsed", "participantCausalOutputRequested", "assignmentMaterialPresent"],
+      "properties": {
+        "boundBaseCommit": { "type": "string", "pattern": "^[a-f0-9]{40}$", "description": "Commit mismatches are schema-valid diagnostic states and fail in the evaluator." },
+        "sourceKind": { "enum": ["synthetic_fixture", "protected_normalized_snapshot"] },
+        "snapshotKey": { "$ref": "#/$defs/safeKey" },
+        "snapshotSha256": { "$ref": "#/$defs/sha256" },
+        "syntheticClusterCountMetadata": { "type": "integer", "minimum": 0, "maximum": 3200, "description": "Caller-supplied metadata only; the eligibility evaluator does not construct or inspect a graph." },
+        "clusterCountEvidenceKind": { "const": "metadata_only_not_graph_evaluated" },
+        "containsRealRows": { "type": "boolean" },
+        "recommendationEdgeUsed": { "type": "boolean" },
+        "participantCausalOutputRequested": { "type": "boolean" },
+        "assignmentMaterialPresent": { "type": "boolean" }
+      }
+    },
+    "gateEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gateId", "status", "sourceStatus", "policyManifestHash", "evidenceProvenanceStatus", "evidenceSourceId", "projectionHash", "attestationHash", "reviewedAt", "expiresAt"],
+      "properties": {
+        "gateId": { "enum": ["moderation", "harmful_offer", "baseline_integrity", "legality", "participant_eligibility"] },
+        "status": { "enum": ["cleared", "blocked", "review_required", "unknown", "stale", "contradictory"] },
+        "sourceStatus": { "enum": ["current", "stale", "unknown", "unbound", "contradictory"] },
+        "policyManifestHash": { "$ref": "#/$defs/sha256", "description": "Identity of the governing policy package; never represented as an evidence-source hash." },
+        "evidenceProvenanceStatus": { "const": "unresolved_not_bound" },
+        "evidenceSourceId": { "type": "null" },
+        "projectionHash": { "type": "null" },
+        "attestationHash": { "type": "null" },
+        "reviewedAt": { "$ref": "#/$defs/requiredTimestamp" },
+        "expiresAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "offer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offerKey", "ownerKey", "mode", "offeredCause", "requestedCause", "causeCollation", "workflowStatus", "status", "operability", "invitationCompatibility", "gates"],
+      "properties": {
+        "offerKey": { "$ref": "#/$defs/safeKey" },
+        "ownerKey": { "$ref": "#/$defs/safeKey" },
+        "mode": { "enum": ["pledge", "offset", "payment"] },
+        "offeredCause": { "type": "string", "minLength": 1, "maxLength": 180, "description": "Non-ASCII values are schema-valid diagnostic states and fail the candidate collation gate." },
+        "requestedCause": { "type": "string", "minLength": 1, "maxLength": 180, "description": "Non-ASCII values are schema-valid diagnostic states and fail the candidate collation gate." },
+        "causeCollation": { "enum": ["postgres-ilike-printable-ascii-v1", "unbound", "unknown", "contradictory"] },
+        "workflowStatus": { "enum": ["draft", "pending_review", "published", "changes_requested", "rejected", "paused", "closed", "deleted"] },
+        "status": { "enum": ["open", "paused", "matched", "closed"] },
+        "operability": { "enum": ["operative", "expired", "superseded", "withdrawn", "blocked", "unknown", "stale", "contradictory"] },
+        "invitationCompatibility": { "enum": ["compatible", "payment_schedule_present", "donation_offset_attachment_present", "active_performance_bond_present", "unknown", "stale", "contradictory"] },
+        "gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["moderation", "harmfulOffer", "baselineIntegrity", "legality", "participantEligibility"],
+          "properties": {
+            "moderation": { "$ref": "#/$defs/gateEvidence" },
+            "harmfulOffer": { "$ref": "#/$defs/gateEvidence" },
+            "baselineIntegrity": { "$ref": "#/$defs/gateEvidence" },
+            "legality": { "$ref": "#/$defs/gateEvidence" },
+            "participantEligibility": { "$ref": "#/$defs/gateEvidence" }
+          }
+        }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "allowedRole", "purposeCode", "privacyScope", "sourceStatus", "grantHash", "startsAt", "expiresAt", "revokedAt"],
+      "properties": {
+        "status": { "enum": ["current", "absent", "revoked", "stale", "scope_mismatch", "unknown", "contradictory"] },
+        "allowedRole": { "enum": ["source_only", "target_only", "bidirectional", "none"] },
+        "purposeCode": { "const": "reciprocal_trade_research_eligibility_v1" },
+        "privacyScope": { "const": "research_eligibility_normalized_pair_only" },
+        "sourceStatus": { "enum": ["current", "stale", "unknown", "unbound", "contradictory"] },
+        "grantHash": { "$ref": "#/$defs/sha256" },
+        "startsAt": { "$ref": "#/$defs/requiredTimestamp" },
+        "expiresAt": { "$ref": "#/$defs/timestamp" },
+        "revokedAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "restriction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "sourceStatus", "startsAt", "expiresAt", "revokedAt"],
+      "properties": {
+        "status": { "enum": ["clear", "active", "reviewing", "expired", "revoked", "unknown", "contradictory"] },
+        "sourceStatus": { "enum": ["current", "stale", "unknown", "unbound", "contradictory"] },
+        "startsAt": { "$ref": "#/$defs/requiredTimestamp" },
+        "expiresAt": { "$ref": "#/$defs/timestamp" },
+        "revokedAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "engagement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acceptedInterest", "invitation", "thread", "agreement", "duplicatePair", "historicalInterference"],
+      "properties": {
+        "acceptedInterest": { "enum": ["none", "active", "terminal", "unknown", "contradictory"] },
+        "invitation": { "enum": ["none", "active", "terminal", "unknown", "contradictory"] },
+        "thread": { "enum": ["none", "active", "terminal", "unknown", "contradictory"] },
+        "agreement": { "enum": ["none", "active", "terminal", "unknown", "contradictory"] },
+        "duplicatePair": { "enum": ["none", "present", "unknown", "contradictory"] },
+        "historicalInterference": { "enum": ["captured", "none", "unknown", "contradictory"] }
+      }
+    },
+    "pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blockStatus", "sourceRestriction", "targetRestriction", "pairRestriction", "sourceConsent", "targetConsent", "engagement"],
+      "properties": {
+        "blockStatus": { "enum": ["clear", "blocked_source_to_target", "blocked_target_to_source", "blocked_both", "unknown", "contradictory"] },
+        "sourceRestriction": { "$ref": "#/$defs/restriction" },
+        "targetRestriction": { "$ref": "#/$defs/restriction" },
+        "pairRestriction": { "$ref": "#/$defs/restriction" },
+        "sourceConsent": { "$ref": "#/$defs/consent" },
+        "targetConsent": { "$ref": "#/$defs/consent" },
+        "engagement": { "$ref": "#/$defs/engagement" }
+      }
+    }
+  }
+}

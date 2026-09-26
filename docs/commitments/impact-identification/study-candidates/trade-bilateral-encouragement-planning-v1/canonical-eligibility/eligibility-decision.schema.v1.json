@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/reciprocal-trade-research-eligibility-decision.v1.json",
+  "title": "Reciprocal Trade research eligibility decision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "evaluatorVersion", "policySourceManifestHash", "effectiveAt", "subjectMode", "candidatePolicySatisfied", "candidateReasonCodes", "globalBlockerReasons", "eligible", "reasonCodes", "unknownBlockers", "staleSourceBlockers", "canonicalEligibilitySourceStatus", "realGraphDiagnosticsStatus", "protectedDataExportAuthorized", "executionDecision", "assignmentGenerated", "assignmentSeedGenerated", "participantLevelCausalClaim"],
+  "properties": {
+    "schemaVersion": { "const": "reciprocal-trade-research-eligibility-decision-v1.0.0" },
+    "evaluatorVersion": { "const": "reciprocal-trade-research-eligibility-v1.0.0" },
+    "policySourceManifestHash": { "const": "sha256:ba46f72b3676229eb73e653d4b5b370a2145a2998522bf7acb0991d38da42243" },
+    "effectiveAt": { "type": ["string", "null"], "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$" },
+    "subjectMode": { "enum": ["synthetic", "protected", "invalid"] },
+    "candidatePolicySatisfied": { "type": "boolean" },
+    "candidateReasonCodes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/candidateReasonCode" } },
+    "globalBlockerReasons": { "type": "array", "minItems": 2, "uniqueItems": true, "prefixItems": [{ "const": "CANONICAL_ELIGIBILITY_SOURCE_CONFLICT" }, { "const": "GATE_EVIDENCE_PROVENANCE_UNRESOLVED" }], "items": { "$ref": "#/$defs/globalBlockerReason" } },
+    "eligible": { "const": false },
+    "reasonCodes": { "type": "array", "minItems": 2, "uniqueItems": true, "prefixItems": [{ "const": "CANONICAL_ELIGIBILITY_SOURCE_CONFLICT" }, { "const": "GATE_EVIDENCE_PROVENANCE_UNRESOLVED" }], "items": { "$ref": "#/$defs/reasonCode" } },
+    "unknownBlockers": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/candidateReasonCode" } },
+    "staleSourceBlockers": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/candidateReasonCode" } },
+    "canonicalEligibilitySourceStatus": { "const": "blocked_source_conflict" },
+    "realGraphDiagnosticsStatus": { "const": "blocked_not_run" },
+    "protectedDataExportAuthorized": { "const": false },
+    "executionDecision": { "const": "no_launch" },
+    "assignmentGenerated": { "const": false },
+    "assignmentSeedGenerated": { "const": false },
+    "participantLevelCausalClaim": { "type": "null" }
+  },
+  "$defs": {
+    "globalBlockerReason": {
+      "enum": ["CANONICAL_ELIGIBILITY_SOURCE_CONFLICT", "GATE_EVIDENCE_PROVENANCE_UNRESOLVED", "PRIVACY_REVIEW_NOT_APPROVED", "ETHICS_DETERMINATION_NOT_APPROVED", "CONSENT_OR_WAIVER_NOT_APPROVED"]
+    },
+    "candidateReasonCode": {
+      "enum": ["INPUT_SCHEMA_INVALID", "INPUT_SCHEMA_VERSION_MISMATCH", "EVALUATOR_VERSION_MISMATCH", "POLICY_MANIFEST_HASH_MISMATCH", "BASE_COMMIT_MISMATCH", "EFFECTIVE_TIME_INVALID", "PROVENANCE_NOT_SYNTHETIC", "SYNTHETIC_IDENTIFIER_NAMESPACE_REQUIRED", "REAL_ROWS_PROHIBITED", "PROTECTED_DATA_NOT_AUTHORIZED", "STUDY_AUTHORIZATION_PROHIBITED", "RECOMMENDATION_EVIDENCE_PROHIBITED", "PARTICIPANT_CAUSAL_OUTPUT_PROHIBITED", "ASSIGNMENT_MATERIAL_PROHIBITED", "SAME_OFFER", "SAME_OWNER", "UNSUPPORTED_MODE", "MODE_MISMATCH", "SOURCE_NOT_PUBLISHED", "TARGET_NOT_PUBLISHED", "SOURCE_NOT_OPEN", "TARGET_NOT_OPEN", "SOURCE_NOT_OPERATIVE", "TARGET_NOT_OPERATIVE", "SOURCE_INVITATION_INCOMPATIBLE", "TARGET_INVITATION_INCOMPATIBLE", "CAUSE_COLLATION_UNBOUND", "CAUSE_VALUE_UNSAFE", "CAUSE_PATTERN_INVALID", "SOURCE_REQUEST_NOT_OFFERED_BY_TARGET", "TARGET_REQUEST_NOT_OFFERED_BY_SOURCE", "SOURCE_MODERATION_NOT_CLEARED", "TARGET_MODERATION_NOT_CLEARED", "SOURCE_HARM_NOT_CLEARED", "TARGET_HARM_NOT_CLEARED", "SOURCE_BASELINE_NOT_CLEARED", "TARGET_BASELINE_NOT_CLEARED", "SOURCE_LEGALITY_NOT_CLEARED", "TARGET_LEGALITY_NOT_CLEARED", "SOURCE_PARTICIPANT_NOT_ELIGIBLE", "TARGET_PARTICIPANT_NOT_ELIGIBLE", "SOURCE_CONSENT_NOT_CURRENT", "TARGET_CONSENT_NOT_CURRENT", "SOURCE_ROLE_NOT_AUTHORIZED", "TARGET_ROLE_NOT_AUTHORIZED", "PRIVACY_SCOPE_MISMATCH", "PAIR_BLOCKED", "BLOCK_STATUS_UNKNOWN", "SOURCE_RESTRICTED", "TARGET_RESTRICTED", "PAIR_RESTRICTED", "RESTRICTION_STATUS_UNKNOWN", "RESTRICTION_STATUS_CONTRADICTORY", "ACCEPTED_INTEREST_CONFLICT", "INVITATION_CONFLICT", "ACTIVE_THREAD_CONFLICT", "ACTIVE_AGREEMENT_CONFLICT", "DUPLICATE_PAIR_CONFLICT", "HISTORICAL_INTERFERENCE_UNKNOWN"]
+    },
+    "reasonCode": {
+      "enum": ["CANONICAL_ELIGIBILITY_SOURCE_CONFLICT", "GATE_EVIDENCE_PROVENANCE_UNRESOLVED", "PRIVACY_REVIEW_NOT_APPROVED", "ETHICS_DETERMINATION_NOT_APPROVED", "CONSENT_OR_WAIVER_NOT_APPROVED", "INPUT_SCHEMA_INVALID", "INPUT_SCHEMA_VERSION_MISMATCH", "EVALUATOR_VERSION_MISMATCH", "POLICY_MANIFEST_HASH_MISMATCH", "BASE_COMMIT_MISMATCH", "EFFECTIVE_TIME_INVALID", "PROVENANCE_NOT_SYNTHETIC", "SYNTHETIC_IDENTIFIER_NAMESPACE_REQUIRED", "REAL_ROWS_PROHIBITED", "PROTECTED_DATA_NOT_AUTHORIZED", "STUDY_AUTHORIZATION_PROHIBITED", "RECOMMENDATION_EVIDENCE_PROHIBITED", "PARTICIPANT_CAUSAL_OUTPUT_PROHIBITED", "ASSIGNMENT_MATERIAL_PROHIBITED", "SAME_OFFER", "SAME_OWNER", "UNSUPPORTED_MODE", "MODE_MISMATCH", "SOURCE_NOT_PUBLISHED", "TARGET_NOT_PUBLISHED", "SOURCE_NOT_OPEN", "TARGET_NOT_OPEN", "SOURCE_NOT_OPERATIVE", "TARGET_NOT_OPERATIVE", "SOURCE_INVITATION_INCOMPATIBLE", "TARGET_INVITATION_INCOMPATIBLE", "CAUSE_COLLATION_UNBOUND", "CAUSE_VALUE_UNSAFE", "CAUSE_PATTERN_INVALID", "SOURCE_REQUEST_NOT_OFFERED_BY_TARGET", "TARGET_REQUEST_NOT_OFFERED_BY_SOURCE", "SOURCE_MODERATION_NOT_CLEARED", "TARGET_MODERATION_NOT_CLEARED", "SOURCE_HARM_NOT_CLEARED", "TARGET_HARM_NOT_CLEARED", "SOURCE_BASELINE_NOT_CLEARED", "TARGET_BASELINE_NOT_CLEARED", "SOURCE_LEGALITY_NOT_CLEARED", "TARGET_LEGALITY_NOT_CLEARED", "SOURCE_PARTICIPANT_NOT_ELIGIBLE", "TARGET_PARTICIPANT_NOT_ELIGIBLE", "SOURCE_CONSENT_NOT_CURRENT", "TARGET_CONSENT_NOT_CURRENT", "SOURCE_ROLE_NOT_AUTHORIZED", "TARGET_ROLE_NOT_AUTHORIZED", "PRIVACY_SCOPE_MISMATCH", "PAIR_BLOCKED", "BLOCK_STATUS_UNKNOWN", "SOURCE_RESTRICTED", "TARGET_RESTRICTED", "PAIR_RESTRICTED", "RESTRICTION_STATUS_UNKNOWN", "RESTRICTION_STATUS_CONTRADICTORY", "ACCEPTED_INTEREST_CONFLICT", "INVITATION_CONFLICT", "ACTIVE_THREAD_CONFLICT", "ACTIVE_AGREEMENT_CONFLICT", "DUPLICATE_PAIR_CONFLICT", "HISTORICAL_INTERFERENCE_UNKNOWN"]
+    }
+  },
+  "oneOf": [
+    { "properties": { "candidatePolicySatisfied": { "const": true }, "candidateReasonCodes": { "maxItems": 0 } } },
+    { "properties": { "candidatePolicySatisfied": { "const": false }, "candidateReasonCodes": { "minItems": 1 } } }
+  ]
+}
