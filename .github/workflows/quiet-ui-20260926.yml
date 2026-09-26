@@ -1,0 +1,113 @@
+name: Quiet UI implementation and verification
+on:
+  push:
+    branches: [ops/quiet-ui-20260926]
+    paths: [.github/workflows/quiet-ui-20260926.yml]
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.patch.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/quiet-ui-20260926
+          path: candidate
+          fetch-depth: 0
+      - name: Apply the reviewed scoped source transformations
+        id: patch
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          python ../transport/.github/quiet-ui-20260926.py
+          git diff --check
+          git add --pathspec-from-file=/tmp/quiet-ui-files.txt
+          test "$(git diff --cached --name-only | wc -l)" -eq 20
+          git diff --cached --check
+          git diff --cached --stat
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git commit -m 'Simplify operational UI and open Dashboard in Profile priorities'
+          git push origin HEAD:refs/heads/fix/quiet-ui-20260926
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+  quality:
+    needs: stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL: '1'
+      VERCEL_ENV: production
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.stage.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Record immutable candidate and exact changes
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/quiet-ui-evidence
+          git rev-parse HEAD | tee /tmp/quiet-ui-evidence/commit.txt
+          git diff ef3b1b595f6bddd1e660e3215ca19e57254234f3 --stat | tee /tmp/quiet-ui-evidence/diff-stat.txt
+          git diff ef3b1b595f6bddd1e660e3215ca19e57254234f3 > /tmp/quiet-ui-evidence/changes.patch
+          git diff --check ef3b1b595f6bddd1e660e3215ca19e57254234f3
+      - run: npm ci
+      - name: Complete unit, lint, type and build gates
+        id: gates
+        run: |
+          set -euo pipefail
+          npm test > /tmp/quiet-ui-evidence/unit.log 2>&1 || { tail -100 /tmp/quiet-ui-evidence/unit.log; exit 1; }
+          tail -15 /tmp/quiet-ui-evidence/unit.log
+          npm run lint -- --quiet > /tmp/quiet-ui-evidence/lint.log 2>&1 || { cat /tmp/quiet-ui-evidence/lint.log; exit 1; }
+          npx tsc --noEmit > /tmp/quiet-ui-evidence/types.log 2>&1 || { cat /tmp/quiet-ui-evidence/types.log; exit 1; }
+          npm run build > /tmp/quiet-ui-evidence/build.log 2>&1 || { tail -120 /tmp/quiet-ui-evidence/build.log; exit 1; }
+          tail -20 /tmp/quiet-ui-evidence/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Focused rendered UI and existing affected flows
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.release.config.ts tests/quiet-ui.spec.ts tests/homepage-narrow-header.spec.ts tests/create-route-ui-regression.spec.ts tests/refined-header.spec.ts --reporter=line > /tmp/quiet-ui-evidence/focused-browser.log 2>&1 || { tail -240 /tmp/quiet-ui-evidence/focused-browser.log; exit 1; }
+          tail -30 /tmp/quiet-ui-evidence/focused-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-focused-${{ needs.stage.outputs.sha }}
+          path: |
+            /tmp/quiet-ui-evidence
+            test-results
+          retention-days: 7
+      - name: Complete release browser suite
+        if: ${{ !cancelled() && steps.gates.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line > /tmp/quiet-ui-evidence/release-browser.log 2>&1 || { tail -300 /tmp/quiet-ui-evidence/release-browser.log; exit 1; }
+          tail -30 /tmp/quiet-ui-evidence/release-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-complete-${{ needs.stage.outputs.sha }}
+          path: |
+            /tmp/quiet-ui-evidence
+            test-results
+          retention-days: 7
