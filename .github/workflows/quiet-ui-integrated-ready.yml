@@ -1,4 +1,4 @@
-name: Quiet UI integrated release readiness
+name: Quiet UI current-main integration
 on:
   push:
     branches: [ops/quiet-ui-20260926]
@@ -6,136 +6,179 @@ on:
 permissions:
   contents: read
 jobs:
-  integrate:
+  integrate-and-verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 75
     permissions:
       contents: write
-      actions: write
-    outputs:
-      sha: ${{ steps.integrate.outputs.sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: fix/quiet-ui-20260926
-          fetch-depth: 40
-      - name: Integrate the inspected main without losing its Profile simplification
-        id: integrate
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          test "$(git rev-parse HEAD)" = 9faa89cd60bdf30231f83553c0302e9a52980e80
-          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = 9faa89cd60bdf30231f83553c0302e9a52980e80
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48
-          git config user.name ghuser29384
-          git config user.email 262476329+ghuser29384@users.noreply.github.com
-          git fetch --depth=40 origin 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48
-          if ! git merge --no-commit --no-ff 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48; then
-            python - <<'PY'
-          import subprocess
-          unresolved=subprocess.check_output(['git','diff','--name-only','--diff-filter=U'],text=True).splitlines()
-          allowed={'public/moral-trade-live-core.txt','public/moral-trade-live.html'}
-          assert unresolved and set(unresolved).issubset(allowed),unresolved
-          # Both changes delete the same introduction. Keep the already-tested
-          # header-free controls and compact loading state, not a replacement hero.
-          subprocess.run(['git','checkout','--ours','--',*unresolved],check=True)
-          subprocess.run(['git','add','--',*unresolved],check=True)
-          PY
-          fi
-          python - <<'PY'
-          from pathlib import Path
-          import hashlib,re
-          core=Path('public/moral-trade-live-core.txt').read_bytes()
-          assert b"pageHead('What needs you now.'" not in core
-          assert b'data-home-create="true"' in core
-          p=Path('public/moral-trade-live.html')
-          s,n=re.subn(r"digest !== '[a-f0-9]{64}'", "digest !== '"+hashlib.sha256(core).hexdigest()+"'", p.read_text())
-          assert n==1
-          p.write_text(s)
-          p=Path('src/app/profile/page.tsx')
-          s=p.read_text()
-          old='href={viewer ? "/dashboard" : "/login?returnTo=/profile"}'
-          assert s.count(old)==1
-          # Account settings must bypass the new priority-first Dashboard entry.
-          p.write_text(s.replace(old,'href={viewer ? "/dashboard?view=controls" : "/login?returnTo=/profile"}'))
-          PY
-          git add public/moral-trade-live-core.txt public/moral-trade-live.html src/app/profile/page.tsx
-          git diff --cached --check
-          git commit -m 'Preserve the concurrent Profile cleanup and header-free homepage'
-          git diff --check 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48
-          test "$(git diff --name-only 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48 | wc -l)" -eq 28
-          git push origin HEAD:refs/heads/fix/quiet-ui-20260926
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          old=$(gh api repos/$GITHUB_REPOSITORY/actions/runs/36211920474)
-          test "$(jq -r .head_sha <<<"$old")" = f8e79f0bec344cb5a6b4dd2426bd1fad02d73bbe
-          if [ "$(jq -r .status <<<"$old")" != completed ]; then
-            gh api --method POST repos/$GITHUB_REPOSITORY/actions/runs/36211920474/cancel || true
-          fi
-  quality:
-    needs: integrate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
     env:
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
       VERCEL: '1'
       VERCEL_ENV: production
       PLAYWRIGHT_HTML_OPEN: never
+      QUIET_HEAD: c7a90bcff9f9db593108c977bda3d64289d08cdb
+      MAIN_HEAD: 068efb7d24b30551b7af1895d20a41ba40ce921f
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.integrate.outputs.sha }}
-          persist-credentials: false
-          fetch-depth: 40
+          ref: fix/quiet-ui-20260926
+          fetch-depth: 80
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Record immutable source
+      - name: Integrate current main without regressing the approved quiet UI
+        id: integrate
         run: |
-          mkdir -p /tmp/quiet-ui-integrated
-          git rev-parse HEAD > /tmp/quiet-ui-integrated/commit.txt
-          git diff --check 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48
-          git diff --stat 8b8c4c21b0ac025cc2b9db706fc91665fdbf2f48 > /tmp/quiet-ui-integrated/diff-stat.txt
-          git archive --format=tar.gz HEAD > /tmp/quiet-ui-integrated/source.tar.gz
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$QUIET_HEAD"
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = "$QUIET_HEAD"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_HEAD"
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git fetch --depth=80 origin "$MAIN_HEAD"
+          if ! git merge --no-commit --no-ff "$MAIN_HEAD"; then
+            python - <<'PY'
+          import subprocess
+          unresolved = subprocess.check_output(
+              ["git", "diff", "--name-only", "--diff-filter=U"], text=True
+          ).splitlines()
+          allowed = {
+              "public/moral-trade-live-core.txt",
+              "public/moral-trade-live.html",
+              "tests/operational-retirement.spec.ts",
+              "tests/returning-homepage.spec.ts",
+              "tests/sitewide-canonical-visual-system.spec.ts",
+              "tests/walkthrough.spec.ts",
+          }
+          assert unresolved and set(unresolved).issubset(allowed), unresolved
+          subprocess.run(["git", "checkout", "--ours", "--", *unresolved], check=True)
+          subprocess.run(["git", "add", "--", *unresolved], check=True)
+          PY
+          fi
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import re
+
+          core_path = Path("public/moral-trade-live-core.txt")
+          core = core_path.read_text()
+          old = '''function nowPage() {
+            return `<section class="page" aria-label="Home"><div class="mt-home-controls">
+              ${tab([['focus', 'Focus'], ['plan', 'Plan resources']], 'now', 'now')}
+              <a class="btn primary" data-home-create="true" href="/trades/new">Create offer</a></div>
+              ${state.now === 'plan' ? nowPlan() : nowFocus()}</section>`;
+          }'''.replace("          ", "")
+          new = '''function nowPage() {
+            return `<section class="page" aria-label="Home">${actions()}<div class="mt-home-controls">
+              ${tab([['focus', 'Focus'], ['plan', 'Plan resources']], 'now', 'now')}
+              </div>
+              ${state.now === 'plan' ? nowPlan() : nowFocus()}</section>`;
+          }'''.replace("          ", "")
+          assert core.count(old) == 1, "quiet homepage block drifted"
+          core = core.replace(old, new)
+          assert "pageHead('What needs you now.'" not in core
+          assert "${actions()}<div class=\"mt-home-controls\">" in core
+          assert "Create offer" in core
+          core_path.write_text(core)
+
+          html_path = Path("public/moral-trade-live.html")
+          html = html_path.read_text()
+          digest = hashlib.sha256(core_path.read_bytes()).hexdigest()
+          html, count = re.subn(
+              r"digest !== '[a-f0-9]{64}'",
+              f"digest !== '{digest}'",
+              html,
+          )
+          assert count == 1
+          html_path.write_text(html)
+
+          profile_path = Path("src/app/profile/page.tsx")
+          profile = profile_path.read_text()
+          assert 'href={viewer ? "/dashboard?view=controls" : "/login?returnTo=/profile"}' in profile
+
+          operational_path = Path("tests/operational-retirement.spec.ts")
+          operational = operational_path.read_text()
+          duplicate = '''    await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+              await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();'''.replace("              ", "    ")
+          replacement = '''    await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+              await expect(page.getByRole("heading", { name: "What needs you now." })).toHaveCount(0);'''.replace("              ", "    ")
+          if duplicate in operational:
+              operational = operational.replace(duplicate, replacement, 1)
+          operational_path.write_text(operational)
+
+          returning_path = Path("tests/returning-homepage.spec.ts")
+          returning = returning_path.read_text()
+          returning = returning.replace("page.locator('[data-home-create=\"true\"]')", "page.locator('button[data-action=\"create\"]')")
+          no_head = '    await expect(page.locator(".head")).toHaveCount(0);'
+          date_checks = '''    const date = page.locator(".head .date");
+              await expect(date).toHaveAttribute("data-mt-local-date-time", "2026-07-16");
+              await expect(date.locator('time[data-mt-local-date="true"]')).toHaveAttribute(
+                "datetime",
+                "2026-07-16",
+              );
+              await expect(date.locator('time[data-mt-local-date="true"]')).toHaveText(
+                "Thursday, July 16, 2026",
+              );
+              await expect(date.locator('[data-mt-local-greeting="true"]')).toHaveText(
+                "Good afternoon.",
+              );'''.replace("              ", "    ")
+          assert returning.count(no_head) == 1
+          returning = returning.replace(no_head, date_checks)
+          returning_path.write_text(returning)
+          PY
+          git add public/moral-trade-live-core.txt public/moral-trade-live.html src/app/profile/page.tsx tests/operational-retirement.spec.ts tests/returning-homepage.spec.ts
+          git diff --cached --check
+          git commit -m 'Integrate quiet UI with current main'
+          git diff --check "$MAIN_HEAD"
+          mkdir -p /tmp/quiet-ui-current-main
+          git rev-parse HEAD | tee /tmp/quiet-ui-current-main/commit.txt
+          git diff --stat "$MAIN_HEAD" > /tmp/quiet-ui-current-main/diff-stat.txt
+          git diff --name-status "$MAIN_HEAD" > /tmp/quiet-ui-current-main/changed-files.txt
+          git archive --format=tar.gz HEAD > /tmp/quiet-ui-current-main/source.tar.gz
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - run: npm ci
       - name: Unit tests, lint and TypeScript
         run: |
           set -euo pipefail
-          npm test > /tmp/quiet-ui-integrated/unit.log 2>&1 || { tail -100 /tmp/quiet-ui-integrated/unit.log; exit 1; }
-          tail -12 /tmp/quiet-ui-integrated/unit.log
-          npm run lint -- --quiet > /tmp/quiet-ui-integrated/lint.log 2>&1 || { cat /tmp/quiet-ui-integrated/lint.log; exit 1; }
-          npx tsc --noEmit > /tmp/quiet-ui-integrated/types.log 2>&1 || { cat /tmp/quiet-ui-integrated/types.log; exit 1; }
+          npm test > /tmp/quiet-ui-current-main/unit.log 2>&1 || { tail -160 /tmp/quiet-ui-current-main/unit.log; exit 1; }
+          tail -20 /tmp/quiet-ui-current-main/unit.log
+          npm run lint -- --quiet > /tmp/quiet-ui-current-main/lint.log 2>&1 || { cat /tmp/quiet-ui-current-main/lint.log; exit 1; }
+          npx tsc --noEmit --pretty false > /tmp/quiet-ui-current-main/types.log 2>&1 || { cat /tmp/quiet-ui-current-main/types.log; exit 1; }
       - name: Production build
-        id: build
         run: |
-          npm run build > /tmp/quiet-ui-integrated/build.log 2>&1 || { tail -120 /tmp/quiet-ui-integrated/build.log; exit 1; }
-          tail -20 /tmp/quiet-ui-integrated/build.log
+          npm run build > /tmp/quiet-ui-current-main/build.log 2>&1 || { tail -180 /tmp/quiet-ui-current-main/build.log; exit 1; }
+          tail -24 /tmp/quiet-ui-current-main/build.log
       - run: npx playwright install --with-deps chromium
+      - name: Focused quiet UI desktop and mobile QA
+        run: |
+          npx playwright test --config=playwright.release.config.ts \
+            tests/quiet-ui.spec.ts \
+            tests/homepage-narrow-header.spec.ts \
+            tests/create-route-ui-regression.spec.ts \
+            tests/discover-home-visual-alignment.spec.ts \
+            --reporter=line > /tmp/quiet-ui-current-main/focused-browser.log 2>&1 || { tail -260 /tmp/quiet-ui-current-main/focused-browser.log; exit 1; }
+          tail -30 /tmp/quiet-ui-current-main/focused-browser.log
       - name: Complete release browser suite
         run: |
-          npm run test:e2e:release -- --reporter=line > /tmp/quiet-ui-integrated/release-browser.log 2>&1 || { tail -250 /tmp/quiet-ui-integrated/release-browser.log; exit 1; }
-          tail -20 /tmp/quiet-ui-integrated/release-browser.log
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: quiet-ui-integrated-suite-${{ needs.integrate.outputs.sha }}
-          path: |
-            /tmp/quiet-ui-integrated
-            test-results
-          retention-days: 7
+          npm run test:e2e:release -- --reporter=line > /tmp/quiet-ui-current-main/release-browser.log 2>&1 || { tail -300 /tmp/quiet-ui-current-main/release-browser.log; exit 1; }
+          tail -30 /tmp/quiet-ui-current-main/release-browser.log
       - name: Preserve Commitments session and streaming behavior
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
-          npx playwright test --config=playwright.commitments.config.ts --reporter=line > /tmp/quiet-ui-integrated/commitments-browser.log 2>&1 || { tail -140 /tmp/quiet-ui-integrated/commitments-browser.log; exit 1; }
-          tail -20 /tmp/quiet-ui-integrated/commitments-browser.log
+          npx playwright test --config=playwright.commitments.config.ts --reporter=line > /tmp/quiet-ui-current-main/commitments-browser.log 2>&1 || { tail -180 /tmp/quiet-ui-current-main/commitments-browser.log; exit 1; }
+          tail -24 /tmp/quiet-ui-current-main/commitments-browser.log
+      - name: Publish the exact verified candidate
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = "$QUIET_HEAD"
+          git push origin HEAD:refs/heads/fix/quiet-ui-20260926
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: quiet-ui-integrated-ready-${{ needs.integrate.outputs.sha }}
+          name: quiet-ui-current-main-${{ steps.integrate.outputs.sha }}
           path: |
-            /tmp/quiet-ui-integrated
+            /tmp/quiet-ui-current-main
             test-results
           retention-days: 7
