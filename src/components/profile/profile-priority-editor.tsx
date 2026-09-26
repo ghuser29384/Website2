@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
 import { saveProfilePrioritySearchAction } from "@/app/profile/priorities/actions";
@@ -91,6 +91,9 @@ function SaveButton() {
 interface ProfilePriorityEditorProps {
   initialAllocation: ProfilePriorityAllocation;
   returnTo: string;
+  returnPath?: string;
+  cancelTo?: string;
+  navigation?: ReactNode;
 }
 
 const priorityOrder = PROFILE_PRIORITY_OPTIONS.map((priority) => priority.id);
@@ -98,6 +101,9 @@ const priorityOrder = PROFILE_PRIORITY_OPTIONS.map((priority) => priority.id);
 export function ProfilePriorityEditor({
   initialAllocation,
   returnTo,
+  returnPath,
+  cancelTo = returnTo,
+  navigation,
 }: ProfilePriorityEditorProps) {
   const [allocation, setAllocation] = useState<ProfilePriorityAllocation>(initialAllocation);
   const [focusedPriorityId, setFocusedPriorityId] = useState<ProfilePriorityId | null>(null);
@@ -140,7 +146,7 @@ export function ProfilePriorityEditor({
   return (
     <section aria-labelledby="profile-priorities-heading" className={styles.profilePage}>
       <form action={saveProfilePrioritySearchAction}>
-        <input name="return_to" type="hidden" value={`/profile/priorities?returnTo=${encodeURIComponent(returnTo)}`} />
+        <input name="return_to" type="hidden" value={returnPath ?? `/profile/priorities?returnTo=${encodeURIComponent(returnTo)}`} />
         <input name="success_to" type="hidden" value={returnTo} />
         <input name="priority_allocation" type="hidden" value={serializedAllocation} />
 
@@ -157,6 +163,8 @@ export function ProfilePriorityEditor({
           </div>
           <SaveButton />
         </header>
+
+        {navigation}
 
         <div className={styles.mosaicLayout}>
           <aside className={styles.introPanel}>
@@ -194,7 +202,7 @@ export function ProfilePriorityEditor({
               <Icon className={styles.icon} name="reset" />
               Reset unsaved changes
             </button>
-            <Link className={styles.textAction} href={returnTo}>
+            <Link className={styles.textAction} href={cancelTo} prefetch={false}>
               Cancel and return
             </Link>
           </aside>

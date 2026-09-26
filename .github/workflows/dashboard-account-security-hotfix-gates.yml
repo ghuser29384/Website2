@@ -9,16 +9,20 @@ on:
       - reopened
       - synchronize
     paths:
-      - "src/app/dashboard/dashboard-account-security.css"
-      - "src/app/dashboard/layout.tsx"
-      - "src/app/dashboard/page.tsx"
-      - "src/components/dashboard/background-account-security-panel.tsx"
+      - "src/app/dashboard/**"
+      - "src/app/profile/priorities/page.tsx"
+      - "src/components/dashboard/**"
+      - "src/components/profile/profile-priorities-view.tsx"
+      - "src/components/profile/profile-priority-editor.tsx"
       - "src/components/layout/site-footer.tsx"
       - "src/components/layout/site-topbar.tsx"
+      - "src/lib/dashboard-view*"
+      - "src/lib/dashboard-loading*"
       - "src/dashboard-account-security-visibility.test.ts"
       - "src/proxy.test.ts"
       - "src/proxy.ts"
       - "tests/dashboard-account-security-visibility.spec.ts"
+      - "tests/dashboard-sparks.spec.ts"
       - ".github/workflows/dashboard-account-security-hotfix-gates.yml"
   push:
     branches:
@@ -41,16 +45,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
       - name: Install exact dependencies
         run: npm ci
-
       - name: Run focused visibility and routing contracts
         shell: bash
         run: |
@@ -58,26 +59,24 @@ jobs:
           node --import tsx --test \
             src/dashboard-account-security-visibility.test.ts \
             src/proxy.test.ts \
+            src/lib/dashboard-view.test.ts \
+            src/lib/dashboard-loading.test.ts \
             2>&1 | tee focused-dashboard-account-security.log
-
       - name: Run complete repository tests
         shell: bash
         run: |
           set -o pipefail
           npm test 2>&1 | tee repository-tests.log
-
       - name: Run complete ESLint
         shell: bash
         run: |
           set -o pipefail
           npm run lint -- --quiet 2>&1 | tee repository-lint.log
-
       - name: Run TypeScript
         shell: bash
         run: |
           set -o pipefail
           npx tsc --noEmit 2>&1 | tee typescript.log
-
       - name: Run optimized production build
         shell: bash
         env:
@@ -88,8 +87,7 @@ jobs:
         run: |
           set -o pipefail
           npm run build 2>&1 | tee production-build.log
-
-      - name: Prove the exact current-main diff stays inside the Account-security surface
+      - name: Prove the exact current-main diff stays inside the Dashboard and Profile surface
         shell: bash
         run: |
           set -euo pipefail
@@ -102,23 +100,32 @@ jobs:
           .github/workflows/dashboard-account-security-hotfix-gates.yml
           src/app/dashboard/dashboard-account-security.css
           src/app/dashboard/layout.tsx
+          src/app/dashboard/loading.tsx
           src/app/dashboard/page.tsx
+          src/app/profile/priorities/page.tsx
           src/components/dashboard/background-account-security-panel.tsx
+          src/components/dashboard/dashboard-tools.module.css
+          src/components/dashboard/dashboard-tools.tsx
           src/components/layout/site-footer.tsx
           src/components/layout/site-topbar.tsx
+          src/components/profile/profile-priorities-view.tsx
+          src/components/profile/profile-priority-editor.tsx
           src/dashboard-account-security-visibility.test.ts
+          src/lib/dashboard-loading.test.ts
+          src/lib/dashboard-view.test.ts
+          src/lib/dashboard-view.ts
           src/proxy.test.ts
           src/proxy.ts
           tests/dashboard-account-security-visibility.spec.ts
+          tests/dashboard-sparks.spec.ts
           EOF
           sort -o allowed-files.txt allowed-files.txt
           unexpected_files="$(comm -23 actual-files.txt allowed-files.txt)"
           if [[ -n "$unexpected_files" ]]; then
-            echo 'Unexpected files in the Account-security change:' >&2
+            echo 'Unexpected files in the Dashboard/Profile change:' >&2
             printf '%s\n' "$unexpected_files" >&2
             exit 1
           fi
-
       - name: Upload quality evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -147,26 +154,21 @@ jobs:
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
       - name: Install exact dependencies
         run: npm ci
-
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
       - name: Run the focused desktop and mobile Account-security gate
         shell: bash
         run: |
           set -o pipefail
           npm run test:e2e -- tests/dashboard-account-security-visibility.spec.ts --reporter=line \
             2>&1 | tee rendered-dashboard-account-security.log
-
       - name: Run the human offers-to-Discover browser contract
         shell: bash
         run: |
@@ -175,7 +177,6 @@ jobs:
             --grep '/offers transfers to the dedicated Discover shell' \
             --reporter=line \
             2>&1 | tee rendered-offers-redirect.log
-
       - name: Upload rendered evidence
         if: always()
         uses: actions/upload-artifact@v4
