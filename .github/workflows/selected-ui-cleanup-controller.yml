@@ -1,4 +1,4 @@
-name: Integrate and verify selected shared UI cleanup
+name: Final exact-head selected UI verification
 on:
   pull_request:
     paths:
@@ -6,8 +6,9 @@ on:
       - '.github/selected-ui-cleanup/**'
 permissions:
   contents: write
+  actions: write
 concurrency:
-  group: selected-ui-cleanup-extraction-20260926
+  group: selected-ui-cleanup-final-verification-20260926
   cancel-in-progress: false
 jobs:
   verify-selected:
@@ -16,12 +17,12 @@ jobs:
     timeout-minutes: 90
     env:
       BASE_SHA: 464e61299896216ddc77e65bfa2211664aa875ee
-      PRODUCT_SHA: 316d4a523cf81d3e4dafff07e4b07c2cc34de76b
+      PRODUCT_SHA: 1627e4f4e9d7bb2138bb45695a50b589d3134ffd
       PRODUCT_BRANCH: cleanup/selected-shared-ui-only-20260926
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
       VERCEL: '1'
-      VERCEL_ENV: preview
+      VERCEL_ENV: production
       PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
       PLAYWRIGHT_HTML_OPEN: never
     steps:
@@ -33,7 +34,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Preserve concurrent main work and prove only the selected release delta
+      - name: Align only obsolete browser locators and prove exact scope
         shell: bash
         run: |
           set -euo pipefail
@@ -44,28 +45,8 @@ jobs:
           git config user.name 'ghuser29384'
           git config user.email '262476329+ghuser29384@users.noreply.github.com'
           git switch -c "$PRODUCT_BRANCH"
-          mkdir -p "$RUNNER_TEMP/selected-ui-evidence"
-          if ! git merge --no-ff --no-commit "$BASE_SHA"; then
-            git diff --cc > "$RUNNER_TEMP/selected-ui-evidence/conflicts.patch"
-            python3 - <<'PY'
-          from pathlib import Path
-          import os,subprocess
-          conflicts=subprocess.check_output(['git','diff','--name-only','--diff-filter=U'],text=True).splitlines()
-          assert conflicts == ['src/lib/action-first-positioning.test.ts'], conflicts
-          p=Path(conflicts[0]); s=subprocess.check_output(['git','show',os.environ['BASE_SHA']+':'+str(p)],text=True)
-          changes=[
-            ('import test from "node:test";', 'import test from "node:test";\nimport { getTopbarActions } from "./site";'),
-            (r'assert.match(site, /href: "\/trades\/new", label: "Create"/);', 'assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });'),
-            (r'assert.match(site, /href: "\/worked-examples", label: "Worked examples"/);', r'assert.doesNotMatch(site, /href: "\/worked-examples"/);'+'\n  assert.ok(readFileSync("src/app/worked-examples/page.tsx", "utf8").length > 0);'),
-          ]
-          for before,after in changes:
-            assert s.count(before)==1,before
-            s=s.replace(before,after,1)
-          p.write_text(s)
-          subprocess.run(['git','add','--',str(p)],check=True)
-          PY
-          fi
-          python3 "$GITHUB_WORKSPACE/.github/selected-ui-cleanup/browser-expectations.py"
+          python3 "$GITHUB_WORKSPACE/.github/selected-ui-cleanup/finish-browser-contracts.py"
+          git commit -m 'Align remaining browser contracts with the selected navigation and search'
           python3 - <<'PY'
           import os,subprocess
           expected=['public/moral-trade-live-navigation.js','public/moral-trade-discover.html',
@@ -73,22 +54,35 @@ jobs:
           'src/components/search/smart-query-auto-enhancer.tsx','src/lib/site.ts','src/lib/refined-header.ts',
           'src/lib/refined-header.test.ts','src/lib/selected-ui-cleanup.test.ts','tests/refined-header.spec.ts','tests/selected-ui-cleanup.spec.ts',
           'tests/returning-homepage.spec.ts','tests/input-assist-hydration.spec.ts',
-          *['src/lib/'+f+'.test.ts' for f in ['action-first-positioning','live-discover-navigation','production-feature-cleanup','public-route-smoke','site','trade-controls-route-contract']]]
-          actual=subprocess.check_output(['git','diff','--cached','--name-only',os.environ['BASE_SHA']],text=True).splitlines()
+          *['src/lib/'+f+'.test.ts' for f in ['action-first-positioning','live-discover-navigation','production-feature-cleanup','public-route-smoke','site','trade-controls-route-contract']],
+          *['tests/'+f+'.spec.ts' for f in ['contact-page-layout','discover-home-visual-alignment','exact-live-now-recommendations','homepage-narrow-header','offers-density','public-routes','walkthrough']]]
+          actual=subprocess.check_output(['git','diff','--name-only',os.environ['BASE_SHA'],'HEAD'],text=True).splitlines()
           assert sorted(actual)==sorted(expected),actual
           for p in ['src/app/about/page.tsx','src/app/sitemap.ts','src/app/start/page.tsx','public/moral-trade-refined-header.css','public/moral-trade-account-identity.js','.github/workflows/vercel-release.yml']:
-            subprocess.run(['git','diff','--cached','--exit-code',os.environ['BASE_SHA'],'--',p],check=True)
-          print('Exact twenty-path selected delta; concurrent Start/account behavior, About, sitemap, styling and release gates preserved.')
+            subprocess.run(['git','diff','--exit-code',os.environ['BASE_SHA'],'HEAD','--',p],check=True)
+          print('Exact twenty-seven-path delta: eight selected runtime paths and nineteen test files; all other runtime and release configuration unchanged.')
           PY
-          git diff --cached --check
-          git commit -m 'Integrate current main and align selected navigation browser checks'
           test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
           git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+          mkdir -p "$RUNNER_TEMP/selected-ui-evidence"
           git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/selected-cleanup.patch"
           git diff --stat "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/scope.txt"
           printf 'base=%s\nhead=%s\ntree=%s\n' "$BASE_SHA" "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee "$RUNNER_TEMP/selected-ui-evidence/source.txt"
           git diff --name-only --diff-filter=ACM "$BASE_SHA" HEAD | zip "$RUNNER_TEMP/selected-ui-evidence/changed-source.zip" -@
-      - name: Install the existing locked dependencies
+      - name: Stop only the superseded pre-correction QA run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/ghuser29384/Website2/actions/runs/36264468532 > "$RUNNER_TEMP/previous.json"
+          test "$(jq -r .head_sha "$RUNNER_TEMP/previous.json")" = a3a43115188d91e8ed0f1a0a41d7641c696456ac
+          test "$(jq -r .head_branch "$RUNNER_TEMP/previous.json")" = ops/selected-ui-cleanup-20260926-v1
+          test "$(jq -r .workflow_id "$RUNNER_TEMP/previous.json")" = 367878173
+          if [ "$(jq -r .status "$RUNNER_TEMP/previous.json")" != completed ]; then
+            gh api --method POST repos/ghuser29384/Website2/actions/runs/36264468532/cancel
+          fi
+      - name: Install existing locked dependencies
         working-directory: ${{ runner.temp }}/selected-ui-candidate
         run: npm ci
       - name: Complete unit tests
@@ -103,6 +97,11 @@ jobs:
       - name: Optimized production build
         working-directory: ${{ runner.temp }}/selected-ui-candidate
         run: set -o pipefail; npm run build 2>&1 | tee "$RUNNER_TEMP/selected-ui-evidence/build.log"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: selected-ui-source-quality-${{ github.run_id }}
+          path: ${{ runner.temp }}/selected-ui-evidence
+          retention-days: 14
       - name: Actual production-server browser checks
         working-directory: ${{ runner.temp }}/selected-ui-candidate
         shell: bash
