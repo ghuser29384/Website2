@@ -1029,10 +1029,16 @@ test.describe("Offers compact hybrid", () => {
     const noJsPage = await noJsContext.newPage();
     const response = await noJsPage.goto(targetRoute, { waitUntil: "domcontentloaded" });
     expect(response?.ok()).toBe(true);
-    const heading = noJsPage.getByRole("heading", { name: "Live proposals", exact: true, level: 1 });
+    // Preserve the original HTML-delivery contract, distinct from hydration and visibility.
+    // Keep diagnostics so hidden streamed HTML cannot be reported as a usable no-script UI.
+    const heading = noJsPage.locator("h1#directory-heading");
     const rows = noJsPage.locator("[data-participant-offer]");
     const primaryActions = noJsPage.locator('[data-testid="proposal-primary-action"]');
+    await mkdir(captureDirectory, { recursive: true });
+    await writeFile(path.join(captureDirectory, "no-script.html"), await noJsPage.content(), "utf8");
+    await noJsPage.screenshot({ path: path.join(captureDirectory, "no-script.png") });
     await expect(heading).toHaveCount(1);
+    await expect(heading).toHaveText("Live proposals");
     const rowCount = await rows.count();
     const primaryActionCount = await primaryActions.count();
     expect(rowCount).toBeGreaterThan(0);
