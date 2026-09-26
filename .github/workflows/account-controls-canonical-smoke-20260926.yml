@@ -1,0 +1,157 @@
+name: Account controls canonical smoke
+on:
+  push:
+    branches: [ops/account-controls-canonical-smoke-20260926]
+    paths: [.github/workflows/account-controls-canonical-smoke-20260926.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Guard verification-only source
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF_NAME" = ops/account-controls-canonical-smoke-20260926
+          git merge-base --is-ancestor 1a397cceb83fd51f26c69cd06209b297d881c0ca HEAD
+          echo 'e2f123a623dd0ecaa511896b90fba5a6ef0679a39c844f2ac15391661ee018df  public/moral-trade-live-account.js' | sha256sum -c -
+          git diff --check HEAD^
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install chromium
+      - name: Verify canonical bytes and actual public browser interactions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p account-controls-canonical-evidence
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { chromium, expect } from '@playwright/test';
+          const dir = 'account-controls-canonical-evidence';
+          const expected = readFileSync('public/moral-trade-live-account.js');
+          const sha = buffer => createHash('sha256').update(buffer).digest('hex');
+          const result = { startedAt: new Date().toISOString(), sourceSha256: sha(expected), assets: [], browsers: [], blockedWrites: [], error: null };
+          const origin = 'https://www.moraltrade.org';
+          let browser;
+          try {
+            for (const host of ['moraltrade.org', 'www.moraltrade.org']) {
+              const response = await fetch(`https://${host}/moral-trade-live-account.js?verify=${process.env.GITHUB_RUN_ID}`, { headers: { 'Cache-Control': 'no-cache', DNT: '1' }, signal: AbortSignal.timeout(45000) });
+              const bytes = Buffer.from(await response.arrayBuffer());
+              assert.equal(response.status, 200);
+              assert.deepEqual(bytes, expected, `${host}: published script must exactly match the merged patch`);
+              result.assets.push({ host, status: response.status, finalUrl: response.url, bytes: bytes.length, sha256: sha(bytes) });
+            }
+            browser = await chromium.launch();
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 1000 }, serviceWorkers: 'block', extraHTTPHeaders: { DNT: '1' } });
+              await context.addCookies([{ name: 'mt_analytics_opt_out', value: '1', url: origin }]);
+              await context.route('**/*', async route => {
+                const request = route.request();
+                if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
+                  result.blockedWrites.push({ method: request.method(), path: new URL(request.url()).pathname });
+                  return route.abort();
+                }
+                return route.continue();
+              });
+              const page = await context.newPage();
+              page.setDefaultTimeout(20000);
+              const errors = [];
+              const consoleMessages = [];
+              const checks = [];
+              page.on('pageerror', error => errors.push(error.message));
+              page.on('console', message => { if (['error', 'warning'].includes(message.type())) consoleMessages.push({ type: message.type(), text: message.text() }); });
+              const open = async () => {
+                const response = await page.goto(origin + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+                assert.equal(response.status(), 200);
+                await page.locator('[data-action="profile"]').click();
+                await expect(page.locator('[data-mt-live-account-action="currency"]')).toBeVisible();
+                await expect(page.locator('[data-mt-live-account-panel] [disabled]')).toHaveCount(0);
+              };
+              await open();
+              assert.match(await page.title(), /Moral Trade/i);
+              assert.equal(new URL(page.url()).hostname, 'www.moraltrade.org');
+              await expect(page.locator('[data-mt-live-account-summary]')).toContainText('Sign in');
+              await expect(page.locator('nextjs-portal')).toHaveCount(0);
+              assert.ok(await page.locator('#drawer').evaluate(element => element.scrollWidth <= element.clientWidth), 'drawer overflow');
+              checks.push('page identity, meaningful account content, no framework overlay, no disabled account controls, no drawer overflow');
+              await page.screenshot({ path: `${dir}/live-account-${width}.png` });
+              for (const key of ['currency', 'safe-cap', 'dispute']) {
+                const control = page.locator(`[data-mt-live-account-action="${key}"]`);
+                const help = page.locator(`[data-mt-live-account-help="${key}"]`);
+                await expect(help).toBeHidden();
+                await control.click();
+                await expect(help).toBeVisible();
+                await expect(control).toHaveAttribute('aria-expanded', 'true');
+                await control.press('Space');
+                await expect(help).toBeHidden();
+                await control.press('Enter');
+                await expect(help).toBeVisible();
+                checks.push(`${key}: click, Space, Enter and aria-expanded`);
+              }
+              await expect(page.locator('[data-mt-live-account-help="safe-cap"]')).toContainText('No monthly spending limit is enforced');
+              await page.screenshot({ path: `${dir}/live-account-details-${width}.png` });
+              await page.getByRole('button', { name: 'Close account', exact: true }).click();
+              await expect(page.locator('#overlay')).not.toHaveClass(/open/);
+              await page.locator('[data-action="profile"]').click();
+              await expect(page.locator('[data-mt-live-account-help]')).toHaveCount(3);
+              checks.push('close and reopen without duplicate disclosures');
+              const destinations = {
+                'payment-account': '/dashboard#payment-setup',
+                notifications: '/dashboard#privacy-controls',
+                'public-trust': '/dashboard#wish-profile',
+                privacy: '/dashboard#privacy-controls',
+              };
+              for (const [key, returnTo] of Object.entries(destinations)) {
+                await open();
+                const link = page.locator(`[data-mt-live-account-action="${key}"]`);
+                await expect(link).toHaveAttribute('href', `/login?returnTo=${encodeURIComponent(returnTo)}`);
+                await link.click();
+                await page.waitForURL(url => url.pathname === '/login');
+                assert.equal(new URL(page.url()).searchParams.get('returnTo'), returnTo);
+                assert.ok((await page.locator('body').innerText()).length > 50);
+                checks.push(`${key}: actual login navigation preserves ${returnTo}`);
+              }
+              await open();
+              await page.locator('[data-mt-live-account-manage]').press('Enter');
+              await page.waitForURL(url => url.pathname === '/login');
+              assert.equal(new URL(page.url()).searchParams.get('returnTo'), '/dashboard');
+              checks.push('Manage account: keyboard navigation preserves /dashboard');
+              await open();
+              await page.locator('[data-mt-live-account-action="terms"]').click();
+              await page.waitForURL(url => url.pathname === '/terms');
+              await expect(page.locator('body')).toContainText(/Terms/i);
+              checks.push('terms: actual public document navigation');
+              assert.deepEqual(errors, [], 'JavaScript page errors');
+              result.browsers.push({ width, height: 1000, checks, pageErrors: errors, consoleMessages });
+              await context.close();
+            }
+            result.completedAt = new Date().toISOString();
+            result.passed = true;
+            console.log(JSON.stringify(result, null, 2));
+          } catch (error) {
+            result.error = String(error?.stack || error);
+            result.passed = false;
+            console.error(result.error);
+            process.exitCode = 1;
+          } finally {
+            if (browser) await browser.close();
+            writeFileSync(`${dir}/result.json`, JSON.stringify(result, null, 2));
+          }
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: account-controls-canonical-${{ github.run_id }}
+          path: account-controls-canonical-evidence
+          retention-days: 14
