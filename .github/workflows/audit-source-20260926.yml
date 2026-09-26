@@ -1,0 +1,27 @@
+name: Audit remediation source snapshot
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-source-20260926.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f58ee041dfd909cad7699ed67485cc0a7db95933
+          persist-credentials: false
+      - name: Archive tracked source only
+        run: |
+          test "$(git rev-parse HEAD)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          mkdir -p /tmp/audit-source
+          git archive --format=tar.gz HEAD src public tests scripts .github AGENTS.md package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs playwright.config.ts playwright.release.config.ts playwright.commitments.config.ts vercel.ts > /tmp/audit-source/source.tar.gz
+          sha256sum /tmp/audit-source/source.tar.gz > /tmp/audit-source/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit-source-f58ee041
+          path: /tmp/audit-source
+          retention-days: 3
