@@ -1,0 +1,121 @@
+name: Quiet UI release-ready verification
+on:
+  push:
+    branches: [ops/quiet-ui-20260926]
+    paths: [.github/workflows/quiet-ui-release-ready.yml]
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    outputs:
+      sha: ${{ steps.stage.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/quiet-ui-20260926
+          fetch-depth: 30
+      - name: Preserve the concurrently approved Offers masthead contract
+        id: stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = c6c91a5656a15c996dcddf6b19c4c2e04fc6d6ec
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = c6c91a5656a15c996dcddf6b19c4c2e04fc6d6ec
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tests/sitewide-canonical-visual-system.spec.ts')
+          s=p.read_text()
+          old='await topbar.evaluate((el) => el.classList.contains("mt-refined-header")) ? "rgb(17, 18, 20)" : BLACK'
+          new='await topbar.evaluate((el) => el.classList.contains("mt-refined-header")) ? "rgb(17, 18, 20)" : finalPathname === "/offers" ? "rgb(7, 7, 7)" : BLACK'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          PY
+          git diff --check
+          git add tests/sitewide-canonical-visual-system.spec.ts
+          test "$(git diff --cached --name-only)" = tests/sitewide-canonical-visual-system.spec.ts
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git commit -m 'Preserve the approved Offers masthead in sitewide visual checks'
+          git diff --check d4d4b25fdf7a46a247838482ce5225163e45a963
+          test "$(git diff --name-only d4d4b25fdf7a46a247838482ce5225163e45a963 | wc -l)" -eq 27
+          git push origin HEAD:refs/heads/fix/quiet-ui-20260926
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # Stop only our superseded candidate's QA; the final run below repeats all gates.
+          old=$(gh api repos/$GITHUB_REPOSITORY/actions/runs/36211674197)
+          test "$(jq -r .head_sha <<<"$old")" = 317831244e43ab1f834b1ece0fa22dc6d3debc7b
+          if [ "$(jq -r .status <<<"$old")" != completed ]; then
+            gh api --method POST repos/$GITHUB_REPOSITORY/actions/runs/36211674197/cancel || true
+          fi
+  quality:
+    needs: stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL: '1'
+      VERCEL_ENV: production
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.stage.outputs.sha }}
+          persist-credentials: false
+          fetch-depth: 30
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Record exact source
+        run: |
+          mkdir -p /tmp/quiet-ui-release-ready
+          git rev-parse HEAD > /tmp/quiet-ui-release-ready/commit.txt
+          git diff --check d4d4b25fdf7a46a247838482ce5225163e45a963
+          git diff --stat d4d4b25fdf7a46a247838482ce5225163e45a963 > /tmp/quiet-ui-release-ready/diff-stat.txt
+          git archive --format=tar.gz HEAD > /tmp/quiet-ui-release-ready/source.tar.gz
+      - run: npm ci
+      - name: Unit tests, lint and TypeScript
+        run: |
+          set -euo pipefail
+          npm test > /tmp/quiet-ui-release-ready/unit.log 2>&1 || { tail -100 /tmp/quiet-ui-release-ready/unit.log; exit 1; }
+          tail -12 /tmp/quiet-ui-release-ready/unit.log
+          npm run lint -- --quiet > /tmp/quiet-ui-release-ready/lint.log 2>&1 || { cat /tmp/quiet-ui-release-ready/lint.log; exit 1; }
+          npx tsc --noEmit > /tmp/quiet-ui-release-ready/types.log 2>&1 || { cat /tmp/quiet-ui-release-ready/types.log; exit 1; }
+      - name: Production build
+        id: build
+        run: |
+          npm run build > /tmp/quiet-ui-release-ready/build.log 2>&1 || { tail -120 /tmp/quiet-ui-release-ready/build.log; exit 1; }
+          tail -20 /tmp/quiet-ui-release-ready/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Complete release browser suite
+        run: |
+          npm run test:e2e:release -- --reporter=line > /tmp/quiet-ui-release-ready/release-browser.log 2>&1 || { tail -250 /tmp/quiet-ui-release-ready/release-browser.log; exit 1; }
+          tail -20 /tmp/quiet-ui-release-ready/release-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-release-suite-${{ needs.stage.outputs.sha }}
+          path: |
+            /tmp/quiet-ui-release-ready
+            test-results
+          retention-days: 7
+      - name: Preserve Commitments session and streaming behavior
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          npx playwright test --config=playwright.commitments.config.ts --reporter=line > /tmp/quiet-ui-release-ready/commitments-browser.log 2>&1 || { tail -140 /tmp/quiet-ui-release-ready/commitments-browser.log; exit 1; }
+          tail -20 /tmp/quiet-ui-release-ready/commitments-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-release-ready-${{ needs.stage.outputs.sha }}
+          path: |
+            /tmp/quiet-ui-release-ready
+            test-results
+          retention-days: 7
