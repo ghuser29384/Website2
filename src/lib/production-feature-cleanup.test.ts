@@ -27,12 +27,11 @@ test("real saved records and server authorization remain intact", () => {
   assert.match(read("src/app/saved-offers/page.tsx"), /await listCartItems\(viewer.authUser.id\)/);
 });
 
-test("demonstrations and review notes are learning resources, not primary controls", () => {
-  const learn = FOOTER_LINK_GROUPS.find((group) => group.title === "Learn")!;
+test("demonstrations remain available without shared navigation promotion", () => {
   for (const href of ["/trade-controls", "/reasoning-center", "/priority-correction-fund"]) {
-    assert.ok(learn.links.some((link) => link.href === href));
+    assert.ok(read(`src/app${href}/page.tsx`).length > 0);
     assert.ok(getPrimaryNavLinks().every((link) => link.href !== href));
-    assert.ok(FOOTER_LINK_GROUPS.filter((group) => group.title !== "Learn").every((group) => group.links.every((link) => link.href !== href)));
+    assert.ok(FOOTER_LINK_GROUPS.every((group) => group.links.every((link) => link.href !== href)));
   }
   const notes = read("src/app/reasoning-center/page.tsx");
   assert.doesNotMatch(notes, /Draft review note|navSections|reasoning-topic-strip|>Ask</);
