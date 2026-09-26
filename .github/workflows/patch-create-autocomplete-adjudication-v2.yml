@@ -1,0 +1,118 @@
+name: Patch Create autocomplete adjudication controller v2
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/patch-create-autocomplete-adjudication-v2.yml"
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: patch-create-autocomplete-adjudication-v2
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+  CONTROLLER_BRANCH: qa/patch-create-autocomplete-adjudication-v2
+  CONTROLLER_PATH: .github/workflows/patch-create-autocomplete-adjudication-v2.yml
+  TARGET_BRANCH: qa/create-autocomplete-adjudicate-cac2fbab
+  TARGET_PATH: .github/workflows/create-autocomplete-adjudicate-cac2fbab.yml
+  EXPECTED_TARGET_HEAD: e7c73dc8e0e517707486e9cbfdeddeb6f2212b12
+  TARGET_PR: "588"
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Guard exact patcher and target controller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.sha }}' = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          patcher_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$patcher_files" = "$CONTROLLER_PATH"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${TARGET_BRANCH}" --jq .object.sha)" = "$EXPECTED_TARGET_HEAD"
+          target_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${TARGET_PR}")"
+          test "$(jq -r .state <<<"$target_pr")" = 'open'
+          test "$(jq -r .head.ref <<<"$target_pr")" = "$TARGET_BRANCH"
+          test "$(jq -r .head.sha <<<"$target_pr")" = "$EXPECTED_TARGET_HEAD"
+
+      - name: Patch workspace-safe evidence paths on the target controller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${TARGET_PATH}?ref=${TARGET_BRANCH}")"
+          blob_sha="$(jq -r .sha <<<"$metadata")"
+          jq -r .content <<<"$metadata" | tr -d '\n' | base64 -d > /tmp/original.yml
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('/tmp/original.yml')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  '  EVIDENCE_DIR: create-autocomplete-adjudication-cac2fbab',
+                  '  EVIDENCE_DIR: /tmp/create-autocomplete-adjudication-cac2fbab',
+              ),
+              (
+                  '          mkdir -p prior-evidence "$EVIDENCE_DIR"',
+                  '          mkdir -p /tmp/prior-evidence "$EVIDENCE_DIR"',
+              ),
+              (
+                  '            --dir prior-evidence',
+                  '            --dir /tmp/prior-evidence',
+              ),
+              (
+                  '          test -f prior-evidence/exact-differential.json',
+                  '          test -f /tmp/prior-evidence/exact-differential.json',
+              ),
+              (
+                  '          cp prior-evidence/exact-differential.json "$EVIDENCE_DIR/prior-exact-differential.json"',
+                  '          cp /tmp/prior-evidence/exact-differential.json "$EVIDENCE_DIR/prior-exact-differential.json"',
+              ),
+              (
+                  "            fs.readFileSync('prior-evidence/exact-differential.json', 'utf8'),",
+                  "            fs.readFileSync('/tmp/prior-evidence/exact-differential.json', 'utf8'),",
+              ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'unexpected replacement inventory for {old!r}: {count}')
+              text = text.replace(old, new)
+          Path('/tmp/patched.yml').write_text(text, encoding='utf-8')
+          PY
+
+          ruby -e 'require "yaml"; YAML.parse_file(ARGV[0]) or abort("invalid YAML")' /tmp/patched.yml
+          diff -u /tmp/original.yml /tmp/patched.yml | tee /tmp/controller.patch || true
+          test "$(grep -c '/tmp/prior-evidence' /tmp/patched.yml)" -ge 5
+          test "$(grep -c '/tmp/create-autocomplete-adjudication-cac2fbab' /tmp/patched.yml)" -eq 1
+
+          encoded="$(base64 -w0 /tmp/patched.yml)"
+          jq -n \
+            --arg message 'Keep adjudication evidence outside the checkout workspace' \
+            --arg content "$encoded" \
+            --arg sha "$blob_sha" \
+            --arg branch "$TARGET_BRANCH" \
+            '{message:$message,content:$content,sha:$sha,branch:$branch}' \
+            | gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${TARGET_PATH}" --input - \
+            | tee /tmp/update.json
+          new_head="$(jq -r .commit.sha /tmp/update.json)"
+          test -n "$new_head"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${TARGET_BRANCH}" --jq .object.sha)" = "$new_head"
+          printf '%s\n' "$new_head"
