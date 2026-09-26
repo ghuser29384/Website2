@@ -585,7 +585,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             primaryAction={{ href: createHref, label: "Create a proposal" }}
             showLogout={isAuthenticated}
           />
-          <p className={densityStyles.routeContext}>Offers · Live directory</p>
         </div>
       </header>
 
@@ -610,31 +609,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         ) : null}
 
         <section className={densityStyles.workspace} aria-labelledby="directory-heading">
-          <aside className={densityStyles.introRail}>
-            <p className={densityStyles.sectionLabel}>Live offers</p>
-            <h1 id="directory-heading">Find a live proposal you can evaluate quickly.</h1>
+          <header className={densityStyles.introRail}>
+            <h1 id="directory-heading">Live proposals</h1>
             <p className={densityStyles.introCopy}>
-              Search by outcome, evidence, budget, or deadline, then open only the exact terms
-              worth considering.
+              Search by outcome, evidence, budget, or deadline. Open a proposal to review its exact terms.
             </p>
-
-            <details className={densityStyles.infoDisclosure}>
-              <summary>Directory rule</summary>
-              <div>
-                <strong>Live participant records only.</strong>
-                <p>
-                  Search never substitutes examples for live demand. A result with an unknown
-                  amount, deadline, or verification state does not pass a hard constraint on that
-                  field.
-                </p>
-              </div>
-            </details>
-
-            <nav aria-label="Offers supporting routes" className={densityStyles.introLinks}>
-              <Link href="/donate">Make a financial contribution</Link>
-              <Link href="/offers?view=templates">Browse trade templates</Link>
-            </nav>
-          </aside>
+          </header>
 
           <SmartQueryForm
             action="/offers"
@@ -647,10 +627,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
             <div className={densityStyles.searchStage} data-testid="directory-controls">
               <div className={densityStyles.resultsHeading}>
-                <div>
-                  <p className={densityStyles.sectionLabel}>Live directory</p>
-                  <h2>Open participant proposals</h2>
-                </div>
+                <h2 className="sr-only">Open participant proposals</h2>
                 <p aria-live="polite" className={densityStyles.resultCount}>
                   {livePage.error ? (
                     <strong>Results unavailable</strong>
@@ -671,17 +648,19 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     defaultValue={search}
                     id="offers-search"
                     name="search"
-                    placeholder="e.g. verified civic work under $50 before August 1"
+                    placeholder="Search by cause, action, budget, or deadline"
                     type="search"
                   />
                   <button type="submit">Search</button>
                 </div>
               </div>
 
-              <div className={densityStyles.activeState}>
-                <span>{activeFilterLabels.length ? activeFilterLabels.join(" · ") : "All proposal types"}</span>
-                {hasFilters ? <a href={buildLiveHref({})}>Clear all</a> : null}
-              </div>
+              {hasFilters ? (
+                <div className={densityStyles.activeState}>
+                  <span>{activeFilterLabels.length ? activeFilterLabels.join(" · ") : sortLabel}</span>
+                  <a href={buildLiveHref({})}>Clear all</a>
+                </div>
+              ) : null}
             </div>
 
             <details className={densityStyles.filterDisclosure}>
@@ -779,6 +758,25 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 ) : <span />}
               </nav>
             ) : null}
+          </div>
+
+          <div className={densityStyles.directoryHelp}>
+            <details className={densityStyles.infoDisclosure}>
+              <summary>Directory rule</summary>
+              <div>
+                <strong>Live participant records only.</strong>
+                <p>
+                  Search never substitutes examples for live demand. A result with an unknown
+                  amount, deadline, or verification state does not pass a hard constraint on that
+                  field.
+                </p>
+              </div>
+            </details>
+
+            <nav aria-label="Offers supporting routes" className={densityStyles.introLinks}>
+              <Link href="/donate">Make a financial contribution</Link>
+              <Link href="/offers?view=templates">Browse trade templates</Link>
+            </nav>
           </div>
 
           <section className={densityStyles.otherRoutes} aria-labelledby="other-routes-heading">
