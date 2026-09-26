@@ -9,37 +9,37 @@
   padding: 34px clamp(28px, 3vw, 48px) 56px;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-route-board) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-route-board) {
   background: #ffffff !important;
   border-color: #dfe3e9 !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-route-workspace) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-route-workspace) {
   background: #ffffff !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-nav) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-nav) {
   background: #ffffff !important;
   border-color: #e1e5eb !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-brand) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-brand) {
   border-color: #e1e5eb !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-link) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-link) {
   border-radius: 9px !important;
   margin-inline: 12px;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-link.is-active),
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-link[aria-current="page"]) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-link.is-active),
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-link[aria-current="page"]) {
   background: #151719 !important;
-  border-left-color: var(--commitments-redesign-blue) !important;
+  border-left-color: #2858ff !important;
   color: #ffffff !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-plan) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-plan) {
   background: #ffffff !important;
   border-color: #dfe3e9 !important;
   border-radius: 10px !important;
@@ -339,7 +339,7 @@
   padding: 0;
 }
 
-.page :global(.commitments-center) {
+.page:global(.commitments-center) {
   box-shadow: none !important;
 }
 
@@ -355,7 +355,7 @@
 }
 
 @media (max-width: 900px) {
-  :global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-link) {
+  .shell:global(.marketplace-app-shell) :global(.mt-v75-side-link) {
     border-radius: 0 !important;
     margin-inline: 0;
   }

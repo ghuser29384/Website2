@@ -57,3 +57,11 @@ test("streamed loading state uses the same title and five-card skeleton", () => 
   assert.ok(loading.includes("[0, 1, 2, 3, 4]"));
   assert.doesNotMatch(loading, /\$|No commitments|Sign in|Sign out/);
 });
+
+// Every shell override must have a local CSS-module owner. The previous
+// entirely-global selectors fail the clean production CSS-module build.
+test("Commitments shell overrides have a local owner and cannot leak to other routes", () => {
+  assert.ok(page.includes("${redesignStyles.shell} page-shell marketplace-app-shell"));
+  assert.doesNotMatch(css, /:global\(\.marketplace-app-shell:has/);
+  assert.equal((css.match(/\.shell:global\(\.marketplace-app-shell\)/g) ?? []).length, 9);
+});

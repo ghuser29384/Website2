@@ -399,7 +399,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
   const verifiedRecords = data?.records.filter((record) => record.verifiedOutcome) ?? [];
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className={`${redesignStyles.shell} page-shell marketplace-app-shell`}>
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
