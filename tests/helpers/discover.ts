@@ -36,13 +36,26 @@ export async function fulfill(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
-export async function mockAccount(page: Page) {
-  await page.route("**/api/live-account", (route) => fulfill(route, { authenticated: false }));
+export async function mockAccount(page: Page, authenticated = false) {
+  await page.route("**/api/live-account", (route) => fulfill(route, {
+    authenticated,
+    ...(authenticated ? {
+      account: {
+        displayName: "Authenticated Tester",
+        firstName: "Authenticated",
+        initials: "AT",
+      },
+    } : {}),
+  }));
 }
 
-export async function mockInventory(page: Page, resolve: (body: BrowseRequest) => Record<string, unknown> = (body) => responseFor(body)) {
+export async function mockInventory(
+  page: Page,
+  resolve: (body: BrowseRequest) => Record<string, unknown> = (body) => responseFor(body),
+  authenticated = false,
+) {
   const requests: BrowseRequest[] = [];
-  await mockAccount(page);
+  await mockAccount(page, authenticated);
   await page.route("**/api/discover/search", async (route) => {
     const body = route.request().postDataJSON() as BrowseRequest;
     requests.push(body);

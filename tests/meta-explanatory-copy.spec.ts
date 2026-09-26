@@ -48,7 +48,7 @@ test("renders concise states on the affected routes", async ({ page }) => {
   await page.goto("/pilot");
   await expect(page).toHaveURL(/\/start(?:\?.*)?$/);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Choose a real first action." }),
+    page.getByRole("heading", { level: 1, name: "Is this your first time here?" }),
   ).toBeVisible();
   await expect(page.locator("body")).not.toContainText("distinguish a serious first user");
 });

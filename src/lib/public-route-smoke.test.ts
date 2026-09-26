@@ -505,13 +505,11 @@ test("visitor router exposes four live action paths before deeper marketplace me
   const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
-  assert.match(startPage, /Choose a real first action/);
-  assert.match(startPage, /Fund, create, pool, or explore/);
-  assert.match(startPage, /Make a financial contribution/);
-  assert.match(startPage, /Provider-hosted payment/);
-  assert.match(startPage, /No platform custody/);
-  assert.match(startPage, /getMarketplaceOverview/);
-  assert.match(startPage, /VISITOR_PATHS\.map/);
+  assert.match(startPage, /Is this your first time here\?/);
+  assert.match(startPage, /href="\/walkthrough"/);
+  assert.match(startPage, /href="\/login"/);
+  assert.match(startPage, /if \(viewer\) redirect\("\/feed"\)/);
+  assert.doesNotMatch(startPage, /getMarketplaceOverview|VISITOR_PATHS\.map|Make a financial contribution/);
   assert.match(visitorPathsSource, /key: "fund"/);
   assert.match(visitorPathsSource, /key: "create"/);
   assert.match(visitorPathsSource, /key: "pool"/);
