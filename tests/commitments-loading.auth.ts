@@ -100,7 +100,11 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       await expect(record.getByRole("heading", { name: "Private agreement" })).toBeVisible();
       await expect(record.getByText("$1,250", { exact: true }).first()).toBeVisible();
       await expect(record.getByText("€70", { exact: true }).first()).toBeVisible();
-      await expect(record.getByText("No evidence submitted", { exact: true })).toBeVisible();
+      // Evidence and review share a definition; exact text also includes the review child.
+      const evidence = record.getByRole("definition").filter({ hasText: "No evidence submitted" });
+      await expect(evidence).toBeVisible();
+      await expect(evidence).toContainText("No evidence submitted");
+      await expect(evidence.locator("small")).toHaveText("No review case");
       await expect(record.getByRole("link", { name: /Resolve payment authorization/ })).toHaveAttribute("href", /\/agreements\//);
       await expect(page.getByText("Some records unavailable", { exact: false })).toHaveCount(0);
       const resources = page.locator('details').filter({ has: page.locator('summary', { hasText: /^Resource totals$/ }) });
