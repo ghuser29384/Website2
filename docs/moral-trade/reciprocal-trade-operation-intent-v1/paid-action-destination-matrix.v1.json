@@ -1,0 +1,107 @@
+{
+  "artifactKind": "paid_action_destination_matrix",
+  "matrixVersion": "1.0.0",
+  "outerContractFamily": "paid_action",
+  "liveEnablement": "all_disabled_pending_separate_activation_decisions",
+  "destinations": [
+    {
+      "option": 1,
+      "id": "actor_compensation",
+      "label": "Actor personal-income compensation",
+      "nestedOpportunityRequired": false,
+      "additionalGate": "labor_tax_identity_review_before_live_enablement"
+    },
+    {
+      "option": 2,
+      "id": "approved_charity_or_project",
+      "label": "Direct approved charity or project payment",
+      "nestedOpportunityRequired": false,
+      "additionalGate": "destination_approval_and_payment_capability"
+    },
+    {
+      "option": 3,
+      "id": "threshold_pool_contribution",
+      "label": "Assurance, DAC, or other threshold-pool contribution",
+      "nestedOpportunityRequired": true,
+      "allowedNestedTypes": ["threshold_funding_assurance_dac"],
+      "additionalGate": "nested_threshold_authority_same_snapshot"
+    },
+    {
+      "option": 4,
+      "id": "upgrade_payment",
+      "label": "Donation Upgrade or Spending/Consumption Upgrade payment",
+      "nestedOpportunityRequired": true,
+      "allowedNestedTypes": ["donation_upgrade", "spending_consumption_upgrade"],
+      "additionalGate": "preserve_distinct_baseline_evidence_settlement_and_impact_semantics"
+    },
+    {
+      "option": 5,
+      "id": "approved_moral_trade_opportunity",
+      "label": "Another approved Moral Trade opportunity",
+      "nestedOpportunityRequired": true,
+      "allowedNestedTypes": [
+        "donation_redirect",
+        "donation_upgrade",
+        "spending_consumption_upgrade",
+        "co_fund",
+        "co_act",
+        "threshold_funding_assurance_dac",
+        "threshold_sign_on"
+      ],
+      "additionalGate": "nested_mechanism_authority_same_snapshot"
+    },
+    {
+      "option": 6,
+      "id": "merchant_vendor_payment",
+      "label": "Approved merchant or vendor direct payment",
+      "nestedOpportunityRequired": false,
+      "additionalGate": "merchant_approval_and_provider_capability"
+    },
+    {
+      "option": 7,
+      "id": "verified_expense_reimbursement",
+      "label": "Pre-approved verified expense reimbursement to the actor",
+      "nestedOpportunityRequired": false,
+      "additionalGate": "preapproval_and_verified_expense_separate_from_compensation"
+    },
+    {
+      "option": 8,
+      "id": "designated_third_party_beneficiary",
+      "label": "Designated non-actor third-party beneficiary",
+      "nestedOpportunityRequired": false,
+      "additionalGate": "deferred_or_heightened_review_by_default"
+    },
+    {
+      "option": 9,
+      "id": "exact_cent_split_allocation",
+      "label": "Exact-cent split across permitted destinations",
+      "nestedOpportunityRequired": false,
+      "additionalGate": "integer_minor_units_sum_exactly_to_total_and_each_leg_passes_its_own_gate"
+    }
+  ],
+  "systemMoneyLegs": [
+    { "id": "performance_bond", "class": "collateral" },
+    { "id": "security_deposit", "class": "collateral" },
+    { "id": "collateral", "class": "collateral" },
+    { "id": "escrow_or_mandate_authorization", "class": "authorization" },
+    { "id": "refund", "class": "refund" },
+    { "id": "reversal", "class": "refund" },
+    { "id": "chargeback", "class": "refund" },
+    { "id": "failed_settlement_return", "class": "refund" },
+    { "id": "tax_withholding", "class": "tax" },
+    { "id": "required_reporting_amount", "class": "tax" },
+    { "id": "platform_fee", "class": "fee" },
+    { "id": "provider_fee", "class": "fee" },
+    { "id": "dac_success_surcharge", "class": "fee" },
+    { "id": "reserve_allocation", "class": "reserve" },
+    { "id": "dac_failure_bonus", "class": "bonus" }
+  ],
+  "invariants": [
+    "A system money leg is never a substantive destination.",
+    "Expense reimbursement is accounted separately from actor compensation.",
+    "Every allocation identifier is unique within the Paid Action contract.",
+    "Split allocations use integer minor units and must sum exactly to totalAmountMinor.",
+    "Every nested allocation binds generic nested-opportunity fields and passes its own authority under the same snapshot.",
+    "Partial or failed settlement cannot be interpreted as full substantive performance."
+  ]
+}

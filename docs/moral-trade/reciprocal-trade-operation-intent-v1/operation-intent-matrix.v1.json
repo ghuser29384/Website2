@@ -1,0 +1,416 @@
+{
+  "artifactKind": "moral_trade_operation_intent_matrix",
+  "matrixVersion": "1.0.0",
+  "boundBaseCommit": "75fd512e6cf82e2c51df53e211b854c0263109c3",
+  "ownerDecisionSource": {
+    "issue": 701,
+    "commentId": 5300603136,
+    "status": "frozen_for_design_and_shadow"
+  },
+  "commonGateOrder": [
+    "schema_and_synthetic_provenance",
+    "mechanism_and_contract_family",
+    "actor_and_identity",
+    "intent_specific_lifecycle",
+    "database_authoritative_compatibility",
+    "blocks_and_restrictions",
+    "current_engagement_conflicts",
+    "structured_safety_validity_baseline_legality_participant_policy",
+    "product_consent_and_privacy",
+    "nested_mechanism_authority",
+    "intent_specific_transaction_snapshot",
+    "research_only_additions"
+  ],
+  "commonRules": {
+    "failClosed": "Missing, stale, contradictory, unknown, or unbound required state fails the applicable candidate gate.",
+    "history": "Active interests, invitations, threads, agreements, and duplicate-current pairs block a new product pair. Terminal history does not block by itself but must be captured for research interference.",
+    "collation": "Cause and contract compatibility is database-authoritative. Application code must not reproduce unfrozen PostgreSQL ILIKE Unicode behavior.",
+    "transaction": "Every mutation must invoke and revalidate the common authority immediately before mutation in the same PostgreSQL transaction snapshot.",
+    "structuredSafety": "Current structured moderation, noncompensable harm or threat, validity, baseline, legality, and participant-policy state is required; free text is never clearance.",
+    "feed": "Mechanism authorities emit unified envelopes. Cross-mechanism ranking may order eligible envelopes but cannot create, widen, or override eligibility.",
+    "paidAction": "Allocation identifiers are unique, integer minor units sum exactly, nested destination types follow the destination matrix, and system money legs never count as substantive consideration.",
+    "nested": "Each nested opportunity has a unique identifier, depth exactly one, the evaluated root opportunity as parent, an acyclic nested ancestry graph, current frozen terms, and an eligible authority result from the same snapshot.",
+    "coAct": "Direct Feed presentation carries no nested role or promised state; a nested Co-Act obligation binds exactly one role and the promised state fixed by its typed obligation level.",
+    "consent": "Product discovery, invitation delivery and acceptance, and research consent or waiver are separate typed states.",
+    "research": "recommendation_graph_edges is never matchability authority and no participant-level causal or expected-additional output is permitted."
+  },
+  "intents": [
+    {
+      "intent": "cross_mechanism_feed_ingestion_and_ranking",
+      "layer": "cross_mechanism_feed",
+      "allowedMechanismFamilies": [
+        "reciprocal_trade",
+        "donation_redirect",
+        "donation_upgrade",
+        "spending_consumption_upgrade",
+        "co_fund",
+        "co_act",
+        "threshold_funding_assurance_dac",
+        "threshold_sign_on"
+      ],
+      "allowedOuterContractFamilies": [
+        "reciprocal_pledge_swap",
+        "paid_action",
+        null
+      ],
+      "targetOfferPolicy": "not_required_at_feed_boundary",
+      "lifecycleRequirements": "The mechanism authority must attest a current, eligible opportunity and freeze terms version, terms hash, source revision, effective time, and authority snapshot in the envelope.",
+      "compatibilitySemantics": "Delegated to the named mechanism authority; the Feed does not run reciprocal-cause logic for independent mechanisms.",
+      "financialAttachmentCompatibility": "Delegated to the mechanism authority. Paid Action destinations remain ontology-only and disabled for live activation.",
+      "identityRequirements": "Viewer authorization and source privacy must permit delivery; a mechanism envelope must not expose a private source-bound delivery as public inventory.",
+      "blockAndRestrictionRules": "The envelope must reflect the mechanism authority's current block and restriction decision. Ranking cannot override a failed authority.",
+      "engagementRules": "Mechanism-specific current engagement conflicts are resolved before envelope emission.",
+      "structuredGateRules": "Mechanism-specific structured gates must be current and cleared before envelope emission.",
+      "productConsentAndPrivacyRules": "Applicable product-discovery consent and delivery privacy are required. Invitation and research consent are not inferred.",
+      "researchOnlyRules": "None. Research-only envelopes cannot enter the product Feed.",
+      "effectiveTimeAndSnapshot": "One envelope binds one mechanism-authority snapshot; ranking is non-authoritative ordering over accepted envelopes.",
+      "commonGateIds": [
+        "schema_and_synthetic_provenance",
+        "mechanism_and_contract_family",
+        "actor_and_identity",
+        "product_consent_and_privacy"
+      ],
+      "intentSpecificGateIds": [
+        "mechanism_authority_attestation",
+        "opportunity_envelope",
+        "ranking_non_override",
+        "source_channel"
+      ],
+      "successOutput": "One accepted unified opportunity envelope eligible only for cross-mechanism ordering.",
+      "runtimeStatus": "shadow_only_not_wired",
+      "differentialSourceRowIds": [
+        "cross-feed-base-inventory-and-ranking",
+        "cross-feed-a1-additional-mechanisms",
+        "cross-feed-pareto-ordering"
+      ],
+      "testTags": [
+        "cross_mechanism_feed",
+        "authority_non_override",
+        "co_act_direct"
+      ]
+    },
+    {
+      "intent": "reciprocal_trade_match_suggestion_list",
+      "layer": "reciprocal_trade_mechanism_authority",
+      "allowedMechanismFamilies": [
+        "reciprocal_trade"
+      ],
+      "allowedOuterContractFamilies": [
+        "reciprocal_pledge_swap",
+        "paid_action"
+      ],
+      "targetOfferPolicy": "required",
+      "lifecycleRequirements": "Source and target are distinct, current, published, open, operative, and revision-bound.",
+      "compatibilitySemantics": "reciprocal_pledge_swap requires a database-bound reciprocal-cause result; paid_action requires a database-bound typed action-and-consideration compatibility result.",
+      "financialAttachmentCompatibility": "Paid Action uses the nine-option destination schema and separate system money legs. No destination is live-enabled by this tranche.",
+      "identityRequirements": "Distinct offers and owners; actor is the source owner or another explicitly authorized role.",
+      "blockAndRestrictionRules": "Either-direction blocks and active or reviewing account, role, mechanism, or pair restrictions block.",
+      "engagementRules": "Active interest, invitation, thread, agreement, or duplicate-current pair blocks. Captured terminal history alone does not.",
+      "structuredGateRules": "Both offers and owners require current cleared structured states.",
+      "productConsentAndPrivacyRules": "Both sides require applicable product-discovery consent and compatible privacy scopes.",
+      "researchOnlyRules": "None.",
+      "effectiveTimeAndSnapshot": "Read-only candidate decision under one frozen snapshot. The exact same common gates must make start_suggested_match actionable if state does not change.",
+      "commonGateIds": [
+        "schema_and_synthetic_provenance",
+        "mechanism_and_contract_family",
+        "actor_and_identity",
+        "intent_specific_lifecycle",
+        "database_authoritative_compatibility",
+        "blocks_and_restrictions",
+        "current_engagement_conflicts",
+        "structured_safety_validity_baseline_legality_participant_policy",
+        "product_consent_and_privacy",
+        "nested_mechanism_authority"
+      ],
+      "intentSpecificGateIds": [
+        "actionable_suggestion_equivalence"
+      ],
+      "successOutput": "A candidate pair that is semantically actionable by start_suggested_match under the same state.",
+      "runtimeStatus": "shadow_only_not_wired",
+      "differentialSourceRowIds": [
+        "reciprocal-suggestion-query",
+        "reciprocal-suggestion-ui",
+        "structured-gate-candidates",
+        "block-restriction-and-history-sources"
+      ],
+      "testTags": [
+        "reciprocal_suggestion",
+        "collation_boundary",
+        "active_conflicts",
+        "paid_action"
+      ]
+    },
+    {
+      "intent": "start_suggested_match",
+      "layer": "reciprocal_trade_mechanism_authority",
+      "allowedMechanismFamilies": [
+        "reciprocal_trade"
+      ],
+      "allowedOuterContractFamilies": [
+        "reciprocal_pledge_swap",
+        "paid_action"
+      ],
+      "targetOfferPolicy": "required",
+      "lifecycleRequirements": "Same as reciprocal_trade_match_suggestion_list at mutation time.",
+      "compatibilitySemantics": "Same database-authoritative compatibility result as the suggestion intent, recomputed or re-read inside the mutation transaction.",
+      "financialAttachmentCompatibility": "Typed Paid Action consideration and nested authorities must still pass; every live payment destination remains disabled.",
+      "identityRequirements": "Authorized source owner, distinct target owner, and exact source and target identifiers.",
+      "blockAndRestrictionRules": "Re-evaluate all either-direction blocks and active restrictions after pair lock and immediately before mutation.",
+      "engagementRules": "Re-evaluate active interests, invitations, threads, agreements, and duplicate-current pair state. A blocked or other non-closed thread cannot be reused.",
+      "structuredGateRules": "Both offers and owners require current cleared states in the mutation snapshot.",
+      "productConsentAndPrivacyRules": "Both sides require product-discovery permission and compatible privacy. Invitation acceptance remains a separate later transition unless frozen terms explicitly require prior acceptance.",
+      "researchOnlyRules": "None.",
+      "effectiveTimeAndSnapshot": "Pair lock, authority decision, and thread or proposal mutation share one PostgreSQL transaction snapshot; revision mismatch or concurrency fails closed.",
+      "commonGateIds": [
+        "schema_and_synthetic_provenance",
+        "mechanism_and_contract_family",
+        "actor_and_identity",
+        "intent_specific_lifecycle",
+        "database_authoritative_compatibility",
+        "blocks_and_restrictions",
+        "current_engagement_conflicts",
+        "structured_safety_validity_baseline_legality_participant_policy",
+        "product_consent_and_privacy",
+        "nested_mechanism_authority",
+        "intent_specific_transaction_snapshot"
+      ],
+      "intentSpecificGateIds": [
+        "same_transaction_revalidation",
+        "pair_lock",
+        "no_blocked_thread_resurrection"
+      ],
+      "successOutput": "Authority permission to perform only the named start-match mutation in the same transaction.",
+      "runtimeStatus": "shadow_only_not_wired",
+      "differentialSourceRowIds": [
+        "reciprocal-suggestion-ui",
+        "start-suggested-match-mutation",
+        "invitation-database-authority-chain",
+        "downstream-invitation-response-counterproposal-and-confirmation",
+        "structured-gate-candidates",
+        "block-restriction-and-history-sources"
+      ],
+      "testTags": [
+        "toctou",
+        "concurrency",
+        "blocked_thread",
+        "nested_failure"
+      ]
+    },
+    {
+      "intent": "create_invitation",
+      "layer": "reciprocal_trade_mechanism_authority",
+      "allowedMechanismFamilies": [
+        "reciprocal_trade"
+      ],
+      "allowedOuterContractFamilies": [
+        "reciprocal_pledge_swap",
+        "paid_action"
+      ],
+      "targetOfferPolicy": "optional_for_account_bound_or_first_claim_recipient",
+      "lifecycleRequirements": "The source is current, published, open, operative, and revision-bound. A supplied target offer must also be current.",
+      "compatibilitySemantics": "If an invitation is bound to a target offer, use the applicable database compatibility decision; otherwise bind the exact source terms and intended recipient channel.",
+      "financialAttachmentCompatibility": "The complete Paid Action schema is representable, but every destination is fail-closed for live enablement until separate payment, legal, and provider review.",
+      "identityRequirements": "Authorized source owner; no self-invitation; an account-bound recipient or explicitly first-claim private link contract.",
+      "blockAndRestrictionRules": "Known recipient pairs require either-direction block and active restriction checks. Unknown first-claim recipients must be rechecked atomically on claim and acceptance.",
+      "engagementRules": "An active invitation or other current pair engagement blocks duplicate creation where the recipient is known.",
+      "structuredGateRules": "Source structured gates are required at creation; recipient participant-policy gates are required when identity is known and again on acceptance.",
+      "productConsentAndPrivacyRules": "Invitation-delivery permission and invitation acceptance are separate. Creation may leave acceptance pending and creates no obligation; acceptance is required before an agreement transition.",
+      "researchOnlyRules": "Invitation is never research consent.",
+      "effectiveTimeAndSnapshot": "Invitation insert and current-state revalidation share one transaction. Recipient claim and response repeat applicable gates in their own mutation transaction.",
+      "commonGateIds": [
+        "schema_and_synthetic_provenance",
+        "mechanism_and_contract_family",
+        "actor_and_identity",
+        "intent_specific_lifecycle",
+        "blocks_and_restrictions",
+        "current_engagement_conflicts",
+        "structured_safety_validity_baseline_legality_participant_policy",
+        "product_consent_and_privacy",
+        "nested_mechanism_authority",
+        "intent_specific_transaction_snapshot"
+      ],
+      "intentSpecificGateIds": [
+        "invitation_delivery_permission",
+        "recipient_binding",
+        "acceptance_separation"
+      ],
+      "successOutput": "Authority permission to create one revocable, expiring invitation that creates no obligation.",
+      "runtimeStatus": "shadow_only_not_wired",
+      "differentialSourceRowIds": [
+        "invitation-ui-and-server-action",
+        "invitation-database-authority-chain",
+        "downstream-invitation-response-counterproposal-and-confirmation",
+        "structured-gate-candidates",
+        "block-restriction-and-history-sources"
+      ],
+      "testTags": [
+        "invitation_consent",
+        "blocks",
+        "duplicate_invitation",
+        "paid_action"
+      ]
+    },
+    {
+      "intent": "ordinary_publish_or_review",
+      "layer": "reciprocal_trade_mechanism_authority",
+      "allowedMechanismFamilies": [
+        "reciprocal_trade"
+      ],
+      "allowedOuterContractFamilies": [
+        "reciprocal_pledge_swap",
+        "paid_action"
+      ],
+      "targetOfferPolicy": "forbidden",
+      "lifecycleRequirements": "A current source draft is pending_review and paused from public inventory; approval may publish only the reviewed frozen revision.",
+      "compatibilitySemantics": "No pair compatibility decision is made at publication. Contract-family and nested terms must nevertheless be structurally valid.",
+      "financialAttachmentCompatibility": "Paid Action ontology may be reviewed in shadow, but no destination becomes live-enabled and no payment authorization is created.",
+      "identityRequirements": "Authorized reviewer plus exact source owner and offer revision.",
+      "blockAndRestrictionRules": "Applicable owner, role, and mechanism restrictions block approval; pair rules are deferred until a counterparty exists.",
+      "engagementRules": "Duplicate active offer and immutable source-link constraints apply; no thread or agreement is created by review.",
+      "structuredGateRules": "Source moderation, noncompensable harm or threat, validity, baseline, legality, and participant-policy states must be current and cleared.",
+      "productConsentAndPrivacyRules": "Product publication consent and public privacy scope are required. Research consent is separate.",
+      "researchOnlyRules": "None.",
+      "effectiveTimeAndSnapshot": "Authority revalidation and publication or review-state mutation share one transaction and exact terms revision.",
+      "commonGateIds": [
+        "schema_and_synthetic_provenance",
+        "mechanism_and_contract_family",
+        "actor_and_identity",
+        "intent_specific_lifecycle",
+        "blocks_and_restrictions",
+        "structured_safety_validity_baseline_legality_participant_policy",
+        "product_consent_and_privacy",
+        "nested_mechanism_authority",
+        "intent_specific_transaction_snapshot"
+      ],
+      "intentSpecificGateIds": [
+        "reviewer_authorization",
+        "public_inventory_boundary"
+      ],
+      "successOutput": "Authority permission for only the named review transition in the same transaction.",
+      "runtimeStatus": "shadow_only_not_wired",
+      "differentialSourceRowIds": [
+        "ordinary-review-router-and-mutation",
+        "structured-gate-candidates"
+      ],
+      "testTags": [
+        "ordinary_review",
+        "structured_gates",
+        "toctou"
+      ]
+    },
+    {
+      "intent": "feed_private_delivery",
+      "layer": "source_bound_private_channel",
+      "allowedMechanismFamilies": [
+        "reciprocal_trade"
+      ],
+      "allowedOuterContractFamilies": [
+        "reciprocal_pledge_swap",
+        "paid_action"
+      ],
+      "targetOfferPolicy": "required_as_exact_original_source",
+      "lifecycleRequirements": "Derived source is pending_review and private; original target is current, published, open, operative, and at the exact bound terms version, hash, and source revision.",
+      "compatibilitySemantics": "The exact source relationship and mechanism-specific nested authorities replace public reciprocal listing semantics; this is not cross-mechanism Feed ingestion.",
+      "financialAttachmentCompatibility": "Paid Action remains shadow-only. No money leg may be authorized by private delivery.",
+      "identityRequirements": "Authorized reviewer, distinct creator and original owner, and exact source-bound counterparty.",
+      "blockAndRestrictionRules": "Either-direction block and all active restrictions are rechecked after pair lock.",
+      "engagementRules": "Active current pair conflicts block or require the exact idempotent delivery record; terminal history is retained.",
+      "structuredGateRules": "Derived and original offers and both participants require current cleared structured states.",
+      "productConsentAndPrivacyRules": "Exact source-bound private-delivery permission and compatible private scopes are required; public publication is forbidden.",
+      "researchOnlyRules": "Private delivery is not research inclusion.",
+      "effectiveTimeAndSnapshot": "Pair lock, exact source revision revalidation, authority decision, counterproposal insert, and derived-draft close share one transaction.",
+      "commonGateIds": [
+        "schema_and_synthetic_provenance",
+        "mechanism_and_contract_family",
+        "actor_and_identity",
+        "intent_specific_lifecycle",
+        "blocks_and_restrictions",
+        "current_engagement_conflicts",
+        "structured_safety_validity_baseline_legality_participant_policy",
+        "product_consent_and_privacy",
+        "nested_mechanism_authority",
+        "intent_specific_transaction_snapshot"
+      ],
+      "intentSpecificGateIds": [
+        "exact_source_binding",
+        "private_channel_only",
+        "same_transaction_delivery"
+      ],
+      "successOutput": "Authority permission for one idempotent private delivery to the exact source counterparty.",
+      "runtimeStatus": "shadow_only_not_wired",
+      "differentialSourceRowIds": [
+        "feed-private-delivery-router-and-rpc",
+        "structured-gate-candidates",
+        "block-restriction-and-history-sources"
+      ],
+      "testTags": [
+        "private_delivery",
+        "source_revision",
+        "toctou",
+        "public_feed_separation"
+      ]
+    },
+    {
+      "intent": "research_edge_projection",
+      "layer": "research_adapter_after_product_authority",
+      "allowedMechanismFamilies": [
+        "reciprocal_trade"
+      ],
+      "allowedOuterContractFamilies": [
+        "reciprocal_pledge_swap",
+        "paid_action"
+      ],
+      "targetOfferPolicy": "required",
+      "lifecycleRequirements": "A product-authority candidate pair is projected without changing product state; current exclusion and terminal historical interference remain distinct.",
+      "compatibilitySemantics": "Consumes the database-authoritative product compatibility result. recommendation_graph_edges cannot supply or replace it.",
+      "financialAttachmentCompatibility": "Preserves typed Paid Action and settlement state only as approved research fields; it never authorizes payment.",
+      "identityRequirements": "Synthetic-only in this package. Protected identities or rows are prohibited.",
+      "blockAndRestrictionRules": "Current blocks and restrictions exclude the edge; captured terminal history remains an interference attribute.",
+      "engagementRules": "Current engagement conflicts exclude the edge. Terminal historical states are retained and never silently converted to zero.",
+      "structuredGateRules": "All applicable product structured gates remain required before research-only additions.",
+      "productConsentAndPrivacyRules": "Product consent is not research consent. Separate study-specific consent or an independently approved waiver or alteration is required.",
+      "researchOnlyRules": "Bound research purpose, privacy and ethics determinations, no recommendation-edge authority, no assignment entropy, and no participant causal output.",
+      "effectiveTimeAndSnapshot": "Read-only projection from one frozen authority snapshot; no product mutation or study execution.",
+      "commonGateIds": [
+        "schema_and_synthetic_provenance",
+        "mechanism_and_contract_family",
+        "actor_and_identity",
+        "intent_specific_lifecycle",
+        "database_authoritative_compatibility",
+        "blocks_and_restrictions",
+        "current_engagement_conflicts",
+        "structured_safety_validity_baseline_legality_participant_policy",
+        "product_consent_and_privacy",
+        "nested_mechanism_authority",
+        "research_only_additions"
+      ],
+      "intentSpecificGateIds": [
+        "research_purpose",
+        "research_consent_or_waiver",
+        "historical_interference",
+        "no_graph_substitution",
+        "no_causal_output"
+      ],
+      "successOutput": "A synthetic shadow edge decision only; never registration, assignment, contact, or causal attribution.",
+      "runtimeStatus": "shadow_only_not_wired",
+      "differentialSourceRowIds": [
+        "research-projection-and-recommendation-graph-boundary",
+        "structured-gate-candidates",
+        "block-restriction-and-history-sources"
+      ],
+      "testTags": [
+        "research_consent",
+        "history",
+        "recommendation_graph_prohibition",
+        "causal_output_prohibition"
+      ]
+    }
+  ],
+  "releaseBoundary": {
+    "releaseClassification": "repository_only",
+    "disposition": "do_not_merge_or_deploy",
+    "sqlAuthorityCandidateIncluded": false,
+    "runtimeCallSitesWired": false,
+    "liveEligibleAlwaysFalse": true
+  }
+}

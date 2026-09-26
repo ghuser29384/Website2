@@ -1,0 +1,2178 @@
+{
+  "artifactKind": "moral_trade_operation_intent_synthetic_shadow_fixtures",
+  "fixtureVersion": "1.0.0",
+  "baseInput": {
+    "schemaVersion": "moral-trade-operation-intent-input-v1.0.0",
+    "evaluatorVersion": "moral-trade-operation-intent-shadow-v1.0.0",
+    "subjectMode": "synthetic_shadow",
+    "intent": "reciprocal_trade_match_suggestion_list",
+    "effectiveAt": "2026-08-15T00:00:00.000Z",
+    "snapshot": {
+      "snapshotId": "synthetic:snapshot:base",
+      "transactionId": "synthetic:transaction:base",
+      "decisionRevision": 1,
+      "mutationRevision": 1,
+      "sameTransaction": true,
+      "revalidatedImmediatelyBeforeMutation": true,
+      "concurrentMutationDetected": false
+    },
+    "actor": {
+      "actorId": "synthetic:profile:source",
+      "authorized": true,
+      "role": "source_owner"
+    },
+    "counterparty": {
+      "profileId": "synthetic:profile:target",
+      "distinctFromActor": true,
+      "accountBindingStatus": "bound"
+    },
+    "sourceOffer": {
+      "offerId": "synthetic:offer:source",
+      "ownerId": "synthetic:profile:source",
+      "mechanismFamily": "reciprocal_trade",
+      "outerContractFamily": "reciprocal_pledge_swap",
+      "workflowStatus": "published",
+      "operationalStatus": "open",
+      "operative": true,
+      "termsVersion": 1,
+      "termsHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "termsCurrent": true,
+      "sourceRevision": "synthetic:revision:source:1",
+      "sourceRevisionCurrent": true,
+      "privacyScopeCompatible": true
+    },
+    "targetOffer": {
+      "offerId": "synthetic:offer:target",
+      "ownerId": "synthetic:profile:target",
+      "mechanismFamily": "reciprocal_trade",
+      "outerContractFamily": "reciprocal_pledge_swap",
+      "workflowStatus": "published",
+      "operationalStatus": "open",
+      "operative": true,
+      "termsVersion": 1,
+      "termsHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "termsCurrent": true,
+      "sourceRevision": "synthetic:revision:target:1",
+      "sourceRevisionCurrent": true,
+      "privacyScopeCompatible": true
+    },
+    "pair": {
+      "blockStatus": "clear",
+      "restrictions": [],
+      "engagements": {
+        "activeInterest": false,
+        "activeInvitation": false,
+        "activeThread": false,
+        "activeAgreement": false,
+        "duplicateCurrentPair": false,
+        "terminalHistoricalRecordsCaptured": true,
+        "terminalHistoricalCount": 0
+      },
+      "compatibility": {
+        "authority": "postgres_database",
+        "kind": "reciprocal_cause_pair",
+        "status": "match",
+        "patternClass": "exact_ascii",
+        "databaseResultBound": true,
+        "collationIdentity": "synthetic:collation:postgres-main"
+      }
+    },
+    "structuredGates": {
+      "source": {
+        "moderation": "cleared",
+        "noncompensableHarmThreat": "cleared",
+        "validity": "cleared",
+        "baseline": "cleared",
+        "legality": "cleared",
+        "participantPolicy": "cleared"
+      },
+      "target": {
+        "moderation": "cleared",
+        "noncompensableHarmThreat": "cleared",
+        "validity": "cleared",
+        "baseline": "cleared",
+        "legality": "cleared",
+        "participantPolicy": "cleared"
+      }
+    },
+    "consent": {
+      "sourceProductDiscovery": "granted",
+      "targetProductDiscovery": "granted",
+      "invitationDeliveryPermission": "granted",
+      "invitationAcceptance": "pending",
+      "sourceResearch": "not_required",
+      "targetResearch": "not_required",
+      "privacyScopeCompatible": true
+    },
+    "paidAction": null,
+    "nestedOpportunities": [],
+    "systemMoneyLegs": [],
+    "coAct": null,
+    "feed": {
+      "sourceChannel": "public_mechanism",
+      "mechanismAuthorityEligible": true,
+      "rankingAttemptedToOverrideAuthority": false,
+      "cta": "start_private_thread",
+      "opportunityEnvelope": null
+    },
+    "privateDelivery": {
+      "applies": false,
+      "boundSourceOfferId": null,
+      "boundTermsVersion": null,
+      "boundTermsHash": null,
+      "boundSourceRevision": null,
+      "exactSourceOfferIdBound": false,
+      "exactTermsVersionBound": false,
+      "exactTermsHashBound": false,
+      "exactSourceRevisionBound": false,
+      "publicMarketPublicationRequested": false
+    },
+    "research": {
+      "applies": false,
+      "purposeBound": false,
+      "studySpecificConsentOrWaiverApproved": false,
+      "recommendationGraphUsedAsAuthority": false,
+      "participantCausalOutputRequested": false,
+      "historicalInterferenceCaptured": true
+    }
+  },
+  "cases": [
+    {
+      "id": "reciprocal_pledge_suggestion_pass",
+      "tags": [
+        "reciprocal_suggestion"
+      ],
+      "patch": {},
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "cross_feed_co_act_direct_pass",
+      "tags": [
+        "cross_mechanism_feed",
+        "co_act_direct",
+        "authority_non_override"
+      ],
+      "patch": {
+        "intent": "cross_mechanism_feed_ingestion_and_ranking",
+        "actor": {
+          "role": "feed_ranker"
+        },
+        "counterparty": {
+          "profileId": null,
+          "distinctFromActor": true,
+          "accountBindingStatus": "not_applicable"
+        },
+        "sourceOffer": {
+          "offerId": "synthetic:offer:coact",
+          "ownerId": "synthetic:profile:coact-owner",
+          "mechanismFamily": "co_act",
+          "outerContractFamily": null,
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:coact:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": null,
+        "structuredGates": {
+          "target": null
+        },
+        "consent": {
+          "targetProductDiscovery": "not_required",
+          "invitationDeliveryPermission": "not_required",
+          "invitationAcceptance": "not_applicable"
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "not_applicable",
+            "status": "unavailable",
+            "patternClass": "not_applicable",
+            "databaseResultBound": false,
+            "collationIdentity": null
+          }
+        },
+        "feed": {
+          "cta": "join_or_review_co_act",
+          "opportunityEnvelope": {
+            "schemaVersion": "moral-trade-opportunity-envelope-v1.0.0",
+            "opportunityId": "synthetic:offer:coact",
+            "mechanismFamily": "co_act",
+            "outerContractFamily": null,
+            "authority": {
+              "authorityId": "synthetic:authority:co_act:v1",
+              "decisionId": "synthetic:decision:coact",
+              "eligible": true,
+              "snapshotId": "synthetic:snapshot:base",
+              "effectiveAt": "2026-08-15T00:00:00.000Z",
+              "reasonCodes": []
+            },
+            "terms": {
+              "version": 1,
+              "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "sourceRevision": "synthetic:revision:coact:1"
+            },
+            "delivery": {
+              "sourceChannel": "public_mechanism",
+              "privacyClass": "public_safe",
+              "cta": "join_or_review_co_act"
+            },
+            "ranking": {
+              "eligible": true,
+              "authorityMayBeOverridden": false,
+              "featureClass": "non_authoritative_ordering_only"
+            }
+          }
+        },
+        "coAct": {
+          "presentation": "direct_feed",
+          "nestedOpportunityId": null,
+          "roleId": null,
+          "obligationLevel": "not_applicable",
+          "promisedState": "not_applicable",
+          "observedState": "invited",
+          "activationState": "active",
+          "capacityState": "available",
+          "timingBound": true,
+          "evidenceBound": true,
+          "withdrawalTermsBound": true,
+          "identityPrivacyBound": true,
+          "participantEligibilityCleared": true,
+          "authorityEligible": true,
+          "promisedStateSatisfied": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": [],
+      "expectedObservationCodes": [
+        "CROSS_MECHANISM_RANKING_NON_AUTHORITATIVE"
+      ]
+    },
+    {
+      "id": "cross_feed_donation_upgrade_pass",
+      "tags": [
+        "cross_mechanism_feed",
+        "mechanism_separation"
+      ],
+      "patch": {
+        "intent": "cross_mechanism_feed_ingestion_and_ranking",
+        "actor": {
+          "role": "feed_ranker"
+        },
+        "counterparty": {
+          "profileId": null,
+          "distinctFromActor": true,
+          "accountBindingStatus": "not_applicable"
+        },
+        "sourceOffer": {
+          "offerId": "synthetic:offer:donation-upgrade",
+          "ownerId": "synthetic:profile:donation-owner",
+          "mechanismFamily": "donation_upgrade",
+          "outerContractFamily": null,
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:donation-upgrade:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": null,
+        "structuredGates": {
+          "target": null
+        },
+        "consent": {
+          "targetProductDiscovery": "not_required",
+          "invitationDeliveryPermission": "not_required",
+          "invitationAcceptance": "not_applicable"
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "not_applicable",
+            "status": "unavailable",
+            "patternClass": "not_applicable",
+            "databaseResultBound": false,
+            "collationIdentity": null
+          }
+        },
+        "feed": {
+          "cta": "review_donation_upgrade",
+          "opportunityEnvelope": {
+            "schemaVersion": "moral-trade-opportunity-envelope-v1.0.0",
+            "opportunityId": "synthetic:offer:donation-upgrade",
+            "mechanismFamily": "donation_upgrade",
+            "outerContractFamily": null,
+            "authority": {
+              "authorityId": "synthetic:authority:donation_upgrade:v1",
+              "decisionId": "synthetic:decision:donation-upgrade",
+              "eligible": true,
+              "snapshotId": "synthetic:snapshot:base",
+              "effectiveAt": "2026-08-15T00:00:00.000Z",
+              "reasonCodes": []
+            },
+            "terms": {
+              "version": 1,
+              "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "sourceRevision": "synthetic:revision:donation-upgrade:1"
+            },
+            "delivery": {
+              "sourceChannel": "public_mechanism",
+              "privacyClass": "public_safe",
+              "cta": "review_donation_upgrade"
+            },
+            "ranking": {
+              "eligible": true,
+              "authorityMayBeOverridden": false,
+              "featureClass": "non_authoritative_ordering_only"
+            }
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "cross_feed_authority_cannot_be_overridden",
+      "tags": [
+        "cross_mechanism_feed",
+        "authority_non_override"
+      ],
+      "patch": {
+        "intent": "cross_mechanism_feed_ingestion_and_ranking",
+        "actor": {
+          "role": "feed_ranker"
+        },
+        "counterparty": {
+          "profileId": null,
+          "accountBindingStatus": "not_applicable"
+        },
+        "targetOffer": null,
+        "structuredGates": {
+          "target": null
+        },
+        "consent": {
+          "targetProductDiscovery": "not_required",
+          "invitationDeliveryPermission": "not_required",
+          "invitationAcceptance": "not_applicable"
+        },
+        "feed": {
+          "mechanismAuthorityEligible": false,
+          "rankingAttemptedToOverrideAuthority": true,
+          "opportunityEnvelope": {
+            "schemaVersion": "moral-trade-opportunity-envelope-v1.0.0",
+            "opportunityId": "synthetic:offer:source",
+            "mechanismFamily": "reciprocal_trade",
+            "outerContractFamily": "reciprocal_pledge_swap",
+            "authority": {
+              "authorityId": "synthetic:authority:reciprocal_trade:v1",
+              "decisionId": "synthetic:decision:source",
+              "eligible": true,
+              "snapshotId": "synthetic:snapshot:base",
+              "effectiveAt": "2026-08-15T00:00:00.000Z",
+              "reasonCodes": []
+            },
+            "terms": {
+              "version": 1,
+              "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "sourceRevision": "synthetic:revision:source:1"
+            },
+            "delivery": {
+              "sourceChannel": "public_mechanism",
+              "privacyClass": "public_safe",
+              "cta": "start_private_thread"
+            },
+            "ranking": {
+              "eligible": true,
+              "authorityMayBeOverridden": false,
+              "featureClass": "non_authoritative_ordering_only"
+            }
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "MECHANISM_AUTHORITY_NOT_ELIGIBLE",
+        "FEED_RANKING_AUTHORITY_OVERRIDE_PROHIBITED"
+      ]
+    },
+    {
+      "id": "start_suggested_match_pass",
+      "tags": [
+        "toctou",
+        "reciprocal_suggestion"
+      ],
+      "patch": {
+        "intent": "start_suggested_match"
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": [],
+      "expectedObservationCodes": [
+        "INVITATION_ACCEPTANCE_PENDING"
+      ]
+    },
+    {
+      "id": "toctou_missing_same_transaction_revalidation",
+      "tags": [
+        "toctou"
+      ],
+      "patch": {
+        "intent": "start_suggested_match",
+        "snapshot": {
+          "sameTransaction": false,
+          "revalidatedImmediatelyBeforeMutation": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "SAME_TRANSACTION_REVALIDATION_REQUIRED"
+      ]
+    },
+    {
+      "id": "toctou_snapshot_revision_mismatch",
+      "tags": [
+        "toctou"
+      ],
+      "patch": {
+        "intent": "start_suggested_match",
+        "snapshot": {
+          "mutationRevision": 2
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "SNAPSHOT_REVISION_MISMATCH"
+      ]
+    },
+    {
+      "id": "toctou_concurrent_mutation",
+      "tags": [
+        "toctou",
+        "concurrency"
+      ],
+      "patch": {
+        "intent": "start_suggested_match",
+        "snapshot": {
+          "concurrentMutationDetected": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "CONCURRENT_MUTATION_DETECTED"
+      ]
+    },
+    {
+      "id": "either_direction_pair_block",
+      "tags": [
+        "blocks"
+      ],
+      "patch": {
+        "pair": {
+          "blockStatus": "blocked"
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "PAIR_BLOCKED"
+      ]
+    },
+    {
+      "id": "active_pair_restriction",
+      "tags": [
+        "restrictions"
+      ],
+      "patch": {
+        "pair": {
+          "restrictions": [
+            {
+              "scope": "pair",
+              "status": "active",
+              "startsAt": "2026-08-14T00:00:00.000Z",
+              "expiresAt": null,
+              "revokedAt": null
+            }
+          ]
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "ACTIVE_RESTRICTION"
+      ]
+    },
+    {
+      "id": "expired_restriction_is_nonblocking",
+      "tags": [
+        "restrictions",
+        "time_semantics"
+      ],
+      "patch": {
+        "pair": {
+          "restrictions": [
+            {
+              "scope": "mechanism",
+              "status": "expired",
+              "startsAt": "2026-08-01T00:00:00.000Z",
+              "expiresAt": "2026-08-14T00:00:00.000Z",
+              "revokedAt": null
+            }
+          ]
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "active_thread_blocks_new_pair",
+      "tags": [
+        "history_states",
+        "blocked_thread"
+      ],
+      "patch": {
+        "pair": {
+          "engagements": {
+            "activeThread": true
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "ACTIVE_THREAD_CONFLICT"
+      ]
+    },
+    {
+      "id": "terminal_history_retained_not_blocking",
+      "tags": [
+        "history_states"
+      ],
+      "patch": {
+        "pair": {
+          "engagements": {
+            "terminalHistoricalCount": 3
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": [],
+      "expectedObservationCodes": [
+        "TERMINAL_HISTORY_RETAINED"
+      ]
+    },
+    {
+      "id": "unknown_history_fails_closed",
+      "tags": [
+        "history_states"
+      ],
+      "patch": {
+        "pair": {
+          "engagements": {
+            "terminalHistoricalRecordsCaptured": false
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "HISTORICAL_STATE_NOT_CAPTURED"
+      ]
+    },
+    {
+      "id": "unbound_non_ascii_collation_fails_closed",
+      "tags": [
+        "collation_boundary"
+      ],
+      "patch": {
+        "pair": {
+          "compatibility": {
+            "status": "unavailable",
+            "patternClass": "non_ascii",
+            "databaseResultBound": false,
+            "collationIdentity": null
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "DATABASE_COMPATIBILITY_REQUIRED",
+        "DATABASE_COLLATION_IDENTITY_REQUIRED"
+      ]
+    },
+    {
+      "id": "database_bound_percent_pattern_passes_without_app_emulation",
+      "tags": [
+        "collation_boundary"
+      ],
+      "patch": {
+        "pair": {
+          "compatibility": {
+            "patternClass": "percent_pattern"
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "database_bound_underscore_pattern_passes_without_app_emulation",
+      "tags": [
+        "collation_boundary"
+      ],
+      "patch": {
+        "pair": {
+          "compatibility": {
+            "patternClass": "underscore_pattern"
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "database_bound_escape_pattern_passes_without_app_emulation",
+      "tags": [
+        "collation_boundary"
+      ],
+      "patch": {
+        "pair": {
+          "compatibility": {
+            "patternClass": "escape_pattern"
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "database_reports_no_match",
+      "tags": [
+        "collation_boundary"
+      ],
+      "patch": {
+        "pair": {
+          "compatibility": {
+            "status": "no_match"
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "DATABASE_COMPATIBILITY_NO_MATCH"
+      ]
+    },
+    {
+      "id": "structured_source_moderation_block",
+      "tags": [
+        "structured_gates"
+      ],
+      "patch": {
+        "structuredGates": {
+          "source": {
+            "moderation": "blocked"
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "SOURCE_MODERATION_NOT_CLEARED"
+      ]
+    },
+    {
+      "id": "structured_target_participant_policy_missing",
+      "tags": [
+        "structured_gates"
+      ],
+      "patch": {
+        "structuredGates": {
+          "target": {
+            "participantPolicy": "missing"
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "TARGET_PARTICIPANT_POLICY_NOT_CLEARED"
+      ]
+    },
+    {
+      "id": "target_product_discovery_missing",
+      "tags": [
+        "product_consent"
+      ],
+      "patch": {
+        "consent": {
+          "targetProductDiscovery": "missing"
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "TARGET_PRODUCT_DISCOVERY_CONSENT_REQUIRED"
+      ]
+    },
+    {
+      "id": "create_invitation_pending_acceptance_pass",
+      "tags": [
+        "invitation_consent",
+        "toctou"
+      ],
+      "patch": {
+        "intent": "create_invitation",
+        "targetOffer": null,
+        "counterparty": {
+          "profileId": null,
+          "accountBindingStatus": "first_claim_pending"
+        },
+        "structuredGates": {
+          "target": null
+        },
+        "consent": {
+          "targetProductDiscovery": "not_required",
+          "invitationAcceptance": "pending"
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "not_applicable",
+            "status": "unavailable",
+            "patternClass": "not_applicable",
+            "databaseResultBound": false,
+            "collationIdentity": null
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": [],
+      "expectedObservationCodes": [
+        "INVITATION_ACCEPTANCE_PENDING"
+      ]
+    },
+    {
+      "id": "create_invitation_delivery_permission_missing",
+      "tags": [
+        "invitation_consent"
+      ],
+      "patch": {
+        "intent": "create_invitation",
+        "targetOffer": null,
+        "counterparty": {
+          "profileId": null,
+          "accountBindingStatus": "first_claim_pending"
+        },
+        "structuredGates": {
+          "target": null
+        },
+        "consent": {
+          "targetProductDiscovery": "not_required",
+          "invitationDeliveryPermission": "missing",
+          "invitationAcceptance": "pending"
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "not_applicable",
+            "status": "unavailable",
+            "patternClass": "not_applicable",
+            "databaseResultBound": false,
+            "collationIdentity": null
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "INVITATION_DELIVERY_PERMISSION_REQUIRED"
+      ]
+    },
+    {
+      "id": "ordinary_review_pass",
+      "tags": [
+        "ordinary_review",
+        "toctou"
+      ],
+      "patch": {
+        "intent": "ordinary_publish_or_review",
+        "actor": {
+          "role": "reviewer"
+        },
+        "counterparty": {
+          "profileId": null,
+          "accountBindingStatus": "not_applicable"
+        },
+        "sourceOffer": {
+          "workflowStatus": "pending_review",
+          "operationalStatus": "paused",
+          "operative": false
+        },
+        "targetOffer": null,
+        "structuredGates": {
+          "target": null
+        },
+        "consent": {
+          "targetProductDiscovery": "not_required",
+          "invitationDeliveryPermission": "not_required",
+          "invitationAcceptance": "not_applicable"
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "not_applicable",
+            "status": "unavailable",
+            "patternClass": "not_applicable",
+            "databaseResultBound": false,
+            "collationIdentity": null
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "ordinary_review_baseline_blocked",
+      "tags": [
+        "ordinary_review",
+        "structured_gates"
+      ],
+      "patch": {
+        "intent": "ordinary_publish_or_review",
+        "actor": {
+          "role": "reviewer"
+        },
+        "counterparty": {
+          "profileId": null,
+          "accountBindingStatus": "not_applicable"
+        },
+        "sourceOffer": {
+          "workflowStatus": "pending_review",
+          "operationalStatus": "paused",
+          "operative": false
+        },
+        "targetOffer": null,
+        "structuredGates": {
+          "source": {
+            "baseline": "review_required"
+          },
+          "target": null
+        },
+        "consent": {
+          "targetProductDiscovery": "not_required",
+          "invitationDeliveryPermission": "not_required",
+          "invitationAcceptance": "not_applicable"
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "not_applicable",
+            "status": "unavailable",
+            "patternClass": "not_applicable",
+            "databaseResultBound": false,
+            "collationIdentity": null
+          }
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "SOURCE_BASELINE_NOT_CLEARED"
+      ]
+    },
+    {
+      "id": "private_delivery_pass",
+      "tags": [
+        "private_delivery",
+        "source_revision",
+        "public_feed_separation",
+        "toctou"
+      ],
+      "patch": {
+        "intent": "feed_private_delivery",
+        "actor": {
+          "role": "reviewer"
+        },
+        "sourceOffer": {
+          "workflowStatus": "pending_review",
+          "operationalStatus": "paused",
+          "operative": false
+        },
+        "feed": {
+          "sourceChannel": "private_source_bound"
+        },
+        "privateDelivery": {
+          "applies": true,
+          "boundSourceOfferId": "synthetic:offer:target",
+          "boundTermsVersion": 1,
+          "boundTermsHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "boundSourceRevision": "synthetic:revision:target:1",
+          "exactSourceOfferIdBound": true,
+          "exactTermsVersionBound": true,
+          "exactTermsHashBound": true,
+          "exactSourceRevisionBound": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "private_delivery_missing_exact_revision",
+      "tags": [
+        "private_delivery",
+        "source_revision"
+      ],
+      "patch": {
+        "intent": "feed_private_delivery",
+        "actor": {
+          "role": "reviewer"
+        },
+        "sourceOffer": {
+          "workflowStatus": "pending_review",
+          "operationalStatus": "paused",
+          "operative": false
+        },
+        "feed": {
+          "sourceChannel": "private_source_bound"
+        },
+        "privateDelivery": {
+          "applies": true,
+          "boundSourceOfferId": "synthetic:offer:target",
+          "boundTermsVersion": 1,
+          "boundTermsHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "boundSourceRevision": "synthetic:revision:target:1",
+          "exactSourceOfferIdBound": true,
+          "exactTermsVersionBound": true,
+          "exactTermsHashBound": true,
+          "exactSourceRevisionBound": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "PRIVATE_DELIVERY_SOURCE_BINDING_REQUIRED"
+      ]
+    },
+    {
+      "id": "private_delivery_cannot_publish_publicly",
+      "tags": [
+        "private_delivery",
+        "public_feed_separation"
+      ],
+      "patch": {
+        "intent": "feed_private_delivery",
+        "actor": {
+          "role": "reviewer"
+        },
+        "sourceOffer": {
+          "workflowStatus": "pending_review",
+          "operationalStatus": "paused",
+          "operative": false
+        },
+        "feed": {
+          "sourceChannel": "private_source_bound"
+        },
+        "privateDelivery": {
+          "applies": true,
+          "boundSourceOfferId": "synthetic:offer:target",
+          "boundTermsVersion": 1,
+          "boundTermsHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "boundSourceRevision": "synthetic:revision:target:1",
+          "exactSourceOfferIdBound": true,
+          "exactTermsVersionBound": true,
+          "exactTermsHashBound": true,
+          "exactSourceRevisionBound": true,
+          "publicMarketPublicationRequested": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "PRIVATE_DELIVERY_PUBLIC_MARKET_FORBIDDEN"
+      ]
+    },
+    {
+      "id": "private_delivery_wrong_channel",
+      "tags": [
+        "private_delivery",
+        "public_feed_separation"
+      ],
+      "patch": {
+        "intent": "feed_private_delivery",
+        "actor": {
+          "role": "reviewer"
+        },
+        "sourceOffer": {
+          "workflowStatus": "pending_review",
+          "operationalStatus": "paused",
+          "operative": false
+        },
+        "privateDelivery": {
+          "applies": true,
+          "boundSourceOfferId": "synthetic:offer:target",
+          "boundTermsVersion": 1,
+          "boundTermsHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "boundSourceRevision": "synthetic:revision:target:1",
+          "exactSourceOfferIdBound": true,
+          "exactTermsVersionBound": true,
+          "exactTermsHashBound": true,
+          "exactSourceRevisionBound": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "PRIVATE_DELIVERY_CHANNEL_REQUIRED"
+      ]
+    },
+    {
+      "id": "paid_action_actor_compensation_shadow_pass",
+      "tags": [
+        "paid_action"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "actor_compensation",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:actor",
+              "destinationClass": "actor_compensation",
+              "amountMinor": 10000,
+              "nestedOpportunityId": null
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "not_started",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": [],
+      "expectedGlobalIncludes": [
+        "PAYMENT_DESTINATION_LIVE_ENABLEMENT_DEFERRED"
+      ]
+    },
+    {
+      "id": "paid_action_nested_cofund_pass",
+      "tags": [
+        "paid_action",
+        "nested_failure"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "approved_moral_trade_opportunity",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:cofund",
+              "destinationClass": "approved_moral_trade_opportunity",
+              "amountMinor": 10000,
+              "nestedOpportunityId": "synthetic:opportunity:cofund"
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "not_started",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": false
+        },
+        "nestedOpportunities": [
+          {
+            "nestedOpportunityType": "co_fund",
+            "nestedOpportunityId": "synthetic:opportunity:cofund",
+            "nestedTermsVersion": 1,
+            "nestedTermsHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "nestedSourceRevision": "synthetic:revision:cofund:1",
+            "depth": 1,
+            "parentOpportunityId": "synthetic:offer:paid-source",
+            "ancestryOpportunityIds": [],
+            "authorityEligible": true,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          }
+        ]
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "nested_authority_failure",
+      "tags": [
+        "nested_failure"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "approved_moral_trade_opportunity",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:cofund",
+              "destinationClass": "approved_moral_trade_opportunity",
+              "amountMinor": 10000,
+              "nestedOpportunityId": "synthetic:opportunity:cofund"
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "not_started",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": false
+        },
+        "nestedOpportunities": [
+          {
+            "nestedOpportunityType": "co_fund",
+            "nestedOpportunityId": "synthetic:opportunity:cofund",
+            "nestedTermsVersion": 1,
+            "nestedTermsHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "nestedSourceRevision": "synthetic:revision:cofund:1",
+            "depth": 1,
+            "parentOpportunityId": "synthetic:offer:paid-source",
+            "ancestryOpportunityIds": [],
+            "authorityEligible": false,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          }
+        ]
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "NESTED_AUTHORITY_NOT_ELIGIBLE"
+      ]
+    },
+    {
+      "id": "nesting_depth_two_rejected",
+      "tags": [
+        "cycle",
+        "nested_failure"
+      ],
+      "patch": {
+        "nestedOpportunities": [
+          {
+            "nestedOpportunityType": "co_act",
+            "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+            "nestedTermsVersion": 2,
+            "nestedTermsHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "nestedSourceRevision": "synthetic:revision:coact:2",
+            "depth": 2,
+            "parentOpportunityId": "synthetic:offer:source",
+            "ancestryOpportunityIds": [],
+            "authorityEligible": true,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          }
+        ],
+        "coAct": {
+          "presentation": "nested_obligation",
+          "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+          "roleId": "synthetic:role:facilitator",
+          "obligationLevel": "reach_milestone",
+          "promisedState": "milestone_completed",
+          "observedState": "milestone_completed",
+          "activationState": "active",
+          "capacityState": "available",
+          "timingBound": true,
+          "evidenceBound": true,
+          "withdrawalTermsBound": true,
+          "identityPrivacyBound": true,
+          "participantEligibilityCleared": true,
+          "authorityEligible": true,
+          "promisedStateSatisfied": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "NESTING_DEPTH_EXCEEDED"
+      ]
+    },
+    {
+      "id": "nested_self_reference_rejected",
+      "tags": [
+        "cycle",
+        "nested_failure"
+      ],
+      "patch": {
+        "nestedOpportunities": [
+          {
+            "nestedOpportunityType": "co_act",
+            "nestedOpportunityId": "synthetic:offer:source",
+            "nestedTermsVersion": 2,
+            "nestedTermsHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "nestedSourceRevision": "synthetic:revision:coact:2",
+            "depth": 1,
+            "parentOpportunityId": "synthetic:offer:source",
+            "ancestryOpportunityIds": [],
+            "authorityEligible": true,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          }
+        ],
+        "coAct": {
+          "presentation": "nested_obligation",
+          "nestedOpportunityId": "synthetic:offer:source",
+          "roleId": "synthetic:role:facilitator",
+          "obligationLevel": "reach_milestone",
+          "promisedState": "milestone_completed",
+          "observedState": "milestone_completed",
+          "activationState": "active",
+          "capacityState": "available",
+          "timingBound": true,
+          "evidenceBound": true,
+          "withdrawalTermsBound": true,
+          "identityPrivacyBound": true,
+          "participantEligibilityCleared": true,
+          "authorityEligible": true,
+          "promisedStateSatisfied": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "NESTED_SELF_REFERENCE"
+      ]
+    },
+    {
+      "id": "nested_cycle_rejected",
+      "tags": [
+        "cycle",
+        "nested_failure"
+      ],
+      "patch": {
+        "nestedOpportunities": [
+          {
+            "nestedOpportunityType": "co_act",
+            "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+            "nestedTermsVersion": 2,
+            "nestedTermsHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "nestedSourceRevision": "synthetic:revision:coact:2",
+            "depth": 1,
+            "parentOpportunityId": "synthetic:offer:source",
+            "ancestryOpportunityIds": [
+              "synthetic:opportunity:cofund-cycle"
+            ],
+            "authorityEligible": true,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          },
+          {
+            "nestedOpportunityType": "co_fund",
+            "nestedOpportunityId": "synthetic:opportunity:cofund-cycle",
+            "nestedTermsVersion": 1,
+            "nestedTermsHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+            "nestedSourceRevision": "synthetic:revision:cofund-cycle:1",
+            "depth": 1,
+            "parentOpportunityId": "synthetic:offer:source",
+            "ancestryOpportunityIds": [
+              "synthetic:opportunity:coact-nested"
+            ],
+            "authorityEligible": true,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          }
+        ],
+        "coAct": {
+          "presentation": "nested_obligation",
+          "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+          "roleId": "synthetic:role:facilitator",
+          "obligationLevel": "reach_milestone",
+          "promisedState": "milestone_completed",
+          "observedState": "milestone_completed",
+          "activationState": "active",
+          "capacityState": "available",
+          "timingBound": true,
+          "evidenceBound": true,
+          "withdrawalTermsBound": true,
+          "identityPrivacyBound": true,
+          "participantEligibilityCleared": true,
+          "authorityEligible": true,
+          "promisedStateSatisfied": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "NESTED_CYCLE"
+      ]
+    },
+    {
+      "id": "exact_cent_split_pass",
+      "tags": [
+        "split_accounting",
+        "paid_action"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "exact_cent_split_allocation",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:one",
+              "destinationClass": "actor_compensation",
+              "amountMinor": 4001,
+              "nestedOpportunityId": null
+            },
+            {
+              "allocationId": "synthetic:allocation:two",
+              "destinationClass": "approved_charity_or_project",
+              "amountMinor": 5999,
+              "nestedOpportunityId": null
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "not_started",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "exact_cent_split_mismatch",
+      "tags": [
+        "split_accounting",
+        "paid_action"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "exact_cent_split_allocation",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:one",
+              "destinationClass": "actor_compensation",
+              "amountMinor": 4001,
+              "nestedOpportunityId": null
+            },
+            {
+              "allocationId": "synthetic:allocation:two",
+              "destinationClass": "approved_charity_or_project",
+              "amountMinor": 5998,
+              "nestedOpportunityId": null
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "not_started",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "EXACT_CENT_SPLIT_MISMATCH"
+      ]
+    },
+    {
+      "id": "system_leg_cannot_be_substantive_consideration",
+      "tags": [
+        "split_accounting",
+        "paid_action"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "actor_compensation",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:actor",
+              "destinationClass": "actor_compensation",
+              "amountMinor": 10000,
+              "nestedOpportunityId": null
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "not_started",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": true
+        },
+        "systemMoneyLegs": [
+          {
+            "legId": "synthetic:leg:bond",
+            "legType": "performance_bond",
+            "amountMinor": 500,
+            "status": "planned"
+          }
+        ]
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "SUBSTANTIVE_DESTINATION_CONTAINS_SYSTEM_LEG"
+      ]
+    },
+    {
+      "id": "partial_settlement_requires_resolved_policy",
+      "tags": [
+        "partial_settlement",
+        "paid_action"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "actor_compensation",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:actor",
+              "destinationClass": "actor_compensation",
+              "amountMinor": 10000,
+              "nestedOpportunityId": null
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "partially_settled",
+          "partialCompletionPolicyStatus": "unresolved",
+          "substantiveDestinationIncludesSystemLeg": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "PARTIAL_SETTLEMENT_POLICY_UNRESOLVED"
+      ]
+    },
+    {
+      "id": "failed_settlement_is_not_completion",
+      "tags": [
+        "partial_settlement",
+        "paid_action"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "actor_compensation",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:actor",
+              "destinationClass": "actor_compensation",
+              "amountMinor": 10000,
+              "nestedOpportunityId": null
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "failed",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "SETTLEMENT_FAILED"
+      ]
+    },
+    {
+      "id": "expense_reimbursement_requires_preapproval",
+      "tags": [
+        "paid_action"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "verified_expense_reimbursement",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:expense",
+              "destinationClass": "verified_expense_reimbursement",
+              "amountMinor": 10000,
+              "nestedOpportunityId": null
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "not_applicable",
+          "settlementStatus": "not_started",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "EXPENSE_REIMBURSEMENT_PREAPPROVAL_REQUIRED"
+      ]
+    },
+    {
+      "id": "third_party_beneficiary_requires_heightened_review",
+      "tags": [
+        "paid_action"
+      ],
+      "patch": {
+        "sourceOffer": {
+          "offerId": "synthetic:offer:paid-source",
+          "ownerId": "synthetic:profile:source",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-source:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "targetOffer": {
+          "offerId": "synthetic:offer:paid-target",
+          "ownerId": "synthetic:profile:target",
+          "mechanismFamily": "reciprocal_trade",
+          "outerContractFamily": "paid_action",
+          "workflowStatus": "published",
+          "operationalStatus": "open",
+          "operative": true,
+          "termsVersion": 1,
+          "termsHash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "termsCurrent": true,
+          "sourceRevision": "synthetic:revision:paid-target:1",
+          "sourceRevisionCurrent": true,
+          "privacyScopeCompatible": true
+        },
+        "pair": {
+          "compatibility": {
+            "kind": "paid_action_terms",
+            "patternClass": "not_applicable"
+          }
+        },
+        "paidAction": {
+          "destinationClass": "designated_third_party_beneficiary",
+          "totalAmountMinor": 10000,
+          "currency": "USD",
+          "allocations": [
+            {
+              "allocationId": "synthetic:allocation:beneficiary",
+              "destinationClass": "designated_third_party_beneficiary",
+              "amountMinor": 10000,
+              "nestedOpportunityId": null
+            }
+          ],
+          "expensePreApproved": false,
+          "thirdPartyReviewStatus": "pending",
+          "settlementStatus": "not_started",
+          "partialCompletionPolicyStatus": "not_applicable",
+          "substantiveDestinationIncludesSystemLeg": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "THIRD_PARTY_BENEFICIARY_REVIEW_REQUIRED"
+      ]
+    },
+    {
+      "id": "nested_co_act_milestone_exact_state_pass",
+      "tags": [
+        "co_act_states",
+        "nested_failure"
+      ],
+      "patch": {
+        "nestedOpportunities": [
+          {
+            "nestedOpportunityType": "co_act",
+            "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+            "nestedTermsVersion": 2,
+            "nestedTermsHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "nestedSourceRevision": "synthetic:revision:coact:2",
+            "depth": 1,
+            "parentOpportunityId": "synthetic:offer:source",
+            "ancestryOpportunityIds": [],
+            "authorityEligible": true,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          }
+        ],
+        "coAct": {
+          "presentation": "nested_obligation",
+          "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+          "roleId": "synthetic:role:facilitator",
+          "obligationLevel": "reach_milestone",
+          "promisedState": "milestone_completed",
+          "observedState": "milestone_completed",
+          "activationState": "active",
+          "capacityState": "available",
+          "timingBound": true,
+          "evidenceBound": true,
+          "withdrawalTermsBound": true,
+          "identityPrivacyBound": true,
+          "participantEligibilityCleared": true,
+          "authorityEligible": true,
+          "promisedStateSatisfied": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": []
+    },
+    {
+      "id": "nested_co_act_join_is_not_milestone",
+      "tags": [
+        "co_act_states"
+      ],
+      "patch": {
+        "nestedOpportunities": [
+          {
+            "nestedOpportunityType": "co_act",
+            "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+            "nestedTermsVersion": 2,
+            "nestedTermsHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "nestedSourceRevision": "synthetic:revision:coact:2",
+            "depth": 1,
+            "parentOpportunityId": "synthetic:offer:source",
+            "ancestryOpportunityIds": [],
+            "authorityEligible": true,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          }
+        ],
+        "coAct": {
+          "presentation": "nested_obligation",
+          "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+          "roleId": "synthetic:role:facilitator",
+          "obligationLevel": "reach_milestone",
+          "promisedState": "milestone_completed",
+          "observedState": "joined",
+          "activationState": "active",
+          "capacityState": "available",
+          "timingBound": true,
+          "evidenceBound": true,
+          "withdrawalTermsBound": true,
+          "identityPrivacyBound": true,
+          "participantEligibilityCleared": true,
+          "authorityEligible": true,
+          "promisedStateSatisfied": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "CO_ACT_PROMISED_STATE_NOT_SATISFIED"
+      ]
+    },
+    {
+      "id": "nested_co_act_capacity_full",
+      "tags": [
+        "co_act_states"
+      ],
+      "patch": {
+        "nestedOpportunities": [
+          {
+            "nestedOpportunityType": "co_act",
+            "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+            "nestedTermsVersion": 2,
+            "nestedTermsHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "nestedSourceRevision": "synthetic:revision:coact:2",
+            "depth": 1,
+            "parentOpportunityId": "synthetic:offer:source",
+            "ancestryOpportunityIds": [],
+            "authorityEligible": true,
+            "authoritySnapshotId": "synthetic:snapshot:base",
+            "sourceRevisionCurrent": true,
+            "termsFrozen": true
+          }
+        ],
+        "coAct": {
+          "presentation": "nested_obligation",
+          "nestedOpportunityId": "synthetic:opportunity:coact-nested",
+          "roleId": "synthetic:role:facilitator",
+          "obligationLevel": "reach_milestone",
+          "promisedState": "milestone_completed",
+          "observedState": "milestone_completed",
+          "activationState": "active",
+          "capacityState": "full",
+          "timingBound": true,
+          "evidenceBound": true,
+          "withdrawalTermsBound": true,
+          "identityPrivacyBound": true,
+          "participantEligibilityCleared": true,
+          "authorityEligible": true,
+          "promisedStateSatisfied": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "CO_ACT_ACTIVATION_OR_CAPACITY_BLOCKED"
+      ]
+    },
+    {
+      "id": "research_projection_passes_candidate_but_never_executes",
+      "tags": [
+        "research_consent",
+        "history_states"
+      ],
+      "patch": {
+        "intent": "research_edge_projection",
+        "actor": {
+          "role": "research_projector"
+        },
+        "consent": {
+          "sourceResearch": "approved",
+          "targetResearch": "approved"
+        },
+        "research": {
+          "applies": true,
+          "purposeBound": true,
+          "studySpecificConsentOrWaiverApproved": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": true,
+      "expectedCandidateReasonCodes": [],
+      "expectedGlobalIncludes": [
+        "RESEARCH_EXECUTION_NOT_AUTHORIZED"
+      ]
+    },
+    {
+      "id": "research_consent_missing",
+      "tags": [
+        "research_consent"
+      ],
+      "patch": {
+        "intent": "research_edge_projection",
+        "actor": {
+          "role": "research_projector"
+        },
+        "consent": {
+          "sourceResearch": "missing",
+          "targetResearch": "missing"
+        },
+        "research": {
+          "applies": true,
+          "purposeBound": true,
+          "studySpecificConsentOrWaiverApproved": false
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "RESEARCH_CONSENT_OR_WAIVER_REQUIRED"
+      ]
+    },
+    {
+      "id": "recommendation_graph_is_not_authority",
+      "tags": [
+        "recommendation_graph_prohibition"
+      ],
+      "patch": {
+        "intent": "research_edge_projection",
+        "actor": {
+          "role": "research_projector"
+        },
+        "consent": {
+          "sourceResearch": "approved",
+          "targetResearch": "approved"
+        },
+        "research": {
+          "applies": true,
+          "purposeBound": true,
+          "studySpecificConsentOrWaiverApproved": true,
+          "recommendationGraphUsedAsAuthority": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "RECOMMENDATION_GRAPH_AUTHORITY_PROHIBITED"
+      ]
+    },
+    {
+      "id": "participant_causal_output_prohibited",
+      "tags": [
+        "causal_output_prohibition"
+      ],
+      "patch": {
+        "intent": "research_edge_projection",
+        "actor": {
+          "role": "research_projector"
+        },
+        "consent": {
+          "sourceResearch": "approved",
+          "targetResearch": "approved"
+        },
+        "research": {
+          "applies": true,
+          "purposeBound": true,
+          "studySpecificConsentOrWaiverApproved": true,
+          "participantCausalOutputRequested": true
+        }
+      },
+      "expectedCandidatePolicySatisfied": false,
+      "expectedCandidateReasonCodes": [
+        "PARTICIPANT_CAUSAL_OUTPUT_PROHIBITED"
+      ]
+    }
+  ],
+  "invalidInputCases": [
+    {
+      "id": "production_identifier_rejected",
+      "patch": {
+        "actor": {
+          "actorId": "00000000-0000-0000-0000-000000000001"
+        }
+      },
+      "expectedSchemaError": true
+    },
+    {
+      "id": "pseudonymous_identifier_rejected",
+      "patch": {
+        "sourceOffer": {
+          "offerId": "pseudonym:offer:1"
+        }
+      },
+      "expectedSchemaError": true
+    },
+    {
+      "id": "unknown_input_field_rejected",
+      "patch": {
+        "unexpectedLiveFlag": true
+      },
+      "expectedSchemaError": true
+    }
+  ],
+  "requiredCoverageTags": [
+    "toctou",
+    "concurrency",
+    "blocks",
+    "restrictions",
+    "history_states",
+    "collation_boundary",
+    "nested_failure",
+    "split_accounting",
+    "partial_settlement",
+    "cycle",
+    "co_act_states",
+    "cross_mechanism_feed",
+    "public_feed_separation",
+    "structured_gates",
+    "product_consent",
+    "invitation_consent",
+    "research_consent",
+    "recommendation_graph_prohibition",
+    "causal_output_prohibition",
+    "paid_action",
+    "ordinary_review",
+    "private_delivery",
+    "source_revision"
+  ]
+}

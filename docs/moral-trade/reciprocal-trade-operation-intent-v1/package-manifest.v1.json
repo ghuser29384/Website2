@@ -1,0 +1,396 @@
+{
+  "artifactKind": "moral_trade_operation_intent_shadow_package_manifest",
+  "manifestVersion": "1.0.0",
+  "boundBaseCommit": "75fd512e6cf82e2c51df53e211b854c0263109c3",
+  "ownerDecisionFreeze": {
+    "issue": 701,
+    "commentId": 5300603136,
+    "status": "final_for_design_and_shadow"
+  },
+  "upstreamAcceptedReview": {
+    "pullRequest": 691,
+    "head": "14a22614ae33dfa0f4c72989d5dccd5c80fbb5c4",
+    "reviewId": 4938337996,
+    "use": "read_only_source_conflict_input",
+    "modifiedByThisPackage": false
+  },
+  "release": {
+    "classification": "repository_only_design_and_shadow",
+    "disposition": "do_not_merge_or_deploy",
+    "sqlAuthorityCandidateIncluded": false,
+    "runtimeCallSitesWired": false
+  },
+  "authorization": {
+    "liveActivationAuthorized": false,
+    "productionMigrationAuthorized": false,
+    "realOrQaRowAccessAuthorized": false,
+    "moneyMovementAuthorized": false,
+    "studyRegistrationOrExecutionAuthorized": false,
+    "assignmentEntropyAuthorized": false,
+    "participantContactAuthorized": false,
+    "pr534MethodologyAuthorized": false
+  },
+  "hashes": {
+    "sourceGitBlob": "sha1",
+    "sourceAndArtifactRaw": "sha256",
+    "manifestSelfHashExcluded": true
+  },
+  "intendedFiles": [
+    ".github/workflows/reciprocal-trade-operation-intent-shadow-gates.yml",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/README.md",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/authority-decision.schema.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/authority-input.schema.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/co-act-state-matrix.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/differential-source-map.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/differential-source-map.v1.md",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/ontology.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/operation-intent-matrix.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/operation-intent-matrix.v1.md",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/opportunity-envelope.schema.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/package-manifest.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/paid-action-destination-matrix.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/reason-codes.v1.json",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/release-classification.md",
+    "docs/moral-trade/reciprocal-trade-operation-intent-v1/synthetic-shadow-fixtures.v1.json",
+    "scripts/reciprocal-trade-shadow/operation-intent-evaluator.mjs",
+    "scripts/reciprocal-trade-shadow/operation-intent-evaluator.test.mjs",
+    "scripts/reciprocal-trade-shadow/validate-operation-intent-package.mjs"
+  ],
+  "sourceBindings": [
+    {
+      "sourceId": "source-01",
+      "path": "scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs",
+      "symbolPatterns": [
+        "export async function listReciprocalMatches"
+      ],
+      "gitBlobSha1": "283d79f565f6da0ac9d292716fe1de6f137e9a77",
+      "rawSha256": "70f1a56e42376f17572baec69d00d7027b02922c038d4fa9b4a1364efbab6087"
+    },
+    {
+      "sourceId": "source-02",
+      "path": "src/app/admin/trade-review/page.tsx",
+      "symbolPatterns": [
+        "reviewCoreOfferAction"
+      ],
+      "gitBlobSha1": "6b5920aa5b3c75a980a5a731e4a265f79a3b2463",
+      "rawSha256": "df46b4d44a00c248c757ffc3bc428845b28f7e135be2fde1eeb3108f4b8758fb"
+    },
+    {
+      "sourceId": "source-03",
+      "path": "src/app/api/live-now-a1/route.ts",
+      "symbolPatterns": [
+        "applyParetoLearningToLiveNowPayload"
+      ],
+      "gitBlobSha1": "673938822ed1e50f31008b58d457bca8f0eab11d",
+      "rawSha256": "99b97c8c3239e4c78f0afb01a50fb6f3aaa4afbcd3b4e7684b7661a873bf0449"
+    },
+    {
+      "sourceId": "source-04",
+      "path": "src/app/api/live-now/route.ts",
+      "symbolPatterns": [
+        "buildHybridLiveNowFeed"
+      ],
+      "gitBlobSha1": "aa4f78ee40ce032feaab3d18b5f81a817530388d",
+      "rawSha256": "3cade0ccf84d5e7a497544da24c79ef7b0579be846dbdd15c8dd3cac4bb55d65"
+    },
+    {
+      "sourceId": "source-05",
+      "path": "src/app/core-trade-actions-base.ts",
+      "symbolPatterns": [
+        "export async function startSuggestedMatchAction"
+      ],
+      "gitBlobSha1": "21a53e04fe86799028475c8b6c57062ddfa25082",
+      "rawSha256": "ceab7886e632e9b3fa2b63df75a5c39223fe147119fb73e026bad6163a2243f9"
+    },
+    {
+      "sourceId": "source-06",
+      "path": "src/app/core-trade-actions.ts",
+      "symbolPatterns": [
+        "reviewFeedCreateAwareCoreOfferAction"
+      ],
+      "gitBlobSha1": "5da2ef2436ed6aea1704fb1ea422fe36a7226378",
+      "rawSha256": "db91b53e28ac649962a7362b766e4b9d6e10dcf72a8efe252226517504640b0c"
+    },
+    {
+      "sourceId": "source-07",
+      "path": "src/app/feed-create-review-actions.ts",
+      "symbolPatterns": [
+        "moral_trade_feed_create_deliver_service"
+      ],
+      "gitBlobSha1": "717b8955ea472305cd514a924b40ec84b5add006",
+      "rawSha256": "2e64184d83608569d5adde2754ae6667bce024eaff1027356b9a98a0284117f8"
+    },
+    {
+      "sourceId": "source-08",
+      "path": "src/app/trades/[offerId]/invite/page.tsx",
+      "symbolPatterns": [
+        "createTradeInvitationAction"
+      ],
+      "gitBlobSha1": "50aa0ac4c5c220eeb321ca9b70a927a5b46d847e",
+      "rawSha256": "113bb2895eb56eef0a1f9a0073a1a4df94173886e06b6ac97f21555e39dd6835"
+    },
+    {
+      "sourceId": "source-09",
+      "path": "src/app/trades/[offerId]/manage/page.tsx",
+      "symbolPatterns": [
+        "listReciprocalMatches"
+      ],
+      "gitBlobSha1": "ec35fd465fb61a3e35e40627c6993ced59d72d8e",
+      "rawSha256": "d9c7e0073351ec510595430b69d84f8ef9447273bd67d3ce7bab04c1f21c156d"
+    },
+    {
+      "sourceId": "source-10",
+      "path": "src/lib/core-trade-base.ts",
+      "symbolPatterns": [
+        "export async function listReciprocalMatches"
+      ],
+      "gitBlobSha1": "4d7bcd9c9e89d06c9d478be1c10874861662727e",
+      "rawSha256": "26d5784a26fd4e739c7d21f2255347ad3d22ead4582b33740e1f71d10c49e669"
+    },
+    {
+      "sourceId": "source-11",
+      "path": "src/lib/live-now-additional-mechanisms.ts",
+      "symbolPatterns": [
+        "export async function loadAdditionalPublicMechanisms"
+      ],
+      "gitBlobSha1": "daa002c4cc3cefb78971ddec5fe0b21ed288d64b",
+      "rawSha256": "2ef87ce26fa42b61a73b5a2aa87a21a99bd7e4daaebf76e9f052ba9cf1ecd06f"
+    },
+    {
+      "sourceId": "source-12",
+      "path": "src/lib/live-now-hybrid-feed.ts",
+      "symbolPatterns": [
+        "export async function buildHybridLiveNowFeed"
+      ],
+      "gitBlobSha1": "f415022cf11a542801b0bb17b021a16f4877a20e",
+      "rawSha256": "575d5cc35ba5342e928fa08bb975e889b520cbdbcd9750da96e3ee70c8f9d828"
+    },
+    {
+      "sourceId": "source-13",
+      "path": "src/lib/live-now-recommendations.ts",
+      "symbolPatterns": [
+        "export function rankLiveNowOffers"
+      ],
+      "gitBlobSha1": "3444974e551605b1196af1265362db8a2dc6aab2",
+      "rawSha256": "d9456675956ee7bd6344e6d806a127ea9d711dbdd404dfa9c06c40d78b54e1b8"
+    },
+    {
+      "sourceId": "source-14",
+      "path": "src/lib/moral-trade/baseline-integrity.ts",
+      "symbolPatterns": [
+        "evaluateMoralTradeBaselineIntegrity"
+      ],
+      "gitBlobSha1": "5fb63200a4a3d786cce074e25d9639175fe9da8f",
+      "rawSha256": "e1ff79563c0818be25f89a922a26825a5e870da7de097b2853b9c7acf0034245"
+    },
+    {
+      "sourceId": "source-15",
+      "path": "src/lib/moral-trade/noncompensable-blockers.ts",
+      "symbolPatterns": [
+        "evaluateMoralTradeNoncompensableBlocker"
+      ],
+      "gitBlobSha1": "5e5c07641ee52fa92abf55cf28917bf309af866f",
+      "rawSha256": "ec48a6ae5cea40998d27af474025c4af46592fafa8f2dc59ca9566179c6d38d8"
+    },
+    {
+      "sourceId": "source-16",
+      "path": "src/lib/moral-trade/offer-validity.ts",
+      "symbolPatterns": [
+        "evaluateMoralTradeOfferValidity"
+      ],
+      "gitBlobSha1": "9818959606e03d5f38547cb9edf73d6dbf423bf0",
+      "rawSha256": "5b5b135c97417dfb9a19f2b7b19ca9e730bf0f211712a06e242ddb572013e54f"
+    },
+    {
+      "sourceId": "source-17",
+      "path": "src/lib/moral-trade/participant-eligibility.ts",
+      "symbolPatterns": [
+        "evaluateMoralTradeParticipantEligibility"
+      ],
+      "gitBlobSha1": "a220ff4784394026d235ddef1339d35fc4b85bdb",
+      "rawSha256": "ddeeaba14da14f9db9a075678fcdded0daba320a60b2f0efb518293f32e756b0"
+    },
+    {
+      "sourceId": "source-18",
+      "path": "src/lib/moral-trade/privacy-governance.ts",
+      "symbolPatterns": [
+        "evaluateMoralTradePrivacyGovernance"
+      ],
+      "gitBlobSha1": "3f6add7eb716691128153cd1e8a4ef99e453bb29",
+      "rawSha256": "64cb1f155b337c019436704a42eb88a402a51fbc19b361e75bbda5824a27194b"
+    },
+    {
+      "sourceId": "source-19",
+      "path": "src/lib/moral-trade/user-safety-content-moderation.ts",
+      "symbolPatterns": [
+        "evaluateMoralTradeUserSafetyContentModeration"
+      ],
+      "gitBlobSha1": "c9e18ac8a35e15a86f63c4982bdee19284a14a8f",
+      "rawSha256": "5e8aec22f8ef489dc3482fdf4e3367ba5fb1033ca1eec47140994fcd8a1846ab"
+    },
+    {
+      "sourceId": "source-20",
+      "path": "src/lib/pareto-feed-runtime.ts",
+      "symbolPatterns": [
+        "export async function applyParetoLearningToLiveNowPayload"
+      ],
+      "gitBlobSha1": "bb7796ffa895255461e4ae12072b15e3f670f523",
+      "rawSha256": "956f1a823f6308aeca6ca614765ad34547d0f2671bf8cee412d2d0c967e78571"
+    },
+    {
+      "sourceId": "source-21",
+      "path": "src/lib/recommendation-learning.ts",
+      "symbolPatterns": [
+        "export const RECOMMENDATION_OPPORTUNITY_TYPES"
+      ],
+      "gitBlobSha1": "9360d346f6acd8465045380e87d1bb9143322b68",
+      "rawSha256": "dd2b94b15cbc1d58faf25d5f0ada1adee3cd9fb7460262751467a49096ce9c5f"
+    },
+    {
+      "sourceId": "source-22",
+      "path": "src/lib/recommendation-training.ts",
+      "symbolPatterns": [
+        "recommendation_graph_edges"
+      ],
+      "gitBlobSha1": "8370f9830c831079a9f5bb4287df06b30434b726",
+      "rawSha256": "f3ccf20a66edbcc1c2459dab085dde6c62a4c96d55cd4964e1db73e71b7e6c7e"
+    },
+    {
+      "sourceId": "source-23",
+      "path": "supabase/migrations/20260714132939_contextual_credibility.sql",
+      "symbolPatterns": [
+        "create table if not exists public.credibility_restrictions"
+      ],
+      "gitBlobSha1": "4b1802afdf5d4e2e665de70e267421f76e68e7a2",
+      "rawSha256": "11850c62f2869a9bce34c1700c443ac88fa3320f192fa7259eef3901204ce3b3"
+    },
+    {
+      "sourceId": "source-24",
+      "path": "supabase/migrations/20260716080505_core_trade_loop.sql",
+      "symbolPatterns": [
+        "create table if not exists public.trade_blocks"
+      ],
+      "gitBlobSha1": "e4bd487b9c55f905e52b25b99ef269fecf784d8c",
+      "rawSha256": "b0fa3cd2ed313ea90768779594d260ea0317d4596150f8b3a1f66159232604c4"
+    },
+    {
+      "sourceId": "source-25",
+      "path": "supabase/migrations/20260721153100_publish_moral_trade_offer_bank.sql",
+      "symbolPatterns": [
+        "create temporary table moral_trade_offer_bank_pairs"
+      ],
+      "gitBlobSha1": "36da32a2719da41e65fff0be19a6cf28ee2ad6b9",
+      "rawSha256": "464567475d3202f5d560b738b04fd74894a86378484ad4242ff9f8b9c3bb174f"
+    },
+    {
+      "sourceId": "source-26",
+      "path": "supabase/migrations/20260722223000_harden_trade_invitations.sql",
+      "symbolPatterns": [
+        "create or replace function moral_trade_private.offer_is_invitable"
+      ],
+      "gitBlobSha1": "5a2b10085586e810b819f9b855708b1372168954",
+      "rawSha256": "e0e568bf42c2162fbba35c05722aa009ebcaa2dfbe800bc25ad7eecd6f974eed"
+    },
+    {
+      "sourceId": "source-27",
+      "path": "supabase/migrations/20260729165525_evidence_weighted_milestones_additive.sql",
+      "symbolPatterns": [
+        "create or replace function moral_trade_private.require_bound_trade_actor"
+      ],
+      "gitBlobSha1": "7c856b5f96c93a58d3679e34d58cd23a54e24f03",
+      "rawSha256": "506233f927807c30b47f08f486636709b17a89adb8e033b544b6521fde8fd746"
+    },
+    {
+      "sourceId": "source-28",
+      "path": "supabase/migrations/20260729170000_marketplace_atomic_acceptance_current_core.sql",
+      "symbolPatterns": [
+        "create or replace function public.confirm_agreement_version_v2_unbound_legacy"
+      ],
+      "gitBlobSha1": "d44334cc78f92d6d549392d0fa766eb854220e05",
+      "rawSha256": "1f677eedc2e4eb49e857610f6b31d42548636f55ca6d0e349e1c523209c11dae"
+    },
+    {
+      "sourceId": "source-29",
+      "path": "supabase/migrations/20260808110500_feed_create_private_delivery_v1.sql",
+      "symbolPatterns": [
+        "create or replace function public.moral_trade_feed_create_deliver_service"
+      ],
+      "gitBlobSha1": "c3ee7dd6bd1052f08aa377abcb4071a612703eb8",
+      "rawSha256": "8ff85b984b42922d20e86ccd85f906fcded23e1af43d4c101f171a5a231fd9b5"
+    }
+  ],
+  "artifactBindings": [
+    {
+      "path": ".github/workflows/reciprocal-trade-operation-intent-shadow-gates.yml",
+      "rawSha256": "f229e2301a26c00eacc1f5a0f956cd511c01e669d497b39430f1e8460d2321db"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/README.md",
+      "rawSha256": "b42d835bd7fbdc5b3908eb739d67d72d4e8b2943f447cdcc8c020bf096c6193d"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/authority-decision.schema.v1.json",
+      "rawSha256": "54326e91f87dabcbd232f9bcf8cb0c0ff67f610838e504a034efdbdb42ff4e7f"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/authority-input.schema.v1.json",
+      "rawSha256": "4be8720a50c74893570ab1ee5c9d48419d7fa9716fdc1ba00cf5544a42681a64"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/co-act-state-matrix.v1.json",
+      "rawSha256": "c35ecaa2a93e599bb83271ce1b34905e2bcc26e80c920ff71b30546a18ae7689"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/differential-source-map.v1.json",
+      "rawSha256": "8399292987058870876abc9747241d312eca0140ddadb775c0a514b8ace52088"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/differential-source-map.v1.md",
+      "rawSha256": "2d99a99740433f8b8464b82204189554172c0b49bddf14d510a377212d667450"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/ontology.v1.json",
+      "rawSha256": "5b55fc2dd516c6aefc84a7faa7bbc0316eb9b850ff01e775cc389884574c4956"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/operation-intent-matrix.v1.json",
+      "rawSha256": "5f9b691aa156e3800820d6ff4447587eda6fbbaa1244b163f1119bd346d26097"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/operation-intent-matrix.v1.md",
+      "rawSha256": "d5df0fc06e761692c1289e4c950fc44ae266b2132cea9b9b6b1009af99f0019c"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/opportunity-envelope.schema.v1.json",
+      "rawSha256": "f150cd0cfba96f4fd0e394f2b9b2ad8b6ff40150fe4cd5e32b0a31a7a0864ae9"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/paid-action-destination-matrix.v1.json",
+      "rawSha256": "9d8ee371ace07e8e76675c140211022959d4640a58bb2b24865df5966ffe581b"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/reason-codes.v1.json",
+      "rawSha256": "a76775f4f2bf37d5d60a78ec4d9d2bd3606451486eb516a0803438c5b5f6f0a4"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/release-classification.md",
+      "rawSha256": "ab8b866ca8dc14ac22ed374defc3cb23074232bf48bbefc450dc489ba9453121"
+    },
+    {
+      "path": "docs/moral-trade/reciprocal-trade-operation-intent-v1/synthetic-shadow-fixtures.v1.json",
+      "rawSha256": "78133936572c2780ba3020c295131eae4369cb0fcb63bf69bbc3e417abc498db"
+    },
+    {
+      "path": "scripts/reciprocal-trade-shadow/operation-intent-evaluator.mjs",
+      "rawSha256": "d6ef5494e8859e3126cc1ae937b54a76fe92b5c8095cdef58d01c8f839bb805b"
+    },
+    {
+      "path": "scripts/reciprocal-trade-shadow/operation-intent-evaluator.test.mjs",
+      "rawSha256": "32aa45683cee2c567912d7e23609305f42eb4a0eca43cb9c2fd2981b02f857b6"
+    },
+    {
+      "path": "scripts/reciprocal-trade-shadow/validate-operation-intent-package.mjs",
+      "rawSha256": "00765879048f904e62ecd90a8b9b351ea2a3c4a100526857bfec39dff94ace8e"
+    }
+  ]
+}

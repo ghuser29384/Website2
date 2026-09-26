@@ -1,0 +1,69 @@
+{
+  "artifactKind": "co_act_direct_and_nested_state_matrix",
+  "matrixVersion": "1.0.0",
+  "directFeed": {
+    "mechanismFamily": "co_act",
+    "presentation": "direct_feed",
+    "requiredCta": "join_or_review_co_act",
+    "requiredAuthority": "co_act",
+    "requiredStates": {
+      "activationState": "active",
+      "capacityState": "available",
+      "participantEligibility": "cleared"
+    },
+    "successMeaning": "The opportunity may enter cross-mechanism ranking; it does not establish joining or performance."
+  },
+  "nestedObligations": [
+    {
+      "obligationLevel": "join",
+      "requiredObservedState": "joined",
+      "notSatisfiedBy": ["invited", "signed"]
+    },
+    {
+      "obligationLevel": "accept_role",
+      "requiredObservedState": "role_accepted",
+      "notSatisfiedBy": ["invited", "signed", "joined"]
+    },
+    {
+      "obligationLevel": "reach_milestone",
+      "requiredObservedState": "milestone_completed",
+      "notSatisfiedBy": ["invited", "signed", "joined", "role_accepted", "activated"]
+    },
+    {
+      "obligationLevel": "complete_role",
+      "requiredObservedState": "role_completed",
+      "notSatisfiedBy": ["invited", "signed", "joined", "role_accepted", "activated", "milestone_completed"]
+    }
+  ],
+  "requiredFrozenFields": [
+    "opportunity",
+    "role",
+    "obligationLevel",
+    "nestedTermsVersion",
+    "nestedTermsHash",
+    "nestedSourceRevision",
+    "activationState",
+    "capacityState",
+    "timing",
+    "evidence",
+    "withdrawalTerms",
+    "identityAndPrivacy",
+    "participantEligibility"
+  ],
+  "stateVocabulary": [
+    "invited",
+    "signed",
+    "joined",
+    "role_accepted",
+    "activated",
+    "milestone_completed",
+    "role_completed",
+    "withdrawn"
+  ],
+  "invariants": [
+    "Direct Feed presentation and nested obligation presentation are distinct.",
+    "No earlier state is inferred to satisfy a later promised state.",
+    "The frozen Co-Act authority decides promised-state satisfaction under the same transaction snapshot.",
+    "A direct recommendation is not evidence that a user joined, accepted a role, reached a milestone, or completed a role."
+  ]
+}
