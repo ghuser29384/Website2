@@ -1,0 +1,202 @@
+name: Integrate Quiet UI With Main
+
+on:
+  push:
+    branches:
+      - fix/quiet-ui-20260926
+    paths:
+      - .github/workflows/quiet-ui-integrate-main.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: quiet-ui-integrate-main
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out quiet UI branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/quiet-ui-20260926
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Merge current main and resolve the five known overlaps
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_status=$?
+          set -e
+
+          allowed_conflicts="$RUNNER_TEMP/allowed-conflicts.txt"
+          actual_conflicts="$RUNNER_TEMP/actual-conflicts.txt"
+          cat > "$allowed_conflicts" <<'EOF'
+          public/moral-trade-live-core.txt
+          public/moral-trade-live.html
+          src/app/canonical-visual-system.css
+          tests/homepage-narrow-header.spec.ts
+          tests/returning-homepage.spec.ts
+          EOF
+          sort -u "$allowed_conflicts" -o "$allowed_conflicts"
+          git diff --name-only --diff-filter=U | sort -u > "$actual_conflicts"
+
+          if [[ $merge_status -ne 0 ]]; then
+            unexpected="$(comm -23 "$actual_conflicts" "$allowed_conflicts")"
+            if [[ -n "$unexpected" ]]; then
+              echo "Unexpected merge conflicts:"
+              echo "$unexpected"
+              exit 1
+            fi
+          fi
+
+          for path in \
+            public/moral-trade-live-core.txt \
+            public/moral-trade-live.html \
+            src/app/canonical-visual-system.css \
+            tests/homepage-narrow-header.spec.ts \
+            tests/returning-homepage.spec.ts
+          do
+            git checkout --ours -- "$path"
+          done
+
+          python3 <<'PY'
+          from pathlib import Path
+          import hashlib
+          import re
+
+          def read(path: str) -> str:
+              return Path(path).read_text()
+
+          def write(path: str, value: str) -> None:
+              Path(path).write_text(value)
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              value = read(path)
+              if value.count(old) != 1:
+                  raise RuntimeError(f"{path}: expected exactly one match for {old!r}, found {value.count(old)}")
+              write(path, value.replace(old, new, 1))
+
+          core_path = "public/moral-trade-live-core.txt"
+          core = read(core_path)
+          replacements = [
+              ("--blue:#0a4cff;--orange:#ef6a1e;--lime:#477d60;--green:#3c8b52;--purple:#7d45b4;",
+               "--blue:#0a4cff;--orange:#ef6a1e;--sage:#b9cbbb;--green:#3c8b52;--purple:#7d45b4;"),
+              (".btn.lime{background:var(--lime);border-color:var(--lime)}",
+               ".btn.lime{background:var(--sage);border-color:var(--sage)}"),
+              (".lime{color:#789000}", ".lime{color:#365244}"),
+              (".tag.near{color:#697d00;border-color:#c8dd71;background:#f4f8da}",
+               ".tag.near{color:#365244;border-color:#d2e0d3;background:#e7efe5}"),
+              (".dot.live{background:var(--lime)}", ".dot.live{background:var(--sage)}"),
+              (".progress.limebar span{background:var(--lime)}", ".progress.limebar span{background:var(--sage)}"),
+              (".iconbox.limebg{background:#dcef5d}", ".iconbox.limebg{background:#d2e0d3}"),
+              (".range span{position:absolute;left:25%;right:25%;top:-1px;height:5px;background:var(--lime)}",
+               ".range span{position:absolute;left:25%;right:25%;top:-1px;height:5px;background:var(--sage)}"),
+              ('const actions = (label = \'Create offer\') => `<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;',
+               'const actions = (label = \'Create offer\') => `<div class="h mt-feed-actions">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;'),
+          ]
+          for old, new in replacements:
+              if core.count(old) != 1:
+                  raise RuntimeError(f"{core_path}: expected exactly one match for {old!r}, found {core.count(old)}")
+              core = core.replace(old, new, 1)
+          write(core_path, core)
+
+          canonical_path = "src/app/canonical-visual-system.css"
+          canonical = read(canonical_path)
+          if canonical.count("--mt-lime: #a2aa16;") != 1:
+              raise RuntimeError("canonical lime variable not found exactly once")
+          canonical = canonical.replace("--mt-lime: #a2aa16;", "--mt-sage: #526b58;", 1)
+          old_success = ".status-banner-success {\n  border-color: #7e8d2d;\n  background: #eef0d7;\n  color: #4c5913;\n}"
+          new_success = ".status-banner-success {\n  border-color: #526b58;\n  background: #e7efe5;\n  color: #365244;\n}"
+          if canonical.count(old_success) != 1:
+              raise RuntimeError("canonical success banner block not found exactly once")
+          write(canonical_path, canonical.replace(old_success, new_success, 1))
+
+          for test_path in [
+              "tests/homepage-narrow-header.spec.ts",
+              "tests/returning-homepage.spec.ts",
+          ]:
+              value = read(test_path)
+              value = value.replace('page.locator(".head .date")', 'page.locator(".page .date")')
+              if test_path.endswith("homepage-narrow-header.spec.ts"):
+                  value = value.replace(
+                      "page.locator('.head button[data-action=\"create\"]')",
+                      "page.locator('.page button[data-action=\"create\"]')",
+                  )
+              write(test_path, value)
+
+          digest = hashlib.sha256(Path(core_path).read_bytes()).hexdigest()
+          loader_path = "public/moral-trade-live.html"
+          loader = read(loader_path)
+          loader, count = re.subn(
+              r"digest !== '[a-f0-9]{64}'",
+              f"digest !== '{digest}'",
+              loader,
+              count=1,
+          )
+          if count != 1:
+              raise RuntimeError("live loader integrity guard not found exactly once")
+          write(loader_path, loader)
+          print(f"Final live-core SHA-256: {digest}")
+          PY
+
+          rm .github/workflows/quiet-ui-integrate-main.yml
+          git add -A
+
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo "Unresolved conflicts remain:"
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+
+          git diff --cached --check
+          test "$(git merge-base --is-ancestor origin/main HEAD; echo $?)" != "0" || true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repository tests
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify quiet UI in rendered desktop and mobile views
+        run: >-
+          npx playwright test
+          tests/create-route-ui-regression.spec.ts
+          tests/homepage-narrow-header.spec.ts
+          tests/quiet-ui.spec.ts
+          tests/returning-homepage.spec.ts
+          tests/sitewide-canonical-visual-system.spec.ts
+          --reporter=line
+
+      - name: Commit tested integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          git commit -m "Integrate quiet UI with muted palette"
+          git push origin HEAD:fix/quiet-ui-20260926
