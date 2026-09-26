@@ -20,7 +20,7 @@ interface CreateRouteChooserProps {
 const ROUTE_HOVER_COLORS: Record<CreateMode, string> = {
   trade: "#dceffd",
   offset: "#eceaff",
-  pool: "#f1f7cc",
+  pool: "#e6edf8",
   back: "#e7efe5",
 };
 
