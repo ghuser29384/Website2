@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: d7f36e9340b75d3b772dca7b7466a49b30fc66a4
+          ref: f1669819cfaeb9af30a175b38b26320308798e2e
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -37,14 +37,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/dashboard-sparks-evidence/source
-          test "$(git rev-parse HEAD)" = d7f36e9340b75d3b772dca7b7466a49b30fc66a4
+          test "$(git rev-parse HEAD)" = f1669819cfaeb9af30a175b38b26320308798e2e
           git merge-base --is-ancestor ef3b1b595f6bddd1e660e3215ca19e57254234f3 HEAD
           git diff --check ef3b1b595f6bddd1e660e3215ca19e57254234f3
           git diff --name-only ef3b1b595f6bddd1e660e3215ca19e57254234f3 > /tmp/dashboard-sparks-evidence/changed-files.txt
           python3 - <<'PY'
           from pathlib import Path
           actual = set(Path('/tmp/dashboard-sparks-evidence/changed-files.txt').read_text().splitlines())
-          expected = {'src/app/dashboard/page.tsx', 'src/app/dashboard/loading.tsx', 'src/app/dashboard/dashboard-account-security.css', 'src/app/profile/priorities/page.tsx', 'src/components/profile/profile-priorities-view.tsx', 'src/components/profile/profile-priority-editor.tsx', 'src/components/dashboard/dashboard-tools.tsx', 'src/components/dashboard/dashboard-tools.module.css', 'src/lib/dashboard-view.ts', 'src/lib/dashboard-view.test.ts', 'src/lib/dashboard-loading.test.ts', 'tests/dashboard-sparks.spec.ts', 'src/dashboard-account-security-visibility.test.ts', '.github/workflows/dashboard-account-security-hotfix-gates.yml'}
+          expected = {'src/app/dashboard/page.tsx', 'src/app/dashboard/loading.tsx', 'src/app/dashboard/dashboard-account-security.css', 'src/app/profile/priorities/page.tsx', 'src/components/profile/profile-priorities-view.tsx', 'src/components/profile/profile-priority-editor.tsx', 'src/components/dashboard/dashboard-tools.tsx', 'src/components/dashboard/dashboard-tools.module.css', 'src/lib/dashboard-view.ts', 'src/lib/dashboard-view.test.ts', 'src/lib/dashboard-loading.test.ts', 'tests/dashboard-sparks.spec.ts', 'src/dashboard-account-security-visibility.test.ts', 'tests/dashboard-account-security-visibility.spec.ts', '.github/workflows/dashboard-account-security-hotfix-gates.yml'}
           assert actual == expected, actual ^ expected
           PY
           git diff --exit-code ef3b1b595f6bddd1e660e3215ca19e57254234f3 -- .github/workflows/vercel-release.yml src/lib/supabase src/app/profile/priorities/actions.ts supabase package.json package-lock.json src/lib/app-data.ts
@@ -69,7 +69,7 @@ jobs:
           cat > /tmp/dashboard-sparks-qa.config.mjs <<'JS'
           export default {
             testDir: `${process.env.GITHUB_WORKSPACE}/tests`,
-            testMatch: 'dashboard-sparks.spec.ts',
+            testMatch: ['dashboard-sparks.spec.ts', 'dashboard-account-security-visibility.spec.ts'],
             timeout: 60000,
             expect: { timeout: 15000 },
             retries: 0,
