@@ -4,7 +4,6 @@ on:
   push:
     branches: [ops/get-started-live-release-20260926]
     paths:
-      - .github/get-started-live-integration.py
       - .github/workflows/get-started-live-release-qa.yml
 
 permissions:
@@ -16,79 +15,33 @@ concurrency:
 
 env:
   EXPECTED_MAIN_SHA: ed0bc4a53a2ea91cee1a66fef8831d3181f53f13
-  EXPECTED_PR_HEAD: de1fc6f59ac395f8b81ff1e3fba15b2dff6e7ab9
+  EXPECTED_CANDIDATE_SHA: a9c64c7a2831762aacebc9eb00ec7329036aca3c
   CANDIDATE_BRANCH: fix/get-started-choice-router-20260926
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  VERCEL: '1'
+  PLAYWRIGHT_HTML_OPEN: never
 
 jobs:
-  integrate:
+  qa:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
-    permissions:
-      contents: write
-    outputs:
-      candidate_sha: ${{ steps.integrate.outputs.sha }}
+    timeout-minutes: 60
     steps:
-      - name: Check out exact transport source
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          path: transport
-          persist-credentials: false
-
-      - name: Check out the reviewed candidate branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CANDIDATE_BRANCH }}
-          path: candidate
-          fetch-depth: 0
-
-      - name: Merge current main and add guest-only header behavior
-        id: integrate
-        working-directory: candidate
+      - name: Check exact remote identities
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          test "$(git rev-parse HEAD)" = "$EXPECTED_PR_HEAD"
-          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          remote_candidate="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          remote_main="$(git ls-remote https://github.com/$GITHUB_REPOSITORY.git refs/heads/main | awk '{print $1}')"
+          remote_candidate="$(git ls-remote https://github.com/$GITHUB_REPOSITORY.git "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
           test "$remote_main" = "$EXPECTED_MAIN_SHA"
-          test "$remote_candidate" = "$EXPECTED_PR_HEAD"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git fetch --no-tags origin "$EXPECTED_MAIN_SHA"
-          git merge --no-ff --no-edit "$EXPECTED_MAIN_SHA"
-          python ../transport/.github/get-started-live-integration.py "$PWD"
-          git add -- \
-            public/moral-trade-account-identity.js \
-            public/moral-trade-discover.html \
-            public/moral-trade-live-navigation.js \
-            public/moral-trade-refined-header.css \
-            src/sitewide-account-identity.test.ts \
-            tests/helpers/discover.ts \
-            tests/refined-header.spec.ts
-          test "$(git diff --cached --name-only | wc -l)" -eq 7
-          git diff --cached --check
-          git commit -m 'Show Get Started only to signed-out visitors'
-          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          test "$remote_candidate" = "$EXPECTED_CANDIDATE_SHA"
 
-  qa:
-    needs: integrate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    env:
-      EXPECTED_SHA: ${{ needs.integrate.outputs.candidate_sha }}
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-      SITE_URL: http://127.0.0.1:3210
-      VERCEL: '1'
-      PLAYWRIGHT_HTML_OPEN: never
-    steps:
       - name: Check out exact integrated candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.integrate.outputs.candidate_sha }}
-          fetch-depth: 2
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node
@@ -101,7 +54,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          git cat-file -e "$EXPECTED_MAIN_SHA^{commit}"
           mkdir -p get-started-release-evidence
           git rev-parse HEAD > get-started-release-evidence/commit.txt
           git rev-parse HEAD^{tree} > get-started-release-evidence/tree.txt
@@ -171,7 +125,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: get-started-live-release-${{ needs.integrate.outputs.candidate_sha }}
+          name: get-started-live-release-${{ env.EXPECTED_CANDIDATE_SHA }}
           path: |
             get-started-release-evidence
             test-results
