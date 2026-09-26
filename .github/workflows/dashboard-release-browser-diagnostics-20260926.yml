@@ -1,0 +1,91 @@
+name: Dashboard release browser diagnostics
+
+on:
+  push:
+    branches:
+      - ops/dashboard-sparks-production-20260926
+    paths:
+      - .github/workflows/dashboard-release-browser-diagnostics-20260926.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-release-browser-diagnostics-20260926
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXACT_SHA: ed0bc4a53a2ea91cee1a66fef8831d3181f53f13
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Check out the exact merged Dashboard release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          persist-credentials: false
+
+      - name: Verify immutable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+          mkdir -p /tmp/dashboard-release-browser
+          git rev-parse HEAD > /tmp/dashboard-release-browser/commit.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Build the exact production application
+        env:
+          VERCEL: '1'
+          VERCEL_ENV: production
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/dashboard-release-browser/build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the complete release browser suite and retain all output
+        id: browser
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          npm run test:e2e:release -- --reporter=line > /tmp/dashboard-release-browser/release-e2e.log 2>&1
+          status=$?
+          printf '%s\n' "$status" > /tmp/dashboard-release-browser/exit-status.txt
+          if [[ -d test-results ]]; then cp -R test-results /tmp/dashboard-release-browser/; fi
+          if [[ -d playwright-report ]]; then cp -R playwright-report /tmp/dashboard-release-browser/; fi
+          tail -n 250 /tmp/dashboard-release-browser/release-e2e.log
+          exit "$status"
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-release-browser-diagnostics
+          path: /tmp/dashboard-release-browser
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Require the browser suite after evidence is retained
+        if: always()
+        shell: bash
+        run: |
+          test '${{ steps.browser.outcome }}' = success
