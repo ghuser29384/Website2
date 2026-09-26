@@ -136,9 +136,11 @@
           if (!more.contains(event.relatedTarget)) more.open = false;
         });
         actions.prepend(more);
-        // This is an entry link, not an authentication assertion or a new signup flow.
+        // The shared identity bridge reveals this only after signed-out status is known.
         const start = document.createElement("a");
         start.className = "header-start";
+        start.dataset.mtGuestOnly = "true";
+        start.hidden = true;
         start.href = "/start";
         start.textContent = "Get Started";
         actions.appendChild(start);
