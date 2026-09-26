@@ -11,6 +11,7 @@ on:
       - "src/lib/commitments-loading.test.ts"
       - "src/lib/commitments-portfolio.ts"
       - "src/commitments-portfolio-wiring.test.ts"
+      - "src/commitments-redesign-contract.test.ts"
       - "playwright.commitments.config.ts"
       - "tests/commitments-loading.auth.ts"
 
@@ -42,12 +43,13 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Test portfolio reads and loading boundary
+      - name: Test portfolio reads, redesign and loading boundary
         run: |
           node --import tsx --test \
             src/lib/commitments-offer-data.test.ts \
             src/lib/commitments-loading.test.ts \
-            src/commitments-portfolio-wiring.test.ts
+            src/commitments-portfolio-wiring.test.ts \
+            src/commitments-redesign-contract.test.ts
       - name: Lint repository and check diff
         run: |
           npm run lint -- --quiet
@@ -65,11 +67,27 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify streaming, signed-out access and fixture-session navigation
         run: npx playwright test --config=playwright.commitments.config.ts --reporter=line --repeat-each=3
+      - name: Stage rendered evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p commitments-rendered-evidence
+          if [[ -d test-results/commitments-loading ]]; then
+            find test-results/commitments-loading -type f -print
+            while IFS= read -r file; do
+              target="commitments-rendered-evidence/${file#test-results/commitments-loading/}"
+              mkdir -p "$(dirname "$target")"
+              cp "$file" "$target"
+            done < <(find test-results/commitments-loading -type f)
+          fi
+          screenshot_count="$(find commitments-rendered-evidence -type f -name '*.png' | wc -l)"
+          test "$screenshot_count" -ge 4
       - name: Preserve browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: commitments-rendered-${{ github.event.pull_request.head.sha }}
-          path: test-results/commitments-loading
-          if-no-files-found: ignore
-          retention-days: 3
+          path: commitments-rendered-evidence
+          if-no-files-found: error
+          retention-days: 7

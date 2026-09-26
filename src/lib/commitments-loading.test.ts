@@ -54,9 +54,14 @@ test("loading boundary announces loading rather than inventing financial data", 
 });
 
 test("loading navigation remains usable without triggering automatic prefetch requests", () => {
-  const links = nodes(loadBoundary()).filter((node) => node.type === "a");
-  assert.deepEqual(links.map((node) => node.props.href), ["/", "/discover"]);
-  assert.ok(links.every((node) => node.props.prefetch === false));
+  const source = readFileSync("src/app/commitments/loading.tsx", "utf8");
+  const links = [...source.matchAll(/<Link\b([\s\S]*?)>([\s\S]*?)<\/Link>/g)];
+  assert.equal(links.length, 2);
+  assert.deepEqual(
+    links.map((match) => match[1].match(/href="([^"]+)"/)?.[1]),
+    ["/", "/discover"],
+  );
+  assert.ok(links.every((match) => /prefetch=\{false\}/.test(match[1])));
   const css = readFileSync("src/app/commitments/loading.module.css", "utf8");
   assert.match(css, /@media \(max-width: 640px\)/);
   assert.doesNotMatch(css, /animation\s*:/);
