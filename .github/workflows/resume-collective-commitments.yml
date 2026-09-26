@@ -1,0 +1,402 @@
+name: Resume collective identity-threshold commitments release candidate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/resume-collective-commitments.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: resume-collective-commitments-20260726
+  cancel-in-progress: false
+
+jobs:
+  test-build-publish-migrate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/apply-collective-commitments-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_OPS_BRANCH: ops/apply-collective-commitments-20260726
+      PRODUCT_BRANCH: feature/collective-identity-threshold-commitments-20260726
+      EXPECTED_PRODUCT_BASE: 9808ca22768b395ef6ef740a27881541b5e5f12a
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      MIGRATION_VERSION: "20260726171000"
+      MIGRATION_NAME: collective_identity_threshold_commitments
+      MIGRATION_SHA256: 593a624606104cccf69c3ad7f1b6e9fbd7cf11b1e5ec1309c2f429f68492351e
+      PAYLOAD_B64_SHA256: 70265f39c632f5b481818d56cc7a8b3a6d3af720ba006799ee73ea56f9ed9ae5
+      PAYLOAD_TGZ_SHA256: 8c3354b6292960df490f7a7a897e6127e4b874a50683eb1b3693433183fccdb7
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-resume-artifacts
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      COLLECTIVE_COMMITMENTS_ENABLED: "false"
+
+    steps:
+      - name: Validate exact execution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "$EXPECTED_OPS_BRANCH"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+
+      - name: Check out temporary operator branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and validate immutable product payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          payload_b64="$RUNNER_TEMP/collective-product.b64"
+          payload_tgz="$RUNNER_TEMP/collective-product.tar.gz"
+          cat .github/collective-commitments-payload/part-* > "$payload_b64"
+          echo "${PAYLOAD_B64_SHA256}  ${payload_b64}" | sha256sum --check --strict
+          base64 --decode "$payload_b64" > "$payload_tgz"
+          echo "${PAYLOAD_TGZ_SHA256}  ${payload_tgz}" | sha256sum --check --strict
+
+          PAYLOAD_TGZ="$payload_tgz" python3 - <<'PY' | tee "$ARTIFACT_DIR/payload-manifest.json"
+          import hashlib
+          import json
+          import os
+          import tarfile
+          from pathlib import PurePosixPath
+
+          expected = [
+              ".env.example",
+              "vercel.json",
+              "docs/collective-identity-threshold-commitments.md",
+              "supabase/migrations/20260726171000_collective_identity_threshold_commitments.sql",
+              "supabase/tests/collective_identity_threshold_commitments.sql",
+              "src/lib/collective-commitments/config.ts",
+              "src/lib/collective-commitments/crypto.ts",
+              "src/lib/collective-commitments/service-client.ts",
+              "src/lib/collective-commitments/service.ts",
+              "src/lib/collective-commitments/types.ts",
+              "src/lib/collective-commitments/types.test.ts",
+              "src/collective-commitments-wiring.test.ts",
+              "src/app/collective-commitments/actions.ts",
+              "src/app/collective-commitments/page.tsx",
+              "src/app/collective-commitments/new/page.tsx",
+              "src/app/collective-commitments/identity/page.tsx",
+              "src/app/collective-commitments/[commitmentId]/page.tsx",
+              "src/app/api/jobs/collective-commitments-expire/route.ts",
+              "src/components/collective-commitments/collective-commitment-shell.tsx",
+              "src/components/collective-commitments/collective-commitment-form.tsx",
+              "src/components/collective-commitments/collective-signature-controls.tsx",
+              "src/components/collective-commitments/submit-button.tsx",
+              "src/components/collective-commitments/collective-commitments.module.css",
+          ]
+          with tarfile.open(os.environ["PAYLOAD_TGZ"], "r:gz") as archive:
+              members = archive.getmembers()
+              names = [member.name for member in members]
+              if names != expected:
+                  raise SystemExit(f"Unexpected payload members: {names!r}")
+              files = {}
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  if not member.isfile() or path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"Unsafe payload member: {member.name}")
+                  stream = archive.extractfile(member)
+                  if stream is None:
+                      raise SystemExit(f"Missing file body: {member.name}")
+                  files[member.name] = hashlib.sha256(stream.read()).hexdigest()
+          print(json.dumps({"members": names, "sha256": files}, indent=2))
+          PY
+          cp "$payload_tgz" "$RUNNER_TEMP/collective-product.validated.tar.gz"
+
+      - name: Check out and guard exact product branch base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin "$PRODUCT_BRANCH"
+          git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
+          actual="$(git rev-parse HEAD)"
+          if [[ "$actual" != "$EXPECTED_PRODUCT_BASE" ]]; then
+            echo "Refusing moved product branch. Expected $EXPECTED_PRODUCT_BASE, found $actual." >&2
+            exit 1
+          fi
+
+      - name: Materialize exact product files
+        shell: bash
+        run: |
+          set -euo pipefail
+          PAYLOAD_TGZ="$RUNNER_TEMP/collective-product.validated.tar.gz" ROOT="$GITHUB_WORKSPACE" python3 - <<'PY'
+          import os
+          import shutil
+          import tarfile
+          from pathlib import Path, PurePosixPath
+
+          root = Path(os.environ["ROOT"]).resolve()
+          with tarfile.open(os.environ["PAYLOAD_TGZ"], "r:gz") as archive:
+              for member in archive.getmembers():
+                  path = PurePosixPath(member.name)
+                  if not member.isfile() or path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"Unsafe payload member: {member.name}")
+                  target = (root / Path(*path.parts)).resolve()
+                  if root not in target.parents and target != root:
+                      raise SystemExit(f"Payload escapes workspace: {member.name}")
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  source = archive.extractfile(member)
+                  if source is None:
+                      raise SystemExit(f"Missing file body: {member.name}")
+                  with target.open("wb") as output:
+                      shutil.copyfileobj(source, output)
+          PY
+          git status --short | tee "$ARTIFACT_DIR/generated-status.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused model and source-contract tests
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/lib/collective-commitments/types.test.ts \
+            src/collective-commitments-wiring.test.ts \
+            2>&1 | tee "$ARTIFACT_DIR/focused-tests.log"
+
+      - name: Run focused lint
+        shell: bash
+        run: |
+          set -o pipefail
+          npx eslint \
+            src/lib/collective-commitments \
+            src/app/collective-commitments \
+            src/app/api/jobs/collective-commitments-expire \
+            src/components/collective-commitments \
+            src/collective-commitments-wiring.test.ts \
+            2>&1 | tee "$ARTIFACT_DIR/focused-lint.log"
+
+      - name: Compare full repository tests with exact main baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          npm test > "$ARTIFACT_DIR/product-tests.log" 2>&1
+          product_status=$?
+          set -e
+
+          baseline_dir="$RUNNER_TEMP/collective-main-baseline"
+          git worktree add --detach "$baseline_dir" "$EXPECTED_PRODUCT_BASE"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$baseline_dir/node_modules"
+          set +e
+          (
+            cd "$baseline_dir"
+            npm test
+          ) > "$ARTIFACT_DIR/main-tests.log" 2>&1
+          main_status=$?
+          set -e
+
+          PRODUCT_STATUS="$product_status" MAIN_STATUS="$main_status" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          artifact = Path(os.environ["ARTIFACT_DIR"])
+          pattern = re.compile(r"^✖ (.+) \((?:\d+(?:\.\d+)?|\d+e[+-]?\d+)ms\)$", re.MULTILINE)
+
+          def failures(name):
+              text = (artifact / name).read_text(errors="replace")
+              return sorted(set(pattern.findall(text)))
+
+          product_status = int(os.environ["PRODUCT_STATUS"])
+          main_status = int(os.environ["MAIN_STATUS"])
+          product = failures("product-tests.log")
+          main = failures("main-tests.log")
+          if product_status != 0 and not product:
+              raise SystemExit("Product test command failed without a parseable failing subtest.")
+          if main_status != 0 and not main:
+              raise SystemExit("Exact-main test command failed without a parseable failing subtest.")
+          new = sorted(set(product) - set(main))
+          fixed = sorted(set(main) - set(product))
+          report = {
+              "productExit": product_status,
+              "mainExit": main_status,
+              "productFailures": product,
+              "mainFailures": main,
+              "newFailures": new,
+              "fixedBaselineFailures": fixed,
+          }
+          (artifact / "full-test-comparison.json").write_text(json.dumps(report, indent=2))
+          print(json.dumps(report, indent=2))
+          if new:
+              raise SystemExit("The product branch introduces full-suite failures beyond exact main.")
+          PY
+
+      - name: Build the exact production application
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$ARTIFACT_DIR/build.log"
+
+      - name: Check whitespace errors
+        shell: bash
+        run: |
+          set -o pipefail
+          git diff --check "$EXPECTED_PRODUCT_BASE" -- 2>&1 | tee "$ARTIFACT_DIR/diff-check.log"
+
+      - name: Commit and push the exact tested product branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -- \
+            .env.example \
+            vercel.json \
+            docs/collective-identity-threshold-commitments.md \
+            supabase/migrations/20260726171000_collective_identity_threshold_commitments.sql \
+            supabase/tests/collective_identity_threshold_commitments.sql \
+            src/lib/collective-commitments \
+            src/collective-commitments-wiring.test.ts \
+            src/app/collective-commitments \
+            src/app/api/jobs/collective-commitments-expire/route.ts \
+            src/components/collective-commitments
+          git commit -m "Add collective identity-threshold commitments"
+          git push origin "HEAD:$PRODUCT_BRANCH"
+          echo "PRODUCT_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Validate exact QA database target and install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected = os.environ["EXPECTED_QA_REF"]
+          if expected not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside the exact MoralTrade QA project.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit(f"Refusing unexpected database host: {parsed.hostname}")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Apply exact migration atomically to MoralTrade QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="supabase/migrations/${MIGRATION_VERSION}_${MIGRATION_NAME}.sql"
+          echo "${MIGRATION_SHA256}  ${migration}" | sha256sum --check --strict
+
+          preflight="$ARTIFACT_DIR/qa-preflight.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL > "$preflight"
+          select case
+            when current_database() <> 'postgres' then 'FAIL:database'
+            when exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='${MIGRATION_VERSION}'
+            ) then 'FAIL:migration_already_recorded'
+            when to_regclass('public.collective_commitments') is not null then 'FAIL:table_already_exists'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$preflight")" = "PASS"
+
+          apply_file="$RUNNER_TEMP/apply-collective-migration.sql"
+          python3 - "$migration" "$apply_file" <<'PY'
+          from pathlib import Path
+          import sys
+          source = Path(sys.argv[1]).read_text()
+          lines = source.splitlines()
+          first = next(i for i, line in enumerate(lines) if line.strip())
+          last = len(lines) - 1 - next(i for i, line in enumerate(reversed(lines)) if line.strip())
+          if lines[first].strip().lower() != 'begin;' or lines[last].strip().lower() != 'commit;':
+              raise SystemExit('Migration transaction boundary changed unexpectedly.')
+          body = lines[:first] + lines[first + 1:last] + lines[last + 1:]
+          Path(sys.argv[2]).write_text('\n'.join(body) + '\n')
+          PY
+          cat >> "$apply_file" <<SQL
+          insert into supabase_migrations.schema_migrations (
+            version, statements, name, created_by, idempotency_key
+          ) values (
+            '${MIGRATION_VERSION}',
+            array['Applied from guarded collective-commitment workflow; sha256 ${MIGRATION_SHA256}'],
+            '${MIGRATION_NAME}',
+            'github-actions-collective-commitments',
+            'collective-${MIGRATION_VERSION}-${MIGRATION_SHA256}'
+          );
+          SQL
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --single-transaction --file "$apply_file" \
+            2>&1 | tee "$ARTIFACT_DIR/migration-apply.log"
+
+      - name: Run transactional database regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/collective_identity_threshold_commitments.sql \
+            2>&1 | tee "$ARTIFACT_DIR/database-regression.log"
+          grep -Fq "PASS: duplicate-human and duplicate-account signatures are rejected" "$ARTIFACT_DIR/database-regression.log"
+          grep -Fq "PASS: exact manifest activation publishes all names atomically and only opted-in affiliations" "$ARTIFACT_DIR/database-regression.log"
+          grep -Fq "PASS: activation and expiry erase private ciphertext and per-commitment keys" "$ARTIFACT_DIR/database-regression.log"
+
+      - name: Verify installed QA schema inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          inventory="$ARTIFACT_DIR/qa-schema-inventory.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' > "$inventory"
+          select case
+            when to_regclass('public.collective_identity_credentials') is null then 'FAIL:credentials'
+            when to_regclass('public.collective_commitments') is null then 'FAIL:commitments'
+            when to_regclass('public.collective_commitment_keys') is null then 'FAIL:keys'
+            when to_regclass('public.collective_commitment_private_signatures') is null then 'FAIL:private_signatures'
+            when to_regclass('public.collective_commitment_public_signers') is null then 'FAIL:public_signers'
+            when to_regclass('public.collective_commitment_receipts') is null then 'FAIL:receipts'
+            when to_regprocedure('public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)') is null then 'FAIL:activation_rpc'
+            when has_table_privilege('authenticated', 'public.collective_commitment_private_signatures', 'select') then 'FAIL:private_select'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$inventory")" = "PASS"
+
+      - name: Record sanitized result
+        shell: bash
+        run: |
+          {
+            echo "product_branch=${PRODUCT_BRANCH}"
+            echo "product_head=${PRODUCT_HEAD}"
+            echo "qa_project=${EXPECTED_QA_REF}"
+            echo "migration_version=${MIGRATION_VERSION}"
+            echo "migration_sha256=${MIGRATION_SHA256}"
+            echo "focused_tests=PASS"
+            echo "focused_lint=PASS"
+            echo "full_test_new_failures=NONE"
+            echo "production_build=PASS"
+            echo "database_regression=PASS"
+            echo "production_enabled=NO"
+          } > "$ARTIFACT_DIR/result.txt"
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-commitments-resume-${{ github.run_id }}
+          path: collective-resume-artifacts
+          if-no-files-found: warn
+          retention-days: 14

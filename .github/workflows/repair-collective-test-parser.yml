@@ -1,0 +1,67 @@
+name: Repair collective full-test comparison parser
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/repair-collective-test-parser.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/apply-collective-commitments-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact temporary branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ops/apply-collective-commitments-20260726
+
+      - name: Replace the obsolete TAP parser exactly
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/apply-collective-commitments.yml')
+          source = path.read_text()
+          lines = source.splitlines()
+          targets = [
+              index
+              for index, line in enumerate(lines)
+              if 'pattern = re.compile(r"^not ok ' in line and 're.MULTILINE)' in line
+          ]
+          new_fragment = 'pattern = re.compile(r"^✖ (.+) \\((?:\\d+(?:\\.\\d+)?|\\d+e[+-]?\\d+)ms\\)$", re.MULTILINE)'
+          if not targets and new_fragment in source:
+              print('Parser already repaired; no write required.')
+              raise SystemExit(0)
+          if len(targets) != 1:
+              raise SystemExit(f'Expected one parser target; found {len(targets)}.')
+          index = targets[0]
+          indent = lines[index][: len(lines[index]) - len(lines[index].lstrip())]
+          lines[index] = indent + new_fragment
+          path.write_text('\n'.join(lines) + '\n')
+          PY
+
+      - name: Commit and push only the parser repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/workflows/apply-collective-commitments.yml; then
+            echo "No parser change to commit."
+            exit 0
+          fi
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git diff --check
+          git add .github/workflows/apply-collective-commitments.yml
+          git commit -m "Parse Node test-runner failure lines"
+          git push origin HEAD:ops/apply-collective-commitments-20260726
