@@ -411,7 +411,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <MarketplaceRouteShell active="track">
+        <MarketplaceRouteShell active="track" hidePlannerSummary>
           <section className={`${styles.page} ${redesignStyles.page} v72-private-surface commitments-center mt-v75-route-card`} aria-labelledby="commitments-heading">
             <header className={`${styles.hero} ${redesignStyles.hero}`}>
               <div>
@@ -483,7 +483,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
                   <summary className={redesignStyles.detailsSummary}>
                     <span className={redesignStyles.detailsTitle}>Additional details</span>
                     <span className={redesignStyles.detailsMeta}>
-                      Connected record types
+                      {data.warnings.length ? `${data.warnings.length} source warning${data.warnings.length === 1 ? "" : "s"}` : "Connected record types"}
                       <span aria-hidden="true" className={redesignStyles.detailsChevron} />
                     </span>
                   </summary>

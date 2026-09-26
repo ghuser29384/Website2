@@ -80,6 +80,19 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       await expect(page.getByText("Additional details", { exact: true })).toBeVisible();
       await expect(page.getByText("Connected record types", { exact: true })).toBeVisible();
       await expect(page.getByText("Some connected record types could not be loaded")).toHaveCount(0);
+      const disclosure = page.locator("details").filter({ has: page.getByText("Additional details", { exact: true }) });
+      await disclosure.locator("summary").click();
+      await expect(disclosure).toHaveAttribute("open", "");
+      await expect(disclosure).toContainText("not an expected-value estimate");
+      await disclosure.locator("summary").click();
+      await expect(disclosure).not.toHaveAttribute("open", "");
+      const headingSize = await page.locator("#commitments-heading").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      expect(headingSize).toBeLessThanOrEqual(68);
+      if (viewport.width >= 980) {
+        expect(await summary.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length)).toBe(5);
+        await expect(page.getByRole("complementary", { name: "Marketplace sections" }).getByText("0 in planner")).toHaveCount(0);
+      }
+
       await expectNoHorizontalOverflow(page);
       await page.screenshot({ path: testInfo.outputPath(`loaded-empty-${viewport.width}.png`), fullPage: true });
 

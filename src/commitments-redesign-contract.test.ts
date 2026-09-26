@@ -65,3 +65,8 @@ test("Commitments shell overrides have a local owner and cannot leak to other ro
   assert.doesNotMatch(css, /:global\(\.marketplace-app-shell:has/);
   assert.equal((css.match(/\.shell:global\(\.marketplace-app-shell\)/g) ?? []).length, 9);
 });
+
+test("Commitments keeps incomplete-source status visible and omits unsupported sidebar balances", () => {
+  assert.ok(page.includes('data.warnings.length ? `${data.warnings.length} source warning'));
+  assert.ok(page.includes('<MarketplaceRouteShell active="track" hidePlannerSummary>'));
+});
