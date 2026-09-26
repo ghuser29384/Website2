@@ -8,7 +8,7 @@ permissions:
   contents: write
 concurrency:
   group: selected-cleanup-20260926
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   verify-and-publish-candidate:
     if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.ref == 'ops/selected-cleanup-source-20260926' && github.event.pull_request.head.repo.full_name == github.repository
@@ -29,7 +29,7 @@ jobs:
       - name: Check out the current production baseline
         uses: actions/checkout@v4
         with:
-          ref: ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          ref: 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
           path: app
           fetch-depth: 0
           persist-credentials: false
@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          test "$(git rev-parse HEAD)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
           mkdir -p "$GITHUB_WORKSPACE/evidence"
           python3 - <<'PY'
           from pathlib import Path
@@ -136,8 +136,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh api repos/ghuser29384/Website2/git/ref/heads/main --jq .object.sha)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
-          test "$(git rev-parse HEAD^)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          test "$(gh api repos/ghuser29384/Website2/git/ref/heads/main --jq .object.sha)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          test "$(git rev-parse HEAD^)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
           test -z "$(git diff --name-only HEAD)"
           credential="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $credential" push https://github.com/ghuser29384/Website2.git HEAD:refs/heads/release/selected-shared-cleanup-20260926
