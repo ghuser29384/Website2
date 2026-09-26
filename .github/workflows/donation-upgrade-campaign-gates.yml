@@ -1,0 +1,72 @@
+name: Donation Upgrade campaign gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/donation-upgrade-campaign-gates.yml"
+      - "src/app/donation-upgrade/**"
+      - "src/app/api/campaign-events/**"
+      - "src/app/admin/donation-upgrade-campaign/**"
+      - "src/donation-upgrade-campaign.test.ts"
+      - "supabase/migrations/20260801123000_donation_upgrade_campaign_events.sql"
+      - "tests/donation-upgrade-landing.spec.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: donation-upgrade-campaign-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Unit, lint, build, and rendered campaign checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused Donation Upgrade source-contract tests
+        run: node --import tsx --test src/donation-upgrade-campaign.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run repository ESLint
+        run: npm run lint -- --quiet
+
+      - name: Build production artifact
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run rendered desktop and mobile checks
+        run: npx playwright test tests/donation-upgrade-landing.spec.ts --reporter=line
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: donation-upgrade-campaign-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 30
