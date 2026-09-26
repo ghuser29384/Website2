@@ -1,0 +1,281 @@
+name: Apply and validate Discover offer flow
+
+on:
+  push:
+    branches:
+      - agent/fix-discover-offer-flow-20260731
+    paths:
+      - .github/workflows/apply-discover-offer-bundle.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: discover-offer-flow-implementation
+  cancel-in-progress: false
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact implementation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/fix-discover-offer-flow-20260731
+
+      - name: Download and safely expand the reviewed source bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import io
+          import json
+          import os
+          import re
+          import tarfile
+          import time
+          import urllib.request
+          from pathlib import Path, PurePosixPath
+
+          topic = "mt-offer-flow-344-7f6e0c9a31d84b0db841b9e7bf260731"
+          poll_url = f"https://ntfy.sh/{topic}/json?poll=1&since=all"
+          event = None
+          last_error = None
+
+          for _ in range(12):
+              try:
+                  request = urllib.request.Request(
+                      poll_url,
+                      headers={"User-Agent": "MoralTrade-offer-flow-CI/1.0"},
+                  )
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      lines = response.read().decode("utf-8").splitlines()
+                  events = []
+                  for line in lines:
+                      if not line.strip():
+                          continue
+                      candidate = json.loads(line)
+                      message = str(candidate.get("message", ""))
+                      attachment = candidate.get("attachment") or {}
+                      if re.search(r"\bsha256=[0-9a-f]{64}\b", message) and attachment.get("url"):
+                          events.append(candidate)
+                  if events:
+                      event = max(events, key=lambda item: int(item.get("time", 0)))
+                      break
+              except Exception as error:  # pragma: no cover - CI diagnostic path
+                  last_error = error
+              time.sleep(5)
+
+          if event is None:
+              raise SystemExit(f"No source bundle event was available: {last_error!r}")
+
+          message = str(event["message"])
+          expected_sha = re.search(r"\bsha256=([0-9a-f]{64})\b", message).group(1)
+          attachment_url = str(event["attachment"]["url"])
+          request = urllib.request.Request(
+              attachment_url,
+              headers={"User-Agent": "MoralTrade-offer-flow-CI/1.0"},
+          )
+          with urllib.request.urlopen(request, timeout=120) as response:
+              archive_bytes = response.read()
+
+          actual_sha = hashlib.sha256(archive_bytes).hexdigest()
+          if actual_sha != expected_sha:
+              raise SystemExit(
+                  f"Source bundle digest mismatch: expected {expected_sha}, received {actual_sha}"
+              )
+
+          root = Path.cwd().resolve()
+          with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as archive:
+              members = archive.getmembers()
+              if not members:
+                  raise SystemExit("The source bundle is empty.")
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"Unsafe archive path: {member.name}")
+                  if member.issym() or member.islnk() or member.isdev():
+                      raise SystemExit(f"Unsupported archive entry: {member.name}")
+                  if path.parts and path.parts[0] == ".git":
+                      raise SystemExit(f"The archive may not alter Git metadata: {member.name}")
+              archive.extractall(root, members=members, filter="data")
+
+          Path("artifacts/discover-offer-flow").mkdir(parents=True, exist_ok=True)
+          Path("artifacts/discover-offer-flow/source-bundle.sha256").write_text(
+              f"{actual_sha}  source.tar.gz\n",
+              encoding="utf-8",
+          )
+          print(f"Expanded {len(members)} reviewed entries from bundle {actual_sha}.")
+          PY
+
+      - name: Rebuild the canonical Discover payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/apply-discover-offer-flow.py
+          python3 scripts/apply-discover-offer-flow.py
+          rm -f .offer-flow-build.json
+          node --check public/discover/offer-composer.js
+          git diff --check
+
+      - name: Install repository dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f pnpm-lock.yaml ]]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+          elif [[ -f yarn.lock ]]; then
+            corepack enable
+            yarn install --immutable || yarn install --frozen-lockfile
+          elif [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Run focused, complete, lint, type, and production-build gates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_script() {
+            local script="$1"
+            if [[ -f pnpm-lock.yaml ]]; then
+              pnpm run "$script"
+            elif [[ -f yarn.lock ]]; then
+              yarn "$script"
+            else
+              npm run "$script"
+            fi
+          }
+
+          exec_bin() {
+            if [[ -f pnpm-lock.yaml ]]; then
+              pnpm exec "$@"
+            elif [[ -f yarn.lock ]]; then
+              yarn exec "$@"
+            else
+              npx --no-install "$@"
+            fi
+          }
+
+          has_script() {
+            node -e 'const p=require("./package.json"); process.exit(p.scripts?.[process.argv[1]] ? 0 : 1)' "$1"
+          }
+
+          exec_bin tsx --test src/lib/discover-offer-flow-contract.test.ts
+
+          if has_script test; then
+            run_script test
+          else
+            exec_bin tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx'
+          fi
+
+          if has_script lint; then
+            run_script lint
+          else
+            exec_bin eslint .
+          fi
+
+          if has_script typecheck; then
+            run_script typecheck
+          elif has_script type-check; then
+            run_script type-check
+          else
+            exec_bin tsc --noEmit
+          fi
+
+          run_script build
+          git diff --check
+
+      - name: Install the existing Playwright Chromium runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f pnpm-lock.yaml ]]; then
+            pnpm exec playwright install --with-deps chromium
+          elif [[ -f yarn.lock ]]; then
+            yarn exec playwright install --with-deps chromium
+          else
+            npx --no-install playwright install --with-deps chromium
+          fi
+
+      - name: Run rendered desktop and mobile interaction QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/discover-offer-flow/rendered
+          if [[ -f pnpm-lock.yaml ]]; then
+            pnpm exec next start -H 127.0.0.1 -p 3000 > artifacts/discover-offer-flow/next.log 2>&1 &
+          elif [[ -f yarn.lock ]]; then
+            yarn exec next start -H 127.0.0.1 -p 3000 > artifacts/discover-offer-flow/next.log 2>&1 &
+          else
+            npx --no-install next start -H 127.0.0.1 -p 3000 > artifacts/discover-offer-flow/next.log 2>&1 &
+          fi
+          server_pid=$!
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3000/discover >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat artifacts/discover-offer-flow/next.log
+              exit 1
+            fi
+            if [[ "$attempt" == "90" ]]; then
+              cat artifacts/discover-offer-flow/next.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          OFFER_FLOW_QA_OUTPUT="$PWD/artifacts/discover-offer-flow/rendered" \
+          BASE_URL="http://127.0.0.1:3000" \
+            node scripts/qa/discover-offer-composer.mjs
+
+          git diff --check
+
+      - name: Upload rendered and gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-offer-flow-evidence-${{ github.sha }}
+          path: |
+            artifacts/discover-offer-flow
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Commit the exact passing implementation to the PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/inspect-discover-offer-flow.yml
+          rm -f .github/workflows/apply-discover-offer-bundle.yml
+          rm -f .offer-flow-build.json
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No implementation changes remained to commit."
+            exit 0
+          fi
+          git config user.name "Moral Trade release automation"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "Implement actionable Discover offer responses"
+          git push origin HEAD:agent/fix-discover-offer-flow-20260731

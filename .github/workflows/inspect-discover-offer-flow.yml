@@ -1,0 +1,61 @@
+name: Inspect Discover offer flow
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/inspect-discover-offer-flow.yml"
+      - "public/discover/payload/**"
+      - "public/moral-trade-discover.html"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Expand Discover payload and export exact branch source
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const zlib = require('node:zlib');
+          const parts = fs.readdirSync('public/discover/payload')
+            .filter((name) => name.endsWith('.txt'))
+            .sort((a, b) => Number(a.replace('.txt', '')) - Number(b.replace('.txt', '')))
+            .map((name) => fs.readFileSync(`public/discover/payload/${name}`, 'utf8').trim());
+          const source = zlib.gunzipSync(Buffer.from(parts.join(''), 'base64')).toString('utf8');
+          fs.mkdirSync('artifacts/discover-inspection', { recursive: true });
+          fs.writeFileSync('artifacts/discover-inspection/discover-source.html', source);
+          const needles = [
+            'Offer flow opened',
+            'Make offer',
+            'Build an open-source evaluation harness for alignment',
+            'Ellen Sun',
+            'data-',
+            'selected',
+            'opportunit',
+          ];
+          const lines = source.split(/\r?\n/);
+          const snippets = [];
+          for (let index = 0; index < lines.length; index += 1) {
+            if (needles.some((needle) => lines[index].toLowerCase().includes(needle.toLowerCase()))) {
+              const start = Math.max(0, index - 3);
+              const end = Math.min(lines.length, index + 4);
+              snippets.push(`--- lines ${start + 1}-${end} ---\n${lines.slice(start, end).join('\n')}`);
+            }
+          }
+          fs.writeFileSync('artifacts/discover-inspection/snippets.txt', snippets.join('\n\n'));
+          console.log(`Expanded ${source.length} characters across ${lines.length} lines.`);
+          NODE
+          git archive --format=tar.gz --output=artifacts/discover-inspection/branch-source.tar.gz HEAD
+          git rev-parse HEAD > artifacts/discover-inspection/exported-head.sha
+          sha256sum artifacts/discover-inspection/branch-source.tar.gz > artifacts/discover-inspection/branch-source.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: discover-offer-flow-inspection-${{ github.sha }}
+          path: artifacts/discover-inspection
+          retention-days: 2
+          if-no-files-found: error
