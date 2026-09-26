@@ -72,7 +72,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                     {viewer ? "Signed in" : supabaseReady ? "Sign in required" : "Not connected"}
                   </p>
                 </div>
-                <Link className={styles.settings} href={viewer ? "/dashboard" : "/login?returnTo=/profile"} prefetch={false}>
+                <Link className={styles.settings} href={viewer ? "/dashboard?view=controls" : "/login?returnTo=/profile"} prefetch={false}>
                   {viewer ? "View settings" : "Sign in to continue"}
                 </Link>
               </div>

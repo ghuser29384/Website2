@@ -7,12 +7,12 @@ html {
 /* The request form is a content panel, not a primary action button. Keep its text and surfaces explicit. */
 .request-primary {
   border-color: var(--line-strong) !important;
-  background: #fffdf8 !important;
+  background: #ffffff !important;
   color: #111111 !important;
 }
 
 .request-primary:hover {
-  background: #fffdf8 !important;
+  background: #ffffff !important;
 }
 
 .request-entry-head label {
@@ -25,7 +25,7 @@ html {
 
 .request-input-row,
 .suggestions {
-  background: #fffdf8 !important;
+  background: #ffffff !important;
   color: #111111 !important;
 }
 
@@ -36,7 +36,7 @@ html {
 
 .suggestion-option,
 .suggestion-option span:last-child {
-  background: #fffdf8 !important;
+  background: #ffffff !important;
   color: #111111 !important;
 }
 
@@ -61,7 +61,7 @@ html {
 
 /* The chosen cause sits on a light strip inside the dark intro column. Do not inherit white text. */
 .chosen-strip {
-  background: #fffdf8 !important;
+  background: #ffffff !important;
   color: #111111 !important;
 }
 
@@ -189,11 +189,11 @@ html {
 #screenCause .intro {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-self: stretch;
   min-width: 0;
   padding: clamp(24px, 2.5vw, 36px);
-  border-right: 1px solid var(--ink);
+  border-right: 1px solid var(--line);
 }
 
 #screenCause .step-label {
@@ -201,8 +201,8 @@ html {
 }
 
 #screenCause #causeHeading {
-  max-width: 12ch;
-  font-size: clamp(2.25rem, 3.4vw, 3.5rem);
+  max-width: 22ch;
+  font-size: clamp(28px, 2.5vw, 32px);
   line-height: 1.08 !important; /* Override the canonical poster leading. */
   text-wrap: balance;
   overflow-wrap: anywhere;
@@ -281,12 +281,12 @@ html {
     min-height: 0 !important; /* Do not inherit the canonical 310px mobile hero. */
     padding: 24px;
     border-right: 0;
-    border-bottom: 1px solid var(--ink);
+    border-bottom: 1px solid var(--line);
   }
 
   #screenCause #causeHeading {
     max-width: 22ch;
-    font-size: clamp(2rem, 5.5vw, 3rem);
+    font-size: 28px;
   }
 
   #screenCause .intro-copy {

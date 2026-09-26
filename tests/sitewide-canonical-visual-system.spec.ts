@@ -1,6 +1,6 @@
 import { expect, test, type ConsoleMessage, type Page, type TestInfo } from "@playwright/test";
 
-const PAPER = "rgb(245, 242, 233)";
+const PAPER = "rgb(247, 248, 250)";
 const BLACK = "rgb(5, 5, 5)";
 const BLUE = "rgb(36, 80, 255)";
 
@@ -219,7 +219,11 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
   } else {
     const topbar = page.locator(".mt-site-topbar").first();
     if (await topbar.isVisible().catch(() => false)) {
-      await expect(topbar).toHaveCSS("background-color", await topbar.evaluate((el) => el.classList.contains("mt-refined-header")) ? "rgb(17, 18, 20)" : BLACK);
+      const usesRefinedHeader = await topbar.evaluate((element) =>
+      element.classList.contains("mt-refined-header"),
+    );
+    const expectedTopbarColor = usesRefinedHeader ? "rgb(17, 18, 20)" : BLACK;
+    await expect(topbar).toHaveCSS("background-color", expectedTopbarColor);
       await expect(topbar).toHaveCSS("border-radius", "0px");
     }
   }
@@ -342,7 +346,7 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await expect(page.getByRole("banner")).toBeVisible({ timeout: 45_000 });
   await expect(page.getByRole("banner")).toHaveCSS("background-color", "rgb(17, 18, 20)");
   await expect(page.getByRole("link", { exact: true, name: "Moral Trade, home" })).toBeVisible();
-  await expect(page.getByRole("heading", { exact: true, level: 1, name: "What needs you now." })).toHaveCount(0);
+  await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
   await expect(page.getByRole("button", { exact: true, name: "Focus" })).toBeVisible();
   await waitForTextLength(page, 160);
   await expectNoFrameworkOverlay(page, "/");
