@@ -24,25 +24,22 @@ jobs:
           ref: fix/quiet-ui-20260926
           path: candidate
           fetch-depth: 30
-      - name: Preserve reviewed current main and stage the final directory contracts
+      - name: Finish the reviewed shared hierarchy without changing behavior
         id: stage
         working-directory: candidate
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          test "$(git rev-parse HEAD)" = 212316ab2c11b84245eb2f618d982f9a77ffa7db
-          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = 212316ab2c11b84245eb2f618d982f9a77ffa7db
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = d4d4b25fdf7a46a247838482ce5225163e45a963
+          test "$(git rev-parse HEAD)" = fcdd6a824e816caaa6b35d2348628b9bc6405af0
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = fcdd6a824e816caaa6b35d2348628b9bc6405af0
+          python ../transport/.github/quiet-ui-hierarchy.py
+          git diff --check
+          git add src/app/canonical-visual-system.css public/moral-trade-canonical-static.css tests/quiet-ui.spec.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 3
+          git diff --cached --check
           git config user.name ghuser29384
           git config user.email 262476329+ghuser29384@users.noreply.github.com
-          git fetch --depth=30 origin d4d4b25fdf7a46a247838482ce5225163e45a963
-          git merge --no-edit d4d4b25fdf7a46a247838482ce5225163e45a963
-          python ../transport/.github/quiet-ui-contracts.py
-          git diff --check
-          git add public/moral-trade-discover.css tests/discover-home-visual-alignment.spec.ts tests/exact-live-local-time.spec.ts tests/returning-homepage-timezone.spec.ts tests/returning-homepage.spec.ts
-          test "$(git diff --cached --name-only | wc -l)" -eq 5
-          git diff --cached --check
-          git commit -m 'Unify directory surfaces and preserve header-free hydration behavior'
+          git commit -m 'Keep shared section titles subordinate and control borders distinct'
           git diff --check d4d4b25fdf7a46a247838482ce5225163e45a963
           test "$(git diff --name-only d4d4b25fdf7a46a247838482ce5225163e45a963 | wc -l)" -eq 25
           git push origin HEAD:refs/heads/fix/quiet-ui-20260926
@@ -90,7 +87,7 @@ jobs:
           npm run build > /tmp/quiet-ui-ready/build.log 2>&1 || { tail -120 /tmp/quiet-ui-ready/build.log; exit 1; }
           tail -20 /tmp/quiet-ui-ready/build.log
       - run: npx playwright install --with-deps chromium
-      - name: Focused directory and header-retirement interactions
+      - name: Focused directory, hierarchy and header-retirement interactions
         run: |
           npx playwright test --config=playwright.release.config.ts tests/discover-home-visual-alignment.spec.ts tests/exact-live-local-time.spec.ts tests/returning-homepage-timezone.spec.ts tests/returning-homepage.spec.ts tests/quiet-ui.spec.ts --reporter=line > /tmp/quiet-ui-ready/focused-browser.log 2>&1 || { tail -200 /tmp/quiet-ui-ready/focused-browser.log; exit 1; }
           tail -25 /tmp/quiet-ui-ready/focused-browser.log
