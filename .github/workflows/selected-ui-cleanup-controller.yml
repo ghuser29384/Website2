@@ -65,21 +65,23 @@ jobs:
           subprocess.run(['git','add','--',str(p)],check=True)
           PY
           fi
+          python3 "$GITHUB_WORKSPACE/.github/selected-ui-cleanup/browser-expectations.py"
           python3 - <<'PY'
           import os,subprocess
           expected=['public/moral-trade-live-navigation.js','public/moral-trade-discover.html',
           'src/app/layout.tsx','src/components/layout/site-footer.tsx','src/components/layout/site-topbar.tsx',
           'src/components/search/smart-query-auto-enhancer.tsx','src/lib/site.ts','src/lib/refined-header.ts',
           'src/lib/refined-header.test.ts','src/lib/selected-ui-cleanup.test.ts','tests/refined-header.spec.ts','tests/selected-ui-cleanup.spec.ts',
+          'tests/returning-homepage.spec.ts','tests/input-assist-hydration.spec.ts',
           *['src/lib/'+f+'.test.ts' for f in ['action-first-positioning','live-discover-navigation','production-feature-cleanup','public-route-smoke','site','trade-controls-route-contract']]]
           actual=subprocess.check_output(['git','diff','--cached','--name-only',os.environ['BASE_SHA']],text=True).splitlines()
           assert sorted(actual)==sorted(expected),actual
           for p in ['src/app/about/page.tsx','src/app/sitemap.ts','src/app/start/page.tsx','public/moral-trade-refined-header.css','public/moral-trade-account-identity.js','.github/workflows/vercel-release.yml']:
             subprocess.run(['git','diff','--cached','--exit-code',os.environ['BASE_SHA'],'--',p],check=True)
-          print('Exact eighteen-path selected delta; concurrent Start/account behavior, About, sitemap, styling and release gates preserved.')
+          print('Exact twenty-path selected delta; concurrent Start/account behavior, About, sitemap, styling and release gates preserved.')
           PY
           git diff --cached --check
-          git commit -m 'Integrate current main without expanding the selected UI cleanup'
+          git commit -m 'Integrate current main and align selected navigation browser checks'
           test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
           git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
           git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/selected-ui-evidence/selected-cleanup.patch"
