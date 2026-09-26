@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { getTopbarActions } from "./site";
 
 const home = readFileSync("src/app/page.tsx", "utf8");
 const start = readFileSync("src/app/start/page.tsx", "utf8");
@@ -43,19 +44,19 @@ test("primary acquisition routes lead with real actions instead of pilot languag
   assert.match(site, /href: "\/start",\s*label: "Get started"/);
   assert.match(site, /href: "\/feed", label: "Feed"/);
   assert.match(site, /href: "\/discover", label: "Discover"/);
-  assert.match(site, /href: "\/trades\/new", label: "Create"/);
-  assert.match(start, /Make a financial contribution/);
+  assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });
+  assert.match(start, /Open the walkthrough/);
+  assert.match(start, /Go to sign in/);
   assert.match(legacyPilot, /permanentRedirect\("\/start"\)/);
 });
 
-test("the start route streams its critical action shell before optional live state", () => {
-  assert.match(start, /export default function StartPage\(\)/);
-  assert.doesNotMatch(start, /export default async function StartPage/);
-  assert.match(start, /createUnavailableMarketplaceOverview\(\)/);
-  assert.ok(
-    start.indexOf("<h1>Choose a real first action.</h1>") <
-      start.indexOf("<StartServiceSnapshot />"),
-  );
+test("the start route sends guests to review or login and redirects existing users", () => {
+  assert.match(start, /export default async function StartPage\(\)/);
+  assert.match(start, /const viewer = await getViewer\(\)/);
+  assert.match(start, /if \(viewer\) redirect\("\/feed"\)/);
+  assert.match(start, /href="\/walkthrough"/);
+  assert.match(start, /href="\/login"/);
+  assert.doesNotMatch(start, /getMarketplaceOverview|StartServiceSnapshot|VISITOR_PATHS/);
 });
 
 test("the financial action has a real external payment handoff and explicit boundaries", () => {
@@ -65,7 +66,7 @@ test("the financial action has a real external payment handoff and explicit boun
   assert.match(donate, /No Moral Trade custody/);
   assert.match(donateButton, /getEveryOrgDonationHref\(target\)/);
   assert.match(donateButton, /everyDotOrgDonateButton/);
-  assert.match(start, /No platform custody/);
+  assert.doesNotMatch(start, /Make a financial contribution|EveryOrgDonateButton/);
 });
 
 test("the returning homepage delegates to real feed actions rather than a mock", () => {
@@ -84,7 +85,8 @@ test("examples remain available only as a secondary learning resource", () => {
   assert.match(offers, /redirect\("\/worked-examples"\)/);
   assert.match(notFound, /href="\/offers\?view=live"/);
   assert.match(notFound, /href="\/donate"/);
-  assert.match(site, /href: "\/worked-examples", label: "Worked examples"/);
+  assert.doesNotMatch(site, /href: "\/worked-examples"/);
+  assert.ok(readFileSync("src/app/worked-examples/page.tsx", "utf8").length > 0);
   assert.doesNotMatch(routeBaseline, /"path": "\/worked-examples"/);
   assert.doesNotMatch(routeBaseline, /"path": "\/trust"/);
   assert.match(routeBaseline, /"path": "\/donate"/);

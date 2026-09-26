@@ -20,7 +20,7 @@ test("the live navigation bridge exposes four real destinations and keeps tools 
   assert.match(bridge, /data-mt-discover-link/);
   assert.match(bridge, /nav\.closest\("\.mt-site-topbar"\)/);
   assert.match(bridge, /header-more/);
-  assert.match(bridge, /"\/walkthrough", "How it works"/);
+  assert.match(bridge, /"\/walkthrough", "Tour"/);
   assert.doesNotMatch(bridge, /stopImmediatePropagation|preventDefault|window\.location\.assign|100 Sparks/);
   assert.match(bridge, /normalizeLiveLandmarks/);
   assert.match(bridge, /mtNestedMainNormalized/);

@@ -294,3 +294,8 @@ body .mt-refined-header.mt-refined-header .topbar-actions .button-secondary:focu
 .mt-refined-header.mt-refined-header .topbar-menu-panel {
   min-width: 0;
 }
+
+/* Static headers reveal acquisition actions only after account state resolves. */
+body .mt-refined-header [data-mt-guest-only="true"][hidden] {
+  display: none !important;
+}

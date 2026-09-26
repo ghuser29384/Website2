@@ -8,7 +8,8 @@ for (const width of [1440, 390, 320]) {
     await page.goto("/");
     const feed = page.locator('[data-mt-live-now="adaptive"]');
     await expect(feed).toBeVisible();
-    const utilityHeader = page.locator(".head");
+    const utilityHeader = page.locator(".mt-home-controls");
+    await expect(page.locator(".page .head")).toHaveCount(0);
     await expect(utilityHeader).toBeVisible();
     await expect(utilityHeader.locator("h1")).toHaveCount(0);
     await expect(utilityHeader.locator(".date")).toBeVisible();

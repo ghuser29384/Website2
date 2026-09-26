@@ -5,14 +5,14 @@ const fixedInstant = new Date("2026-07-17T01:30:00.000Z");
 async function openHome(page: Page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.locator("main#app")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".head .date")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".page .date")).toBeVisible({ timeout: 30_000 });
 }
 
 async function expectLocalGreeting(
   page: Page,
   expected: { dateTime: string; dateLabel: string; greeting: string },
 ) {
-  const localDate = page.locator(".head .date");
+  const localDate = page.locator(".page .date");
   await expect(localDate).toHaveAttribute("data-mt-local-date-time", expected.dateTime);
 
   const time = localDate.locator('time[data-mt-local-date="true"]');

@@ -8,19 +8,15 @@ export function usesDefaultHeader(links: SiteNavLinkItem[]): boolean {
   );
 }
 
-export const REFINED_HEADER_LINKS: SiteNavLinkItem[] = [
-  { href: "/feed", label: "Home" },
-  { href: "/discover", label: "Trades" },
-  { href: "/commitments", label: "Commitments" },
-  { href: "/profile", label: "Profile" },
-];
+export const REFINED_HEADER_LINKS: SiteNavLinkItem[] = getPrimaryNavLinks();
 
 export const HEADER_UTILITY_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/trades/new", label: "Create a trade" },
   { href: "/messages", label: "Messages" },
   { href: "/cart", label: "Saved offers" },
-  { href: "/invite", label: "Invite someone" },
-  { href: "/walkthrough", label: "How it works" },
+  { href: "/invite", label: "Invite" },
+  { href: "/evidence", label: "Evidence" },
+  { href: "/walkthrough", label: "Tour" },
   { href: "/safety", label: "Safety" },
 ];

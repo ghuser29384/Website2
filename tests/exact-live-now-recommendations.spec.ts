@@ -616,7 +616,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await expect(page).toHaveURL(/\/feed$/);
     const home = page.locator('[data-mt-primary-links] a[data-mt-feed-link="true"]');
-    await expect(home).toHaveText("Home");
+    await expect(home).toHaveText("Feed");
     await expect(home).toHaveAttribute("href", "/feed");
     await expect(home).toHaveAttribute("aria-current", "page");
     const feed = page.locator('[data-mt-live-now="adaptive"]');
@@ -667,14 +667,17 @@ test.describe("adaptive moral-opportunity Now feed", () => {
       "Profile",
     ]);
 
-    const evidence = navigation.getByRole("link", { name: "Profile", exact: true });
-    await expect(evidence).toBeVisible();
+    await page.locator(".header-more > summary").click();
+    await expect(page.locator(".header-more").getByRole("link", { name: "Messages", exact: true })).toBeVisible();
+    await page.locator(".header-more > summary").click();
+    const profile = navigation.getByRole("link", { name: "Profile", exact: true });
+    await expect(profile).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
 
-    await evidence.click();
+    await profile.click();
     await expect(page).toHaveURL(/\/profile$/);
     await expect(
     page.getByRole("heading", {

@@ -121,7 +121,7 @@
         for (const [href, label] of [
           ["/dashboard", "Dashboard"], ["/trades/new", "Create a trade"],
           ["/messages", "Messages"], ["/cart", "Saved offers"],
-          ["/invite", "Invite someone"], ["/walkthrough", "How it works"], ["/safety", "Safety"],
+          ["/invite", "Invite"], ["/evidence", "Evidence"], ["/walkthrough", "Tour"], ["/safety", "Safety"],
         ]) {
           const link = document.createElement("a");
           link.href = href;
@@ -136,9 +136,11 @@
           if (!more.contains(event.relatedTarget)) more.open = false;
         });
         actions.prepend(more);
-        // This is an entry link, not an authentication assertion or a new signup flow.
+        // The shared identity bridge reveals this only after signed-out status is known.
         const start = document.createElement("a");
         start.className = "header-start";
+        start.dataset.mtGuestOnly = "true";
+        start.hidden = true;
         start.href = "/start";
         start.textContent = "Get Started";
         actions.appendChild(start);

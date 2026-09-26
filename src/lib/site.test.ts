@@ -2,52 +2,46 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { FOOTER_LINK_GROUPS, getPrimaryNavLinks } from "@/lib/site";
+import { HEADER_UTILITY_LINKS } from "@/lib/refined-header";
 import { SITE_SEARCH_ITEMS } from "@/lib/site-search";
 
-test("exposes Feed and Discover as the first marketplace navigation entries", () => {
+test("exposes Home and Trades as the first marketplace navigation entries", () => {
   const primaryLinks = getPrimaryNavLinks(false);
   const [feedLink, discoverLink] = primaryLinks;
 
   assert.deepEqual(feedLink, {
     href: "/feed",
-    label: "Feed",
+    label: "Home",
   });
 
   assert.deepEqual(discoverLink, {
     href: "/discover",
-    label: "Discover",
+    label: "Trades",
   });
-  assert.ok(primaryLinks.some((link) => link.href === "/evidence" && link.label === "Evidence"));
+  assert.ok(primaryLinks.every((link) => link.href !== "/evidence"));
+  assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === "/evidence" && link.label === "Evidence"));
 });
 
-test("links to Feed and Discover from the marketplace footer group", () => {
-  const marketplaceGroup = FOOTER_LINK_GROUPS.find((group) => group.title === "Marketplace");
+test("links to Home and Trades from the marketplace footer group", () => {
+  const marketplaceGroup = FOOTER_LINK_GROUPS.find((group) => group.title === "Explore");
 
   assert.ok(marketplaceGroup);
   assert.ok(
     marketplaceGroup.links.some(
-      (link) => link.href === "/feed" && link.label === "Personalized feed",
+      (link) => link.href === "/feed" && link.label === "Home",
     ),
   );
   assert.ok(
     marketplaceGroup.links.some(
-      (link) => link.href === "/discover" && link.label === "Discover opportunities",
+      (link) => link.href === "/discover" && link.label === "Trades",
     ),
   );
 });
 
-test("links to Trade controls without adding another primary navigation item", () => {
-  const safetyGroup = FOOTER_LINK_GROUPS.find(
-    (group) => group.title === "Learn",
-  );
-
-  assert.ok(safetyGroup);
-  assert.ok(
-    safetyGroup.links.some(
-      (link) => link.href === "/trade-controls" && link.label === "Safeguard demonstrations",
-    ),
-  );
+test("Trade controls stays out of shared navigation while its directory entry remains", () => {
+  assert.ok(FOOTER_LINK_GROUPS.every((group) => group.links.every((link) => link.href !== "/trade-controls")));
   assert.ok(getPrimaryNavLinks(false).every((link) => link.href !== "/trade-controls"));
+  assert.ok(SITE_SEARCH_ITEMS.some((item) => item.href === "/trade-controls"));
 });
 
 test("makes all ten coordination and safety controls discoverable in site search", () => {

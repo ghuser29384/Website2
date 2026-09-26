@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mockAccount, mockInventory } from "./helpers/discover";
+import { mockAccount, mockInventory, responseFor } from "./helpers/discover";
 
 for (const width of [1728, 1440, 1024, 390, 320]) {
   for (const route of ["/feed", "/discover", "/profile"]) {
@@ -45,6 +45,22 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
   }
 }
 
+for (const route of ["/feed", "/discover"] as const) {
+  test(`Get Started is hidden after authenticated identity resolves at ${route}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    if (route === "/discover") {
+      await mockInventory(page, (body) => responseFor(body), true);
+    } else {
+      await mockAccount(page, true);
+    }
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+    const header = page.locator(".mt-refined-header").first();
+    await expect(header.locator('[data-mt-account-avatar="true"]').first()).toHaveText("AT");
+    await expect(header.locator('[data-mt-guest-only="true"]')).toHaveCount(1);
+    await expect(header.locator(".header-start")).toBeHidden();
+  });
+}
+
 test("Profile owns priorities and a legacy Sparks URL preserves the authenticated editor", async ({ page }) => {
   await page.goto("/profile");
   await page.getByRole("link", { name: /Adjust priorities/ }).click();
@@ -66,10 +82,10 @@ for (const width of [1280, 390, 320]) {
       await summary.focus();
       await expect(summary).toBeFocused();
       await page.keyboard.press("Enter");
-      await expect(header.getByRole("link", { name: "Messages", exact: true })).toBeVisible();
+      await expect(header.getByRole("link", { name: "Evidence", exact: true })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(summary).toBeFocused();
-      await expect(header.getByRole("link", { name: "Messages", exact: true })).not.toBeVisible();
+      await expect(header.getByRole("link", { name: "Evidence", exact: true })).not.toBeVisible();
       const trades = header.locator('[data-mt-primary-links] a[href="/discover"]');
       await trades.click();
       await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
@@ -81,13 +97,13 @@ test("the directory masthead keeps native page links usable without JavaScript",
   const context = await browser.newContext({ baseURL, javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   await page.goto("/discover");
-  const profile = page.locator('[data-mt-primary-links] a[href="/profile"]');
+  const profile = page.locator('[data-mt-primary-links] a[href="/feed"]');
   await expect(profile).toBeVisible();
-  await expect(profile).toHaveAccessibleName("Profile");
+  await expect(profile).toHaveAccessibleName("Home");
   await expect(page.locator("[data-mt-primary-links] > a")).toHaveCount(4);
   await profile.click();
-  await expect(page).toHaveURL(/\/profile$/);
-  // The pre-existing streamed Profile application requires JavaScript; the
+  await expect(page).toHaveURL(/\/feed$/);
+  // The pre-existing Feed application requires JavaScript; the
   // directory navigation itself must still perform a native document request.
   await context.close();
 });
@@ -113,3 +129,18 @@ for (const target of ["/feed", "/discover"]) {
     expect(rscRequests).toEqual([]);
   });
 }
+
+
+test("the React brand navigates to the standalone homepage without RSC", async ({ page }) => {
+  const rscRequests: string[] = [];
+  await page.route(url => url.pathname === "/" && url.searchParams.has("_rsc"), route => {
+    rscRequests.push(route.request().url());
+    return route.abort();
+  });
+  await page.goto("/contact");
+  const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === "/");
+  await page.getByRole("link", { name: "Moral Trade, home", exact: true }).click();
+  await navigation;
+  await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+  expect(rscRequests).toEqual([]);
+});

@@ -814,13 +814,13 @@ test.describe("Offers compact hybrid", () => {
 
     const search = publicPage.getByLabel("Search proposals", { exact: true });
     await search.fill("under");
-    await publicPage.getByRole("button", { name: "Search", exact: true }).click();
+    await publicPage.getByTestId("directory-controls").getByRole("button", { name: "Search", exact: true }).click();
     await expect(publicPage.locator('[data-testid="smart-query-clarification"]')).toBeVisible();
     await expect(publicPage.getByText("What amount should the proposal stay under?", { exact: true })).toBeVisible();
     await publicPage.getByRole("button", { name: "Keep editing" }).click();
 
     await search.fill("civic work");
-    await publicPage.getByRole("button", { name: "Search", exact: true }).click();
+    await publicPage.getByTestId("directory-controls").getByRole("button", { name: "Search", exact: true }).click();
     await expect(publicPage).toHaveURL(/search=civic(?:%20|\+)work/);
     expect(new URL(publicPage.url()).searchParams.get("mode")).toBe("pledge");
     await expect(publicPage.locator("[data-participant-offer]").first()).toBeVisible();
