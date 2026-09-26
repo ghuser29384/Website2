@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mockAccount, mockInventory } from "./helpers/discover";
+import { mockAccount, mockInventory, responseFor } from "./helpers/discover";
 
 for (const width of [1728, 1440, 1024, 390, 320]) {
   for (const route of ["/feed", "/discover", "/profile"]) {
@@ -43,6 +43,22 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
       await testInfo.attach("browser-errors", { body: JSON.stringify(errors), contentType: "application/json" });
     });
   }
+}
+
+for (const route of ["/feed", "/discover"] as const) {
+  test(`Get Started is hidden after authenticated identity resolves at ${route}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    if (route === "/discover") {
+      await mockInventory(page, (body) => responseFor(body), true);
+    } else {
+      await mockAccount(page, true);
+    }
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+    const header = page.locator(".mt-refined-header").first();
+    await expect(header.locator('[data-mt-account-avatar="true"]').first()).toHaveText("AT");
+    await expect(header.locator('[data-mt-guest-only="true"]')).toHaveCount(1);
+    await expect(header.locator(".header-start")).toBeHidden();
+  });
 }
 
 test("Profile owns priorities and a legacy Sparks URL preserves the authenticated editor", async ({ page }) => {
