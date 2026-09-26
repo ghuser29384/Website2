@@ -7,6 +7,7 @@ on:
       - ".github/workflows/commitments-performance-gates.yml"
       - "src/app/commitments/**"
       - "src/components/commitments/**"
+      - "src/components/marketplace/marketplace-components.tsx"
       - "src/lib/commitments-offer-data*"
       - "src/lib/commitments-loading.test.ts"
       - "src/lib/commitments-portfolio.ts"
@@ -14,6 +15,7 @@ on:
       - "src/commitments-redesign-contract.test.ts"
       - "playwright.commitments.config.ts"
       - "tests/commitments-loading.auth.ts"
+      - "tests/sitewide-canonical-visual-system.spec.ts"
 
 permissions:
   contents: read
@@ -67,6 +69,11 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify streaming, signed-out access and fixture-session navigation
         run: npx playwright test --config=playwright.commitments.config.ts --reporter=line --repeat-each=3
+      - name: Verify approved geometry within the shared visual contract
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: npx playwright test tests/sitewide-canonical-visual-system.spec.ts --config=playwright.release.config.ts --grep "Commitments uses the approved" --reporter=line --output=test-results/commitments-shared-geometry
       - name: Stage rendered evidence
         if: always()
         shell: bash
@@ -80,6 +87,9 @@ jobs:
               mkdir -p "$(dirname "$target")"
               cp "$file" "$target"
             done < <(find test-results/commitments-loading -type f)
+          fi
+          if [[ -d test-results/commitments-shared-geometry ]]; then
+            cp -R test-results/commitments-shared-geometry commitments-rendered-evidence/shared-geometry
           fi
           screenshot_count="$(find commitments-rendered-evidence -type f -name '*.png' | wc -l)"
           test "$screenshot_count" -ge 4
