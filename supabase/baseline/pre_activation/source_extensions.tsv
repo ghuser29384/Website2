@@ -1,0 +1,5 @@
+pg_stat_statements	extensions	1.11
+pg_trgm	extensions	1.6
+pgcrypto	extensions	1.3
+supabase_vault	vault	0.3.1
+uuid-ossp	extensions	1.1

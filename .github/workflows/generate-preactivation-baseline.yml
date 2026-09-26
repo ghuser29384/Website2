@@ -1,0 +1,188 @@
+name: Generate and validate authoritative pre-activation Supabase baseline
+
+on:
+  push:
+    branches:
+      - database/preactivation-schema-baseline-clean-20260819
+    paths:
+      - scripts/database/generate-preactivation-baseline.trigger
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preactivation-baseline-generation-clean-20260819
+  cancel-in-progress: true
+
+jobs:
+  generate-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      SOURCE_HEAD: ${{ github.sha }}
+      SOURCE_MAIN: 26d1fe436dbf9a4440bfafd501ddf8db944a1127
+      TARGET_BRANCH: database/preactivation-schema-baseline-clean-20260819
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact generator source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact repository dependencies
+        run: npm ci
+
+      - name: Verify PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            timeout 300s sudo apt-get update -qq
+            timeout 300s sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+          pg_dump --version
+
+      - name: Prepare portable generator and validator sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/database/prepare-preactivation-generator.py \
+            scripts/database/generate-preactivation-baseline.sh \
+            "$RUNNER_TEMP/generate-preactivation-baseline.sh"
+          python3 scripts/database/prepare-preactivation-validator.py \
+            scripts/database/validate-preactivation-baseline.sh \
+            "$RUNNER_TEMP/validate-preactivation-baseline.sh"
+          chmod +x \
+            "$RUNNER_TEMP/generate-preactivation-baseline.sh" \
+            "$RUNNER_TEMP/validate-preactivation-baseline.sh"
+
+      - name: Generate the production-derived data-free baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          bash "$RUNNER_TEMP/generate-preactivation-baseline.sh"
+          cp "$RUNNER_TEMP/generate-preactivation-baseline.sh" \
+            scripts/database/generate-preactivation-baseline.sh
+          cp "$RUNNER_TEMP/validate-preactivation-baseline.sh" \
+            scripts/database/validate-preactivation-baseline.sh
+          grep -nE '^(GRANT|REVOKE|ALTER DEFAULT PRIVILEGES)' \
+            supabase/baseline/pre_activation/schema.sql \
+            > "${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}/manifests/baseline-acl-statements.txt"
+
+      - name: Verify source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/database-preactivation-baseline-contract.test.ts \
+            src/lib/database-preactivation-privilege-reconciliation-contract.test.ts
+          npx eslint \
+            src/lib/database-preactivation-baseline-contract.test.ts \
+            src/lib/database-preactivation-privilege-reconciliation-contract.test.ts
+          if grep -Fq '\nCREATE TRIGGER' supabase/baseline/pre_activation/schema.sql; then
+            echo "The generated baseline contains a literal backslash-n trigger separator." >&2
+            exit 1
+          fi
+          git diff --check
+
+      - name: Reconstruct the pre-activation catalog in a clean local Supabase stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/database/validate-preactivation-baseline.sh \
+            "$GITHUB_WORKSPACE/artifacts/preactivation-baseline-clean-room"
+
+      - name: Run repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit --pretty false
+          npm run build
+
+      - name: Commit and push only the validated generated boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$SOURCE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/database/generate-preactivation-baseline.sh \
+            scripts/database/validate-preactivation-baseline.sh \
+            supabase/baseline/pre_activation \
+            src/lib/database-preactivation-baseline-contract.test.ts
+          git commit -m "Capture authoritative pre-activation Supabase baseline"
+          RESULT_HEAD="$(git rev-parse HEAD)"
+          git push origin "HEAD:$TARGET_BRANCH"
+          printf 'result_head=%s\nresult_tree=%s\n' \
+            "$RESULT_HEAD" \
+            "$(git rev-parse HEAD^{tree})" \
+            >> "${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}/manifests/result.txt"
+
+      - name: Package privacy-safe generation and clean-room evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          GENERATED="${RUNNER_TEMP}/preactivation-baseline-${GITHUB_RUN_ID}"
+          mkdir -p evidence/generation evidence/clean-room
+          if [[ -d "$GENERATED/manifests" ]]; then
+            cp -R "$GENERATED/manifests" evidence/generation/
+          fi
+          if [[ -d "$GENERATED/logs" ]]; then
+            cp -R "$GENERATED/logs" evidence/generation/
+          fi
+          if [[ -d artifacts/preactivation-baseline-clean-room ]]; then
+            cp -R artifacts/preactivation-baseline-clean-room/. evidence/clean-room/
+          fi
+          python3 - <<'PY_REDACT'
+          from pathlib import Path
+          import re
+
+          ansi_escape = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+          replacements = (
+              (re.compile(r"postgres(?:ql)?://[^\s\x1b]+", re.IGNORECASE), "[redacted-local-database-url]"),
+              (re.compile(r"\bsb_(?:publishable|secret)_[A-Za-z0-9_-]+\b"), "[redacted-local-api-key]"),
+              (re.compile(r"\beyJ[A-Za-z0-9_-]{20,}(?:\.[A-Za-z0-9_-]+){1,2}\b"), "[redacted-jwt]"),
+          )
+          clean_room = Path("evidence/clean-room")
+          if clean_room.is_dir():
+              for path in clean_room.glob("*.log"):
+                  text = ansi_escape.sub("", path.read_text(errors="replace"))
+                  for pattern, replacement in replacements:
+                      text = pattern.sub(replacement, text)
+                  path.write_text(text)
+          PY_REDACT
+          if grep -REIl \
+              'postgres(ql)?://|eyJ[A-Za-z0-9_-]{20,}|sb_(publishable|secret)_[A-Za-z0-9_-]+' \
+              evidence 2>/dev/null > evidence/credential-scan-matches.txt; then
+            test ! -s evidence/credential-scan-matches.txt
+          fi
+          find evidence -type f -print0 | sort -z | xargs -0 -r sha256sum \
+            > evidence/artifact-sha256.txt
+
+      - name: Upload generation and clean-room evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preactivation-baseline-generation-${{ github.run_id }}
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 21
