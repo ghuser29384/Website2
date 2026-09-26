@@ -26,7 +26,7 @@ s = s.replace(needle, '''/* Section titles must stay subordinate to the operatio
 ''' + needle)
 p.write_text(s)
 p = Path('public/moral-trade-canonical-static.css')
-s = p.read_text().replace('--line-strong: #b8bec8;', '--line-strong: #89919e;')
+s = p.read_text().replace('--line-strong: #b8bec8 !important;', '--line-strong: #89919e !important;').replace('--line-dark: #b8bec8 !important;', '--line-dark: #89919e !important;')
 assert s != p.read_text()
 p.write_text(s)
 
@@ -52,4 +52,51 @@ for (const width of [1440, 390, 320]) {
 }
 '''
 p.write_text(s)
-print('Shared section hierarchy and stronger control boundaries updated; data and release gates unchanged.')
+
+# Browser trace demonstrated a stalled /discover?_rsc request from Contact.
+# These two destinations are standalone HTML documents, not React server payloads.
+p = Path('src/components/layout/site-topbar.tsx')
+s = p.read_text()
+needle = '''  const isActive = isHrefActive(pathname, href) || (href === "/feed" && pathname === "/");
+
+  return ('''
+assert s.count(needle) == 1
+s = s.replace(needle, '''  const isActive = isHrefActive(pathname, href) || (href === "/feed" && pathname === "/");
+
+  // Standalone HTML shells must use document navigation, not an RSC request.
+  if (href === "/feed" || href === "/discover") {
+    return (
+      <a aria-current={isActive ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
+        {label}
+      </a>
+    );
+  }
+
+  return (''')
+p.write_text(s)
+p = Path('tests/refined-header.spec.ts')
+s = p.read_text() + '''
+for (const target of ["/feed", "/discover"]) {
+  test(`React header uses a document request for standalone ${target}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    const rscRequests: string[] = [];
+    await page.route(url => ["/feed", "/discover"].includes(url.pathname) && url.searchParams.has("_rsc"), route => {
+      rscRequests.push(route.request().url());
+      return route.abort();
+    });
+    await page.goto("/contact");
+    const summary = page.locator(".mt-refined-header summary").filter({ hasText: "More" });
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("link", { name: "Messages", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === target);
+    await page.locator(`[data-mt-primary-links] a[href="${target}"]`).click();
+    await navigation;
+    await expect.poll(() => new URL(page.url()).pathname).toBe(target);
+    expect(rscRequests).toEqual([]);
+  });
+}
+'''
+p.write_text(s)
+print('Shared hierarchy, stronger form boundaries and native standalone navigation updated.')
