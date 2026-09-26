@@ -1,0 +1,44 @@
+name: Cancel obsolete pre-Dashboard release
+
+on:
+  push:
+    branches:
+      - ops/dashboard-sparks-production-20260926
+    paths:
+      - .github/workflows/cancel-obsolete-offers-release-20260926.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CURRENT_MAIN: ed0bc4a53a2ea91cee1a66fef8831d3181f53f13
+      OBSOLETE_SHA: a0f79791ff7a439c0f0c85554c428fce65000eb5
+      OBSOLETE_RUN: '36216702664'
+      REPLACEMENT_RUN: '36217295913'
+    steps:
+      - name: Cancel only the verified obsolete release before upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/dashboard-sparks-production-20260926
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$CURRENT_MAIN"
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSOLETE_RUN" > /tmp/obsolete.json
+          jq -e --arg sha "$OBSOLETE_SHA" '.name == "Gated Vercel release" and .head_sha == $sha and (.status == "in_progress" or .status == "pending" or .status == "queued") and .conclusion == null' /tmp/obsolete.json >/dev/null
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REPLACEMENT_RUN" > /tmp/replacement.json
+          jq -e --arg sha "$CURRENT_MAIN" '.name == "Gated Vercel release" and .head_sha == $sha and (.status == "pending" or .status == "queued") and .conclusion == null' /tmp/replacement.json >/dev/null
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSOLETE_RUN/jobs?per_page=10" > /tmp/jobs.json
+          jq -e '[.jobs[].steps[] | select(.name == "Upload the already-built artifact exactly once")][0].status == "pending"' /tmp/jobs.json >/dev/null
+
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$OBSOLETE_RUN/cancel" >/dev/null
+          printf 'Cancelled obsolete release `%s`; replacement release `%s` remains queued for current main.\n' "$OBSOLETE_RUN" "$REPLACEMENT_RUN" >> "$GITHUB_STEP_SUMMARY"
