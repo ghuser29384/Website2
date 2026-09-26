@@ -1,0 +1,75 @@
+name: Prepare compact Commitments candidate
+on:
+  push:
+    branches: [ops/commitments-layout-20260926]
+    paths: [.github/workflows/commitments-layout-apply-20260926.yml]
+permissions:
+  contents: write
+concurrency:
+  group: prepare-compact-commitments-20260926
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 049b9b927edc16d8ca049a056bcc5a07c197aadf
+          path: patch-source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: d4d4b25fdf7a46a247838482ce5225163e45a963
+          path: app
+          fetch-depth: 0
+      - name: Verify exact patch bytes and allowed paths
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          python3 - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          expected = [
+            'c5fa8c193b51d0dcc91c4287db0dfd5f2d69280944c2e102ef4acde31bca8b1e',
+            'f7ec4184089d7942dc937ff9c68401d77757edf92554df7f3565a48f163a84fe',
+            '151b0251986a5f346fe1ad4f8ea3f9a3fba983e398ef6ed8f083d990c12cf981',
+            '5f6e39a2f4e9ac74d66fdff34a57631f9bda3cf36befdf13866ad0bde5b185d9',
+            '3a85f2876ecf2dcd60341da795886aa6370579e34ab5007bfaf0507c85ca0f72',
+          ]
+          parts = []
+          for i, digest in enumerate(expected):
+            content = pathlib.Path(f'patch-source/.github/commitments-layout-parts/{i}.txt').read_text().strip()
+            actual = hashlib.sha256(content.encode()).hexdigest()
+            assert actual == digest, f'Segment {i} mismatch: {actual}'
+            parts.append(content)
+          patch = gzip.decompress(base64.b64decode(''.join(parts), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'a5efb01b6a468bacc9767f77f792016c8212d5cc660f1f4d93d7dfeb3629766e'
+          pathlib.Path('/tmp/commitments-layout.patch').write_bytes(patch)
+          subprocess.run(['git','apply','--check','/tmp/commitments-layout.patch'],cwd='app',check=True)
+          subprocess.run(['git','apply','/tmp/commitments-layout.patch'],cwd='app',check=True)
+          subprocess.run(['git','add','-N','tests/fixtures/commitments-layout.mjs'],cwd='app',check=True)
+          paths = set(subprocess.check_output(['git','diff','--name-only'],cwd='app').decode().splitlines())
+          assert paths == {
+            'playwright.commitments.config.ts','scripts/auth-resolution-supabase.mjs',
+            'scripts/vercel-admin-cost-controls.mjs','scripts/vercel-admin-cost-controls.test.mjs',
+            'src/app/commitments/commitments.module.css','src/app/commitments/loading.module.css',
+            'src/app/commitments/loading.tsx','src/app/commitments/page.tsx',
+            'src/commitments-portfolio-wiring.test.ts','src/components/marketplace/marketplace-components.tsx',
+            'tests/commitments-live-portfolio.spec.ts','tests/commitments-loading.auth.ts',
+            'tests/fixtures/commitments-layout.mjs',
+          }, paths
+          subprocess.run(['git','diff','--check'],cwd='app',check=True)
+          PY
+      - name: Publish isolated candidate without changing main
+        working-directory: app
+        run: |
+          set -euo pipefail
+          branch=fix/commitments-compact-layout-20260926
+          test -z "$(git ls-remote --heads origin "refs/heads/$branch")"
+          git switch -c "$branch"
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git add src/app/commitments src/components/marketplace/marketplace-components.tsx src/commitments-portfolio-wiring.test.ts playwright.commitments.config.ts scripts/auth-resolution-supabase.mjs scripts/vercel-admin-cost-controls.mjs scripts/vercel-admin-cost-controls.test.mjs tests/commitments-live-portfolio.spec.ts tests/commitments-loading.auth.ts tests/fixtures/commitments-layout.mjs
+          git commit -m 'Simplify Commitments layout and reveal details progressively'
+          git push origin "HEAD:refs/heads/$branch"
+          git rev-parse HEAD HEAD^{tree}
