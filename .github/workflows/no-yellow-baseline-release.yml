@@ -1,0 +1,38 @@
+name: Baseline release differential for sitewide no-yellow
+
+on:
+  push:
+    branches: [ops/no-fluorescent-yellow-validation-20260925]
+    paths: [.github/workflows/no-yellow-baseline-release.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard exact base
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Run unchanged release browser suite on base
+        run: npm run test:e2e:release -- --reporter=line
