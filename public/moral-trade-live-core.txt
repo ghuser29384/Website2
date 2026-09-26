@@ -138,8 +138,7 @@ function render() {
   $('#app').innerHTML = nowPage();
 }
 function nowPage() {
-  return `<section class="page">${pageHead('What needs you now.', 'Review live opportunities and plan your next action.', 'Create offer')}
-    ${tab([['focus', 'Focus'], ['plan', 'Plan resources']], 'now', 'now')}
+  return `<section class="page">${tab([['focus', 'Focus'], ['plan', 'Plan resources']], 'now', 'now')}
     ${state.now === 'plan' ? nowPlan() : nowFocus()}</section>`;
 }
 // The authenticated live feed replaces this fail-closed loading state.
