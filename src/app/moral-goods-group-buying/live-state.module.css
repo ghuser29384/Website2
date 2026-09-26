@@ -26,9 +26,9 @@
 }
 
 .pendingBadge {
-  border-color: var(--signal-ink);
-  background: var(--signal);
-  color: var(--signal-ink);
+  border-color: var(--accent-deep);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .blockedBadge,
@@ -247,9 +247,9 @@
 }
 
 .gateStatusPending {
-  border-color: var(--signal-ink);
-  background: var(--signal);
-  color: var(--signal-ink);
+  border-color: var(--accent-deep);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .gateStatusBlocked {
