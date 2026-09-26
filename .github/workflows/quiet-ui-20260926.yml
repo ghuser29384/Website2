@@ -2,7 +2,7 @@ name: Quiet UI implementation and verification
 on:
   push:
     branches: [ops/quiet-ui-20260926]
-    paths: [.github/workflows/quiet-ui-20260926.yml]
+    paths: [.github/workflows/quiet-ui-20260926.yml, .github/quiet-ui-20260926.py, .github/quiet-ui-corrections-20260926.py]
 permissions:
   contents: read
 jobs:
