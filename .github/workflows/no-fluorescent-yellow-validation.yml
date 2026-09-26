@@ -1,0 +1,184 @@
+name: Sitewide no-fluorescent-yellow validation
+
+on:
+  push:
+    branches: [ops/no-fluorescent-yellow-validation-20260925]
+    paths: [.github/workflows/no-fluorescent-yellow-validation.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    env:
+      CANDIDATE_SHA: 02fe79c7d84f2d859c7b85459350d5a1e786a021
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 02fe79c7d84f2d859c7b85459350d5a1e786a021
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Guard source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/no-fluorescent-yellow-validation-20260925
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git diff --check 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9 HEAD
+          mkdir -p "$RUNNER_TEMP/no-yellow-evidence"
+          git diff --stat 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9 HEAD > "$RUNNER_TEMP/no-yellow-evidence/diff-stat.txt"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run focused and repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/no-fluorescent-yellow.test.ts src/lib/text-selection-style.test.ts | tee "$RUNNER_TEMP/no-yellow-evidence/focused.log"
+          npm test | tee "$RUNNER_TEMP/no-yellow-evidence/tests.log"
+          npm run lint -- --quiet | tee "$RUNNER_TEMP/no-yellow-evidence/lint.log"
+          npx tsc --noEmit | tee "$RUNNER_TEMP/no-yellow-evidence/typecheck.log"
+          npm run build | tee "$RUNNER_TEMP/no-yellow-evidence/build.log"
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Verify representative rendered routes and colors
+        shell: bash
+        env:
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+        run: |
+          set -euo pipefail
+          npm run start -- --hostname 127.0.0.1 --port 3210 > "$RUNNER_TEMP/no-yellow-evidence/server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3210/ >/dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium } from '@playwright/test';
+
+          const out = `${process.env.RUNNER_TEMP}/no-yellow-evidence`;
+          const browser = await chromium.launch();
+          const evidence = { candidate: process.env.CANDIDATE_SHA, results: [] };
+          const banned = new Set([
+            'rgb(225, 246, 91)',
+            'rgb(184, 217, 44)',
+            'rgb(189, 220, 37)',
+          ]);
+
+          async function contextFor(width) {
+            const context = await browser.newContext({ viewport: { width, height: 1000 } });
+            await context.addCookies([
+              { name: 'mt_walkthrough_seen', value: '1', url: 'http://127.0.0.1:3210', sameSite: 'Lax' },
+              { name: 'mt_analytics_opt_out', value: '1', url: 'http://127.0.0.1:3210', sameSite: 'Lax' },
+            ]);
+            return context;
+          }
+
+          try {
+            for (const width of [1440, 390]) {
+              const context = await contextFor(width);
+              const page = await context.newPage();
+              const errors = [];
+              page.on('pageerror', e => errors.push(e.message));
+
+              const home = await page.goto('http://127.0.0.1:3210/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+              assert.ok((home?.status() ?? 200) < 400);
+              const rootTokens = await page.evaluate(() => {
+                const style = getComputedStyle(document.documentElement);
+                const probe = document.createElement('div');
+                probe.style.cssText = 'position:fixed;left:-9999px;background:var(--signal);color:var(--signal-ink)';
+                document.body.appendChild(probe);
+                const s = getComputedStyle(probe);
+                const value = { signal:s.backgroundColor, signalInk:s.color };
+                probe.remove();
+                return value;
+              });
+              assert.equal(rootTokens.signal, 'rgb(223, 230, 255)');
+              assert.equal(rootTokens.signalInk, 'rgb(38, 55, 111)');
+              assert.equal(banned.has(rootTokens.signal), false);
+              await page.screenshot({ path: `${out}/home-${width}.png`, fullPage: true });
+
+              const create = await page.goto('http://127.0.0.1:3210/create?mode=pool', { waitUntil: 'domcontentloaded', timeout: 60000 });
+              assert.ok((create?.status() ?? 200) < 400);
+              const poolButton = page.locator('[data-create-mode="pool"]');
+              await poolButton.waitFor({ state: 'visible', timeout: 45000 });
+              await poolButton.hover();
+              const poolHover = await poolButton.evaluate(el => getComputedStyle(el).backgroundColor);
+              assert.equal(poolHover, 'rgb(230, 237, 248)');
+              assert.equal(banned.has(poolHover), false);
+              await page.screenshot({ path: `${out}/create-pool-hover-${width}.png`, fullPage: true });
+
+              const pledge = await page.goto('http://127.0.0.1:3210/pledge-swaps', { waitUntil: 'domcontentloaded', timeout: 60000 });
+              assert.ok((pledge?.status() ?? 200) < 400);
+              const pledgeTokens = await page.locator('main').first().evaluate(el => {
+                const style = getComputedStyle(el);
+                return {
+                  background: style.getPropertyValue('--pledge-signal').trim(),
+                  ink: style.getPropertyValue('--pledge-signal-ink').trim(),
+                };
+              });
+              assert.equal(pledgeTokens.background.toLowerCase(), '#e4eaff');
+              assert.equal(pledgeTokens.ink.toLowerCase(), '#26376f');
+              await page.screenshot({ path: `${out}/pledge-swaps-${width}.png`, fullPage: true });
+
+              const controls = await page.goto('http://127.0.0.1:3210/trade-controls', { waitUntil: 'domcontentloaded', timeout: 60000 });
+              assert.ok((controls?.status() ?? 200) < 400);
+              const controlTokens = await page.locator('main').first().evaluate(el => {
+                const style = getComputedStyle(el);
+                return {
+                  lime: style.getPropertyValue('--lime').trim(),
+                  limeDark: style.getPropertyValue('--lime-dark').trim(),
+                };
+              });
+              assert.equal(controlTokens.lime.toLowerCase(), '#83a97d');
+              assert.equal(controlTokens.limeDark.toLowerCase(), '#4f6d4c');
+              await page.screenshot({ path: `${out}/trade-controls-${width}.png`, fullPage: true });
+
+              assert.deepEqual(errors, []);
+              evidence.results.push({ width, rootTokens, poolHover, pledgeTokens, controlTokens });
+              await context.close();
+            }
+            await writeFile(`${out}/rendered-colors.json`, JSON.stringify(evidence, null, 2));
+          } finally {
+            await browser.close();
+          }
+          NODE
+
+      - name: Run unchanged release browser suite
+        shell: bash
+        env:
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line | tee "$RUNNER_TEMP/no-yellow-evidence/release-browser.log"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: no-fluorescent-yellow-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/no-yellow-evidence
+            test-results
+          if-no-files-found: warn
+          retention-days: 7
