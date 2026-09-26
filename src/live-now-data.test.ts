@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
@@ -16,6 +17,14 @@ const tracker = readFileSync(
   "src/components/recommendations/recommendation-learning-tracker.tsx",
   "utf8",
 );
+
+test("the live loader accepts the exact checked-in core asset", () => {
+  const expectedDigest = loader.match(/digest !== '([a-f0-9]{64})'/)?.[1];
+  const actualDigest = createHash("sha256")
+    .update(readFileSync("public/moral-trade-live-core.txt"))
+    .digest("hex");
+  assert.equal(expectedDigest, actualDigest);
+});
 
 test("the live shell fetches private profile recommendations before rendering", () => {
   assert.match(loader, /fetch\('\/api\/live-now'/);

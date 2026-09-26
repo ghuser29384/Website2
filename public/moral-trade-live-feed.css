@@ -4,7 +4,7 @@
   --mt-feed-paper: #fffef9;
   --mt-feed-blue: #1648ff;
   --mt-feed-orange: #ff5c1a;
-  --mt-feed-lime: #b8d92c;
+  --mt-feed-sage: #b9cbbb;
   --mt-feed-action: #1648ff;
   --mt-feed-redirect: #a84100;
   --mt-feed-public-goods: #526b00;
@@ -928,4 +928,24 @@
   .mt-feed-toast {
     transition: none;
   }
+}
+
+/* The compact date and Create row must wrap independently of the removed intro. */
+.mt-feed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mt-feed-actions .date {
+  min-width: 0;
+  text-align: left;
+}
+
+.mt-feed-actions > .btn {
+  max-width: 100%;
+  white-space: normal;
 }
