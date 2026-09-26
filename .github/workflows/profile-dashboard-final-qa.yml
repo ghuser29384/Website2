@@ -1,0 +1,65 @@
+name: Profile Dashboard final QA
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/workflows/profile-dashboard-final-qa.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  public:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      VERCEL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3d87b0de33e711e8dc5b81f484d49c771484b90d
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify exact application equivalence to the passed account fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/profile-dashboard-final-qa
+          test "$(git rev-parse HEAD)" = 3d87b0de33e711e8dc5b81f484d49c771484b90d
+          test "$(git diff --name-only 885104e888a209c9dc2d385bb898a0209a66a97f HEAD)" = tests/refined-header.spec.ts
+          git diff 885104e888a209c9dc2d385bb898a0209a66a97f HEAD > /tmp/profile-dashboard-final-qa/test-only-followup.patch
+          git rev-parse HEAD > /tmp/profile-dashboard-final-qa/commit.txt
+          gh api repos/ghuser29384/Website2/actions/jobs/108510526458 > /tmp/profile-dashboard-final-qa/passed-fixture-job.json
+          jq -e '.conclusion == "success" and .name == "fixture" and .run_id == 36280219680' /tmp/profile-dashboard-final-qa/passed-fixture-job.json
+          git diff --check HEAD^
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Source tests
+        run: npm test > /tmp/profile-dashboard-final-qa/tests.log 2>&1
+      - name: Lint and types
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet > /tmp/profile-dashboard-final-qa/lint.log 2>&1
+          npx tsc --noEmit --pretty false > /tmp/profile-dashboard-final-qa/types.log 2>&1
+      - name: Production build
+        run: npm run build > /tmp/profile-dashboard-final-qa/build.log 2>&1
+      - run: npx playwright install --with-deps chromium
+      - name: Redirect, account entry, and shared-header checks
+        run: npx playwright test tests/profile-dashboard-redirect.spec.ts tests/profile-priorities-access.spec.ts tests/refined-header.spec.ts --workers=1 --reporter=line > /tmp/profile-dashboard-final-qa/targeted-browser.log 2>&1
+      - name: Complete unchanged release browser gate
+        run: npm run test:e2e:release -- --reporter=line > /tmp/profile-dashboard-final-qa/release-browser.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-final-qa
+          path: |
+            /tmp/profile-dashboard-final-qa
+            test-results
+          retention-days: 7
