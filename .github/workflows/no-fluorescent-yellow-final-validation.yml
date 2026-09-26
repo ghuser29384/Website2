@@ -1,0 +1,214 @@
+name: Sitewide no-fluorescent-yellow final validation
+
+on:
+  push:
+    branches: [ops/no-fluorescent-yellow-validation-20260925]
+    paths: [.github/workflows/no-fluorescent-yellow-final-validation.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 02fe79c7d84f2d859c7b85459350d5a1e786a021
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Guard exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/no-fluorescent-yellow-validation-20260925
+          test "$(git rev-parse HEAD)" = 02fe79c7d84f2d859c7b85459350d5a1e786a021
+          git diff --check 5ed93aae32d9be5bb6357f0a95c83cfcc66066b9 HEAD
+          mkdir -p "$RUNNER_TEMP/no-yellow-final"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+
+      - name: Verify representative production-built routes contain no audited fluorescent colors
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- --hostname 127.0.0.1 --port 3210 > "$RUNNER_TEMP/no-yellow-final/server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3210/about >/dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium } from '@playwright/test';
+
+          const out = `${process.env.RUNNER_TEMP}/no-yellow-final`;
+          const routes = [
+            ['/about', 'about'],
+            ['/offers?view=live', 'offers'],
+            ['/create?mode=pool', 'create-pool'],
+            ['/pledge-swaps', 'pledge-swaps'],
+            ['/trade-controls', 'trade-controls'],
+          ];
+          const banned = new Set([
+            'rgb(225, 246, 91)',
+            'rgb(184, 217, 44)',
+            'rgb(189, 220, 37)',
+            'rgb(162, 170, 22)',
+            'rgb(223, 240, 168)',
+            'rgb(241, 247, 204)',
+            'rgb(200, 221, 113)',
+            'rgb(244, 248, 218)',
+            'rgb(120, 144, 0)',
+            'rgb(116, 136, 0)',
+            'rgb(105, 125, 0)',
+            'rgb(32, 39, 0)',
+            'rgb(48, 59, 0)',
+          ]);
+          const customProps = [
+            '--signal',
+            '--signal-ink',
+            '--success-soft',
+            '--success-ink',
+            '--pledge-signal',
+            '--pledge-signal-ink',
+            '--lime',
+            '--lime-dark',
+            '--mt-lime',
+            '--mt-feed-lime',
+          ];
+
+          const browser = await chromium.launch();
+          const evidence = { candidate: '02fe79c7d84f2d859c7b85459350d5a1e786a021', results: [] };
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 1000 } });
+              await context.addCookies([
+                { name: 'mt_walkthrough_seen', value: '1', url: 'http://127.0.0.1:3210', sameSite: 'Lax' },
+                { name: 'mt_analytics_opt_out', value: '1', url: 'http://127.0.0.1:3210', sameSite: 'Lax' },
+              ]);
+              const page = await context.newPage();
+              const pageErrors = [];
+              page.on('pageerror', error => pageErrors.push(error.message));
+
+              for (const [route, slug] of routes) {
+                const response = await page.goto('http://127.0.0.1:3210' + route, {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 60000,
+                });
+                assert.ok((response?.status() ?? 200) < 400, route);
+                await page.locator('body').waitFor({ state: 'visible', timeout: 30000 });
+
+                const scan = await page.evaluate(({ bannedValues, propNames }) => {
+                  const bannedSet = new Set(bannedValues);
+                  const matches = [];
+                  const foundProps = {};
+                  const elements = [document.documentElement, document.body, ...document.querySelectorAll('*')];
+
+                  for (const element of elements) {
+                    const style = getComputedStyle(element);
+                    for (const property of [
+                      'backgroundColor',
+                      'color',
+                      'borderTopColor',
+                      'borderRightColor',
+                      'borderBottomColor',
+                      'borderLeftColor',
+                      'outlineColor',
+                      'fill',
+                      'stroke',
+                    ]) {
+                      const value = style[property];
+                      if (value && bannedSet.has(value)) {
+                        matches.push({
+                          property,
+                          value,
+                          tag: element.tagName,
+                          id: element.id || null,
+                          className: typeof element.className === 'string' ? element.className.slice(0, 160) : null,
+                        });
+                      }
+                    }
+                    for (const prop of propNames) {
+                      const value = style.getPropertyValue(prop).trim().toLowerCase();
+                      if (value && !foundProps[prop]) foundProps[prop] = value;
+                    }
+                  }
+
+                  return { matches, foundProps };
+                }, { bannedValues: [...banned], propNames: customProps });
+
+                assert.deepEqual(scan.matches, [], `${route} must not render audited fluorescent-yellow/lime colors`);
+
+                if (scan.foundProps['--signal']) {
+                  assert.equal(scan.foundProps['--signal'], '#dfe6ff');
+                  assert.equal(scan.foundProps['--signal-ink'], '#26376f');
+                }
+                if (scan.foundProps['--success-soft']) {
+                  assert.equal(scan.foundProps['--success-soft'], '#e8f0df');
+                  assert.equal(scan.foundProps['--success-ink'], '#3f5b43');
+                }
+                if (scan.foundProps['--pledge-signal']) {
+                  assert.equal(scan.foundProps['--pledge-signal'], '#e4eaff');
+                  assert.equal(scan.foundProps['--pledge-signal-ink'], '#26376f');
+                }
+                if (scan.foundProps['--lime']) {
+                  assert.equal(scan.foundProps['--lime'], '#83a97d');
+                  assert.equal(scan.foundProps['--lime-dark'], '#4f6d4c');
+                }
+                if (scan.foundProps['--mt-lime']) {
+                  assert.equal(scan.foundProps['--mt-lime'], '#70866b');
+                }
+                if (scan.foundProps['--mt-feed-lime']) {
+                  assert.equal(scan.foundProps['--mt-feed-lime'], '#7ea67a');
+                }
+
+                await page.screenshot({ path: `${out}/${slug}-${width}.png`, fullPage: true });
+                evidence.results.push({ width, route, finalUrl: page.url(), ...scan });
+              }
+
+              assert.deepEqual(pageErrors, []);
+              await context.close();
+            }
+            await writeFile(`${out}/rendered-scan.json`, JSON.stringify(evidence, null, 2));
+          } finally {
+            await browser.close();
+          }
+          NODE
+
+      - name: Run unchanged release browser suite on candidate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line | tee "$RUNNER_TEMP/no-yellow-final/release-browser.log"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: no-yellow-final-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/no-yellow-final
+            test-results
+          if-no-files-found: warn
+          retention-days: 7
