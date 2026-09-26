@@ -154,8 +154,8 @@
   justify-content: center;
   border: 1px solid var(--ink);
   padding: 0.25rem 0.5rem;
-  background: var(--signal);
-  color: var(--signal-ink);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
   font-family: var(--font-mono);
   font-size: 0.64rem;
   font-weight: 700;
@@ -317,7 +317,7 @@
 }
 
 .routeCard:target {
-  outline: 3px solid var(--signal);
+  outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -360,9 +360,9 @@
 }
 
 .statusAction {
-  border-color: var(--signal-ink);
-  background: var(--signal);
-  color: var(--signal-ink);
+  border-color: var(--accent-deep);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .routeSummary {
@@ -566,7 +566,7 @@
 }
 
 .participantNotice {
-  border-left: 7px solid var(--signal);
+  border-left: 7px solid var(--accent);
 }
 
 .participantNotice h3,
@@ -667,7 +667,7 @@
 }
 
 .safeguardGrid span {
-  color: var(--signal);
+  color: var(--accent-soft);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 700;
@@ -705,7 +705,7 @@
 
 .advancedPanel summary::after {
   float: right;
-  color: var(--signal);
+  color: var(--accent-soft);
   content: "+";
 }
 
