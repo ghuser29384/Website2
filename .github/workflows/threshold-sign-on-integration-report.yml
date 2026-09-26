@@ -1,0 +1,90 @@
+name: Threshold Sign-On latest-main integration report
+
+on:
+  push:
+    branches:
+      - ops/threshold-sign-on-integrate-20260730
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/threshold-sign-on-integration-report.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: threshold-sign-on-integration-report-20260730
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+       github.head_ref == 'ops/threshold-sign-on-integrate-20260730')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_MAIN: a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3
+      EXPECTED_FEATURE: e33c7040d643b5af6e337c02ff3b986f7cf9b235
+      FEATURE_BRANCH: feature/collective-commitments-in-create-20260729
+      ARTIFACT_DIR: ${{ github.workspace }}/threshold-sign-on-integration-report
+
+    steps:
+      - name: Validate exact boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          test "$branch" = "ops/threshold-sign-on-integrate-20260730"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Attempt exact merge and capture conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR/conflicts"
+          git fetch origin main "$FEATURE_BRANCH"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git rev-parse origin/$FEATURE_BRANCH)" = "$EXPECTED_FEATURE"
+          git checkout --detach "$EXPECTED_FEATURE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          set +e
+          git merge --no-commit --no-ff "$EXPECTED_MAIN" >"$ARTIFACT_DIR/merge.stdout" 2>"$ARTIFACT_DIR/merge.stderr"
+          merge_status=$?
+          set -e
+          printf 'merge_status=%s\n' "$merge_status" > "$ARTIFACT_DIR/result.txt"
+          git status --short > "$ARTIFACT_DIR/status.txt"
+          git diff --name-only --diff-filter=U > "$ARTIFACT_DIR/conflict-files.txt"
+
+          while IFS= read -r path; do
+            [[ -n "$path" ]] || continue
+            safe="${path//\//__}"
+            git show ":1:$path" > "$ARTIFACT_DIR/conflicts/${safe}.base" 2>/dev/null || true
+            git show ":2:$path" > "$ARTIFACT_DIR/conflicts/${safe}.feature" 2>/dev/null || true
+            git show ":3:$path" > "$ARTIFACT_DIR/conflicts/${safe}.main" 2>/dev/null || true
+            git diff --cc -- "$path" > "$ARTIFACT_DIR/conflicts/${safe}.diff" || true
+          done < "$ARTIFACT_DIR/conflict-files.txt"
+
+          if [[ "$merge_status" == "0" ]]; then
+            git diff --stat "$EXPECTED_FEATURE" > "$ARTIFACT_DIR/merged-stat.txt"
+            git diff --name-only "$EXPECTED_FEATURE" > "$ARTIFACT_DIR/merged-files.txt"
+          fi
+
+      - name: Upload merge report
+        uses: actions/upload-artifact@v4
+        with:
+          name: threshold-sign-on-integration-report-${{ github.run_id }}
+          path: threshold-sign-on-integration-report
+          if-no-files-found: error
+          retention-days: 7
