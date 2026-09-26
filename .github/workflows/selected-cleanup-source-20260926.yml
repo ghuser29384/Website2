@@ -73,8 +73,18 @@ jobs:
                   'after': 'f380a33dec1b36ada9c98e3e76907b62db53cd27',
                   'edits': [[72, 73, '  assert.doesNotMatch(siteSource, /href: "\\/trade-controls"/);\n']],
               },
+              'tests/exact-live-now-recommendations.spec.ts': {
+                  'before': '2bc5b2f0c57b1501119606f5946e702b0bb26aa8',
+                  'after': '03c3acd752dca573dbaf683991c3a883fc82f713',
+                  'edits': [
+                      [618, 619, '    await expect(home).toHaveText("Feed");\n'],
+                      [663, 665, '      "Feed",\n      "Discover",\n      "Messages",\n'],
+                      [666, 667, ''],
+                      [669, 670, '    const menu = page.locator(".topbar .header-more");\n    await menu.locator("summary").click();\n    const evidence = menu.getByRole("link", { name: "Profile", exact: true });\n'],
+                  ],
+              },
           })
-          assert len(edits) == 26
+          assert len(edits) == 27
           for name, spec in edits.items():
               path = Path(name)
               assert not path.is_absolute() and '..' not in path.parts
