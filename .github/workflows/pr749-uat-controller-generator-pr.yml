@@ -1,0 +1,65 @@
+name: PR 749 controller artifact generator
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr749-uat-controller-generator-pr.yml"
+      - "ops/pr749-generate-controller.py"
+      - ".github/workflows/pr740-dac-current-main-integration-uat-20260816.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Generate and verify the exact PR 749 controller
+        run: python3 ops/pr749-generate-controller.py
+
+      - name: Upload generated controller
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr749-generated-uat-controller-${{ github.run_id }}
+          path: generated/pr749-dac-current-main-integration-uat-20260817.yml
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Commit the generated workflow to the one-use controller branch
+        shell: bash
+        env:
+          CONTROLLER_BRANCH: ops/pr749-dac-current-main-integration-uat-20260817
+          TRUSTED_CONTROLLER_SHA: c3a74201e5391df6d731e4638d2353329ba68518
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin \
+            "+refs/heads/${CONTROLLER_BRANCH}:refs/remotes/origin/${CONTROLLER_BRANCH}"
+          observed_controller="$(git rev-parse "refs/remotes/origin/${CONTROLLER_BRANCH}")"
+          test "$observed_controller" = "$TRUSTED_CONTROLLER_SHA"
+
+          rm -rf "$RUNNER_TEMP/pr749-controller"
+          git worktree add --detach "$RUNNER_TEMP/pr749-controller" "$observed_controller"
+          mkdir -p "$RUNNER_TEMP/pr749-controller/.github/workflows"
+          cp generated/pr749-dac-current-main-integration-uat-20260817.yml \
+            "$RUNNER_TEMP/pr749-controller/.github/workflows/pr749-dac-current-main-integration-uat-20260817.yml"
+
+          cd "$RUNNER_TEMP/pr749-controller"
+          git add .github/workflows/pr749-dac-current-main-integration-uat-20260817.yml
+          test -n "$(git diff --cached --name-only)"
+          test "$(git diff --cached --name-only)" = ".github/workflows/pr749-dac-current-main-integration-uat-20260817.yml"
+          git commit -m "ops: arm PR 749 fresh-current-main DAC integration UAT"
+          new_head="$(git rev-parse HEAD)"
+          git push origin "HEAD:refs/heads/${CONTROLLER_BRANCH}"
+          printf 'controller_branch=%s\ncontroller_head=%s\n' \
+            "$CONTROLLER_BRANCH" "$new_head" | tee "$RUNNER_TEMP/pr749-controller-result.txt"

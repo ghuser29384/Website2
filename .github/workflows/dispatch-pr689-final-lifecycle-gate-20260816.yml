@@ -1,0 +1,56 @@
+name: Dispatch PR 689 final exact-head lifecycle gate
+
+on:
+  push:
+    branches:
+      - ops/pr689-isolated-qa-preview-uat-20260814
+    paths:
+      - ".github/workflows/dispatch-pr689-final-lifecycle-gate-20260816.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: dispatch-pr689-final-lifecycle-gate-20260816
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HEAD_SHA: 1456027e1ebaf9e99ea2d03f5e223de4ef510e23
+  EXPECTED_TREE_SHA: 40a5e2c40a80c65d47a7af510c882988c86bed3f
+  TARGET_BRANCH: integration/mpgf-dac-lifecycle-current-main-20260814
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Verify exact draft PR identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr="$(gh api repos/$GITHUB_REPOSITORY/pulls/689)"
+          test "$(jq -r '.state' <<<"$pr")" = "open"
+          test "$(jq -r '.draft' <<<"$pr")" = "true"
+          test "$(jq -r '.merged' <<<"$pr")" = "false"
+          test "$(jq -r '.head.ref' <<<"$pr")" = "$TARGET_BRANCH"
+          test "$(jq -r '.head.sha' <<<"$pr")" = "$EXPECTED_HEAD_SHA"
+          tree="$(gh api repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_HEAD_SHA --jq '.tree.sha')"
+          test "$tree" = "$EXPECTED_TREE_SHA"
+
+      - name: Dispatch permanent lifecycle gate on exact PR head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/mpgf-dac-product-lifecycle-gates.yml/dispatches" \
+            -f ref="$TARGET_BRANCH"
+          echo "dispatched_head=$EXPECTED_HEAD_SHA"
