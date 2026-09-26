@@ -1,0 +1,78 @@
+name: Align Commitments browser contract
+on:
+  push:
+    branches: [ops/commitments-redesign-release-20260926]
+    paths: [.github/workflows/commitments-redesign-browser-contract.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7956ef1ee91686ccabf1258f6158b4286772cf7a
+          fetch-depth: 0
+      - name: Update only the approved route geometry contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c work/commitments-redesign-browser-contract-20260926
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/sitewide-canonical-visual-system.spec.ts')
+          source = path.read_text()
+          old = '        radius: Number.parseFloat(style.borderTopLeftRadius) || 0,\n'
+          assert source.count(old) == 1
+          source = source.replace(old, old + '''        // The approved Commitments sidebar is the sole exception to the
+                  // historical square-corner contract. Assert its exact radius;
+                  // do not relax checks for other pages or arbitrary elements.
+                  commitmentsRadius: document.querySelector(".commitments-center") && window.innerWidth > 900
+                    ? element.matches(".mt-v75-side-link") ? 9
+                      : element.matches(".mt-v75-side-plan") ? 10 : null
+                    : null,
+          ''')
+          old = '    expect(item.radius, `${route}: ${String(item.className)} radius`).toBeLessThanOrEqual(3);'
+          assert source.count(old) == 1
+          source = source.replace(old, '''    if (item.commitmentsRadius !== null) {
+                expect(item.radius, `${route}: approved Commitments ${String(item.className)} radius`).toBe(item.commitmentsRadius);
+              } else {
+                expect(item.radius, `${route}: ${String(item.className)} radius`).toBeLessThanOrEqual(3);
+              }''')
+          old = 'test("Commitments uses hard editorial navigation and preserves tab interaction"'
+          assert old in source
+          source = source.replace(old, 'test("Commitments uses the approved rounded sidebar and preserves tab interaction"')
+          source = source.replace('await expect(activeTrack).toHaveCSS("border-radius", "0px");', 'await expect(activeTrack).toHaveCSS("border-radius", "9px");')
+          source = source.replace('await expect(activeTrack).toHaveCSS("background-color", BLACK);', 'await expect(activeTrack).toHaveCSS("background-color", "rgb(21, 23, 25)");')
+          source = source.replace('await expect(activeTrack).toHaveCSS("border-left-color", BLUE);', 'await expect(activeTrack).toHaveCSS("border-left-color", "rgb(40, 88, 255)");')
+          source = source.replace('await expect(planner).toHaveCSS("border-radius", "0px");', 'await expect(planner).toHaveCSS("border-radius", "10px");')
+          path.write_text(source)
+          # Exercise the adapted shared contract in addition to private renderer
+          # checks. Production deployment still runs the complete release suite.
+          path = Path('.github/workflows/commitments-performance-gates.yml')
+          source = path.read_text()
+          anchor = '      - name: Stage rendered evidence\n'
+          assert anchor in source
+          source = source.replace(anchor, '''      - name: Verify shared geometry and navigation on the redesigned route
+                  run: npx playwright test tests/sitewide-canonical-visual-system.spec.ts --config=playwright.release.config.ts --grep "Commitments uses the approved" --reporter=line
+          ''' + anchor)
+          path.write_text(source)
+          PY
+          git diff --check
+          git add tests/sitewide-canonical-visual-system.spec.ts .github/workflows/commitments-performance-gates.yml
+          git commit -m 'Verify approved Commitments geometry without relaxing other routes'
+          mkdir -p /tmp/commitments-browser-contract
+          git rev-parse HEAD | tee /tmp/commitments-browser-contract/candidate-sha.txt
+          git diff f58ee041dfd909cad7699ed67485cc0a7db95933 > /tmp/commitments-browser-contract/commitments.patch
+          git archive HEAD | gzip > /tmp/commitments-browser-contract/source.tar.gz
+          git push origin HEAD:refs/heads/work/commitments-redesign-browser-contract-20260926
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commitments-redesign-browser-contract
+          path: /tmp/commitments-browser-contract
+          if-no-files-found: error
+          retention-days: 7
