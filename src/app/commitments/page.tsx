@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { CommitmentsDocumentLink } from "@/components/commitments/commitments-document-link";
 import { CommitmentsLocalGreeting } from "@/components/commitments/commitments-local-greeting";
 import { ImpactShareButton } from "@/components/commitments/impact-share-button";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -188,9 +189,9 @@ function PortfolioView({
         </div>
         <nav className={styles.groupSwitch} aria-label="Group portfolio by">
           {(Object.keys(GROUP_LABELS) as PortfolioGroupMode[]).map((option) => (
-            <Link aria-current={group === option ? "page" : undefined} href={groupHref(option)} key={option}>
+            <CommitmentsDocumentLink aria-current={group === option ? "page" : undefined} href={groupHref(option)} key={option}>
               {GROUP_LABELS[option]}
-            </Link>
+            </CommitmentsDocumentLink>
           ))}
         </nav>
       </section>
@@ -338,8 +339,8 @@ function CalendarView({ data, showAll }: { data: Awaited<ReturnType<typeof loadC
       <div className={styles.sectionHeader}>
         <div><span>Calendar</span><h2>Deadlines and expected commitment events.</h2></div>
         <nav className={styles.groupSwitch} aria-label="Calendar scope">
-          <Link aria-current={!showAll ? "page" : undefined} href="/commitments?tab=calendar">Action needed</Link>
-          <Link aria-current={showAll ? "page" : undefined} href="/commitments?tab=calendar&calendar=all">All dates</Link>
+          <CommitmentsDocumentLink aria-current={!showAll ? "page" : undefined} href="/commitments?tab=calendar">Action needed</CommitmentsDocumentLink>
+          <CommitmentsDocumentLink aria-current={showAll ? "page" : undefined} href="/commitments?tab=calendar&calendar=all">All dates</CommitmentsDocumentLink>
         </nav>
       </div>
       {items.length ? (
@@ -421,9 +422,9 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 
             <nav className={styles.tabs} aria-label="Commitments sections">
               {(Object.keys(TAB_LABELS) as CommitmentsTab[]).map((option) => (
-                <Link aria-current={tab === option ? "page" : undefined} href={tabHref(option, group)} key={option}>
+                <CommitmentsDocumentLink aria-current={tab === option ? "page" : undefined} href={tabHref(option, group)} key={option}>
                   {TAB_LABELS[option]}
-                </Link>
+                </CommitmentsDocumentLink>
               ))}
             </nav>
 
@@ -476,7 +477,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
                     {tab === "calendar" ? <CalendarView data={data} showAll={showAllCalendar} /> : null}
                   </div>
                   <aside className={styles.activityRail}>
-                    <header><div><span>Recent activity</span><h2>Latest updates.</h2></div><Link href="/commitments?tab=ledger">View all →</Link></header>
+                    <header><div><span>Recent activity</span><h2>Latest updates.</h2></div><CommitmentsDocumentLink href="/commitments?tab=ledger">View all →</CommitmentsDocumentLink></header>
                     {data.recentActivity.length ? (
                       <ol>
                         {data.recentActivity.map((event) => (

@@ -1,11 +1,14 @@
 import {
   listAgreementsForUser,
-  listCartItems,
-  listProfileOffers,
   type AgreementRecord,
-  type CartItemRecord,
   type OfferRecord,
 } from "@/lib/app-data";
+import {
+  listCommitmentCartItems,
+  listCommitmentOpenOffers,
+  type CommitmentCartItem,
+  type CommitmentOffer,
+} from "@/lib/commitments-offer-data";
 import { demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import type { MpgfParticipantState } from "@/lib/mpgf/participant-types";
 import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
@@ -173,7 +176,7 @@ function normalizedText(...values: Array<string | null | undefined>) {
   return values.filter(Boolean).join(" ").toLowerCase();
 }
 
-function inferMechanism(offer: OfferRecord | null | undefined, fallback: CommitmentMechanism = "Trade") {
+function inferMechanism(offer: CommitmentOffer | null | undefined, fallback: CommitmentMechanism = "Trade") {
   if (!offer) return fallback;
   const text = normalizedText(
     offer.offer_action,
@@ -199,7 +202,7 @@ function inferMechanism(offer: OfferRecord | null | undefined, fallback: Commitm
   return fallback;
 }
 
-function inferResourceType(offer: OfferRecord | null | undefined): CommitmentResourceType {
+function inferResourceType(offer: CommitmentOffer | null | undefined): CommitmentResourceType {
   if (!offer) return "Commitment";
   const text = normalizedText(offer.offer_action, offer.request_action, offer.notes);
   if (offer.mode === "payment" || offer.mode === "offset" || /donat|fund|pay|\$|usd/.test(text)) {
@@ -621,7 +624,7 @@ async function loadDonationOffsetsForUser(userId: string): Promise<DonationOffse
   };
 }
 
-function openOfferRecord(offer: OfferRecord, cartOfferIds: Set<string>): OpenOfferRecord {
+function openOfferRecord(offer: CommitmentOffer, cartOfferIds: Set<string>): OpenOfferRecord {
   const mechanism = inferMechanism(offer);
   return {
     id: offer.id,
@@ -635,7 +638,7 @@ function openOfferRecord(offer: OfferRecord, cartOfferIds: Set<string>): OpenOff
   };
 }
 
-function explicitCartMoney(item: CartItemRecord) {
+function explicitCartMoney(item: CommitmentCartItem) {
   const offer = item.offer;
   if (!offer) return [] as ResourceQuantity[];
   if (offer.donationOffset?.requested_matching_amount_cents) {
@@ -648,7 +651,7 @@ function explicitCartMoney(item: CartItemRecord) {
   return [money(Math.round(dollars * 100), "USD")];
 }
 
-function cartProjection(cartItems: CartItemRecord[]): CartProjection {
+function cartProjection(cartItems: CommitmentCartItem[]): CartProjection {
   return {
     itemCount: cartItems.length,
     projectedCounterpartyActions: cartItems.filter((item) => Boolean(item.offer)).length,
@@ -863,8 +866,8 @@ export async function loadCommitmentsPortfolioData({
   const warnings: string[] = [];
   const [agreements, cartItems, openOffers, participantState, redirectBundle] = await Promise.all([
     settle("Agreements", listAgreementsForUser(userId), [] as AgreementRecord[], warnings),
-    settle("Cart", listCartItems(userId, 100), [] as CartItemRecord[], warnings),
-    settle("Open offers", listProfileOffers(userId, userId), [] as OfferRecord[], warnings),
+    settle("Cart", listCommitmentCartItems(userId), [] as CommitmentCartItem[], warnings),
+    settle("Open offers", listCommitmentOpenOffers(userId), [] as CommitmentOffer[], warnings),
     settle(
       "Threshold funding",
       loadMpgfParticipantState({ userId, displayName }),
