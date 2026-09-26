@@ -1,0 +1,36 @@
+name: Payment methods source inspection
+on:
+  push:
+    branches: [ops/payment-methods-source-20260926]
+    paths: [.github/workflows/payment-methods-source-20260926.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f58ee041dfd909cad7699ed67485cc0a7db95933
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Export immutable source and development dependencies
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          mkdir -p /tmp/payment-methods-source
+          git archive --format=zip HEAD -o /tmp/payment-methods-source/source.zip
+          git rev-parse HEAD HEAD^{tree} > /tmp/payment-methods-source/source-identity.txt
+          npm ci --ignore-scripts
+          tar --exclude='node_modules/@next/swc-*' -czf /tmp/payment-methods-source/dependencies.tgz node_modules
+          sha256sum /tmp/payment-methods-source/source.zip /tmp/payment-methods-source/dependencies.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: payment-methods-source-${{ github.run_id }}
+          path: /tmp/payment-methods-source
+          retention-days: 3
