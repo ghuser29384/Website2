@@ -14,13 +14,6 @@ concurrency:
   group: get-started-choice-live-release-20260926
   cancel-in-progress: false
 
-env:
-  BASE_SHA: ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf
-  ORIGINAL_START_SHA: de1fc6f59ac395f8b81ff1e3fba15b2dff6e7ab9
-  GUEST_CTA_SHA: a9c64c7a2831762aacebc9eb00ec7329036aca3c
-  EXPECTED_OLD_HEAD: aa9a8b8dd090e10b035a3c2e61999de9544092dc
-  CANDIDATE_BRANCH: fix/get-started-choice-router-20260926
-
 jobs:
   prepare:
     runs-on: ubuntu-24.04
@@ -30,171 +23,24 @@ jobs:
     outputs:
       candidate_sha: ${{ steps.candidate.outputs.sha }}
     steps:
-      - name: Check out current production base
+      - name: Check out preparation source
+        uses: actions/checkout@v4
+        with:
+          ref: ops/get-started-choice-release-20260926
+          path: transport
+          persist-credentials: false
+
+      - name: Check out exact production base
         uses: actions/checkout@v4
         with:
           ref: ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf
+          path: candidate
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Build one clean integrated candidate
+      - name: Build and publish one clean candidate
         id: candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
-          test "$(git rev-parse HEAD)" = "$BASE_SHA"
-          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          test "$remote_main" = "$BASE_SHA"
-          remote_candidate="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
-          test "$remote_candidate" = "$EXPECTED_OLD_HEAD"
-
-          start_files=(
-            src/app/start/page.tsx
-            src/app/start/start.module.css
-            src/lib/action-first-positioning.test.ts
-            src/lib/public-route-smoke.test.ts
-            src/lib/start-entry-router.test.ts
-            tests/meta-explanatory-copy.spec.ts
-            tests/pilot-copy.spec.ts
-            tests/sitewide-canonical-visual-fidelity.spec.ts
-            tests/start-entry-router.spec.ts
-          )
-          for path in "${start_files[@]}"; do
-            mkdir -p "$(dirname "$path")"
-            git show "$ORIGINAL_START_SHA:$path" > "$path"
-          done
-
-          guest_files=(
-            public/moral-trade-discover.html
-            public/moral-trade-live-navigation.js
-            public/moral-trade-refined-header.css
-            src/sitewide-account-identity.test.ts
-            tests/helpers/discover.ts
-            tests/refined-header.spec.ts
-          )
-          for path in "${guest_files[@]}"; do
-            mkdir -p "$(dirname "$path")"
-            git show "$GUEST_CTA_SHA:$path" > "$path"
-          done
-
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('public/moral-trade-account-identity.js')
-          text = path.read_text()
-          replacements = [
-              (
-                  "  const ROOT_SELECTOR = '.topbar,[role=\"banner\"],header';\n",
-                  "  const ROOT_SELECTOR = '.topbar,[role=\"banner\"],header';\n"
-                  "  const GUEST_ONLY_SELECTOR = '[data-mt-guest-only=\"true\"]';\n",
-              ),
-              (
-                  "  let identity = normalizeIdentity(\n"
-                  "    hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { authenticated: false },\n"
-                  "  );\n"
-                  "  let scheduled = false;\n",
-                  "  let identity = normalizeIdentity(\n"
-                  "    hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { authenticated: false },\n"
-                  "  );\n"
-                  "  let identityResolved = hasBootstrap;\n"
-                  "  let scheduled = false;\n",
-              ),
-              (
-                  "  function patchLegacyGreetings() {\n",
-                  "  function patchGuestOnlyActions() {\n"
-                  "    const shouldShow = identityResolved && !identity.authenticated;\n\n"
-                  "    document.querySelectorAll(GUEST_ONLY_SELECTOR).forEach((element) => {\n"
-                  "      element.hidden = !shouldShow;\n"
-                  "      element.toggleAttribute(\"aria-hidden\", !shouldShow);\n"
-                  "    });\n"
-                  "  }\n\n"
-                  "  function patchLegacyGreetings() {\n",
-              ),
-              (
-                  "  function patchAll() {\n"
-                  "    patchAvatarCandidates();\n",
-                  "  function patchAll() {\n"
-                  "    patchGuestOnlyActions();\n"
-                  "    patchAvatarCandidates();\n",
-              ),
-              (
-                  "      .then((payload) => {\n"
-                  "        identity = normalizeIdentity(payload);\n"
-                  "        schedulePatch();\n",
-                  "      .then((payload) => {\n"
-                  "        identity = normalizeIdentity(payload);\n"
-                  "        identityResolved = true;\n"
-                  "        schedulePatch();\n",
-              ),
-          ]
-          for old, new in replacements:
-              if text.count(old) != 1:
-                  raise SystemExit(f'unexpected account-identity source while applying: {old!r}')
-              text = text.replace(old, new)
-          required = [
-              '.mt-feed-actions .date span.muted',
-              'identityResolved && !identity.authenticated',
-              'element.hidden = !shouldShow',
-          ]
-          for value in required:
-              if value not in text:
-                  raise SystemExit(f'missing merged account-identity behavior: {value}')
-          path.write_text(text)
-          PY
-
-          git add -- \
-            public/moral-trade-account-identity.js \
-            public/moral-trade-discover.html \
-            public/moral-trade-live-navigation.js \
-            public/moral-trade-refined-header.css \
-            src/app/start/page.tsx \
-            src/app/start/start.module.css \
-            src/lib/action-first-positioning.test.ts \
-            src/lib/public-route-smoke.test.ts \
-            src/lib/start-entry-router.test.ts \
-            src/sitewide-account-identity.test.ts \
-            tests/helpers/discover.ts \
-            tests/meta-explanatory-copy.spec.ts \
-            tests/pilot-copy.spec.ts \
-            tests/refined-header.spec.ts \
-            tests/sitewide-canonical-visual-fidelity.spec.ts \
-            tests/start-entry-router.spec.ts
-
-          cat > /tmp/expected-files <<'EOF'
-          public/moral-trade-account-identity.js
-          public/moral-trade-discover.html
-          public/moral-trade-live-navigation.js
-          public/moral-trade-refined-header.css
-          src/app/start/page.tsx
-          src/app/start/start.module.css
-          src/lib/action-first-positioning.test.ts
-          src/lib/public-route-smoke.test.ts
-          src/lib/start-entry-router.test.ts
-          src/sitewide-account-identity.test.ts
-          tests/helpers/discover.ts
-          tests/meta-explanatory-copy.spec.ts
-          tests/pilot-copy.spec.ts
-          tests/refined-header.spec.ts
-          tests/sitewide-canonical-visual-fidelity.spec.ts
-          tests/start-entry-router.spec.ts
-          EOF
-          sed -i 's/^          //' /tmp/expected-files
-          git diff --cached --name-only | sort > /tmp/actual-files
-          sort -o /tmp/expected-files /tmp/expected-files
-          diff -u /tmp/expected-files /tmp/actual-files
-          git diff --cached --check
-          test "$(git diff --cached -- public/moral-trade-live-feed.css | wc -l)" -eq 0
-          test "$(git diff --cached -- public/moral-trade-live-local-time.js | wc -l)" -eq 0
-          test "$(git diff --cached -- public/moral-trade-live-account.js | wc -l)" -eq 0
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Route Get Started visitors to walkthrough or login'
-          candidate_sha="$(git rev-parse HEAD)"
-          git push --force-with-lease="refs/heads/$CANDIDATE_BRANCH:$EXPECTED_OLD_HEAD" \
-            origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
-          echo "sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+        run: python transport/.github/get-started-choice-release-prepare.py candidate
 
   qa:
     needs: prepare
@@ -202,6 +48,7 @@ jobs:
     timeout-minutes: 55
     env:
       EXPECTED_SHA: ${{ needs.prepare.outputs.candidate_sha }}
+      BASE_SHA: ccc581e3e310d0ad3fc23cc101cf7c54cbe0b8bf
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
       VERCEL: '1'
@@ -221,7 +68,6 @@ jobs:
           cache: npm
 
       - name: Record exact candidate identity
-        shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
@@ -237,7 +83,6 @@ jobs:
         run: npm ci
 
       - name: Focused source contracts
-        shell: bash
         run: |
           set -euo pipefail
           node --import tsx --test \
@@ -248,20 +93,17 @@ jobs:
             | tee release-evidence/focused-unit.log
 
       - name: Complete repository tests
-        shell: bash
         run: |
           set -euo pipefail
           npm test | tee release-evidence/unit.log
 
       - name: Complete lint and typecheck
-        shell: bash
         run: |
           set -euo pipefail
           npm run lint -- --quiet 2>&1 | tee release-evidence/lint.log
           npx tsc --noEmit 2>&1 | tee release-evidence/types.log
 
       - name: Production build
-        shell: bash
         run: |
           set -euo pipefail
           npm run build 2>&1 | tee release-evidence/build.log
@@ -270,7 +112,6 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Render changed and adjacent surfaces
-        shell: bash
         run: |
           set -euo pipefail
           npx playwright test \
@@ -286,14 +127,12 @@ jobs:
             --workers=1 --reporter=line 2>&1 | tee release-evidence/focused-browser.log
 
       - name: Complete unchanged release browser suite
-        shell: bash
         run: |
           set -euo pipefail
           npm run test:e2e:release -- --reporter=line 2>&1 | tee release-evidence/release-browser.log
 
       - name: Collect rendered evidence
         if: always()
-        shell: bash
         run: |
           mkdir -p release-evidence/screenshots
           find test-results -name '*.png' -exec cp '{}' release-evidence/screenshots/ ';' || true
