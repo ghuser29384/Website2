@@ -1,0 +1,189 @@
+name: PR 827 current production selection verification
+
+on:
+  push:
+    branches: [ops/pr827-selection-validation-20260925]
+    paths: [.github/workflows/pr827-production-selection-check-v2.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out current production source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          persist-credentials: false
+      - name: Guard inherited fix blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          test "$(git rev-parse HEAD:src/app/readability-cleanup.css)" = bc2e8acdf9bbfda54ddc0b78de28aa3687cdeb74
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Verify the real canonical production offer title
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr827-production-v2"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium } from '@playwright/test';
+
+          const directory = `${process.env.RUNNER_TEMP}/pr827-production-v2`;
+          const evidence = {
+            expectedProductionSource: 'ef3b1b595f6bddd1e660e3215ca19e57254234f3',
+            fixBlob: 'bc2e8acdf9bbfda54ddc0b78de28aa3687cdeb74',
+            checkedAt: new Date().toISOString(),
+            results: [],
+            passed: false,
+          };
+
+          const browser = await chromium.launch();
+          try {
+            for (const width of [1440, 390]) {
+              const context = await browser.newContext({ viewport: { width, height: 1000 } });
+              await context.addCookies([
+                { name: 'mt_analytics_opt_out', value: '1', url: 'https://www.moraltrade.org', sameSite: 'Lax' },
+                { name: 'mt_walkthrough_seen', value: '1', url: 'https://www.moraltrade.org', sameSite: 'Lax' },
+              ]);
+              const page = await context.newPage();
+              const result = { width, pageErrors: [], consoleErrors: [] };
+              evidence.results.push(result);
+              page.on('pageerror', error => result.pageErrors.push(error.message));
+              page.on('console', message => {
+                if (message.type() === 'error') result.consoleErrors.push(message.text());
+              });
+
+              try {
+                const response = await page.goto('https://www.moraltrade.org/offers?view=live', {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 60000,
+                });
+                result.status = response.status();
+                result.url = page.url();
+                assert.equal(result.status, 200);
+                assert.equal(new URL(result.url).pathname, '/offers');
+
+                const heading = page.locator('[data-participant-offer] h4')
+                  .filter({ hasText: 'Counterparty-selected learning or attention' })
+                  .first();
+                await heading.waitFor({ state: 'visible', timeout: 45000 });
+                await page.evaluate(() => document.fonts.ready);
+                await heading.scrollIntoViewIfNeeded();
+
+                const row = heading.locator('xpath=ancestor::section[@data-participant-offer][1]');
+                result.offerId = await row.getAttribute('data-offer-id');
+                result.heading = await heading.innerText();
+
+                const measure = element => {
+                  const rect = element.getBoundingClientRect();
+                  const style = getComputedStyle(element);
+                  return {
+                    x: rect.x + window.scrollX,
+                    y: rect.y + window.scrollY,
+                    width: rect.width,
+                    height: rect.height,
+                    background: style.backgroundColor,
+                    color: style.color,
+                  };
+                };
+
+                result.before = await heading.evaluate(measure);
+                await row.screenshot({ path: `${directory}/offers-${width}-ordinary.png` });
+
+                result.selected = await heading.evaluate(element => {
+                  const probe = document.createElement('span');
+                  probe.style.cssText = 'position:fixed;width:0;height:0;visibility:hidden;background:var(--accent-soft);color:var(--ink)';
+                  document.body.appendChild(probe);
+                  const expected = {
+                    background: getComputedStyle(probe).backgroundColor,
+                    color: getComputedStyle(probe).color,
+                  };
+                  probe.remove();
+
+                  const selection = window.getSelection();
+                  selection.removeAllRanges();
+                  const range = document.createRange();
+                  range.selectNodeContents(element);
+                  selection.addRange(range);
+                  const selectionStyle = getComputedStyle(element, '::selection');
+
+                  return {
+                    expected,
+                    actual: {
+                      background: selectionStyle.backgroundColor,
+                      color: selectionStyle.color,
+                    },
+                    text: selection.toString(),
+                    heading: element.textContent,
+                  };
+                });
+
+                assert.equal(result.selected.actual.background, result.selected.expected.background);
+                assert.equal(result.selected.actual.color, result.selected.expected.color);
+                assert.equal(result.selected.actual.background, 'rgb(228, 234, 255)');
+                assert.notEqual(result.selected.actual.background, 'rgb(225, 246, 91)');
+                assert.equal(result.selected.text, result.selected.heading);
+                assert.ok(result.selected.text.includes('Counterparty-selected'));
+                assert.deepEqual(await heading.evaluate(measure), result.before);
+
+                await row.screenshot({ path: `${directory}/offers-${width}-selected.png` });
+                await heading.screenshot({ path: `${directory}/title-${width}-selected.png` });
+
+                await heading.click();
+                assert.equal(await page.evaluate(() => window.getSelection().toString()), '');
+                result.after = await heading.evaluate(measure);
+                assert.deepEqual(result.after, result.before);
+
+                const details = row.locator('[data-proposal-disclosure]');
+                const summary = details.locator('summary');
+                assert.equal(await details.evaluate(element => element.open), false);
+                await summary.focus();
+                await page.keyboard.press('Enter');
+                assert.equal(await details.evaluate(element => element.open), true);
+                await page.keyboard.press('Enter');
+                assert.equal(await details.evaluate(element => element.open), false);
+                result.focus = await summary.evaluate(element => ({
+                  focused: document.activeElement === element,
+                  focusVisible: element.matches(':focus-visible'),
+                }));
+                assert.equal(result.focus.focused, true);
+                assert.equal(result.focus.focusVisible, true);
+
+                assert.deepEqual(result.pageErrors, []);
+                result.passed = true;
+              } catch (error) {
+                result.error = String(error.stack || error);
+                await page.screenshot({ path: `${directory}/failure-${width}.png`, fullPage: true }).catch(() => {});
+                throw error;
+              } finally {
+                await context.close();
+              }
+            }
+            evidence.passed = true;
+          } finally {
+            evidence.finishedAt = new Date().toISOString();
+            await writeFile(`${directory}/production-selection.json`, JSON.stringify(evidence, null, 2));
+            await browser.close();
+          }
+          NODE
+      - name: Upload production verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr827-production-selection-v2-${{ github.run_id }}
+          path: ${{ runner.temp }}/pr827-production-v2
+          if-no-files-found: error
+          retention-days: 7
