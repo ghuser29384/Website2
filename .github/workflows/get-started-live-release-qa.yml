@@ -15,7 +15,7 @@ concurrency:
 
 env:
   EXPECTED_MAIN_SHA: ed0bc4a53a2ea91cee1a66fef8831d3181f53f13
-  EXPECTED_CANDIDATE_SHA: a9c64c7a2831762aacebc9eb00ec7329036aca3c
+  EXPECTED_OLD_CANDIDATE_SHA: a9c64c7a2831762aacebc9eb00ec7329036aca3c
   CANDIDATE_BRANCH: fix/get-started-choice-router-20260926
   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
   SITE_URL: http://127.0.0.1:3210
@@ -23,9 +23,75 @@ env:
   PLAYWRIGHT_HTML_OPEN: never
 
 jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      candidate_sha: ${{ steps.fix.outputs.sha }}
+    steps:
+      - name: Check out exact integrated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_OLD_CANDIDATE_SHA }}
+          fetch-depth: 2
+
+      - name: Fix the narrow Feed header without weakening the browser check
+        id: fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = "$EXPECTED_OLD_CANDIDATE_SHA"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          remote_candidate="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+          test "$remote_candidate" = "$EXPECTED_OLD_CANDIDATE_SHA"
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("public/moral-trade-live-feed.css")
+          css = path.read_text()
+          marker = "/* Keep the legacy Feed heading and create action inside narrow viewports. */"
+          if marker in css:
+              raise SystemExit("mobile Feed header fix already present")
+          css = css.rstrip() + """
+
+          @media (max-width: 420px) {
+            /* Keep the legacy Feed heading and create action inside narrow viewports. */
+            main#app > .page > .h {
+              flex-wrap: wrap;
+            }
+
+            main#app > .page > .h > .date {
+              flex: 1 1 130px;
+              min-width: 0;
+            }
+
+            main#app > .page > .h > .btn {
+              flex: 0 1 auto;
+              max-width: 100%;
+            }
+          }
+          """
+          path.write_text(css)
+          PY
+          git diff --check
+          test "$(git diff --name-only | sed '/^$/d')" = public/moral-trade-live-feed.css
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- public/moral-trade-live-feed.css
+          git commit -m 'Keep the Feed header inside narrow viewports'
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   qa:
+    needs: prepare
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      EXPECTED_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate_sha }}
     steps:
       - name: Check exact remote identities
         shell: bash
