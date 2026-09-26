@@ -1,0 +1,73 @@
+name: Dispatch Dashboard 100 Sparks production
+
+on:
+  push:
+    branches:
+      - ops/dashboard-sparks-production-20260926
+    paths:
+      - .github/workflows/dashboard-sparks-production-dispatch-20260926.yml
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: dashboard-sparks-production-dispatch-20260926
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: ed0bc4a53a2ea91cee1a66fef8831d3181f53f13
+  CANDIDATE_HEAD: 4074592fc738a58f37021a7179742d65476548a8
+  EXPECTED_TREE: a9ba7dcd3e708e351d2ebfd5cf4f3ba87de62e94
+  RELEASE_WORKFLOW: vercel-release.yml
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify immutable merge and unchanged release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/dashboard-sparks-production-20260926
+          test "$GITHUB_RUN_ATTEMPT" = 1
+
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          test "$current_main" = "$EXPECTED_SHA"
+
+          gh api "repos/$GITHUB_REPOSITORY/pulls/837" > /tmp/pr.json
+          jq -e --arg merged "$EXPECTED_SHA" --arg head "$CANDIDATE_HEAD" \
+            '.merged == true and .merge_commit_sha == $merged and .head.sha == $head' \
+            /tmp/pr.json >/dev/null
+
+          merged_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_SHA" --jq .tree.sha)"
+          candidate_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$CANDIDATE_HEAD" --jq .tree.sha)"
+          test "$merged_tree" = "$EXPECTED_TREE"
+          test "$candidate_tree" = "$EXPECTED_TREE"
+
+          test "$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/vercel-release.yml?ref=$EXPECTED_SHA" --jq .sha)" = e219e99d25279161b89eee80fc410912c3561a19
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW" --jq .state)" = active
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$EXPECTED_SHA&event=workflow_dispatch&per_page=100" > /tmp/existing.json
+          jq -e '[.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml" and (.status != "completed" or .conclusion == "success"))] | length == 0' /tmp/existing.json >/dev/null
+
+      - name: Dispatch the unchanged gated production workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg expected_sha "$EXPECTED_SHA" \
+            '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$expected_sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches" \
+                --input - >/dev/null
+          printf 'Dispatched the unchanged gated production release for `%s`.\n' "$EXPECTED_SHA" >> "$GITHUB_STEP_SUMMARY"
