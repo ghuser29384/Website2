@@ -1,0 +1,33 @@
+name: Selected cleanup source snapshot
+on:
+  pull_request:
+    paths:
+      - .github/workflows/selected-cleanup-source-20260926.yml
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.ref == 'ops/selected-cleanup-source-20260926' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Export pinned public source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          mkdir -p /tmp/selected-cleanup-source
+          git archive --format=tar.gz HEAD src public tests scripts config .github package.json package-lock.json tsconfig.json next.config.ts playwright.config.ts playwright.release.config.ts eslint.config.mjs vercel.ts AGENTS.md > /tmp/selected-cleanup-source/source.tar.gz
+          git ls-tree -r HEAD > /tmp/selected-cleanup-source/tree.txt
+          git rev-parse HEAD HEAD^{tree} > /tmp/selected-cleanup-source/identity.txt
+          sha256sum /tmp/selected-cleanup-source/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: selected-cleanup-source-ef3b1b595f6bddd1e660e3215ca19e57254234f3
+          path: /tmp/selected-cleanup-source
+          retention-days: 2
