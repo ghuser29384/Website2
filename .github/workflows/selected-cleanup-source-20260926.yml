@@ -4,6 +4,7 @@ on:
     paths:
       - .github/workflows/selected-cleanup-source-20260926.yml
       - .github/selected-cleanup-edits.json.gz
+      - .github/selected-cleanup-native-link-fixes.json
 permissions:
   contents: write
 concurrency:
@@ -85,27 +86,44 @@ jobs:
               },
           })
           assert len(edits) == 27
-          for name, spec in edits.items():
-              path = Path(name)
-              assert not path.is_absolute() and '..' not in path.parts
-              assert name not in {'src/app/about/page.tsx', 'src/app/sitemap.ts', 'next.config.ts', '.github/workflows/vercel-release.yml'}
-              assert not name.startswith(('supabase/', 'src/app/api/', 'src/app/profile/'))
-              before = path.read_bytes() if path.exists() else None
-              assert (blob(before) if before is not None else None) == spec['before'], name
-              if spec['after'] is None:
-                  path.unlink()
-                  continue
-              lines = (before or b'').decode('utf-8').splitlines(keepends=True)
-              for start, end, replacement in reversed(spec['edits']):
-                  lines[start:end] = replacement.splitlines(keepends=True)
-              after = ''.join(lines).encode('utf-8')
-              assert blob(after) == spec['after'], name
-              path.parent.mkdir(parents=True, exist_ok=True)
-              path.write_bytes(after)
-          subprocess.run(['git', 'add', '--', *edits], check=True)
+          def apply_batch(batch):
+              for name, spec in batch.items():
+                  path = Path(name)
+                  assert not path.is_absolute() and '..' not in path.parts
+                  assert name not in {'src/app/about/page.tsx', 'src/app/sitemap.ts', 'next.config.ts', '.github/workflows/vercel-release.yml'}
+                  assert not name.startswith(('supabase/', 'src/app/api/', 'src/app/profile/'))
+                  before = path.read_bytes() if path.exists() else None
+                  assert (blob(before) if before is not None else None) == spec['before'], name
+                  if spec['after'] is None:
+                      path.unlink()
+                      continue
+                  lines = (before or b'').decode('utf-8').splitlines(keepends=True)
+                  for start, end, replacement in reversed(spec['edits']):
+                      lines[start:end] = replacement.splitlines(keepends=True)
+                  after = ''.join(lines).encode('utf-8')
+                  assert blob(after) == spec['after'], name
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_bytes(after)
+          apply_batch(edits)
+          final_scope = {name: {'before': spec['before'], 'after': spec['after']} for name, spec in edits.items()}
+          # The rendered mobile gate exposed Next client navigation to static HTML.
+          # Fix only selected header/footer route links and keep exact document-request tests.
+          native_raw = Path('../controller/.github/selected-cleanup-native-link-fixes.json').read_bytes()
+          assert hashlib.sha256(native_raw).hexdigest() == 'd43b21a680b532584778156145468b67e9cef8b49a1de7e0a35ea24d58b15562'
+          native = json.loads(native_raw)
+          assert set(native) == {
+              'src/components/layout/site-footer.tsx', 'src/components/layout/site-topbar.tsx',
+              'src/components/layout/site-route-link.tsx', 'src/lib/selected-cleanup.test.ts',
+              'tests/selected-cleanup.spec.ts',
+          }
+          apply_batch(native)
+          for name, spec in native.items():
+              final_scope[name] = {'before': final_scope.get(name, {}).get('before'), 'after': spec['after']}
+          assert len(final_scope) == 28
+          subprocess.run(['git', 'add', '--', *final_scope], check=True)
           actual = subprocess.check_output(['git','diff','--cached','--name-only'], text=True).splitlines()
-          assert set(actual) == set(edits)
-          Path('../evidence/selected-scope.json').write_text(json.dumps(edits, indent=2))
+          assert set(actual) == set(final_scope)
+          Path('../evidence/selected-scope.json').write_text(json.dumps(final_scope, indent=2))
           PY
           git diff --cached --check
           git diff --cached --binary > "$GITHUB_WORKSPACE/evidence/selected.patch"
