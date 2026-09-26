@@ -1,0 +1,3 @@
+sensitivity_group,sensitivity,draws,detail,mean_five_year_net_causal_cash,median_five_year_net_causal_cash,p10_five_year_net_causal_cash,p90_five_year_net_causal_cash
+additionality,90_day_displacement,200000,early sensitivity; does not replace the frozen 12-month central estimand,376285.57354,109072.834116,-290906.954972,1401892.89001
+cash_cost,permanent_founder_seed_cost,200000,"$2,500 subtracted once rather than treated as conditionally recoverable reserve capital",367900.375771,103103.030891,-294604.100743,1384763.8204

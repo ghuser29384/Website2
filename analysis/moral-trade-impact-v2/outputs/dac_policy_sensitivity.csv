@@ -1,0 +1,21 @@
+sensitivity_group,sensitivity,draws,detail,median_five_year_project_funding,median_eoy5_reserve_cash,probability_capacity_waiting,median_capacity_waiting_pledges
+dac_surcharge_policy,coverage_controller,20000,adaptive transparent coverage controller,7330.8992039,2161.87978575,0.42215,0
+dac_surcharge_policy,stress_percentile,20000,lowest-rate stress-percentile policy,6774.93554072,2263.02762363,0.41225,0
+dac_surcharge_policy,fixed_0.02,20000,fixed published rate 2%,7603.15980753,1215.39446797,0.4939,0
+dac_surcharge_policy,fixed_0.03,20000,fixed published rate 3%,7538.47684592,1501.2041575,0.48555,0
+dac_surcharge_policy,fixed_0.04,20000,fixed published rate 4%,7474.15156402,1652.14101199,0.47665,0
+dac_surcharge_policy,fixed_0.05,20000,fixed published rate 5%,7393.35691185,1780.85246482,0.46745,0
+dac_surcharge_policy,fixed_0.06,20000,fixed published rate 6%,7318.84288576,1897.97762174,0.45905,0
+dac_surcharge_policy,fixed_0.07,20000,fixed published rate 7%,7263.17040416,2003.13312955,0.4503,0
+dac_surcharge_policy,fixed_0.08,20000,fixed published rate 8%,7199.85902902,2095.36775256,0.4424,0
+dac_surcharge_policy,fixed_0.09,20000,fixed published rate 9%,7115.65030406,2178.62957392,0.43445,0
+dac_surcharge_policy,fixed_0.10,20000,fixed published rate 10%,7047.47149572,2259.09177903,0.4267,0
+dac_surcharge_policy,fixed_0.11,20000,fixed published rate 11%,6968.20698331,2336.62002944,0.4184,0
+dac_surcharge_policy,fixed_0.12,20000,fixed published rate 12%,6906.4278161,2398.68813396,0.4109,0
+dac_surcharge_policy,fixed_0.13,20000,fixed published rate 13%,6832.27785642,2454.62994525,0.40425,0
+dac_surcharge_policy,fixed_0.14,20000,fixed published rate 14%,6747.8856974,2495.05840987,0.3972,0
+dac_surcharge_policy,fixed_0.15,20000,fixed published rate 15%,6689.82421195,2505.57209058,0.3911,0
+dac_bonus_schedule,linear_5_to_1,20000,linear 5% opening to 1% deadline,8993.53613953,2383.00639452,0.3108,0
+dac_bonus_schedule,linear_10_to_2,20000,linear 10% opening to 2% deadline,7484.93256375,2168.89895458,0.4305,0
+dac_bonus_schedule,linear_15_to_2,20000,linear 15% opening to 2% deadline,6891.85431283,2079.1711136,0.48195,0
+dac_bonus_schedule,front_loaded_nonlinear,20000,front-loaded nonlinear 10% opening to 2% deadline,8210.43865983,2288.60982097,0.3704,0
