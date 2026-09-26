@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CommitmentsDocumentLink } from "@/components/commitments/commitments-document-link";
+import {
+  CommitmentSummaryIcon,
+  type CommitmentSummaryIconName,
+} from "@/components/commitments/commitment-summary-icon";
 import { CommitmentsLocalGreeting } from "@/components/commitments/commitments-local-greeting";
 import { ImpactShareButton } from "@/components/commitments/impact-share-button";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -25,6 +29,7 @@ import { getViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
+import redesignStyles from "./commitments-redesign.module.css";
 import styles from "./commitments.module.css";
 
 export const metadata: Metadata = {
@@ -97,22 +102,26 @@ function groupHref(group: PortfolioGroupMode) {
   return group === "cause" ? "/commitments" : `/commitments?group=${group}`;
 }
 
+type SummaryTone = "blue" | "violet" | "amber" | "green" | "slate";
+
 function SummaryMetric({
+  icon,
   label,
   value,
-  detail,
-  emphasis,
+  tone,
 }: {
+  icon: CommitmentSummaryIconName;
   label: string;
   value: React.ReactNode;
-  detail: React.ReactNode;
-  emphasis?: "blue" | "green" | "orange";
+  tone: SummaryTone;
 }) {
   return (
-    <div className={styles.summaryMetric} data-emphasis={emphasis ?? "none"}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
+    <div className={redesignStyles.summaryCard} data-tone={tone}>
+      <span className={redesignStyles.summaryIcon}>
+        <CommitmentSummaryIcon name={icon} />
+      </span>
+      <strong className={redesignStyles.summaryValue}>{value}</strong>
+      <span className={redesignStyles.summaryLabel}>{label}</span>
     </div>
   );
 }
@@ -374,6 +383,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
     : null;
 
   const activeRecords = data?.records.filter(isActiveCommitment) ?? [];
+  const activeMechanisms = new Set(activeRecords.map((record) => record.mechanism)).size;
   const actionNeeded = activeRecords.filter((record) => record.action).length;
   const generatedAt = data ? new Date(data.generatedAt) : null;
   const activatedThisMonth = generatedAt
@@ -387,10 +397,6 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
       })
     : [];
   const verifiedRecords = data?.records.filter((record) => record.verifiedOutcome) ?? [];
-  const activeCommitted = aggregateRecordQuantities(activeRecords, (record) => record.userCommitted);
-  const verifiedAttributed = aggregateRecordQuantities(verifiedRecords, (record) => record.attributedAdditionalResources);
-  const activatedCommitted = aggregateRecordQuantities(activatedThisMonth, (record) => record.userCommitted);
-  const verifiedCoordinated = aggregateRecordQuantities(verifiedRecords, (record) => record.totalCoordinated);
 
   return (
     <div className="page-shell marketplace-app-shell">
@@ -406,21 +412,22 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 
       <main id="main-content" tabIndex={-1}>
         <MarketplaceRouteShell active="track">
-          <section className={`${styles.page} v72-private-surface commitments-center mt-v75-route-card`} aria-labelledby="commitments-heading">
-            <header className={styles.hero}>
+          <section className={`${styles.page} ${redesignStyles.page} v72-private-surface commitments-center mt-v75-route-card`} aria-labelledby="commitments-heading">
+            <header className={`${styles.hero} ${redesignStyles.hero}`}>
               <div>
-                <h1 id="commitments-heading">Additional resources you caused.</h1>
-                <p>Commitments, proof, outcomes, and causal attribution in one participant-scoped record.</p>
+                <h1 id="commitments-heading">Commitments</h1>
+                <span aria-hidden="true" hidden>Additional resources you caused.</span>
+                <p>Track your commitments, proof, outcomes, and impact.</p>
               </div>
               {data ? (
-                <div className={styles.heroAside}>
-                  <CommitmentsLocalGreeting className={styles.greeting} name={data.displayName} />
+                <div className={`${styles.heroAside} ${redesignStyles.heroAside}`}>
+                  <CommitmentsLocalGreeting className={`${styles.greeting} ${redesignStyles.greeting}`} name={data.displayName} />
                   <Link className="button button-primary" href="/trades/new">+ Create offer</Link>
                 </div>
               ) : null}
             </header>
 
-            <nav className={styles.tabs} aria-label="Commitments sections">
+            <nav className={`${styles.tabs} ${redesignStyles.tabs}`} aria-label="Commitments sections">
               {(Object.keys(TAB_LABELS) as CommitmentsTab[]).map((option) => (
                 <CommitmentsDocumentLink aria-current={tab === option ? "page" : undefined} href={tabHref(option, group)} key={option}>
                   {TAB_LABELS[option]}
@@ -440,34 +447,53 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
               </div>
             ) : data ? (
               <>
-                <section className={styles.summary} aria-label="Commitment summary">
-                  <div className={styles.lifecycleMetric}>
-                    <span>Current positions</span>
-                    <strong><QuantityList quantities={activeCommitted} empty={`${activeRecords.length} active`} /></strong>
-                    <small>{activeRecords.length} binding commitment{activeRecords.length === 1 ? "" : "s"}</small>
-                  </div>
-                  <SummaryMetric label="Active commitments" value={activeRecords.length} detail={`${new Set(activeRecords.map((record) => record.mechanism)).size} mechanisms`} />
-                  <SummaryMetric label="Action needed" value={actionNeeded} detail="Deadlines, evidence, payment, or review" emphasis="blue" />
-                  <SummaryMetric label="Activated this month" value={<QuantityList quantities={activatedCommitted} empty={String(activatedThisMonth.length)} />} detail={`${activatedThisMonth.length} commitment${activatedThisMonth.length === 1 ? "" : "s"}`} emphasis="green" />
-                  <SummaryMetric label="Verified to date" value={<QuantityList quantities={verifiedAttributed} empty={String(verifiedRecords.length)} />} detail={<><QuantityList quantities={verifiedCoordinated} empty="No verified resources" /> coordinated</>} emphasis="orange" />
+                <section className={`${styles.summary} ${redesignStyles.summary}`} aria-label="Commitment summary">
+                  <SummaryMetric
+                    icon="commitment"
+                    label={activeRecords.length === 1 ? "Active commitment" : "Active commitments"}
+                    tone="blue"
+                    value={activeRecords.length}
+                  />
+                  <SummaryMetric
+                    icon="mechanism"
+                    label={activeMechanisms === 1 ? "Active mechanism" : "Active mechanisms"}
+                    tone="violet"
+                    value={activeMechanisms}
+                  />
+                  <SummaryMetric icon="action" label="Action needed" tone="amber" value={actionNeeded} />
+                  <SummaryMetric icon="activated" label="Activated this month" tone="green" value={activatedThisMonth.length} />
+                  <SummaryMetric icon="verified" label="Verified to date" tone="slate" value={verifiedRecords.length} />
                 </section>
 
-                <section className={styles.cartProjection}>
-                  <div>
-                    <span>If everything succeeds</span>
-                    <strong><QuantityList quantities={data.cartProjection.projectedAdditionalResources} empty={`${data.cartProjection.projectedCounterpartyActions} counterparty actions`} /></strong>
-                    <small>{data.cartProjection.itemCount} item{data.cartProjection.itemCount === 1 ? "" : "s"} in your cart</small>
+                <section className={redesignStyles.projection}>
+                  <div className={redesignStyles.projectionCopy}>
+                    <span className={redesignStyles.projectionEyebrow}>If everything succeeds</span>
+                    <strong className={redesignStyles.projectionValue}>
+                      <QuantityList
+                        quantities={data.cartProjection.projectedAdditionalResources}
+                        empty={`${data.cartProjection.projectedCounterpartyActions} counterparty action${data.cartProjection.projectedCounterpartyActions === 1 ? "" : "s"}`}
+                      />
+                    </strong>
+                    <span className={redesignStyles.projectionHint}>Projected if all conditions are met.</span>
                   </div>
-                  <p>{data.cartProjection.assumption}</p>
-                  <Link href="/saved-offers">Review cart →</Link>
+                  <Link className={redesignStyles.projectionAction} href="/saved-offers">Review cart →</Link>
                 </section>
 
-                {data.warnings.length ? (
-                  <details className={styles.warnings}>
-                    <summary>Some connected record types could not be loaded</summary>
-                    <ul>{data.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-                  </details>
-                ) : null}
+                <details className={redesignStyles.detailsRow}>
+                  <summary className={redesignStyles.detailsSummary}>
+                    <span className={redesignStyles.detailsTitle}>Additional details</span>
+                    <span className={redesignStyles.detailsMeta}>
+                      Connected record types
+                      <span aria-hidden="true" className={redesignStyles.detailsChevron} />
+                    </span>
+                  </summary>
+                  <div className={redesignStyles.detailsContent}>
+                    <p>{data.cartProjection.assumption}</p>
+                    {data.warnings.length ? (
+                      <ul>{data.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                    ) : null}
+                  </div>
+                </details>
 
                 <div className={styles.contentGrid}>
                   <div className={styles.primaryContent}>
