@@ -1,0 +1,72 @@
+name: Profile Dashboard merge classification
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/workflows/profile-dashboard-merge-classification.yml]
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+  statuses: write
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_SHA: f58ee041dfd909cad7699ed67485cc0a7db95933
+      HEAD_SHA: 26eac46171955fc1db1a5b7dbf56f76bdcf4b8ae
+      EXPECTED_TREE: 94419069467c650382f57761091a7e4e6ac954eb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f58ee041dfd909cad7699ed67485cc0a7db95933
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Guard the verified application tree and current test merge
+        id: guard
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/profile-dashboard-20260926
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/861" > /tmp/pr.json
+          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" '.state == "open" and .draft == false and .merged == false and .mergeable == true and .head.sha == $head and .base.sha == $base and .changed_files == 17' /tmp/pr.json >/dev/null
+          merge_sha="$(jq -r .merge_commit_sha /tmp/pr.json)"
+          [[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/git/commits/$merge_sha" > /tmp/merge.json
+          jq -e --arg tree "$EXPECTED_TREE" --arg base "$BASE_SHA" --arg head "$HEAD_SHA" '.tree.sha == $tree and (.parents | length == 2) and ([.parents[].sha] | index($base) != null and index($head) != null)' /tmp/merge.json >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/status" > /tmp/head-status.json
+          jq -e '.statuses | any(.context == "release-classification" and .state == "success")' /tmp/head-status.json >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36280768578" > /tmp/qa.json
+          jq -e '.conclusion == "success" and .head_sha == "2c16449150313e05a3ce8f4a0741b07ee67fb140"' /tmp/qa.json >/dev/null
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+      - name: Run the original base-branch release policy without modifications
+        id: policy
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          export PR_BODY="$(jq -r .body /tmp/pr.json)"
+          node scripts/validate-release-pr-body.mjs
+      - name: Publish the actual policy result on the verified merge SHA
+        if: always() && steps.guard.outcome == 'success'
+        env:
+          MERGE_SHA: ${{ steps.guard.outputs.merge_sha }}
+          POLICY_OUTCOME: ${{ steps.policy.outcome }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/pulls/861" > /tmp/current-pr.json
+          jq -e --arg merge "$MERGE_SHA" --arg base "$BASE_SHA" --arg head "$HEAD_SHA" '.state == "open" and .merge_commit_sha == $merge and .base.sha == $base and .head.sha == $head' /tmp/current-pr.json >/dev/null
+          test "$(jq -r .body /tmp/current-pr.json)" = "$(jq -r .body /tmp/pr.json)"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          state=failure
+          description='Unchanged trusted release classification policy failed'
+          if [[ "$POLICY_OUTCOME" = success ]]; then
+            state=success
+            description='Unchanged trusted release classification policy passed'
+          fi
+          jq -n --arg state "$state" --arg description "$description" --arg target "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" '{state:$state,context:"release-classification",description:$description,target_url:$target}' | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$MERGE_SHA" --input - >/dev/null
+          test "$state" = success
