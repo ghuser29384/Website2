@@ -216,7 +216,7 @@ test.describe("live route recommendation planner", () => {
     await expect(composer.locator('[data-mt-lrp-disclosure="options"]')).not.toHaveAttribute("open", "");
     await composer.getByLabel("What would you like to change?", { exact: true }).fill("Reduce preventable animal suffering");
     await composer.getByLabel("Cause area", { exact: true }).fill("Factory farming");
-    await composer.getByLabel("Budget", { exact: true }).fill("35");
+    await composer.getByRole("spinbutton", { name: "Budget", exact: true }).fill("35");
     await composer.getByLabel("Time available (min)").fill("45");
     await composer.getByText("More options", { exact: false }).click();
     await composer.getByLabel("Maximum actions").fill("2");
