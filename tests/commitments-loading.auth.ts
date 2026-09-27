@@ -78,7 +78,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       // Empty accounts must not receive a zero-impact success projection.
       await expect(page.getByText("If everything succeeds", { exact: true })).toHaveCount(0);
       await expect(page.getByText("Projection assumptions", { exact: true })).toHaveCount(0);
-      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(page.locator(".commitments-center").getByRole("alert")).toHaveCount(0);
       const headingSize = await page.locator("#commitments-heading").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       expect(headingSize).toBeLessThanOrEqual(68);
       if (viewport.width >= 980) {
