@@ -1,0 +1,181 @@
+name: Planner release operations — never merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/plan-resources-release-ops.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: planner-release-operations-20260927
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.head_ref == 'ops/verify-plan-resources-20260927' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      CANDIDATE: b6500253ec8bdea3213e61b417700e927078e306
+      BASE: caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b6500253ec8bdea3213e61b417700e927078e306
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify immutable source and exact three-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/planner-evidence"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          git merge-base --is-ancestor "$BASE" HEAD
+          git diff --check "$BASE" HEAD
+          git diff --name-only "$BASE" HEAD | sort > "$RUNNER_TEMP/planner-evidence/actual-paths.txt"
+          printf '%s\n' public/moral-trade-live-route-planner-compact.css public/moral-trade-live-route-recommendations.js tests/exact-live-route-recommendations.spec.ts | sort > "$RUNNER_TEMP/planner-evidence/expected-paths.txt"
+          cmp "$RUNNER_TEMP/planner-evidence/actual-paths.txt" "$RUNNER_TEMP/planner-evidence/expected-paths.txt"
+          test "$(git rev-parse HEAD:public/moral-trade-live-route-recommendations.js)" = '633e5b90dee845efe3b21ae6d69f81e5ab50a65b'
+          test "$(git rev-parse HEAD:public/moral-trade-live-route-planner-compact.css)" = 'c5bd36d4b8d8ca5d96f0071241bd7b48fd0d832d'
+          test "$(git rev-parse HEAD:tests/exact-live-route-recommendations.spec.ts)" = 'f2e814ea22c4a618032ac834650110a205d4f2e5'
+          git diff "$BASE" HEAD > "$RUNNER_TEMP/planner-evidence/reviewed-scope.diff"
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/planner-evidence/source-identity.txt"
+          sha256sum public/moral-trade-live-route-recommendations.js public/moral-trade-live-route-planner-compact.css > "$RUNNER_TEMP/planner-evidence/runtime.sha256"
+          node --check public/moral-trade-live-route-recommendations.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Complete unit, lint, type and build gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/planner-evidence/unit.log"
+          npm run lint -- --quiet 2>&1 | tee "$RUNNER_TEMP/planner-evidence/lint.log"
+          npx tsc --noEmit 2>&1 | tee "$RUNNER_TEMP/planner-evidence/types.log"
+          npm run build 2>&1 | tee "$RUNNER_TEMP/planner-evidence/build.log"
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Planner production-renderer regression suite twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test tests/exact-live-route-recommendations.spec.ts --workers=1 --repeat-each=2 --retries=0 --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/planner-tests.log"
+      - name: Capture actual application and interactive responsive evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3210 > "$RUNNER_TEMP/planner-evidence/server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do curl -fsS http://127.0.0.1:3210/ -o /dev/null && break || sleep 2; done
+          cat > "$RUNNER_TEMP/planner-browser-check.cjs" <<'JS'
+          const {createRequire} = require('node:module');
+          const {writeFileSync} = require('node:fs');
+          const assert = require('node:assert/strict');
+          const {chromium} = createRequire(process.cwd() + '/package.json')('@playwright/test');
+          const out = process.env.RUNNER_TEMP + '/planner-evidence';
+          const profile = {
+            goal:'', causePriorities:['Future flourishing'], moneyBudgetCents:0,
+            timeBudgetMinutes:0, actionBudgetCount:3, horizon:'month', routeFormats:['direct'],
+            evidencePreference:'high', uncertaintyPreference:'balanced', interactionPreference:'open',
+            privacyPreference:'private', plannedDonationBaseline:false, plannedDonationCents:0,
+            otherwiseBaseline:'', calibrationCount:0, interviewCompleted:false
+          };
+          function envelope(planner) {
+            return {authenticated:planner.status !== 'signed_out', generatedAt:'2026-09-27T02:22:01.000Z', matchingOpportunityCount:0,
+              profile:{causes:[],weightedCauses:[],openToPayment:null,openToPledges:null,signalSources:[],learningEnabled:true},
+              recentChanges:[],recommendations:[],status:planner.status === 'signed_out'?'signed_out':'no_matches',routePlanner:planner};
+          }
+          (async()=>{
+            const browser = await chromium.launch();
+            const report={candidate:process.env.CANDIDATE,fixture:'Synthetic route API only; actual production-built application. No production records accessed.',viewports:[],errors:[]};
+            try {
+              for(const width of [1440,1024,820,768,390,320]) {
+                const ctx = await browser.newContext({viewport:{width,height:width>800?1000:844}});
+                await ctx.addCookies([{name:'mt_walkthrough_seen',value:'1',url:'http://127.0.0.1:3210'}]);
+                const page=await ctx.newPage();
+                const errors=[]; page.on('pageerror',e=>errors.push(e.message));
+                let planner={status:'profile_incomplete',checkedAt:'2026-09-27T02:22:01.000Z',profile:{...profile},needsMoreInput:['goal','otherwiseBaseline'],routes:[],candidateCount:0};
+                const posts=[];
+                await page.route('**/api/live-now**',async r=>{
+                  if(new URL(r.request().url()).pathname.endsWith('/route-profile')) {
+                    const payload=r.request().postDataJSON(); posts.push(payload);
+                    assert.equal(payload.action,'save_profile');
+                    planner={...planner,status:'no_live',profile:payload.profile,needsMoreInput:[]};
+                    return r.fulfill({contentType:'application/json',body:JSON.stringify({authenticated:true,saved:true})});
+                  }
+                  await r.fulfill({contentType:'application/json',body:JSON.stringify(envelope(planner))});
+                });
+                await page.goto('http://127.0.0.1:3210/moral-trade-live.html#now',{waitUntil:'networkidle'});
+                await page.getByRole('button',{name:'Plan resources',exact:true}).click();
+                const grid=page.locator('[data-mt-live-route-planner="true"]'); await grid.waitFor();
+                await page.waitForFunction(()=>Array.from(document.styleSheets).some(s=>s.href?.includes('route-planner-compact')));
+                await page.evaluate(()=>document.fonts.ready);
+                const options=page.locator('[data-mt-lrp-disclosure="options"]');
+                assert.equal(await options.evaluate(el=>el.open),false);
+                const geometry=await grid.evaluate(el=>({width:el.getBoundingClientRect().width,columns:getComputedStyle(el).gridTemplateColumns,
+                  overflow:document.documentElement.scrollWidth-innerWidth,
+                  fields:[...el.querySelectorAll('.mt-lrp-composer input,.mt-lrp-composer textarea')].filter(e=>e.getBoundingClientRect().height>0).map(e=>e.name),
+                  heading:getComputedStyle(el.querySelector('.mt-lrp-composer h2')).fontSize,
+                  background:getComputedStyle(el).backgroundColor}));
+                assert.ok(geometry.overflow<=1,JSON.stringify({width,geometry}));
+                assert.ok(geometry.fields.includes('goal') && geometry.fields.includes('otherwiseBaseline'));
+                assert.ok(!geometry.fields.includes('actionBudgetCount'));
+                if(width===1440||width===390||width===320){
+                  await page.screenshot({path:`${out}/planner-${width}.png`,fullPage:true});
+                  await grid.screenshot({path:`${out}/planner-component-${width}.png`});
+                }
+                await options.locator('summary').click();
+                assert.equal(await options.evaluate(el=>el.open),true);
+                await page.getByLabel('Maximum actions').fill('2');
+                await page.getByLabel('What would you like to change?',{exact:true}).fill('Support future flourishing');
+                await page.getByLabel('What would you do without a trade?',{exact:true}).fill('I would not start a new project this month.');
+                await options.locator('summary').click();
+                await page.getByRole('button',{name:'Find routes',exact:true}).click();
+                await page.getByRole('heading',{name:'No matching routes yet',exact:true}).waitFor();
+                assert.equal(posts.length,1); assert.equal(posts[0].profile.actionBudgetCount,2);
+                assert.deepEqual(posts[0].profile.routeFormats,['direct']);
+                await page.getByText('About these results',{exact:true}).click();
+                assert.ok((await page.locator('.mt-lrp-source-note').innerText()).includes('0 open source candidates'));
+                report.viewports.push({width,title:await page.title(),url:page.url(),geometry,savePayloadChecked:true,errors});
+                report.errors.push(...errors); await ctx.close();
+              }
+              assert.deepEqual(report.errors,[]);
+              writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));
+            } finally {await browser.close();}
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          node "$RUNNER_TEMP/planner-browser-check.cjs"
+      - name: Complete unchanged release browser suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/release-browser.log"
+      - name: Record end-of-run source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          git diff --exit-code
+          printf 'candidate=%s\nbase=%s\nrun=%s\n' "$CANDIDATE" "$BASE" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/planner-evidence/passed.txt"
+      - name: Stage failure traces outside repository
+        if: always()
+        shell: bash
+        run: |
+          if [ -d test-results ]; then cp -R test-results "$RUNNER_TEMP/planner-evidence/test-results"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: planner-release-qa-${{ github.run_id }}
+          path: ${{ runner.temp }}/planner-evidence
+          retention-days: 14
+          if-no-files-found: error
