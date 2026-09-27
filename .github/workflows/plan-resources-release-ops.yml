@@ -126,11 +126,11 @@ jobs:
           const profile={goal:'',causePriorities:['Future flourishing'],moneyBudgetCents:0,timeBudgetMinutes:0,actionBudgetCount:3,horizon:'month',routeFormats:['direct'],evidencePreference:'high',uncertaintyPreference:'balanced',interactionPreference:'open',privacyPreference:'private',plannedDonationBaseline:false,plannedDonationCents:0,otherwiseBaseline:'',calibrationCount:0,interviewCompleted:false};
           const envelope=planner=>({authenticated:true,generatedAt:'2026-09-27T02:22:01.000Z',matchingOpportunityCount:0,profile:{causes:[],weightedCauses:[],openToPayment:null,openToPledges:null,signalSources:[],learningEnabled:true},recentChanges:[],recommendations:[],status:'no_matches',routePlanner:planner});
           async function center(locator){await locator.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));}
-          async function click(locator){await center(locator);await locator.click();}
-          async function fill(locator,value){await center(locator);await locator.fill(value);}
+          async function click(locator){await locator.page().keyboard.press('Escape');await center(locator);await locator.click();}
+          async function fill(locator,value){await center(locator);await locator.fill(value);await locator.press('Escape');await locator.press('Tab');}
           (async()=>{
             const browser=await chromium.launch();
-            const report={candidate:process.env.CANDIDATE,fixture:'Explicit synthetic route API with actual production-built app; no production records.',viewports:[]};
+            const report={candidate:process.env.CANDIDATE,fixture:'Explicit synthetic route API with actual production-built app; no production records. Normal Escape/Tab dismisses completion suggestions before clicking another control.',viewports:[]};
             try{
               for(const width of [1440,1024,820,768,390,320]){
                 const ctx=await browser.newContext({viewport:{width,height:width>800?1000:844}});
@@ -139,6 +139,7 @@ jobs:
                 const entry={width,phase:'load',errors:[],posts:[],passed:false};report.viewports.push(entry);
                 page.on('pageerror',e=>entry.errors.push(e.message));
                 let planner={status:'profile_incomplete',checkedAt:'2026-09-27T02:22:01.000Z',profile:{...profile},needsMoreInput:['goal','otherwiseBaseline'],routes:[],candidateCount:0};
+                const posts=[];
                 await ctx.addCookies([{name:'mt_walkthrough_seen',value:'1',url:'http://127.0.0.1:3210'},{name:'mt_analytics_opt_out',value:'1',url:'http://127.0.0.1:3210'}]);
                 await page.route('**/api/live-now**',async r=>{
                   if(new URL(r.request().url()).pathname.endsWith('/route-profile')){
