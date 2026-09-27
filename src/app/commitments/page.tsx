@@ -367,6 +367,11 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
     ? await loadCommitmentsPortfolioData({ userId: viewer.authUser.id, displayName: viewer.displayName })
     : null;
 
+  const retryParams = new URLSearchParams();
+  if (tab !== "portfolio") retryParams.set("tab", tab);
+  if (group !== "cause") retryParams.set("group", group);
+  if (showAllCalendar) retryParams.set("calendar", "all");
+  const retryHref = retryParams.size ? `/commitments?${retryParams}` : "/commitments";
   const summary = data ? summarizeCommitmentRecords(data.records, data.generatedAt) : null;
 
   return (
@@ -422,7 +427,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
                     <strong>Some records could not be fully loaded</strong>
                     <p>Counts marked “found” reflect loaded records only. “Unknown” does not mean zero.</p>
                     <ul>{data.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-                    <CommitmentsDocumentLink href={tabHref(tab, group)}>Retry loading records</CommitmentsDocumentLink>
+                    <CommitmentsDocumentLink href={retryHref}>Retry loading records</CommitmentsDocumentLink>
                   </div>
                 ) : null}
                 <p className={redesignStyles.summaryNote}>

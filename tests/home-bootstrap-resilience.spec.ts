@@ -47,6 +47,10 @@ test("failed optional sources show unavailable rather than demo records",async({
   await expect(page.locator('[data-mt-live-now-recommendation]')).toHaveCount(0);
   await expect(page.locator('[data-mt-guest-only="true"]').first()).not.toBeVisible();
   await expect(page.locator('header [data-mt-primary-links]')).toBeVisible();
+  await page.locator('button[data-action="profile"]').click();
+  await expect(page.locator('[data-mt-live-account-summary="true"]')).toContainText("could not be loaded");
+  await expect(page.locator('[data-mt-live-account-panel="true"]').getByText("Sign in to view", {exact:true})).toHaveCount(0);
+  await expect(page.locator('[data-mt-live-account-manage="true"]')).toHaveAttribute("href", "/dashboard");
 });
 
 test("a stalled feed reaches an unavailable state within its bounded wait",async({page})=>{

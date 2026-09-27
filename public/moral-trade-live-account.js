@@ -12,7 +12,7 @@
   );
 
   let account = normalizePayload(
-    hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { authenticated: false },
+    hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { status: "loading" },
   );
   let applying = false;
   let scheduled = false;
@@ -46,6 +46,7 @@
         : {};
 
     return {
+      status: typeof source.authenticated === "boolean" ? (source.authenticated ? "authenticated" : "signed_out") : source.status === "loading" ? "loading" : "unavailable",
       authenticated: source.authenticated === true,
       completedCommitments:
         Number.isInteger(details.completedCommitments) && details.completedCommitments >= 0
@@ -206,6 +207,8 @@
   }
 
   function memberSummary() {
+    if (account.status === "loading") return "Loading account details…";
+    if (account.status === "unavailable") return "Account details could not be loaded. Refresh to retry.";
     if (!account.authenticated) {
       return "Sign in to view account details.";
     }
@@ -303,7 +306,7 @@
   };
 
   function accountHref(href) {
-    return account.authenticated ? href : `/login?returnTo=${encodeURIComponent(href)}`;
+    return account.status === "signed_out" ? `/login?returnTo=${encodeURIComponent(href)}` : href;
   }
 
   function termsHref() {
@@ -363,11 +366,11 @@
       return;
     }
 
-    const label = key === "terms" || account.authenticated ? destination.label : "Sign in";
+    const label = key !== "terms" && account.status === "signed_out" ? "Sign in" : destination.label;
     // Idempotence matters: textContent writes trigger our MutationObserver.
     if (action.textContent !== label) action.textContent = label;
     action.setAttribute("href", key === "terms" ? destination.href : accountHref(destination.href));
-    action.setAttribute("aria-label", account.authenticated || key === "terms"
+    action.setAttribute("aria-label", account.status !== "signed_out" || key === "terms"
       ? destination.name : `Sign in to ${destination.name.toLowerCase()}`);
   }
 
@@ -377,7 +380,7 @@
     if (!action) return;
     action.setAttribute("data-mt-live-account-manage", "true");
     action.setAttribute("href", accountHref("/dashboard"));
-    const label = account.authenticated ? "Manage account" : "Sign in";
+    const label = account.status === "signed_out" ? "Sign in" : "Manage account";
     if (action.textContent !== label) action.textContent = label;
   }
 
@@ -395,6 +398,8 @@
   }
 
   function signedInValue(value, missing = "Not configured") {
+    if (account.status === "loading") return "Loading…";
+    if (account.status === "unavailable") return "Unavailable";
     return account.authenticated ? value || missing : "Sign in to view";
   }
 
@@ -508,8 +513,8 @@
       credentials: "same-origin",
       headers: { Accept: "application/json" },
     })
-      .then((response) => (response.ok ? response.json() : { authenticated: false }))
-      .catch(() => ({ authenticated: false }))
+      .then((response) => (response.ok ? response.json() : { status: "unavailable" }))
+      .catch(() => ({ status: "unavailable" }))
       .then((payload) => {
         account = normalizePayload(payload);
         schedulePatch();

@@ -116,3 +116,13 @@ test("homepage boot has usable links, bounded independent requests, and no user 
   const identity = source("public/moral-trade-account-identity.js");
   assert.match(identity,/typeof window.__MT_LIVE_ACCOUNT_BOOTSTRAP__\?\.authenticated === "boolean"/);
 });
+
+
+test("unavailable account details never assert a signed-out state", () => {
+  const bridge = source("public/moral-trade-live-account.js");
+  assert.match(bridge, /account.status === "unavailable"/);
+  assert.match(bridge, /Account details could not be loaded/);
+  assert.match(bridge, /typeof source.authenticated === "boolean"/);
+  assert.doesNotMatch(bridge, /catch\(\(\) => \({ authenticated: false }\)\)/);
+  assert.match(source("src/app/commitments/page.tsx"), /if \(showAllCalendar\) retryParams.set\("calendar", "all"\)/);
+});

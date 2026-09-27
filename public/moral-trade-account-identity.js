@@ -194,11 +194,11 @@
       credentials: "same-origin",
       headers: { Accept: "application/json" },
     })
-      .then((response) => (response.ok ? response.json() : { authenticated: false }))
-      .catch(() => ({ authenticated: false }))
+      .then((response) => (response.ok ? response.json() : { status: "unavailable" }))
+      .catch(() => ({ status: "unavailable" }))
       .then((payload) => {
         identity = normalizeIdentity(payload);
-        identityResolved = true;
+        identityResolved = typeof payload?.authenticated === "boolean";
         schedulePatch();
       });
   }
