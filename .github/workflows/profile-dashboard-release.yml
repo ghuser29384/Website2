@@ -1,0 +1,165 @@
+name: Profile Dashboard release and verification
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/profile-dashboard-release.go]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: profile-dashboard-release-20260926
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      run_id: ${{ steps.release.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify the approved merged tree and dispatch the existing release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: 26eac46171955fc1db1a5b7dbf56f76bdcf4b8ae
+          EXPECTED_TREE: 94419069467c650382f57761091a7e4e6ac954eb
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/profile-dashboard-20260926
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          merged="$(cat .github/profile-dashboard-release.go)"
+          [[ "$merged" =~ ^[0-9a-f]{40}$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$merged"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/861" > /tmp/pr.json
+          jq -e --arg merged "$merged" --arg candidate "$CANDIDATE_SHA" '.merged == true and .merge_commit_sha == $merged and .head.sha == $candidate and .changed_files == 17' /tmp/pr.json >/dev/null
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$merged" --jq .tree.sha)" = "$EXPECTED_TREE"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$CANDIDATE_SHA" --jq .tree.sha)" = "$EXPECTED_TREE"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/vercel-release.yml?ref=$merged" --jq .sha)" = e219e99d25279161b89eee80fc410912c3561a19
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36280768578" > /tmp/qa.json
+          jq -e '.conclusion == "success" and .head_sha == "2c16449150313e05a3ce8f4a0741b07ee67fb140"' /tmp/qa.json >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$merged&event=workflow_dispatch&per_page=100" > /tmp/existing.json
+          existing="$(jq -r '[.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml" and (.status != "completed" or .conclusion == "success"))] | sort_by(.id) | last | .id // empty' /tmp/existing.json)"
+          if [[ -n "$existing" ]]; then
+            run_id="$existing"
+          else
+            gh workflow run vercel-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f target=production -f ref=main -f expected_sha="$merged"
+            run_id=''
+            for i in $(seq 1 30); do
+              run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$merged&event=workflow_dispatch&per_page=100" --jq '[.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml")] | sort_by(.id) | last | .id // empty')"
+              [[ -n "$run_id" ]] && break
+              sleep 2
+            done
+          fi
+          test -n "$run_id"
+          echo "sha=$merged" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf 'Existing gated production workflow: run %s, exact merge %s. No release policy changes.\n' "$run_id" "$merged" >> "$GITHUB_STEP_SUMMARY"
+  verify:
+    needs: dispatch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RELEASE_SHA: ${{ needs.dispatch.outputs.sha }}
+      RELEASE_RUN: ${{ needs.dispatch.outputs.run_id }}
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.dispatch.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for the unchanged gated release to finish successfully
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/profile-dashboard-production
+          for i in $(seq 1 60); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN" > /tmp/profile-dashboard-production/release-run.json
+            test "$(jq -r .head_sha /tmp/profile-dashboard-production/release-run.json)" = "$RELEASE_SHA"
+            if [[ "$(jq -r .status /tmp/profile-dashboard-production/release-run.json)" = completed ]]; then
+              test "$(jq -r .conclusion /tmp/profile-dashboard-production/release-run.json)" = success
+              exit 0
+            fi
+            sleep 30
+          done
+          echo 'The release did not finish inside the verification window.' >&2
+          exit 1
+      - name: Read-only production redirect and browser verification
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium, request, expect } from '@playwright/test';
+          const baseURL = 'https://www.moraltrade.org';
+          const output = '/tmp/profile-dashboard-production';
+          const result = { commit: process.env.RELEASE_SHA, releaseRun: process.env.RELEASE_RUN, startedAt: new Date().toISOString(), redirects: [], browser: [] };
+          const api = await request.newContext({ baseURL, timeout: 30000 });
+          const browser = await chromium.launch();
+          try {
+            for (const query of ['', '?view=controls&filter=one&filter=two']) {
+              const response = await api.get(`/profile${query}`, { maxRedirects: 0 });
+              assert.equal(response.status(), 308);
+              const target = new URL(response.headers().location, baseURL);
+              assert.equal(target.origin, baseURL);
+              assert.equal(target.pathname, '/dashboard');
+              assert.deepEqual([...target.searchParams], [...new URLSearchParams(query)]);
+              result.redirects.push({ path: `/profile${query}`, status: response.status(), location: response.headers().location });
+            }
+            for (const width of [1440, 390, 320]) {
+              const context = await browser.newContext({ baseURL, viewport: { width, height: 900 } });
+              await context.addCookies([{ name: 'mt_analytics_opt_out', value: '1', url: baseURL }]);
+              const page = await context.newPage();
+              const pageErrors = [], consoleErrors = [];
+              page.on('pageerror', error => pageErrors.push(error.message));
+              page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+              await page.goto('/profile');
+              await expect(page).toHaveURL(url => url.pathname === '/login' && url.searchParams.get('returnTo') === '/dashboard');
+              await expect(page).toHaveTitle(/Log in/);
+              await expect(page.getByRole('heading', { name: 'Welcome back', exact: true })).toBeVisible();
+              await expect(page.getByTestId('profile-account')).toHaveCount(0);
+              await expect(page.locator('nextjs-portal')).toHaveCount(0);
+              assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+              await page.screenshot({ path: `${output}/profile-login-${width}.png` });
+              await page.goto('/contact');
+              const header = page.locator('.mt-refined-header').first();
+              await header.locator('summary').filter({ hasText: 'More' }).click();
+              const profile = header.getByRole('link', { name: 'Profile', exact: true });
+              await expect(profile).toHaveCount(1);
+              await expect(profile).toHaveAttribute('href', '/dashboard');
+              await expect(header.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
+              await page.screenshot({ path: `${output}/profile-menu-${width}.png` });
+              await profile.click();
+              await expect(page).toHaveURL(url => url.pathname === '/login' && url.searchParams.get('returnTo') === '/dashboard');
+              result.browser.push({ width, url: page.url(), title: await page.title(), privateContentExposed: false, interaction: 'Profile alias -> Dashboard sign-in; Contact More -> Profile -> Dashboard sign-in', pageErrors, consoleErrors });
+              assert.deepEqual(pageErrors, []);
+              await context.close();
+            }
+            result.completedAt = new Date().toISOString();
+          } finally {
+            await writeFile(`${output}/results.json`, JSON.stringify(result, null, 2));
+            console.log(JSON.stringify(result, null, 2));
+            await api.dispose();
+            await browser.close();
+          }
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-production-verification
+          path: /tmp/profile-dashboard-production
+          retention-days: 7
