@@ -176,12 +176,18 @@ async function mountPlanner(
 
   await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "Plan resources" })).toBeVisible();
-  await page.addStyleTag({ url: "/moral-trade-live-route-recommendations.css" });
-  await page.addScriptTag({ url: "/moral-trade-live-route-recommendations.js" });
+  // Exercise the actual shell asset loader without injecting duplicate styles or scripts.
   await page.getByRole("button", { name: "Plan resources" }).click();
   await expect(page.locator('[data-mt-live-route-planner="true"]')).toBeVisible();
 
   return { posts };
+}
+
+async function openPreferences(page: Page) {
+  const details = page.locator('[data-mt-lrp-disclosure="preferences"]');
+  if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await details.locator("summary").click();
+  }
 }
 
 test.describe("live route recommendation planner", () => {
@@ -206,16 +212,20 @@ test.describe("live route recommendation planner", () => {
     );
 
     const composer = page.locator("[data-mt-live-route-composer]");
-    await composer.getByLabel("Goal", { exact: true }).fill("Reduce preventable animal suffering");
-    await composer.getByLabel("Cause area used for matching").fill("Farmed-animal welfare");
-    await composer.getByLabel("Money").fill("35");
-    await composer.getByLabel("Minutes").fill("45");
-    await composer.getByLabel("Actions").fill("2");
+    await expect(composer.locator('[data-mt-lrp-disclosure="options"]')).not.toHaveAttribute("open", "");
+    await composer.getByLabel("What would you like to change?", { exact: true }).fill("Reduce preventable animal suffering");
+    await composer.getByLabel("Cause area", { exact: true }).fill("Factory farming");
+    await composer.getByRole("spinbutton", { name: "Budget", exact: true }).fill("35");
+    await composer.getByLabel("Time available (min)").fill("45");
+    await composer.getByText("More options", { exact: false }).click();
+    await composer.getByLabel("Maximum actions").fill("2");
     await composer.getByText("Personal action", { exact: true }).click();
-    await composer.getByLabel("Without a trade, I would…").fill(
+    await composer.getByLabel("What would you do without a trade?").fill(
       "I would keep my current meals and make no extra donation.",
     );
-    await composer.getByRole("button", { name: "Update routes" }).click();
+    // Collapsing the controls must not omit their values from FormData.
+    await composer.locator('[data-mt-lrp-disclosure="options"] > summary').click();
+    await composer.getByRole("button", { name: "Find routes" }).click();
 
     await expect(page.locator('[data-mt-live-route-card="best-fit"]')).toBeVisible();
     expect(posts).toHaveLength(1);
@@ -259,6 +269,7 @@ test.describe("live route recommendation planner", () => {
         : withComparison,
     );
 
+    await openPreferences(page);
     await page.getByRole("button", { name: "Compare two options" }).click();
     const dialog = page.getByRole("dialog", { name: "Which works better for you?" });
     await expect(dialog).toBeVisible();
@@ -290,7 +301,8 @@ test.describe("live route recommendation planner", () => {
         : readyPlanner(),
     );
 
-    await page.getByRole("button", { name: "Guided goal interview" }).click();
+    await openPreferences(page);
+    await page.getByRole("button", { name: "Help with my goal" }).click();
     const dialog = page.getByRole("dialog", { name: "Tell us what should change." });
     await dialog.getByLabel("Desired change").fill("Improve global health");
     await dialog.getByLabel("Cause area used for matching").fill("Global health");
@@ -376,6 +388,9 @@ test.describe("live route recommendation planner", () => {
     await expect(cards.nth(0).getByText("Best fit", { exact: true })).toBeVisible();
     await expect(cards.nth(1).getByText("Lowest friction", { exact: true })).toBeVisible();
     await expect(cards.nth(2).getByText("Live coordination", { exact: true })).toBeVisible();
+    await expect(cards.first().locator(".mt-lrp-metrics")).not.toBeVisible();
+    await cards.first().getByText("Why this route?", { exact: true }).click();
+    await expect(cards.first().locator(".mt-lrp-metrics")).toBeVisible();
   });
 
   test("shows a truthful no-live state without a generic recommendation", async ({
@@ -385,8 +400,9 @@ test.describe("live route recommendation planner", () => {
       page,
       readyPlanner({ status: "no_live", routes: [], candidateCount: 0 }),
     );
-    await expect(page.getByText("No live route right now.", { exact: true })).toBeVisible();
-    await expect(page.getByText("These are next actions, not recommendations.")).toBeVisible();
+    await expect(page.getByText("No matching routes yet", { exact: true })).toBeVisible();
+    await page.getByText("About these results", { exact: true }).click();
+    await expect(page.getByText("These are next actions, not recommendations.", { exact: false })).toBeVisible();
     await expect(page.locator("[data-mt-live-route-card]")).toHaveCount(0);
     await expect(page.getByText("Recommended mixed route", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Create an offer" })).toHaveAttribute(
@@ -434,6 +450,7 @@ test.describe("live route recommendation planner", () => {
 
     let overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(1);
+    await openPreferences(page);
     await page.getByRole("button", { name: "Compare two options" }).click();
     await expect(page.getByRole("dialog", { name: "Which works better for you?" })).toBeVisible();
     overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -443,4 +460,35 @@ test.describe("live route recommendation planner", () => {
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   });
+
+  test("reveals an invalid collapsed field and keeps input-only planning free of status clutter", async ({ page }) => {
+    const { posts } = await mountPlanner(page, readyPlanner());
+    const options = page.locator('[data-mt-lrp-disclosure="options"]');
+    const preferences = page.locator('[data-mt-lrp-disclosure="preferences"]');
+    await expect(options).not.toHaveAttribute("open", "");
+    await expect(preferences).not.toHaveAttribute("open", "");
+    await expect(page.locator(".mt-lrp-truth-card, .mt-lrp-tool-card")).toHaveCount(0);
+    await options.locator("summary").click();
+    await page.getByLabel("Maximum actions").fill("");
+    await options.locator("summary").click();
+    await page.getByRole("button", { name: "Update routes", exact: true }).click();
+    await expect(options).toHaveAttribute("open", "");
+    await expect(page.getByLabel("Maximum actions")).toBeFocused();
+    expect(posts).toHaveLength(0);
+  });
+});
+
+
+test("loads compact styles when the live shell already provides the base stylesheet", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mountPlanner(page, readyPlanner());
+  await expect(page.locator("#mt-live-route-recommendations-styles")).toHaveCount(1);
+  await expect(page.locator("#mt-live-route-recommendations-styles-compact")).toHaveCount(1);
+  const grid = page.locator(".plan-grid.mt-lrp-layout");
+  await expect(grid).toHaveCSS("max-width", "1160px");
+  await expect(grid.locator(".mt-lrp-composer")).toHaveCSS("position", "static");
+  await expect(grid.locator(".mt-lrp-composer h2")).toHaveCSS("font-size", "23px");
+  await expect.poll(() => grid.evaluate((element) =>
+    getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length,
+  )).toBe(2);
 });
