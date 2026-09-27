@@ -1,0 +1,120 @@
+name: Profile Dashboard integrated QA
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/workflows/profile-dashboard-integrated-qa.yml]
+permissions:
+  contents: read
+jobs:
+  public:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      VERCEL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 31231dcd8d78cb7c7e4f16669c390bb44c48adc6
+          fetch-depth: 4
+          persist-credentials: false
+      - name: Verify merge composition and the unchanged Profile patch
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/profile-dashboard-integrated-qa
+          test "$(git rev-parse HEAD)" = 31231dcd8d78cb7c7e4f16669c390bb44c48adc6
+          test "$(git rev-parse HEAD^{tree})" = aa87d8fcc7b1a29a9d5db827f1ce7506ed88cff9
+          test "$(git rev-parse HEAD^1)" = caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+          test "$(git rev-parse HEAD^2)" = 26eac46171955fc1db1a5b7dbf56f76bdcf4b8ae
+          test "$(git diff --name-only HEAD^1 HEAD | wc -l)" -eq 17
+          git diff --check HEAD^1 HEAD
+          git rev-parse HEAD > /tmp/profile-dashboard-integrated-qa/commit.txt
+          git diff HEAD^1 HEAD > /tmp/profile-dashboard-integrated-qa/profile-only.patch
+          git diff HEAD^2 HEAD > /tmp/profile-dashboard-integrated-qa/main-integration.patch
+          python <<'PY'
+          import subprocess
+          from pathlib import Path
+          old_base='f58ee041dfd909cad7699ed67485cc0a7db95933'
+          feature='26eac46171955fc1db1a5b7dbf56f76bdcf4b8ae'
+          files=subprocess.check_output(['git','diff','--name-only',old_base,feature],text=True).splitlines()
+          new_files=subprocess.check_output(['git','diff','--name-only','HEAD^1','HEAD'],text=True).splitlines()
+          assert files==new_files and len(files)==17
+          for path in files:
+              if path=='src/components/marketplace/marketplace-components.tsx':
+                  parent=subprocess.check_output(['git','show',f'HEAD^1:{path}'],text=True)
+                  expected=parent.replace('href: "/profile", label: "Profile"','href: "/dashboard", label: "Profile"')
+                  assert parent.count('href: "/profile", label: "Profile"')==2
+                  assert Path(path).read_text()==expected
+              else:
+                  expected=subprocess.check_output(['git','show',f'{feature}:{path}'])
+                  assert Path(path).read_bytes()==expected, path
+          print('All seventeen feature edits preserved exactly; newer Commitments changes retained.')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Complete source tests
+        run: npm test > /tmp/profile-dashboard-integrated-qa/tests.log 2>&1
+      - name: Lint and typecheck
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet > /tmp/profile-dashboard-integrated-qa/lint.log 2>&1
+          npx tsc --noEmit --pretty false > /tmp/profile-dashboard-integrated-qa/types.log 2>&1
+      - name: Production build
+        run: npm run build > /tmp/profile-dashboard-integrated-qa/build.log 2>&1
+      - run: npx playwright install --with-deps chromium
+      - name: Targeted routing, navigation and combined page regressions
+        run: npx playwright test tests/profile-dashboard-redirect.spec.ts tests/profile-priorities-access.spec.ts tests/refined-header.spec.ts tests/exact-live-now-recommendations.spec.ts tests/sitewide-canonical-visual-system.spec.ts --workers=1 --reporter=line > /tmp/profile-dashboard-integrated-qa/browser.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-integrated-public-qa
+          path: |
+            /tmp/profile-dashboard-integrated-qa
+            test-results
+          retention-days: 7
+  fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: local-fixture-publishable-key-not-production
+      SUPABASE_SERVICE_ROLE_KEY: local-fixture-service-role-not-production
+      DASHBOARD_SPARKS_FIXTURE: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      VERCEL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 31231dcd8d78cb7c7e4f16669c390bb44c48adc6
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: mkdir -p /tmp/profile-dashboard-integrated-fixture && git rev-parse HEAD > /tmp/profile-dashboard-integrated-fixture/commit.txt
+      - run: npm ci
+      - name: Build with isolated synthetic identity
+        run: npm run build > /tmp/profile-dashboard-integrated-fixture/build.log 2>&1
+      - run: npx playwright install --with-deps chromium
+      - name: Recheck saved priorities and controls on the integrated tree
+        run: npx playwright test tests/dashboard-sparks.spec.ts --workers=1 --reporter=line > /tmp/profile-dashboard-integrated-fixture/browser.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-integrated-fixture-qa
+          path: |
+            /tmp/profile-dashboard-integrated-fixture
+            /tmp/dashboard-sparks-evidence
+            test-results
+          retention-days: 7
