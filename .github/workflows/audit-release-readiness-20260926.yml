@@ -1,0 +1,131 @@
+name: Audit release readiness
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-release-readiness-20260926.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 3f2b0bfd8a90132fcc9b81f0314d9f3d70673808
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 2
+          show-progress: false
+      - name: Apply the approved three renderer-test corrections
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = 3f2b0bfd8a90132fcc9b81f0314d9f3d70673808
+          mkdir -p ../evidence
+          python3 - <<'PY'
+          import base64,hashlib,lzma,pathlib,subprocess
+          patch=lzma.decompress(base64.b64decode(pathlib.Path('../controller/.github/audit-ui-contracts.b64').read_text(),validate=True))
+          assert hashlib.sha256(patch).hexdigest()=='f0026a7a8470dbecdfbed6990e2fec038c17eec2bb878138ed1ab37b7efc80c7'
+          pathlib.Path('../evidence/renderer-contracts.patch').write_bytes(patch)
+          subprocess.run(['git','apply','--check','../evidence/renderer-contracts.patch'],check=True)
+          subprocess.run(['git','apply','../evidence/renderer-contracts.patch'],check=True)
+          paths=subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()
+          assert sorted(paths)==sorted(['tests/commitments-loading.auth.ts','tests/commitments-sidebar-layout.spec.ts','tests/sitewide-canonical-visual-system.spec.ts'])
+          subprocess.run(['git','add','--',*paths],check=True)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          PY
+          branch=fix/audit-truth-locale-20260926
+          test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = 3f2b0bfd8a90132fcc9b81f0314d9f3d70673808
+          git config user.name 'ghuser29384'
+          git config user.email '262476329+ghuser29384@users.noreply.github.com'
+          git commit -m 'Verify the single-navigation layout and ignore the framework route announcer'
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "HEAD:refs/heads/$branch"
+          git rev-parse HEAD > ../evidence/candidate-sha.txt
+          git rev-parse 'HEAD^{tree}' > ../evidence/candidate-tree.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Install, test and lint
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm test 2>&1 | tee ../evidence/unit-tests.log
+          node --import tsx --test src/commitments-portfolio-wiring.test.ts src/commitments-redesign-contract.test.ts src/live-account-data.test.ts src/live-now-data.test.ts src/live-operational-retirement.test.ts src/offers-walkthrough-density.test.ts src/sitewide-account-identity.test.ts 2>&1 | tee ../evidence/source-tests.log
+          npm run lint -- --quiet 2>&1 | tee ../evidence/lint.log
+      - name: Build and TypeScript
+        id: build
+        working-directory: candidate
+        env:
+          VERCEL: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee ../evidence/build.log
+          npx tsc --noEmit --pretty false 2>&1 | tee ../evidence/typescript.log
+          npx playwright install --with-deps chromium
+      - name: New authenticated locale and data-state regressions
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.audit.config.ts --reporter=line 2>&1 | tee ../evidence/audit-browser.log
+      - name: Keep account screenshots
+        if: always()
+        run: |
+          if test -d candidate/test-results; then cp -r candidate/test-results evidence/audit-test-results; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: readiness-account-${{ github.run_id }}
+          path: evidence
+          retention-days: 14
+      - name: Existing authenticated Commitments regressions
+        if: always() && steps.build.outcome == 'success'
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.commitments.config.ts --reporter=line 2>&1 | tee ../evidence/commitments-browser.log
+      - name: Keep Commitments screenshots
+        if: always()
+        run: |
+          if test -d candidate/test-results; then cp -r candidate/test-results evidence/commitments-test-results; fi
+      - name: Complete release browser suite
+        if: always() && steps.build.outcome == 'success'
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee ../evidence/release-browser.log
+      - name: Keep release screenshots
+        if: always()
+        run: |
+          if test -d candidate/test-results; then cp -r candidate/test-results evidence/release-test-results; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-readiness-${{ github.run_id }}
+          path: evidence
+          retention-days: 14
