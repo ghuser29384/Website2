@@ -62,6 +62,11 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
+        source: "/profile",
+        destination: "/dashboard",
+        permanent: true,
+      },
+      {
         source: "/donation-offsets/conditional",
         destination: "/trades/new?structure=conditional-donation",
         permanent: true,

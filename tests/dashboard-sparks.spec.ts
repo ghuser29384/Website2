@@ -92,13 +92,15 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     writeFileSync(`/tmp/dashboard-sparks-evidence/fixture-requests-${testInfo.title.replace(/[^a-z0-9]/gi, "-")}.json`, JSON.stringify(requests, null, 2));
   });
 
+  for (const entry of ["/dashboard", "/profile"]) {
   for (const width of [1440, 390, 320]) {
-    test(`opens directly on priorities with responsive controls at ${width}px`, async ({ page, context }) => {
+    test(`${entry} opens on canonical priorities with responsive controls at ${width}px`, async ({ page, context }) => {
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await signIn(context);
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
-      await page.goto(`${origin}/dashboard`);
+      await page.goto(`${origin}${entry}`);
+      await expect(page).toHaveURL(`${origin}/dashboard`);
       await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
       await expect(page).toHaveTitle(/Dashboard/);
       const tools = page.getByRole("navigation", { name: "Dashboard controls" });
@@ -110,10 +112,32 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
         expect(requests.filter((request) => request.path === path)).toHaveLength(0);
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-      await page.screenshot({ path: `/tmp/dashboard-sparks-evidence/dashboard-${width}.png`, fullPage: true });
+      await page.screenshot({ path: `/tmp/dashboard-sparks-evidence/${entry.slice(1)}-${width}.png`, fullPage: true });
       expect(errors).toEqual([]);
     });
   }
+
+  }
+
+  test("legacy Profile feedback reaches Dashboard without a data write", async ({ page, context }) => {
+    await signIn(context);
+    const message = "Priorities saved. Your allocation is unchanged.";
+    await page.goto(`${origin}/profile?message=${encodeURIComponent(message)}`);
+    await expect(page).toHaveURL((url) => url.pathname === "/dashboard" && url.searchParams.get("message") === message);
+    await expect(page.getByRole("status").filter({ hasText: message })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
+    expect(requests.some((request) => request.path === "/rest/v1/cohort_onboarding_profiles" && request.method !== "GET")).toBe(false);
+  });
+
+  test("legacy Profile control bookmarks retain their selection and fragment", async ({ page, context }) => {
+    await signIn(context);
+    await page.goto(`${origin}/profile?view=controls#payment-setup`);
+    await expect(page).toHaveURL(`${origin}/dashboard?view=controls#payment-setup`);
+    await expect(page.locator("#payment-setup")).toBeVisible();
+    await page.getByRole("navigation", { name: "Dashboard controls" }).getByRole("link", { name: "Priorities", exact: true }).click();
+    await expect(page).toHaveURL(`${origin}/dashboard`);
+    await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
+  });
 
   test("Currency opens without a write or losing unsaved sparks and Escape closes it", async ({ page, context }) => {
     await signIn(context);

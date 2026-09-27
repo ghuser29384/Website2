@@ -668,21 +668,16 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     ]);
 
     await page.locator(".header-more > summary").click();
-    const evidence = page.locator(".header-more").getByRole("link", { name: "Profile", exact: true });
-    await expect(evidence).toBeVisible();
+    const profile = page.locator(".header-more").getByRole("link", { name: "Profile", exact: true });
+    await expect(profile).toBeVisible();
+    await expect(profile).toHaveAttribute("href", "/dashboard");
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
 
-    await evidence.click();
-    await expect(page).toHaveURL(/\/profile$/);
-    await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "Your profile",
-      exact: true,
-    }),
-  ).toBeVisible();
+    await profile.click();
+    await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/dashboard");
+    await expect(page.getByRole("heading", { level: 1, name: "Welcome back", exact: true })).toBeVisible();
   });
 });

@@ -119,8 +119,8 @@
         const panel = document.createElement("div");
         panel.className = "header-more-links";
         for (const [href, label] of [
-          ["/dashboard", "Dashboard"], ["/trades/new", "Create a trade"],
-          ["/profile", "Profile"], ["/cart", "Saved offers"],
+          ["/dashboard", "Profile"], ["/trades/new", "Create a trade"],
+          ["/cart", "Saved offers"],
           ["/invite", "Invite"], ["/evidence", "Evidence"], ["/walkthrough", "Tour"], ["/safety", "Safety"],
         ]) {
           const link = document.createElement("a");

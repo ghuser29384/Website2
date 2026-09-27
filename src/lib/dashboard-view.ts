@@ -18,3 +18,19 @@ export function getLegacyDashboardTarget(search: string, hash: string): string |
   params.set("view", "controls");
   return `/dashboard?${params.toString()}${hash}`;
 }
+
+/** Keep legacy feedback and control selections without accepting a redirect host. */
+export function getProfileDashboardTarget(
+  values: Record<string, string | string[] | undefined>,
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, item);
+    } else if (value !== undefined) {
+      params.append(key, value);
+    }
+  }
+  const query = params.toString();
+  return query ? `/dashboard?${query}` : "/dashboard";
+}

@@ -10,12 +10,11 @@ const alias = read("../app/100-sparks/page.tsx");
 const editor = read("../components/profile/profile-priority-editor.tsx");
 const dashboardTools = read("../components/dashboard/dashboard-tools.tsx");
 
-test("Profile exposes Priorities before role-readiness details", () => {
-  assert.match(profile, /import \{ ProfilePrioritiesCard \}/);
-  const cardPosition = profile.indexOf('<ProfilePrioritiesCard returnTo="/profile" />');
-  assert.ok(cardPosition > 0);
-  assert.ok(cardPosition < profile.indexOf("Your role readiness"));
-  assert.doesNotMatch(profile.slice(0, cardPosition), /<details/);
+test("Profile is only an alias for the Dashboard priority editor", () => {
+  assert.match(profile, /permanentRedirect\(getProfileDashboardTarget\(await searchParams\)\)/);
+  assert.doesNotMatch(profile, /getViewer|createClient|ProfilePrioritiesCard|<section/);
+  const dashboard = read("../app/dashboard/page.tsx");
+  assert.match(dashboard, /<ProfilePrioritiesView.*dashboard/);
 });
 
 test("the shared card clearly names the feature and navigates without a write", () => {
@@ -52,10 +51,12 @@ test("the named entry point reuses the existing authenticated editor", () => {
   assert.doesNotMatch(alias, /createClient|\.update\(|\.insert\(|localStorage/);
 });
 
-test("Profile displays feedback when priority saving returns to it", () => {
-  assert.match(profile, /getFormMessage\(await searchParams\)/);
-  assert.match(profile, /\{formMessage\.text\}/);
-  assert.match(profile, /role=\{formMessage\.tone === "error" \? "alert" : "status"\}/);
+test("the canonical priorities view retains returned feedback", () => {
+  assert.match(profile, /getProfileDashboardTarget\(await searchParams\)/);
+  const view = read("../components/profile/profile-priorities-view.tsx");
+  assert.match(view, /getFormMessage\(resolvedSearchParams\)/);
+  assert.match(view, /\{formMessage\.text\}/);
+  assert.match(view, /role=\{formMessage\.tone === "error" \? "alert" : "status"\}/);
 });
 
 test("surfacing priorities retains account isolation and opt-in setup", () => {
