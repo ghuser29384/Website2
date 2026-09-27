@@ -1,0 +1,104 @@
+name: Audit production release and verification
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-production-20260927.yml]
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: audit-production-4db5ef744c8c
+  cancel-in-progress: false
+jobs:
+  release-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    env:
+      EXPECTED_RELEASE_SHA: 4db5ef744c8cebab1940f70ef6bab499a6a61860
+      APPROVED_HEAD_SHA: 9db9ecc4e889910c2ba0b9fe9395eb1f2d02e02f
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Dispatch only the exact merged production candidate
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/audit-source-20260926
+          mkdir -p /tmp/audit-live-evidence
+          gh api "repos/$GITHUB_REPOSITORY/pulls/863" > /tmp/audit-live-evidence/merged-pr.json
+          jq -e --arg merged "$EXPECTED_RELEASE_SHA" --arg approved "$APPROVED_HEAD_SHA" '.merged == true and .merge_commit_sha == $merged and .head.sha == $approved' /tmp/audit-live-evidence/merged-pr.json >/dev/null
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_RELEASE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml" --jq .state)" = active
+          find_run() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&head_sha=$EXPECTED_RELEASE_SHA&per_page=10" --jq '.workflow_runs[0].id // empty'
+          }
+          run_id="$(find_run)"
+          if test -z "$run_id"; then
+            jq -n --arg sha "$EXPECTED_RELEASE_SHA" '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+              | gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" --input -
+          fi
+          for attempt in $(seq 1 20); do
+            run_id="$(find_run)"
+            if test -n "$run_id"; then break; fi
+            sleep 10
+          done
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$run_id" > /tmp/audit-live-evidence/release-run-id.txt
+          printf 'Gated release run: %s\nExact production SHA: %s\n' "$run_id" "$EXPECTED_RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Wait for the unchanged gated release to finish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 140); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" > /tmp/audit-live-evidence/release-run.json
+            jq -e --arg sha "$EXPECTED_RELEASE_SHA" '.head_sha == $sha and .event == "workflow_dispatch" and .path == ".github/workflows/vercel-release.yml"' /tmp/audit-live-evidence/release-run.json >/dev/null
+            if test "$(jq -r .status /tmp/audit-live-evidence/release-run.json)" = completed; then
+              test "$(jq -r .conclusion /tmp/audit-live-evidence/release-run.json)" = success
+              exit 0
+            fi
+            sleep 30
+          done
+          echo 'Timed out waiting; no alternative deployment or alias bypass was attempted.' >&2
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: 4db5ef744c8cebab1940f70ef6bab499a6a61860
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 2
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Install only the locked test runtime
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_RELEASE_SHA"
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Verify canonical bytes and read-only browser interactions
+        working-directory: candidate
+        run: node ../controller/.github/audit-live-smoke-20260927.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-production-evidence-${{ github.run_id }}
+          path: /tmp/audit-live-evidence
+          retention-days: 14
