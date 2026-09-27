@@ -1,0 +1,77 @@
+name: Audit legacy gate boundary evidence
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-legacy-gate-boundaries-20260927.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 9db9ecc4e889910c2ba0b9fe9395eb1f2d02e02f
+          persist-credentials: false
+          fetch-depth: 0
+          show-progress: false
+      - name: Compare the exact unaffected lifecycle and Dashboard gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = 9db9ecc4e889910c2ba0b9fe9395eb1f2d02e02f
+          mkdir -p /tmp/evidence
+          base=2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49
+          git merge-base --is-ancestor "$base" HEAD
+          git diff --exit-code "$base" HEAD -- supabase .github/workflows/mpgf-dac-product-lifecycle-gates.yml .github/workflows/dashboard-account-security-hotfix-gates.yml src/lib/mpgf src/app/api/mpgf > /tmp/evidence/unchanged-foundations.diff
+          git diff --name-only "$base" HEAD > /tmp/evidence/reviewed-scope.txt
+          python3 - <<'PY'
+          import hashlib,json,pathlib,subprocess
+          base='2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49'
+          paths=['supabase/tests/mpgf_dac_public_terms_api.sql','supabase/tests/mpgf_dac_product_browser_cleanup.sql','.github/workflows/mpgf-dac-product-lifecycle-gates.yml','.github/workflows/dashboard-account-security-hotfix-gates.yml']
+          rows=[]
+          for path in paths:
+            before=subprocess.check_output(['git','show',base+':'+path])
+            after=pathlib.Path(path).read_bytes()
+            assert before==after
+            rows.append({'path':path,'base_sha256':hashlib.sha256(before).hexdigest(),'candidate_sha256':hashlib.sha256(after).hexdigest()})
+          pathlib.Path('/tmp/evidence/identical-inputs.json').write_text(json.dumps(rows,indent=2))
+          # The historical gate rejects every broad PR containing a non-Dashboard
+          # file. Record that predicate; do not change it or mark it successful.
+          gate=pathlib.Path(paths[-1]).read_text()
+          assert 'Prove the exact current-main diff stays inside the Dashboard and Profile surface' in gate
+          assert 'src/app/commitments/page.tsx' not in gate
+          assert 'src/app/commitments/page.tsx' in pathlib.Path('/tmp/evidence/reviewed-scope.txt').read_text().splitlines()
+          pathlib.Path('/tmp/evidence/dashboard-boundary.txt').write_text('Historical Dashboard-only scope predicate rejects this explicitly authorized multi-page audit. Its tests/lint/types/build and rendered job passed in run 36298383459; the predicate and workflow remain unchanged. This is not a claim that its full workflow passed.\n')
+          PY
+      - name: Read only the missing legacy QA relation names
+        env:
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse,parse_qs
+          u=urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          assert u.scheme in ('postgres','postgresql') and u.hostname=='aws-0-us-west-1.pooler.supabase.com' and 'hvmxfjjbdcgjjudmthdz' in (u.username or '') and u.port==5432 and u.path=='/postgres' and u.password
+          assert parse_qs(u.query).get('sslmode',['require'])==['require']
+          PY
+          docker run --rm -i -e PGSSLMODE=require postgres:17 psql "$QA_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -At <<'SQL' | tee /tmp/evidence/qa-readonly-relations.txt
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout = '5s';
+          SELECT 'legacy_match_pools=' || (to_regclass('public.mpgf_public_goods_match_pools') IS NOT NULL)::text;
+          SELECT 'legacy_pledges=' || (to_regclass('public.mpgf_public_goods_pledges') IS NOT NULL)::text;
+          ROLLBACK;
+          SQL
+          grep -qx 'legacy_match_pools=false' /tmp/evidence/qa-readonly-relations.txt
+          grep -qx 'legacy_pledges=false' /tmp/evidence/qa-readonly-relations.txt
+          printf 'The unchanged base and candidate SQL refer to these two absent legacy QA relations. No migration, fixture, cleanup DELETE, or production operation was executed by this read-only check.\n' > /tmp/evidence/database-boundary.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-legacy-boundaries-${{ github.run_id }}
+          path: /tmp/evidence
+          retention-days: 14
