@@ -1,0 +1,164 @@
+name: Quiet UI final candidate verification
+
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-final-verification.yml]
+
+permissions:
+  contents: read
+concurrency:
+  group: quiet-ui-final-verification
+  cancel-in-progress: false
+env:
+  CANDIDATE: 35b174d5d09c6a846a6964af02c4dc248d6e1eb4
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  quality:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run all repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD | tee evidence/revision.txt
+          git diff --check f58ee041dfd909cad7699ed67485cc0a7db95933 HEAD
+          npm test 2>&1 | tee evidence/unit.log
+      - name: Run ESLint
+        run: npm run lint -- --quiet 2>&1 | tee evidence/lint.log
+      - name: Run TypeScript
+        run: npx tsc --noEmit 2>&1 | tee evidence/typecheck.log
+      - name: Build production including the unchanged prebuild safety gates
+        run: npm run build 2>&1 | tee evidence/build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-final-quality
+          path: evidence/
+          retention-days: 7
+
+  browser:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Focused desktop and mobile checks
+        id: focused
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/focused-results.json
+        run: npx playwright test tests/quiet-ui.spec.ts tests/homepage-narrow-header.spec.ts tests/refined-header.spec.ts tests/discover-home-visual-alignment.spec.ts tests/selected-ui-cleanup.spec.ts tests/returning-homepage.spec.ts tests/create-route-ui-regression.spec.ts --output=test-results/focused --reporter=line,json
+      - name: Complete unchanged rendered release suite
+        if: ${{ !cancelled() && steps.focused.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/release-results.json
+        run: npm run test:e2e:release -- --output=test-results/release --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-final-browser
+          path: |
+            evidence/
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: warn
+
+  dashboard:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: dashboard-local-public-fixture
+      SUPABASE_SERVICE_ROLE_KEY: dashboard-local-service-fixture
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      DASHBOARD_SPARKS_FIXTURE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Authenticated priorities and account isolation on loopback-only fixtures
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/dashboard-results.json
+        run: npx playwright test tests/dashboard-sparks.spec.ts --workers=1 --output=test-results/dashboard --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-final-dashboard
+          path: |
+            evidence/
+            test-results/
+            /tmp/dashboard-sparks-evidence/
+          retention-days: 7
+          if-no-files-found: warn
+
+  commitments:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:3231
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: auth-resolution-public-fixture
+      SUPABASE_SERVICE_ROLE_KEY: auth-resolution-service-fixture
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+      SITE_URL: http://127.0.0.1:3211
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Commitments loading and session boundary with isolated local data
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/commitments-results.json
+        run: npx playwright test --config=playwright.commitments.config.ts --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-final-commitments
+          path: |
+            evidence/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
