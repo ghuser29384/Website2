@@ -151,9 +151,13 @@ async function installAuthDomObserver(page: Page) {
       const feedState = document
         .querySelector('[data-mt-live-now="adaptive"]')
         ?.getAttribute("data-mt-live-now-state");
+      // Profile's heading is public. Observe verified account state and the
+      // owner-bound editor, rather than treating shared navigation copy as data.
+      const verifiedProfile = Boolean(document.querySelector('[data-testid="profile-account"]')?.textContent?.includes("Signed in"));
+      const privatePriorities = Boolean(document.querySelector('input[name="priority_allocation"]'));
       const state = {
         authenticatedSurface:
-          text.includes("Your profile") ||
+          verifiedProfile || privatePriorities ||
           text.includes("What priorities are being exchanged?") ||
           text.includes("Account — saved settings and records.") ||
           feedState === "ready" ||
@@ -162,7 +166,7 @@ async function installAuthDomObserver(page: Page) {
         privateContent:
           text.includes("Auth Resolution QA") ||
           text.includes("History limited") ||
-          text.includes("Your profile") ||
+          verifiedProfile || privatePriorities ||
           text.includes("What priorities are being exchanged?") ||
           text.includes("Account — saved settings and records.") ||
           feedState === "ready" ||
@@ -171,7 +175,7 @@ async function installAuthDomObserver(page: Page) {
           Boolean(document.querySelector("[data-mt-live-now-recommendation]")),
         signedIn:
           text.includes("Signed in") ||
-          text.includes("Your profile") ||
+          verifiedProfile || privatePriorities ||
           text.includes("What priorities are being exchanged?"),
         signedOut:
           text.includes("Profile unavailable") ||
@@ -509,7 +513,8 @@ for (const viewport of viewports) {
       );
       const dashboardResponse = await dashboardNavigation;
       expect(dashboardResponse?.ok()).toBeTruthy();
-      await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
+      await expect(page.locator('input[name="priority_allocation"]')).toHaveCount(1);
       await expectNoHorizontalOverflow(page);
       expectNoSignedOutFlash(authHistory);
 
@@ -596,9 +601,9 @@ test("expired and invalid identities fail closed without private content", async
 }) => {
   const negativeRoutes = [
     {
-      privateHeading: "Your profile",
+      privateHeading: "",
       route: "/profile",
-      signedOutHeading: "Profile unavailable",
+      signedOutHeading: "",
       type: "profile",
     },
     {
@@ -608,7 +613,7 @@ test("expired and invalid identities fail closed without private content", async
       type: "composer",
     },
     {
-      privateHeading: "Account",
+      privateHeading: "Priorities",
       route: "/dashboard",
       signedOutHeading: "Sign in",
       type: "dashboard",
@@ -639,6 +644,12 @@ test("expired and invalid identities fail closed without private content", async
       expect(response?.ok()).toBeTruthy();
       if (negativeRoute.type === "dashboard") {
         await expect(page).toHaveURL(/\/login\?returnTo=%2Fdashboard/u);
+      } else if (negativeRoute.type === "profile") {
+        const account = page.getByTestId("profile-account");
+        await expect(account.getByText("Sign in required", { exact: true })).toBeVisible();
+        await expect(account.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute("href", "/login?returnTo=/profile");
+        await expect(account.getByText("Signed in", { exact: true })).toHaveCount(0);
+        await expect(account.getByText("History limited", { exact: true })).toHaveCount(0);
       } else {
         await expect(
           page.getByRole("heading", { name: negativeRoute.signedOutHeading }),
@@ -650,6 +661,7 @@ test("expired and invalid identities fail closed without private content", async
         ).toHaveCount(0);
       }
       await expect(page.getByText("Auth Resolution QA", { exact: true })).toHaveCount(0);
+      await expect(page.locator('input[name="priority_allocation"]')).toHaveCount(0);
       await expect(page.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
       await flushAuthDomObserver(page);
       await expect.poll(() => authHistory.length).toBeGreaterThan(0);
