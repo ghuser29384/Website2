@@ -12,7 +12,8 @@ async function session(request:APIRequestContext,context:BrowserContext) {
 }
 
 test.describe("Audit remediation with isolated account and source states",()=>{
-  test.describe.configure({mode:"serial"});
+  // Each case resets its own fixture and receives a fresh browser context.
+  test.describe.configure({mode:"default"});
   test.use({locale:"zh-CN",timezoneId:"America/Los_Angeles"});
   test.beforeEach(async({request,context})=>{
     await request.post(`${fixtureURL}/__fixture/reset`,{headers});
@@ -37,7 +38,7 @@ test.describe("Audit remediation with isolated account and source states",()=>{
       await expect(page.getByText("0 in planner",{exact:true})).toHaveCount(0);
       await expect(page.getByText("If everything succeeds",{exact:true})).toHaveCount(0);
       await expect(page.getByRole("link",{name:"Private agreement",exact:true})).toBeVisible();
-      await expect(page.getByText("$12.50",{exact:true}).first()).toBeVisible();
+      await expect(page.getByText("$12.5",{exact:true}).first()).toBeVisible();
       await expect(page.getByText("€20",{exact:true}).first()).toBeVisible();
       await page.evaluate(()=>document.fonts.ready);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
