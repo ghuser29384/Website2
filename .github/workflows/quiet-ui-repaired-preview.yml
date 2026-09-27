@@ -1,0 +1,30 @@
+name: Dispatch repaired quiet UI gated preview
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-repaired-preview.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify the staged tree and invoke the unchanged release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo=ghuser29384/Website2
+          expected=7b7b0d0b5ca78c9819c760c8001112f9efe868c1
+          candidate=45a327757d515d73bceeae7a87dde3971b46de0a
+          test "$GITHUB_REPOSITORY" = "$repo"
+          test "$(gh api "repos/$repo/git/ref/heads/release/vercel-preview" --jq .object.sha)" = "$expected"
+          test "$(gh api "repos/$repo/git/ref/heads/fix/quiet-ui-20260926" --jq .object.sha)" = "$candidate"
+          test "$(gh api "repos/$repo/git/commits/$expected" --jq .tree.sha)" = aadc14305b82ff9f456fa22bba0517d751467c9a
+          jq -n --arg expected "$expected" '{ref:"main",inputs:{target:"preview",ref:"release/vercel-preview",expected_sha:$expected}}' > /tmp/dispatch.json
+          gh api --method POST "repos/$repo/actions/workflows/vercel-release.yml/dispatches" --input /tmp/dispatch.json
+          echo 'Requested the standard gated preview; no production release was requested.' >> "$GITHUB_STEP_SUMMARY"
