@@ -58,14 +58,16 @@ jobs:
               return (text.replace('"100 Sparks"', '"Priorities"')
                   .replace('"Adjust your 100 sparks."', '"Priorities"')
                   .replace('100 Sparks is discoverable', 'Priorities is discoverable')
+                  .replace('Dashboard 100 Sparks with a loopback-only account fixture', 'Dashboard Priorities with a loopback-only account fixture')
+                  .replace('{ name: "Priorities" }', '{ name: "Priorities", exact: true }')
                   .replace('outputPath(`100-sparks-${route.slice(1)}', 'outputPath(`priorities-${route.slice(1)}'))
           for path in ['tests/profile-priorities-access.spec.ts', 'tests/dashboard-sparks.spec.ts']:
               old, current = git('show', f'{ancestor}:{path}'), git('show', f'{base}:{path}')
               if rename_labels(old) != current:
-                  print(''.join(difflib.unified_diff(rename_labels(old).splitlines(True), current.splitlines(True))))
+                  diff = ''.join(difflib.unified_diff(rename_labels(old).splitlines(True), current.splitlines(True)))
+                  Path('/tmp/profile-unification-qa/unreviewed-diff.log').write_text(diff)
+                  print(diff)
                   raise SystemExit(f'Unexpected non-label changes in {path}')
-              # Preserve the complete prior alias/save/account-isolation suite,
-              # adapting only labels that current main intentionally renamed.
               Path(path).write_text(rename_labels(git('show', f'{candidate}:{path}')))
               subprocess.run(['git', 'add', path], check=True)
           path = 'src/lib/profile-priorities-access.test.ts'
@@ -82,7 +84,6 @@ jobs:
                   assert len(matches) == 1, name
                   return matches[0].group()
               current = current.replace(extract(current, old_name), extract(previous, new_name), 1)
-          # Current main's extra consistent-Priorities-name regression is retained.
           assert 'consistently name the feature Priorities' in current
           Path(path).write_text(current)
           subprocess.run(['git', 'add', path], check=True)
