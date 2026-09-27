@@ -127,10 +127,10 @@ test("offers defaults to an open editorial directory instead of stacked dense pa
   );
   const disclosureSource = proposalTemplate.slice(disclosureIndex, disclosureEndIndex);
   for (const required of [
-    "<dt>Get</dt>",
-    "<dd>{offer.request_action}</dd>",
-    "<dt>Do</dt>",
+    "<dt>Offer maker commits</dt>",
     "<dd>{offer.offer_action}</dd>",
+    "<dt>Responding participant commits</dt>",
+    "<dd>{offer.request_action}</dd>",
     "Counteroffer",
     ">Ask</Link>",
     'saved ? "Remove saved" : "Save"',

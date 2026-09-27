@@ -13,14 +13,14 @@ const shells = new Map([
   ["walkthrough", readFileSync("public/moral-trade-production.html", "utf8")],
 ]);
 
-test("every static product shell bootstraps the authenticated account identity before rendering", () => {
+test("static product shells resolve account identity before showing account-dependent actions", () => {
   for (const [name, shell] of shells) {
     if (name === "discover") {
       assert.match(shell, /<span data-mt-account-avatar="true">•<\/span>/u);
       assert.match(identityBridge, /fetch\(ENDPOINT/u);
       assert.doesNotMatch(shell, /Alex Johnson|>AJ</u);
     } else {
-      assert.match(shell, /fetch\(["']\/api\/live-account["']/u, `${name} must load the viewer`);
+      assert.match(shell, /(?:fetch|readJson)\(["']\/api\/live-account["']/u, `${name} must load the viewer`);
       assert.match(shell, /__MT_LIVE_ACCOUNT_BOOTSTRAP__/u, `${name} must bootstrap the viewer`);
     }
     assert.match(
@@ -47,10 +47,10 @@ test("static Get Started actions fail closed until signed-out identity is resolv
   assert.match(discover, /data-mt-guest-only="true" hidden href="\/start"/u);
   assert.match(liveNavigation, /start\.dataset\.mtGuestOnly = "true"/u);
   assert.match(liveNavigation, /start\.hidden = true/u);
-  assert.match(identityBridge, /let identityResolved = hasBootstrap/u);
+  assert.match(identityBridge, /let identityResolved = hasBootstrap &&\s*typeof window.__MT_LIVE_ACCOUNT_BOOTSTRAP__\?\.authenticated === "boolean"/u);
   assert.match(identityBridge, /identityResolved && !identity\.authenticated/u);
   assert.match(identityBridge, /element\.hidden = !shouldShow/u);
-  assert.match(identityBridge, /identityResolved = true/u);
+  assert.match(identityBridge, /identityResolved = typeof payload\?\.authenticated === "boolean"/u);
   assert.match(refinedHeaderCss, /\[data-mt-guest-only="true"\]\[hidden\][\s\S]*display: none !important/u);
 });
 

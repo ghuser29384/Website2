@@ -111,7 +111,7 @@ test("authenticated profile navigation cannot prefetch the queryless Offers comp
   );
 });
 
-test("Dashboard bottom navigation cannot prefetch the Offers compatibility redirect", () => {
+test("Dashboard bottom navigation uses canonical Discover without speculative requests", () => {
   const bottomNavStart = marketplaceComponentsSource.indexOf(
     "export function MarketplaceBottomNav({",
   );
@@ -121,7 +121,7 @@ test("Dashboard bottom navigation cannot prefetch the Offers compatibility redir
     bottomNavSource.includes(
       [
         "          href={item.href}",
-        '          prefetch={item.href === "/offers" ? false : undefined}',
+        '          prefetch={item.href === "/discover" ? false : undefined}',
         "          key={item.key}",
       ].join("\n"),
     ),

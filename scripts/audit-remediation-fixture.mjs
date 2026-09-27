@@ -30,7 +30,10 @@ export function auditFixture(request, response, url) {
   }
   if (["populated","partial","cart-unavailable"].includes(state) && table === "agreements") {
     send(response,200,[{id:agreementId, offer_id:null, proposer_id:USER_ID, responder_id:OTHER_ID,
-      status:"active",completion_state:"open", created_at:"2026-09-20T12:00:00Z",updated_at:"2026-09-21T12:00:00Z",
+      source:"manual", interest_id:null,match_id:null,introduction_plan_id:null,
+      structured_terms:"",no_trade_baseline:"",counterfactual_declaration:"",duration_terms:"",exit_conditions:"",
+      evidence_rule:"",privacy_scope:"Private",disclosure_scope:"Private",challenge_window_ends_at:null,
+      status:"active",completion_state:"pending_evidence", created_at:"2026-09-20T12:00:00Z",updated_at:"2026-09-21T12:00:00Z",
       proposer_completed_at:null,responder_completed_at:null,completed_at:null,notes:"Synthetic agreement for audit QA only"}]);return true;
   }
   if (["populated","partial","cart-unavailable"].includes(state) && table === "agreement_payments") {
