@@ -1,40 +1,182 @@
-name: Audit remediation source snapshot
+name: Audit remediation candidate QA
 on:
   push:
     branches: [ops/audit-source-20260926]
     paths: [.github/workflows/audit-source-20260926.yml]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: audit-remediation-candidate-20260926
+  cancel-in-progress: false
 jobs:
-  snapshot:
+  candidate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 45
+    env:
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: f58ee041dfd909cad7699ed67485cc0a7db95933
+          ref: ${{ github.sha }}
+          path: controller
           persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: f58ee041dfd909cad7699ed67485cc0a7db95933
+          path: candidate
           fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the exact patch and allowed paths
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/audit-source-20260926
+          test "$(git rev-parse HEAD)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          mkdir -p ../evidence
+          python3 - <<'PY'
+          import base64, hashlib, lzma, pathlib, subprocess
+          controller = pathlib.Path('../controller/.github')
+          encoded = ''.join((controller / f'audit-remediation.part{i}.b64').read_text().strip() for i in (1, 2))
+          patch = lzma.decompress(base64.b64decode(encoded, validate=True))
+          expected = 'a73844fe81f018e09208e2dcc395c886f364a749ad37be3189ac4018bfe5dfc4'
+          assert hashlib.sha256(patch).hexdigest() == expected, 'Remediation patch checksum mismatch'
+          pathlib.Path('../evidence/remediation.patch').write_bytes(patch)
+          subprocess.run(['git','apply','--check','--unidiff-zero','../evidence/remediation.patch'],check=True)
+          subprocess.run(['git','apply','--unidiff-zero','../evidence/remediation.patch'],check=True)
+          allowed = '''playwright.audit.config.ts
+          public/moral-trade-account-identity.js
+          public/moral-trade-create/index.html
+          public/moral-trade-live-account.js
+          public/moral-trade-live-now.js
+          public/moral-trade-live-route-recommendations.js
+          public/moral-trade-live.html
+          scripts/audit-remediation-fixture.mjs
+          scripts/auth-resolution-supabase.mjs
+          src/app/commitments/commitments-redesign.module.css
+          src/app/commitments/loading.module.css
+          src/app/commitments/loading.tsx
+          src/app/commitments/page.tsx
+          src/app/donation-offsets/conditional/deadline-field.tsx
+          src/app/mpgf/pools/page.tsx
+          src/app/offers/offers-density.module.css
+          src/app/offers/page.tsx
+          src/app/pools/page.tsx
+          src/commitments-portfolio-wiring.test.ts
+          src/components/commitments/commitment-summary-icon.tsx
+          src/components/commitments/commitments-local-greeting.tsx
+          src/components/dashboard/background-account-security-panel.tsx
+          src/components/dashboard/background-local-drafts-panel.tsx
+          src/components/donation-offsets/donation-redirect-impact-flow.tsx
+          src/components/marketplace/marketplace-components.tsx
+          src/components/marketplace/participant-offer-group.tsx
+          src/components/mpgf/mpgf-contribution-controls.tsx
+          src/components/ui/local-date-time.tsx
+          src/lib/audit-remediation.test.ts
+          src/lib/background-explanations.ts
+          src/lib/commitments-offer-data.test.ts
+          src/lib/commitments-portfolio.ts
+          src/lib/commitments-summary.ts
+          src/lib/interface-locale.ts
+          src/lib/moral-trade/reasoning-packets.ts
+          src/lib/offer-discovery-facts.ts
+          src/lib/offers-directory-layout.test.ts
+          src/lib/public-route-smoke.test.ts
+          src/lib/smart-query-records.ts
+          src/live-account-data.test.ts
+          tests/audit-remediation.auth.ts
+          tests/home-bootstrap-resilience.spec.ts
+          tests/offers-density.spec.ts'''.splitlines()
+          allowed = sorted(x.strip() for x in allowed)
+          changed = subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()
+          untracked = subprocess.check_output(['git','ls-files','--others','--exclude-standard'],text=True).splitlines()
+          assert sorted(set(changed+untracked)) == allowed, 'Unexpected changed-file set'
+          subprocess.run(['git','add','--',*allowed],check=True)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          canonical = subprocess.check_output(['git','diff','--cached','--binary','--unified=0'])
+          assert hashlib.sha256(canonical).hexdigest() == expected, 'Applied source differs from reviewed patch'
+          pathlib.Path('../evidence/source-sha256.txt').write_text(expected+'\n')
+          PY
+      - name: Publish only the isolated fix branch
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch=fix/audit-truth-locale-20260926
+          test -z "$(git ls-remote origin "refs/heads/$branch")"
+          git config user.name 'ghuser29384'
+          git config user.email '262476329+ghuser29384@users.noreply.github.com'
+          git switch -c "$branch"
+          git commit -m 'Correct interface language, proposal facts, and commitment summaries'
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "HEAD:refs/heads/$branch"
+          git rev-parse HEAD | tee ../evidence/candidate-sha.txt
+          git rev-parse 'HEAD^{tree}' > ../evidence/candidate-tree.txt
+          git diff --stat HEAD^ HEAD > ../evidence/scope.txt
+          printf 'Candidate `%s` published on `%s`. No main merge or deployment.\n' "$(git rev-parse HEAD)" "$branch" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Prepare isolated source and locked packages only
-        env:
-          MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+          cache-dependency-path: candidate/package-lock.json
+      - name: Install exact locked dependencies
+        working-directory: candidate
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests and source contracts
+        working-directory: candidate
+        shell: bash
         run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = f58ee041dfd909cad7699ed67485cc0a7db95933
-          mkdir -p /tmp/audit-source
-          git archive --format=tar.gz HEAD > /tmp/audit-source/full-source.tar.gz
-          git diff ed0bc4a53a2ea91cee1a66fef8831d3181f53f13 961695b103dd1750e2a3c0ed397c91379d811b52 > /tmp/audit-source/pr857.patch
-          npm ci --no-audit --no-fund
-          tar -czf /tmp/audit-source/locked-packages.tar.gz node_modules
-          cd /tmp/audit-source
-          sha256sum full-source.tar.gz locked-packages.tar.gz pr857.patch > SHA256SUMS
+          set -o pipefail
+          npm test 2>&1 | tee ../evidence/unit-tests.log
+          node --import tsx --test src/commitments-portfolio-wiring.test.ts src/live-account-data.test.ts src/lib/local-date-time.test.ts 2>&1 | tee ../evidence/source-tests.log
+      - name: Lint
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee ../evidence/lint.log
+      - name: Production build and TypeScript
+        working-directory: candidate
+        env:
+          VERCEL: '1'
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee ../evidence/build.log
+          npx tsc --noEmit --pretty false 2>&1 | tee ../evidence/typescript.log
+      - name: Install Chromium
+        working-directory: candidate
+        run: npx playwright install --with-deps chromium
+      - name: Isolated account and partial-data browser checks
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test --config=playwright.audit.config.ts --reporter=line 2>&1 | tee ../evidence/audit-browser.log
+      - name: Complete current release browser suite
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee ../evidence/release-browser.log
+      - name: Collect rendered evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          if test -d candidate/test-results; then cp -r candidate/test-results evidence/; fi
+          if test -d candidate/playwright-report; then cp -r candidate/playwright-report evidence/; fi
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: audit-workspace-f58ee041
-          path: /tmp/audit-source
-          compression-level: 0
-          retention-days: 3
+          name: audit-remediation-qa-${{ github.run_id }}
+          path: evidence
+          retention-days: 14
