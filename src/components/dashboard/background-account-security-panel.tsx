@@ -219,7 +219,7 @@ export function BackgroundAccountSecurityPanel({
               </strong>
               <span>
                 {factor.factorType} · added{" "}
-                {factor.createdAt ? new Date(factor.createdAt).toLocaleDateString() : "recently"}
+                {factor.createdAt ? new Date(factor.createdAt).toLocaleDateString("en-US") : "recently"}
               </span>
               <button
                 className="button button-secondary button-mini"

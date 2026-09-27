@@ -297,7 +297,7 @@
 
   function formatMoney(cents) {
     const dollars = Math.max(0, cents) / 100;
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       maximumFractionDigits: Number.isInteger(dollars) ? 0 : 2,
@@ -307,7 +307,7 @@
   function formatCheckedAt(value) {
     const date = new Date(value);
     if (!Number.isFinite(date.getTime())) return "Not checked yet";
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat("en-US", {
       hour: "numeric",
       minute: "2-digit",
       month: "short",

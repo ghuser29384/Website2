@@ -1,3 +1,4 @@
+import { auditFixture } from "./audit-remediation-fixture.mjs";
 import { generateKeyPairSync, sign } from "node:crypto";
 import http from "node:http";
 
@@ -216,6 +217,8 @@ const server = http.createServer((request, response) => {
     json(response, 404, { message: "Auth-resolution fixture endpoint not found." });
     return;
   }
+
+  if (auditFixture(request, response, url)) return;
 
   if (request.method === "GET" && url.pathname === "/") {
     json(response, 200, { ready: true });

@@ -247,7 +247,7 @@ export function BackgroundLocalDraftsPanel({ syncDraftAction }: BackgroundLocalD
       const formData = new FormData();
       formData.set("draft_id", attempt.id);
       formData.set("draft_body", attempt.body);
-      formData.set("draft_label", `Local draft ${new Date(attempt.updatedAt).toLocaleDateString()}`);
+      formData.set("draft_label", `Local draft ${new Date(attempt.updatedAt).toLocaleDateString("en-US")}`);
 
       const result = await syncDraftAction(formData);
       await persistDraft({
@@ -334,7 +334,7 @@ export function BackgroundLocalDraftsPanel({ syncDraftAction }: BackgroundLocalD
         <ul className="clean-list">
           {drafts.map((draft) => (
             <li key={draft.id}>
-              <strong>{new Date(draft.updatedAt).toLocaleDateString()}</strong> ·{" "}
+              <strong>{new Date(draft.updatedAt).toLocaleDateString("en-US")}</strong> ·{" "}
               {formatBackgroundLocalDraftSyncStatus(draft.syncStatus)} · attempts{" "}
               {draft.retryCount}
               <br />

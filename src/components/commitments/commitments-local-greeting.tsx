@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { INTERFACE_LOCALE } from "@/lib/interface-locale";
+
 interface GreetingState {
   date: string;
   timeOfDay: string;
@@ -11,7 +13,7 @@ interface GreetingState {
 function makeGreeting(now: Date): GreetingState {
   const hour = now.getHours();
   return {
-    date: new Intl.DateTimeFormat(undefined, {
+    date: new Intl.DateTimeFormat(INTERFACE_LOCALE, {
       weekday: "long",
       month: "long",
       day: "numeric",

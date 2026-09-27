@@ -10,13 +10,22 @@
   <title>Moral Trade — Live</title>
   <style>
     html,body{margin:0;background:#f5f2e9;color:#111;font-family:system-ui,sans-serif}
-    main{min-height:100vh;display:grid;place-items:center;padding:24px}
+    main{min-height:40vh;padding:24px;max-width:1180px;margin:auto}
+    .boot-nav{display:flex;flex-wrap:wrap;gap:24px;align-items:center;padding:20px 24px;background:#111214;color:white}
+    .boot-nav a{color:inherit;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+    .boot-nav a:focus-visible{outline:2px solid #3158ff;outline-offset:4px}
+    .boot-nav .boot-brand{font-size:24px;margin-right:auto}
     p{max-width:40rem;line-height:1.5}
   </style>
 </head>
 <body>
   <!-- The root URL remains the live Feed; Trade creation routes through /trades/new. -->
-  <main><p id="loading">Loading Moral Trade…</p></main>
+  <nav class="boot-nav" aria-label="Primary navigation">
+    <a class="boot-brand" href="/">Moral Trade</a>
+    <a href="/feed">Feed</a><a href="/discover">Discover</a>
+    <a href="/messages">Messages</a><a href="/commitments">Commitments</a>
+  </nav>
+  <main><p id="loading" role="status">Loading your feed…</p><a href="/discover">Browse live proposals</a></main>
   <script>
     (async () => {
       if (window.location.hash === '#trade') {
@@ -45,32 +54,30 @@
             candidateCount: 0,
           },
         });
-        const accountPromise = fetch('/api/live-account', {
-          credentials: 'same-origin',
-          headers: { Accept: 'application/json' },
-        })
-          .then((response) => (response.ok ? response.json() : { authenticated: false }))
-          .catch(() => ({ authenticated: false }));
-        const liveNowPromise = fetch('/api/live-now', {
-          credentials: 'same-origin',
-          headers: { Accept: 'application/json' },
-        })
-          .then(async (response) => {
-            if (!response.ok) return unavailableLiveNow();
+        // Optional account/feed reads must not gate the usable shell. All reads
+        // are bounded; failures stay unavailable, not fabricated signed-out data.
+        async function readJson(url, fallback) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 8000);
+          try {
+            const response = await fetch(url, { credentials: 'same-origin',
+              headers: { Accept: 'application/json' }, signal: controller.signal });
+            if (!response.ok) return fallback;
             const payload = await response.json();
-            return payload && typeof payload === 'object' && payload.routePlanner
-              ? payload
-              : unavailableLiveNow(payload);
-          })
-          .catch(() => unavailableLiveNow());
-        const [raw, liveAccount, liveNow] = await Promise.all([
-          fetch('/moral-trade-live-core.txt').then((response) => {
-            if (!response.ok) throw new Error('live core');
-            return response.arrayBuffer();
-          }),
-          accountPromise,
-          liveNowPromise,
-        ]);
+            return payload && typeof payload === 'object' ? payload : fallback;
+          } catch { return fallback; }
+          finally { clearTimeout(timer); }
+        }
+        const accountPromise = readJson('/api/live-account', { status: 'unavailable' });
+        const liveNowPromise = readJson('/api/live-now', unavailableLiveNow());
+        const coreController = new AbortController();
+        const coreTimer = setTimeout(() => coreController.abort(), 8000);
+        let raw;
+        try {
+          const response = await fetch('/moral-trade-live-core.txt', { signal: coreController.signal });
+          if (!response.ok) throw new Error('live core');
+          raw = await response.arrayBuffer();
+        } finally { clearTimeout(coreTimer); }
         const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', raw))]
           .map((value) => value.toString(16).padStart(2, '0'))
           .join('');
@@ -80,18 +87,8 @@
         }
 
         const source = new TextDecoder().decode(raw);
-        const accountJson = JSON.stringify(liveAccount)
-          .replace(/</g, '\\u003c')
-          .replace(/>/g, '\\u003e')
-          .replace(/&/g, '\\u0026')
-          .replace(/\u2028/g, '\\u2028')
-          .replace(/\u2029/g, '\\u2029');
-        const liveNowJson = JSON.stringify(liveNow)
-          .replace(/</g, '\\u003c')
-          .replace(/>/g, '\\u003e')
-          .replace(/&/g, '\\u0026')
-          .replace(/\u2028/g, '\\u2028')
-          .replace(/\u2029/g, '\\u2029');
+        window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ = { status: 'loading' };
+        window.__MT_LIVE_NOW_BOOTSTRAP__ = { status: 'loading' };
         const faviconLinks = [
           '<link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
           '<link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
@@ -108,8 +105,6 @@
           '<link id="mt-refined-header-styles" rel="stylesheet" href="/moral-trade-refined-header.css">',
         ].join('');
         const accountScripts = [
-          `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
-          `<script>window.__MT_LIVE_NOW_BOOTSTRAP__=${liveNowJson};<\/script>`,
           '<script src="/moral-trade-account-identity.js"><\/script>',
           '<script src="/moral-trade-live-account.js"><\/script>',
         ].join('');
@@ -123,12 +118,6 @@
           '<script src="/moral-trade-live-local-time.js"><\/script>',
           '<script src="/moral-trade-brand.js"><\/script>',
           '<script src="/moral-trade-live-templates.js"><\/script>',
-          '<script src="/moral-trade-live-now.js"><\/script>',
-          '<script src="/moral-trade-live-feed-identity.js"><\/script>',
-          '<script src="/moral-trade-live-feed-create.js"><\/script>',
-          '<script src="/moral-trade-live-feed-diagnostics.js"><\/script>',
-          '<script src="/moral-trade-live-learning-diagnostics.js"><\/script>',
-          '<script src="/moral-trade-live-route-recommendations.js"><\/script>',
           '<script src="/moral-trade-live-priority-route.js"><\/script>',
           '<script src="/moral-trade-requester-identity.js"><\/script>',
           '<script src="/moral-trade-live-command-center.js"><\/script>',
@@ -141,8 +130,44 @@
         document.open();
         document.write(enhancedSource);
         document.close();
+
+        const shellReady = document.readyState === 'loading'
+          ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
+          : Promise.resolve();
+        void accountPromise.then((payload) => {
+          window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ = payload;
+          window.dispatchEvent(new CustomEvent('mt:live-account-ready', { detail: payload }));
+        });
+        function loadEnhancement(src) {
+          return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            const timer = setTimeout(() => { script.remove(); reject(new Error('feed enhancement timeout')); }, 8000);
+            script.src = src;
+            script.onload = () => { clearTimeout(timer); resolve(); };
+            script.onerror = () => { clearTimeout(timer); reject(new Error('feed enhancement unavailable')); };
+            document.body.appendChild(script);
+          });
+        }
+        void liveNowPromise.then(async (payload) => {
+          await shellReady;
+          window.__MT_LIVE_NOW_BOOTSTRAP__ = payload.routePlanner ? payload : unavailableLiveNow(payload);
+          // These modules take a bootstrap snapshot. Load them once, in their
+          // established order, after this independent request settles.
+          for (const src of [
+            '/moral-trade-live-now.js',
+            '/moral-trade-live-feed-identity.js',
+            '/moral-trade-live-feed-create.js',
+            '/moral-trade-live-feed-diagnostics.js',
+            '/moral-trade-live-learning-diagnostics.js',
+            '/moral-trade-live-route-recommendations.js',
+          ]) await loadEnhancement(src);
+        }).catch(() => {
+          const main = document.getElementById('app');
+          if (main) main.innerHTML = '<section role="alert"><p>The feed could not be loaded. Refresh to retry.</p><a href="/discover">Browse live proposals</a></section>';
+        });
       } catch (error) {
-        document.getElementById('loading').textContent = 'Unable to load the interface. Please refresh.';
+        const loading = document.getElementById('loading');
+        if (loading) loading.textContent = 'Unable to load the interface. Please refresh, or use the navigation above.';
         console.error(error);
       }
     })();

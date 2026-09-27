@@ -239,7 +239,7 @@ export function MpgfContributionControls({
             <span>{subscription.poolId.replaceAll("-", " ")}</span>
             <span>{formatUsd(subscription.amountCents)}</span>
             <span>{subscription.status.replaceAll("_", " ")}</span>
-            <span>{new Date(subscription.nextChargeAt).toLocaleDateString()}</span>
+            <span>{new Date(subscription.nextChargeAt).toLocaleDateString("en-US")}</span>
           </div>
         ))}
       </div>
@@ -420,7 +420,7 @@ export function MpgfContributionControls({
               <span>{refund.id.slice(0, 8)}</span>
               <span>{formatUsd(refund.amountCents)}</span>
               <span>{refund.status.replaceAll("_", " ")}</span>
-              <span>{refund.processedAt ? new Date(refund.processedAt).toLocaleDateString() : "Pending review"}</span>
+              <span>{refund.processedAt ? new Date(refund.processedAt).toLocaleDateString("en-US") : "Pending review"}</span>
             </div>
           ))}
         </div>

@@ -15,8 +15,8 @@ const retiredPlaceholders = [
   /96% on time/,
 ];
 
-test("the live shell bootstraps authenticated account data before rendering", () => {
-  assert.match(shell, /fetch\('\/api\/live-account'/);
+test("the live shell loads account data independently of its usable shell", () => {
+  assert.match(shell, /readJson\('\/api\/live-account'/);
   assert.match(shell, /__MT_LIVE_ACCOUNT_BOOTSTRAP__/);
   assert.match(shell, /moral-trade-live-account\.js/);
   assert.match(shell, /source\.replace\('<\/head>'/);
