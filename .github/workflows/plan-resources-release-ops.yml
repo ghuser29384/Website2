@@ -1,5 +1,4 @@
 name: Planner release operations — never merge
-
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -7,15 +6,35 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: planner-release-operations-20260927
+  group: planner-corrected-assets-20260927
   cancel-in-progress: false
 jobs:
-  verify:
+  stop_obsolete_qa:
     if: github.repository == 'ghuser29384/Website2' && github.head_ref == 'ops/verify-plan-resources-20260927' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Stop only the superseded planner validation, never a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          endpoint=repos/ghuser29384/Website2/actions/runs/36290546337
+          gh api "$endpoint" > "$RUNNER_TEMP/obsolete.json"
+          jq -e '.head_sha == "df734cc2346f2aaf5c67a0caba90d3b4ffe5c451" and .head_branch == "ops/verify-plan-resources-20260927" and .path == ".github/workflows/plan-resources-release-ops.yml"' "$RUNNER_TEMP/obsolete.json"
+          if [ "$(jq -r .status "$RUNNER_TEMP/obsolete.json")" != completed ]; then
+            gh api --method POST "$endpoint/cancel" || test "$(gh api "$endpoint" --jq .status)" = completed
+          fi
+  verify:
+    needs: stop_obsolete_qa
+    runs-on: ubuntu-24.04
     timeout-minutes: 65
+    permissions:
+      contents: write
     env:
-      CANDIDATE: cf12e53bd1d4265ebe2057b109ca40f3f1bc78da
+      SOURCE: cf12e53bd1d4265ebe2057b109ca40f3f1bc78da
       BASE: be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -27,24 +46,58 @@ jobs:
           ref: cf12e53bd1d4265ebe2057b109ca40f3f1bc78da
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify immutable source and exact four-file scope
+      - name: Apply only the reviewed stylesheet installation fix and its regression
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE"
           mkdir -p "$RUNNER_TEMP/planner-evidence"
-          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          def blob(s):
+              b=s.encode(); return hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
+          p=Path('public/moral-trade-live-route-recommendations.js'); s=p.read_text()
+          assert blob(s)=='633e5b90dee845efe3b21ae6d69f81e5ab50a65b'
+          old='    if (document.getElementById(STYLE_ID)) return;\n    // Keep the shared route/dialog styling; scope the compact layout to this planner.\n    ["/moral-trade-live-route-recommendations.css", "/moral-trade-live-route-planner-compact.css"].forEach((href, index) => {\n      const link = document.createElement("link");\n      link.id = index === 0 ? STYLE_ID : `${STYLE_ID}-compact`;'
+          new='    // The shell can preload the base stylesheet; install each missing sheet independently.\n    ["/moral-trade-live-route-recommendations.css", "/moral-trade-live-route-planner-compact.css"].forEach((href, index) => {\n      const id = index === 0 ? STYLE_ID : `${STYLE_ID}-compact`;\n      if (document.getElementById(id)) return;\n      const link = document.createElement("link");\n      link.id = id;'
+          assert s.count(old)==1; s=s.replace(old,new)
+          assert blob(s)=='3a9e60538fa8cc828025679080010c24bb538501'; p.write_text(s)
+          p=Path('tests/exact-live-route-recommendations.spec.ts'); s=p.read_text()
+          assert blob(s)=='58354ed820654996d4bf660f48a1b5b35267320f'
+          s+=r'''
+
+          test("loads compact styles when the live shell already provides the base stylesheet", async ({ page }) => {
+            await page.setViewportSize({ width: 1440, height: 1000 });
+            await mountPlanner(page, readyPlanner());
+            await expect(page.locator("#mt-live-route-recommendations-styles")).toHaveCount(1);
+            await expect(page.locator("#mt-live-route-recommendations-styles-compact")).toHaveCount(1);
+            const grid = page.locator(".plan-grid.mt-lrp-layout");
+            await expect(grid).toHaveCSS("max-width", "1160px");
+            await expect(grid.locator(".mt-lrp-composer")).toHaveCSS("position", "static");
+            await expect(grid.locator(".mt-lrp-composer h2")).toHaveCSS("font-size", "23px");
+            await expect.poll(() => grid.evaluate((element) =>
+              getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length,
+            )).toBe(2);
+          });
+          '''
+          assert blob(s)=='1fb5fa4c7b1d3df69dd769ea195ae9e931fa4bf7'; p.write_text(s)
+          PY
+          node --check public/moral-trade-live-route-recommendations.js
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/moral-trade-live-route-recommendations.js tests/exact-live-route-recommendations.spec.ts
+          git commit -m 'Load the compact planner stylesheet when the shell preloads base styles'
+          echo "CANDIDATE=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           git merge-base --is-ancestor "$BASE" HEAD
-          git diff --check "$BASE" HEAD
           git diff --name-only "$BASE" HEAD | sort > "$RUNNER_TEMP/planner-evidence/actual-paths.txt"
           printf '%s\n' public/moral-trade-live-route-planner-compact.css public/moral-trade-live-route-recommendations.js tests/exact-live-route-recommendations.spec.ts tests/exact-live-custom-route.spec.ts | sort > "$RUNNER_TEMP/planner-evidence/expected-paths.txt"
           cmp "$RUNNER_TEMP/planner-evidence/actual-paths.txt" "$RUNNER_TEMP/planner-evidence/expected-paths.txt"
-          test "$(git rev-parse HEAD:public/moral-trade-live-route-recommendations.js)" = '633e5b90dee845efe3b21ae6d69f81e5ab50a65b'
           test "$(git rev-parse HEAD:public/moral-trade-live-route-planner-compact.css)" = 'c5bd36d4b8d8ca5d96f0071241bd7b48fd0d832d'
-          test "$(git rev-parse HEAD:tests/exact-live-route-recommendations.spec.ts)" = '58354ed820654996d4bf660f48a1b5b35267320f'
           test "$(git rev-parse HEAD:tests/exact-live-custom-route.spec.ts)" = '4461be267720e8d18a8f63f6dc5a1f03137b99e6'
           git diff "$BASE" HEAD > "$RUNNER_TEMP/planner-evidence/reviewed-scope.diff"
           git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/planner-evidence/source-identity.txt"
           sha256sum public/moral-trade-live-route-recommendations.js public/moral-trade-live-route-planner-compact.css > "$RUNNER_TEMP/planner-evidence/runtime.sha256"
-          node --check public/moral-trade-live-route-recommendations.js
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -76,26 +129,25 @@ jobs:
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 60); do curl -fsS http://127.0.0.1:3210/ -o /dev/null && break || sleep 2; done
           cat > "$RUNNER_TEMP/planner-browser-check.cjs" <<'JS'
-          const {createRequire} = require('node:module');
-          const {writeFileSync} = require('node:fs');
-          const assert = require('node:assert/strict');
-          const {chromium} = createRequire(process.cwd() + '/package.json')('@playwright/test');
-          const out = process.env.RUNNER_TEMP + '/planner-evidence';
-          const profile = {goal:'',causePriorities:['Future flourishing'],moneyBudgetCents:0,timeBudgetMinutes:0,actionBudgetCount:3,horizon:'month',routeFormats:['direct'],evidencePreference:'high',uncertaintyPreference:'balanced',interactionPreference:'open',privacyPreference:'private',plannedDonationBaseline:false,plannedDonationCents:0,otherwiseBaseline:'',calibrationCount:0,interviewCompleted:false};
-          const envelope = planner => ({authenticated:true,generatedAt:'2026-09-27T02:22:01.000Z',matchingOpportunityCount:0,profile:{causes:[],weightedCauses:[],openToPayment:null,openToPledges:null,signalSources:[],learningEnabled:true},recentChanges:[],recommendations:[],status:'no_matches',routePlanner:planner});
+          const {createRequire}=require('node:module');
+          const {writeFileSync}=require('node:fs');
+          const assert=require('node:assert/strict');
+          const {chromium}=createRequire(process.cwd()+'/package.json')('@playwright/test');
+          const out=process.env.RUNNER_TEMP+'/planner-evidence';
+          const profile={goal:'',causePriorities:['Future flourishing'],moneyBudgetCents:0,timeBudgetMinutes:0,actionBudgetCount:3,horizon:'month',routeFormats:['direct'],evidencePreference:'high',uncertaintyPreference:'balanced',interactionPreference:'open',privacyPreference:'private',plannedDonationBaseline:false,plannedDonationCents:0,otherwiseBaseline:'',calibrationCount:0,interviewCompleted:false};
+          const envelope=planner=>({authenticated:true,generatedAt:'2026-09-27T02:22:01.000Z',matchingOpportunityCount:0,profile:{causes:[],weightedCauses:[],openToPayment:null,openToPledges:null,signalSources:[],learningEnabled:true},recentChanges:[],recommendations:[],status:'no_matches',routePlanner:planner});
           (async()=>{
             const browser=await chromium.launch();
             const report={candidate:process.env.CANDIDATE,fixture:'Synthetic route API; actual production-built application. No production records accessed.',viewports:[],errors:[]};
-            try {
-              for(const width of [1440,1024,820,768,390,320]) {
+            try{
+              for(const width of [1440,1024,820,768,390,320]){
                 const ctx=await browser.newContext({viewport:{width,height:width>800?1000:844}});
                 await ctx.addCookies([{name:'mt_walkthrough_seen',value:'1',url:'http://127.0.0.1:3210'}]);
-                const page=await ctx.newPage();
-                const errors=[]; page.on('pageerror',e=>errors.push(e.message));
+                const page=await ctx.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
                 let planner={status:'profile_incomplete',checkedAt:'2026-09-27T02:22:01.000Z',profile:{...profile},needsMoreInput:['goal','otherwiseBaseline'],routes:[],candidateCount:0};
                 const posts=[];
                 await page.route('**/api/live-now**',async r=>{
-                  if(new URL(r.request().url()).pathname.endsWith('/route-profile')) {
+                  if(new URL(r.request().url()).pathname.endsWith('/route-profile')){
                     const payload=r.request().postDataJSON(); posts.push(payload); assert.equal(payload.action,'save_profile');
                     planner={...planner,status:'no_live',profile:payload.profile,needsMoreInput:[]};
                     return r.fulfill({contentType:'application/json',body:JSON.stringify({authenticated:true,saved:true})});
@@ -107,49 +159,37 @@ jobs:
                 const grid=page.locator('[data-mt-live-route-planner="true"]'); await grid.waitFor();
                 await page.waitForFunction(()=>Array.from(document.styleSheets).some(s=>s.href?.includes('route-planner-compact')));
                 await page.evaluate(()=>document.fonts.ready);
-                if([1440,390,320].includes(width)) {
+                if([1440,390,320].includes(width)){
                   await page.screenshot({path:`${out}/planner-${width}.png`,fullPage:true});
                   await grid.screenshot({path:`${out}/planner-component-${width}.png`});
                 }
-                const options=page.locator('[data-mt-lrp-disclosure="options"]');
-                assert.equal(await options.evaluate(el=>el.open),false);
+                const options=page.locator('[data-mt-lrp-disclosure="options"]'); assert.equal(await options.evaluate(el=>el.open),false);
                 const geometry=await grid.evaluate(el=>{
                   const visible=e=>{
                     for(let p=e;p;p=p.parentElement){
-                      if(p.hidden) return false;
-                      const s=getComputedStyle(p);
-                      if(s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse') return false;
-                      if(p.tagName==='DETAILS'&&!p.open){
-                        const summary=Array.from(p.children).find(c=>c.tagName==='SUMMARY');
-                        if(!summary||!summary.contains(e)) return false;
-                      }
+                      if(p.hidden)return false;
+                      const s=getComputedStyle(p); if(s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse')return false;
+                      if(p.tagName==='DETAILS'&&!p.open){const summary=Array.from(p.children).find(c=>c.tagName==='SUMMARY');if(!summary||!summary.contains(e))return false;}
                     }
                     return e.getBoundingClientRect().height>0;
                   };
-                  return {width:el.getBoundingClientRect().width,columns:getComputedStyle(el).gridTemplateColumns,overflow:document.documentElement.scrollWidth-innerWidth,
-                    fields:Array.from(el.querySelectorAll('.mt-lrp-composer input,.mt-lrp-composer textarea')).filter(visible).map(e=>e.name),
-                    heading:getComputedStyle(el.querySelector('.mt-lrp-composer h2')).fontSize,background:getComputedStyle(el).backgroundColor};
+                  return {width:el.getBoundingClientRect().width,columns:getComputedStyle(el).gridTemplateColumns,overflow:document.documentElement.scrollWidth-innerWidth,fields:Array.from(el.querySelectorAll('.mt-lrp-composer input,.mt-lrp-composer textarea')).filter(visible).map(e=>e.name),heading:getComputedStyle(el.querySelector('.mt-lrp-composer h2')).fontSize,background:getComputedStyle(el).backgroundColor};
                 });
-                const entry={width,title:await page.title(),url:page.url(),geometry,savePayloadChecked:false,errors};
-                report.viewports.push(entry); writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));
-                assert.ok(geometry.overflow<=1,JSON.stringify(entry));
-                assert.ok(geometry.fields.includes('goal')&&geometry.fields.includes('otherwiseBaseline'));
-                assert.ok(!geometry.fields.includes('actionBudgetCount'),JSON.stringify(entry));
-                await options.locator('summary').click();
-                assert.equal(await options.evaluate(el=>el.open),true);
+                const entry={width,title:await page.title(),url:page.url(),geometry,savePayloadChecked:false,errors}; report.viewports.push(entry); writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));
+                assert.ok(geometry.overflow<=1,JSON.stringify(entry)); assert.equal(geometry.heading,'23px');
+                assert.ok(geometry.fields.includes('goal')&&geometry.fields.includes('otherwiseBaseline')); assert.ok(!geometry.fields.includes('actionBudgetCount'),JSON.stringify(entry));
+                await options.locator('summary').click(); assert.equal(await options.evaluate(el=>el.open),true);
                 await page.getByLabel('Maximum actions').fill('2');
                 await page.getByLabel('What would you like to change?',{exact:true}).fill('Support future flourishing');
                 await page.getByLabel('What would you do without a trade?',{exact:true}).fill('I would not start a new project this month.');
-                await options.locator('summary').click();
-                await page.getByRole('button',{name:'Find routes',exact:true}).click();
+                await options.locator('summary').click(); await page.getByRole('button',{name:'Find routes',exact:true}).click();
                 await page.getByRole('heading',{name:'No matching routes yet',exact:true}).waitFor();
                 assert.equal(posts.length,1); assert.equal(posts[0].profile.actionBudgetCount,2); assert.deepEqual(posts[0].profile.routeFormats,['direct']);
-                await page.getByText('About these results',{exact:true}).click();
-                assert.ok((await page.locator('.mt-lrp-source-note').innerText()).includes('0 open source candidates'));
+                await page.getByText('About these results',{exact:true}).click(); assert.ok((await page.locator('.mt-lrp-source-note').innerText()).includes('0 open source candidates'));
                 entry.savePayloadChecked=true; report.errors.push(...errors); await ctx.close();
               }
               assert.deepEqual(report.errors,[]);
-            } finally {writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));await browser.close();}
+            }finally{writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));await browser.close();}
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
           node "$RUNNER_TEMP/planner-browser-check.cjs"
@@ -168,7 +208,9 @@ jobs:
         run: |
           set -euo pipefail
           npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/release-browser.log"
-      - name: Record successful exact-source verification
+      - name: Publish only the fully tested source commit to the existing feature branch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test '${{ steps.planner.outcome }}' = success
@@ -176,6 +218,12 @@ jobs:
           test '${{ steps.release.outcome }}' = success
           test "$(git rev-parse HEAD)" = "$CANDIDATE"
           git diff --exit-code
+          ref='repos/ghuser29384/Website2/git/ref/heads/fix/plan-resources-quiet-layout-20260926'
+          test "$(gh api "$ref" --jq .object.sha)" = "$SOURCE"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin HEAD:refs/heads/fix/plan-resources-quiet-layout-20260926
+          test "$(gh api "$ref" --jq .object.sha)" = "$CANDIDATE"
           printf 'candidate=%s\nbase=%s\nrun=%s\n' "$CANDIDATE" "$BASE" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/planner-evidence/passed.txt"
       - name: Stage failure traces outside repository
         if: always()
