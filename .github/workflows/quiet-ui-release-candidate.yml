@@ -1,0 +1,219 @@
+name: Quiet UI reviewed release candidate
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-release-candidate.yml]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: quiet-ui-release-candidate
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  prepare:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      candidate: ${{ steps.assemble.outputs.candidate }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: quiet-ui-reviewed-runtime-patch
+          run-id: 36282175282
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/runtime-patch
+      - name: Reproduce the reviewed tree on an isolated candidate branch
+        id: assemble
+        run: |
+          set -euo pipefail
+          expected=35b174d5d09c6a846a6964af02c4dc248d6e1eb4
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = "$expected"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          replay="$GITHUB_WORKSPACE/.github/quiet-ui-gate-repairs.py"
+          git worktree add --detach "$RUNNER_TEMP/candidate" "$expected"
+          cd "$RUNNER_TEMP/candidate"
+          python3 "$replay"
+          cp "$RUNNER_TEMP/runtime-patch/package.json" "$RUNNER_TEMP/runtime-patch/package-lock.json" .
+          echo 'cafdc4c078d53d0004fa9ea3803954c5c16c27b5e8d1b1fa7ab9e82bcf469a8c  package.json' | sha256sum -c -
+          echo 'f92caf6acfdfae9542fd7626cba8bda2ae6325c76da37da3d7afba7e48ac2da2  package-lock.json' | sha256sum -c -
+          git add -u
+          git diff --cached --check
+          test "$(git write-tree)" = 3dcb503726e543ea2c3d65e9f80d82d363d1f77c
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git commit -m 'Complete quiet UI integration gates and patch vulnerable runtime dependencies'
+          git push origin HEAD:refs/heads/ops/quiet-ui-release-candidate-20260927
+          candidate=$(git rev-parse HEAD)
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/candidate-evidence"
+          printf 'candidate=%s\nparent=%s\ntree=%s\n' "$candidate" "$expected" "$(git write-tree)" > "$RUNNER_TEMP/candidate-evidence/revision.txt"
+          git diff "$expected" HEAD > "$RUNNER_TEMP/candidate-evidence/changes.patch"
+          cp "$RUNNER_TEMP/runtime-patch/audit-production.json" "$RUNNER_TEMP/candidate-evidence/"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-release-revision
+          path: ${{ runner.temp }}/candidate-evidence/
+          retention-days: 7
+          if-no-files-found: warn
+  quality:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.candidate }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Absolute repository, root-contract, security and production build gates
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/revision.txt
+          npm test 2>&1 | tee evidence/unit.log
+          node --import tsx --test src/*.test.ts src/lib/create-interface/*.test.ts 2>&1 | tee evidence/root-and-create.log
+          npm run lint -- --quiet 2>&1 | tee evidence/lint.log
+          npx tsc --noEmit 2>&1 | tee evidence/typescript.log
+          npm audit --omit=dev --json > evidence/audit-production.json
+          npm run build 2>&1 | tee evidence/build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-release-quality
+          path: evidence/
+          retention-days: 7
+  browser:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.candidate }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Focused desktop and mobile checks with unchanged retry and timeout settings
+        id: focused
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/focused-results.json
+        run: npx playwright test tests/quiet-ui.spec.ts tests/homepage-narrow-header.spec.ts tests/refined-header.spec.ts tests/discover-home-visual-alignment.spec.ts tests/selected-ui-cleanup.spec.ts tests/returning-homepage.spec.ts tests/create-route-ui-regression.spec.ts --output=test-results/focused --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-release-focused-browser
+          path: |
+            evidence/
+            test-results/focused/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Complete unchanged release browser suite
+        if: ${{ !cancelled() && steps.focused.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/release-results.json
+        run: npm run test:e2e:release -- --output=test-results/release --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-release-browser
+          path: |
+            evidence/
+            test-results/release/
+          retention-days: 7
+          if-no-files-found: warn
+  dashboard:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: dashboard-local-public-fixture
+      SUPABASE_SERVICE_ROLE_KEY: dashboard-local-service-fixture
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      DASHBOARD_SPARKS_FIXTURE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.candidate }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Authenticated priorities, account controls, and isolation on local fixtures
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/dashboard-results.json
+        run: npx playwright test tests/dashboard-sparks.spec.ts --workers=1 --output=test-results/dashboard --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-release-dashboard
+          path: |
+            evidence/
+            test-results/
+            /tmp/dashboard-sparks-evidence/
+          retention-days: 7
+          if-no-files-found: warn
+  commitments:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:3231
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: auth-resolution-public-fixture
+      SUPABASE_SERVICE_ROLE_KEY: auth-resolution-service-fixture
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+      SITE_URL: http://127.0.0.1:3211
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.candidate }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Commitments streaming, authentication and quiet layout with local fixtures
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/commitments-results.json
+        run: npx playwright test --config=playwright.commitments.config.ts --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-release-commitments
+          path: |
+            evidence/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
