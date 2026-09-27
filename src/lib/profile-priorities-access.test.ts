@@ -7,8 +7,10 @@ const profile = read("../app/profile/page.tsx");
 const setup = read("../components/profile/complete-profile-review.tsx");
 const card = read("../components/profile/profile-priorities-card.tsx");
 const alias = read("../app/100-sparks/page.tsx");
+const editor = read("../components/profile/profile-priority-editor.tsx");
+const dashboardTools = read("../components/dashboard/dashboard-tools.tsx");
 
-test("Profile exposes 100 Sparks before role-readiness details", () => {
+test("Profile exposes Priorities before role-readiness details", () => {
   assert.match(profile, /import \{ ProfilePrioritiesCard \}/);
   const cardPosition = profile.indexOf('<ProfilePrioritiesCard returnTo="/profile" />');
   assert.ok(cardPosition > 0);
@@ -17,11 +19,21 @@ test("Profile exposes 100 Sparks before role-readiness details", () => {
 });
 
 test("the shared card clearly names the feature and navigates without a write", () => {
-  assert.match(card, />100 Sparks<\/h2>/);
+  assert.match(card, />Priorities<\/h2>/);
   assert.match(card, /Adjust priorities/);
   assert.match(card, /\/profile\/priorities\?returnTo=\$\{encodeURIComponent\(returnTo\)\}/);
   assert.match(card, /prefetch=\{false\}/);
   assert.doesNotMatch(card, /<form|<details|localStorage|createClient|useEffect|onClick/);
+});
+
+test("the dashboard, editor, card, and legacy entry consistently name the feature Priorities", () => {
+  assert.match(dashboardTools, /href="\/dashboard"[^>]*>\s*Priorities\s*<\/Link>/);
+  assert.match(editor, /<h1 id="profile-priorities-heading">Priorities<\/h1>/);
+  assert.match(card, /<h2 id="profile-priorities-card-heading">Priorities<\/h2>/);
+  assert.match(alias, /title: "Priorities"/);
+  for (const source of [dashboardTools, editor, card, alias]) {
+    assert.doesNotMatch(source, /100 Sparks|Adjust your 100 sparks/);
+  }
 });
 
 test("profile setup exposes the card outside its form and optional disclosure", () => {

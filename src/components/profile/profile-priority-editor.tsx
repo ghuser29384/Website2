@@ -169,7 +169,7 @@ export function ProfilePriorityEditor({
         <div className={styles.mosaicLayout}>
           <aside className={styles.introPanel}>
             <p className={styles.sectionLabel}>Private profile</p>
-            <h1 id="profile-priorities-heading">Adjust your 100 sparks.</h1>
+            <h1 id="profile-priorities-heading">Priorities</h1>
             <p className={styles.introDescription}>
               Move your attention between priorities. Your live feed will use the saved weighting.
             </p>
