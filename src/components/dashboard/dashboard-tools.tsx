@@ -21,7 +21,7 @@ export function DashboardTools({ active }: { active: DashboardView }) {
   return (
     <nav className={styles.tools} aria-label="Dashboard controls">
       <Link href="/dashboard" prefetch={false} aria-current={active === "priorities" ? "page" : undefined}>
-        100 Sparks
+        Priorities
       </Link>
       <details className={styles.currency} onKeyDown={(event) => {
         if (event.key === "Escape") {
@@ -33,7 +33,7 @@ export function DashboardTools({ active }: { active: DashboardView }) {
         <div className={styles.currencyDetails}>
           <h2>Currency</h2>
           <p>Amounts use the currency stated in each offer or agreement. An account-wide currency selector is not available.</p>
-          <p>Changing your sparks does not convert amounts or change any payment terms.</p>
+          <p>Changing your priorities does not convert amounts or change any payment terms.</p>
           <Link href="/dashboard?view=controls#payment-setup" prefetch={false}>Payment setup</Link>
         </div>
       </details>

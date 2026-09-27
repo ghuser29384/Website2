@@ -20,8 +20,8 @@ export function ProfilePrioritiesCard({ returnTo }: ProfilePrioritiesCardProps) 
         <small>sparks</small>
       </div>
       <div className={styles.copy}>
-        <p className={styles.eyebrow}>Your priorities</p>
-        <h2 id="profile-priorities-card-heading">100 Sparks</h2>
+        <p className={styles.eyebrow}>Your profile</p>
+        <h2 id="profile-priorities-card-heading">Priorities</h2>
         <p>Choose what matters to you. Distribute 100 sparks across your priorities to personalize your feed.</p>
         <p className={styles.note}>Optional and private. You can adjust them anytime.</p>
       </div>

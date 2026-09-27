@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390, 320]) {
   for (const route of ["/profile", "/complete-profile"]) {
-    test(`100 Sparks is discoverable from ${route} at ${width}px`, async ({ page, context }, testInfo) => {
+    test(`Priorities is discoverable from ${route} at ${width}px`, async ({ page, context }, testInfo) => {
       await context.clearCookies();
       await page.setViewportSize({ width, height: 900 });
       const errors: string[] = [];
@@ -17,7 +17,7 @@ for (const width of [1440, 390, 320]) {
       await expect(page).toHaveURL((url) => url.pathname === route);
       await expect(page).toHaveTitle(/profile.*Moral Trade/i);
       const card = page.getByTestId("profile-priorities-card");
-      await expect(card.getByRole("heading", { name: "100 Sparks", exact: true })).toBeVisible();
+      await expect(card.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
       const action = card.getByRole("link", { name: "Adjust priorities", exact: true });
       await expect(action).toBeVisible();
       await expect(action).toHaveCSS("color", "rgb(255, 255, 255)");
@@ -29,7 +29,7 @@ for (const width of [1440, 390, 320]) {
       expect(actionBox).not.toBeNull();
       expect(actionBox!.height).toBeGreaterThanOrEqual(44);
       await expect(page.locator("nextjs-portal")).toHaveCount(0);
-      await page.screenshot({ path: testInfo.outputPath(`100-sparks-${route.slice(1)}-${width}.png`), fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(`priorities-${route.slice(1)}-${width}.png`), fullPage: true });
 
       // The entry is visible to everyone; private allocation still requires authentication.
       await action.focus();
