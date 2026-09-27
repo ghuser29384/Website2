@@ -1,0 +1,113 @@
+name: Quiet UI final release diagnostics
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-finalize.yml]
+permissions:
+  contents: read
+concurrency:
+  group: quiet-ui-final-diagnostics
+  cancel-in-progress: false
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+jobs:
+  diagnose:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ea9f882fbd665f898ecd210bcddbfd6fc338d8f9
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preserve exact source and revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD HEAD^{tree} > evidence/revision.txt
+          git diff --check caa25edccad0a444d4d18b45046a9e3fdfc1abf8 HEAD
+          git archive --format=tar.gz HEAD > evidence/source.tar.gz
+          git diff caa25edccad0a444d4d18b45046a9e3fdfc1abf8 HEAD > evidence/changes.patch
+          git ls-files '*AGENTS.md' > evidence/agent-paths.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quiet-ui-exact-source
+          path: evidence/
+          retention-days: 7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Capture the actual overflowing elements and production-server behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3210 > evidence/server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:3210/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node --input-type=module <<'JS'
+          import { chromium } from '@playwright/test';
+          import { writeFileSync } from 'node:fs';
+          const browser = await chromium.launch();
+          const report = [];
+          try {
+            for (const width of [1440, 390]) {
+              const page = await browser.newPage({ viewport: { width, height: 1000 } });
+              const errors = [];
+              page.on('pageerror', e => errors.push(e.message));
+              await page.goto('http://127.0.0.1:3210/moral-trade/technical-spec', { waitUntil: 'networkidle' });
+              await page.evaluate(() => document.fonts.ready);
+              const overflow = await page.evaluate(() => {
+                const describe = element => {
+                  const r = element.getBoundingClientRect();
+                  const s = getComputedStyle(element);
+                  return { tag: element.tagName, id: element.id, className: element.className,
+                    text: element.textContent?.trim().slice(0, 180), x: r.x, right: r.right, width: r.width,
+                    display: s.display, minWidth: s.minWidth, maxWidth: s.maxWidth,
+                    whiteSpace: s.whiteSpace, overflow: s.overflow, overflowWrap: s.overflowWrap,
+                    gridTemplateColumns: s.gridTemplateColumns, fontFamily: s.fontFamily, fontSize: s.fontSize };
+                };
+                return { innerWidth, scrollWidth: document.documentElement.scrollWidth,
+                  offenders: [...document.querySelectorAll('body *')].filter(el => {
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0 && (r.right > innerWidth + 1 || r.left < -1);
+                  }).slice(0, 50).map(el => ({ element: describe(el), parent: el.parentElement && describe(el.parentElement) })) };
+              });
+              await page.screenshot({ path: `evidence/technical-spec-${width}.png` });
+              report.push({ width, url: page.url(), title: await page.title(), errors, ...overflow });
+              await page.close();
+            }
+          } finally {
+            await browser.close();
+            writeFileSync('evidence/overflow.json', JSON.stringify(report, null, 2));
+          }
+          JS
+      - name: Run the unchanged Dashboard browser assertions against the production bundle
+        env:
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/dashboard-gate.json
+        run: npx playwright test tests/dashboard-account-security-visibility.spec.ts --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-final-diagnostics
+          path: |
+            evidence/overflow.json
+            evidence/server.log
+            evidence/*.png
+            evidence/dashboard-gate.json
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
