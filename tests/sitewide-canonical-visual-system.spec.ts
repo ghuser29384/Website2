@@ -363,7 +363,7 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await page.screenshot({ path: testInfo.outputPath("reference-walkthrough.png"), fullPage: false });
 });
 
-test("Commitments uses one navigation system and preserves tab interaction", async ({ page }, testInfo) => {
+test("Commitments uses the approved single-navigation layout and preserves tab interaction", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expectCanonicalSurface(page, "/commitments", testInfo);
 
