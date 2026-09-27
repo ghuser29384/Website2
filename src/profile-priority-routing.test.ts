@@ -41,7 +41,7 @@ test("the profile priorities route edits and persists the canonical 100-spark al
   assert.match(priorityView, /<ProfilePriorityEditor/);
   assert.match(priorityView, /priority_allocations,cause_areas/);
   assert.match(priorityView, /\.eq\("profile_id", viewer\.authUser\.id\)/);
-  assert.match(priorityEditor, /Adjust your 100 sparks/);
+  assert.match(priorityEditor, /<h1 id="profile-priorities-heading">Priorities<\/h1>/);
   assert.match(priorityEditor, /name="priority_allocation"/);
   assert.match(priorityEditor, /COMPLETE_PROFILE_SPARK_VALUE/);
   assert.match(priorityAction, /normalizeProfilePriorityAllocation/);
