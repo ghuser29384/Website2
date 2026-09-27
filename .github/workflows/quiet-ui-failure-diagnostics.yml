@@ -1,0 +1,75 @@
+name: Quiet UI exact-head failure diagnostics
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-failure-diagnostics.yml]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: quiet-ui-failure-diagnostics
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+jobs:
+  diagnose:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 35b174d5d09c6a846a6964af02c4dc248d6e1eb4
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Collect failed job logs through the read-only Actions API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          python3 <<'PY'
+          import urllib.request,json,os,pathlib
+          base='https://api.github.com/repos/ghuser29384/Website2'
+          def get(path):
+              req=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+              return urllib.request.urlopen(req,timeout=45).read()
+          runs=json.loads(get('/actions/runs?head_sha=35b174d5d09c6a846a6964af02c4dc248d6e1eb4&per_page=100'))['workflow_runs']
+          pathlib.Path('diagnostics/runs.json').write_text(json.dumps(runs,indent=2))
+          for run in runs:
+              jobs=json.loads(get('/actions/runs/'+str(run['id'])+'/jobs?per_page=100'))['jobs']
+              for job in jobs:
+                  if job['conclusion']=='failure':
+                      try: pathlib.Path('diagnostics/job-'+str(job['id'])+'.log').write_bytes(get('/actions/jobs/'+str(job['id'])+'/logs'))
+                      except Exception as e: print(job['id'],type(e).__name__)
+          PY
+      - name: Record complete root-level contracts on candidate and exact base
+        run: |
+          set -euo pipefail
+          set +e
+          node --import tsx --test src/*.test.ts > diagnostics/root-candidate.log 2>&1
+          candidate_result=$?
+          npm audit --omit=dev --json > diagnostics/audit-production.json
+          audit_result=$?
+          set -e
+          git worktree add --detach "$RUNNER_TEMP/main-base" f58ee041dfd909cad7699ed67485cc0a7db95933
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/main-base/node_modules"
+          cd "$RUNNER_TEMP/main-base"
+          set +e
+          node --import tsx --test src/*.test.ts > "$GITHUB_WORKSPACE/diagnostics/root-base.log" 2>&1
+          base_result=$?
+          set -e
+          printf 'candidate_exit=%s\nbase_exit=%s\naudit_exit=%s\n' "$candidate_result" "$base_result" "$audit_result" > "$GITHUB_WORKSPACE/diagnostics/results.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-exact-head-failure-diagnostics
+          path: diagnostics/
+          retention-days: 7
+          if-no-files-found: error
