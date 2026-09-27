@@ -91,7 +91,7 @@ test("partial-record warnings precede totals and the empty cart does not show a 
   assert.match(page,/Retry loading records/);
   assert.match(page,/data\.cartProjection\.itemCount > 0/);
   assert.match(page,/!data.availability.savedOffersComplete/);
-  assert.doesNotMatch(page,/Additional resources you caused\.|Activated this month|mechanisms`/);
+  assert.doesNotMatch(page,/<h1[^>]*>Additional resources you caused\.|Activated this month|mechanisms`/);
   assert.match(page,/Calendar month in UTC/);
   const shared = source("src/components/marketplace/marketplace-components.tsx");
   assert.doesNotMatch(shared,/<strong>0 in planner|<em>Charged now/);

@@ -1,3 +1,18 @@
+/* The approved workspace owns its geometry without restyling other routes. */
+.shell.shell {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.shell.shell > main {
+  margin-top: 0;
+}
+
 .page:global(.commitments-center) {
   --commitments-redesign-ink: #111318;
   --commitments-redesign-muted: #68707c;
@@ -5,69 +20,76 @@
   --commitments-redesign-blue: #2858ff;
   background: #ffffff !important;
   border-color: #dfe3e9 !important;
+  display: block;
+  border: 0 !important;
   min-height: 100%;
   padding: 34px clamp(28px, 3vw, 48px) 56px;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-route-board) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-route-board) {
+  border: 0 !important;
+  gap: 0;
+  width: 100%;
+  max-width: none;
   background: #ffffff !important;
   border-color: #dfe3e9 !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-route-workspace) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-route-workspace) {
   background: #ffffff !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-nav) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-nav) {
   background: #ffffff !important;
   border-color: #e1e5eb !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-brand) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-brand) {
   border-color: #e1e5eb !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-link) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-link) {
+  width: 100%;
   border-radius: 9px !important;
-  margin-inline: 12px;
+  margin-inline: 0;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-link.is-active),
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-link[aria-current="page"]) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-link.is-active),
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-link[aria-current="page"]) {
   background: #151719 !important;
-  border-left-color: var(--commitments-redesign-blue) !important;
+  border-left-color: #2858ff !important;
   color: #ffffff !important;
 }
 
-:global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-plan) {
+.shell:global(.marketplace-app-shell) :global(.mt-v75-side-plan) {
   background: #ffffff !important;
   border-color: #dfe3e9 !important;
   border-radius: 10px !important;
-  margin-inline: 12px;
+  margin-inline: 0;
 }
 
-.page :global(.button) {
+.shell.shell .page :global(.button) {
   border-radius: 8px !important;
   box-shadow: none !important;
 }
 
-.hero {
+.page .hero {
   align-items: center;
   gap: 36px;
   padding: 0 0 34px;
 }
 
-.hero h1 {
+.page .hero h1 {
   color: var(--commitments-redesign-ink);
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(2rem, 3vw, 2.75rem);
+  font-size: clamp(3rem, 4.25vw, 4.15rem);
   font-weight: 500;
   letter-spacing: -0.045em;
   line-height: 0.98;
   max-width: none;
 }
 
-.hero p {
+.page .hero p {
   color: var(--commitments-redesign-muted);
   font-family: inherit;
   font-size: clamp(0.98rem, 1.2vw, 1.08rem);
@@ -77,23 +99,23 @@
   max-width: 590px;
 }
 
-.heroAside {
+.page .heroAside {
   align-items: center;
   gap: 20px;
 }
 
-.greeting {
+.page .greeting {
   color: var(--commitments-redesign-ink);
   font-size: 0.9rem;
   gap: 5px;
   min-width: 210px;
 }
 
-.greeting span {
+.page .greeting span {
   color: var(--commitments-redesign-muted);
 }
 
-.heroAside :global(.button) {
+.page .heroAside :global(.button) {
   align-items: center;
   display: inline-flex;
   font-size: 0.92rem;
@@ -104,26 +126,26 @@
   padding-inline: 22px;
 }
 
-.tabs {
+.page .tabs {
   border-bottom-color: var(--commitments-redesign-rule);
   gap: clamp(28px, 3vw, 48px);
   overflow: visible;
 }
 
-.tabs a {
+.page .tabs a {
   color: #353b45;
   font-size: 1rem;
   font-weight: 520;
   padding: 12px 1px 14px;
 }
 
-.tabs a[aria-current="page"] {
+.page .tabs a[aria-current="page"] {
   border-bottom-color: var(--commitments-redesign-blue);
   color: var(--commitments-redesign-blue);
   font-weight: 700;
 }
 
-.summary {
+.page .summary {
   border-bottom: 0;
   display: grid;
   gap: 18px;
@@ -139,7 +161,7 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  min-height: 132px;
+  min-height: 180px;
   min-width: 0;
   padding: 20px 22px 22px;
 }
@@ -150,10 +172,10 @@
   border-radius: 999px;
   color: var(--commitments-redesign-blue);
   display: inline-flex;
-  height: 32px;
+  height: 48px;
   justify-content: center;
-  margin-bottom: 10px;
-  width: 32px;
+  margin-bottom: 18px;
+  width: 48px;
 }
 
 .summaryIcon svg {
@@ -339,7 +361,7 @@
   padding: 0;
 }
 
-.page :global(.commitments-center) {
+.page:global(.commitments-center) {
   box-shadow: none !important;
 }
 
@@ -349,13 +371,13 @@
 }
 
 @media (max-width: 1220px) {
-  .summary {
+  .page .summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 900px) {
-  :global(.marketplace-app-shell:has(.commitments-center) .mt-v75-side-link) {
+  .shell:global(.marketplace-app-shell) :global(.mt-v75-side-link) {
     border-radius: 0 !important;
     margin-inline: 0;
   }
@@ -364,24 +386,24 @@
     padding: 28px 22px 48px;
   }
 
-  .hero {
+  .page .hero {
     align-items: flex-start;
     flex-direction: column;
     gap: 22px;
   }
 
-  .heroAside {
+  .page .heroAside {
     align-items: center;
     justify-content: space-between;
     width: 100%;
   }
 
-  .greeting {
+  .page .greeting {
     align-items: flex-start;
     min-width: 0;
   }
 
-  .summary {
+  .page .summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -391,29 +413,29 @@
     padding: 24px 16px 42px;
   }
 
-  .hero h1 {
+  .page .hero h1 {
     font-size: 2.72rem;
   }
 
-  .hero p {
+  .page .hero p {
     font-size: 0.95rem;
   }
 
-  .heroAside {
+  .page .heroAside {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .heroAside :global(.button) {
+  .page .heroAside :global(.button) {
     width: 100%;
   }
 
-  .tabs {
+  .page .tabs {
     gap: 24px;
     overflow-x: auto;
   }
 
-  .summary {
+  .page .summary {
     grid-template-columns: 1fr;
   }
 

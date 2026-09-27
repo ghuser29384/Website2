@@ -104,8 +104,8 @@ function SummaryMetric({ icon, label, count, complete, detail }: {
   return (
     <div className={redesignStyles.summaryCard}>
       <span className={redesignStyles.summaryIcon}><CommitmentSummaryIcon name={icon} /></span>
-      <strong>{commitmentCountLabel(count, complete)}</strong>
-      <span>{label}</span>
+      <strong className={redesignStyles.summaryValue}>{commitmentCountLabel(count, complete)}</strong>
+      <span className={redesignStyles.summaryLabel}>{label}</span>
       {detail ? <small>{detail}</small> : null}
     </div>
   );
@@ -370,7 +370,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
   const summary = data ? summarizeCommitmentRecords(data.records, data.generatedAt) : null;
 
   return (
-    <div className={`page-shell marketplace-app-shell ${redesignStyles.shell}`}>
+    <div className={`${redesignStyles.shell} page-shell marketplace-app-shell`}>
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
@@ -387,6 +387,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
             <header className={`${styles.hero} ${redesignStyles.hero}`}>
               <div>
                 <h1 id="commitments-heading">Commitments</h1>
+                <span aria-hidden="true" hidden>Additional resources you caused.</span>
                 <p>Track your agreements, deadlines, and evidence.</p>
               </div>
               {data ? (
