@@ -1,0 +1,93 @@
+name: Exact audit UI acceptance
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-exact-ui-20260926.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 49f36f1cb0ac4c60cb22e3a6134797215870e678
+          persist-credentials: false
+          fetch-depth: 2
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Exact source, unit tests and lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 49f36f1cb0ac4c60cb22e3a6134797215870e678
+          mkdir -p /tmp/evidence
+          git rev-parse HEAD > /tmp/evidence/candidate-sha.txt
+          git rev-parse 'HEAD^{tree}' > /tmp/evidence/candidate-tree.txt
+          git diff --check
+          npm ci --no-audit --no-fund
+          npm test 2>&1 | tee /tmp/evidence/unit-tests.log
+          node --import tsx --test src/commitments-portfolio-wiring.test.ts src/commitments-redesign-contract.test.ts src/live-account-data.test.ts src/live-now-data.test.ts src/live-operational-retirement.test.ts src/offers-walkthrough-density.test.ts src/sitewide-account-identity.test.ts src/lib/local-date-time.test.ts 2>&1 | tee /tmp/evidence/source-tests.log
+          npm run lint -- --quiet 2>&1 | tee /tmp/evidence/lint.log
+      - name: Production build and types
+        id: build
+        env:
+          VERCEL: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee /tmp/evidence/build.log
+          npx tsc --noEmit --pretty false 2>&1 | tee /tmp/evidence/typescript.log
+          npx playwright install --with-deps chromium
+      - name: Populated, partial and unavailable account states
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.audit.config.ts --reporter=line 2>&1 | tee /tmp/evidence/audit-browser.log
+      - name: Save audit screenshots
+        if: always()
+        run: |
+          if test -d test-results; then cp -r test-results /tmp/evidence/audit-test-results; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exact-audit-account-${{ github.run_id }}
+          path: /tmp/evidence
+          retention-days: 14
+      - name: Empty accounts, delayed auth and responsive tabs
+        if: always() && steps.build.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.commitments.config.ts --reporter=line 2>&1 | tee /tmp/evidence/commitments-browser.log
+      - name: Save Commitments screenshots
+        if: always()
+        run: |
+          if test -d test-results; then cp -r test-results /tmp/evidence/commitments-test-results; fi
+      - name: Homepage resilience and single-navigation regressions
+        if: always() && steps.build.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.release.config.ts tests/home-bootstrap-resilience.spec.ts tests/commitments-sidebar-layout.spec.ts tests/sitewide-canonical-visual-system.spec.ts --reporter=line 2>&1 | tee /tmp/evidence/public-browser.log
+      - name: Save public screenshots
+        if: always()
+        run: |
+          if test -d test-results; then cp -r test-results /tmp/evidence/public-test-results; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exact-audit-acceptance-${{ github.run_id }}
+          path: /tmp/evidence
+          retention-days: 14
