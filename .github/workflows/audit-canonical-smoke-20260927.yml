@@ -1,0 +1,81 @@
+name: Audit canonical smoke acceptance
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-canonical-smoke-20260927.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_RELEASE_SHA: 4db5ef744c8cebab1940f70ef6bab499a6a61860
+      RELEASE_RUN_ID: '36299252812'
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Require the existing gated release to succeed; never dispatch a second release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          mkdir -p /tmp/audit-live-evidence
+          for attempt in $(seq 1 120); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" > /tmp/audit-live-evidence/release-run.json
+            jq -e --arg sha "$EXPECTED_RELEASE_SHA" '.head_sha == $sha and .event == "workflow_dispatch" and .path == ".github/workflows/vercel-release.yml"' /tmp/audit-live-evidence/release-run.json >/dev/null
+            if test "$(jq -r .status /tmp/audit-live-evidence/release-run.json)" = completed; then
+              test "$(jq -r .conclusion /tmp/audit-live-evidence/release-run.json)" = success
+              exit 0
+            fi
+            sleep 30
+          done
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: 4db5ef744c8cebab1940f70ef6bab499a6a61860
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Prepare the exact read-only smoke and real rendered navigation selector
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_RELEASE_SHA"
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('../controller/.github/audit-live-smoke-20260927.mjs').read_text()
+          old="await expect(page.getByRole('navigation', {name:'Primary', exact:true})).toBeVisible({timeout:45000});"
+          new="await expect(page.locator('header [data-mt-primary-links=\"true\"]')).toBeVisible({timeout:45000});"
+          assert source.count(old)==1
+          # The standalone homepage names its nav 'Primary navigation', whereas
+          # Next routes call it 'Primary'. Use the stable rendered hook already
+          # checked in tests/home-bootstrap-resilience.spec.ts, not a new label.
+          assert 'header [data-mt-primary-links="true"]' in Path('tests/home-bootstrap-resilience.spec.ts').read_text()
+          Path('/tmp/audit-canonical-smoke.mjs').write_text(source.replace(old,new))
+          Path('/tmp/audit-live-evidence/selector-correction.txt').write_text('Homepage smoke uses its existing rendered data-mt-primary-links hook. All route, asset, privacy, overflow and browser-error assertions remain unchanged. No product source or deployment was changed.\n')
+          PY
+      - name: Execute canonical route, asset and interaction verification
+        working-directory: candidate
+        run: node /tmp/audit-canonical-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-canonical-acceptance-${{ github.run_id }}
+          path: /tmp/audit-live-evidence
+          retention-days: 14
