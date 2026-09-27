@@ -1,0 +1,135 @@
+name: Final audit remediation QA
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-final-20260926.yml]
+permissions:
+  contents: write
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 5133e3dbbc22960ebbcc1d2cd24237f0748099d0
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 2
+          show-progress: false
+      - name: Apply only the verified five-file follow-up
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = 5133e3dbbc22960ebbcc1d2cd24237f0748099d0
+          mkdir -p ../evidence
+          python3 - <<'PY'
+          import base64, hashlib, lzma, pathlib, subprocess
+          patch = lzma.decompress(base64.b64decode(pathlib.Path('../controller/.github/audit-account-final.b64').read_text(),validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '2ae423fd2ac3b6c2243e741a277f395a760115837d8a1e47b9aefa757a9a17af'
+          pathlib.Path('../evidence/followup.patch').write_bytes(patch)
+          subprocess.run(['git','apply','--check','../evidence/followup.patch'],check=True)
+          subprocess.run(['git','apply','../evidence/followup.patch'],check=True)
+          paths = subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()
+          assert sorted(paths) == sorted(['public/moral-trade-account-identity.js','public/moral-trade-live-account.js','src/app/commitments/page.tsx','src/lib/audit-remediation.test.ts','tests/home-bootstrap-resilience.spec.ts'])
+          subprocess.run(['git','add','--',*paths],check=True)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          PY
+      - name: Publish only the expected fix-branch successor
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch=fix/audit-truth-locale-20260926
+          test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = 5133e3dbbc22960ebbcc1d2cd24237f0748099d0
+          git config user.name 'ghuser29384'
+          git config user.email '262476329+ghuser29384@users.noreply.github.com'
+          git commit -m 'Preserve unknown account state and complete retry parameters'
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "HEAD:refs/heads/$branch"
+          git rev-parse HEAD > ../evidence/candidate-sha.txt
+          git rev-parse 'HEAD^{tree}' > ../evidence/candidate-tree.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Install locked packages
+        working-directory: candidate
+        run: npm ci --no-audit --no-fund
+      - name: All unit tests, source contracts and lint
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee ../evidence/unit-tests.log
+          node --import tsx --test src/commitments-portfolio-wiring.test.ts src/commitments-redesign-contract.test.ts src/live-account-data.test.ts src/lib/local-date-time.test.ts 2>&1 | tee ../evidence/source-tests.log
+          npm run lint -- --quiet 2>&1 | tee ../evidence/lint.log
+      - name: Production build and TypeScript
+        id: build
+        working-directory: candidate
+        env:
+          VERCEL: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee ../evidence/build.log
+          npx tsc --noEmit --pretty false 2>&1 | tee ../evidence/typescript.log
+      - name: Install Chromium
+        working-directory: candidate
+        run: npx playwright install --with-deps chromium
+      - name: Account, locale and incomplete-data checks
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.audit.config.ts --reporter=line 2>&1 | tee ../evidence/audit-browser.log
+      - name: Save audit screenshots
+        if: always()
+        run: |
+          if test -d candidate/test-results; then cp -r candidate/test-results evidence/audit-test-results; fi
+      - name: Existing Commitments renderer checks
+        if: always() && steps.build.outcome == 'success'
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.commitments.config.ts --reporter=line 2>&1 | tee ../evidence/commitments-browser.log
+      - name: Save Commitments screenshots
+        if: always()
+        run: |
+          if test -d candidate/test-results; then cp -r candidate/test-results evidence/commitments-test-results; fi
+      - name: Complete release browser suite
+        if: always() && steps.build.outcome == 'success'
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee ../evidence/release-browser.log
+      - name: Save release screenshots
+        if: always()
+        run: |
+          mkdir -p evidence
+          if test -d candidate/test-results; then cp -r candidate/test-results evidence/release-test-results; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-audit-qa-${{ github.run_id }}
+          path: evidence
+          retention-days: 14
