@@ -128,7 +128,7 @@ jobs:
           # Only these two repository-only CI repairs may differ from that tree.
           # Other PRs retain the original narrow allowlist unchanged.
           if [[ "$PULL_REQUEST_NUMBER" == '841' && "$PULL_REQUEST_HEAD_REF" == 'fix/quiet-ui-20260926' ]]; then
-            approved_tree=e60ac7b04eff8d9d795adc28d3479a4d59b6e5ac
+            approved_tree=56320144f7bf54ad2f3df097860894bfaba8cb13
             git cat-file -e "$approved_tree^{tree}"
             git diff --exit-code "$approved_tree" "$GITHUB_SHA" -- . \
               ':(exclude).github/workflows/dashboard-account-security-hotfix-gates.yml' \
