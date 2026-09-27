@@ -176,8 +176,7 @@ async function mountPlanner(
 
   await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "Plan resources" })).toBeVisible();
-  await page.addStyleTag({ url: "/moral-trade-live-route-recommendations.css" });
-  await page.addScriptTag({ url: "/moral-trade-live-route-recommendations.js" });
+  // Exercise the actual shell asset loader without injecting duplicate styles or scripts.
   await page.getByRole("button", { name: "Plan resources" }).click();
   await expect(page.locator('[data-mt-live-route-planner="true"]')).toBeVisible();
 
@@ -477,4 +476,19 @@ test.describe("live route recommendation planner", () => {
     await expect(page.getByLabel("Maximum actions")).toBeFocused();
     expect(posts).toHaveLength(0);
   });
+});
+
+
+test("loads compact styles when the live shell already provides the base stylesheet", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mountPlanner(page, readyPlanner());
+  await expect(page.locator("#mt-live-route-recommendations-styles")).toHaveCount(1);
+  await expect(page.locator("#mt-live-route-recommendations-styles-compact")).toHaveCount(1);
+  const grid = page.locator(".plan-grid.mt-lrp-layout");
+  await expect(grid).toHaveCSS("max-width", "1160px");
+  await expect(grid.locator(".mt-lrp-composer")).toHaveCSS("position", "static");
+  await expect(grid.locator(".mt-lrp-composer h2")).toHaveCSS("font-size", "23px");
+  await expect.poll(() => grid.evaluate((element) =>
+    getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length,
+  )).toBe(2);
 });

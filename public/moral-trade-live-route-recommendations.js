@@ -283,11 +283,12 @@
   }
 
   function installStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    // Keep the shared route/dialog styling; scope the compact layout to this planner.
+    // The shell can preload the base stylesheet; install each missing sheet independently.
     ["/moral-trade-live-route-recommendations.css", "/moral-trade-live-route-planner-compact.css"].forEach((href, index) => {
+      const id = index === 0 ? STYLE_ID : `${STYLE_ID}-compact`;
+      if (document.getElementById(id)) return;
       const link = document.createElement("link");
-      link.id = index === 0 ? STYLE_ID : `${STYLE_ID}-compact`;
+      link.id = id;
       link.rel = "stylesheet";
       link.href = href;
       document.head.append(link);
