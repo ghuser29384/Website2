@@ -1,0 +1,106 @@
+name: Release approved Commitments redesign
+on:
+  push:
+    branches: [ops/commitments-redesign-release-20260926]
+    paths: [.github/workflows/commitments-redesign-production-dispatch.yml]
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: commitments-redesign-production-caa25edc
+  cancel-in-progress: false
+env:
+  RELEASE_SHA: caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+  APPROVED_HEAD: 6ad52c07cb9e858f0d3f7afdea72171460272815
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    outputs:
+      release_run: ${{ steps.dispatch.outputs.release_run }}
+    steps:
+      - name: Recheck protected merge, immutable main and verified candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          gh api "repos/$GITHUB_REPOSITORY/pulls/857" > /tmp/pr.json
+          jq -e --arg merged "$RELEASE_SHA" --arg head "$APPROVED_HEAD" '.merged == true and .merge_commit_sha == $merged and .head.sha == $head' /tmp/pr.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$RELEASE_SHA"
+          for run in 36280980067 36280980049; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" --jq '{id,status,conclusion}' | tee /tmp/run.json
+            jq -e '.status == "completed" and .conclusion == "success"' /tmp/run.json
+          done
+          test "$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/vercel-release.yml?ref=$APPROVED_HEAD" --jq .sha)" = "$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/vercel-release.yml?ref=$RELEASE_SHA" --jq .sha)"
+      - name: Dispatch unchanged canonical gated workflow once
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          find_run() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&event=workflow_dispatch&per_page=100" \
+              --jq '.workflow_runs | map(select(.path == ".github/workflows/vercel-release.yml" and .head_branch == "main")) | sort_by(.created_at) | last | .id // empty'
+          }
+          release_run="$(find_run)"
+          if [[ -z "$release_run" ]]; then
+            jq -n --arg sha "$RELEASE_SHA" '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$sha,synthetic_auth_fixture_url:""}}' > /tmp/dispatch.json
+            gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" --input /tmp/dispatch.json
+            for attempt in $(seq 1 30); do
+              release_run="$(find_run)"
+              [[ -n "$release_run" ]] && break
+              sleep 2
+            done
+          fi
+          [[ "$release_run" =~ ^[0-9]+$ ]]
+          echo "release_run=$release_run" >> "$GITHUB_OUTPUT"
+          echo "Canonical production run: $release_run"
+          echo "https://github.com/$GITHUB_REPOSITORY/actions/runs/$release_run" >> "$GITHUB_STEP_SUMMARY"
+          gh run watch "$release_run" --repo "$GITHUB_REPOSITORY" --exit-status --interval 30
+  verify-production:
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      SMOKE_OUTPUT: /tmp/commitments-production-evidence
+    steps:
+      - name: Check out exact released application
+        uses: actions/checkout@v4
+        with:
+          ref: caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+          path: app
+          persist-credentials: false
+      - name: Check out this immutable read-only verifier
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: ops
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install locked browser dependencies
+        working-directory: app
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Verify redesigned production route on both canonical domains
+        working-directory: app
+        run: node ../ops/scripts/qa/commitments-redesign-production-smoke.mjs
+      - name: Preserve production screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-redesign-production-caa25edc
+          path: /tmp/commitments-production-evidence
+          if-no-files-found: error
+          retention-days: 14
