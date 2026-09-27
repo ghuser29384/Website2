@@ -1,0 +1,99 @@
+name: Profile Dashboard fixture stability
+on:
+  push:
+    branches: [ops/profile-dashboard-integration-20260927]
+    paths: [.github/workflows/profile-dashboard-fixture-stability-20260927.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: profile-dashboard-fixture-stability-20260927
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      BASE: 2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49
+      CANDIDATE: 31231dcd8d78cb7c7e4f16669c390bb44c48adc6
+      EXPECTED_TREE: 6afe1f6e85312a4fae65fc9af062354c48e65820
+      BRANCH: fix/profile-dashboard-canonical-20260926
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: local-fixture-anon-key
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49
+          fetch-depth: 0
+      - name: Verify previous passing gates and restore their exact source tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$BASE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$CANDIDATE"
+          mkdir -p /tmp/profile-fixture-stability
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36298611757" > /tmp/prior-run.json
+          jq -e '.head_sha == "5c19306342326cfde74722bc18645060fa11554a" and .status == "completed" and .conclusion == "failure"' /tmp/prior-run.json >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36298611757/jobs" > /tmp/prior-jobs.json
+          jq -e '[.jobs[].steps[] | select(.name == "Focused routing and privacy regressions" or .name == "Repository tests" or .name == "Lint and typecheck" or .name == "Production build" or .name == "Complete unchanged release browser suite" or .name == "Build with only loopback synthetic account configuration")] | length == 6 and all(.conclusion == "success")' /tmp/prior-jobs.json >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/10925215655" | jq -e '.digest == "sha256:4b1791a5b4fd0e112faa4696b0202d9d81f43d99f9a05d23f644f50e849fd3e7" and .workflow_run.id == 36298611757' >/dev/null
+          gh run download 36298611757 --repo "$GITHUB_REPOSITORY" --name profile-unification-integrated-qa --dir /tmp/prior-profile-qa
+          test "$(cat /tmp/prior-profile-qa/tree.txt)" = "$EXPECTED_TREE"
+          git apply --index /tmp/prior-profile-qa/integration.patch
+          test "$(git write-tree)" = "$EXPECTED_TREE"
+          test "$(git diff --cached --name-only | wc -l)" = 17
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          new_head="$(printf 'Reconcile Profile account alias with current Priorities naming\n\nExact source tree from integration QA 36298611757; no application or test changes for the repeated fixture verification.\n' | git commit-tree "$EXPECTED_TREE" -p "$CANDIDATE" -p "$BASE")"
+          git checkout --detach "$new_head"
+          git rev-parse HEAD > /tmp/profile-fixture-stability/commit.txt
+          git rev-parse HEAD^{tree} > /tmp/profile-fixture-stability/tree.txt
+          cp /tmp/prior-profile-qa/integration.patch /tmp/profile-fixture-stability/
+          cp /tmp/prior-profile-qa/{focused-tests.log,tests.log,lint.log,types.log,build.log,browser.log,diff-stat.txt} /tmp/profile-fixture-stability/
+          cp -R /tmp/prior-profile-qa/public-test-results /tmp/profile-fixture-stability/
+          printf 'All prior passing gates reused only after exact-tree equality. Prior fixture failure retained in run 36298611757. No assertions or timeouts changed.\n' > /tmp/profile-fixture-stability/source-equivalence.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build the exact synthetic-account application
+        run: npm run build > /tmp/profile-fixture-stability/fixture-build.log 2>&1
+      - run: npx playwright install --with-deps chromium
+      - name: Repeat the entire unchanged authenticated fixture suite three times
+        env:
+          DASHBOARD_SPARKS_FIXTURE: '1'
+        run: npx playwright test --config=playwright.release.config.ts tests/dashboard-sparks.spec.ts --repeat-each=3 --reporter=line > /tmp/profile-fixture-stability/fixture-browser.log 2>&1
+      - name: Publish the verified tree to the existing PR only
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$CANDIDATE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          git diff --exit-code
+          git push origin "HEAD:refs/heads/$BRANCH"
+      - name: Retain all evidence including failures
+        if: always()
+        run: |
+          mkdir -p /tmp/profile-fixture-stability
+          if [ -d test-results ]; then cp -R test-results /tmp/profile-fixture-stability/; fi
+          if [ -d /tmp/dashboard-sparks-evidence ]; then cp -R /tmp/dashboard-sparks-evidence /tmp/profile-fixture-stability/; fi
+          for log in /tmp/profile-fixture-stability/*.log; do echo "=== $log ==="; tail -25 "$log"; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-unification-fixture-stability
+          path: /tmp/profile-fixture-stability
+          retention-days: 7
