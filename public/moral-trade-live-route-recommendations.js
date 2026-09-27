@@ -284,11 +284,14 @@
 
   function installStyles() {
     if (document.getElementById(STYLE_ID)) return;
-    const link = document.createElement("link");
-    link.id = STYLE_ID;
-    link.rel = "stylesheet";
-    link.href = "/moral-trade-live-route-recommendations.css";
-    document.head.append(link);
+    // Keep the shared route/dialog styling; scope the compact layout to this planner.
+    ["/moral-trade-live-route-recommendations.css", "/moral-trade-live-route-planner-compact.css"].forEach((href, index) => {
+      const link = document.createElement("link");
+      link.id = index === 0 ? STYLE_ID : `${STYLE_ID}-compact`;
+      link.rel = "stylesheet";
+      link.href = href;
+      document.head.append(link);
+    });
   }
 
   function formatMoney(cents) {
@@ -336,9 +339,8 @@
     const currentStatus = statusKind(planner.status);
     if (currentStatus === "signed_out") {
       return `<aside class="panel mt-lrp-composer" data-mt-live-route-composer>
-        <div class="eyebrow blue">YOUR ROUTE</div>
-        <h2>Make it yours.</h2>
-        <p>Sign in to save private limits and baselines.</p>
+        <h2>Your plan</h2>
+        <p>Sign in to save your goals and limits.</p>
         <a class="btn primary" href="/login?returnTo=%2Fmoral-trade-live.html%23now">Sign in →</a>
       </aside>`;
     }
@@ -349,7 +351,6 @@
       : profile.plannedDonationBaseline === false
         ? "no"
         : "";
-    const showOtherwise = true;
     const showDonation =
       profile.routeFormats.includes("redirect") ||
       profile.plannedDonationBaseline ||
@@ -357,51 +358,51 @@
     const disableSave = busy || currentStatus === "unavailable";
 
     return `<aside class="panel mt-lrp-composer" data-mt-live-route-composer>
-      <header>
-        <div class="eyebrow blue">YOUR ROUTE</div>
-        <h2>Set the limits.</h2>
-        <p>We ask only what can change the result.</p>
-      </header>
+      <header><h2>Your plan</h2></header>
       <form data-mt-lrp-profile-form novalidate>
         <label class="mt-lrp-field" for="mt-lrp-goal">
-          <span>Goal</span>
-          <input id="mt-lrp-goal" name="goal" maxlength="180" required value="${escapeHtml(profile.goal)}" placeholder="What should change?">
+          <span>What would you like to change?</span>
+          <input id="mt-lrp-goal" name="goal" maxlength="180" required value="${escapeHtml(profile.goal)}" placeholder="Describe your goal">
         </label>
         <label class="mt-lrp-field" for="mt-lrp-cause">
-          <span>Cause area used for matching</span>
-          <input id="mt-lrp-cause" name="causePriority" maxlength="120" required value="${escapeHtml(profile.causePriorities[0] || "")}" placeholder="For example: Farmed-animal welfare">
-          <small>This is matched to cause labels on live listings; it stays separate from your goal statement.</small>
+          <span>Cause area</span>
+          <input id="mt-lrp-cause" name="causePriority" maxlength="120" required value="${escapeHtml(profile.causePriorities[0] || "")}" placeholder="For example: Global health">
         </label>
-        <div class="mt-lrp-pair">
+        <div class="mt-lrp-pair mt-lrp-budget-pair">
           <label class="mt-lrp-field" for="mt-lrp-money">
-            <span>Money</span>
+            <span>Budget</span>
             <span class="mt-lrp-number"><i aria-hidden="true">$</i><input id="mt-lrp-money" name="moneyBudget" type="number" min="0" max="1000000" step="1" inputmode="decimal" required value="${escapeHtml(profile.moneyBudgetCents / 100)}"></span>
           </label>
           <label class="mt-lrp-field" for="mt-lrp-time">
-            <span>Minutes</span>
+            <span>Time available (min)</span>
             <input id="mt-lrp-time" name="timeBudgetMinutes" type="number" min="0" max="100000" step="5" inputmode="numeric" required value="${escapeHtml(profile.timeBudgetMinutes)}">
           </label>
-          <label class="mt-lrp-field" for="mt-lrp-actions">
-            <span>Actions</span>
-            <input id="mt-lrp-actions" name="actionBudgetCount" type="number" min="0" max="1000" step="1" inputmode="numeric" required value="${escapeHtml(profile.actionBudgetCount === null ? 3 : profile.actionBudgetCount)}">
-          </label>
         </div>
-        <label class="mt-lrp-field" for="mt-lrp-horizon">
-          <span>Time horizon</span>
-          <select id="mt-lrp-horizon" name="horizon">
-            ${selectOptions([["day", "Today"], ["week", "This week"], ["month", "This month"], ["quarter", "This quarter"], ["year", "This year"]], profile.horizon)}
-          </select>
+        <label class="mt-lrp-field" for="mt-lrp-otherwise" data-mt-lrp-baseline-fields>
+          <span>What would you do without a trade?</span>
+          <textarea id="mt-lrp-otherwise" name="otherwiseBaseline" maxlength="700" rows="2" required placeholder="Your existing plan, or nothing yet">${escapeHtml(profile.otherwiseBaseline)}</textarea>
         </label>
-        <fieldset class="mt-lrp-formats">
-          <legend>Ways I can help</legend>
-          <div>${renderFormatChecks(profile.routeFormats)}</div>
-        </fieldset>
-        <div class="mt-lrp-conditional" data-mt-lrp-baseline-fields ${showOtherwise ? "" : "hidden"}>
-          <label class="mt-lrp-field" for="mt-lrp-otherwise">
-            <span>Without a trade, I would…</span>
-            <textarea id="mt-lrp-otherwise" name="otherwiseBaseline" maxlength="700" rows="3" required placeholder="Describe the no-trade baseline">${escapeHtml(profile.otherwiseBaseline)}</textarea>
-          </label>
-        </div>
+        <details class="mt-lrp-options" data-mt-lrp-disclosure="options">
+          <summary>More options <span>Timing and ways to help</span></summary>
+          <div class="mt-lrp-options-body">
+            <div class="mt-lrp-pair mt-lrp-budget-pair">
+              <label class="mt-lrp-field" for="mt-lrp-horizon">
+                <span>Timeframe</span>
+                <select id="mt-lrp-horizon" name="horizon">
+                  ${selectOptions([["day", "Today"], ["week", "This week"], ["month", "This month"], ["quarter", "This quarter"], ["year", "This year"]], profile.horizon)}
+                </select>
+              </label>
+              <label class="mt-lrp-field" for="mt-lrp-actions">
+                <span>Maximum actions</span>
+                <input id="mt-lrp-actions" name="actionBudgetCount" type="number" min="0" max="1000" step="1" inputmode="numeric" required value="${escapeHtml(profile.actionBudgetCount === null ? 3 : profile.actionBudgetCount)}">
+              </label>
+            </div>
+            <fieldset class="mt-lrp-formats">
+              <legend>Ways I can help</legend>
+              <div>${renderFormatChecks(profile.routeFormats)}</div>
+            </fieldset>
+          </div>
+        </details>
         <div class="mt-lrp-conditional" data-mt-lrp-donation-fields data-force-visible="${donationNeedsAnswer}" ${showDonation ? "" : "hidden"}>
           <label class="mt-lrp-field" for="mt-lrp-donation-baseline">
             <span>Was a donation already planned?</span>
@@ -415,10 +416,10 @@
             <span>Planned amount</span>
             <span class="mt-lrp-number"><i aria-hidden="true">$</i><input id="mt-lrp-donation-amount" name="plannedDonation" type="number" min="0" max="1000000" step="1" inputmode="decimal" value="${escapeHtml(profile.plannedDonationCents / 100)}"></span>
           </label>
-          <small>Redirects appear only when this baseline is real.</small>
+          <small>Redirects require an existing donation plan.</small>
         </div>
         <p class="mt-lrp-form-error" data-mt-lrp-form-error role="alert"></p>
-        <button class="btn primary mt-lrp-save" type="submit" ${disableSave ? "disabled" : ""}>${busy ? "Updating…" : "Update routes"}</button>
+        <button class="btn primary mt-lrp-save" type="submit" ${disableSave ? "disabled" : ""}>${busy ? "Updating…" : currentStatus === "incomplete" ? "Find routes" : "Update routes"}</button>
       </form>
     </aside>`;
   }
@@ -480,11 +481,14 @@
         </div>
         <span class="mt-lrp-route-number" aria-hidden="true">0${index + 1}</span>
       </header>
-      <div class="mt-lrp-metrics" aria-label="Route measures">
-        ${METRIC_LABELS.map(([key, metricLabel]) => renderMetric(key, metricLabel, route.metrics[key])).join("")}
-      </div>
-      ${renderMetricNotes(route.metrics)}
       <ol class="mt-lrp-steps">${route.steps.map(renderStep).join("")}</ol>
+      <details class="mt-lrp-route-reason" data-mt-lrp-disclosure="route-${escapeHtml(route.id)}">
+        <summary>Why this route?</summary>
+        <div class="mt-lrp-metrics" aria-label="Route measures">
+          ${METRIC_LABELS.map(([key, metricLabel]) => renderMetric(key, metricLabel, route.metrics[key])).join("")}
+        </div>
+        ${renderMetricNotes(route.metrics)}
+      </details>
       ${route.uncertainties.length ? `<details class="mt-lrp-uncertainty"><summary>What is uncertain</summary><ul>${route.uncertainties.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></details>` : ""}
     </article>`;
   }
@@ -492,22 +496,23 @@
   function humanNeed(value) {
     const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, "");
     if (normalized.includes("goal")) return "Goal";
-    if (normalized.includes("money")) return "Money limit";
-    if (normalized.includes("time")) return "Time limit";
-    if (normalized.includes("horizon")) return "Time horizon";
+    if (normalized.includes("money")) return "Budget";
+    if (normalized.includes("horizon")) return "Timeframe";
+    if (normalized.includes("time")) return "Time available";
+    if (normalized.includes("actionbudget")) return "Maximum actions";
+    if (normalized.includes("cause")) return "Cause area";
     if (normalized.includes("format")) return "Ways you can help";
     if (normalized.includes("planned") || normalized.includes("donation")) return "Planned-donation baseline";
-    if (normalized.includes("baseline")) return "What happens without a trade";
+    if (normalized.includes("baseline")) return "What you would do without a trade";
     return value.replace(/[_-]+/g, " ");
   }
 
   function renderState(title, copy, options = {}) {
     const needsList = options.needs?.length
-      ? `<ul class="mt-lrp-needs">${options.needs.map((item) => `<li>${escapeHtml(humanNeed(item))}</li>`).join("")}</ul>`
+      ? `<details class="mt-lrp-missing" data-mt-lrp-disclosure="missing"><summary>Details still needed</summary><ul>${options.needs.map((item) => `<li>${escapeHtml(humanNeed(item))}</li>`).join("")}</ul></details>`
       : "";
     const actions = options.actions || "";
     return `<div class="mt-lrp-state" data-mt-live-route-state="${escapeHtml(options.state || "")}">
-      <span class="mt-lrp-state-mark" aria-hidden="true">${escapeHtml(options.mark || "→")}</span>
       <h3>${escapeHtml(title)}</h3>
       <p>${escapeHtml(copy)}</p>
       ${needsList}${actions}
@@ -521,56 +526,47 @@
       body = renderState(
         "Sign in to see your routes.",
         "No personalized or demo route is shown while signed out.",
-        {
-          state: "signed_out",
-          actions: '<a class="btn primary" href="/login?returnTo=%2Fmoral-trade-live.html%23now">Sign in →</a>',
-        },
+        { state: "signed_out" },
       );
     } else if (currentStatus === "incomplete") {
       body = renderState(
-        "Finish the few details that change the result.",
-        "Routes stay hidden until the required limits and baseline are known.",
-        { state: "incomplete", needs: planner.needsMoreInput, mark: "…" },
+        "Your options will appear here",
+        "Add your goal, limits, and what you would do without a trade.",
+        { state: "incomplete", needs: planner.needsMoreInput },
       );
     } else if (currentStatus === "unavailable") {
       body = renderState(
         "Routes are temporarily unavailable.",
         "Your profile remains private. Refresh or try again shortly.",
-        { state: "unavailable", mark: "!" },
+        { state: "unavailable" },
       );
     } else if (currentStatus === "loading") {
-      body = renderState("Checking live sources…", "No fallback route is substituted.", {
+      body = renderState("Checking live sources…", "Looking for options that fit your plan.", {
         state: "loading",
-        mark: "…",
       });
     } else if (currentStatus === "no_live" || !planner.routes.length) {
       body = renderState(
-        "No live route right now.",
-        "Nothing open currently fits these limits.",
+        "No matching routes yet",
+        "No open options currently fit your plan. Try adjusting your limits.",
         {
           state: "no_live",
-          mark: "○",
-          actions: `<div class="mt-lrp-state-actions"><a class="btn" href="/offers">Browse live offers</a><a class="btn" href="/offers/new">Create an offer</a></div><small>These are next actions, not recommendations.</small>`,
+          actions: `<div class="mt-lrp-state-actions"><a class="btn" href="/offers">Browse live offers</a><a class="mt-lrp-text-button" href="/offers/new">Create an offer</a></div>`,
         },
       );
     } else {
       body = `<div class="mt-lrp-route-list">${planner.routes.slice(0, 3).map(renderRouteCard).join("")}</div>`;
     }
+    const checked = (currentStatus === "ready" || currentStatus === "no_live") &&
+      Number.isFinite(new Date(planner.checkedAt).getTime());
 
     return `<section class="mt-lrp-results-inner" data-mt-live-route-results data-state="${escapeHtml(currentStatus)}">
       <header class="mt-lrp-results-head">
-        <div>
-          <div class="eyebrow blue">LIVE ROUTES</div>
-          <h2>${planner.profile.goal ? `Routes for ${escapeHtml(planner.profile.goal)}` : "Your best available routes"}</h2>
-          <p>Screened for clear overlap with what you said you would otherwise do.</p>
-        </div>
-        <div class="mt-lrp-checked">
-          <span>${planner.candidateCount} candidate${planner.candidateCount === 1 ? "" : "s"}</span>
-          <time datetime="${escapeHtml(planner.checkedAt)}">Checked ${escapeHtml(formatCheckedAt(planner.checkedAt))}</time>
-        </div>
+        <h2>Suggested routes</h2>
+        ${checked ? `<time datetime="${escapeHtml(planner.checkedAt)}">Checked ${escapeHtml(formatCheckedAt(planner.checkedAt))}</time>` : ""}
       </header>
       ${requestError ? `<p class="mt-lrp-request-error" role="alert">${escapeHtml(requestError)}</p>` : ""}
       ${body}
+      ${checked ? `<details class="mt-lrp-source-note" data-mt-lrp-disclosure="sources"><summary>About these results</summary><p>${currentStatus === "no_live" ? "These are next actions, not recommendations. " : ""}${planner.candidateCount} open source candidate${planner.candidateCount === 1 ? "" : "s"} when checked. Availability is checked again before you act.</p></details>` : ""}
     </section>`;
   }
 
@@ -655,26 +651,25 @@
 
   function renderTools() {
     const profile = planner.profile;
+    if (statusKind(planner.status) === "signed_out") {
+      return '<aside class="mt-lrp-tools" data-mt-live-route-tools></aside>';
+    }
     const compareButton = planner.comparison
       ? '<button class="btn mt-lrp-tool-button" type="button" data-mt-lrp-action="open-comparison">Compare two options</button>'
-      : '<p class="mt-lrp-tool-done">No comparison needed now.</p>';
+      : "";
     const resetButton = profile.calibrationCount > 0
       ? '<button class="mt-lrp-text-button" type="button" data-mt-lrp-action="reset-calibration">Reset comparisons</button>'
       : "";
     return `<aside class="mt-lrp-tools" data-mt-live-route-tools>
-      <section class="panel mt-lrp-tool-card">
-        <div class="eyebrow">TUNE THE ROUTE</div>
-        <h3>Only when useful.</h3>
-        ${compareButton}
-        <button class="btn mt-lrp-tool-button" type="button" data-mt-lrp-action="open-interview">Guided goal interview</button>
-        ${resetButton}
-        <small>${profile.calibrationCount} comparison${profile.calibrationCount === 1 ? "" : "s"} saved${profile.interviewCompleted ? " · interview confirmed" : ""}</small>
-      </section>
-      <section class="panel mt-lrp-tool-card mt-lrp-truth-card">
-        <div class="eyebrow">WHAT “LIVE” MEANS</div>
-        <p>A real source was open when checked. We check again before you act.</p>
-        <strong>${planner.candidateCount}</strong><span>open source candidate${planner.candidateCount === 1 ? "" : "s"}</span>
-      </section>
+      <details class="mt-lrp-options mt-lrp-preferences" data-mt-lrp-disclosure="preferences">
+        <summary>Refine preferences</summary>
+        <div class="mt-lrp-options-body">
+          <button class="btn mt-lrp-tool-button" type="button" data-mt-lrp-action="open-interview">Help with my goal</button>
+          ${compareButton}${resetButton}
+          ${profile.calibrationCount > 0 ? `<small>${profile.calibrationCount} comparison${profile.calibrationCount === 1 ? "" : "s"} saved</small>` : ""}
+          ${profile.interviewCompleted ? "<small>Goal interview confirmed</small>" : ""}
+        </div>
+      </details>
       <p class="mt-lrp-request-status" aria-live="polite">${escapeHtml(requestMessage)}</p>
       ${renderComparisonDialog()}
       ${renderInterviewDialog()}
@@ -707,6 +702,10 @@
     const tools =
       grid.querySelector("[data-mt-live-route-tools]") || grid.querySelector(":scope > aside.stack");
     if (!composer || !route || !tools) return false;
+    const openDisclosures = new Set(Array.from(
+      grid.querySelectorAll("details[data-mt-lrp-disclosure][open]"),
+      (detail) => detail.getAttribute("data-mt-lrp-disclosure"),
+    ));
 
     grid.classList.add("mt-lrp-layout");
     grid.setAttribute("data-mt-live-route-planner", "true");
@@ -721,6 +720,9 @@
 
     const replacementTools = document.createRange().createContextualFragment(renderTools());
     tools.replaceWith(replacementTools);
+    grid.querySelectorAll("details[data-mt-lrp-disclosure]").forEach((detail) => {
+      detail.open = openDisclosures.has(detail.getAttribute("data-mt-lrp-disclosure"));
+    });
 
     const page = grid.parentElement;
     if (page) {
@@ -889,6 +891,17 @@
     form.querySelector('[data-mt-lrp-action="confirm-interview"]')?.focus();
   }
 
+  // Browser validation must reveal a required field before trying to focus it.
+  document.addEventListener("invalid", (event) => {
+    if (!(event.target instanceof Element)) return;
+    if (!event.target.closest("[data-mt-lrp-profile-form]")) return;
+    let detail = event.target.closest("details");
+    while (detail) {
+      detail.open = true;
+      detail = detail.parentElement?.closest("details");
+    }
+  }, true);
+
   document.addEventListener("change", (event) => {
     if (!(event.target instanceof Element)) return;
     if (
@@ -909,7 +922,9 @@
       const error = form.querySelector("[data-mt-lrp-form-error]");
       if (!form.reportValidity()) return;
       if (!profile.routeFormats.length) {
+        form.querySelector('[data-mt-lrp-disclosure="options"]').open = true;
         if (error) error.textContent = "Choose at least one way to help.";
+        form.querySelector('input[name="routeFormat"]')?.focus();
         return;
       }
       if (error) error.textContent = "";
