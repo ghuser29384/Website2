@@ -13,7 +13,7 @@ export const REFINED_HEADER_LINKS: SiteNavLinkItem[] = getPrimaryNavLinks();
 export const HEADER_UTILITY_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/trades/new", label: "Create a trade" },
-  { href: "/profile", label: "Profile" },
+  { href: "/messages", label: "Messages" },
   { href: "/cart", label: "Saved offers" },
   { href: "/invite", label: "Invite" },
   { href: "/evidence", label: "Evidence" },

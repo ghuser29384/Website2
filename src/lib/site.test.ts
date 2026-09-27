@@ -5,35 +5,35 @@ import { FOOTER_LINK_GROUPS, getPrimaryNavLinks } from "@/lib/site";
 import { HEADER_UTILITY_LINKS } from "@/lib/refined-header";
 import { SITE_SEARCH_ITEMS } from "@/lib/site-search";
 
-test("exposes Feed and Discover as the first marketplace navigation entries", () => {
+test("exposes Home and Trades as the first marketplace navigation entries", () => {
   const primaryLinks = getPrimaryNavLinks(false);
   const [feedLink, discoverLink] = primaryLinks;
 
   assert.deepEqual(feedLink, {
     href: "/feed",
-    label: "Feed",
+    label: "Home",
   });
 
   assert.deepEqual(discoverLink, {
     href: "/discover",
-    label: "Discover",
+    label: "Trades",
   });
   assert.ok(primaryLinks.every((link) => link.href !== "/evidence"));
   assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === "/evidence" && link.label === "Evidence"));
 });
 
-test("links to Feed and Discover from the marketplace footer group", () => {
+test("links to Home and Trades from the marketplace footer group", () => {
   const marketplaceGroup = FOOTER_LINK_GROUPS.find((group) => group.title === "Explore");
 
   assert.ok(marketplaceGroup);
   assert.ok(
     marketplaceGroup.links.some(
-      (link) => link.href === "/feed" && link.label === "Feed",
+      (link) => link.href === "/feed" && link.label === "Home",
     ),
   );
   assert.ok(
     marketplaceGroup.links.some(
-      (link) => link.href === "/discover" && link.label === "Discover",
+      (link) => link.href === "/discover" && link.label === "Trades",
     ),
   );
 });

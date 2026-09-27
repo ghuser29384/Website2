@@ -12,12 +12,12 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
       const header = page.locator(".mt-refined-header").first();
       const nav = header.locator("[data-mt-primary-links]");
-      await expect(nav.locator(":scope > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
+      await expect(nav.locator(":scope > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
       await expect(header).toHaveCSS("background-color", "rgb(17, 18, 20)");
       await expect(nav.getByText("100 Sparks")).toHaveCount(0);
-      await expect(nav.locator('[aria-current="page"]')).toHaveCount(route === "/profile" ? 0 : 1);
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
       const hrefs = await nav.locator(":scope > a").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
-      expect(hrefs).toEqual(["/feed", "/discover", "/messages", "/commitments"]);
+      expect(hrefs).toEqual(["/feed", "/discover", "/commitments", "/profile"]);
       const brand = header.locator(".brand");
       await expect(brand).toBeVisible();
       await expect(brand).toHaveCSS("color", "rgb(255, 255, 255)");
@@ -65,9 +65,13 @@ test("Profile owns priorities and a legacy Sparks URL preserves the authenticate
   await page.goto("/profile");
   await page.getByRole("link", { name: /Adjust priorities/ }).click();
   await expect(page).toHaveURL(/\/login\?returnTo=/);
+  // A URL change can precede the streamed auth surface. Finish this navigation
+  // before starting another redirect to the same destination in this context.
+  await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible();
   expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
   await page.goto("/100-sparks");
   await expect(page).toHaveURL(/\/login\?returnTo=/);
+  await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible();
   expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
 });
 
@@ -99,7 +103,7 @@ test("the directory masthead keeps native page links usable without JavaScript",
   await page.goto("/discover");
   const profile = page.locator('[data-mt-primary-links] a[href="/feed"]');
   await expect(profile).toBeVisible();
-  await expect(profile).toHaveAccessibleName("Feed");
+  await expect(profile).toHaveAccessibleName("Home");
   await expect(page.locator("[data-mt-primary-links] > a")).toHaveCount(4);
   await profile.click();
   await expect(page).toHaveURL(/\/feed$/);
@@ -107,3 +111,67 @@ test("the directory masthead keeps native page links usable without JavaScript",
   // directory navigation itself must still perform a native document request.
   await context.close();
 });
+
+for (const target of ["/feed", "/discover"]) {
+  test(`React header uses a document request for standalone ${target}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    const rscRequests: string[] = [];
+    await page.route(url => ["/feed", "/discover"].includes(url.pathname) && url.searchParams.has("_rsc"), route => {
+      rscRequests.push(route.request().url());
+      return route.abort();
+    });
+    await page.goto("/contact");
+    const summary = page.locator(".mt-refined-header summary").filter({ hasText: "More" });
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".mt-refined-header").getByRole("link", { name: "Messages", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === target);
+    await page.locator(`[data-mt-primary-links] a[href="${target}"]`).click();
+    await navigation;
+    await expect.poll(() => new URL(page.url()).pathname).toBe(target);
+    expect(rscRequests).toEqual([]);
+  });
+}
+
+
+test("the React brand navigates to the standalone homepage without RSC", async ({ page }) => {
+  const rscRequests: string[] = [];
+  await page.route(url => url.pathname === "/" && url.searchParams.has("_rsc"), route => {
+    rscRequests.push(route.request().url());
+    return route.abort();
+  });
+  await page.goto("/contact");
+  const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === "/");
+  await page.locator(".mt-refined-header").getByRole("link", { name: "Moral Trade, home", exact: true }).click();
+  await navigation;
+  await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+  expect(rscRequests).toEqual([]);
+});
+
+for (const [label, selector, target] of [
+  ["breadcrumb", '.breadcrumbs a[href="/"]', "/"],
+  ["footer brand", '.mt-footer-brand', "/"],
+  ["footer Home", '.mt-footer-links a[href="/feed"]', "/feed"],
+  ["footer Trades", '.mt-footer-links a[href="/discover"]', "/discover"],
+]) {
+  test(`${label} uses document navigation without standalone RSC prefetch`, async ({ page }) => {
+    const rscRequests: string[] = [];
+    page.on("request", request => {
+      const url = new URL(request.url());
+      if (["/", "/feed", "/discover"].includes(url.pathname) && url.searchParams.has("_rsc")) {
+        rscRequests.push(request.url());
+      }
+    });
+    await page.goto("/what-is-moral-trade");
+    const link = page.locator(selector);
+    await link.scrollIntoViewIfNeeded();
+    await link.focus();
+    const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === target);
+    await link.press("Enter");
+    await navigation;
+    await expect.poll(() => new URL(page.url()).pathname).toBe(target);
+    await expect(page.locator(target === "/discover" ? "#command-form" : '[data-mt-live-now="adaptive"]')).toBeVisible();
+    expect(rscRequests).toEqual([]);
+  });
+}

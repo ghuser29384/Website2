@@ -67,7 +67,7 @@ test("the canonical shared tokens drive every shared Next.js route", () => {
   );
 
   for (const token of [
-    ["paper", "#f5f2e9"],
+    ["paper", "#f7f8fa"],
     ["black", "#050505"],
     ["ink", "#111111"],
     ["blue", "#2450ff"],
@@ -77,9 +77,9 @@ test("the canonical shared tokens drive every shared Next.js route", () => {
   }
 
   assert.match(canonical, /\.mt-site-topbar\s*\{[\s\S]*background:\s*var\(--mt-black\)/);
-  assert.match(canonical, /\.hero\s*>\s*\.hero-grid\s+\.hero-copy\s*\{[\s\S]*background:\s*var\(--mt-black\)/);
+  assert.match(canonical, /\.hero\s*>\s*\.hero-grid\s+\.hero-copy\s*\{[^}]*background:\s*transparent/);
   assert.match(canonical, /\.mt-site-footer\s*\{[\s\S]*background:\s*var\(--mt-black\)/);
-  assert.match(canonical, /background-image:[\s\S]*linear-gradient\(rgba\(17, 17, 17, 0\.035\)/);
+  assert.match(canonical, /body\s*\{[^}]*background-image:\s*none/);
   assert.match(canonical, /border-radius:\s*0\s*!important/);
   assert.equal(canonical.includes('[class*="card" i]'), false);
   assert.equal(canonical.includes('[class*="receipt" i]'), false);

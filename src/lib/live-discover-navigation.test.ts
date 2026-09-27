@@ -13,7 +13,7 @@ test("the exact live loader injects the Discover navigation bridge", () => {
 
 test("the live navigation bridge exposes four real destinations and keeps tools secondary", () => {
   const bridge = readPublicFile("moral-trade-live-navigation.js");
-  for (const [href, label] of [["/feed", "Feed"], ["/discover", "Discover"], ["/messages", "Messages"], ["/commitments", "Commitments"]]) {
+  for (const [href, label] of [["/feed", "Home"], ["/discover", "Trades"], ["/commitments", "Commitments"], ["/profile", "Profile"]]) {
     assert.ok(bridge.includes(`"${href}", "${label}"`));
   }
   assert.match(bridge, /data-mt-feed-link/);
@@ -31,6 +31,6 @@ test("Discover uses ordinary canonical navigation without a graph or navigation 
   for (const href of ["/feed", "/discover", "/walkthrough", "/trades/new", "/commitments", "/evidence"]) {
     assert.ok(shell.includes(`href="${href}"`));
   }
-  assert.match(shell, /aria-current="page">Discover/);
+  assert.match(shell, /aria-current="page">Trades/);
   assert.doesNotMatch(shell, /moral-trade-discover-navigation|moral-trade-discover-value-hover/);
 });

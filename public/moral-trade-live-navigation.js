@@ -88,10 +88,10 @@
       if (!header) continue;
       if (nav.dataset.mtPrimaryLinks === "true") { patched = true; continue; }
       const links = [
-        ["/feed", "Feed", "data-mt-feed-link"],
-        ["/discover", "Discover", "data-mt-discover-link"],
-        ["/messages", "Messages", ""],
+        ["/feed", "Home", "data-mt-feed-link"],
+        ["/discover", "Trades", "data-mt-discover-link"],
         ["/commitments", "Commitments", ""],
+        ["/profile", "Profile", ""],
       ];
       const fragment = document.createDocumentFragment();
       const path = window.location.pathname;
@@ -120,7 +120,7 @@
         panel.className = "header-more-links";
         for (const [href, label] of [
           ["/dashboard", "Dashboard"], ["/trades/new", "Create a trade"],
-          ["/profile", "Profile"], ["/cart", "Saved offers"],
+          ["/messages", "Messages"], ["/cart", "Saved offers"],
           ["/invite", "Invite"], ["/evidence", "Evidence"], ["/walkthrough", "Tour"], ["/safety", "Safety"],
         ]) {
           const link = document.createElement("a");

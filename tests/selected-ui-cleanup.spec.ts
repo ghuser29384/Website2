@@ -10,7 +10,7 @@ for (const width of [1440, 390, 320]) {
     // The About removal was explicitly excluded from this release.
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("A service for cooperation across moral disagreement.");
     const header = page.locator(".mt-refined-header").first();
-    await expect(header.locator("[data-mt-primary-links] > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
+    await expect(header.locator("[data-mt-primary-links] > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
     await expect(header.locator('form[role="search"]')).toHaveAttribute("action", "/offers");
     await expect(header.locator('form[role="search"]')).toHaveAttribute("method", "get");
     await expect(header.getByRole("searchbox", { name: "Search offers" })).toBeVisible();

@@ -1,14 +1,14 @@
 /* Canonical Home / Walkthrough styling for standalone product shells. */
 :root {
-  --paper: #f5f2e9 !important;
-  --paper-2: #fffdf8 !important;
-  --surface: #fffdf8 !important;
-  --surface-solid: #fffdf8 !important;
+  --paper: #f7f8fa !important;
+  --paper-2: #ffffff !important;
+  --surface: #ffffff !important;
+  --surface-solid: #ffffff !important;
   --ink: #111111 !important;
   --muted: #66645f !important;
-  --line: #c7c5bd !important;
-  --line-dark: #8d8b84 !important;
-  --line-strong: #8d8b84 !important;
+  --line: #e0e3e8 !important;
+  --line-dark: #89919e !important;
+  --line-strong: #89919e !important;
   --blue: #2450ff !important;
   --blue-dark: #153ee9 !important;
   --blue-pale: #e4eaff !important;
@@ -18,10 +18,8 @@
 
 html,
 body {
-  background-color: #f5f2e9 !important;
-  background-image:
-    linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(17, 17, 17, 0.035) 1px, transparent 1px) !important;
+  background-color: #f7f8fa !important;
+  background-image: none !important;
   background-size: 24px 24px !important;
   color: #111111 !important;
 }
@@ -120,34 +118,44 @@ summary:focus-visible {
 
 .screen.active .stage,
 .summary-stage {
-  border: 1px solid #111111 !important;
-  background: rgba(255, 253, 248, 0.94) !important;
+  border: 1px solid var(--line) !important;
+  background: #ffffff !important;
 }
 
 .intro {
-  border-right-color: #111111 !important;
-  background: #050505 !important;
-  color: #ffffff !important;
+  border-right-color: var(--line) !important;
+  background: #ffffff !important;
+  color: #111111 !important;
+
+  min-height: 0 !important;
 }
 
 .intro .step-label,
 .summary-head .step-label,
 .fund-mode-kicker {
-  color: #e66c17 !important;
+  color: #2450ff !important;
 }
 
 .intro h1,
 .summary-head h1 {
-  color: #ffffff !important;
-  font-family: Georgia, "Times New Roman", serif !important;
-  font-weight: 400 !important;
-  letter-spacing: -0.045em !important;
-  line-height: 0.96 !important;
+  color: #111111 !important;
+  font-family: var(--sans, system-ui, sans-serif) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.2 !important;
+
+  font-size: clamp(28px, 2.5vw, 32px) !important;
+
+  max-width: 26ch;
 }
 
 .intro-copy,
 .intro p {
-  color: #c9c5bd !important;
+  color: #606773 !important;
+
+  font-size: 16px;
+
+  line-height: 1.5;
 }
 
 .cause-panel,
@@ -161,8 +169,8 @@ summary:focus-visible {
 .pool-subpanel,
 .money-destination,
 .visibility-policy-section {
-  border-color: #8d8b84 !important;
-  background: #fffdf8 !important;
+  border-color: #b8bec8 !important;
+  background: #ffffff !important;
 }
 
 .btn.primary,
@@ -208,7 +216,7 @@ button.primary:hover,
   align-items: stretch !important;
   gap: 0 !important;
   border: 1px solid #111111 !important;
-  background: #fffdf8 !important;
+  background: #ffffff !important;
 }
 
 .mt-verify-hero > div:first-child {
@@ -231,7 +239,7 @@ button.primary:hover,
 .mt-verify-summary-card {
   border: 0 !important;
   border-left: 1px solid #111111 !important;
-  background: #fffdf8 !important;
+  background: #ffffff !important;
 }
 
 .mt-verify-panel,
@@ -241,8 +249,8 @@ button.primary:hover,
 .mt-verify-stage,
 .mt-verify-callout,
 .mt-verify-dropzone {
-  border-color: #c7c5bd !important;
-  background: #fffdf8 !important;
+  border-color: #e0e3e8 !important;
+  background: #ffffff !important;
 }
 
 .mt-verify-btn--primary {
@@ -268,14 +276,24 @@ button.primary:hover,
     grid-template-columns: 1fr !important;
   }
 
-  .intro {
-    min-height: 310px !important;
+.intro {
+    min-height: 0 !important;
     border-right: 0 !important;
-    border-bottom: 1px solid #111111 !important;
-  }
+    border-bottom: 1px solid var(--line) !important;
+
+  border-right-color: var(--line) !important;
+
+  background: #ffffff !important;
+
+  color: #111111 !important;
+}
 
   .mt-verify-summary-card {
     border-top: 1px solid #111111 !important;
     border-left: 0 !important;
   }
 }
+
+/* Operational summary copy uses the same neutral surface as the form. */
+.summary-head { background: #ffffff !important; color: #111111 !important; }
+.ambient-circle { display: none; }

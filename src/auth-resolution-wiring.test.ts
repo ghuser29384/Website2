@@ -107,7 +107,7 @@ test("authenticated profile navigation cannot prefetch the queryless Offers comp
   );
   assert.match(
     profilePageSource,
-    /<Link className="button button-secondary button-mini" href="\/offers" prefetch=\{false\}>/u,
+    /<Link\b[^>]*href="\/offers"[^>]*prefetch=\{false\}[^>]*>Back to offers<\/Link>/u,
   );
 });
 

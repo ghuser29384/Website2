@@ -51,6 +51,15 @@ function NavItem({ href, label, className }: { href: string; label: string; clas
   const pathname = usePathname();
   const isActive = isHrefActive(pathname, href) || (href === "/feed" && pathname === "/");
 
+  // Standalone HTML shells must use document navigation, not an RSC request.
+  if (href === "/" || href === "/feed" || href === "/discover") {
+    return (
+      <a aria-current={isActive ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
+        {label}
+      </a>
+    );
+  }
+
   return (
     <Link prefetch={false} aria-current={isActive ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
       {label}
@@ -182,9 +191,9 @@ export function SiteTopbar({
       aria-label="Primary"
       className={["topbar mt-site-topbar", showSearch ? "topbar-with-search" : "", refinedHeader ? "mt-refined-header" : ""].filter(Boolean).join(" ")}
     >
-      <Link prefetch={false} aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
+      <a aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
         <MoralTradeWordmark />
-      </Link>
+      </a>
       <div className="topbar-links" data-mt-primary-links={refinedHeader ? "true" : undefined}>
         {headerLinks.map((link) =>
           link.items?.length ? (

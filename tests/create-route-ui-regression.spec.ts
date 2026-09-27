@@ -154,9 +154,9 @@ test.describe("Create route UI regression repairs", () => {
     expect(layout.listClientHeight).toBeLessThanOrEqual(276);
     expect(layout.listScrollHeight).toBeGreaterThan(layout.listClientHeight);
     expect(layout.selectedCauseColor).toBe("rgb(17, 17, 17)");
-    expect(layout.requestPanelBackground).toBe("rgb(255, 253, 248)");
+    expect(layout.requestPanelBackground).toBe("rgb(255, 255, 255)");
     expect(layout.suggestionColor).toBe("rgb(17, 17, 17)");
-    expect(layout.suggestionBackground).toBe("rgb(255, 253, 248)");
+    expect(layout.suggestionBackground).toBe("rgb(255, 255, 255)");
     expect(layout.instructionColor).toBe("rgb(77, 75, 70)");
 
     const selectedMarker = await causeButton.evaluate(
@@ -327,8 +327,8 @@ test.describe("Cause-step proportions", () => {
         };
       });
 
-      expect(layout.fontSize).toBeLessThanOrEqual(56.1);
-      expect(layout.fontSize).toBeGreaterThanOrEqual(32);
+      expect(layout.fontSize).toBeLessThanOrEqual(32.1);
+      expect(layout.fontSize).toBeGreaterThanOrEqual(28);
       expect(layout.lineHeight).toBeGreaterThanOrEqual(layout.fontSize * 1.04);
       expect(layout.headingHeight).toBeLessThanOrEqual(layout.lineHeight * 3 + 1);
       expect(layout.headingLeftInset).toBeGreaterThanOrEqual(23);

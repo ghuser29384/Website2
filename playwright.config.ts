@@ -25,6 +25,19 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:3210",
     storageState: {
       cookies: [
+        // UI journeys use the real privacy opt-out instead of accumulating
+        // analytics events across hundreds of routes on one loopback address.
+        // Production ingestion limits remain unchanged.
+        {
+          domain: "127.0.0.1",
+          expires: -1,
+          httpOnly: false,
+          name: "mt_analytics_opt_out",
+          path: "/",
+          sameSite: "Lax",
+          secure: false,
+          value: "1",
+        },
         {
           domain: "127.0.0.1",
           expires: -1,

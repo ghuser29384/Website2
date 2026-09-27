@@ -5,9 +5,9 @@ import { getPrimaryNavLinks } from "@/lib/site";
 import { HEADER_UTILITY_LINKS, REFINED_HEADER_LINKS, usesDefaultHeader } from "./refined-header";
 
 test("the default masthead has four destinations and priorities belong to Profile", () => {
-  assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.label), ["Feed", "Discover", "Messages", "Commitments"]);
-  assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.href), ["/feed", "/discover", "/messages", "/commitments"]);
-  assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === "/profile"));
+  assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.label), ["Home", "Trades", "Commitments", "Profile"]);
+  assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.href), ["/feed", "/discover", "/commitments", "/profile"]);
+  assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === "/messages"));
   assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === "/trades/new"));
   assert.ok(usesDefaultHeader(getPrimaryNavLinks(false)));
   assert.ok(usesDefaultHeader(getPrimaryNavLinks(true)));

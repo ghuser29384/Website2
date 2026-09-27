@@ -29,7 +29,7 @@ test("the canonical primary-action rule no longer paints the request content pan
 test("the repair stylesheet makes the broken states explicit and viewport-aware", () => {
   assert.match(
     repairCss,
-    /\.request-primary\s*\{[\s\S]*?background: #fffdf8 !important;/,
+    /\.request-primary\s*\{[\s\S]*?background: #ffffff !important;/,
   );
   assert.match(
     repairCss,

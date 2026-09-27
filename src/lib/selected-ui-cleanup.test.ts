@@ -56,13 +56,13 @@ function render(authenticated: boolean, overrides = {}) {
 }
 
 test("the selected four links are shared without losing secondary account access", () => {
-  const expected = ["Feed", "Discover", "Messages", "Commitments"];
+  const expected = ["Home", "Trades", "Commitments", "Profile"];
   for (const auth of [false, true]) {
     assert.deepEqual(getPrimaryNavLinks(auth).map((link) => link.label), expected);
     assert.ok(usesDefaultHeader(getPrimaryNavLinks(auth)));
   }
   assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.label), expected);
-  for (const href of ["/profile", "/dashboard", "/trades/new", "/cart", "/invite", "/evidence", "/walkthrough", "/safety"]) {
+  for (const href of ["/messages", "/dashboard", "/trades/new", "/cart", "/invite", "/evidence", "/walkthrough", "/safety"]) {
     assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === href));
   }
 });

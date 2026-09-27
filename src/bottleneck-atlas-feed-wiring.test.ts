@@ -56,7 +56,8 @@ test("the public atlas and candidate detail routes preserve the hypothesis bound
   assert.match(api, /does not establish a current organization-specific bottleneck/);
 });
 
-test("the Bottleneck Atlas is linked from the public navigation system", () => {
+test("the Atlas stays available without crowding the site-wide task navigation", () => {
   const site = read("src/lib/site.ts");
-  assert.match(site, /href: "\/bottleneck-atlas", label: "Bottleneck Atlas"/);
+  assert.doesNotMatch(site, /href: "\/bottleneck-atlas"/);
+  assert.match(read("src/app/bottleneck-atlas/page.tsx"), /Field evidence is a search prior, not a live claim/);
 });

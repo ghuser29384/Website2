@@ -6,14 +6,14 @@ const shell = readFileSync("public/moral-trade-discover.html", "utf8");
 const styles = readFileSync("public/moral-trade-discover.css", "utf8");
 
 test("Discover keeps the canonical masthead and accessible two-sided list", () => {
-  for (const path of ["/feed", "/discover", "/trade-controls", "/trades/new", "/commitments", "/evidence"]) {
+  for (const path of ["/feed", "/discover", "/profile", "/trades/new", "/commitments", "/evidence"]) {
     assert.ok(shell.includes(`href="${path}"`));
   }
   assert.match(shell, /aria-current="page">Trades/);
   assert.match(shell, /Skip to trades/);
   assert.match(shell, /role="search"/);
   assert.match(shell, /aria-live="polite"/);
-  assert.match(styles, /--paper:\s*#f5f2e9/);
+  assert.match(styles, /--paper:\s*#f7f8fa/);
   assert.match(styles, /--blue:\s*#154cff/);
   assert.match(styles, /\.app-header\s*\{[^}]*background:\s*#050505/);
   assert.match(styles, /grid-template-columns: 1fr 1fr/);
