@@ -7,7 +7,10 @@ import { HEADER_UTILITY_LINKS, REFINED_HEADER_LINKS, usesDefaultHeader } from ".
 test("the default masthead has four destinations and priorities belong to Profile", () => {
   assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.label), ["Feed", "Discover", "Messages", "Commitments"]);
   assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.href), ["/feed", "/discover", "/messages", "/commitments"]);
-  assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === "/profile"));
+  assert.deepEqual(HEADER_UTILITY_LINKS.filter((link) => link.href === "/dashboard"), [
+    { href: "/dashboard", label: "Profile" },
+  ]);
+  assert.equal(HEADER_UTILITY_LINKS.some((link) => link.href === "/profile"), false);
   assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === "/trades/new"));
   assert.ok(usesDefaultHeader(getPrimaryNavLinks(false)));
   assert.ok(usesDefaultHeader(getPrimaryNavLinks(true)));
