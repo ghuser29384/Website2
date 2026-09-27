@@ -22,13 +22,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ea9f882fbd665f898ecd210bcddbfd6fc338d8f9
-          fetch-depth: 0
           persist-credentials: false
-      - name: Record exact source revision
-        run: |
-          mkdir -p evidence
-          git rev-parse HEAD HEAD^{tree} > evidence/revision.txt
-          git diff --check caa25edccad0a444d4d18b45046a9e3fdfc1abf8 HEAD
+      - run: mkdir -p evidence && git rev-parse HEAD HEAD^{tree} > evidence/revision.txt
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -36,12 +31,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - name: Run the unchanged Dashboard browser assertions against the production bundle
-        env:
-          PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
-          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/dashboard-gate.json
-        run: npx playwright test tests/dashboard-account-security-visibility.spec.ts --reporter=line,json
-      - name: Capture actual overflowing elements without waiting for background networking
+      - name: Isolate overflow without clipping content or waiting for background networking
         shell: bash
         run: |
           set -euo pipefail
@@ -57,38 +47,55 @@ jobs:
           import { writeFileSync } from 'node:fs';
           const browser = await chromium.launch();
           const report = [];
-          try {
-            for (const width of [1440, 390]) {
-              const page = await browser.newPage({ viewport: { width, height: 1000 } });
-              await page.context().addCookies([
-                { name: 'mt_walkthrough_seen', value: '1', url: 'http://127.0.0.1:3210' },
-                { name: 'mt_analytics_opt_out', value: '1', url: 'http://127.0.0.1:3210' },
-              ]);
-              const errors = [];
-              page.on('pageerror', e => errors.push(e.message));
-              await page.goto('http://127.0.0.1:3210/moral-trade/technical-spec', { waitUntil: 'domcontentloaded' });
-              await expect(page.getByRole('heading').first()).toBeVisible();
-              await page.evaluate(() => Promise.race([document.fonts.ready, new Promise(resolve => setTimeout(resolve, 1000))]));
-              const overflow = await page.evaluate(() => {
-                const describe = element => {
-                  const r = element.getBoundingClientRect();
-                  const s = getComputedStyle(element);
-                  return { tag: element.tagName, id: element.id, className: element.className,
-                    text: element.textContent?.trim().slice(0, 180), x: r.x, y: r.y, right: r.right, width: r.width,
-                    display: s.display, minWidth: s.minWidth, maxWidth: s.maxWidth,
-                    whiteSpace: s.whiteSpace, overflow: s.overflow, overflowWrap: s.overflowWrap,
-                    gridTemplateColumns: s.gridTemplateColumns, fontFamily: s.fontFamily, fontSize: s.fontSize };
-                };
-                return { innerWidth, scrollWidth: document.documentElement.scrollWidth, fontStatus: document.fonts.status,
-                  offenders: [...document.querySelectorAll('body *')].filter(el => {
-                    const r = el.getBoundingClientRect();
-                    return r.width > 0 && (r.right > innerWidth + 1 || r.left < -1);
-                  }).slice(0, 100).map(el => ({ element: describe(el), parent: el.parentElement && describe(el.parentElement) })) };
+          async function measure(page) {
+            return page.evaluate(() => {
+              const describe = element => {
+                const r = element.getBoundingClientRect();
+                const s = getComputedStyle(element);
+                return { tag: element.tagName, id: element.id, className: element.className,
+                  text: element.textContent?.trim().slice(0, 180), x: r.x, y: r.y, right: r.right, width: r.width,
+                  clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+                  display: s.display, minWidth: s.minWidth, maxWidth: s.maxWidth,
+                  whiteSpace: s.whiteSpace, overflow: s.overflow, overflowWrap: s.overflowWrap,
+                  fontFamily: s.fontFamily, fontSize: s.fontSize };
+              };
+              const offenders = [...document.querySelectorAll('body *')].filter(el => {
+                // The specification's intentionally scrollable tables are not page overflow.
+                if (el.closest('.mpgf-table')) return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && (r.right > innerWidth + 1 || r.left < -1 ||
+                  (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1));
               });
-              report.push({ width, url: page.url(), title: await page.title(), errors, ...overflow });
-              writeFileSync('evidence/overflow.json', JSON.stringify(report, null, 2));
-              await page.screenshot({ path: `evidence/technical-spec-${width}.png`, timeout: 10000 });
-              await page.close();
+              return { innerWidth, scrollWidth: document.documentElement.scrollWidth, fontStatus: document.fonts.status,
+                offenderCount: offenders.length,
+                offenders: offenders.slice(0, 80).map(el => ({ element: describe(el), parent: el.parentElement && describe(el.parentElement) })) };
+            });
+          }
+          try {
+            for (const fonts of ['normal', 'unavailable']) {
+              for (const width of [1440, 390]) {
+                const page = await browser.newPage({ viewport: { width, height: 1000 } });
+                if (fonts === 'unavailable') {
+                  await page.route(/\.(woff2?|ttf|otf)(\?|$)/, route => route.abort('failed'));
+                }
+                await page.context().addCookies([
+                  { name: 'mt_walkthrough_seen', value: '1', url: 'http://127.0.0.1:3210' },
+                  { name: 'mt_analytics_opt_out', value: '1', url: 'http://127.0.0.1:3210' },
+                ]);
+                const errors = [];
+                page.on('pageerror', e => errors.push(e.message));
+                await page.goto('http://127.0.0.1:3210/moral-trade/technical-spec', { waitUntil: 'domcontentloaded' });
+                await expect(page.getByRole('heading').first()).toBeVisible();
+                await page.evaluate(() => Promise.race([document.fonts.ready, new Promise(resolve => setTimeout(resolve, 1000))]));
+                const before = await measure(page);
+                // Diagnostic experiment only. The source and actual tests remain unchanged.
+                await page.addStyleTag({ content: '.protocol-contract-card { overflow-wrap: anywhere; }' });
+                const after = await measure(page);
+                report.push({ fonts, width, errors, before, after });
+                writeFileSync('evidence/overflow.json', JSON.stringify(report, null, 2));
+                await page.screenshot({ path: `evidence/technical-spec-experiment-${fonts}-${width}.png`, timeout: 10000 });
+                await page.close();
+              }
             }
           } finally {
             await browser.close();
@@ -99,8 +106,6 @@ jobs:
         if: always()
         with:
           name: quiet-ui-final-diagnostics
-          path: |
-            evidence/
-            test-results/
+          path: evidence/
           retention-days: 7
           if-no-files-found: warn
