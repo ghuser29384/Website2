@@ -1,0 +1,32 @@
+name: Audit integration source
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-integration-20260926.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+          persist-credentials: false
+          fetch-depth: 2
+          show-progress: false
+      - name: Export only the concurrent change
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          mkdir -p /tmp/audit-integration
+          git diff --binary HEAD^ HEAD > /tmp/audit-integration/main.patch
+          git diff --name-only HEAD^ HEAD > /tmp/audit-integration/paths.txt
+          git archive HEAD $(cat /tmp/audit-integration/paths.txt) | gzip > /tmp/audit-integration/changed-files.tar.gz
+          sha256sum /tmp/audit-integration/* > /tmp/audit-integration/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit-integration-caa25edc
+          path: /tmp/audit-integration
+          retention-days: 3
