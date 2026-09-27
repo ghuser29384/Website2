@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
-      CANDIDATE: e213bc1198b846e8ad930355aaccecc26bfece3b
-      BASE: caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+      CANDIDATE: 0929a6a4eec1295b81c45df22eae9b375f26f531
+      BASE: be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
       PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: e213bc1198b846e8ad930355aaccecc26bfece3b
+          ref: 0929a6a4eec1295b81c45df22eae9b375f26f531
           fetch-depth: 0
           persist-credentials: false
       - name: Verify immutable source and exact three-file scope
@@ -69,6 +69,11 @@ jobs:
         run: |
           set -euo pipefail
           npx playwright test tests/exact-live-route-recommendations.spec.ts --workers=1 --repeat-each=2 --retries=0 --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/planner-tests.log"
+      - name: Complete unchanged release browser suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/release-browser.log"
       - name: Capture actual application and interactive responsive evidence
         shell: bash
         run: |
@@ -83,24 +88,14 @@ jobs:
           const assert = require('node:assert/strict');
           const {chromium} = createRequire(process.cwd() + '/package.json')('@playwright/test');
           const out = process.env.RUNNER_TEMP + '/planner-evidence';
-          const profile = {
-            goal:'', causePriorities:['Future flourishing'], moneyBudgetCents:0,
-            timeBudgetMinutes:0, actionBudgetCount:3, horizon:'month', routeFormats:['direct'],
-            evidencePreference:'high', uncertaintyPreference:'balanced', interactionPreference:'open',
-            privacyPreference:'private', plannedDonationBaseline:false, plannedDonationCents:0,
-            otherwiseBaseline:'', calibrationCount:0, interviewCompleted:false
-          };
-          function envelope(planner) {
-            return {authenticated:planner.status !== 'signed_out', generatedAt:'2026-09-27T02:22:01.000Z', matchingOpportunityCount:0,
-              profile:{causes:[],weightedCauses:[],openToPayment:null,openToPledges:null,signalSources:[],learningEnabled:true},
-              recentChanges:[],recommendations:[],status:planner.status === 'signed_out'?'signed_out':'no_matches',routePlanner:planner};
-          }
+          const profile = {goal:'',causePriorities:['Future flourishing'],moneyBudgetCents:0,timeBudgetMinutes:0,actionBudgetCount:3,horizon:'month',routeFormats:['direct'],evidencePreference:'high',uncertaintyPreference:'balanced',interactionPreference:'open',privacyPreference:'private',plannedDonationBaseline:false,plannedDonationCents:0,otherwiseBaseline:'',calibrationCount:0,interviewCompleted:false};
+          const envelope = planner => ({authenticated:true,generatedAt:'2026-09-27T02:22:01.000Z',matchingOpportunityCount:0,profile:{causes:[],weightedCauses:[],openToPayment:null,openToPledges:null,signalSources:[],learningEnabled:true},recentChanges:[],recommendations:[],status:'no_matches',routePlanner:planner});
           (async()=>{
-            const browser = await chromium.launch();
-            const report={candidate:process.env.CANDIDATE,fixture:'Synthetic route API only; actual production-built application. No production records accessed.',viewports:[],errors:[]};
+            const browser=await chromium.launch();
+            const report={candidate:process.env.CANDIDATE,fixture:'Synthetic route API; actual production-built application. No production records accessed.',viewports:[],errors:[]};
             try {
               for(const width of [1440,1024,820,768,390,320]) {
-                const ctx = await browser.newContext({viewport:{width,height:width>800?1000:844}});
+                const ctx=await browser.newContext({viewport:{width,height:width>800?1000:844}});
                 await ctx.addCookies([{name:'mt_walkthrough_seen',value:'1',url:'http://127.0.0.1:3210'}]);
                 const page=await ctx.newPage();
                 const errors=[]; page.on('pageerror',e=>errors.push(e.message));
@@ -108,8 +103,7 @@ jobs:
                 const posts=[];
                 await page.route('**/api/live-now**',async r=>{
                   if(new URL(r.request().url()).pathname.endsWith('/route-profile')) {
-                    const payload=r.request().postDataJSON(); posts.push(payload);
-                    assert.equal(payload.action,'save_profile');
+                    const payload=r.request().postDataJSON(); posts.push(payload); assert.equal(payload.action,'save_profile');
                     planner={...planner,status:'no_live',profile:payload.profile,needsMoreInput:[]};
                     return r.fulfill({contentType:'application/json',body:JSON.stringify({authenticated:true,saved:true})});
                   }
@@ -120,53 +114,52 @@ jobs:
                 const grid=page.locator('[data-mt-live-route-planner="true"]'); await grid.waitFor();
                 await page.waitForFunction(()=>Array.from(document.styleSheets).some(s=>s.href?.includes('route-planner-compact')));
                 await page.evaluate(()=>document.fonts.ready);
-                const options=page.locator('[data-mt-lrp-disclosure="options"]');
-                assert.equal(await options.evaluate(el=>el.open),false);
-                const geometry=await grid.evaluate(el=>({width:el.getBoundingClientRect().width,columns:getComputedStyle(el).gridTemplateColumns,
-                  overflow:document.documentElement.scrollWidth-innerWidth,
-                  fields:[...el.querySelectorAll('.mt-lrp-composer input,.mt-lrp-composer textarea')].filter(e=>e.checkVisibility()).map(e=>e.name),
-                  action:{rendered:el.querySelector('[name="actionBudgetCount"]').checkVisibility(),closedParent:!!el.querySelector('[name="actionBudgetCount"]').closest('details:not([open])')},
-                  heading:getComputedStyle(el.querySelector('.mt-lrp-composer h2')).fontSize,
-                  background:getComputedStyle(el).backgroundColor}));
-                const entry={width,title:await page.title(),url:page.url(),geometry,savePayloadChecked:false,errors};
-                report.viewports.push(entry);
-                writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));
-                if(width===1440||width===390||width===320){
+                if([1440,390,320].includes(width)) {
                   await page.screenshot({path:`${out}/planner-${width}.png`,fullPage:true});
                   await grid.screenshot({path:`${out}/planner-component-${width}.png`});
                 }
-                assert.ok(geometry.overflow<=1,JSON.stringify({width,geometry}));
-                assert.ok(geometry.fields.includes('goal') && geometry.fields.includes('otherwiseBaseline'));
-                assert.ok(!geometry.fields.includes('actionBudgetCount'),JSON.stringify(geometry));
+                const options=page.locator('[data-mt-lrp-disclosure="options"]');
+                assert.equal(await options.evaluate(el=>el.open),false);
+                const geometry=await grid.evaluate(el=>{
+                  const visible=e=>{
+                    for(let p=e;p;p=p.parentElement){
+                      if(p.hidden) return false;
+                      const s=getComputedStyle(p);
+                      if(s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse') return false;
+                      if(p.tagName==='DETAILS'&&!p.open){
+                        const summary=Array.from(p.children).find(c=>c.tagName==='SUMMARY');
+                        if(!summary||!summary.contains(e)) return false;
+                      }
+                    }
+                    return e.getBoundingClientRect().height>0;
+                  };
+                  return {width:el.getBoundingClientRect().width,columns:getComputedStyle(el).gridTemplateColumns,overflow:document.documentElement.scrollWidth-innerWidth,
+                    fields:Array.from(el.querySelectorAll('.mt-lrp-composer input,.mt-lrp-composer textarea')).filter(visible).map(e=>e.name),
+                    heading:getComputedStyle(el.querySelector('.mt-lrp-composer h2')).fontSize,background:getComputedStyle(el).backgroundColor};
+                });
+                const entry={width,title:await page.title(),url:page.url(),geometry,savePayloadChecked:false,errors};
+                report.viewports.push(entry); writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));
+                assert.ok(geometry.overflow<=1,JSON.stringify(entry));
+                assert.ok(geometry.fields.includes('goal')&&geometry.fields.includes('otherwiseBaseline'));
+                assert.ok(!geometry.fields.includes('actionBudgetCount'),JSON.stringify(entry));
                 await options.locator('summary').click();
                 assert.equal(await options.evaluate(el=>el.open),true);
-                assert.equal(await page.getByLabel('Maximum actions').evaluate(el=>el.checkVisibility()),true);
                 await page.getByLabel('Maximum actions').fill('2');
                 await page.getByLabel('What would you like to change?',{exact:true}).fill('Support future flourishing');
                 await page.getByLabel('What would you do without a trade?',{exact:true}).fill('I would not start a new project this month.');
                 await options.locator('summary').click();
                 await page.getByRole('button',{name:'Find routes',exact:true}).click();
                 await page.getByRole('heading',{name:'No matching routes yet',exact:true}).waitFor();
-                assert.equal(posts.length,1); assert.equal(posts[0].profile.actionBudgetCount,2);
-                assert.deepEqual(posts[0].profile.routeFormats,['direct']);
+                assert.equal(posts.length,1); assert.equal(posts[0].profile.actionBudgetCount,2); assert.deepEqual(posts[0].profile.routeFormats,['direct']);
                 await page.getByText('About these results',{exact:true}).click();
                 assert.ok((await page.locator('.mt-lrp-source-note').innerText()).includes('0 open source candidates'));
-                entry.savePayloadChecked=true;
-                report.errors.push(...errors); await ctx.close();
+                entry.savePayloadChecked=true; report.errors.push(...errors); await ctx.close();
               }
               assert.deepEqual(report.errors,[]);
-            } finally {
-              writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));
-              await browser.close();
-            }
+            } finally {writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));await browser.close();}
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
           node "$RUNNER_TEMP/planner-browser-check.cjs"
-      - name: Complete unchanged release browser suite
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/release-browser.log"
       - name: Record end-of-run source identity
         shell: bash
         run: |
