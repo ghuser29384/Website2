@@ -42,7 +42,7 @@ jobs:
           git merge --no-ff --no-commit "$BASE" > /tmp/profile-unification-qa/merge.log 2>&1 || true
           cat /tmp/profile-unification-qa/merge.log
           python <<'PY'
-          import os, re, subprocess
+          import difflib, os, re, subprocess
           from pathlib import Path
           def git(*args):
               return subprocess.check_output(['git', *args], text=True)
@@ -55,10 +55,15 @@ jobs:
           print('Reviewed naming/routing test conflicts:', conflicts)
           ancestor = git('merge-base', base, candidate).strip()
           def rename_labels(text):
-              return text.replace('"100 Sparks"', '"Priorities"').replace('"Adjust your 100 sparks."', '"Priorities"').replace('100 Sparks is discoverable', 'Priorities is discoverable')
+              return (text.replace('"100 Sparks"', '"Priorities"')
+                  .replace('"Adjust your 100 sparks."', '"Priorities"')
+                  .replace('100 Sparks is discoverable', 'Priorities is discoverable')
+                  .replace('outputPath(`100-sparks-${route.slice(1)}', 'outputPath(`priorities-${route.slice(1)}'))
           for path in ['tests/profile-priorities-access.spec.ts', 'tests/dashboard-sparks.spec.ts']:
               old, current = git('show', f'{ancestor}:{path}'), git('show', f'{base}:{path}')
-              assert rename_labels(old) == current, f'Unexpected non-label changes in {path}'
+              if rename_labels(old) != current:
+                  print(''.join(difflib.unified_diff(rename_labels(old).splitlines(True), current.splitlines(True))))
+                  raise SystemExit(f'Unexpected non-label changes in {path}')
               # Preserve the complete prior alias/save/account-isolation suite,
               # adapting only labels that current main intentionally renamed.
               Path(path).write_text(rename_labels(git('show', f'{candidate}:{path}')))
@@ -114,7 +119,9 @@ jobs:
       - name: Install repository browser
         run: npx playwright install --with-deps chromium
       - name: Complete unchanged release browser suite
-        run: npm run test:e2e:release -- --reporter=line > /tmp/profile-unification-qa/browser.log 2>&1
+        run: |
+          npm run test:e2e:release -- --reporter=line > /tmp/profile-unification-qa/browser.log 2>&1
+          if [ -d test-results ]; then cp -R test-results /tmp/profile-unification-qa/public-test-results; fi
       - name: Build with only loopback synthetic account configuration
         env:
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
