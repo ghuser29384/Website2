@@ -1,0 +1,37 @@
+name: Pin Profile release evidence
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/workflows/profile-dashboard-repin-release.yml]
+permissions:
+  contents: write
+jobs:
+  pin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Update only the completed-evidence guard, not release policy
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/profile-dashboard-20260926
+          test "$(git hash-object .github/workflows/profile-dashboard-release.yml)" = 47e210a7241a1441807ea904a6ff474a45b7d3d2
+          python <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/profile-dashboard-release.yml')
+          text=p.read_text()
+          for old,new in [('36281748234','36282233978'),('62d667b84f9dcde4f24442faf859594edcded69a','f11161ec500e49a779d4ba913abfa5c5bca67e26')]:
+              assert text.count(old)==1
+              text=text.replace(old,new)
+          p.write_text(text)
+          PY
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/profile-dashboard-release.yml
+          test "$(git diff --cached --name-only)" = .github/workflows/profile-dashboard-release.yml
+          git commit -m 'Pin the production-config Profile integration QA result'
+          git push origin HEAD:refs/heads/ops/profile-dashboard-20260926
