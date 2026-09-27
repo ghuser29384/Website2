@@ -1,0 +1,110 @@
+name: Audit fixes current-main verification
+on:
+  push:
+    branches: [ops/audit-source-20260926]
+    paths: [.github/workflows/audit-resume-20260927.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 49f36f1cb0ac4c60cb22e3a6134797215870e678
+          persist-credentials: false
+          fetch-depth: 0
+          show-progress: false
+      - name: Integrate exact main and export reviewable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = 49f36f1cb0ac4c60cb22e3a6134797215870e678
+          test "$(git merge-base HEAD 2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49)" = caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+          mkdir -p /tmp/source /tmp/evidence
+          git archive --format=tar.gz HEAD > /tmp/source/candidate-before.tar.gz
+          git diff --binary caa25edccad0a444d4d18b45046a9e3fdfc1abf8 2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49 > /tmp/source/main-delta.patch
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git merge --no-commit --no-ff 2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --cached --check
+          git commit -m 'Integrate released Priorities and planner changes into audit fixes'
+          git archive --format=tar.gz HEAD > /tmp/source/integrated.tar.gz
+          git diff --binary 2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49 HEAD > /tmp/source/final-review.patch
+          git diff --stat 2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49 HEAD > /tmp/evidence/scope.txt
+          git rev-parse HEAD > /tmp/evidence/tested-commit.txt
+          git rev-parse 'HEAD^{tree}' | tee /tmp/evidence/tested-tree.txt /tmp/source/tested-tree.txt
+          sha256sum /tmp/source/* > /tmp/source/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-resume-source-${{ github.run_id }}
+          path: /tmp/source
+          retention-days: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Locked dependencies, unit contracts and lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm test 2>&1 | tee /tmp/evidence/unit-tests.log
+          node --import tsx --test src/commitments-portfolio-wiring.test.ts src/commitments-redesign-contract.test.ts src/live-account-data.test.ts src/live-now-data.test.ts src/live-operational-retirement.test.ts src/offers-walkthrough-density.test.ts src/sitewide-account-identity.test.ts src/lib/local-date-time.test.ts 2>&1 | tee /tmp/evidence/source-tests.log
+          npm run lint 2>&1 | tee /tmp/evidence/lint.log
+      - name: Production build and TypeScript
+        id: build
+        env:
+          VERCEL: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee /tmp/evidence/build.log
+          npx tsc --noEmit --pretty false 2>&1 | tee /tmp/evidence/typescript.log
+          npx playwright install --with-deps chromium
+      - name: Authenticated locale and data-state tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.audit.config.ts --reporter=line 2>&1 | tee /tmp/evidence/audit-browser.log
+      - name: Preserve account evidence
+        if: always()
+        run: |
+          if test -d test-results; then cp -r test-results /tmp/evidence/audit-test-results; fi
+      - name: Existing Commitments regressions
+        if: always() && steps.build.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.commitments.config.ts --reporter=line 2>&1 | tee /tmp/evidence/commitments-browser.log
+      - name: Preserve Commitments evidence
+        if: always()
+        run: |
+          if test -d test-results; then cp -r test-results /tmp/evidence/commitments-test-results; fi
+      - name: Complete release browser suite
+        if: always() && steps.build.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee /tmp/evidence/release-browser.log
+      - name: Preserve release evidence
+        if: always()
+        run: |
+          if test -d test-results; then cp -r test-results /tmp/evidence/release-test-results; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-resume-checks-${{ github.run_id }}
+          path: /tmp/evidence
+          retention-days: 14
