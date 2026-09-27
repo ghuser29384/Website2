@@ -163,10 +163,10 @@ test("concurrent viewers do not share results or an application-level cache", as
 
 function portfolio(h: ReturnType<typeof harness>) {
   return compile("src/lib/commitments-portfolio.ts", {
-    "@/lib/app-data": { listAgreementsForUser: async () => [] },
+    "@/lib/app-data": { DASHBOARD_PAGE_SIZE: 50, listAgreementsForUser: async () => [] },
     "@/lib/commitments-offer-data": h.subject,
     "@/lib/mpgf/data": { demoMpgfPublicGoodsCampaigns: [] },
-    "@/lib/mpgf/persistence": { loadMpgfParticipantState: async () => ({ publicGoodsPledges: [], warnings: [] }) },
+    "@/lib/mpgf/persistence": { loadMpgfParticipantState: async () => ({ status: "authenticated", publicGoodsPledges: [], warnings: [] }) },
     "@/lib/mpgf/public-goods-contribution-ledger": { buildMpgfContributionProofLedger: () => ({ rows: [] }) },
     "@/lib/supabase/server": h.server,
   }) as { loadCommitmentsPortfolioData: (input: { userId: string; displayName: string; now: Date }) => Promise<CommitmentsPortfolioData> };
@@ -186,12 +186,17 @@ test("portfolio preserves offset precedence, text-money fallback and non-binding
   assert.equal(data.openOffers.length, 2);
   assert.equal(data.openOffers[1].mechanism, "Redirect");
   assert.equal(data.openOffers[0].inCart, true);
-  assert.deepEqual(data.warnings, []);
+  assert.equal(data.availability.recordsComplete, true);
+  assert.equal(data.availability.savedOffersComplete, false, "missing saved offer must not become zero");
+  assert.equal(data.warnings.length, 1);
 });
 
 test("portfolio retains a source warning if offset projection data fails", async () => {
   const h = harness((q) => q.table === "offer_carts" ? ok([cart("a")])
     : q.table === "donation_offset_offers" ? failed("offset unavailable") : ok());
   const data = await portfolio(h).loadCommitmentsPortfolioData({ userId: "viewer", displayName: "Member", now: new Date("2026-09-25T00:00:00Z") });
-  assert.ok(data.warnings.includes("Cart: offset unavailable"));
+  assert.ok(data.warnings.includes("Saved offers could not be loaded. Retry to refresh these records."));
+  assert.equal(data.availability.savedOffersComplete, false);
+  assert.equal(data.availability.recordsComplete, true);
+  assert.equal(data.warnings.some((warning) => warning.includes("offset unavailable")), false, "raw backend details are not UI copy");
 });

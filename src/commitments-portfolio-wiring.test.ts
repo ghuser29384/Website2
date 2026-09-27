@@ -8,7 +8,7 @@ const share = readFileSync("src/components/commitments/impact-share-button.tsx",
 
 test("Commitments renders a live, cross-mechanism portfolio instead of the visual fixture", () => {
   for (const required of [
-    "Additional resources you caused.",
+    "Track your agreements, deadlines, and evidence.",
     "Portfolio",
     "Ledger",
     "Completed",

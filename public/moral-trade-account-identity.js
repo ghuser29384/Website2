@@ -17,7 +17,8 @@
   let identity = normalizeIdentity(
     hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { authenticated: false },
   );
-  let identityResolved = hasBootstrap;
+  let identityResolved = hasBootstrap &&
+    typeof window.__MT_LIVE_ACCOUNT_BOOTSTRAP__?.authenticated === "boolean";
   let scheduled = false;
 
   function stringOrNull(value) {
@@ -181,6 +182,11 @@
     if (document.visibilityState === "visible") schedulePatch();
   });
 
+  window.addEventListener("mt:live-account-ready", (event) => {
+    identity = normalizeIdentity(event.detail);
+    identityResolved = typeof event.detail?.authenticated === "boolean";
+    schedulePatch();
+  });
   schedulePatch();
 
   if (!hasBootstrap) {

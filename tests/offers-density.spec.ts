@@ -767,8 +767,8 @@ test.describe("Offers compact hybrid", () => {
 
       await firstDisclosure.locator(":scope > summary").click();
       await expect(firstDisclosure).toHaveJSProperty("open", true);
-      await expect(firstDisclosure.getByText("Get", { exact: true })).toBeVisible();
-      await expect(firstDisclosure.getByText("Do", { exact: true })).toBeVisible();
+      await expect(firstDisclosure.getByText("Offer maker commits", { exact: true })).toBeVisible();
+      await expect(firstDisclosure.getByText("Responding participant commits", { exact: true })).toBeVisible();
       await capture(publicPage, `expanded-${viewport.width}x${viewport.height}.png`);
       await firstDisclosure.locator(":scope > summary").click();
 
@@ -832,7 +832,7 @@ test.describe("Offers compact hybrid", () => {
     await expect(publicPage).toHaveURL(/sort=lowest_cost/);
     expect(new URL(publicPage.url()).searchParams.get("mode")).toBe("pledge");
     await expect(filterDisclosure).toContainText(
-      "Pledge or reciprocal action · Lowest stated cost",
+      "Pledge or reciprocal action · Lowest recorded contribution",
     );
 
     const clearAll = publicPage.getByRole("link", { name: "Clear all" });

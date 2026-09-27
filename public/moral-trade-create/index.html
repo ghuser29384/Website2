@@ -5308,7 +5308,7 @@
       return state.poolTimingPiecewiseBands.map((band) => {
         const end = Number(band.end || 0);
         const multiplier = Number(band.multiplier || 0);
-        const label = `${start.toLocaleString()}%–${end.toLocaleString()}% of funding period: ${multiplier.toLocaleString()}% multiplier`;
+        const label = `${start.toLocaleString("en-US")}%–${end.toLocaleString("en-US")}% of funding period: ${multiplier.toLocaleString("en-US")}% multiplier`;
         start = end;
         return label;
       }).join("; ");
@@ -5321,10 +5321,10 @@
         if (state.poolTimingCutoffMethod === "date") {
           return `100% multiplier for contributions accepted on or before ${state.poolTimingCutoffDate}; 0% afterward.`;
         }
-        return `100% multiplier during the first ${Number(state.poolTimingCutoffPercent || 0).toLocaleString()}% of the funding period; 0% afterward.`;
+        return `100% multiplier during the first ${Number(state.poolTimingCutoffPercent || 0).toLocaleString("en-US")}% of the funding period; 0% afterward.`;
       }
       if (state.poolFailureTimingMode === "firstPercent") {
-        return `100% multiplier for the first ${Number(state.poolTimingContributorPercent || 0).toLocaleString()}% of eventual unique eligible contributors, using ceil(N × percentage); 0% for later ranks.`;
+        return `100% multiplier for the first ${Number(state.poolTimingContributorPercent || 0).toLocaleString("en-US")}% of eventual unique eligible contributors, using ceil(N × percentage); 0% for later ranks.`;
       }
       if (state.poolFailureTimingMode === "preset") {
         const preset = timingPresetMeta[state.poolTimingPreset] || timingPresetMeta.linear;
@@ -5571,7 +5571,7 @@
         return `${formatUSD(Number(state.poolFailureBonusAmount || 0))} per contributor receiving a refund`;
       }
       if (state.poolFailureBonusType === "percentage") {
-        return `${Number(state.poolFailureBonusPercent || 0).toLocaleString()}% of each contributor’s refunded contribution`;
+        return `${Number(state.poolFailureBonusPercent || 0).toLocaleString("en-US")}% of each contributor’s refunded contribution`;
       }
       return `Percentage function: ${state.poolFailureBonusFunction.trim()}`;
     }
@@ -5732,7 +5732,7 @@
 
       const review = getMoralTradeReviewState();
       const firstThresholdLabel = Number.isFinite(review.firstThreshold) ? formatUSD(review.firstThreshold) : "$—";
-      calculation.textContent = `${review.share.toLocaleString()}% × ${firstThresholdLabel} = ${formatUSD(review.requestedExposure)}`;
+      calculation.textContent = `${review.share.toLocaleString("en-US")}% × ${firstThresholdLabel} = ${formatUSD(review.requestedExposure)}`;
       notice.classList.remove("warning", "neutral");
 
       if (!review.bonusExists) {
@@ -5746,9 +5746,9 @@
         notice.textContent = "Enter the first threshold to determine whether Moral Trade team review is required.";
       } else if (review.required) {
         notice.classList.add("warning");
-        notice.textContent = `Moral Trade team review is required because ${review.share.toLocaleString()}% × ${formatUSD(review.firstThreshold)} = ${formatUSD(review.requestedExposure)}, which is at least $100. Possible decisions: Yes, Revise requested %, or No.`;
+        notice.textContent = `Moral Trade team review is required because ${review.share.toLocaleString("en-US")}% × ${formatUSD(review.firstThreshold)} = ${formatUSD(review.requestedExposure)}, which is at least $100. Possible decisions: Yes, Revise requested %, or No.`;
       } else {
-        notice.textContent = `No team review is triggered by this rule: ${review.share.toLocaleString()}% × ${formatUSD(review.firstThreshold)} = ${formatUSD(review.requestedExposure)}, below $100.`;
+        notice.textContent = `No team review is triggered by this rule: ${review.share.toLocaleString("en-US")}% × ${formatUSD(review.firstThreshold)} = ${formatUSD(review.requestedExposure)}, below $100.`;
       }
     }
 
@@ -6999,7 +6999,7 @@
             ["Threshold visibility", getPoolThresholdVisibilitySummary()],
             ["Funding progress display", getPoolProgressVisibilitySummary()],
             ["Contributor reporting", "Every contributor sees their pledge tranche and refund terms; threshold status and a final settlement report remain visible."],
-            ["Moral Trade funding request", `${reviewState.share.toLocaleString()}% of the failure bonus; review calculation ${reviewState.share.toLocaleString()}% × ${formatUSD(reviewState.firstThreshold)} = ${formatUSD(reviewState.requestedExposure)}.`],
+            ["Moral Trade funding request", `${reviewState.share.toLocaleString("en-US")}% of the failure bonus; review calculation ${reviewState.share.toLocaleString("en-US")}% × ${formatUSD(reviewState.firstThreshold)} = ${formatUSD(reviewState.requestedExposure)}.`],
             ["Team review", poolReview.required
               ? `Required because recipient, underwriting, reserve, and operator approval are required${poolReview.reasons.length ? `, and ${poolReview.reasons.join(" and ")}` : ""}. Funding-request decisions: Yes, Revise requested %, or No. Custom-formula decisions: Approved, Revision required, or Rejected.`
               : "Not required under the $100 exposure rule and no custom formula is used."],
@@ -7252,7 +7252,7 @@
           `<li>After final threshold: ${escapeHTML(getPoolContinuationSummary())}</li>`,
           `<li>Threshold visibility: ${escapeHTML(getPoolThresholdVisibilitySummary())}</li>`,
           `<li>Funding progress display: ${escapeHTML(getPoolProgressVisibilitySummary())}</li>`,
-          `<li>Moral Trade funding request: ${escapeHTML(`${reviewState.share.toLocaleString()}% (${formatUSD(reviewState.requestedExposure)} review calculation)`)}</li>`,
+          `<li>Moral Trade funding request: ${escapeHTML(`${reviewState.share.toLocaleString("en-US")}% (${formatUSD(reviewState.requestedExposure)} review calculation)`)}</li>`,
           `<li>Additional activation rule: ${escapeHTML(state.poolActivation || "None")}</li>`
         ].join("");
       } else {

@@ -497,6 +497,10 @@
     if (document.visibilityState === "visible") schedulePatch();
   });
 
+  window.addEventListener("mt:live-account-ready", (event) => {
+    account = normalizePayload(event.detail);
+    schedulePatch();
+  });
   schedulePatch();
 
   if (!hasBootstrap) {

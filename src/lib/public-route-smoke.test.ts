@@ -400,7 +400,7 @@ test("live offers stay separated from examples while the wish registry uses broa
   assert.match(participantOfferGroup, /aria-describedby=\{`\$\{offerDescriptionId\} \$\{truthNoteId\}`\}/);
   assert.match(participantOfferGroup, /data-proposal-disclosure/);
   assert.match(participantOfferGroup, /\{isOwner \? "Manage" : "Respond"\}/);
-  assert.match(participantOfferGroup, /<dt>Get<\/dt>[\s\S]*<dt>Do<\/dt>/);
+  assert.match(participantOfferGroup, /<dt>Offer maker commits<\/dt>[\s\S]*<dd>\{offer\.offer_action\}<\/dd>[\s\S]*<dt>Responding participant commits<\/dt>[\s\S]*<dd>\{offer\.request_action\}<\/dd>/);
   assert.match(participantOfferGroup, /Counteroffer[\s\S]*Ask[\s\S]*Remove saved[\s\S]*Open full terms/);
 
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
