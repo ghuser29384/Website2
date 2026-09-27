@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
-      CANDIDATE: b6500253ec8bdea3213e61b417700e927078e306
+      CANDIDATE: e213bc1198b846e8ad930355aaccecc26bfece3b
       BASE: caa25edccad0a444d4d18b45046a9e3fdfc1abf8
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: b6500253ec8bdea3213e61b417700e927078e306
+          ref: e213bc1198b846e8ad930355aaccecc26bfece3b
           fetch-depth: 0
           persist-credentials: false
       - name: Verify immutable source and exact three-file scope
@@ -43,7 +43,7 @@ jobs:
           cmp "$RUNNER_TEMP/planner-evidence/actual-paths.txt" "$RUNNER_TEMP/planner-evidence/expected-paths.txt"
           test "$(git rev-parse HEAD:public/moral-trade-live-route-recommendations.js)" = '633e5b90dee845efe3b21ae6d69f81e5ab50a65b'
           test "$(git rev-parse HEAD:public/moral-trade-live-route-planner-compact.css)" = 'c5bd36d4b8d8ca5d96f0071241bd7b48fd0d832d'
-          test "$(git rev-parse HEAD:tests/exact-live-route-recommendations.spec.ts)" = 'f2e814ea22c4a618032ac834650110a205d4f2e5'
+          test "$(git rev-parse HEAD:tests/exact-live-route-recommendations.spec.ts)" = '58354ed820654996d4bf660f48a1b5b35267320f'
           git diff "$BASE" HEAD > "$RUNNER_TEMP/planner-evidence/reviewed-scope.diff"
           git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/planner-evidence/source-identity.txt"
           sha256sum public/moral-trade-live-route-recommendations.js public/moral-trade-live-route-planner-compact.css > "$RUNNER_TEMP/planner-evidence/runtime.sha256"
