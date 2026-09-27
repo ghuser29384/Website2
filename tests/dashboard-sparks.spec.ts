@@ -41,7 +41,7 @@ async function signIn(context: BrowserContext, id = a) {
   ]);
 }
 
-test.describe("Dashboard 100 Sparks with a loopback-only account fixture", () => {
+test.describe("Dashboard Priorities with a loopback-only account fixture", () => {
   test.describe.configure({ mode: "serial" });
   test.skip(process.env.DASHBOARD_SPARKS_FIXTURE !== "1", "Requires the isolated loopback Auth/PostgREST fixture, never production credentials.");
   test.beforeAll(async () => {
@@ -101,10 +101,10 @@ test.describe("Dashboard 100 Sparks with a loopback-only account fixture", () =>
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
       await page.goto(`${origin}${entry}`);
       await expect(page).toHaveURL(`${origin}/dashboard`);
-      await expect(page.getByRole("heading", { name: "Adjust your 100 sparks." })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
       await expect(page).toHaveTitle(/Dashboard/);
       const tools = page.getByRole("navigation", { name: "Dashboard controls" });
-      await expect(tools.getByRole("link", { name: "100 Sparks" })).toHaveAttribute("aria-current", "page");
+      await expect(tools.getByRole("link", { name: "Priorities", exact: true })).toHaveAttribute("aria-current", "page");
       await expect(page.locator('input[name="priority_allocation"]')).toHaveValue(serializeProfilePriorityAllocation(allocation(4)));
       await expect(page.locator("#dashboard-overview")).toHaveCount(0);
       await page.waitForTimeout(800);
@@ -125,7 +125,7 @@ test.describe("Dashboard 100 Sparks with a loopback-only account fixture", () =>
     await page.goto(`${origin}/profile?message=${encodeURIComponent(message)}`);
     await expect(page).toHaveURL((url) => url.pathname === "/dashboard" && url.searchParams.get("message") === message);
     await expect(page.getByRole("status").filter({ hasText: message })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Adjust your 100 sparks." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
     expect(requests.some((request) => request.path === "/rest/v1/cohort_onboarding_profiles" && request.method !== "GET")).toBe(false);
   });
 
@@ -134,9 +134,9 @@ test.describe("Dashboard 100 Sparks with a loopback-only account fixture", () =>
     await page.goto(`${origin}/profile?view=controls#payment-setup`);
     await expect(page).toHaveURL(`${origin}/dashboard?view=controls#payment-setup`);
     await expect(page.locator("#payment-setup")).toBeVisible();
-    await page.getByRole("navigation", { name: "Dashboard controls" }).getByRole("link", { name: "100 Sparks" }).click();
+    await page.getByRole("navigation", { name: "Dashboard controls" }).getByRole("link", { name: "Priorities", exact: true }).click();
     await expect(page).toHaveURL(`${origin}/dashboard`);
-    await expect(page.getByRole("heading", { name: "Adjust your 100 sparks." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
   });
 
   test("Currency opens without a write or losing unsaved sparks and Escape closes it", async ({ page, context }) => {
@@ -207,8 +207,8 @@ test.describe("Dashboard 100 Sparks with a loopback-only account fixture", () =>
     await tools.getByRole("link", { name: "Payment setup", exact: true }).click();
     await expect(page.locator("#payment-setup")).toBeVisible();
     await page.screenshot({ path: "/tmp/dashboard-sparks-evidence/dashboard-payment-controls.png" });
-    await tools.getByRole("link", { name: "100 Sparks" }).click();
-    await expect(page.getByRole("heading", { name: "Adjust your 100 sparks." })).toBeVisible();
+    await tools.getByRole("link", { name: "Priorities", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
     await page.goto(`${origin}/dashboard#payment-setup`);
     await expect(page).toHaveURL(/\/dashboard\?view=controls#payment-setup$/);
     await expect(page.locator("#payment-setup")).toBeVisible();

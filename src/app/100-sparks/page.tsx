@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getSafeInternalPath } from "@/lib/paths";
 
 export const metadata: Metadata = {
-  title: "100 Sparks — Your priorities",
+  title: "Priorities",
   robots: { index: false, follow: false },
 };
 
