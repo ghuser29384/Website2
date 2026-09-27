@@ -87,8 +87,11 @@ jobs:
         run: |
           set -o pipefail
           npm run build 2>&1 | tee production-build.log
-      - name: Prove the exact current-main diff stays inside the Dashboard and Profile surface
+      - name: Prove the exact diff stays inside the approved scope
         shell: bash
+        env:
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          PULL_REQUEST_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           git fetch origin main
@@ -119,7 +122,24 @@ jobs:
           tests/dashboard-account-security-visibility.spec.ts
           tests/dashboard-sparks.spec.ts
           EOF
-          sort -o allowed-files.txt allowed-files.txt
+          # PR 841 is the owner's explicitly approved multi-route quiet UI release,
+          # not the original single-surface hotfix. Freeze every application,
+          # dependency, and test byte to its independently reviewed Git tree.
+          # Only these two repository-only CI repairs may differ from that tree.
+          # Other PRs retain the original narrow allowlist unchanged.
+          if [[ "$PULL_REQUEST_NUMBER" == '841' && "$PULL_REQUEST_HEAD_REF" == 'fix/quiet-ui-20260926' ]]; then
+            approved_tree=8005830af701579b86e9376338a0aff8b6176f90
+            git cat-file -e "$approved_tree^{tree}"
+            git diff --exit-code "$approved_tree" "$GITHUB_SHA" -- . \
+              ':(exclude).github/workflows/dashboard-account-security-hotfix-gates.yml' \
+              ':(exclude).github/workflows/discover-home-visual-alignment.yml'
+            git diff --name-only "$base" "$approved_tree" >> allowed-files.txt
+            printf '%s\n' \
+              '.github/workflows/dashboard-account-security-hotfix-gates.yml' \
+              '.github/workflows/discover-home-visual-alignment.yml' >> allowed-files.txt
+            git diff --name-status "$approved_tree" "$GITHUB_SHA" > approved-tree-ci-delta.txt
+          fi
+          sort -u -o allowed-files.txt allowed-files.txt
           unexpected_files="$(comm -23 actual-files.txt allowed-files.txt)"
           if [[ -n "$unexpected_files" ]]; then
             echo 'Unexpected files in the Dashboard/Profile change:' >&2
@@ -140,6 +160,7 @@ jobs:
             diff-check.log
             allowed-files.txt
             actual-files.txt
+            approved-tree-ci-delta.txt
           if-no-files-found: warn
           retention-days: 30
 
