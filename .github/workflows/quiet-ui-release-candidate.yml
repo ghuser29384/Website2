@@ -25,25 +25,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 45a327757d515d73bceeae7a87dde3971b46de0a
+          ref: e906e3d3245ed949049f385134dce7f95e4db571
           fetch-depth: 0
           persist-credentials: false
       - name: Verify the published candidate matches the independently reviewed tree
         id: verify
         run: |
           set -euo pipefail
-          candidate=45a327757d515d73bceeae7a87dde3971b46de0a
+          candidate=e906e3d3245ed949049f385134dce7f95e4db571
           base=be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
           test "$(git rev-parse HEAD)" = "$candidate"
-          test "$(git rev-parse HEAD^{tree})" = aadc14305b82ff9f456fa22bba0517d751467c9a
-          test "$(git rev-parse HEAD^)" = 3f0c209646479d7ba7062d72135be9bd24db4e37
+          test "$(git rev-parse HEAD^{tree})" = b0564a4febd498fe6054963a6ea650abcad729a5
+          test "$(git rev-parse HEAD^)" = bae2d7d449f8f5d7bc0014c228b2e32080169fd4
           git merge-base --is-ancestor "$base" HEAD
           git merge-base --is-ancestor ea9f882fbd665f898ecd210bcddbfd6fc338d8f9 HEAD
-          git diff --exit-code 0f63ad0ffdb955d98167d474d347290cd42cfe73 HEAD -- . ':(exclude).github/workflows/dashboard-account-security-hotfix-gates.yml'
+          git diff --exit-code 8e8fe95412514f0dd9f8df331fcef4ebd547a280 HEAD -- . ':(exclude).github/workflows/dashboard-account-security-hotfix-gates.yml'
+          # The gated preview has identical runtime bytes. Only a stronger
+          # test-readiness assertion and its frozen CI tree differ.
+          git diff --exit-code 7b7b0d0b5ca78c9819c760c8001112f9efe868c1 HEAD -- . ':(exclude)tests/refined-header.spec.ts' ':(exclude).github/workflows/dashboard-account-security-hotfix-gates.yml'
           git diff --check "$base" HEAD
           mkdir -p evidence
           printf 'candidate=%s\nmain=%s\ntree=%s\n' "$candidate" "$base" "$(git rev-parse HEAD^{tree})" > evidence/revision.txt
           git diff "$base" HEAD > evidence/changes.patch
+          git diff 7b7b0d0b5ca78c9819c760c8001112f9efe868c1 HEAD > evidence/preview-repository-only-delta.patch
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -100,6 +104,10 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
+      - name: Require five independently passing protected-navigation cases with zero retries
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/navigation-results.json
+        run: npx playwright test tests/refined-header.spec.ts --grep 'Profile owns priorities' --repeat-each=5 --output=test-results/navigation --reporter=line,json
       - name: Focused desktop and mobile checks with unchanged retry and timeout settings
         id: focused
         env:
@@ -112,6 +120,7 @@ jobs:
           path: |
             evidence/
             test-results/focused/
+            test-results/navigation/
           retention-days: 7
           if-no-files-found: warn
       - name: Complete unchanged release browser suite
