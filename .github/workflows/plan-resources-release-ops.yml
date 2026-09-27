@@ -124,18 +124,23 @@ jobs:
                 assert.equal(await options.evaluate(el=>el.open),false);
                 const geometry=await grid.evaluate(el=>({width:el.getBoundingClientRect().width,columns:getComputedStyle(el).gridTemplateColumns,
                   overflow:document.documentElement.scrollWidth-innerWidth,
-                  fields:[...el.querySelectorAll('.mt-lrp-composer input,.mt-lrp-composer textarea')].filter(e=>e.getBoundingClientRect().height>0).map(e=>e.name),
+                  fields:[...el.querySelectorAll('.mt-lrp-composer input,.mt-lrp-composer textarea')].filter(e=>e.checkVisibility()).map(e=>e.name),
+                  action:{rendered:el.querySelector('[name="actionBudgetCount"]').checkVisibility(),closedParent:!!el.querySelector('[name="actionBudgetCount"]').closest('details:not([open])')},
                   heading:getComputedStyle(el.querySelector('.mt-lrp-composer h2')).fontSize,
                   background:getComputedStyle(el).backgroundColor}));
-                assert.ok(geometry.overflow<=1,JSON.stringify({width,geometry}));
-                assert.ok(geometry.fields.includes('goal') && geometry.fields.includes('otherwiseBaseline'));
-                assert.ok(!geometry.fields.includes('actionBudgetCount'));
+                const entry={width,title:await page.title(),url:page.url(),geometry,savePayloadChecked:false,errors};
+                report.viewports.push(entry);
+                writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));
                 if(width===1440||width===390||width===320){
                   await page.screenshot({path:`${out}/planner-${width}.png`,fullPage:true});
                   await grid.screenshot({path:`${out}/planner-component-${width}.png`});
                 }
+                assert.ok(geometry.overflow<=1,JSON.stringify({width,geometry}));
+                assert.ok(geometry.fields.includes('goal') && geometry.fields.includes('otherwiseBaseline'));
+                assert.ok(!geometry.fields.includes('actionBudgetCount'),JSON.stringify(geometry));
                 await options.locator('summary').click();
                 assert.equal(await options.evaluate(el=>el.open),true);
+                assert.equal(await page.getByLabel('Maximum actions').evaluate(el=>el.checkVisibility()),true);
                 await page.getByLabel('Maximum actions').fill('2');
                 await page.getByLabel('What would you like to change?',{exact:true}).fill('Support future flourishing');
                 await page.getByLabel('What would you do without a trade?',{exact:true}).fill('I would not start a new project this month.');
@@ -146,12 +151,14 @@ jobs:
                 assert.deepEqual(posts[0].profile.routeFormats,['direct']);
                 await page.getByText('About these results',{exact:true}).click();
                 assert.ok((await page.locator('.mt-lrp-source-note').innerText()).includes('0 open source candidates'));
-                report.viewports.push({width,title:await page.title(),url:page.url(),geometry,savePayloadChecked:true,errors});
+                entry.savePayloadChecked=true;
                 report.errors.push(...errors); await ctx.close();
               }
               assert.deepEqual(report.errors,[]);
+            } finally {
               writeFileSync(out+'/browser-evidence.json',JSON.stringify(report,null,2));
-            } finally {await browser.close();}
+              await browser.close();
+            }
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
           node "$RUNNER_TEMP/planner-browser-check.cjs"
