@@ -1,0 +1,45 @@
+name: Quiet UI compatible runtime patch review
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-runtime-patch-review.yml]
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  prepare:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 35b174d5d09c6a846a6964af02c4dc248d6e1eb4
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Prepare and audit compatible security fixes without modifying the repository
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/runtime-patch-review"
+          npm install --package-lock-only --ignore-scripts next@16.3.3 eslint-config-next@16.3.3
+          npm update --package-lock-only --ignore-scripts ws baseline-browser-mapping
+          git diff -- package.json package-lock.json > "$RUNNER_TEMP/runtime-patch-review/dependency.patch"
+          cp package.json package-lock.json "$RUNNER_TEMP/runtime-patch-review/"
+          npm ci
+          npm audit --omit=dev --json > "$RUNNER_TEMP/runtime-patch-review/audit-production.json"
+          npm ls next sharp ws baseline-browser-mapping --json > "$RUNNER_TEMP/runtime-patch-review/installed-tree.json"
+          tar -I 'zstd -T0 -3' -cf "$RUNNER_TEMP/runtime-patch-review/node_modules.tar.zst" node_modules
+          sha256sum "$RUNNER_TEMP/runtime-patch-review/"* > "$RUNNER_TEMP/runtime-patch-review/SHA256SUMS"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-reviewed-runtime-patch
+          path: ${{ runner.temp }}/runtime-patch-review/
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
