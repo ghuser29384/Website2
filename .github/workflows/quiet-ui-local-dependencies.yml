@@ -1,0 +1,51 @@
+name: Prepare isolated quiet UI dependencies
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-local-dependencies.yml]
+permissions:
+  contents: read
+concurrency:
+  group: quiet-ui-local-dependencies
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+jobs:
+  prepare:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 35b174d5d09c6a846a6964af02c4dc248d6e1eb4
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Resolve the minimum verified Next security patch
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dependency-review"
+          npm view next@16.3.3 version dist.integrity engines --json > "$RUNNER_TEMP/dependency-review/next-metadata.json"
+          npm install --package-lock-only --ignore-scripts next@16.3.3 eslint-config-next@16.3.3
+          git diff -- package.json package-lock.json > "$RUNNER_TEMP/dependency-review/dependency.patch"
+          cp package.json package-lock.json "$RUNNER_TEMP/dependency-review/"
+          npm ci
+          set +e
+          npm audit --omit=dev --json > "$RUNNER_TEMP/dependency-review/audit-production.json"
+          audit_status=$?
+          set -e
+          printf 'audit_exit=%s\n' "$audit_status" > "$RUNNER_TEMP/dependency-review/results.txt"
+          tar -I 'zstd -T0 -3' -cf "$RUNNER_TEMP/dependency-review/node_modules.tar.zst" node_modules
+          sha256sum "$RUNNER_TEMP/dependency-review/"* > "$RUNNER_TEMP/dependency-review/SHA256SUMS"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-isolated-dependencies
+          path: ${{ runner.temp }}/dependency-review/
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
