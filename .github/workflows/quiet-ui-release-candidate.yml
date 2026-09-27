@@ -19,66 +19,34 @@ jobs:
   prepare:
     if: github.actor == 'ghuser29384'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-      actions: read
+    timeout-minutes: 10
     outputs:
-      candidate: ${{ steps.assemble.outputs.candidate }}
+      candidate: ${{ steps.verify.outputs.candidate }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: 439eda02244ff6c7d3b2afbc171bb5110f028ea4
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          name: quiet-ui-reviewed-runtime-patch
-          run-id: 36282175282
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/runtime-patch
-      - name: Reproduce the reviewed tree and preserve current main on an isolated branch
-        id: assemble
+          persist-credentials: false
+      - name: Verify the published candidate matches the independently reviewed tree
+        id: verify
         run: |
           set -euo pipefail
-          expected=35b174d5d09c6a846a6964af02c4dc248d6e1eb4
-          main=caa25edccad0a444d4d18b45046a9e3fdfc1abf8
-          actual_head=$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)
-          actual_main=$(git ls-remote origin refs/heads/main | cut -f1)
-          printf 'Observed head=%s\nObserved main=%s\n' "$actual_head" "$actual_main"
-          test "$actual_head" = "$expected"
-          test "$actual_main" = "$main"
-          replay="$GITHUB_WORKSPACE/.github/quiet-ui-gate-repairs.py"
-          git worktree add --detach "$RUNNER_TEMP/candidate" "$expected"
-          cd "$RUNNER_TEMP/candidate"
-          python3 "$replay"
-          cp "$RUNNER_TEMP/runtime-patch/package.json" "$RUNNER_TEMP/runtime-patch/package-lock.json" .
-          echo 'cafdc4c078d53d0004fa9ea3803954c5c16c27b5e8d1b1fa7ab9e82bcf469a8c  package.json' | sha256sum -c -
-          echo 'f92caf6acfdfae9542fd7626cba8bda2ae6325c76da37da3d7afba7e48ac2da2  package-lock.json' | sha256sum -c -
-          git add -u
-          git diff --cached --check
-          test "$(git write-tree)" = 3dcb503726e543ea2c3d65e9f80d82d363d1f77c
-          # The separately approved Commitments redesign has now merged. Remove
-          # only our superseded module/font-test edits, then merge all of it intact.
-          git restore --source="$expected" --staged --worktree -- src/app/commitments/commitments.module.css tests/commitments-loading.auth.ts
-          git config user.name ghuser29384
-          git config user.email 262476329+ghuser29384@users.noreply.github.com
-          git commit -m 'Complete quiet UI integration gates and patch vulnerable runtime dependencies'
-          git merge --no-commit --no-ff "$main"
-          test -z "$(git diff --name-only --diff-filter=U)"
-          git diff --cached --check
-          test "$(git write-tree)" = 8005830af701579b86e9376338a0aff8b6176f90
-          git commit -m 'Preserve the approved Commitments redesign in quiet UI integration'
-          git push origin HEAD:refs/heads/ops/quiet-ui-release-candidate-20260927
-          candidate=$(git rev-parse HEAD)
+          candidate=439eda02244ff6c7d3b2afbc171bb5110f028ea4
+          test "$(git rev-parse HEAD)" = "$candidate"
+          test "$(git rev-parse HEAD^{tree})" = 8005830af701579b86e9376338a0aff8b6176f90
+          test "$(git rev-parse HEAD^1)" = 35b174d5d09c6a846a6964af02c4dc248d6e1eb4
+          test "$(git rev-parse HEAD^2)" = caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+          git diff --check HEAD^2 HEAD
+          mkdir -p evidence
+          printf 'candidate=%s\nmain=%s\ntree=%s\n' "$candidate" "$(git rev-parse HEAD^2)" "$(git rev-parse HEAD^{tree})" > evidence/revision.txt
+          git diff HEAD^2 HEAD > evidence/changes.patch
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
-          mkdir -p "$RUNNER_TEMP/candidate-evidence"
-          printf 'candidate=%s\nprior_head=%s\nmain=%s\ntree=%s\n' "$candidate" "$expected" "$main" "$(git write-tree)" > "$RUNNER_TEMP/candidate-evidence/revision.txt"
-          git diff "$expected" HEAD > "$RUNNER_TEMP/candidate-evidence/changes.patch"
-          cp "$RUNNER_TEMP/runtime-patch/audit-production.json" "$RUNNER_TEMP/candidate-evidence/"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: quiet-ui-release-revision
-          path: ${{ runner.temp }}/candidate-evidence/
+          path: evidence/
           retention-days: 7
           if-no-files-found: warn
   quality:
@@ -218,6 +186,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Commitments streaming, authentication and the approved current-main layout
         env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME_NAME: evidence/commitments-results.json
           PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/commitments-results.json
         run: npx playwright test --config=playwright.commitments.config.ts --reporter=line,json
       - uses: actions/upload-artifact@v4
