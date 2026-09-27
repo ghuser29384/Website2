@@ -1,0 +1,45 @@
+name: Request gated quiet UI preview
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-preview-dispatch.yml]
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: quiet-ui-preview-dispatch
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify immutable preview and invoke the existing gated workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json, os, urllib.request
+          base='https://api.github.com/repos/ghuser29384/Website2'
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
+          def get(path):
+              return json.load(urllib.request.urlopen(urllib.request.Request(base+path,headers=headers),timeout=30))
+          expected='7e96815370a65a67359e56248ce41f79e1f06dfc'
+          candidate='439eda02244ff6c7d3b2afbc171bb5110f028ea4'
+          assert get('/git/ref/heads/release/vercel-preview')['object']['sha']==expected
+          assert get('/git/ref/heads/fix/quiet-ui-20260926')['object']['sha']==candidate
+          commit=get('/git/commits/'+expected)
+          assert commit['tree']['sha']=='8005830af701579b86e9376338a0aff8b6176f90'
+          assert commit['parents'][0]['sha']==candidate
+          runs=get('/actions/workflows/vercel-release.yml/runs?per_page=100')['workflow_runs']
+          assert not any(r['head_sha']==expected and r['event']=='workflow_dispatch' for r in runs), 'This preview was already requested; inspect its existing run.'
+          assert not any(r['head_branch']=='release/vercel-preview' and r['status']!='completed' for r in runs), 'A different preview release is still active.'
+          payload={'ref':'release/vercel-preview','inputs':{'target':'preview','ref':'release/vercel-preview','expected_sha':expected}}
+          request=urllib.request.Request(base+'/actions/workflows/vercel-release.yml/dispatches',data=json.dumps(payload).encode(),headers={**headers,'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(request,timeout=30) as response:
+              assert response.status==204
+          print('Requested standard gated preview for',expected,'with exact candidate tree',commit['tree']['sha'])
+          PY
