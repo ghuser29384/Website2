@@ -4,21 +4,18 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths: ['.github/workflows/plan-resources-release-ops.yml']
-
 permissions:
   contents: read
-
 concurrency:
   group: planner-release-operations-20260927
   cancel-in-progress: false
-
 jobs:
   verify:
     if: github.repository == 'ghuser29384/Website2' && github.head_ref == 'ops/verify-plan-resources-20260927' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
-      CANDIDATE: 0929a6a4eec1295b81c45df22eae9b375f26f531
+      CANDIDATE: cf12e53bd1d4265ebe2057b109ca40f3f1bc78da
       BASE: be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -27,11 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 0929a6a4eec1295b81c45df22eae9b375f26f531
+          ref: cf12e53bd1d4265ebe2057b109ca40f3f1bc78da
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify immutable source and exact three-file scope
-        shell: bash
+      - name: Verify immutable source and exact four-file scope
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/planner-evidence"
@@ -39,11 +35,12 @@ jobs:
           git merge-base --is-ancestor "$BASE" HEAD
           git diff --check "$BASE" HEAD
           git diff --name-only "$BASE" HEAD | sort > "$RUNNER_TEMP/planner-evidence/actual-paths.txt"
-          printf '%s\n' public/moral-trade-live-route-planner-compact.css public/moral-trade-live-route-recommendations.js tests/exact-live-route-recommendations.spec.ts | sort > "$RUNNER_TEMP/planner-evidence/expected-paths.txt"
+          printf '%s\n' public/moral-trade-live-route-planner-compact.css public/moral-trade-live-route-recommendations.js tests/exact-live-route-recommendations.spec.ts tests/exact-live-custom-route.spec.ts | sort > "$RUNNER_TEMP/planner-evidence/expected-paths.txt"
           cmp "$RUNNER_TEMP/planner-evidence/actual-paths.txt" "$RUNNER_TEMP/planner-evidence/expected-paths.txt"
           test "$(git rev-parse HEAD:public/moral-trade-live-route-recommendations.js)" = '633e5b90dee845efe3b21ae6d69f81e5ab50a65b'
           test "$(git rev-parse HEAD:public/moral-trade-live-route-planner-compact.css)" = 'c5bd36d4b8d8ca5d96f0071241bd7b48fd0d832d'
           test "$(git rev-parse HEAD:tests/exact-live-route-recommendations.spec.ts)" = '58354ed820654996d4bf660f48a1b5b35267320f'
+          test "$(git rev-parse HEAD:tests/exact-live-custom-route.spec.ts)" = '4461be267720e8d18a8f63f6dc5a1f03137b99e6'
           git diff "$BASE" HEAD > "$RUNNER_TEMP/planner-evidence/reviewed-scope.diff"
           git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/planner-evidence/source-identity.txt"
           sha256sum public/moral-trade-live-route-recommendations.js public/moral-trade-live-route-planner-compact.css > "$RUNNER_TEMP/planner-evidence/runtime.sha256"
@@ -55,7 +52,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Complete unit, lint, type and build gates
-        shell: bash
+        id: build
         run: |
           set -euo pipefail
           npm test 2>&1 | tee "$RUNNER_TEMP/planner-evidence/unit.log"
@@ -64,18 +61,14 @@ jobs:
           npm run build 2>&1 | tee "$RUNNER_TEMP/planner-evidence/build.log"
       - name: Install browser
         run: npx playwright install --with-deps chromium
-      - name: Planner production-renderer regression suite twice
-        shell: bash
+      - name: Both planner production-renderer regression suites twice
+        id: planner
         run: |
           set -euo pipefail
-          npx playwright test tests/exact-live-route-recommendations.spec.ts --workers=1 --repeat-each=2 --retries=0 --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/planner-tests.log"
-      - name: Complete unchanged release browser suite
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/release-browser.log"
+          npx playwright test tests/exact-live-route-recommendations.spec.ts tests/exact-live-custom-route.spec.ts --workers=1 --repeat-each=2 --retries=0 --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/planner-tests.log"
       - name: Capture actual application and interactive responsive evidence
-        shell: bash
+        id: visual
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           set -euo pipefail
           npm run start -- -H 127.0.0.1 -p 3210 > "$RUNNER_TEMP/planner-evidence/server.log" 2>&1 &
@@ -160,16 +153,32 @@ jobs:
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
           node "$RUNNER_TEMP/planner-browser-check.cjs"
-      - name: Record end-of-run source identity
-        shell: bash
+      - name: Retain visual evidence before full release suite
+        if: ${{ !cancelled() && steps.visual.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-visual-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/planner-evidence/*.png
+            ${{ runner.temp }}/planner-evidence/browser-evidence.json
+          retention-days: 14
+      - name: Complete unchanged release browser suite
+        id: release
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 | tee "$RUNNER_TEMP/planner-evidence/release-browser.log"
+      - name: Record successful exact-source verification
+        run: |
+          set -euo pipefail
+          test '${{ steps.planner.outcome }}' = success
+          test '${{ steps.visual.outcome }}' = success
+          test '${{ steps.release.outcome }}' = success
           test "$(git rev-parse HEAD)" = "$CANDIDATE"
           git diff --exit-code
           printf 'candidate=%s\nbase=%s\nrun=%s\n' "$CANDIDATE" "$BASE" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/planner-evidence/passed.txt"
       - name: Stage failure traces outside repository
         if: always()
-        shell: bash
         run: |
           if [ -d test-results ]; then cp -R test-results "$RUNNER_TEMP/planner-evidence/test-results"; fi
       - uses: actions/upload-artifact@v4
