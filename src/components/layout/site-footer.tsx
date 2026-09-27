@@ -7,6 +7,8 @@ export function SiteFooter() {
   return (
     <footer className="footer mt-site-footer">
       <div className="mt-footer-lead">
+        {/* The homepage is a standalone HTML rewrite, not an RSC page. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a aria-label="Moral Trade, home" className="mt-footer-brand" href="/">
           <MoralTradeWordmark />
         </a>

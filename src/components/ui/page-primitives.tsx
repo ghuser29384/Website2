@@ -356,6 +356,8 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
     <nav aria-label="Breadcrumb" className="breadcrumbs">
       <ol>
         <li>
+          {/* The homepage is a standalone HTML rewrite, not an RSC page. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/">Home</a>
         </li>
         {items.map((item, index) => {
