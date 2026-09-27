@@ -1,0 +1,63 @@
+name: Preserve verified quiet UI repair
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-preserve-repair.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  preserve:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ea9f882fbd665f898ecd210bcddbfd6fc338d8f9
+          fetch-depth: 0
+      - name: Recover the exact patch from its successful build and six browser assertions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          gh run download 36289499931 --repo "$GITHUB_REPOSITORY" --name quiet-ui-scoped-overflow-repair --dir "$RUNNER_TEMP/verified-repair"
+          patch="$RUNNER_TEMP/verified-repair/evidence/repair.patch"
+          echo "f12f5961c42b1eb0515b61b1e54af7dc62c3c0917f6c7365dc994f3ce87d05e1  $patch" | sha256sum --check
+          node -e 'const r=require(process.argv[1]);if(r.stats.expected!==6||r.stats.unexpected!==0||r.stats.flaky!==0||r.stats.skipped!==0)process.exit(1)' "$RUNNER_TEMP/verified-repair/evidence/repair-tests.json"
+          git apply --index "$patch"
+          printf '%s\n' src/app/globals.css tests/technical-spec-overflow.spec.ts | sort > evidence/allowed.txt
+          git diff --cached --name-only | sort > evidence/actual.txt
+          diff -u evidence/allowed.txt evidence/actual.txt
+          git diff --cached --check
+          git diff --exit-code
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Wrap technical contract identifiers without clipping content'
+          printf 'repair_commit=%s\nrepair_tree=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" > evidence/revision.txt
+      - name: Preserve current main without automatic conflict resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
+          git diff --name-only caa25edccad0a444d4d18b45046a9e3fdfc1abf8 be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 > evidence/main-files.txt
+          git diff caa25edccad0a444d4d18b45046a9e3fdfc1abf8 be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 > evidence/new-main.patch
+          git merge --no-ff --no-edit be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
+          git diff --check
+          git merge-base --is-ancestor ea9f882fbd665f898ecd210bcddbfd6fc338d8f9 HEAD
+          git merge-base --is-ancestor be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 HEAD
+          printf 'candidate=%s\nproduct_tree=%s\nbase=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 >> evidence/revision.txt
+          git diff be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 HEAD > evidence/integrated.patch
+          git archive --format=tar.gz HEAD > evidence/source.tar.gz
+          echo 'PR and main refs (diagnostic only; this step does not merge or release them):'
+          git ls-remote origin refs/heads/main refs/heads/fix/quiet-ui-20260926 refs/heads/ops/quiet-ui-overflow-candidate-20260927
+          test -z "$(git ls-remote origin refs/heads/ops/quiet-ui-overflow-candidate-20260927)"
+          git push origin HEAD:refs/heads/ops/quiet-ui-overflow-candidate-20260927
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-preserved-repair
+          path: evidence/
+          retention-days: 7
