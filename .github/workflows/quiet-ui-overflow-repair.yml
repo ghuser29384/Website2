@@ -1,0 +1,155 @@
+name: Build scoped quiet UI overflow repair
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-overflow-repair.yml]
+permissions:
+  contents: write
+concurrency:
+  group: quiet-ui-overflow-repair
+  cancel-in-progress: false
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+jobs:
+  repair:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ea9f882fbd665f898ecd210bcddbfd6fc338d8f9
+          fetch-depth: 0
+      - name: Verify exact approved starting point
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ea9f882fbd665f898ecd210bcddbfd6fc338d8f9
+          test "$(git rev-parse HEAD^{tree})" = 69713633ce271da9500b39452e10b627a2dd8e9a
+          git merge-base --is-ancestor caa25edccad0a444d4d18b45046a9e3fdfc1abf8 HEAD
+          mkdir -p evidence
+      - name: Repair the owning style and add supplementary failure-mode coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import hashlib
+          p = Path("src/app/globals.css")
+          assert hashlib.sha256(p.read_bytes()).hexdigest() == "f7db3936596b2d19fc2c41f31582455e5283bbee1070da4776ff4f6305b93cb4"
+          old = '.protocol-contract-card {\n  display: grid;\n  gap: 0.75rem;\n  align-content: start;\n}'
+          new = '.protocol-contract-card {\n  display: grid;\n  gap: 0.75rem;\n  align-content: start;\n  /* Contract keys stay readable without expanding a card or clipping its text. */\n  overflow-wrap: anywhere;\n}'
+          value = p.read_text()
+          assert value.count(old) == 1, "Expected owning card rule exactly once"
+          p.write_text(value.replace(old, new, 1))
+          assert not Path("tests/technical-spec-overflow.spec.ts").exists()
+          PY
+          cat > tests/technical-spec-overflow.spec.ts <<'TS'
+          import { expect, test } from "@playwright/test";
+
+          // Contract identifiers must remain readable even before downloaded fonts arrive.
+          // These failure-mode checks supplement (rather than replace) the normal visual suite.
+          for (const width of [1440, 390]) {
+            for (const fonts of ["normal", "unavailable"] as const) {
+              test(`technical specification preserves readable content at ${width}px with ${fonts} fonts`, async ({ page, baseURL }, testInfo) => {
+                test.setTimeout(90_000);
+                if (!baseURL) throw new Error("The specification check requires the configured app origin.");
+                await page.setViewportSize({ width, height: 1000 });
+                await page.context().addCookies([
+                  { name: "mt_analytics_opt_out", value: "1", url: baseURL, sameSite: "Lax" },
+                ]);
+                if (fonts === "unavailable") {
+                  await page.route(/\.(woff2?|ttf|otf)(\?|$)/, (route) => route.abort("failed"));
+                }
+                const errors: string[] = [];
+                page.on("pageerror", (error) => errors.push(error.message));
+                const response = await page.goto("/moral-trade/technical-spec", {
+                  waitUntil: "domcontentloaded",
+                  timeout: 60_000,
+                });
+                expect(response?.status()).toBe(200);
+                await expect(page.getByRole("heading").first()).toBeVisible();
+                await expect(page.locator(".protocol-contract-card").first()).toBeVisible();
+
+                const dimensions = await page.evaluate(() => ({
+                  viewport: window.innerWidth,
+                  document: document.documentElement.scrollWidth,
+                  cards: Array.from(document.querySelectorAll<HTMLElement>(".protocol-contract-card"))
+                    .filter((card) => card.scrollWidth > card.clientWidth + 1)
+                    .map((card) => ({
+                      heading: card.querySelector("h3")?.textContent,
+                      width: card.clientWidth,
+                      scrollWidth: card.scrollWidth,
+                    })),
+                }));
+                expect(dimensions.document, "The document must not overflow horizontally.").toBeLessThanOrEqual(dimensions.viewport + 1);
+                expect(dimensions.cards, "Contract identifiers must wrap inside their cards, not be clipped.").toEqual([]);
+
+                // Dense matrices retain their own scrolling; fitting the page must not hide columns.
+                const matrix = page.locator(".protocol-check-table").first();
+                await expect(matrix).toBeVisible();
+                if (width === 390) {
+                  const scroll = await matrix.evaluate((element) => {
+                    element.scrollLeft = element.scrollWidth;
+                    return {
+                      position: element.scrollLeft,
+                      overflow: getComputedStyle(element).overflowX,
+                    };
+                  });
+                  expect(scroll.overflow).toBe("auto");
+                  expect(scroll.position).toBeGreaterThan(0);
+                }
+                expect(errors).toEqual([]);
+                await page.screenshot({ path: testInfo.outputPath(`technical-spec-${width}-${fonts}.png`) });
+              });
+            }
+          }
+          TS
+          git diff --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build the repaired production bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee evidence/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Verify the real repair and unchanged Dashboard gate with zero retries
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/repair-tests.json
+        run: npx playwright test tests/technical-spec-overflow.spec.ts tests/dashboard-account-security-visibility.spec.ts --workers=1 --reporter=line,json
+      - name: Publish only the two reviewed files to an isolated candidate branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/globals.css tests/technical-spec-overflow.spec.ts
+          printf '%s\n' src/app/globals.css tests/technical-spec-overflow.spec.ts | sort > evidence/allowed-files.txt
+          git diff --cached --name-only | sort > evidence/actual-files.txt
+          diff -u evidence/allowed-files.txt evidence/actual-files.txt
+          git diff --cached --check
+          git diff --cached > evidence/repair.patch
+          test -z "$(git diff --name-only)"
+          test "$(git ls-remote origin refs/heads/fix/quiet-ui-20260926 | cut -f1)" = ea9f882fbd665f898ecd210bcddbfd6fc338d8f9
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = caa25edccad0a444d4d18b45046a9e3fdfc1abf8
+          test -z "$(git ls-remote origin refs/heads/ops/quiet-ui-overflow-candidate-20260927)"
+          git commit -m "Wrap technical contract identifiers without clipping content"
+          printf 'candidate=%s\nproduct_tree=%s\nparent=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" "$(git rev-parse HEAD^)" > evidence/revision.txt
+          git push origin HEAD:refs/heads/ops/quiet-ui-overflow-candidate-20260927
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-scoped-overflow-repair
+          path: |
+            evidence/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 7
