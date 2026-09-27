@@ -54,7 +54,7 @@ jobs:
           source=Path('../controller/.github/audit-live-smoke-20260927.mjs').read_text()
           replacements={
             "await expect(page.getByRole('navigation', {name:'Primary', exact:true})).toBeVisible({timeout:45000});": "await expect(page.locator('header [data-mt-primary-links=\"true\"]')).toBeVisible({timeout:45000});",
-            "await expect(page.getByLabel('Sort', {exact:true})).toBeVisible();": "await expect(filters.locator('select[name=\"sort\"]')).toBeVisible(); await expect(filters.locator('label').filter({has: filters.locator('select[name=\"sort\"]')})).toContainText('Sort');",
+            "await expect(page.getByLabel('Sort', {exact:true})).toBeVisible();": "await expect(filters.locator('label').filter({hasText:'Sort'}).locator('select[name=\"sort\"]')).toBeVisible();",
           }
           assert 'header [data-mt-primary-links="true"]' in Path('tests/home-bootstrap-resilience.spec.ts').read_text()
           assert '<select defaultValue={sort} name="sort">' in Path('src/app/offers/page.tsx').read_text()
@@ -62,7 +62,7 @@ jobs:
             assert source.count(old)==1
             source=source.replace(old,new)
           Path('/tmp/audit-canonical-smoke.mjs').write_text(source)
-          Path('/tmp/audit-live-evidence/selector-correction.txt').write_text('The first smoke verified five exact asset hashes, desktop/mobile Commitments privacy/tabs, and the outcome filter, then failed on an over-specific accessible-name match for Sort. This rerun checks the actual named native select inside the opened filter, its visible Sort label, and the existing homepage navigation hook. All route, asset, privacy, overflow and browser-exception assertions remain enabled. No product source, database or deployment changed.\n')
+          Path('/tmp/audit-live-evidence/selector-correction.txt').write_text('The first smoke verified five exact asset hashes, desktop/mobile Commitments privacy/tabs, and the outcome filter, then failed on an over-specific accessible-name match for Sort. This rerun checks the actual named native select within its visible Sort label inside the opened filter, and the existing homepage navigation hook. All route, asset, privacy, overflow and browser-exception assertions remain enabled. No product source, database or deployment changed.\n')
           PY
       - name: Execute every canonical route, asset and interaction check again
         working-directory: candidate
