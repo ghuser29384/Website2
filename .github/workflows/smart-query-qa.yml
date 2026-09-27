@@ -134,7 +134,6 @@ jobs:
             'src/app/evidence/[[...recordId]]/page.tsx' \
             src/components/layout/site-topbar.tsx \
             src/components/marketplace/participant-offer-group.tsx \
-            src/components/search/smart-query-auto-enhancer.tsx \
             src/components/search/smart-query-form.tsx \
             src/offers-walkthrough-density.test.ts \
             tests/discover-live-search.spec.ts \

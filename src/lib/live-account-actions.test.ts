@@ -66,6 +66,7 @@ interface AccountHarness {
   patchManageAccount: (panel: Panel) => void;
   termsHref: () => string;
   setAccount: (payload: unknown) => void;
+  accountState: () => { authenticated: boolean; status: string };
 }
 
 function loadBridge(payload: unknown = { authenticated: true }) {
@@ -78,6 +79,7 @@ function loadBridge(payload: unknown = { authenticated: true }) {
   const instrumented = source.replace(/\}\)\(\);\s*$/, `
     window.__accountTest = {
       configureAction, patchManageAccount, termsHref,
+      accountState() { return { authenticated: account.authenticated, status: account.status }; },
       setAccount(payload) { account = normalizePayload(payload); }
     };
   })();`);
@@ -129,11 +131,14 @@ test("signed-out navigation preserves each destination, including its fragment",
   }
 });
 
-test("truthy non-boolean authentication is not accepted", () => {
+test("truthy non-boolean authentication stays unknown, not authenticated or signed out", () => {
   const bridge = loadBridge({ authenticated: "true" });
   const row = makeRow();
   bridge.configureAction(row, "payment-account");
-  assert.equal(row.action.textContent, "Sign in");
+  assert.equal(bridge.accountState().authenticated, false);
+  assert.equal(bridge.accountState().status, "unavailable");
+  assert.equal(row.action.getAttribute("href"), "/dashboard#payment-setup");
+  assert.equal(row.action.textContent, "Manage");
 });
 
 for (const [key, message] of Object.entries({

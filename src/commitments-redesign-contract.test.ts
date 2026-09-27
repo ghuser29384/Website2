@@ -9,10 +9,9 @@ const icons = readFileSync("src/components/commitments/commitment-summary-icon.t
 
 test("Commitments uses the approved compact title and reduced-copy hierarchy", () => {
   assert.match(page, /<h1 id="commitments-heading">Commitments<\/h1>/);
-  assert.ok(page.includes("Track your commitments, proof, outcomes, and impact."));
-  assert.ok(page.includes("Projected if all conditions are met."));
-  assert.ok(page.includes("Additional details"));
-  assert.ok(page.includes("Connected record types"));
+  assert.ok(page.includes("Track your agreements, deadlines, and evidence."));
+  assert.ok(page.includes("Projection assumptions"));
+  assert.ok(page.includes("Some records could not be fully loaded"));
   assert.doesNotMatch(page, /<h1[^>]*>Additional resources you caused\.<\/h1>/);
 
   // Keep the old phrase only as a hidden compatibility marker for immutable
@@ -23,11 +22,11 @@ test("Commitments uses the approved compact title and reduced-copy hierarchy", (
 test("Commitments renders five truthful summary cards from participant data", () => {
   assert.equal((page.match(/<SummaryMetric\b/g) ?? []).length, 5);
   for (const label of [
-    "Active commitment",
-    "Active mechanism",
-    "Action needed",
-    "Activated this month",
-    "Verified to date",
+    "Active commitments",
+    "Needs attention",
+    "Awaiting review",
+    "Created this month",
+    "Verified outcomes",
   ]) {
     assert.ok(page.includes(label), `missing concise summary label: ${label}`);
   }
@@ -35,11 +34,10 @@ test("Commitments renders five truthful summary cards from participant data", ()
     assert.ok(page.includes(`icon="${icon}"`), `missing summary icon: ${icon}`);
     assert.ok(icons.includes(`name === "${icon}"`) || icon === "verified");
   }
-  assert.ok(page.includes("activeRecords.length"));
-  assert.ok(page.includes("activeMechanisms"));
-  assert.ok(page.includes("actionNeeded"));
-  assert.ok(page.includes("activatedThisMonth.length"));
-  assert.ok(page.includes("verifiedRecords.length"));
+  for (const metric of ["active", "actionNeeded", "underReview", "createdThisMonth", "verified"]) {
+    assert.ok(page.includes(`count={summary.${metric}}`));
+  }
+  assert.ok(page.includes("commitmentCountLabel(count, complete)"));
 });
 
 test("Commitments follows the accepted white, five-card responsive design", () => {
@@ -67,6 +65,7 @@ test("Commitments shell overrides have a local owner and cannot leak to other ro
 });
 
 test("Commitments keeps incomplete-source status visible and omits unsupported sidebar balances", () => {
-  assert.ok(page.includes('data.warnings.length ? `${data.warnings.length} source warning'));
-  assert.ok(page.includes('<MarketplaceRouteShell active="track" hidePlannerSummary>'));
+  assert.ok(page.indexOf('role="alert"') < page.indexOf('aria-label="Commitment summary"'));
+  assert.ok(page.includes('<MarketplaceRouteShell active="track" hideSidebar>'));
+  assert.ok(page.includes("savedOffersComplete"));
 });

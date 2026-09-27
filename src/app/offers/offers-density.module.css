@@ -758,3 +758,14 @@
     font-size: 0.625rem;
   }
 }
+
+.searchBoundary {
+  padding: 0.8rem 1rem;
+  margin-bottom: 1rem;
+  border-left: 3px solid var(--offers-action);
+  background: var(--offers-surface);
+  color: var(--offers-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.searchBoundary p { margin: 0.3rem 0; }

@@ -79,7 +79,7 @@ test("verification retirement neither imports local signatures nor promotes inve
   assert.match(retirement, /Its local results are not evidence/);
   assert.match(retirement, /href="\/commitments"/);
   assert.doesNotMatch(retirement, /localStorage|sessionStorage|fetch\(|URLSearchParams|signatures\s*:/);
-  assert.ok(loader.indexOf("window.location.hash === '#activity'") < loader.indexOf("fetch('/moral-trade-live-core.txt')"));
+  assert.ok(loader.indexOf("window.location.hash === '#activity'") < loader.indexOf("fetch('/moral-trade-live-core.txt'"));
   const router = readFileSync("public/moral-trade-live-create-router.js", "utf8");
   assert.doesNotMatch(router, /allowDealroomHashOnce/);
   assert.match(router, /window\.location\.assign\("\/commitments"\)/);

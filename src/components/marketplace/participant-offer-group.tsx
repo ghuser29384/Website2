@@ -3,7 +3,6 @@ import Link from "next/link";
 import { toggleCartAction } from "@/app/actions";
 import { groupOffersByUnderlyingAction } from "@/lib/marketplace-participant-groups";
 import { formatMode } from "@/lib/offers";
-import { isVerifiedEvidenceText } from "@/lib/smart-query-records";
 import type { Database } from "@/lib/supabase/database.types";
 
 import styles from "./participant-offer-group.module.css";
@@ -79,7 +78,6 @@ export function ParticipantOfferGroup({
           const counterofferHref = `/offers/new?mode=${offer.mode}&source_offer=${offer.id}`;
           const isOwner = viewerId === offer.owner_id;
           const saved = savedOfferIds.has(offer.id);
-          const verified = isVerifiedEvidenceText(offer.verification);
           const offerHeadingId = `offer-${offer.id}-heading`;
           const offerDescriptionId = `offer-${offer.id}-description`;
 
@@ -114,7 +112,7 @@ export function ParticipantOfferGroup({
 
               <ul aria-label="Proposal summary" className={styles.meta} id={offerDescriptionId}>
                 <li>{offer.duration}</li>
-                <li>{verified ? "Named verification evidence" : "Verification terms stated"}</li>
+                <li>{offer.verification.trim() ? "Evidence requirements stated" : "Evidence requirements missing"}</li>
                 <li>Open · Exact published proposal</li>
               </ul>
 
@@ -123,12 +121,12 @@ export function ParticipantOfferGroup({
                 <div className={styles.disclosureBody}>
                   <dl className={styles.exactTerms}>
                     <div>
-                      <dt>Get</dt>
-                      <dd>{offer.request_action}</dd>
+                      <dt>Offer maker commits</dt>
+                      <dd>{offer.offer_action}</dd>
                     </div>
                     <div>
-                      <dt>Do</dt>
-                      <dd>{offer.offer_action}</dd>
+                      <dt>Responding participant commits</dt>
+                      <dd>{offer.request_action}</dd>
                     </div>
                     <div>
                       <dt>Offered cause</dt>
@@ -143,12 +141,12 @@ export function ParticipantOfferGroup({
                       <dd>{offer.duration}</dd>
                     </div>
                     <div>
-                      <dt>Evidence and reliability</dt>
+                      <dt>Evidence requirements</dt>
                       <dd>{offer.verification}</dd>
                     </div>
                     <div>
-                      <dt>Evidence status</dt>
-                      <dd>{verified ? "Named verification evidence" : "Verification terms stated"}</dd>
+                      <dt>Outcome verification</dt>
+                      <dd>Not established by these proposal terms.</dd>
                     </div>
                     <div>
                       <dt>Terms note</dt>

@@ -268,7 +268,7 @@
     const date = new Date(value);
     if (!Number.isFinite(date.getTime())) return "Updated for this visit";
 
-    return `Updated ${new Intl.DateTimeFormat(undefined, {
+    return `Updated ${new Intl.DateTimeFormat("en-US", {
       hour: "numeric",
       minute: "2-digit",
     }).format(date)}`;
@@ -329,7 +329,7 @@
 
   function formatCurrencyFromCents(value) {
     if (!value) return "";
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       maximumFractionDigits: value % 100 === 0 ? 0 : 2,

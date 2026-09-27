@@ -41,7 +41,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       await page.goto("/commitments");
       await expect(page).toHaveTitle(/Commitments/);
       await expect(page.getByRole("heading", { name: "Commitments", exact: true })).toBeVisible();
-      await expect(page.locator(".commitments-center").getByText("Track your commitments, proof, outcomes, and impact.", { exact: true })).toBeVisible();
+      await expect(page.locator(".commitments-center").getByText("Track your agreements, deadlines, and evidence.", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Sign in to view your commitments." })).toBeVisible();
       await expect(page.locator('[aria-label="Commitment summary"]')).toHaveCount(0);
       await expect(page.getByText("Auth Resolution QA", { exact: false })).toHaveCount(0);
@@ -59,7 +59,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       await page.goto("/commitments");
       await expect(page).toHaveTitle(/Commitments/);
       await expect(page.getByRole("heading", { name: "Commitments", exact: true })).toBeVisible();
-      await expect(page.locator(".commitments-center").getByText("Track your commitments, proof, outcomes, and impact.", { exact: true })).toBeVisible();
+      await expect(page.locator(".commitments-center").getByText("Track your agreements, deadlines, and evidence.", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "No commitments yet." })).toBeVisible();
 
       const summary = page.locator('[aria-label="Commitment summary"]');
@@ -67,30 +67,23 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       await expect(summary.locator(":scope > div")).toHaveCount(5);
       for (const label of [
         "Active commitments",
-        "Active mechanisms",
-        "Action needed",
-        "Activated this month",
-        "Verified to date",
+        "Needs attention",
+        "Awaiting review",
+        "Created this month",
+        "Verified outcomes",
       ]) {
         await expect(summary.getByText(label, { exact: true })).toBeVisible();
       }
 
-      await expect(page.getByText("If everything succeeds", { exact: true })).toBeVisible();
-      await expect(page.getByText("Projected if all conditions are met.", { exact: true })).toBeVisible();
-      await expect(page.getByText("Additional details", { exact: true })).toBeVisible();
-      await expect(page.getByText("Connected record types", { exact: true })).toBeVisible();
-      await expect(page.getByText("Some connected record types could not be loaded")).toHaveCount(0);
-      const disclosure = page.locator("details").filter({ has: page.getByText("Additional details", { exact: true }) });
-      await disclosure.locator("summary").click();
-      await expect(disclosure).toHaveAttribute("open", "");
-      await expect(disclosure).toContainText("not an expected-value estimate");
-      await disclosure.locator("summary").click();
-      await expect(disclosure).not.toHaveAttribute("open", "");
+      // Empty accounts must not receive a zero-impact success projection.
+      await expect(page.getByText("If everything succeeds", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("Projection assumptions", { exact: true })).toHaveCount(0);
+      await expect(page.locator(".commitments-center").getByRole("alert")).toHaveCount(0);
       const headingSize = await page.locator("#commitments-heading").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       expect(headingSize).toBeLessThanOrEqual(68);
       if (viewport.width >= 980) {
         expect(await summary.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length)).toBe(5);
-        await expect(page.getByRole("complementary", { name: "Marketplace sections" }).getByText("0 in planner")).toHaveCount(0);
+        await expect(page.getByRole("complementary", { name: "Marketplace sections" })).toHaveCount(0);
       }
 
       await expectNoHorizontalOverflow(page);

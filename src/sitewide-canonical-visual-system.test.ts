@@ -151,7 +151,10 @@ test("the rendered gate rejects blank and overlay-only route captures", () => {
   assert.match(rendered, /Application error: a client-side exception has occurred/);
   assert.equal(rendered.includes('page.locator("nextjs-portal")).toHaveCount(0)'), false);
   assert.equal(rendered.includes("#account-heading"), false);
-  assert.match(rendered, /mt-v75-side-link\[aria-current="page"\]/);
+  assert.ok(rendered.includes('page.locator(".mt-v75-side-nav, .mt-v75-side-plan")).toHaveCount(0)'));
+  assert.ok(rendered.includes('getByRole("navigation", { name: "Primary", exact: true })'));
+  assert.ok(rendered.includes('getByRole("link", { name: "Commitments", exact: true })).toHaveAttribute("aria-current", "page")'));
+  assert.match(rendered, /Commitments uses the approved single-navigation layout/);
   assert.match(rendered, /Dashboard guest route preserves the existing authentication experience/);
   assert.match(rendered, /Authentication remains outside the canonical hard-geometry restyle/);
   assert.match(rendered, /Public Goods Fund labels use rules instead of capsules/);
