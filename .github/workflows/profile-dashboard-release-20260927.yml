@@ -1,0 +1,181 @@
+name: Profile Dashboard production release and smoke
+on:
+  push:
+    branches: [ops/profile-dashboard-integration-20260927]
+    paths: [.github/workflows/profile-dashboard-release-20260927.yml]
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+concurrency:
+  group: profile-dashboard-release-20260927
+  cancel-in-progress: false
+jobs:
+  release_and_verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXPECTED_SHA: 2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16
+      CANDIDATE_SHA: 3603b83ef04e0cb4fafd5e031cdefa42ec7977d2
+      EXPECTED_TREE: 47ae24e4cc3efe47c948b3bda6aa3e52be7ea7ac
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16
+          persist-credentials: false
+      - name: Guard the immutable verified merge and unchanged release policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/profile-unification-live
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/profile-dashboard-integration-20260927
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/861" > /tmp/profile-unification-live/pr-before-release.json
+          jq -e --arg sha "$EXPECTED_SHA" --arg head "$CANDIDATE_SHA" '.merged == true and .merge_commit_sha == $sha and .head.sha == $head and .changed_files == 17' /tmp/profile-unification-live/pr-before-release.json > /dev/null
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$CANDIDATE_SHA" --jq .tree.sha)" = "$EXPECTED_TREE"
+          test "$(git hash-object .github/workflows/vercel-release.yml)" = e219e99d25279161b89eee80fc410912c3561a19
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36299476171" > /tmp/profile-unification-live/qa-run.json
+          jq -e '.status == "completed" and .conclusion == "success" and .head_sha == "fc599f45e54f15117719ad58debf3989b763e5c8"' /tmp/profile-unification-live/qa-run.json >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$EXPECTED_SHA&event=workflow_dispatch&per_page=100" > /tmp/profile-unification-live/prior-runs.json
+          jq -e '[.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml" and (.status != "completed" or .conclusion == "success"))] | length == 0' /tmp/profile-unification-live/prior-runs.json >/dev/null
+          printf '%s\n' "$EXPECTED_SHA" > /tmp/profile-unification-live/commit.txt
+      - name: Dispatch the existing gated production release exactly once
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run vercel-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f target=production -f ref=main -f expected_sha="$EXPECTED_SHA"
+          for attempt in $(seq 1 20); do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$EXPECTED_SHA&event=workflow_dispatch&per_page=100")"
+            run_id="$(printf '%s' "$runs" | jq -r '[.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml")][0].id // empty')"
+            if [[ -n "$run_id" ]]; then
+              printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+              printf '%s\n' "$run_id" > /tmp/profile-unification-live/release-run-id.txt
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Dispatched, but could not resolve its run identity.' >&2
+          exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Require the unchanged release workflow to finish successfully
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN: ${{ steps.dispatch.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 110); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN" > /tmp/profile-unification-live/release-run.json
+            jq -e --arg sha "$EXPECTED_SHA" '.head_sha == $sha and .path == ".github/workflows/vercel-release.yml"' /tmp/profile-unification-live/release-run.json >/dev/null
+            state="$(jq -r .status /tmp/profile-unification-live/release-run.json)"
+            if [[ "$state" == completed ]]; then
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN/jobs" > /tmp/profile-unification-live/release-jobs.json
+              jq -e '.conclusion == "success"' /tmp/profile-unification-live/release-run.json >/dev/null
+              exit 0
+            fi
+            sleep 20
+          done
+          echo 'Release still incomplete; no production success claimed.' >&2
+          exit 1
+      - name: Verify live redirects and actual signed-out Profile navigation
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { mkdir, writeFile } from 'node:fs/promises';
+          import { chromium, request } from '@playwright/test';
+          const evidence = '/tmp/profile-unification-live';
+          await mkdir(evidence, { recursive: true });
+          const results = { startedAt: new Date().toISOString(), redirects: [], browsers: [] };
+          const api = await request.newContext();
+          const allowedOrigins = new Set(['https://moraltrade.org', 'https://www.moraltrade.org']);
+          let browser;
+          try {
+            for (const origin of allowedOrigins) {
+              for (const query of ['', '?message=Saved%20%26%20ready&tone=success', '?view=controls&filter=one&filter=two']) {
+                let current = new URL(`/profile${query}`, origin);
+                const expected = [...new URLSearchParams(query).entries()];
+                const hops = [];
+                for (let count = 0; count < 3 && current.pathname !== '/dashboard'; count += 1) {
+                  const response = await api.get(current.href, { maxRedirects: 0, timeout: 30000 });
+                  assert.equal(response.status(), 308, `Expected a permanent redirect at ${current.href}`);
+                  const location = response.headers().location;
+                  assert.ok(location);
+                  const next = new URL(location, current);
+                  assert.ok(allowedOrigins.has(next.origin));
+                  assert.deepEqual([...next.searchParams.entries()], expected);
+                  hops.push({ from: current.href, status: response.status(), to: next.href });
+                  current = next;
+                }
+                assert.equal(current.href, `https://www.moraltrade.org/dashboard${current.search}`);
+                results.redirects.push({ origin, query, hops, passed: true });
+              }
+            }
+            browser = await chromium.launch();
+            for (const width of [1440, 390, 320]) {
+              const context = await browser.newContext({ viewport: { width, height: 900 } });
+              await context.addCookies([{ name: 'mt_analytics_opt_out', value: '1', url: 'https://www.moraltrade.org' }]);
+              const page = await context.newPage();
+              const pageErrors = [], consoleErrors = [];
+              page.on('pageerror', error => pageErrors.push(error.message));
+              page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+              try {
+                await page.goto('https://www.moraltrade.org/profile', { waitUntil: 'domcontentloaded', timeout: 45000 });
+                await page.waitForURL(url => url.pathname === '/login' && url.searchParams.get('returnTo') === '/dashboard', { timeout: 30000 });
+                assert.match(await page.title(), /Log in/);
+                await page.getByRole('heading', { name: 'Welcome back', exact: true }).waitFor();
+                assert.equal(await page.getByTestId('profile-account').count(), 0);
+                assert.equal(await page.locator('nextjs-portal').count(), 0);
+                assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+                await page.screenshot({ path: `${evidence}/profile-login-${width}.png` });
+                const loginUrl = page.url();
+                await page.goto('https://www.moraltrade.org/contact', { waitUntil: 'domcontentloaded', timeout: 45000 });
+                const header = page.locator('.mt-refined-header').first();
+                const more = header.locator('summary').filter({ hasText: 'More' });
+                await more.waitFor({ state: 'visible' });
+                await more.click();
+                const profile = header.getByRole('link', { name: 'Profile', exact: true });
+                assert.equal(await profile.count(), 1);
+                assert.equal(await profile.getAttribute('href'), '/dashboard');
+                assert.equal(await header.getByRole('link', { name: 'Dashboard', exact: true }).count(), 0);
+                await page.screenshot({ path: `${evidence}/profile-menu-${width}.png` });
+                await profile.click();
+                await page.waitForURL(url => url.pathname === '/login' && url.searchParams.get('returnTo') === '/dashboard', { timeout: 30000 });
+                await page.getByRole('heading', { name: 'Welcome back', exact: true }).waitFor();
+                assert.deepEqual(pageErrors, []);
+                assert.deepEqual(consoleErrors, []);
+                results.browsers.push({ width, loginUrl, interaction: 'Contact -> More -> Profile -> /login?returnTo=%2Fdashboard', pageErrors, consoleErrors, passed: true });
+              } catch (error) {
+                await page.screenshot({ path: `${evidence}/failure-${width}.png` }).catch(() => {});
+                results.browsers.push({ width, url: page.url(), error: String(error), pageErrors, consoleErrors, passed: false });
+                throw error;
+              } finally { await context.close(); }
+            }
+          } finally {
+            results.finishedAt = new Date().toISOString();
+            await writeFile(`${evidence}/results.json`, JSON.stringify(results, null, 2));
+            console.log(JSON.stringify(results, null, 2));
+            await browser?.close();
+            await api.dispose();
+          }
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-production-smoke
+          path: /tmp/profile-unification-live
+          retention-days: 7
