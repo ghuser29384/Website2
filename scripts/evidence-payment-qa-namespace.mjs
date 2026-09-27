@@ -41,6 +41,7 @@ const OBJECT_DEFINITIONS = [
   ["evidence-item-initial", "EVIDENCE_ITEM_INITIAL_ID"],
   ["evidence-item-correction", "EVIDENCE_ITEM_CORRECTION_ID"],
   ["milestone-review", "MILESTONE_REVIEW_ID"],
+  ["milestone-appeal", "MILESTONE_APPEAL_ID"],
   ["admin-fallback-milestone-review", "ADMIN_FALLBACK_MILESTONE_REVIEW_ID"],
   ["payout", "PAYOUT_ID"],
   ["admin-fallback-payout", "ADMIN_FALLBACK_PAYOUT_ID"],
