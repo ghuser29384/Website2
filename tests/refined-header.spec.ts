@@ -148,3 +148,30 @@ test("the React brand navigates to the standalone homepage without RSC", async (
   await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
   expect(rscRequests).toEqual([]);
 });
+
+for (const [label, selector, target] of [
+  ["breadcrumb", '.breadcrumbs a[href="/"]', "/"],
+  ["footer brand", '.mt-footer-brand', "/"],
+  ["footer Home", '.mt-footer-links a[href="/feed"]', "/feed"],
+  ["footer Trades", '.mt-footer-links a[href="/discover"]', "/discover"],
+]) {
+  test(`${label} uses document navigation without standalone RSC prefetch`, async ({ page }) => {
+    const rscRequests: string[] = [];
+    page.on("request", request => {
+      const url = new URL(request.url());
+      if (["/", "/feed", "/discover"].includes(url.pathname) && url.searchParams.has("_rsc")) {
+        rscRequests.push(request.url());
+      }
+    });
+    await page.goto("/what-is-moral-trade");
+    const link = page.locator(selector);
+    await link.scrollIntoViewIfNeeded();
+    await link.focus();
+    const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === target);
+    await link.press("Enter");
+    await navigation;
+    await expect.poll(() => new URL(page.url()).pathname).toBe(target);
+    await expect(page.locator(target === "/discover" ? "#command-form" : '[data-mt-live-now="adaptive"]')).toBeVisible();
+    expect(rscRequests).toEqual([]);
+  });
+}

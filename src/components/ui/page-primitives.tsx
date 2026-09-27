@@ -356,7 +356,7 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
     <nav aria-label="Breadcrumb" className="breadcrumbs">
       <ol>
         <li>
-          <Link href="/">Home</Link>
+          <a href="/">Home</a>
         </li>
         {items.map((item, index) => {
           const isCurrent = index === items.length - 1;
