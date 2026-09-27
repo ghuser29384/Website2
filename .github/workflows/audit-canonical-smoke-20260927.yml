@@ -9,7 +9,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 15
     env:
       EXPECTED_RELEASE_SHA: 4db5ef744c8cebab1940f70ef6bab499a6a61860
       RELEASE_RUN_ID: '36299252812'
@@ -21,7 +21,7 @@ jobs:
           ref: ${{ github.sha }}
           path: controller
           persist-credentials: false
-      - name: Require the existing gated release to succeed; never dispatch a second release
+      - name: Require the exact completed gated release; never deploy or dispatch
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -29,16 +29,8 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = ghuser29384/Website2
           mkdir -p /tmp/audit-live-evidence
-          for attempt in $(seq 1 120); do
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" > /tmp/audit-live-evidence/release-run.json
-            jq -e --arg sha "$EXPECTED_RELEASE_SHA" '.head_sha == $sha and .event == "workflow_dispatch" and .path == ".github/workflows/vercel-release.yml"' /tmp/audit-live-evidence/release-run.json >/dev/null
-            if test "$(jq -r .status /tmp/audit-live-evidence/release-run.json)" = completed; then
-              test "$(jq -r .conclusion /tmp/audit-live-evidence/release-run.json)" = success
-              exit 0
-            fi
-            sleep 30
-          done
-          exit 1
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" > /tmp/audit-live-evidence/release-run.json
+          jq -e --arg sha "$EXPECTED_RELEASE_SHA" '.head_sha == $sha and .event == "workflow_dispatch" and .path == ".github/workflows/vercel-release.yml" and .status == "completed" and .conclusion == "success"' /tmp/audit-live-evidence/release-run.json >/dev/null
       - uses: actions/checkout@v4
         with:
           ref: 4db5ef744c8cebab1940f70ef6bab499a6a61860
@@ -49,7 +41,7 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: candidate/package-lock.json
-      - name: Prepare the exact read-only smoke and real rendered navigation selector
+      - name: Prepare read-only browser acceptance with source-confirmed field selectors
         working-directory: candidate
         shell: bash
         run: |
@@ -60,17 +52,19 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           source=Path('../controller/.github/audit-live-smoke-20260927.mjs').read_text()
-          old="await expect(page.getByRole('navigation', {name:'Primary', exact:true})).toBeVisible({timeout:45000});"
-          new="await expect(page.locator('header [data-mt-primary-links=\"true\"]')).toBeVisible({timeout:45000});"
-          assert source.count(old)==1
-          # The standalone homepage names its nav 'Primary navigation', whereas
-          # Next routes call it 'Primary'. Use the stable rendered hook already
-          # checked in tests/home-bootstrap-resilience.spec.ts, not a new label.
+          replacements={
+            "await expect(page.getByRole('navigation', {name:'Primary', exact:true})).toBeVisible({timeout:45000});": "await expect(page.locator('header [data-mt-primary-links=\"true\"]')).toBeVisible({timeout:45000});",
+            "await expect(page.getByLabel('Sort', {exact:true})).toBeVisible();": "await expect(filters.locator('select[name=\"sort\"]')).toBeVisible(); await expect(filters.locator('label').filter({has: filters.locator('select[name=\"sort\"]')})).toContainText('Sort');",
+          }
           assert 'header [data-mt-primary-links="true"]' in Path('tests/home-bootstrap-resilience.spec.ts').read_text()
-          Path('/tmp/audit-canonical-smoke.mjs').write_text(source.replace(old,new))
-          Path('/tmp/audit-live-evidence/selector-correction.txt').write_text('Homepage smoke uses its existing rendered data-mt-primary-links hook. All route, asset, privacy, overflow and browser-error assertions remain unchanged. No product source or deployment was changed.\n')
+          assert '<select defaultValue={sort} name="sort">' in Path('src/app/offers/page.tsx').read_text()
+          for old,new in replacements.items():
+            assert source.count(old)==1
+            source=source.replace(old,new)
+          Path('/tmp/audit-canonical-smoke.mjs').write_text(source)
+          Path('/tmp/audit-live-evidence/selector-correction.txt').write_text('The first smoke verified five exact asset hashes, desktop/mobile Commitments privacy/tabs, and the outcome filter, then failed on an over-specific accessible-name match for Sort. This rerun checks the actual named native select inside the opened filter, its visible Sort label, and the existing homepage navigation hook. All route, asset, privacy, overflow and browser-exception assertions remain enabled. No product source, database or deployment changed.\n')
           PY
-      - name: Execute canonical route, asset and interaction verification
+      - name: Execute every canonical route, asset and interaction check again
         working-directory: candidate
         run: node /tmp/audit-canonical-smoke.mjs
       - uses: actions/upload-artifact@v4
