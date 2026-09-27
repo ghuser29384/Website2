@@ -37,22 +37,45 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Wrap technical contract identifiers without clipping content'
           printf 'repair_commit=%s\nrepair_tree=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" > evidence/revision.txt
-      - name: Preserve current main without automatic conflict resolution
+      - name: Integrate current main with the reviewed single-test conflict resolution
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
-          git diff --name-only caa25edccad0a444d4d18b45046a9e3fdfc1abf8 be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 > evidence/main-files.txt
           git diff caa25edccad0a444d4d18b45046a9e3fdfc1abf8 be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 > evidence/new-main.patch
-          git merge --no-ff --no-edit be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
-          git diff --check
+          set +e
+          git merge --no-commit --no-ff be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 > evidence/merge.log 2>&1
+          merge_status=$?
+          set -e
+          cat evidence/merge.log
+          git diff --name-only --diff-filter=U > evidence/conflicts.txt
+          test "$merge_status" -eq 1
+          test "$(cat evidence/conflicts.txt)" = 'src/profile-priority-routing.test.ts'
+          # The only overlap is the renamed heading beside the newer auth/view
+          # assertions. Retain every newer assertion and the new main-branch label.
+          python3 <<'PY'
+          from pathlib import Path
+          import hashlib, subprocess
+          path = 'src/profile-priority-routing.test.ts'
+          original = subprocess.check_output(['git', 'show', 'ea9f882fbd665f898ecd210bcddbfd6fc338d8f9:' + path])
+          assert hashlib.sha256(original).hexdigest() == '860f538a2223ad235ed573885407caa6fa5916fa2b5a70e3cd590f9df3885ffe'
+          value = original.decode()
+          old = '  assert.match(priorityEditor, /Adjust your 100 sparks/);'
+          new = '  assert.match(priorityEditor, /<h1 id="profile-priorities-heading">Priorities<\/h1>/);'
+          assert value.count(old) == 1
+          Path(path).write_text(value.replace(old, new, 1))
+          PY
+          git add src/profile-priority-routing.test.ts
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --cached --check
+          git commit -m 'Preserve current Priorities labels and account-scoped editor assertions'
           git merge-base --is-ancestor ea9f882fbd665f898ecd210bcddbfd6fc338d8f9 HEAD
           git merge-base --is-ancestor be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 HEAD
           printf 'candidate=%s\nproduct_tree=%s\nbase=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 >> evidence/revision.txt
           git diff be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0 HEAD > evidence/integrated.patch
           git archive --format=tar.gz HEAD > evidence/source.tar.gz
-          echo 'PR and main refs (diagnostic only; this step does not merge or release them):'
-          git ls-remote origin refs/heads/main refs/heads/fix/quiet-ui-20260926 refs/heads/ops/quiet-ui-overflow-candidate-20260927
+          git ls-remote origin refs/heads/main refs/heads/fix/quiet-ui-20260926 refs/heads/ops/quiet-ui-overflow-candidate-20260927 > evidence/remote-refs.txt
+          cat evidence/remote-refs.txt
           test -z "$(git ls-remote origin refs/heads/ops/quiet-ui-overflow-candidate-20260927)"
           git push origin HEAD:refs/heads/ops/quiet-ui-overflow-candidate-20260927
       - uses: actions/upload-artifact@v4
