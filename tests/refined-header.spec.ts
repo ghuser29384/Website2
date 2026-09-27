@@ -65,9 +65,13 @@ test("Profile owns priorities and a legacy Sparks URL preserves the authenticate
   await page.goto("/profile");
   await page.getByRole("link", { name: /Adjust priorities/ }).click();
   await expect(page).toHaveURL(/\/login\?returnTo=/);
+  // A URL change can precede the streamed auth surface. Finish this navigation
+  // before starting another redirect to the same destination in this context.
+  await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible();
   expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
   await page.goto("/100-sparks");
   await expect(page).toHaveURL(/\/login\?returnTo=/);
+  await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible();
   expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
 });
 
