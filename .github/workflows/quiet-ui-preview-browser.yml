@@ -1,0 +1,55 @@
+name: Inspect quiet UI gated preview
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-preview-browser.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    defaults:
+      run:
+        shell: bash
+    env:
+      CANDIDATE_SHA: e906e3d3245ed949049f385134dce7f95e4db571
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e906e3d3245ed949049f385134dce7f95e4db571
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Wait for the standard release gates and verify exact preview identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          timeout 30m gh run watch 36290318506 --repo "$GITHUB_REPOSITORY" --exit-status --interval 20 > evidence/release-watch.log 2>&1
+          gh run download 36290318506 --repo "$GITHUB_REPOSITORY" --name gated-vercel-release-preview-36290318506 --dir "$RUNNER_TEMP/preview-release"
+          detail="$RUNNER_TEMP/preview-release/deployment-detail.json"
+          jq -e '.meta.githubCommitSha == "7b7b0d0b5ca78c9819c760c8001112f9efe868c1" and (.readyState // .state) == "READY" and (.projectId // .project.id) == "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7" and (.target // "preview") != "production"' "$detail" >/dev/null
+          git diff --exit-code 7b7b0d0b5ca78c9819c760c8001112f9efe868c1 HEAD -- . ':(exclude)tests/refined-header.spec.ts' ':(exclude).github/workflows/dashboard-account-security-hotfix-gates.yml'
+          git show "$GITHUB_SHA:scripts/ops/quiet-ui-deployment-smoke.mjs" > .quiet-ui-deployment-smoke.mjs
+          jq '{id,url,readyState,target,projectId,meta:{githubCommitSha:.meta.githubCommitSha}}' "$detail" > evidence/deployment.json
+          echo "SMOKE_ORIGINS=$(jq -c '["https://" + .url]' "$detail")" >> "$GITHUB_ENV"
+          echo "DEPLOYMENT_ID=$(jq -r '.id // .uid' "$detail")" >> "$GITHUB_ENV"
+          git rev-parse HEAD HEAD^{tree} > evidence/revision.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check public actions, safe redirects, desktop/mobile layout and exact served bytes
+        run: node .quiet-ui-deployment-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-preview-rendered
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
