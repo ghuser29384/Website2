@@ -652,9 +652,11 @@ function selectPrimaryBrowseDeal(deals: readonly MarketplaceDeal[], zeroLive: bo
 function MarketplaceSideNav({
   active = "browse",
   createHref,
+  hidePlannerSummary = false,
 }: {
   active?: "browse" | "plan" | "track" | "messages" | "profile";
   createHref?: string;
+  hidePlannerSummary?: boolean;
 }) {
   const items = [
     { key: "browse", href: "/offers", label: "Browse", icon: "browse" },
@@ -693,7 +695,8 @@ function MarketplaceSideNav({
         </Link>
       ) : null}
       <div className="mt-v75-side-plan">
-        <strong>0 in planner</strong>
+        <strong>{hidePlannerSummary ? "Planner" : "0 in planner"}</strong>
+        {!hidePlannerSummary ? <>
         <span>
           <em>Exposure</em>
           <b>$0.00</b>
@@ -702,6 +705,7 @@ function MarketplaceSideNav({
           <em>Charged now</em>
           <b>$0.00</b>
         </span>
+        </> : null}
         <Link className="button button-primary button-mini" href="/saved-offers">
           Review & plan
         </Link>
@@ -713,13 +717,15 @@ function MarketplaceSideNav({
 export function MarketplaceRouteShell({
   active,
   children,
+  hidePlannerSummary = false,
 }: {
   active: "browse" | "plan" | "track" | "messages" | "profile";
   children: ReactNode;
+  hidePlannerSummary?: boolean;
 }) {
   return (
     <div className="mt-v75-route-board">
-      <MarketplaceSideNav active={active} />
+      <MarketplaceSideNav active={active} hidePlannerSummary={hidePlannerSummary} />
       <div className="mt-v75-route-workspace">{children}</div>
     </div>
   );
