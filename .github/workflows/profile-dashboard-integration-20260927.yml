@@ -1,0 +1,151 @@
+name: Profile Dashboard integration QA
+on:
+  push:
+    branches: [ops/profile-dashboard-integration-20260927]
+    paths: [.github/workflows/profile-dashboard-integration-20260927.yml]
+permissions:
+  contents: write
+concurrency:
+  group: profile-dashboard-integration-20260927
+  cancel-in-progress: false
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    defaults:
+      run:
+        shell: bash
+    env:
+      BASE: 2241422b6eec8c38a1fad4b3e3a9c9fb7c2bba49
+      CANDIDATE: 31231dcd8d78cb7c7e4f16669c390bb44c48adc6
+      BRANCH: fix/profile-dashboard-canonical-20260926
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 31231dcd8d78cb7c7e4f16669c390bb44c48adc6
+          fetch-depth: 0
+      - name: Integrate immutable revisions without dropping current-main changes
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/profile-dashboard-integration-20260927
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$CANDIDATE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          mkdir -p /tmp/profile-unification-qa
+          git merge --no-ff --no-commit "$BASE" > /tmp/profile-unification-qa/merge.log 2>&1 || true
+          cat /tmp/profile-unification-qa/merge.log
+          python <<'PY'
+          import os, re, subprocess
+          from pathlib import Path
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True)
+          base, candidate = os.environ['BASE'], os.environ['CANDIDATE']
+          conflicts = git('diff', '--name-only', '--diff-filter=U').splitlines()
+          allowed = {'src/lib/profile-priorities-access.test.ts', 'tests/profile-priorities-access.spec.ts', 'tests/dashboard-sparks.spec.ts'}
+          if set(conflicts) - allowed:
+              print(git('diff', '--cc'))
+              raise SystemExit(f'Unreviewed merge conflict: {conflicts}')
+          print('Reviewed naming/routing test conflicts:', conflicts)
+          ancestor = git('merge-base', base, candidate).strip()
+          def rename_labels(text):
+              return text.replace('"100 Sparks"', '"Priorities"').replace('"Adjust your 100 sparks."', '"Priorities"').replace('100 Sparks is discoverable', 'Priorities is discoverable')
+          for path in ['tests/profile-priorities-access.spec.ts', 'tests/dashboard-sparks.spec.ts']:
+              old, current = git('show', f'{ancestor}:{path}'), git('show', f'{base}:{path}')
+              assert rename_labels(old) == current, f'Unexpected non-label changes in {path}'
+              # Preserve the complete prior alias/save/account-isolation suite,
+              # adapting only labels that current main intentionally renamed.
+              Path(path).write_text(rename_labels(git('show', f'{candidate}:{path}')))
+              subprocess.run(['git', 'add', path], check=True)
+          path = 'src/lib/profile-priorities-access.test.ts'
+          current = git('show', f'{base}:{path}')
+          previous = git('show', f'{candidate}:{path}')
+          replacements = [
+              ('Profile exposes Priorities before role-readiness details', 'Profile is only an alias for the Dashboard priority editor'),
+              ('Profile displays feedback when priority saving returns to it', 'the canonical priorities view retains returned feedback'),
+          ]
+          for old_name, new_name in replacements:
+              def extract(text, name):
+                  pattern = r'test\("' + re.escape(name) + r'", \(\) => \{\n.*?\n\}\);'
+                  matches = list(re.finditer(pattern, text, re.S))
+                  assert len(matches) == 1, name
+                  return matches[0].group()
+              current = current.replace(extract(current, old_name), extract(previous, new_name), 1)
+          # Current main's extra consistent-Priorities-name regression is retained.
+          assert 'consistently name the feature Priorities' in current
+          Path(path).write_text(current)
+          subprocess.run(['git', 'add', path], check=True)
+          assert not git('diff', '--name-only', '--diff-filter=U').strip()
+          expected = set(git('diff', '--name-only', ancestor, candidate).splitlines())
+          actual = set(git('diff', '--cached', '--name-only', base).splitlines())
+          assert actual == expected, f'Scope mismatch: added={actual-expected}, missing={expected-actual}'
+          assert len(actual) == 17, actual
+          print('Exactly seventeen unification files; all other current-main source retained.')
+          PY
+          git diff --check
+          git diff --cached --check
+          git diff --cached "$BASE" > /tmp/profile-unification-qa/integration.patch
+          git diff --cached --stat "$BASE" | tee /tmp/profile-unification-qa/diff-stat.txt
+          git commit -m 'Reconcile Profile account alias with current Priorities naming'
+          git rev-parse HEAD | tee /tmp/profile-unification-qa/commit.txt
+          git rev-parse HEAD^{tree} | tee /tmp/profile-unification-qa/tree.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Focused routing and privacy regressions
+        run: node --import tsx --test src/lib/profile-dashboard-redirect.test.ts src/lib/profile-priorities-access.test.ts src/lib/dashboard-view.test.ts > /tmp/profile-unification-qa/focused-tests.log 2>&1
+      - name: Repository tests
+        run: npm test > /tmp/profile-unification-qa/tests.log 2>&1
+      - name: Lint and typecheck
+        run: |
+          npm run lint -- --quiet > /tmp/profile-unification-qa/lint.log 2>&1
+          npx tsc --noEmit --pretty false > /tmp/profile-unification-qa/types.log 2>&1
+      - name: Production build
+        run: npm run build > /tmp/profile-unification-qa/build.log 2>&1
+      - name: Install repository browser
+        run: npx playwright install --with-deps chromium
+      - name: Complete unchanged release browser suite
+        run: npm run test:e2e:release -- --reporter=line > /tmp/profile-unification-qa/browser.log 2>&1
+      - name: Build with only loopback synthetic account configuration
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: local-fixture-anon-key
+        run: |
+          rm -rf .next
+          npm run build > /tmp/profile-unification-qa/fixture-build.log 2>&1
+      - name: Verify real server actions and account isolation against loopback-only fixture
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: local-fixture-anon-key
+          DASHBOARD_SPARKS_FIXTURE: '1'
+        run: npx playwright test --config=playwright.release.config.ts tests/dashboard-sparks.spec.ts --reporter=line > /tmp/profile-unification-qa/fixture-browser.log 2>&1
+      - name: Publish only the tested merge to the existing PR branch
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$CANDIDATE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE"
+          git diff --exit-code
+          git push origin "HEAD:refs/heads/$BRANCH"
+          echo 'Existing PR branch updated; main and production are unchanged.'
+      - name: Preserve exact QA and failure evidence
+        if: always()
+        run: |
+          mkdir -p /tmp/profile-unification-qa
+          if [ -d test-results ]; then cp -R test-results /tmp/profile-unification-qa/; fi
+          if [ -d /tmp/dashboard-sparks-evidence ]; then cp -R /tmp/dashboard-sparks-evidence /tmp/profile-unification-qa/; fi
+          for log in /tmp/profile-unification-qa/*.log; do echo "=== $log ==="; tail -45 "$log"; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-unification-integrated-qa
+          path: /tmp/profile-unification-qa
+          retention-days: 7
