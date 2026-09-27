@@ -50,8 +50,8 @@ test("the home Set priorities links open the Complete Profile page", () => {
   runInNewContext(liveNowBridge, context);
   runInNewContext(priorityRoute, context);
 
-  assert.equal(context.rendered.match(/href="\/complete-profile"/g)?.length, 2);
-  assert.match(context.rendered, /Set priorities →/);
-  assert.match(context.rendered, /Review profile →/);
-  assert.doesNotMatch(context.rendered, /\/profile\/priorities/);
+  assert.equal(context.rendered.match(/href="\/complete-profile"/g)?.length, 1);
+  assert.match(context.rendered, /href="\/complete-profile">Set priorities →/);
+  assert.match(context.rendered, /href="\/offers\?view=live">Browse without personalization →/);
+  assert.match(context.rendered, /href="\/profile\/priorities">Review profile →/);
 });

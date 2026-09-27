@@ -2,7 +2,6 @@ import { expect, test, type ConsoleMessage, type Page, type TestInfo } from "@pl
 
 const PAPER = "rgb(247, 248, 250)";
 const BLACK = "rgb(5, 5, 5)";
-const BLUE = "rgb(36, 80, 255)";
 
 const publicEditorialRoutes = [
   "/about",
@@ -285,13 +284,22 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
       return {
         className: element.className,
         radius: Number.parseFloat(style.borderTopLeftRadius) || 0,
+        // Assert the approved sidebar radius without relaxing other routes.
+        commitmentsRadius: document.querySelector(".commitments-center") && window.innerWidth > 900
+          ? element.matches(".mt-v75-side-link") ? 9
+            : element.matches(".mt-v75-side-plan") ? 10 : null
+          : null,
         shadow: style.boxShadow,
       };
     });
   });
 
   for (const item of geometry) {
-    expect(item.radius, `${route}: ${String(item.className)} radius`).toBeLessThanOrEqual(3);
+    if (item.commitmentsRadius !== null) {
+      expect(item.radius, `${route}: approved Commitments ${String(item.className)} radius`).toBe(item.commitmentsRadius);
+    } else {
+      expect(item.radius, `${route}: ${String(item.className)} radius`).toBeLessThanOrEqual(3);
+    }
     expect(item.shadow, `${route}: ${String(item.className)} shadow`).toBe("none");
   }
 
@@ -359,19 +367,19 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await page.screenshot({ path: testInfo.outputPath("reference-walkthrough.png"), fullPage: false });
 });
 
-test("Commitments uses hard editorial navigation and preserves tab interaction", async ({ page }, testInfo) => {
+test("Commitments uses the approved rounded sidebar and preserves tab interaction", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expectCanonicalSurface(page, "/commitments", testInfo);
 
   const activeTrack = page.locator('.mt-v75-side-link[aria-current="page"]').first();
   await expect(activeTrack).toBeVisible();
-  await expect(activeTrack).toHaveCSS("border-radius", "0px");
-  await expect(activeTrack).toHaveCSS("background-color", BLACK);
-  await expect(activeTrack).toHaveCSS("border-left-color", BLUE);
+  await expect(activeTrack).toHaveCSS("border-radius", "9px");
+  await expect(activeTrack).toHaveCSS("background-color", "rgb(21, 23, 25)");
+  await expect(activeTrack).toHaveCSS("border-left-color", "rgb(40, 88, 255)");
 
   const planner = page.locator(".mt-v75-side-plan").first();
   await expect(planner).toBeVisible();
-  await expect(planner).toHaveCSS("border-radius", "0px");
+  await expect(planner).toHaveCSS("border-radius", "10px");
   await expect(planner).toHaveCSS("box-shadow", "none");
 
   await page.getByRole("link", { exact: true, name: "Ledger" }).click();

@@ -120,7 +120,7 @@ for (const target of ["/feed", "/discover"]) {
     const summary = page.locator(".mt-refined-header summary").filter({ hasText: "More" });
     await summary.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("link", { name: "Messages", exact: true })).toBeVisible();
+    await expect(page.locator(".mt-refined-header").getByRole("link", { name: "Messages", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === target);
     await page.locator(`[data-mt-primary-links] a[href="${target}"]`).click();
@@ -139,7 +139,7 @@ test("the React brand navigates to the standalone homepage without RSC", async (
   });
   await page.goto("/contact");
   const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === "/");
-  await page.getByRole("link", { name: "Moral Trade, home", exact: true }).click();
+  await page.locator(".mt-refined-header").getByRole("link", { name: "Moral Trade, home", exact: true }).click();
   await navigation;
   await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
   expect(rscRequests).toEqual([]);

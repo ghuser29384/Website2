@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 
 const routeBridge = readFileSync("public/moral-trade-live-priority-route.js", "utf8");
 const priorityPage = readFileSync("src/app/profile/priorities/page.tsx", "utf8");
+const priorityView = readFileSync("src/components/profile/profile-priorities-view.tsx", "utf8");
 const priorityAction = readFileSync("src/app/profile/priorities/actions.ts", "utf8");
 const priorityEditor = readFileSync(
   "src/components/profile/profile-priority-editor.tsx",
@@ -36,8 +37,10 @@ test("the no-match priority actions open the profile spark editor and preserve t
 });
 
 test("the profile priorities route edits and persists the canonical 100-spark allocation", () => {
-  assert.match(priorityPage, /ProfilePriorityEditor/);
-  assert.match(priorityPage, /priority_allocations,cause_areas/);
+  assert.match(priorityPage, /<ProfilePrioritiesView searchParams=\{searchParams\}/);
+  assert.match(priorityView, /<ProfilePriorityEditor/);
+  assert.match(priorityView, /priority_allocations,cause_areas/);
+  assert.match(priorityView, /\.eq\("profile_id", viewer\.authUser\.id\)/);
   assert.match(priorityEditor, /Adjust your 100 sparks/);
   assert.match(priorityEditor, /name="priority_allocation"/);
   assert.match(priorityEditor, /COMPLETE_PROFILE_SPARK_VALUE/);

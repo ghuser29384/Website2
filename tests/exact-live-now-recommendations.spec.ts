@@ -616,7 +616,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await expect(page).toHaveURL(/\/feed$/);
     const home = page.locator('[data-mt-primary-links] a[data-mt-feed-link="true"]');
-    await expect(home).toHaveText("Feed");
+    await expect(home).toHaveText("Home");
     await expect(home).toHaveAttribute("href", "/feed");
     await expect(home).toHaveAttribute("aria-current", "page");
     const feed = page.locator('[data-mt-live-now="adaptive"]');

@@ -227,9 +227,9 @@ test("the live home workspace has one semantic page heading and its dedicated na
   await expect(feedControl).toHaveCount(1);
   await expect(discoverControl).toHaveCount(1);
   await expect(evidenceControl).toHaveCount(0);
-  await expect(feedControl).toHaveAccessibleName("Feed");
+  await expect(feedControl).toHaveAccessibleName("Home");
   await expect(feedControl).toHaveAttribute("href", "/feed");
-  await expect(discoverControl).toHaveAccessibleName("Discover");
+  await expect(discoverControl).toHaveAccessibleName("Trades");
   await expect(discoverControl).toHaveAttribute("href", "/discover");
   await expect(page.locator("[data-mt-primary-links] > a")).toHaveText([
     "Home", "Trades", "Commitments", "Profile",

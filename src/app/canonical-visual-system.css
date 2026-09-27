@@ -1,10 +1,10 @@
 /*
  * Canonical Moral Trade visual system.
  *
- * The product source of truth is the Home / Walkthrough language:
- * black framing, warm paper-grid workspaces, editorial serif hierarchy,
- * monospaced utility labels, cobalt actions, thin rules, and hard geometry.
- * This file is deliberately imported last so legacy and specialist routes
+ * Shared operational pages use the approved quiet visual language:
+ * dark framing, neutral workspaces, restrained sans-serif hierarchy,
+ * cobalt actions, muted sage, thin rules, and hard geometry.
+ * This file follows the legacy styles so shared and specialist routes
  * inherit the same product identity without changing their information model.
  */
 
