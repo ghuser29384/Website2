@@ -1,0 +1,107 @@
+name: Verify quiet UI final document readiness
+on:
+  push:
+    branches: [ops/quiet-ui-source-review-20260926]
+    paths: [.github/workflows/quiet-ui-final-navigation.yml]
+permissions:
+  contents: read
+  actions: read
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+jobs:
+  release-failure:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Collect authoritative run metadata and masked failure excerpts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          gh api repos/ghuser29384/Website2/actions/runs/36290318506 > evidence/preview-run.json
+          gh api repos/ghuser29384/Website2/actions/runs/36290318506/jobs > evidence/preview-jobs.json
+          gh run view 36290318506 --repo ghuser29384/Website2 --log-failed > "$RUNNER_TEMP/preview-failed.log"
+          python3 <<'PY'
+          import os,re
+          from pathlib import Path
+          text=Path(os.environ['RUNNER_TEMP']+'/preview-failed.log').read_text()
+          lines=re.sub(r'\x1b\[[0-9;]*m','',text).splitlines()
+          selected=set(range(max(0,len(lines)-150),len(lines)))
+          for i,line in enumerate(lines):
+              if re.search(r'Error:|failed|Failure|Timed out|Expected:|Received:|Timeout|\d+\) \[',line,re.I):
+                  selected.update(range(max(0,i-3),min(len(lines),i+15)))
+          out=[]
+          for i in sorted(selected):
+              line=lines[i]
+              if re.search(r'(?:TOKEN|SECRET|PASSWORD|SERVICE_ROLE_KEY|ANON_KEY)\s*[:=]',line,re.I):
+                  line='[credential assignment omitted]'
+              out.append(line)
+          Path('evidence/preview-failure-excerpts.log').write_text('\n'.join(out))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-actual-preview-failure
+          path: evidence/
+          retention-days: 7
+  navigation:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e906e3d3245ed949049f385134dce7f95e4db571
+          persist-credentials: false
+      - name: Require the final redirected document to finish parsing before asserting its surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git hash-object tests/refined-header.spec.ts)" = 76b9c42868c45c60777d312245d08402b9b8bb9b
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('tests/refined-header.spec.ts')
+          text=p.read_text()
+          old='  await page.goto("/100-sparks");\n  await expect(page).toHaveURL(/\\/login\\?returnTo=/);'
+          new='  await page.goto("/100-sparks");\n  // The legacy route can stream a second redirect after its first load event.\n  // Wait for the final document, not merely its committed URL.\n  await page.waitForURL(/\\/login\\?returnTo=/, { waitUntil: "domcontentloaded" });\n  await expect(page).toHaveURL(/\\/login\\?returnTo=/);'
+          assert text.count(old)==1
+          p.write_text(text.replace(old,new,1))
+          PY
+          git diff --check
+          git diff > evidence/navigation.patch
+          git rev-parse HEAD HEAD^{tree} > evidence/revision.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Verify five independent executions without retries or changed timeout limits
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/navigation-results.json
+        run: npx playwright test tests/refined-header.spec.ts --grep 'Profile owns priorities' --repeat-each=5 --output=test-results/navigation --reporter=line,json
+      - name: Verify the integrated desktop/mobile suite at its normal concurrency
+        id: focused
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/focused-results.json
+        run: npx playwright test tests/quiet-ui.spec.ts tests/homepage-narrow-header.spec.ts tests/refined-header.spec.ts tests/discover-home-visual-alignment.spec.ts tests/selected-ui-cleanup.spec.ts tests/returning-homepage.spec.ts tests/create-route-ui-regression.spec.ts tests/technical-spec-overflow.spec.ts --output=test-results/focused --reporter=line,json
+      - name: Run the full unchanged production-release suite
+        if: ${{ !cancelled() && steps.focused.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/release-results.json
+        run: npm run test:e2e:release -- --output=test-results/release --reporter=line,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiet-ui-final-document-verification
+          path: |
+            evidence/
+            test-results/
+          retention-days: 7
