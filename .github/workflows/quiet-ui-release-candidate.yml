@@ -25,22 +25,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 439eda02244ff6c7d3b2afbc171bb5110f028ea4
+          ref: 45a327757d515d73bceeae7a87dde3971b46de0a
           fetch-depth: 0
           persist-credentials: false
       - name: Verify the published candidate matches the independently reviewed tree
         id: verify
         run: |
           set -euo pipefail
-          candidate=439eda02244ff6c7d3b2afbc171bb5110f028ea4
+          candidate=45a327757d515d73bceeae7a87dde3971b46de0a
+          base=be4f08b4b8e8b1c5033cddec8c6ef36802daf2e0
           test "$(git rev-parse HEAD)" = "$candidate"
-          test "$(git rev-parse HEAD^{tree})" = 8005830af701579b86e9376338a0aff8b6176f90
-          test "$(git rev-parse HEAD^1)" = 35b174d5d09c6a846a6964af02c4dc248d6e1eb4
-          test "$(git rev-parse HEAD^2)" = caa25edccad0a444d4d18b45046a9e3fdfc1abf8
-          git diff --check HEAD^2 HEAD
+          test "$(git rev-parse HEAD^{tree})" = aadc14305b82ff9f456fa22bba0517d751467c9a
+          test "$(git rev-parse HEAD^)" = 3f0c209646479d7ba7062d72135be9bd24db4e37
+          git merge-base --is-ancestor "$base" HEAD
+          git merge-base --is-ancestor ea9f882fbd665f898ecd210bcddbfd6fc338d8f9 HEAD
+          git diff --exit-code 0f63ad0ffdb955d98167d474d347290cd42cfe73 HEAD -- . ':(exclude).github/workflows/dashboard-account-security-hotfix-gates.yml'
+          git diff --check "$base" HEAD
           mkdir -p evidence
-          printf 'candidate=%s\nmain=%s\ntree=%s\n' "$candidate" "$(git rev-parse HEAD^2)" "$(git rev-parse HEAD^{tree})" > evidence/revision.txt
-          git diff HEAD^2 HEAD > evidence/changes.patch
+          printf 'candidate=%s\nmain=%s\ntree=%s\n' "$candidate" "$base" "$(git rev-parse HEAD^{tree})" > evidence/revision.txt
+          git diff "$base" HEAD > evidence/changes.patch
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -101,7 +104,7 @@ jobs:
         id: focused
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/focused-results.json
-        run: npx playwright test tests/quiet-ui.spec.ts tests/homepage-narrow-header.spec.ts tests/refined-header.spec.ts tests/discover-home-visual-alignment.spec.ts tests/selected-ui-cleanup.spec.ts tests/returning-homepage.spec.ts tests/create-route-ui-regression.spec.ts --output=test-results/focused --reporter=line,json
+        run: npx playwright test tests/quiet-ui.spec.ts tests/homepage-narrow-header.spec.ts tests/refined-header.spec.ts tests/discover-home-visual-alignment.spec.ts tests/selected-ui-cleanup.spec.ts tests/returning-homepage.spec.ts tests/create-route-ui-regression.spec.ts tests/technical-spec-overflow.spec.ts --output=test-results/focused --reporter=line,json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -186,7 +189,6 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Commitments streaming, authentication and the approved current-main layout
         env:
-          PLAYWRIGHT_JSON_OUTPUT_NAME_NAME: evidence/commitments-results.json
           PLAYWRIGHT_JSON_OUTPUT_NAME: evidence/commitments-results.json
         run: npx playwright test --config=playwright.commitments.config.ts --reporter=line,json
       - uses: actions/upload-artifact@v4
