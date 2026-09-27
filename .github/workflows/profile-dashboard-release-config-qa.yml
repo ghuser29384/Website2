@@ -1,0 +1,61 @@
+name: Profile Dashboard release-config QA
+on:
+  push:
+    branches: [ops/profile-dashboard-20260926]
+    paths: [.github/workflows/profile-dashboard-release-config-qa.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+      VERCEL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 31231dcd8d78cb7c7e4f16669c390bb44c48adc6
+          persist-credentials: false
+      - name: Verify exact source and already-passed integrated account fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/profile-dashboard-release-config-qa
+          test "$(git rev-parse HEAD)" = 31231dcd8d78cb7c7e4f16669c390bb44c48adc6
+          test "$(git rev-parse HEAD^{tree})" = aa87d8fcc7b1a29a9d5db827f1ce7506ed88cff9
+          git rev-parse HEAD > /tmp/profile-dashboard-release-config-qa/commit.txt
+          gh api repos/ghuser29384/Website2/actions/jobs/108514772533 > /tmp/profile-dashboard-release-config-qa/passed-fixture-job.json
+          jq -e '.conclusion == "success" and .name == "fixture" and .run_id == 36281748234' /tmp/profile-dashboard-release-config-qa/passed-fixture-job.json >/dev/null
+          printf '%s\n' 'The prior integrated run passed all source gates, all 14 private-account fixture tests and 89 public tests; its only failure was a Safety-to-Discover navigation deadline at the base config 5-second expect timeout. This run uses the unchanged production release configuration (10-second expect timeout) for all targeted browser tests, with no source or test edits and no added retries.' > /tmp/profile-dashboard-release-config-qa/context.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Complete source tests
+        run: npm test > /tmp/profile-dashboard-release-config-qa/tests.log 2>&1
+      - name: Lint and typecheck
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet > /tmp/profile-dashboard-release-config-qa/lint.log 2>&1
+          npx tsc --noEmit --pretty false > /tmp/profile-dashboard-release-config-qa/types.log 2>&1
+      - name: Production build
+        run: npm run build > /tmp/profile-dashboard-release-config-qa/build.log 2>&1
+      - run: npx playwright install --with-deps chromium
+      - name: Use the unchanged production release browser gate for targeted routes
+        run: npm run test:e2e:release -- tests/profile-dashboard-redirect.spec.ts tests/profile-priorities-access.spec.ts tests/refined-header.spec.ts tests/exact-live-now-recommendations.spec.ts tests/sitewide-canonical-visual-system.spec.ts --reporter=line > /tmp/profile-dashboard-release-config-qa/browser.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-dashboard-release-config-qa
+          path: |
+            /tmp/profile-dashboard-release-config-qa
+            test-results
+          retention-days: 7
