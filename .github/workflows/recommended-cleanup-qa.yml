@@ -1,0 +1,105 @@
+name: Verify recommended cleanup only - never merge controller
+on:
+  pull_request:
+    paths:
+      - '.github/recommended-cleanup/**'
+      - '.github/workflows/recommended-cleanup-qa.yml'
+permissions:
+  contents: read
+concurrency:
+  group: recommended-cleanup-qa-20260928
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ops/recommended-cleanup-20260928'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    permissions:
+      contents: write
+    env:
+      BASE_SHA: 2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16
+      PRODUCT_BRANCH: cleanup/recommended-followup-20260928
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16
+          fetch-depth: 2
+          persist-credentials: false
+          path: app
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          path: controller
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Apply only the reviewed cleanup to the pinned production baseline
+        working-directory: app
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
+          python3 ../controller/.github/recommended-cleanup/apply.py
+          mkdir -p ../evidence
+          git diff --cached > ../evidence/patch.diff
+          git diff --cached --stat > ../evidence/scope.txt
+          git rev-parse HEAD > ../evidence/base.txt
+      - name: Install locked dependencies
+        working-directory: app
+        run: npm ci
+      - name: Unit, lint, types, production build and rendered gates
+        working-directory: app
+        shell: bash
+        run: |
+          set -uo pipefail
+          failed=0
+          npm test > ../evidence/unit.log 2>&1 || failed=1
+          npm run lint -- --quiet > ../evidence/lint.log 2>&1 || failed=1
+          npx tsc --noEmit > ../evidence/types.log 2>&1 || failed=1
+          if npm run build > ../evidence/build.log 2>&1; then
+            npx playwright install --with-deps chromium > ../evidence/browser-install.log 2>&1 || failed=1
+            PLAYWRIGHT_USE_PRODUCTION_SERVER=1 npx playwright test tests/recommended-cleanup.spec.ts --workers=1 --reporter=line > ../evidence/targeted-browser.log 2>&1 || failed=1
+            npm run test:e2e:release -- --reporter=line > ../evidence/release-browser.log 2>&1 || failed=1
+          else
+            failed=1
+          fi
+          for file in ../evidence/*.log; do echo "==== $file ===="; tail -n 100 "$file"; done
+          test "$failed" = 0
+      - name: Publish only a validated product branch; never main
+        working-directory: app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
+          test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$BASE_SHA"
+          git diff --exit-code
+          git diff --cached --check
+          python3 - <<'PY'
+          import json, subprocess
+          actual = subprocess.check_output(['git','diff','--cached','--name-only'], text=True).splitlines()
+          assert sorted(actual) == sorted(json.load(open('/tmp/recommended-cleanup-scope.json')))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Retire About and finish recommended account and Evidence navigation cleanup'
+          git rev-parse HEAD > ../evidence/product-sha.txt
+          git rev-parse HEAD^{tree} > ../evidence/product-tree.txt
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recommended-cleanup-qa-${{ github.run_id }}
+          path: |
+            evidence
+            app/test-results
+            app/playwright-report
+          if-no-files-found: warn
+          retention-days: 14
