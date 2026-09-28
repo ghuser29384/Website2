@@ -229,6 +229,14 @@ export function createAccountPaymentService(input: AccountPaymentServiceInput) {
     });
     return safeStripeDestination(link.url);
   }
+  async function refreshReceiving(actor: PaymentActor) {
+    const account = await payout(actor);
+    if (!account) throw new AccountPaymentError("Set up receiving payments first.");
+    // An explicit authenticated POST refreshes the legacy routing cache from Stripe.
+    // Page rendering never writes readiness; returning from onboarding is not proof.
+    if (livemode) await repo.syncPayout(actor.id, account);
+    return payoutStatus(account);
+  }
   async function manageReceiving(actor: PaymentActor) {
     const account = await payout(actor);
     if (!account) throw new AccountPaymentError("Set up receiving payments first.");
@@ -238,5 +246,5 @@ export function createAccountPaymentService(input: AccountPaymentServiceInput) {
     const link = await stripe.accounts.createLoginLink(account.id);
     return safeStripeDestination(link.url);
   }
-  return { methods, addMethod, removeMethod, setupResult, receiveOverview, beginReceiving, manageReceiving, customerId };
+  return { methods, addMethod, removeMethod, setupResult, receiveOverview, beginReceiving, refreshReceiving, manageReceiving, customerId };
 }

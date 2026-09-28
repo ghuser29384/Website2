@@ -29,7 +29,9 @@ that this platform can onboard every listed country. Stripe enforces eligibility
 Provider identity, account metadata, and mode are verified before access; browser
 form data never chooses a customer, profile or connected-account owner. Returned
 bank/card data is reduced to masked labels and currency. Readiness comes from
-Stripe capabilities and flags, not a successful navigation.
+Stripe capabilities and flags, not a successful navigation. An authenticated
+Refresh receiving status POST copies those verified flags into the existing
+agreement-routing account record; page rendering itself never writes readiness.
 
 ## Storage and authorization
 

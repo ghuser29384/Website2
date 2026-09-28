@@ -75,7 +75,7 @@ test.describe("Account payment setup with isolated Auth, database and Stripe HTT
       const url = new URL(req.url ?? "/", "http://127.0.0.1:54334");
       const path = url.pathname;
       res.setHeader("Content-Type", "application/json");
-      if (providerUnavailable) { res.statusCode = 503; res.end(JSON.stringify({ error: { type: "api_error", message: "Fixture unavailable" } })); return; }
+      if (providerUnavailable) { res.statusCode = 403; res.end(JSON.stringify({ error: { type: "api_error", message: "Fixture unavailable" } })); return; }
       if (req.method === "POST") providerWrites.push(path);
       const metadata = Object.fromEntries([...form.entries()].filter(([key]) => /^metadata\[/.test(key)).map(([key, value]) => [key.slice(9, -1), value]));
       let result: unknown;
@@ -153,13 +153,20 @@ test.describe("Account payment setup with isolated Auth, database and Stripe HTT
     await expect(page.getByText("Setup incomplete", { exact: true })).toBeVisible();
     expect(await page.getByText("Stripe setup complete", { exact: true }).count()).toBe(0);
     Object.assign(accounts.get("acct_fixture")!, { charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: "active" } });
-    await page.reload();
+    await page.getByRole("button", { name: "Refresh receiving status", exact: true }).click();
     await expect(page.getByText("Stripe setup complete", { exact: true })).toBeVisible();
     await expect(page.getByText("Test bank ending in 6789", { exact: true })).toBeVisible();
     await page.screenshot({ path: "/tmp/account-payment-settings-evidence/receiving-ready.png", fullPage: true });
     await page.getByRole("button", { name: "Manage payout methods", exact: true }).click();
     await expect(page).toHaveURL(/connect.stripe.com\/test-dashboard/);
     expect(providerWrites.some(path => /payment_intents|transfers|charges|subscriptions/.test(path))).toBe(false);
+  });
+  test("provider failure is explicit and never appears as an empty saved-method list", async ({ page, context }) => {
+    providerUnavailable = true; await signIn(context); await page.goto(`${origin}/dashboard/payments`);
+    await expect(page.getByText("We could not load these settings from Stripe. Please try again or contact support.", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add payment method", exact: true })).toHaveCount(0);
+    await expect(page.getByText("No payment methods saved.", { exact: true })).toHaveCount(0);
+    expect(providerWrites).toEqual([]);
   });
   test("signed-out route keeps return destination and cannot create provider objects", async ({ page, context }) => {
     await context.clearCookies(); await page.goto(`${origin}/dashboard/payments`);

@@ -149,6 +149,19 @@ test("payout summary contains only masked details and provider-derived readiness
   await h.service.manageReceiving(A); assert.equal(h.calls.at(-1)?.action, "login");
 });
 
+test("explicit receiving refresh syncs verified provider readiness, not a return flag", async () => {
+  const h = harness(true);
+  assert.equal(await h.service.refreshReceiving(A), "Setup incomplete");
+  assert.equal(h.calls.filter(c => c.action === "syncPayout").length, 1);
+  h.account.charges_enabled = true; h.account.payouts_enabled = true;
+  h.account.details_submitted = true; h.account.capabilities.transfers = "active";
+  assert.equal(await h.service.refreshReceiving(A), "Stripe setup complete");
+  assert.equal(h.calls.filter(c => c.action === "syncPayout").length, 2);
+  h.account.metadata.profile_id = B.id;
+  await assert.rejects(h.service.refreshReceiving(A), /could not be verified/);
+  assert.equal(h.calls.filter(c => c.action === "syncPayout").length, 2);
+});
+
 test("redirects are constrained to Stripe and configured return origins", () => {
   for (const url of ["javascript:alert(1)", "https://stripe.com.evil.invalid", "https://user@checkout.stripe.com", "https://checkout.stripe.com:444", "//connect.stripe.com"]) assert.throws(() => safeStripeDestination(url));
   assert.equal(safeStripeDestination("https://connect.stripe.com/setup/x"), "https://connect.stripe.com/setup/x");

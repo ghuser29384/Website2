@@ -41,6 +41,11 @@ export async function setupReceivingAction(form: FormData) {
     return service.beginReceiving(actor, String(form.get("country") ?? ""));
   });
 }
+export async function refreshReceivingAction() {
+  await runPaymentAction(async (actor) => {
+    await (await accountPayments()).service.refreshReceiving(actor);
+  });
+}
 export async function manageReceivingAction() {
   await runPaymentAction(async (actor) => (await accountPayments()).service.manageReceiving(actor));
 }

@@ -8,7 +8,7 @@ import { requireViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { ACCOUNT_PAYMENTS_PATH, AccountPaymentError, PAYMENT_METHOD_CONSENT } from "@/lib/payments/account-payment-policy";
 import { accountPayments } from "@/lib/payments/account-payments";
-import { addPaymentMethodAction, removePaymentMethodAction, setupReceivingAction, manageReceivingAction } from "./actions";
+import { addPaymentMethodAction, removePaymentMethodAction, setupReceivingAction, refreshReceivingAction, manageReceivingAction } from "./actions";
 import styles from "./payments.module.css";
 
 export const metadata: Metadata = { title: "Payment methods & receiving", robots: { index: false, follow: false } };
@@ -50,7 +50,7 @@ export default async function PaymentsPage({ searchParams }: Props) {
   const flow = first(params.flow);
   if (!notice && flow === "cancelled") notice = "You returned without completing this setup. Review your saved methods below.";
   if (!notice && flow === "receive-refresh") notice = "Your Stripe setup link expired. Continue setup below to get a new link.";
-  if (!notice && flow === "receive-return") notice = "You returned from Stripe. Your current receiving status is shown below.";
+  if (!notice && flow === "receive-return") notice = "You returned from Stripe. Review your status below, then refresh receiving status to sync your account.";
   const countryNames = new Intl.DisplayNames(["en"], { type: "region" });
 
   return <div className={styles.page}>
@@ -98,6 +98,7 @@ export default async function PaymentsPage({ searchParams }: Props) {
             {receiving.methods.length ? <ul className={styles.methods}>{receiving.methods.map((method, index) => <li key={index}><strong>{method.label}</strong><span>{method.currency}</span></li>)}</ul> : <div className={styles.empty}>No payout method returned by Stripe. Continue setup to review your details.</div>}
             {receiving.hasMore ? <p>Open Stripe to view all payout methods.</p> : null}
             <div className={styles.actions}>
+              <form action={refreshReceivingAction}><PaymentSubmit pendingLabel="Refreshing…">Refresh receiving status</PaymentSubmit></form>
               {receiving.status !== "Stripe setup complete" ? <form action={setupReceivingAction}><PaymentSubmit>Continue setup</PaymentSubmit></form> : null}
               {receiving.canManage ? <form action={manageReceivingAction}><PaymentSubmit>Manage payout methods</PaymentSubmit></form> : <p>Manage this account in your Stripe dashboard.</p>}
             </div>

@@ -13,7 +13,12 @@ https.request = function(options, callback) {
         options.headers?.authorization !== 'Bearer sk_test_account_payment_fixture') {
       throw new Error('Payment fixture refuses non-fixture credentials');
     }
-    return http.request({ ...options, host: '127.0.0.1', hostname: '127.0.0.1', port: 54334, protocol: 'http:' }, callback);
+    const request = http.request({ ...options, agent: undefined, host: '127.0.0.1', hostname: '127.0.0.1', port: 54334, protocol: 'http:' }, callback);
+    // The SDK still waits for the TLS event on its test-only intercepted request.
+    request.on('socket', socket => {
+      if (socket.connecting) socket.once('connect', () => socket.emit('secureConnect'));
+    });
+    return request;
   }
   return original.apply(this, arguments);
 };
