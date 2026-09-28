@@ -1,0 +1,121 @@
+name: Account payment settings final evidence
+on:
+  push:
+    branches: [ops/payment-methods-implementation-20260928]
+    paths: [.github/workflows/account-payment-final-evidence-20260928.yml]
+permissions:
+  contents: read
+jobs:
+  align:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.publish.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ba062d0d1864bf3167cfc42c0514648eb8676d09
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preserve SQL and every runtime byte; align recorded QA migration version
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF_NAME" = ops/payment-methods-implementation-20260928
+          python3 - <<'PY'
+          import hashlib,pathlib,subprocess
+          def blob(b): return hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
+          old='20260928181500_account_payment_settings.sql';new='20260928182211_account_payment_settings.sql'
+          path=pathlib.Path('supabase/migrations')
+          assert blob((path/old).read_bytes())=='b85aaeb9e476c03cdb4436e796c9932e7606955d'
+          assert not (path/new).exists()
+          (path/old).rename(path/new)
+          replacements={
+            'docs/account-payment-methods.md':('ad25a6e908a3e545e2d10d472e23fc0fa0c54c7c','4a6836dc23df4f1d3fd8f7fdb53e087e5240abc4',old,new),
+            'src/lib/payments/account-payment-service.test.ts':('f695fb934f1f603a157b65480728e6bf4f794db5','beb8e2572e3500acaacfbf9ec5f091d4ef3515bb',old,new),
+            'tests/account-payment-settings.spec.ts':('8faab8009f0dc0c21c8c2b16b82ce0054cff87f9','d1b783f02112f214c1f2674b41ed10c74da4a929','await expect(page.getByRole("alert")).toContainText("No payment profile");','await expect(page.locator("main").getByRole("alert")).toContainText("No payment profile");'),
+          }
+          for p,(before,after,a,b) in replacements.items():
+            f=pathlib.Path(p);data=f.read_bytes();assert blob(data)==before,p
+            text=data.decode();assert text.count(a)==1,p
+            data=text.replace(a,b).encode();assert blob(data)==after,p;f.write_bytes(data)
+          paths=list(replacements)+[str(path/old),str(path/new)]
+          subprocess.run(['git','add','-A','--']+paths,check=True)
+          assert sorted(subprocess.check_output(['git','diff','--cached','--name-only','--no-renames']).decode().splitlines())==sorted(paths)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          proof=subprocess.check_output(['git','diff','--cached','--summary','-M']).decode()
+          assert '(100%)' in proof
+          pathlib.Path('/tmp/account-payment-runtime-equivalence.txt').write_text('Base ba062d0d1864bf3167cfc42c0514648eb8676d09; all runtime source/config/dependency files and SQL contents unchanged. Only the QA migration filename and its two references plus one scoped test selector changed.\n'+proof)
+          PY
+      - name: Append identity and test-only changes to the draft PR
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch=feat/account-payment-methods-20260928
+          test "$(git ls-remote origin refs/heads/$branch | cut -f1)" = ba062d0d1864bf3167cfc42c0514648eb8676d09
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git commit -m 'Align QA migration version and scope payment error assertion'
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "HEAD:refs/heads/$branch"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git rev-parse HEAD HEAD^{tree} >> /tmp/account-payment-runtime-equivalence.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: account-payment-equivalence-${{ github.run_id }}
+          path: /tmp/account-payment-runtime-equivalence.txt
+          retention-days: 14
+  acceptance:
+    needs: align
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ACCOUNT_PAYMENTS_FIXTURE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54333
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: fixture-publishable
+      SUPABASE_SERVICE_ROLE_KEY: fixture-service
+      STRIPE_SECRET_KEY: sk_test_account_payment_fixture
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL_ENV: preview
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.align.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Exact-head focused tests, types and syntax
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/account-payment-settings-evidence
+          git diff --check HEAD^
+          node --check tests/fixtures/account-payments-preload.cjs
+          node --import tsx --test src/lib/payments/account-payment-service.test.ts src/lib/live-account-actions.test.ts src/live-account-data.test.ts | tee /tmp/account-payment-settings-evidence/focused.log
+          npm run lint -- --quiet | tee /tmp/account-payment-settings-evidence/lint.log
+          npx tsc --noEmit --pretty false | tee /tmp/account-payment-settings-evidence/types.log
+      - name: Exact-head production build and all six server-action browser cases
+        run: |
+          set -euo pipefail
+          npm run build | tee /tmp/account-payment-settings-evidence/build.log
+          npx playwright install --with-deps chromium
+          export NODE_OPTIONS="--require=$GITHUB_WORKSPACE/tests/fixtures/account-payments-preload.cjs"
+          npm run test:e2e -- tests/account-payment-settings.spec.ts --workers=1 --reporter=line | tee /tmp/account-payment-settings-evidence/browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: account-payment-accepted-${{ github.run_id }}
+          path: |
+            /tmp/account-payment-settings-evidence
+            test-results
+          retention-days: 14
