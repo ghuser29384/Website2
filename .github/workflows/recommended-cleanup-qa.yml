@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: recommended-cleanup-qa-20260928
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   verify:
     if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ops/recommended-cleanup-20260928'
