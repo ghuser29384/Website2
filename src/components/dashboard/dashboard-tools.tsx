@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { getLegacyDashboardTarget, type DashboardView } from "@/lib/dashboard-view";
 import styles from "./dashboard-tools.module.css";
 
-export function DashboardTools({ active }: { active: DashboardView }) {
+export function DashboardTools({ active }: { active: DashboardView | "payments" }) {
   useEffect(() => {
     if (active !== "priorities") return;
     function preserveLegacySection() {
@@ -23,6 +23,9 @@ export function DashboardTools({ active }: { active: DashboardView }) {
       <Link href="/dashboard" prefetch={false} aria-current={active === "priorities" ? "page" : undefined}>
         Priorities
       </Link>
+      <Link href="/dashboard/payments" prefetch={false} aria-current={active === "payments" ? "page" : undefined}>
+        Payments
+      </Link>
       <details className={styles.currency} onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.currentTarget.open = false;
@@ -34,7 +37,7 @@ export function DashboardTools({ active }: { active: DashboardView }) {
           <h2>Currency</h2>
           <p>Amounts use the currency stated in each offer or agreement. An account-wide currency selector is not available.</p>
           <p>Changing your priorities does not convert amounts or change any payment terms.</p>
-          <Link href="/dashboard?view=controls#payment-setup" prefetch={false}>Payment setup</Link>
+          <Link href="/dashboard/payments" prefetch={false}>Payment setup</Link>
         </div>
       </details>
       <Link href="/complete-profile" prefetch={false}>Profile details</Link>

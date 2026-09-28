@@ -62,7 +62,7 @@ async function mountAccount(page: Page, authenticated = true) {
 }
 
 const destinations = {
-  "payment-account": "/dashboard#payment-setup",
+  "payment-account": "/dashboard/payments",
   notifications: "/dashboard#privacy-controls",
   "public-trust": "/dashboard#wish-profile",
   privacy: "/dashboard#privacy-controls",

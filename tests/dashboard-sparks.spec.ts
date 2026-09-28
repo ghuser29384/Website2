@@ -205,7 +205,9 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     }
     await tools.locator("summary").click();
     await tools.getByRole("link", { name: "Payment setup", exact: true }).click();
-    await expect(page.locator("#payment-setup")).toBeVisible();
+    await expect(page).toHaveURL(`${origin}/dashboard/payments`);
+    await expect(page.locator("#payment-methods")).toBeVisible();
+    await expect(page.locator("#receive-payments")).toBeVisible();
     await page.screenshot({ path: "/tmp/dashboard-sparks-evidence/dashboard-payment-controls.png" });
     await tools.getByRole("link", { name: "Priorities", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
