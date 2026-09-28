@@ -1,0 +1,32 @@
+name: Stop superseded selected-UI QA
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/selected-ui-cancel-superseded.yml'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  stop-superseded:
+    if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ops/selected-ui-cleanup-20260926-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Cancel only the immutable older QA run with superseded browser locators
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ghuser29384/Website2
+          OLD_RUN: '36263585685'
+          OLD_HEAD: 236599ebe6d2f8d9a9ed951083427c0fe02b3f3a
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/actions/runs/$OLD_RUN" > "$RUNNER_TEMP/old-qa.json"
+          test "$(jq -r .head_sha "$RUNNER_TEMP/old-qa.json")" = "$OLD_HEAD"
+          test "$(jq -r .head_branch "$RUNNER_TEMP/old-qa.json")" = 'ops/selected-ui-cleanup-20260926-v1'
+          test "$(jq -r .workflow_id "$RUNNER_TEMP/old-qa.json")" = '367878173'
+          test "$(jq -r .event "$RUNNER_TEMP/old-qa.json")" = 'pull_request'
+          if [ "$(jq -r .status "$RUNNER_TEMP/old-qa.json")" != 'completed' ]; then
+            gh api --method POST "repos/$REPO/actions/runs/$OLD_RUN/cancel"
+          fi
+          echo 'Only the older selected-UI QA was superseded. The integrated candidate must still pass all checks; no gate is marked passed.'
