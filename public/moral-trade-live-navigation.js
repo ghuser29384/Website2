@@ -3,6 +3,11 @@
 
   if (window.__MT_DISCOVER_NAVIGATION_BRIDGE__) return;
   window.__MT_DISCOVER_NAVIGATION_BRIDGE__ = true;
+  // Optional navigation stays absent if this public availability check cannot run.
+  const evidenceNavigation = document.createElement("script");
+  evidenceNavigation.src = "/moral-trade-evidence-navigation.js";
+  evidenceNavigation.async = true;
+  document.head.appendChild(evidenceNavigation);
 
   const navSelectors = [
     ".topbar nav",
@@ -126,7 +131,14 @@
           const link = document.createElement("a");
           link.href = href;
           link.textContent = label;
-          panel.appendChild(link);
+          if (href === "/evidence") {
+            const gate = document.createElement("template");
+            gate.dataset.mtEvidenceNavigation = "true";
+            gate.content.appendChild(link);
+            panel.appendChild(gate);
+          } else {
+            panel.appendChild(link);
+          }
         }
         more.append(trigger, panel);
         more.addEventListener("keydown", (event) => {

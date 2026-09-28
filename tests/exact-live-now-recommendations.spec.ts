@@ -681,3 +681,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Welcome back", exact: true })).toBeVisible();
   });
 });
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/navigation/evidence", (route) => route.fulfill({ json: { available: true } }));
+});

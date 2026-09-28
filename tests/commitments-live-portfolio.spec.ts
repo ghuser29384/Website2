@@ -150,3 +150,8 @@ for (const viewport of [
     expect(failures.failedRequests).toEqual([]);
   });
 }
+
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/navigation/evidence", (route) => route.fulfill({ json: { available: false } }));
+});

@@ -112,3 +112,7 @@ test("the directory masthead keeps native page links usable without JavaScript",
   // directory navigation itself must still perform a native document request.
   await context.close();
 });
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/navigation/evidence", (route) => route.fulfill({ json: { available: true } }));
+});
