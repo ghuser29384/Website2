@@ -8,27 +8,21 @@ permissions:
 jobs:
   source:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: f58ee041dfd909cad7699ed67485cc0a7db95933
+          ref: 2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - name: Export immutable source and development dependencies
+      - name: Export immutable source only
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = ghuser29384/Website2
-          test "$(git rev-parse HEAD)" = f58ee041dfd909cad7699ed67485cc0a7db95933
+          test "$(git rev-parse HEAD)" = 2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16
           mkdir -p /tmp/payment-methods-source
           git archive --format=zip HEAD -o /tmp/payment-methods-source/source.zip
           git rev-parse HEAD HEAD^{tree} > /tmp/payment-methods-source/source-identity.txt
-          npm ci --ignore-scripts
-          tar --exclude='node_modules/@next/swc-*' -czf /tmp/payment-methods-source/dependencies.tgz node_modules
-          sha256sum /tmp/payment-methods-source/source.zip /tmp/payment-methods-source/dependencies.tgz
+          sha256sum /tmp/payment-methods-source/source.zip
       - uses: actions/upload-artifact@v4
         with:
           name: payment-methods-source-${{ github.run_id }}
