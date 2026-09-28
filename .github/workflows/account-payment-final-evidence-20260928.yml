@@ -53,7 +53,10 @@ jobs:
           set -euo pipefail
           node --check tests/fixtures/account-payments-preload.cjs
           node --import tsx --test src/lib/payments/account-payment-service.test.ts src/lib/live-account-actions.test.ts src/live-account-data.test.ts | tee /tmp/account-payment-settings-evidence/focused.log
-          npm test | tee /tmp/account-payment-settings-evidence/unit.log
+          # The normal repository unit suite runs without a configured external
+          # backend. Loopback fixtures start only in the later browser runner.
+          # Do not let those browser-only variables redirect unrelated unit tests.
+          env -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY -u SUPABASE_SERVICE_ROLE_KEY -u STRIPE_SECRET_KEY npm test | tee /tmp/account-payment-settings-evidence/unit.log
           npm run lint -- --quiet | tee /tmp/account-payment-settings-evidence/lint.log
           npx tsc --noEmit --pretty false | tee /tmp/account-payment-settings-evidence/types.log
       - name: Exact-head production build and all six server-action browser cases
