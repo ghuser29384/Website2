@@ -46,6 +46,7 @@ jobs:
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
           mkdir -p ../evidence
           python3 ../controller/.github/recommended-cleanup/prepare.py
+          python3 ../controller/.github/recommended-cleanup/correct-expectations.py
           git diff --cached > ../evidence/patch.diff
           git diff --cached --stat > ../evidence/scope.txt
           git rev-parse HEAD > ../evidence/base.txt
@@ -64,12 +65,29 @@ jobs:
           if npm run build > ../evidence/build.log 2>&1; then
             npx playwright install --with-deps chromium > ../evidence/browser-install.log 2>&1 || failed=1
             PLAYWRIGHT_USE_PRODUCTION_SERVER=1 npx playwright test tests/recommended-cleanup.spec.ts --workers=1 --reporter=line > ../evidence/targeted-browser.log 2>&1 || failed=1
+            if [ -d test-results ]; then cp -R test-results ../evidence/targeted-test-results; fi
             npm run test:e2e:release -- --reporter=line > ../evidence/release-browser.log 2>&1 || failed=1
+            if [ -d test-results ]; then cp -R test-results ../evidence/release-test-results; fi
           else
             failed=1
           fi
+          echo '=== failed unit assertions ==='
+          grep -n -B4 -A45 'not ok' ../evidence/unit.log || true
           for file in ../evidence/*.log; do echo "==== $file ===="; tail -n 100 "$file"; done
           test "$failed" = 0
+      - name: Build and exercise the existing loopback-only account fixture
+        working-directory: app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: local-fixture-publishable-key
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: local-fixture-anon-key
+          DASHBOARD_SPARKS_FIXTURE: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .next
+          npm run build > ../evidence/fixture-build.log 2>&1
+          npx playwright test --config=playwright.release.config.ts tests/dashboard-sparks.spec.ts --workers=1 --reporter=line > ../evidence/fixture-browser.log 2>&1
       - name: Publish only a validated product branch; never main
         working-directory: app
         env:
@@ -93,6 +111,13 @@ jobs:
           git rev-parse HEAD^{tree} > ../evidence/product-tree.txt
           auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+      - name: Retain all failure evidence and original screenshots
+        if: always()
+        working-directory: app
+        run: |
+          mkdir -p ../evidence
+          if [ -d /tmp/dashboard-sparks-evidence ]; then cp -R /tmp/dashboard-sparks-evidence ../evidence/; fi
+          for file in ../evidence/fixture-*.log; do [ ! -f "$file" ] || { echo "=== $file ==="; tail -n 100 "$file"; }; done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
