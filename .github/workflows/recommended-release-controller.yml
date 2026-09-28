@@ -1,0 +1,127 @@
+name: Release and verify recommended cleanup - never merge controller
+on:
+  pull_request:
+    paths:
+      - '.github/recommended-release/**'
+      - '.github/workflows/recommended-release-controller.yml'
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: recommended-cleanup-production-20260928
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'ghuser29384/Website2' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ops/recommended-cleanup-release-20260928'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      REPO: ghuser29384/Website2
+      EXPECTED_SHA: ab6049702a9e70f29ccc95da6685f0e642e3c835
+      EXPECTED_TREE: b5bd4d7748b6d8c1c1fb741c2dee348178145a70
+      BASE_SHA: 2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16
+      EVIDENCE_DIR: ${{ github.workspace }}/recommended-release-evidence
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ab6049702a9e70f29ccc95da6685f0e642e3c835
+          fetch-depth: 2
+          persist-credentials: false
+          path: app
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          path: controller
+      - name: Guard immutable product, successful QA, exact scope and unchanged release policy
+        working-directory: app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          test "$(git rev-parse HEAD^1)" = "$BASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD:.github/workflows/vercel-release.yml)" = e219e99d25279161b89eee80fc410912c3561a19
+          gh api "repos/$REPO/pulls/869" > "$EVIDENCE_DIR/product-pr.json"
+          jq -e --arg sha "$EXPECTED_SHA" '.merged == true and .merge_commit_sha == $sha and .head.sha == "2b131162450717a2496b2ca5f718c0feb9502c22" and .base.ref == "main"' "$EVIDENCE_DIR/product-pr.json" >/dev/null
+          gh api "repos/$REPO/actions/runs/36469657253" > "$EVIDENCE_DIR/qa-run.json"
+          jq -e '.status == "completed" and .conclusion == "success" and .head_sha == "f3aed9fd35b63c24ecae03318489ce2664f02b0c" and .workflow_id == 369398241' "$EVIDENCE_DIR/qa-run.json" >/dev/null
+          gh api "repos/$REPO/actions/artifacts/10991456859" > "$EVIDENCE_DIR/qa-artifact.json"
+          jq -e '.workflow_run.id == 36469657253 and .digest == "sha256:8964f4d140b73b5a6d0fb1b864f92079cd5084486e499e8058f0e62ba7211946"' "$EVIDENCE_DIR/qa-artifact.json" >/dev/null
+          python3 - <<'PY'
+          import os,subprocess
+          expected=['next.config.ts','public/moral-trade-discover.html','public/moral-trade-evidence-navigation.js','public/moral-trade-live-navigation.js','src/app/about/page.tsx','src/app/api/navigation/evidence/route.ts','src/app/labs/moral-public-goods/[poolSlug]/page.tsx','src/app/sitemap.ts','src/components/dashboard/dashboard-tools.tsx','src/components/layout/evidence-nav-gate.tsx','src/components/layout/site-footer.tsx','src/components/layout/site-topbar.tsx','src/lib/dashboard-view.test.ts','src/lib/dashboard-view.ts','src/lib/evidence-navigation-route.test.ts','src/lib/public-outcome-availability.ts','src/lib/recommended-cleanup.test.ts','src/lib/selected-ui-cleanup.test.ts','tests/commitments-live-portfolio.spec.ts','tests/dashboard-sparks.spec.ts','tests/exact-live-now-recommendations.spec.ts','tests/recommended-cleanup.spec.ts','tests/refined-header.spec.ts','tests/selected-ui-cleanup.spec.ts','tests/sitewide-canonical-visual-system.spec.ts']
+          actual=subprocess.check_output(['git','diff','--name-only',os.environ['BASE_SHA'],'HEAD'],text=True).splitlines()
+          assert sorted(actual)==sorted(expected),actual
+          subprocess.run(['git','diff','--exit-code',os.environ['BASE_SHA'],'HEAD','--','supabase','src/app/actions.ts','src/app/profile/page.tsx','src/app/dashboard/page.tsx','src/app/start/page.tsx','src/components/profile/profile-priorities-view.tsx','src/components/profile/profile-priority-editor.tsx','src/lib/refined-header.ts','public/moral-trade-refined-header.css','package.json','package-lock.json','.github/workflows/vercel-release.yml'],check=True)
+          PY
+          git diff --check "$BASE_SHA" HEAD
+          git diff --stat "$BASE_SHA" HEAD > "$EVIDENCE_DIR/scope.txt"
+          printf 'base=%s\nmerged=%s\ntree=%s\n' "$BASE_SHA" "$EXPECTED_SHA" "$EXPECTED_TREE" > "$EVIDENCE_DIR/source.txt"
+      - name: Dispatch or observe exactly one existing gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$REPO/actions/workflows/vercel-release.yml" --jq .state)" = active
+          endpoint="repos/$REPO/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&head_sha=$EXPECTED_SHA&per_page=100"
+          gh api "$endpoint" > "$EVIDENCE_DIR/release-runs.json"
+          count="$(jq --arg sha "$EXPECTED_SHA" '[.workflow_runs[]|select(.head_sha==$sha and .head_branch=="main")]|length' "$EVIDENCE_DIR/release-runs.json")"
+          test "$count" -le 1
+          if [ "$count" = 0 ]; then
+            test "$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_SHA"
+            jq -n --arg sha "$EXPECTED_SHA" '{ref:"main",inputs:{target:"production",ref:"main",expected_sha:$sha,synthetic_auth_fixture_url:""}}' > "$EVIDENCE_DIR/dispatch-inputs.json"
+            gh api --method POST "repos/$REPO/actions/workflows/vercel-release.yml/dispatches" --input "$EVIDENCE_DIR/dispatch-inputs.json"
+          fi
+          run_id=''
+          for attempt in $(seq 1 30); do
+            gh api "$endpoint" > "$EVIDENCE_DIR/release-runs.json"
+            count="$(jq --arg sha "$EXPECTED_SHA" '[.workflow_runs[]|select(.head_sha==$sha and .head_branch=="main")]|length' "$EVIDENCE_DIR/release-runs.json")"
+            test "$count" -le 1
+            if [ "$count" = 1 ]; then
+              run_id="$(jq -r --arg sha "$EXPECTED_SHA" '.workflow_runs[]|select(.head_sha==$sha and .head_branch=="main")|.id' "$EVIDENCE_DIR/release-runs.json")"
+              break
+            fi
+            sleep 3
+          done
+          test -n "$run_id"
+          printf 'release_run=%s\n' "$run_id" | tee "$EVIDENCE_DIR/release-run.txt"
+          echo "Existing gated release: https://github.com/$REPO/actions/runs/$run_id"
+          for attempt in $(seq 1 200); do
+            gh api "repos/$REPO/actions/runs/$run_id" > "$EVIDENCE_DIR/release-run.json"
+            test "$(jq -r .head_sha "$EVIDENCE_DIR/release-run.json")" = "$EXPECTED_SHA"
+            if [ "$(jq -r .status "$EVIDENCE_DIR/release-run.json")" = completed ]; then
+              test "$(jq -r .conclusion "$EVIDENCE_DIR/release-run.json")" = success
+              exit 0
+            fi
+            sleep 30
+          done
+          echo 'Release did not finish within the observation window.' >&2
+          exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install only the existing locked browser tooling
+        working-directory: app
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Verify live public behavior without private account or payment writes
+        working-directory: app
+        env:
+          APP_ROOT: ${{ github.workspace }}/app
+        run: node "$GITHUB_WORKSPACE/controller/.github/recommended-release/verify-live.mjs"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recommended-cleanup-production-${{ github.run_id }}
+          path: ${{ github.workspace }}/recommended-release-evidence
+          if-no-files-found: warn
+          retention-days: 30
