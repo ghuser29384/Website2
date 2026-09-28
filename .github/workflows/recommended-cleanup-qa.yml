@@ -44,8 +44,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
-          python3 ../controller/.github/recommended-cleanup/apply.py
           mkdir -p ../evidence
+          python3 ../controller/.github/recommended-cleanup/prepare.py
           git diff --cached > ../evidence/patch.diff
           git diff --cached --stat > ../evidence/scope.txt
           git rev-parse HEAD > ../evidence/base.txt
