@@ -1,0 +1,71 @@
+{
+  "base": "2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16",
+  "staged": "227f9a8021bcbf5eb57aeca80fb74bc1d8da03d8",
+  "new": {
+    "docs/account-payment-methods.md": "dc424eb47983dbd2832ca0afbb16e7713c9ea86c",
+    "src/app/dashboard/payments/actions.ts": "ccb8aa8149eb1b4e319bd16dabb7e199f45e2442",
+    "src/app/dashboard/payments/loading.tsx": "91c67898f124900adadc21e61ea03afeec8c389f",
+    "src/app/dashboard/payments/page.tsx": "dd6040390e1cbad8a5c72e8118cfa83c044f8625",
+    "src/app/dashboard/payments/payments.module.css": "f23100bbb59e29b9f7e7144262c5acf2cee081f5",
+    "src/components/payments/payment-submit.tsx": "e57f870294a4ef184a375f8104a2b19d427fd34d",
+    "src/lib/payments/account-payment-policy.ts": "6897207d4923fe02262214035c207de47f0dfa96",
+    "src/lib/payments/account-payment-service.test.ts": "69c8cb003d949aca9ff00d8e5fcd87f687a740f3",
+    "src/lib/payments/account-payment-service.ts": "555fe815c332d15abbfbef1d3b50188b9f0f2f7b",
+    "src/lib/payments/account-payments.ts": "4c908a0cb73dc011b1b3e822c73361f6c8fe2e11",
+    "supabase/migrations/20260928181500_account_payment_settings.sql": "b85aaeb9e476c03cdb4436e796c9932e7606955d",
+    "tests/account-payment-settings.spec.ts": "3a82c5068696ba7709e714497f8d3a1c2724380b",
+    "tests/fixtures/account-payments-preload.cjs": "56617ad3ca6d0cc4549b47943cdecfef1fa3ed82"
+  },
+  "updates": {
+    "public/moral-trade-live-account.js": {
+      "source": "0f4602c5f76b9bbc0a42b70f7c4799c65c676991",
+      "expected": "fd7151606b5fbf3b76dc3b17ba8c1a4001dddbc2",
+      "edits": [[282,284,"      name: \"Manage payment methods and receiving\",\n      href: \"/dashboard/payments\",\n"],[433,435,"        label: \"Payments\",\n        detail: signedInValue(\"Payment methods and receiving\"),\n"]]
+    },
+    "src/app/actions.ts": {
+      "source": "f4115dea82309c23372de81c1147d1ce83c2402d",
+      "expected": "d6402c34531a0cbb15b284970bcd88379cbf53c8",
+      "edits": [[2,2,"import { accountPayments } from \"@/lib/payments/account-payments\";\n"],[8360,8360,"  let savedPaymentCustomer: string | null = null;\n  try {\n    savedPaymentCustomer = await (await accountPayments()).service.customerId({\n      id: viewer.authUser.id,\n    });\n  } catch {\n    redirectWithMessage(returnTo, \"error\", \"Your saved payment profile could not be verified. Please review Payment methods before paying.\");\n  }\n"],[8394,8394,"    customer: savedPaymentCustomer ?? undefined,\n"]]
+    },
+    "src/app/dashboard/page.tsx": {
+      "source": "914c5a86386648a135c581a3d3e670ffd96a9dcd",
+      "expected": "26eae4e77c731b3261f3a4088e8966a3a8c808b6",
+      "edits": [[18,19,""],[27,28,""],[735,806,"          <div className=\"section-head\"><p className=\"eyebrow\">Payments</p><h2>Payment methods & receiving</h2></div>\n          <p>Manage saved payment methods and your receiving account separately.</p>\n          <div className=\"form-actions\">\n            <Link className=\"button button-primary\" href=\"/dashboard/payments\" prefetch={false}>Manage payment methods</Link>\n            <Link className=\"button button-secondary\" href=\"/dashboard/payments#receive-payments\" prefetch={false}>Receive payments</Link>\n"]]
+    },
+    "src/components/dashboard/dashboard-tools.tsx": {
+      "source": "f5d814c25981967613822f35d4eb93b1ec9df982",
+      "expected": "f2ead13ec1910431afb36d4d9cfdfa32297511e1",
+      "edits": [[7,8,"export function DashboardTools({ active }: { active: DashboardView | \"payments\" }) {\n"],[25,25,"      <Link href=\"/dashboard/payments\" prefetch={false} aria-current={active === \"payments\" ? \"page\" : undefined}>\n        Payments\n      </Link>\n"],[36,37,"          <Link href=\"/dashboard/payments\" prefetch={false}>Payment setup</Link>\n"]]
+    },
+    "src/lib/live-account-actions.test.ts": {
+      "source": "4170368201fcea94200a4999e2151893df755668",
+      "expected": "fc7a6bbbaea825a8b07cf671a72c83e79d51f29e",
+      "edits": [[100,101,"  \"payment-account\": \"/dashboard/payments\",\n"],[139,140,"  assert.equal(row.action.getAttribute(\"href\"), \"/dashboard/payments\");\n"]]
+    },
+    "src/lib/supabase/database.types.ts": {
+      "source": "47be19b5476fc3adc57ece40c98ec7e3cca473e8",
+      "expected": "1199025a96a7619313fcd4864f6ddf9417d5ddf9",
+      "edits": [[816,816,"        };\n        Relationships: [];\n      };\n      account_payment_setup_limits: {\n        Row: { profile_id: string; window_started_at: string; attempts: number };\n        Insert: { profile_id: string; window_started_at: string; attempts: number };\n        Update: { window_started_at?: string; attempts?: number };\n        Relationships: [];\n      };\n      account_payment_settings: {\n        Row: {\n          id: string;\n          profile_id: string;\n          platform_account_id: string;\n          livemode: boolean;\n          stripe_customer_id: string | null;\n          customer_started_at: string | null;\n          stripe_account_id: string | null;\n          account_started_at: string | null;\n          account_country: string | null;\n          created_at: string;\n        };\n        Insert: {\n          id?: string;\n          profile_id: string;\n          platform_account_id: string;\n          livemode: boolean;\n          stripe_customer_id?: string | null;\n          customer_started_at?: string | null;\n          stripe_account_id?: string | null;\n          account_started_at?: string | null;\n          account_country?: string | null;\n          created_at?: string;\n        };\n        Update: {\n          stripe_customer_id?: string | null;\n          customer_started_at?: string | null;\n          stripe_account_id?: string | null;\n          account_started_at?: string | null;\n          account_country?: string | null;\n"],[11142,11142,"      take_account_payment_setup_slot: { Args: { p_profile_id: string }; Returns: boolean };\n"]]
+    },
+    "src/live-account-data.test.ts": {
+      "source": "ec46faba274392df1bf158fbd222ee767065b315",
+      "expected": "4c0b30d7a71997fb71961003b2732340aa8b3b84",
+      "edits": [[44,45,"  assert.match(bridge, /label: \"Payments\"/);\n"]]
+    },
+    "supabase/schema.sql": {
+      "source": "7ee52b84fcc628f35c621662ff1143f3f8863231",
+      "expected": "4c9b95d32655cce5fc3e4b804d7c6d1c0d42dcdd",
+      "edits": [[20864,20864,"\n\n-- Account-level setup is deliberately separate from trade-bound mandates.\n-- Only authenticated server actions may create provider links; browser roles\n-- cannot insert mappings, choose a Stripe customer, or mark anything ready.\ncreate table if not exists public.account_payment_settings (\n  id uuid primary key default gen_random_uuid(),\n  profile_id uuid not null references public.profiles(id) on delete cascade,\n  platform_account_id text not null check (platform_account_id ~ '^acct_[A-Za-z0-9]+$'),\n  livemode boolean not null,\n  stripe_customer_id text check (stripe_customer_id ~ '^cus_[A-Za-z0-9]+$'),\n  customer_started_at timestamptz,\n  stripe_account_id text check (stripe_account_id ~ '^acct_[A-Za-z0-9]+$'),\n  account_started_at timestamptz,\n  account_country text check (account_country ~ '^[A-Z]{2}$'),\n  created_at timestamptz not null default now(),\n  unique (profile_id, platform_account_id, livemode),\n  unique (platform_account_id, livemode, stripe_customer_id),\n  unique (platform_account_id, livemode, stripe_account_id),\n  check (stripe_account_id is null or stripe_account_id <> platform_account_id)\n);\nalter table public.account_payment_settings enable row level security;\nrevoke all on table public.account_payment_settings from public, anon, authenticated;\ngrant select, insert, update, delete on table public.account_payment_settings to service_role;\ncomment on table public.account_payment_settings is\n  'Server-owned Stripe setup mappings. No card numbers, bank numbers, money balances or trade payment authorizations.';\n\n-- A database-backed limit also applies across serverless instances.\ncreate table if not exists public.account_payment_setup_limits (\n  profile_id uuid primary key references public.profiles(id) on delete cascade,\n  window_started_at timestamptz not null,\n  attempts integer not null check (attempts between 1 and 11)\n);\nalter table public.account_payment_setup_limits enable row level security;\nrevoke all on table public.account_payment_setup_limits from public, anon, authenticated;\ngrant select, insert, update, delete on table public.account_payment_setup_limits to service_role;\ncreate or replace function public.take_account_payment_setup_slot(p_profile_id uuid)\nreturns boolean language plpgsql security definer set search_path = '' as $$\ndeclare used integer;\nbegin\n  insert into public.account_payment_setup_limits as existing (profile_id, window_started_at, attempts)\n  values (p_profile_id, clock_timestamp(), 1)\n  on conflict (profile_id) do update set\n    attempts = case when existing.window_started_at <= clock_timestamp() - interval '1 minute'\n      then 1 else least(existing.attempts + 1, 11) end,\n    window_started_at = case when existing.window_started_at <= clock_timestamp() - interval '1 minute'\n      then clock_timestamp() else existing.window_started_at end\n  returning attempts into used;\n  return used <= 10;\nend;\n$$;\nrevoke all on function public.take_account_payment_setup_slot(uuid) from public, anon, authenticated;\ngrant execute on function public.take_account_payment_setup_slot(uuid) to service_role;\n"]]
+    },
+    "tests/dashboard-sparks.spec.ts": {
+      "source": "3aa4fa94dde2645f7f2882497efbe23882114680",
+      "expected": "91fde7b014e75b8de0d78e948d973a6aad4e060f",
+      "edits": [[207,208,"    await expect(page).toHaveURL(`${origin}/dashboard/payments`);\n    await expect(page.locator(\"#payment-methods\")).toBeVisible();\n    await expect(page.locator(\"#receive-payments\")).toBeVisible();\n"]]
+    },
+    "tests/live-account-controls.spec.ts": {
+      "source": "4df020736d689aa6b113c558dc8b95d44d10efa4",
+      "expected": "14165bf5215c84fcee0885ca6b4b068f9a28f255",
+      "edits": [[64,65,"  \"payment-account\": \"/dashboard/payments\",\n"]]
+    }
+  }
+}
