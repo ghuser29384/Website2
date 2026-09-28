@@ -1,0 +1,186 @@
+name: Account payment settings implementation QA
+on:
+  push:
+    branches: [ops/payment-methods-implementation-20260928]
+    paths: [.github/workflows/account-payment-implementation-20260928.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.publish.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ops
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16
+          fetch-depth: 0
+          path: candidate
+          persist-credentials: false
+      - name: Materialize exact reviewed files without executing application code
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF_NAME" = ops/payment-methods-implementation-20260928
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          spec = json.loads(pathlib.Path('../ops/docs/ops/account-payment-edits.json').read_text())
+          assert spec['base'] == '2678dc3ea33b17c0375a1bd5bccbb1c4990b4b16'
+          assert spec['staged'] == '227f9a8021bcbf5eb57aeca80fb74bc1d8da03d8'
+          assert subprocess.check_output(['git','rev-parse','HEAD']).decode().strip() == spec['base']
+          def blob(b): return hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
+          paths = list(spec['new']) + list(spec['updates'])
+          assert len(paths) == len(set(paths)) == 23
+          assert all(not p.startswith(('.', '/')) and '..' not in pathlib.PurePosixPath(p).parts for p in paths)
+          assert all(p.startswith(('src/', 'public/', 'tests/', 'supabase/', 'docs/account-')) for p in paths)
+          for p, expected in spec['new'].items():
+            target = pathlib.Path(p)
+            assert not target.exists(), p
+            data = subprocess.check_output(['git','show',spec['staged']+':'+p])
+            assert blob(data) == expected, f'new file mismatch: {p}: {blob(data)} != {expected}'
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+          for p, change in spec['updates'].items():
+            target = pathlib.Path(p)
+            original = target.read_bytes()
+            assert blob(original) == change['source'], f'base mismatch: {p}'
+            lines = original.decode().splitlines(keepends=True)
+            for start, end, replacement in reversed(change['edits']):
+              assert 0 <= start <= end <= len(lines)
+              lines[start:end] = [replacement]
+            result = ''.join(lines).encode()
+            assert blob(result) == change['expected'], f'edited file mismatch: {p}: {blob(result)} != {change["expected"]}'
+            target.write_bytes(result)
+          subprocess.run(['git','add','--']+paths,check=True)
+          changed = subprocess.check_output(['git','diff','--cached','--name-only']).decode().splitlines()
+          assert sorted(changed) == sorted(paths)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          pathlib.Path('/tmp/account-payment-identity.json').write_text(json.dumps({'base':spec['base'],'files':{p:blob(pathlib.Path(p).read_bytes()) for p in paths}},indent=2))
+          PY
+      - name: Publish a new feature branch only
+        id: publish
+        working-directory: candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch=feat/account-payment-methods-20260928
+          test -z "$(git ls-remote origin refs/heads/$branch)"
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git switch -c "$branch"
+          git commit -m 'Add account payment methods and receiving setup' -m 'Owner-authorized implementation. No-charge hosted method setup, separate receiving onboarding, server-owned mappings, consent and mode isolation. Draft candidate only: provider sandbox and protected preview acceptance remain required before deployment.'
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "HEAD:refs/heads/$branch"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git rev-parse HEAD HEAD^{tree} > /tmp/account-payment-source-identity.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: account-payment-source-${{ github.run_id }}
+          path: /tmp/account-payment-*identity*
+          retention-days: 14
+  quality:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Source, unit, lint, types and production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/account-payment-quality
+          node --check public/moral-trade-live-account.js
+          node --check tests/fixtures/account-payments-preload.cjs
+          node --import tsx --test src/lib/payments/account-payment-service.test.ts src/lib/live-account-actions.test.ts src/live-account-data.test.ts | tee /tmp/account-payment-quality/focused.log
+          npm test | tee /tmp/account-payment-quality/unit.log
+          npm run lint -- --quiet | tee /tmp/account-payment-quality/lint.log
+          npx tsc --noEmit --pretty false | tee /tmp/account-payment-quality/types.log
+          npm run build | tee /tmp/account-payment-quality/build.log
+      - name: Complete unchanged rendered release suite
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e:release -- --reporter=line | tee /tmp/account-payment-quality/release-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: account-payment-quality-${{ github.run_id }}
+          path: |
+            /tmp/account-payment-quality
+            test-results
+          retention-days: 14
+  fixtures:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ACCOUNT_PAYMENTS_FIXTURE: '1'
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54333
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: fixture-publishable
+      SUPABASE_SERVICE_ROLE_KEY: fixture-service
+      STRIPE_SECRET_KEY: sk_test_account_payment_fixture
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      VERCEL_ENV: preview
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build production server with loopback fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/account-payment-settings-evidence
+          npm run build | tee /tmp/account-payment-settings-evidence/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise real server actions against isolated HTTP fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NODE_OPTIONS="--require=$GITHUB_WORKSPACE/tests/fixtures/account-payments-preload.cjs"
+          npm run test:e2e -- tests/account-payment-settings.spec.ts --workers=1 --reporter=line | tee /tmp/account-payment-settings-evidence/browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: account-payment-fixtures-${{ github.run_id }}
+          path: |
+            /tmp/account-payment-settings-evidence
+            test-results
+          retention-days: 14
