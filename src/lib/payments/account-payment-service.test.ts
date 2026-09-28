@@ -176,7 +176,7 @@ test("masked data and ready labels never depend just on a return URL", () => {
 });
 
 test("schema and wiring fail closed and expose the new route without changing settlement gates", () => {
-  const sql = readFileSync("supabase/migrations/20260928181500_account_payment_settings.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20260928182211_account_payment_settings.sql", "utf8");
   assert.match(sql, /enable row level security/); assert.match(sql, /from public, anon, authenticated/);
   assert.match(sql, /unique \(profile_id, platform_account_id, livemode\)/);
   assert.match(sql, /security definer set search_path = ''/); assert.match(sql, /return used <= 10/);

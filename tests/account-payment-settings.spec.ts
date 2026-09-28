@@ -174,7 +174,7 @@ test.describe("Account payment setup with isolated Auth, database and Stripe HTT
   });
   test("forged success does not imply a method was saved", async ({ page, context }) => {
     await signIn(context, B); await page.goto(`${origin}/dashboard/payments?setup_session_id=cs_test_foreign`);
-    await expect(page.getByRole("alert")).toContainText("No payment profile");
+    await expect(page.locator("main").getByRole("alert")).toContainText("No payment profile");
     expect(await page.getByText(/Stripe confirmed/).count()).toBe(0); expect(providerWrites).toEqual([]);
   });
 });

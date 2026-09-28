@@ -35,7 +35,7 @@ agreement-routing account record; page rendering itself never writes readiness.
 
 ## Storage and authorization
 
-Apply `20260928181500_account_payment_settings.sql` once per database. The full
+Apply `20260928182211_account_payment_settings.sql` once per database. The full
 schema and TypeScript database declarations include the same objects.
 
 `account_payment_settings` is service-owned, keyed by authenticated profile,
