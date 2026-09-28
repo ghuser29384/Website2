@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useId, useState, useTransition } from "react";
 
+import { EvidenceNavGate } from "@/components/layout/evidence-nav-gate";
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 import { createClient } from "@/lib/supabase/browser";
 import { HEADER_UTILITY_LINKS, REFINED_HEADER_LINKS, usesDefaultHeader } from "@/lib/refined-header";
@@ -33,7 +34,7 @@ interface SiteTopbarProps {
 }
 
 function getHrefPath(href: string) {
-  const [path] = href.split("#");
+  const [path] = href.split(/[?#]/);
   return path || "/";
 }
 
@@ -51,11 +52,12 @@ function NavItem({ href, label, className }: { href: string; label: string; clas
   const pathname = usePathname();
   const isActive = isHrefActive(pathname, href) || (href === "/feed" && pathname === "/");
 
-  return (
+  const content = (
     <Link prefetch={false} aria-current={isActive ? "page" : undefined} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
       {label}
     </Link>
   );
+  return href === "/evidence" ? <EvidenceNavGate>{content}</EvidenceNavGate> : content;
 }
 
 function NavMenu({
@@ -116,10 +118,12 @@ function NavMenu({
         {items.map((item, index) => {
           const showSection = item.section && item.section !== items[index - 1]?.section;
 
-          return item.href ? (
+          const nativeSection = item.href.startsWith("/dashboard?view=controls#");
+          const MenuLink = nativeSection ? "a" : Link;
+          const content = item.href ? (
             <Fragment key={`${item.href}-${item.label}`}>
               {showSection ? <div className="topbar-menu-section">{item.section}</div> : null}
-              <Link prefetch={false}
+              <MenuLink {...(nativeSection ? {} : { prefetch: false })}
                 className={["topbar-menu-link", isHrefActive(pathname, item.href) ? "is-active" : ""]
                   .filter(Boolean)
                   .join(" ")}
@@ -137,9 +141,12 @@ function NavMenu({
                   <span>{item.label}</span>
                   {item.description ? <small>{item.description}</small> : null}
                 </span>
-              </Link>
+              </MenuLink>
             </Fragment>
           ) : null;
+          return item.href === "/evidence"
+            ? <EvidenceNavGate key={`${item.href}-${item.label}`}>{content}</EvidenceNavGate>
+            : content;
         })}
       </div>
     </details>
@@ -225,9 +232,9 @@ export function SiteTopbar({
             <NavMenu
               isOpen={openMenuKey === "account"}
               items={[
-                { href: "/dashboard#my-trades", label: "My trades" },
-                { href: "/dashboard#data-portability", label: "Profile data" },
-                { href: "/cart", label: "Favourites" },
+                { href: "/dashboard?view=controls#my-trades", label: "My trades" },
+                { href: "/dashboard?view=controls#data-portability", label: "Profile data" },
+                ...(!refinedHeader ? [{ href: "/cart", label: "Saved offers" }] : []),
               ]}
               label="Account"
               nativeDisclosure={refinedHeader}

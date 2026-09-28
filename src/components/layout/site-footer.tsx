@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { EvidenceNavGate } from "@/components/layout/evidence-nav-gate";
 import { MoralTradeWordmark, MutualStepMark } from "@/components/brand/moral-trade-wordmark";
 import { FOOTER_LINK_GROUPS } from "@/lib/site";
 
@@ -24,11 +25,16 @@ export function SiteFooter() {
             <div className="footer-column" key={group.title}>
               <h3>{group.title}</h3>
               <ul className="footer-links">
-                {group.links.map((link) => (
-                  <li key={link.href}>
-                    <Link prefetch={false} href={link.href}>{link.label}</Link>
-                  </li>
-                ))}
+                {group.links.map((link) => {
+                  const entry = (
+                    <li key={link.href}>
+                      <Link prefetch={false} href={link.href}>{link.label}</Link>
+                    </li>
+                  );
+                  return link.href === "/evidence"
+                    ? <EvidenceNavGate key={link.href}>{entry}</EvidenceNavGate>
+                    : entry;
+                })}
               </ul>
             </div>
           ))}

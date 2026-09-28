@@ -23,23 +23,10 @@ export function DashboardTools({ active }: { active: DashboardView }) {
       <Link href="/dashboard" prefetch={false} aria-current={active === "priorities" ? "page" : undefined}>
         Priorities
       </Link>
-      <details className={styles.currency} onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.currentTarget.open = false;
-          event.currentTarget.querySelector("summary")?.focus();
-        }
-      }}>
-        <summary>Currency</summary>
-        <div className={styles.currencyDetails}>
-          <h2>Currency</h2>
-          <p>Amounts use the currency stated in each offer or agreement. An account-wide currency selector is not available.</p>
-          <p>Changing your priorities does not convert amounts or change any payment terms.</p>
-          <Link href="/dashboard?view=controls#payment-setup" prefetch={false}>Payment setup</Link>
-        </div>
-      </details>
+      <a href="/dashboard?view=controls#payment-setup">Payment setup</a>
       <Link href="/complete-profile" prefetch={false}>Profile details</Link>
-      <Link href="/dashboard?view=controls#privacy-controls" prefetch={false}>Privacy</Link>
-      <Link href="/dashboard?view=controls#notifications" prefetch={false}>Notifications</Link>
+      <a href="/dashboard?view=controls#privacy-controls">Privacy</a>
+      <a href="/dashboard?view=controls#notifications">Notifications</a>
       <Link href="/dashboard?view=controls" prefetch={false} aria-current={active === "controls" ? "page" : undefined}>
         More controls
       </Link>

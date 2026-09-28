@@ -62,6 +62,11 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
+        source: "/about",
+        destination: "/feed",
+        permanent: true,
+      },
+      {
         source: "/profile",
         destination: "/dashboard",
         permanent: true,
