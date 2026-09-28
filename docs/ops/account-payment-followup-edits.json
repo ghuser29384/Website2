@@ -1,0 +1,40 @@
+{
+  "base": "82314941bb6fca7cd3225efa76200ae5ba1cb26c",
+  "updates": {
+    "src/lib/payments/account-payment-service.ts": {
+      "source": "555fe815c332d15abbfbef1d3b50188b9f0f2f7b",
+      "expected": "187c45e7a92c3e45c319a81cb9e86a18d6ecd8ef",
+      "edits": [[231,231,"  async function refreshReceiving(actor: PaymentActor) {\n    const account = await payout(actor);\n    if (!account) throw new AccountPaymentError(\"Set up receiving payments first.\");\n    // An explicit authenticated POST refreshes the legacy routing cache from Stripe.\n    // Page rendering never writes readiness; returning from onboarding is not proof.\n    if (livemode) await repo.syncPayout(actor.id, account);\n    return payoutStatus(account);\n  }\n"],[240,241,"  return { methods, addMethod, removeMethod, setupResult, receiveOverview, beginReceiving, refreshReceiving, manageReceiving, customerId };\n"]]
+    },
+    "src/app/dashboard/payments/actions.ts": {
+      "source": "ccb8aa8149eb1b4e319bd16dabb7e199f45e2442",
+      "expected": "0faffa4fec071a72b7045898116c7b058035e096",
+      "edits": [[43,43,"export async function refreshReceivingAction() {\n  await runPaymentAction(async (actor) => {\n    await (await accountPayments()).service.refreshReceiving(actor);\n  });\n}\n"]]
+    },
+    "src/app/dashboard/payments/page.tsx": {
+      "source": "dd6040390e1cbad8a5c72e8118cfa83c044f8625",
+      "expected": "c6bb2a3a9694cc884457180cdc2a1b9864b73b8b",
+      "edits": [[10,11,"import { addPaymentMethodAction, removePaymentMethodAction, setupReceivingAction, refreshReceivingAction, manageReceivingAction } from \"./actions\";\n"],[52,53,"  if (!notice && flow === \"receive-return\") notice = \"You returned from Stripe. Review your status below, then refresh receiving status to sync your account.\";\n"],[100,100,"              <form action={refreshReceivingAction}><PaymentSubmit pendingLabel=\"Refreshing…\">Refresh receiving status</PaymentSubmit></form>\n"]]
+    },
+    "src/lib/payments/account-payment-service.test.ts": {
+      "source": "69c8cb003d949aca9ff00d8e5fcd87f687a740f3",
+      "expected": "f695fb934f1f603a157b65480728e6bf4f794db5",
+      "edits": [[151,151,"test(\"explicit receiving refresh syncs verified provider readiness, not a return flag\", async () => {\n  const h = harness(true);\n  assert.equal(await h.service.refreshReceiving(A), \"Setup incomplete\");\n  assert.equal(h.calls.filter(c => c.action === \"syncPayout\").length, 1);\n  h.account.charges_enabled = true; h.account.payouts_enabled = true;\n  h.account.details_submitted = true; h.account.capabilities.transfers = \"active\";\n  assert.equal(await h.service.refreshReceiving(A), \"Stripe setup complete\");\n  assert.equal(h.calls.filter(c => c.action === \"syncPayout\").length, 2);\n  h.account.metadata.profile_id = B.id;\n  await assert.rejects(h.service.refreshReceiving(A), /could not be verified/);\n  assert.equal(h.calls.filter(c => c.action === \"syncPayout\").length, 2);\n});\n\n"]]
+    },
+    "tests/account-payment-settings.spec.ts": {
+      "source": "3a82c5068696ba7709e714497f8d3a1c2724380b",
+      "expected": "8faab8009f0dc0c21c8c2b16b82ce0054cff87f9",
+      "edits": [[77,78,"      if (providerUnavailable) { res.statusCode = 403; res.end(JSON.stringify({ error: { type: \"api_error\", message: \"Fixture unavailable\" } })); return; }\n"],[155,156,"    await page.getByRole(\"button\", { name: \"Refresh receiving status\", exact: true }).click();\n"],[162,162,"  });\n  test(\"provider failure is explicit and never appears as an empty saved-method list\", async ({ page, context }) => {\n    providerUnavailable = true; await signIn(context); await page.goto(`${origin}/dashboard/payments`);\n    await expect(page.getByText(\"We could not load these settings from Stripe. Please try again or contact support.\", { exact: false })).toBeVisible();\n    await expect(page.getByRole(\"button\", { name: \"Add payment method\", exact: true })).toHaveCount(0);\n    await expect(page.getByText(\"No payment methods saved.\", { exact: true })).toHaveCount(0);\n    expect(providerWrites).toEqual([]);\n"]]
+    },
+    "tests/fixtures/account-payments-preload.cjs": {
+      "source": "56617ad3ca6d0cc4549b47943cdecfef1fa3ed82",
+      "expected": "ae63d07505c7a5dacda840d90e87c602f9a98fd9",
+      "edits": [[15,16,"    const request = http.request({ ...options, agent: undefined, host: '127.0.0.1', hostname: '127.0.0.1', port: 54334, protocol: 'http:' }, callback);\n    // The SDK still waits for the TLS event on its test-only intercepted request.\n    request.on('socket', socket => {\n      if (socket.connecting) socket.once('connect', () => socket.emit('secureConnect'));\n    });\n    return request;\n"]]
+    },
+    "docs/account-payment-methods.md": {
+      "source": "dc424eb47983dbd2832ca0afbb16e7713c9ea86c",
+      "expected": "ad25a6e908a3e545e2d10d472e23fc0fa0c54c7c",
+      "edits": [[31,32,"Stripe capabilities and flags, not a successful navigation. An authenticated\nRefresh receiving status POST copies those verified flags into the existing\nagreement-routing account record; page rendering itself never writes readiness.\n"]]
+    }
+  }
+}
