@@ -50,7 +50,7 @@ jobs:
             sleep 1
           done
           curl --fail --silent --show-error --request POST --header "x-auth-resolution-fixture-control: $control" 'http://127.0.0.1:3233/__fixture/completion-state?mode=milestone-completed' > /dev/null
-          curl --fail --silent --show-error --retry 10 --retry-delay 2 "$origin/" > /dev/null
+          curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-all-errors --max-time 5 "$origin/" > /dev/null
           printf '%s\n' "$origin" > fixture-evidence/fixture-origin.txt
           git rev-parse HEAD > fixture-evidence/fixture-head.txt
           printf 'Synthetic in-memory fixture only. No real accounts, production data, payments, or repository secrets. Maximum lifetime 40 minutes after startup; automatic shutdown after saved smoke feedback.\n' > fixture-evidence/scope.txt
