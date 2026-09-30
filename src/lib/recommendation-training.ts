@@ -61,12 +61,25 @@ interface InterestRow {
   created_at: string;
 }
 
+interface MilestoneRow {
+  agreement_version_id: string;
+  final_review_id: string | null;
+  status: string;
+  payout: {
+    is_final: boolean;
+    status: string;
+  } | null;
+}
+
 interface AgreementRow {
   cancelled_at: string | null;
   completed_at: string | null;
+  completion_state: string;
   created_at: string;
+  current_version_id: string | null;
   id: string;
   lifecycle_status: string;
+  milestones: MilestoneRow[];
   offer_id: string;
   proposer_id: string;
   responder_id: string;
@@ -113,7 +126,7 @@ interface OfferRow {
   owner_id: string;
 }
 
-interface TrainingData {
+export interface TrainingData {
   agreements: AgreementRow[];
   completionConfirmations: CompletionConfirmationRow[];
   evidence: EvidenceRow[];
@@ -239,7 +252,7 @@ function interactionWeight(eventType: string) {
   }
 }
 
-async function loadTrainingData(service: any, cutoff: string): Promise<TrainingData> {
+export async function loadTrainingData(service: any, cutoff: string): Promise<TrainingData> {
   const [
     exposures,
     interactions,
@@ -275,7 +288,7 @@ async function loadTrainingData(service: any, cutoff: string): Promise<TrainingD
     service
       .from("agreements")
       .select(
-        "id,offer_id,proposer_id,responder_id,status,lifecycle_status,created_at,completed_at,cancelled_at",
+        "id,offer_id,proposer_id,responder_id,status,lifecycle_status,completion_state,current_version_id,created_at,completed_at,cancelled_at,milestones:trade_agreement_milestones(agreement_version_id,status,final_review_id,payout:trade_milestone_payouts(is_final,status))",
       )
       .gte("created_at", cutoff)
       .limit(10_000),
@@ -340,7 +353,51 @@ async function loadTrainingData(service: any, cutoff: string): Promise<TrainingD
   };
 }
 
-function reconcileOutcomes(data: TrainingData, now: Date): ReconciledOutcome[] {
+function hasVerifiedCompletion(
+  agreement: AgreementRow,
+  completed: boolean,
+  acceptedEvidenceCount: number,
+  confirmations: ReadonlySet<string>,
+) {
+  if (
+    !completed ||
+    agreement.cancelled_at ||
+    agreement.status === "cancelled" ||
+    ["draft", "proposed", "cancelled", "expired", "disputed"].includes(agreement.lifecycle_status) ||
+    agreement.completion_state === "disputed_unresolved"
+  ) return false;
+
+  // Read milestones and their one-to-one payout alongside the agreement, so a
+  // separate capped query cannot hide an incomplete milestone. Missing data
+  // must not silently select the legacy confirmation path.
+  if (!Array.isArray(agreement.milestones)) return false;
+  const currentMilestones = agreement.milestones.filter(
+    (milestone) => milestone.agreement_version_id === agreement.current_version_id,
+  );
+  if (currentMilestones.length) {
+    const liveMilestones = currentMilestones.filter((milestone) => milestone.status !== "cancelled");
+    // Keep aligned with is_trade_agreement_milestone_complete and
+    // recompute_trade_agreement_completion in 20260729165526. Merely reported
+    // payment or a rejected/replacement-pending grade is not completion.
+    return agreement.completion_state === "reviewed_complete" &&
+      liveMilestones.length > 0 &&
+      liveMilestones.every((milestone) =>
+        milestone.final_review_id !== null &&
+        ["graded", "paid"].includes(milestone.status) &&
+        milestone.payout?.is_final === true &&
+        ["not_due", "confirmed", "adjudicated_paid"].includes(milestone.payout.status),
+      );
+  }
+
+  // Frozen versions also exist on legacy agreements. Preserve their evidence
+  // gate, but only the actual two participants can confirm completion.
+  return acceptedEvidenceCount > 0 &&
+    agreement.proposer_id !== agreement.responder_id &&
+    confirmations.has(agreement.proposer_id) &&
+    confirmations.has(agreement.responder_id);
+}
+
+export function reconcileOutcomes(data: TrainingData, now: Date): ReconciledOutcome[] {
   const offerOwner = new Map(data.offers.map((offer) => [offer.id, offer.owner_id]));
   const agreementsByOffer = new Map<string, AgreementRow[]>();
   data.agreements.forEach((agreement) => {
@@ -419,11 +476,13 @@ function reconcileOutcomes(data: TrainingData, now: Date): ReconciledOutcome[] {
       agreement &&
         (agreement.lifecycle_status === "completed" || agreement.status === "completed" || agreement.completed_at),
     );
-    const confirmations = agreement
-      ? completionConfirmations.get(agreement.id)?.size ?? 0
-      : 0;
     const verifiedCompletion = Boolean(
-      agreement && completed && (acceptedEvidence.get(agreement.id) ?? 0) > 0 && confirmations >= 2,
+      agreement && hasVerifiedCompletion(
+        agreement,
+        completed,
+        acceptedEvidence.get(agreement.id) ?? 0,
+        completionConfirmations.get(agreement.id) ?? new Set<string>(),
+      ),
     );
     const feedback = agreement ? feedbackByAgreement.get(agreement.id) ?? [] : [];
     const viewerFeedback = feedback.find((item) => item.profile_id === exposure.profile_id) ?? null;
@@ -586,7 +645,7 @@ async function persistGraphEdges(service: any, edges: ReturnType<typeof aggregat
   }
 }
 
-function buildHeadExamples(outcomes: readonly ReconciledOutcome[]): HeadExamples {
+export function buildHeadExamples(outcomes: readonly ReconciledOutcome[]): HeadExamples {
   const result: HeadExamples = {
     additionality: [],
     counterpartyAcceptance: [],

@@ -9,6 +9,7 @@ import { requireViewer } from "@/lib/app-data";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { getSiteUrl } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { persistTradeCompletionConfirmation } from "@/lib/trade-completion-persistence";
 import { validateTradeCalendarDates } from "@/lib/trade-draft-standards";
 import {
   createTradeInvitationToken,
@@ -1476,51 +1477,23 @@ export async function confirmTradeCompletionAction(formData: FormData) {
   const supabase = createServiceClient() as any;
 
   try {
-    const { data: agreement } = await supabase
-      .from("agreements")
-      .select("*")
-      .eq("id", agreementId)
-      .or(`proposer_id.eq.${viewer.authUser.id},responder_id.eq.${viewer.authUser.id}`)
-      .maybeSingle();
-    if (!agreement) throw new Error("Agreement not found.");
-    if (!["active", "evidence_due"].includes(String(agreement.lifecycle_status))) {
-      throw new Error("Completion cannot be confirmed in the current state.");
-    }
-    const { count: acceptedEvidenceCount } = await supabase
-      .from("trade_evidence_items")
-      .select("id", { count: "exact", head: true })
-      .eq("agreement_id", agreementId)
-      .eq("status", "accepted");
-    if ((acceptedEvidenceCount ?? 0) < 1) {
-      throw new Error("At least one evidence item must be accepted before completion.");
-    }
-
-    await supabase.from("trade_completion_confirmations").upsert(
-      { agreement_id: agreementId, user_id: viewer.authUser.id, confirmed_at: new Date().toISOString() },
-      { onConflict: "agreement_id,user_id" },
+    const { agreement, completed, alreadyCompleted } = await persistTradeCompletionConfirmation(
+      supabase,
+      agreementId,
+      viewer.authUser.id,
     );
-    const { count } = await supabase
-      .from("trade_completion_confirmations")
-      .select("user_id", { count: "exact", head: true })
-      .eq("agreement_id", agreementId);
+    if (alreadyCompleted) {
+      revalidatePath(returnTo);
+      revalidatePublicEvidence(agreementId);
+      redirectWithMessage(returnTo, "message", "This agreement is already completed. The final Deal Receipt is available.");
+    }
     const counterpartId =
       String(agreement.proposer_id) === viewer.authUser.id
         ? String(agreement.responder_id)
         : String(agreement.proposer_id);
 
-    if ((count ?? 0) >= 2) {
-      const now = new Date().toISOString();
+    if (completed) {
       await Promise.all([
-        supabase
-          .from("agreements")
-          .update({
-            status: "completed",
-            lifecycle_status: "completed",
-            completed_at: now,
-            updated_at: now,
-            public_evidence_updated_at: now,
-          })
-          .eq("id", agreementId),
         recordCoreEvent({
           profileId: String(agreement.proposer_id),
           eventType: "agreement_completed",
