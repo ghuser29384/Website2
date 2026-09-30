@@ -38,10 +38,10 @@ test.describe("Adaptive homepage", () => {
 
     const primary = page.locator("header.topbar nav");
     await expect(primary).toBeVisible();
-    await expect(primary.getByRole("link")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
-    await expect(primary.getByRole("link", { name: "Home", exact: true })).toHaveAttribute("href", "/feed");
-    await expect(primary.getByRole("link", { name: "Trades", exact: true })).toHaveAttribute("href", "/discover");
-    await expect(primary.getByRole("link", { name: "Profile", exact: true })).toHaveAttribute("href", "/profile");
+    await expect(primary.getByRole("link")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
+    await expect(primary.getByRole("link", { name: "Feed", exact: true })).toHaveAttribute("href", "/feed");
+    await expect(primary.getByRole("link", { name: "Discover", exact: true })).toHaveAttribute("href", "/discover");
+    await expect(primary.getByRole("link", { name: "Messages", exact: true })).toHaveAttribute("href", "/messages");
     await expect(primary.getByText("100 Sparks")).toHaveCount(0);
     await expect(page.locator(".header-start")).toHaveText("Get Started");
 
@@ -74,6 +74,8 @@ test.describe("Adaptive homepage", () => {
         name: "Sign in to see a feed based on your moral priorities.",
       }),
     ).toBeVisible();
+    await expect(feed.getByText("No profile loaded", { exact: true })).toBeVisible();
+    await expect(feed.getByText("No recommendations shown", { exact: true })).toBeVisible();
     await expect(
       feed.getByText(
         "This page does not guess your priorities or substitute demo recommendations.",
@@ -90,22 +92,14 @@ test.describe("Adaptive homepage", () => {
       "href",
       "/offers?view=live",
     );
-
-    const explanation = feed.locator(".mt-feed-explanation");
-    await expect(explanation).not.toHaveAttribute("open", "");
-    await explanation.locator("summary").click();
-    await expect(explanation).toHaveAttribute("open", "");
-    await expect(explanation).toContainText("No profile loaded");
-    await expect(explanation).toContainText("No recommendations shown");
-    await expect(explanation.getByRole("link", { name: "Review profile →" })).toHaveAttribute(
+    await expect(feed.getByRole("link", { name: "Review profile →" })).toHaveAttribute(
       "href",
-      "/profile/priorities",
+      "/complete-profile",
     );
+
     for (const rule of ["No guessed priorities", "No demo records", "No invented counterparties"]) {
-      await expect(explanation.getByText(rule, { exact: true })).toBeVisible();
+      await expect(feed.getByText(rule, { exact: true })).toBeVisible();
     }
-    await explanation.locator("summary").click();
-    await expect(explanation).not.toHaveAttribute("open", "");
 
     await expect(page.getByTestId("home-offer-trade")).toHaveCount(0);
     await expect(page.getByRole("slider")).toHaveCount(0);
@@ -145,14 +139,7 @@ test.describe("Adaptive homepage", () => {
       }),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: /Sign in/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Browse all live proposals →" })).toBeVisible();
-    const explanation = page.locator(".mt-feed-explanation");
-    await expect(explanation).not.toHaveAttribute("open", "");
-    await explanation.locator("summary").click();
-    await expect(explanation.getByRole("link", { name: "Review profile →" })).toHaveAttribute(
-      "href",
-      "/profile/priorities",
-    );
+    await expect(page.getByRole("link", { name: "Review profile →" })).toBeVisible();
 
     await expect(page.getByTestId("home-offer-trade")).toHaveCount(0);
     await expect(page.getByRole("slider")).toHaveCount(0);

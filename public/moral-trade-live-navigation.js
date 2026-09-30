@@ -3,6 +3,11 @@
 
   if (window.__MT_DISCOVER_NAVIGATION_BRIDGE__) return;
   window.__MT_DISCOVER_NAVIGATION_BRIDGE__ = true;
+  // Optional navigation stays absent if this public availability check cannot run.
+  const evidenceNavigation = document.createElement("script");
+  evidenceNavigation.src = "/moral-trade-evidence-navigation.js";
+  evidenceNavigation.async = true;
+  document.head.appendChild(evidenceNavigation);
 
   const navSelectors = [
     ".topbar nav",
@@ -88,10 +93,10 @@
       if (!header) continue;
       if (nav.dataset.mtPrimaryLinks === "true") { patched = true; continue; }
       const links = [
-        ["/feed", "Home", "data-mt-feed-link"],
-        ["/discover", "Trades", "data-mt-discover-link"],
+        ["/feed", "Feed", "data-mt-feed-link"],
+        ["/discover", "Discover", "data-mt-discover-link"],
+        ["/messages", "Messages", ""],
         ["/commitments", "Commitments", ""],
-        ["/profile", "Profile", ""],
       ];
       const fragment = document.createDocumentFragment();
       const path = window.location.pathname;
@@ -119,14 +124,21 @@
         const panel = document.createElement("div");
         panel.className = "header-more-links";
         for (const [href, label] of [
-          ["/dashboard", "Dashboard"], ["/trades/new", "Create a trade"],
-          ["/messages", "Messages"], ["/cart", "Saved offers"],
+          ["/dashboard", "Profile"], ["/trades/new", "Create a trade"],
+          ["/cart", "Saved offers"],
           ["/invite", "Invite"], ["/evidence", "Evidence"], ["/walkthrough", "Tour"], ["/safety", "Safety"],
         ]) {
           const link = document.createElement("a");
           link.href = href;
           link.textContent = label;
-          panel.appendChild(link);
+          if (href === "/evidence") {
+            const gate = document.createElement("template");
+            gate.dataset.mtEvidenceNavigation = "true";
+            gate.content.appendChild(link);
+            panel.appendChild(gate);
+          } else {
+            panel.appendChild(link);
+          }
         }
         more.append(trigger, panel);
         more.addEventListener("keydown", (event) => {

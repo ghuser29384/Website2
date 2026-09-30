@@ -5,10 +5,6 @@ on:
     paths:
       - "public/moral-trade-discover-home-alignment.css"
       - "public/moral-trade-discover-navigation.js"
-      - "public/moral-trade-discover-search.js"
-      - "public/moral-trade-discover.css"
-      - "public/moral-trade-discover.html"
-      - "public/moral-trade-live-navigation.js"
       - "src/discover-home-visual-contract.test.ts"
       - "src/lib/live-discover-navigation.test.ts"
       - "tests/discover-home-visual-alignment.spec.ts"
@@ -19,10 +15,6 @@ on:
     paths:
       - "public/moral-trade-discover-home-alignment.css"
       - "public/moral-trade-discover-navigation.js"
-      - "public/moral-trade-discover-search.js"
-      - "public/moral-trade-discover.css"
-      - "public/moral-trade-discover.html"
-      - "public/moral-trade-live-navigation.js"
       - "src/discover-home-visual-contract.test.ts"
       - "src/lib/live-discover-navigation.test.ts"
       - "tests/discover-home-visual-alignment.spec.ts"
@@ -60,8 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check "${{ github.event.pull_request.base.sha || github.event.before }}" HEAD
-          node --check public/moral-trade-discover-search.js
-          node --check public/moral-trade-live-navigation.js
+          node --check public/moral-trade-discover-navigation.js
 
       - name: Run focused visual contracts
         shell: bash

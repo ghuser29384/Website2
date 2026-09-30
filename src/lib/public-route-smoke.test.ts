@@ -57,12 +57,12 @@ test("public navigation exposes professional marketplace routes", () => {
   const globalCss = readRepoFile("src/app/globals.css");
 
   assert.deepEqual(labels, [
-    "Home",
-    "Trades",
+    "Feed",
+    "Discover",
+    "Messages",
     "Commitments",
-    "Profile",
   ]);
-  assert.deepEqual(hrefs, ["/feed", "/discover", "/commitments", "/profile"]);
+  assert.deepEqual(hrefs, ["/feed", "/discover", "/messages", "/commitments"]);
   assert.deepEqual(getTopbarActions(false).authLink, { href: "/login", label: "Sign in" });
   assert.deepEqual(getTopbarActions(false).primaryAction, { href: "/start", label: "Get started" });
   assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });
@@ -91,7 +91,7 @@ test("public navigation exposes professional marketplace routes", () => {
   }
   assert.equal(hrefs.includes("/cart"), false);
   assert.equal(siteSource.includes("social credit"), false);
-  assert.match(siteSource, /href: "\/feed", label: "Home"/);
+  assert.match(siteSource, /href: "\/feed", label: "Feed"/);
   assert.match(siteSource, /href: "\/trades\/new",\s*label: "Create"/);
   assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
   assert.match(topbarSource, /placeholder="Search offers"/);
@@ -400,7 +400,7 @@ test("live offers stay separated from examples while the wish registry uses broa
   assert.match(participantOfferGroup, /aria-describedby=\{`\$\{offerDescriptionId\} \$\{truthNoteId\}`\}/);
   assert.match(participantOfferGroup, /data-proposal-disclosure/);
   assert.match(participantOfferGroup, /\{isOwner \? "Manage" : "Respond"\}/);
-  assert.match(participantOfferGroup, /<dt>Get<\/dt>[\s\S]*<dt>Do<\/dt>/);
+  assert.match(participantOfferGroup, /<dt>Offer maker commits<\/dt>[\s\S]*<dd>\{offer\.offer_action\}<\/dd>[\s\S]*<dt>Responding participant commits<\/dt>[\s\S]*<dd>\{offer\.request_action\}<\/dd>/);
   assert.match(participantOfferGroup, /Counteroffer[\s\S]*Ask[\s\S]*Remove saved[\s\S]*Open full terms/);
 
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");

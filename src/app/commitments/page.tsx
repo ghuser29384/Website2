@@ -1,24 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { CommitmentSummaryIcon, type CommitmentSummaryIconName } from "@/components/commitments/commitment-summary-icon";
+import { summarizeCommitmentRecords, commitmentCountLabel } from "@/lib/commitments-summary";
 import { CommitmentsDocumentLink } from "@/components/commitments/commitments-document-link";
-import {
-  CommitmentSummaryIcon,
-  type CommitmentSummaryIconName,
-} from "@/components/commitments/commitment-summary-icon";
 import { CommitmentsLocalGreeting } from "@/components/commitments/commitments-local-greeting";
 import { ImpactShareButton } from "@/components/commitments/impact-share-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import {
-  MarketplaceBottomNav,
   MarketplaceRouteShell,
 } from "@/components/marketplace/marketplace-components";
 import {
   aggregateRecordQuantities,
   groupCommitments,
-  isActiveCommitment,
   loadCommitmentsPortfolioData,
   type CommitmentsTab,
   type CommitmentRecord,
@@ -29,8 +25,8 @@ import { getViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
-import redesignStyles from "./commitments-redesign.module.css";
 import styles from "./commitments.module.css";
+import redesignStyles from "./commitments-redesign.module.css";
 
 export const metadata: Metadata = {
   title: "Commitments",
@@ -69,14 +65,14 @@ function resolveGroup(value: string | undefined): PortfolioGroupMode {
 
 function formatQuantity(quantity: ResourceQuantity) {
   if (quantity.kind === "money" && quantity.currency) {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: quantity.currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     }).format(quantity.value / 100);
   }
-  return `${new Intl.NumberFormat().format(quantity.value)} ${quantity.unit ?? "units"}`;
+  return `${new Intl.NumberFormat("en-US").format(quantity.value)} ${quantity.unit ?? "units"}`;
 }
 
 function QuantityList({ quantities, empty = "—" }: { quantities: ResourceQuantity[]; empty?: string }) {
@@ -102,26 +98,15 @@ function groupHref(group: PortfolioGroupMode) {
   return group === "cause" ? "/commitments" : `/commitments?group=${group}`;
 }
 
-type SummaryTone = "blue" | "violet" | "amber" | "green" | "slate";
-
-function SummaryMetric({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: CommitmentSummaryIconName;
-  label: string;
-  value: React.ReactNode;
-  tone: SummaryTone;
+function SummaryMetric({ icon, label, count, complete, detail }: {
+  icon: CommitmentSummaryIconName; label: string; count: number | null; complete: boolean; detail?: string;
 }) {
   return (
-    <div className={redesignStyles.summaryCard} data-tone={tone}>
-      <span className={redesignStyles.summaryIcon}>
-        <CommitmentSummaryIcon name={icon} />
-      </span>
-      <strong className={redesignStyles.summaryValue}>{value}</strong>
+    <div className={redesignStyles.summaryCard}>
+      <span className={redesignStyles.summaryIcon}><CommitmentSummaryIcon name={icon} /></span>
+      <strong className={redesignStyles.summaryValue}>{commitmentCountLabel(count, complete)}</strong>
       <span className={redesignStyles.summaryLabel}>{label}</span>
+      {detail ? <small>{detail}</small> : null}
     </div>
   );
 }
@@ -194,7 +179,7 @@ function PortfolioView({
       <section className={styles.sectionHeader}>
         <div>
           <span>Allocation</span>
-          <h2>Where your commitments are allocated.</h2>
+          <h2>Your commitments</h2>
         </div>
         <nav className={styles.groupSwitch} aria-label="Group portfolio by">
           {(Object.keys(GROUP_LABELS) as PortfolioGroupMode[]).map((option) => (
@@ -233,7 +218,7 @@ function PortfolioView({
       ) : (
         <div className={styles.guidedEmpty}>
           <div>
-            <h2>No commitments yet.</h2>
+            <h2>{data.availability.recordsComplete ? "No commitments yet." : "No commitments could be loaded."}</h2>
             <p>Published examples, searches, and marketplace previews are not counted as commitments. Binding records appear after an accepted agreement, saved threshold pledge, or completed redirect creates a participant-scoped record.</p>
           </div>
           <div className={styles.emptyActions}>
@@ -279,7 +264,7 @@ function LedgerView({ data }: { data: Awaited<ReturnType<typeof loadCommitmentsP
             </li>
           ))}
         </ol>
-      ) : <div className={styles.inlineEmpty}>No ledger events exist for this account.</div>}
+      ) : <div className={styles.inlineEmpty}>{data.availability.recordsComplete ? "No ledger events exist for this account." : "No ledger events could be loaded."}</div>}
     </section>
   );
 }
@@ -335,7 +320,7 @@ function CompletedView({ data }: { data: Awaited<ReturnType<typeof loadCommitmen
               </article>
             ))}
           </div>
-        ) : <div className={styles.inlineEmpty}>No completed, returned, cancelled, or expired commitments yet.</div>}
+        ) : <div className={styles.inlineEmpty}>{data.availability.recordsComplete ? "No completed, returned, cancelled, or expired commitments yet." : "Completion records could not be fully loaded."}</div>}
       </section>
     </>
   );
@@ -366,7 +351,7 @@ function CalendarView({ data, showAll }: { data: Awaited<ReturnType<typeof loadC
             </li>
           ))}
         </ol>
-      ) : <div className={styles.inlineEmpty}>No dates match this calendar view.</div>}
+      ) : <div className={styles.inlineEmpty}>{data.availability.recordsComplete ? "No dates match this calendar view." : "Calendar records could not be fully loaded."}</div>}
     </section>
   );
 }
@@ -382,21 +367,12 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
     ? await loadCommitmentsPortfolioData({ userId: viewer.authUser.id, displayName: viewer.displayName })
     : null;
 
-  const activeRecords = data?.records.filter(isActiveCommitment) ?? [];
-  const activeMechanisms = new Set(activeRecords.map((record) => record.mechanism)).size;
-  const actionNeeded = activeRecords.filter((record) => record.action).length;
-  const generatedAt = data ? new Date(data.generatedAt) : null;
-  const activatedThisMonth = generatedAt
-    ? activeRecords.filter((record) => {
-        const created = new Date(record.createdAt);
-        return (
-          record.lifecycle !== "conditional" &&
-          created.getUTCFullYear() === generatedAt.getUTCFullYear() &&
-          created.getUTCMonth() === generatedAt.getUTCMonth()
-        );
-      })
-    : [];
-  const verifiedRecords = data?.records.filter((record) => record.verifiedOutcome) ?? [];
+  const retryParams = new URLSearchParams();
+  if (tab !== "portfolio") retryParams.set("tab", tab);
+  if (group !== "cause") retryParams.set("group", group);
+  if (showAllCalendar) retryParams.set("calendar", "all");
+  const retryHref = retryParams.size ? `/commitments?${retryParams}` : "/commitments";
+  const summary = data ? summarizeCommitmentRecords(data.records, data.generatedAt) : null;
 
   return (
     <div className={`${redesignStyles.shell} page-shell marketplace-app-shell`}>
@@ -411,18 +387,17 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <MarketplaceRouteShell active="track" hidePlannerSummary>
+        <MarketplaceRouteShell active="track" hideSidebar>
           <section className={`${styles.page} ${redesignStyles.page} v72-private-surface commitments-center mt-v75-route-card`} aria-labelledby="commitments-heading">
             <header className={`${styles.hero} ${redesignStyles.hero}`}>
               <div>
                 <h1 id="commitments-heading">Commitments</h1>
                 <span aria-hidden="true" hidden>Additional resources you caused.</span>
-                <p>Track your commitments, proof, outcomes, and impact.</p>
+                <p>Track your agreements, deadlines, and evidence.</p>
               </div>
               {data ? (
                 <div className={`${styles.heroAside} ${redesignStyles.heroAside}`}>
                   <CommitmentsLocalGreeting className={`${styles.greeting} ${redesignStyles.greeting}`} name={data.displayName} />
-                  <Link className="button button-primary" href="/trades/new">+ Create offer</Link>
                 </div>
               ) : null}
             </header>
@@ -447,53 +422,40 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
               </div>
             ) : data ? (
               <>
-                <section className={`${styles.summary} ${redesignStyles.summary}`} aria-label="Commitment summary">
-                  <SummaryMetric
-                    icon="commitment"
-                    label={activeRecords.length === 1 ? "Active commitment" : "Active commitments"}
-                    tone="blue"
-                    value={activeRecords.length}
-                  />
-                  <SummaryMetric
-                    icon="mechanism"
-                    label={activeMechanisms === 1 ? "Active mechanism" : "Active mechanisms"}
-                    tone="violet"
-                    value={activeMechanisms}
-                  />
-                  <SummaryMetric icon="action" label="Action needed" tone="amber" value={actionNeeded} />
-                  <SummaryMetric icon="activated" label="Activated this month" tone="green" value={activatedThisMonth.length} />
-                  <SummaryMetric icon="verified" label="Verified to date" tone="slate" value={verifiedRecords.length} />
-                </section>
-
-                <section className={redesignStyles.projection}>
-                  <div className={redesignStyles.projectionCopy}>
-                    <span className={redesignStyles.projectionEyebrow}>If everything succeeds</span>
-                    <strong className={redesignStyles.projectionValue}>
-                      <QuantityList
-                        quantities={data.cartProjection.projectedAdditionalResources}
-                        empty={`${data.cartProjection.projectedCounterpartyActions} counterparty action${data.cartProjection.projectedCounterpartyActions === 1 ? "" : "s"}`}
-                      />
-                    </strong>
-                    <span className={redesignStyles.projectionHint}>Projected if all conditions are met.</span>
+                {data.warnings.length ? (
+                  <div className={redesignStyles.coverageWarning} role="alert" data-testid="commitments-incomplete">
+                    <strong>Some records could not be fully loaded</strong>
+                    <p>Counts marked “found” reflect loaded records only. “Unknown” does not mean zero.</p>
+                    <ul>{data.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                    <CommitmentsDocumentLink href={retryHref}>Retry loading records</CommitmentsDocumentLink>
                   </div>
-                  <Link className={redesignStyles.projectionAction} href="/saved-offers">Review cart →</Link>
-                </section>
+                ) : null}
+                <p className={redesignStyles.summaryNote}>
+                  Loaded records · Updated <LocalDateTime value={data.generatedAt} fallback="just now" options={{ hour: "numeric", minute: "2-digit" }} />
+                </p>
+                {summary ? (
+                  <section className={`${styles.summary} ${redesignStyles.summary}`} aria-label="Commitment summary">
+                    <SummaryMetric icon="commitment" label="Active commitments" count={summary.active} complete={data.availability.recordsComplete} />
+                    <SummaryMetric icon="action" label="Needs attention" count={summary.actionNeeded} complete={data.availability.recordsComplete} />
+                    <SummaryMetric icon="mechanism" label="Awaiting review" count={summary.underReview} complete={data.availability.recordsComplete} />
+                    <SummaryMetric icon="activated" label="Created this month" detail="Calendar month in UTC" count={summary.createdThisMonth} complete={data.availability.recordsComplete} />
+                    <SummaryMetric icon="verified" label="Verified outcomes" count={summary.verified} complete={data.availability.recordsComplete} />
+                  </section>
+                ) : null}
 
-                <details className={redesignStyles.detailsRow}>
-                  <summary className={redesignStyles.detailsSummary}>
-                    <span className={redesignStyles.detailsTitle}>Additional details</span>
-                    <span className={redesignStyles.detailsMeta}>
-                      {data.warnings.length ? `${data.warnings.length} source warning${data.warnings.length === 1 ? "" : "s"}` : "Connected record types"}
-                      <span aria-hidden="true" className={redesignStyles.detailsChevron} />
-                    </span>
-                  </summary>
-                  <div className={redesignStyles.detailsContent}>
-                    <p>{data.cartProjection.assumption}</p>
-                    {data.warnings.length ? (
-                      <ul>{data.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-                    ) : null}
-                  </div>
-                </details>
+                {!data.availability.savedOffersComplete ? (
+                  <p className={redesignStyles.savedState}>Saved offers could not be fully loaded. No projection is shown. <Link href="/saved-offers">Review saved offers</Link></p>
+                ) : data.cartProjection.itemCount > 0 ? (
+                  <section className={redesignStyles.projection}>
+                    <div className={redesignStyles.projectionCopy}>
+                      <span className={redesignStyles.projectionEyebrow}>If everything succeeds</span>
+                      <strong className={redesignStyles.projectionValue}><QuantityList quantities={data.cartProjection.projectedAdditionalResources} empty={`${data.cartProjection.projectedCounterpartyActions} counterparty action${data.cartProjection.projectedCounterpartyActions === 1 ? "" : "s"}`} /></strong>
+                      <span className={redesignStyles.projectionHint}>{data.cartProjection.itemCount} saved offer{data.cartProjection.itemCount === 1 ? "" : "s"}. Not an expected-value estimate.</span>
+                      <details><summary>Projection assumptions</summary><p>{data.cartProjection.assumption}</p></details>
+                    </div>
+                    <Link className={redesignStyles.projectionAction} href="/saved-offers">Review saved offers →</Link>
+                  </section>
+                ) : null}
 
                 <div className={styles.contentGrid}>
                   <div className={styles.primaryContent}>
@@ -503,7 +465,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
                     {tab === "calendar" ? <CalendarView data={data} showAll={showAllCalendar} /> : null}
                   </div>
                   <aside className={styles.activityRail}>
-                    <header><div><span>Recent activity</span><h2>Latest updates.</h2></div><CommitmentsDocumentLink href="/commitments?tab=ledger">View all →</CommitmentsDocumentLink></header>
+                    <header><div><span>Recent activity</span><h2>Recent updates</h2></div><CommitmentsDocumentLink href="/commitments?tab=ledger">View all →</CommitmentsDocumentLink></header>
                     {data.recentActivity.length ? (
                       <ol>
                         {data.recentActivity.map((event) => (
@@ -517,7 +479,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
                           </li>
                         ))}
                       </ol>
-                    ) : <p className={styles.inlineEmpty}>No activity yet.</p>}
+                    ) : <p className={styles.inlineEmpty}>{data.availability.recordsComplete ? "No activity yet." : "Activity could not be fully loaded."}</p>}
                   </aside>
                 </div>
               </>
@@ -526,7 +488,6 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
         </MarketplaceRouteShell>
       </main>
 
-      <MarketplaceBottomNav active="track" />
       <SiteFooter />
     </div>
   );

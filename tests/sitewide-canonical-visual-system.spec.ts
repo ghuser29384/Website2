@@ -1,10 +1,9 @@
 import { expect, test, type ConsoleMessage, type Page, type TestInfo } from "@playwright/test";
 
-const PAPER = "rgb(247, 248, 250)";
+const PAPER = "rgb(245, 242, 233)";
 const BLACK = "rgb(5, 5, 5)";
 
 const publicEditorialRoutes = [
-  "/about",
   "/accessibility",
   "/contact",
   "/faq",
@@ -218,11 +217,7 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
   } else {
     const topbar = page.locator(".mt-site-topbar").first();
     if (await topbar.isVisible().catch(() => false)) {
-      const usesRefinedHeader = await topbar.evaluate((element) =>
-      element.classList.contains("mt-refined-header"),
-    );
-    const expectedTopbarColor = usesRefinedHeader ? "rgb(17, 18, 20)" : BLACK;
-    await expect(topbar).toHaveCSS("background-color", expectedTopbarColor);
+      await expect(topbar).toHaveCSS("background-color", await topbar.evaluate((el) => el.classList.contains("mt-refined-header")) ? "rgb(17, 18, 20)" : BLACK);
       await expect(topbar).toHaveCSS("border-radius", "0px");
     }
   }
@@ -354,7 +349,7 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await expect(page.getByRole("banner")).toBeVisible({ timeout: 45_000 });
   await expect(page.getByRole("banner")).toHaveCSS("background-color", "rgb(17, 18, 20)");
   await expect(page.getByRole("link", { exact: true, name: "Moral Trade, home" })).toBeVisible();
-  await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+  await expect(page.getByRole("heading", { exact: true, level: 1, name: "What needs you now." })).toHaveCount(0);
   await expect(page.getByRole("button", { exact: true, name: "Focus" })).toBeVisible();
   await waitForTextLength(page, 160);
   await expectNoFrameworkOverlay(page, "/");
@@ -367,20 +362,17 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await page.screenshot({ path: testInfo.outputPath("reference-walkthrough.png"), fullPage: false });
 });
 
-test("Commitments uses the approved rounded sidebar and preserves tab interaction", async ({ page }, testInfo) => {
+test("Commitments uses the approved single-navigation layout and preserves tab interaction", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expectCanonicalSurface(page, "/commitments", testInfo);
 
-  const activeTrack = page.locator('.mt-v75-side-link[aria-current="page"]').first();
-  await expect(activeTrack).toBeVisible();
-  await expect(activeTrack).toHaveCSS("border-radius", "9px");
-  await expect(activeTrack).toHaveCSS("background-color", "rgb(21, 23, 25)");
-  await expect(activeTrack).toHaveCSS("border-left-color", "rgb(40, 88, 255)");
-
-  const planner = page.locator(".mt-v75-side-plan").first();
-  await expect(planner).toBeVisible();
-  await expect(planner).toHaveCSS("border-radius", "10px");
-  await expect(planner).toHaveCSS("box-shadow", "none");
+  await expect(page.locator(".mt-v75-side-nav, .mt-v75-side-plan")).toHaveCount(0);
+  const primary = page.getByRole("navigation", { name: "Primary", exact: true });
+  await expect(primary.getByRole("link", { name: "Commitments", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator("#commitments-heading")).toHaveText("Commitments");
+  const workspace = page.locator(".mt-v75-route-workspace");
+  await expect(workspace).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 
   await page.getByRole("link", { exact: true, name: "Ledger" }).click();
   await expect(page).toHaveURL(/\/commitments\?tab=ledger/);
@@ -447,7 +439,7 @@ test("Moral Public Goods Labs gate uses a square evidence panel", async ({ page 
 test("keeps representative routes usable on mobile", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const route of [
-    "/about",
+    "/contact",
     "/offers?view=live",
     "/commitments",
     "/connectors",

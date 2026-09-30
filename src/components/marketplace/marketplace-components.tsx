@@ -652,18 +652,16 @@ function selectPrimaryBrowseDeal(deals: readonly MarketplaceDeal[], zeroLive: bo
 function MarketplaceSideNav({
   active = "browse",
   createHref,
-  hidePlannerSummary = false,
 }: {
   active?: "browse" | "plan" | "track" | "messages" | "profile";
   createHref?: string;
-  hidePlannerSummary?: boolean;
 }) {
   const items = [
-    { key: "browse", href: "/offers", label: "Browse", icon: "browse" },
-    { key: "plan", href: "/saved-offers", label: "Planner", icon: "planner" },
-    { key: "track", href: "/commitments", label: "Track", icon: "track" },
+    { key: "browse", href: "/discover", label: "Discover", icon: "browse" },
+    { key: "plan", href: "/saved-offers", label: "Saved offers", icon: "planner" },
+    { key: "track", href: "/commitments", label: "Commitments", icon: "track" },
     { key: "messages", href: "/messages", label: "Messages", icon: "messages" },
-    { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
+    { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },
   ] as const;
 
   return (
@@ -680,7 +678,7 @@ function MarketplaceSideNav({
             aria-current={active === item.key ? "page" : undefined}
             className={joinClassName(["mt-v75-side-link", active === item.key && "is-active"])}
             href={item.href}
-            prefetch={item.href === "/offers" ? false : undefined}
+            prefetch={item.href === "/discover" ? false : undefined}
             key={item.key}
           >
             <MarketplaceNavIcon name={item.icon} />
@@ -694,22 +692,7 @@ function MarketplaceSideNav({
           Create offer
         </Link>
       ) : null}
-      <div className="mt-v75-side-plan">
-        <strong>{hidePlannerSummary ? "Planner" : "0 in planner"}</strong>
-        {!hidePlannerSummary ? <>
-        <span>
-          <em>Exposure</em>
-          <b>$0.00</b>
-        </span>
-        <span>
-          <em>Charged now</em>
-          <b>$0.00</b>
-        </span>
-        </> : null}
-        <Link className="button button-primary button-mini" href="/saved-offers">
-          Review & plan
-        </Link>
-      </div>
+
     </aside>
   );
 }
@@ -717,15 +700,15 @@ function MarketplaceSideNav({
 export function MarketplaceRouteShell({
   active,
   children,
-  hidePlannerSummary = false,
+  hideSidebar = false,
 }: {
   active: "browse" | "plan" | "track" | "messages" | "profile";
   children: ReactNode;
-  hidePlannerSummary?: boolean;
+  hideSidebar?: boolean;
 }) {
   return (
     <div className="mt-v75-route-board">
-      <MarketplaceSideNav active={active} hidePlannerSummary={hidePlannerSummary} />
+      {!hideSidebar ? <MarketplaceSideNav active={active} /> : null}
       <div className="mt-v75-route-workspace">{children}</div>
     </div>
   );
@@ -2432,11 +2415,11 @@ export function MarketplaceBottomNav({
 }) {
   const normalizedActive = active === "account" ? "profile" : active;
   const items = [
-    { key: "browse", href: "/offers", label: "Browse", icon: "marketplace" },
+    { key: "browse", href: "/discover", label: "Discover", icon: "marketplace" },
     { key: "plan", href: "/saved-offers", label: "Plan", icon: "example" },
-    { key: "track", href: "/commitments", label: "Track", icon: "evidence" },
+    { key: "track", href: "/commitments", label: "Commitments", icon: "evidence" },
     { key: "messages", href: "/messages", label: "Messages", icon: "review" },
-    { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
+    { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },
   ] as const;
 
   return (
@@ -2449,7 +2432,7 @@ export function MarketplaceBottomNav({
             normalizedActive === item.key && "is-active",
           ])}
           href={item.href}
-          prefetch={item.href === "/offers" ? false : undefined}
+          prefetch={item.href === "/discover" ? false : undefined}
           key={item.key}
         >
           <IconMark name={item.icon} />

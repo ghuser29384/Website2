@@ -8,7 +8,7 @@ const siteNavigation = readFileSync("src/lib/site.ts", "utf8");
 test("the personalized feed has a stable public route and primary navigation entry", () => {
   assert.match(nextConfig, /source: "\/feed"/);
   assert.match(nextConfig, /destination: "\/moral-trade-live\.html"/);
-  assert.match(siteNavigation, /href: "\/feed", label: "Home"/);
+  assert.match(siteNavigation, /href: "\/feed", label: "Feed"/);
 });
 
 test("production canonicalizes the apex host so Supabase sessions do not split by host", () => {

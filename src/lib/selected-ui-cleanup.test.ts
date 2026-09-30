@@ -39,6 +39,7 @@ function render(authenticated: boolean, overrides = {}) {
     "@/components/brand/moral-trade-wordmark": { MoralTradeWordmark: () => jsx("span", { children: "Moral Trade" }) },
     "@/lib/supabase/browser": { createClient: () => ({ auth: { signOut: async () => { calls.push("signOut"); } } }) },
     "@/lib/refined-header": { HEADER_UTILITY_LINKS, REFINED_HEADER_LINKS, usesDefaultHeader },
+    "@/components/layout/evidence-nav-gate": { EvidenceNavGate: (props: Record<string, unknown>) => jsx("fragment", props) },
   };
   const output = ts.transpileModule(readFileSync("src/components/layout/site-topbar.tsx", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -56,13 +57,13 @@ function render(authenticated: boolean, overrides = {}) {
 }
 
 test("the selected four links are shared without losing secondary account access", () => {
-  const expected = ["Home", "Trades", "Commitments", "Profile"];
+  const expected = ["Feed", "Discover", "Messages", "Commitments"];
   for (const auth of [false, true]) {
     assert.deepEqual(getPrimaryNavLinks(auth).map((link) => link.label), expected);
     assert.ok(usesDefaultHeader(getPrimaryNavLinks(auth)));
   }
   assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.label), expected);
-  for (const href of ["/messages", "/dashboard", "/trades/new", "/cart", "/invite", "/evidence", "/walkthrough", "/safety"]) {
+  for (const href of ["/dashboard", "/trades/new", "/cart", "/invite", "/evidence", "/walkthrough", "/safety"]) {
     assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === href));
   }
 });
@@ -70,6 +71,8 @@ test("the selected four links are shared without losing secondary account access
 for (const authenticated of [false, true]) {
   test(`actual header keeps one Create entry and a More disclosure (signed in: ${authenticated})`, () => {
     const all = nodes(render(authenticated).root);
+    assert.equal(all.filter((node) => node.type === "a" && node.props.href === "/cart").length, 1);
+    assert.doesNotMatch(text(render(authenticated).root), /Favourites/);
     assert.equal(all.filter((node) => node.type === "a" && node.props.href === "/trades/new").length, 1);
     assert.equal(all.filter((node) => node.type === "summary" && text(node).includes("More")).length, 1);
     const more = all.find((node) => node.type === "details" && text(node).includes("More"))!;
@@ -94,7 +97,7 @@ test("the actual header submits a labelled native offer search", () => {
 test("shortened account copy keeps the existing logout sequence and data links", async () => {
   const { root, calls, pending } = render(true);
   const all = nodes(root);
-  for (const href of ["/dashboard#my-trades", "/dashboard#data-portability", "/cart"]) {
+  for (const href of ["/dashboard?view=controls#my-trades", "/dashboard?view=controls#data-portability", "/cart"]) {
     assert.ok(all.some((node) => node.type === "a" && node.props.href === href));
   }
   assert.doesNotMatch(text(root), /Review owned and engaged offers|Export or import account data|Manage your saved and private workspace/);

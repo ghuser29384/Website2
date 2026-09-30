@@ -268,7 +268,7 @@
     const date = new Date(value);
     if (!Number.isFinite(date.getTime())) return "Updated for this visit";
 
-    return `Updated ${new Intl.DateTimeFormat(undefined, {
+    return `Updated ${new Intl.DateTimeFormat("en-US", {
       hour: "numeric",
       minute: "2-digit",
     }).format(date)}`;
@@ -329,7 +329,7 @@
 
   function formatCurrencyFromCents(value) {
     if (!value) return "";
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       maximumFractionDigits: value % 100 === 0 ? 0 : 2,
@@ -606,24 +606,44 @@
   function renderEmptyState() {
     const content = emptyStateContent();
 
-    return `<div class="focus-layout mt-feed-layout" data-mt-live-now="adaptive" data-mt-live-now-state="${escapeHtml(model.status)}"><main class="mt-feed-main">
-      <section class="mt-feed-empty" aria-label="Feed status">
-        <div><h2>${escapeHtml(content.title)}</h2><p>${escapeHtml(content.copy)}</p></div>
-        <div class="mt-feed-empty-actions"><a class="btn primary" href="${escapeHtml(content.primaryHref)}">${escapeHtml(content.primaryLabel)}</a><a class="mt-feed-secondary-link" href="${escapeHtml(content.secondaryHref)}">${escapeHtml(content.secondaryLabel)}</a></div>
+    return `<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="${escapeHtml(
+      model.status,
+    )}"><main>
+      <section class="panel black urgent">
+        <div><div class="eyebrow orange">${escapeHtml(
+          content.eyebrow,
+        )}</div><h2>${escapeHtml(content.title)}</h2><p class="muted">${escapeHtml(
+          content.copy,
+        )}</p></div>
+        <div class="terms">${content.facts
+          .map(
+            (fact, index) =>
+              `<div><span class="eyebrow">${
+                index === 0 ? "Profile state" : "Feed state"
+              }</span><strong>${escapeHtml(fact)}</strong></div>`,
+          )
+          .join("")}</div>
+        <div class="stack"><a class="btn primary" href="${escapeHtml(
+          content.primaryHref,
+        )}">${escapeHtml(content.primaryLabel)}</a><a class="btn ghost" href="${escapeHtml(
+          content.secondaryHref,
+        )}">${escapeHtml(content.secondaryLabel)}</a></div>
       </section>
       ${renderOwnedOpportunities()}
-      <details class="mt-feed-explanation">
-        <summary>How matching works</summary>
-        <div class="mt-feed-explanation-body">
-          <p>Your priorities select the benefit. Your action model estimates the burden.</p>
-          <p><strong>Explicit choices remain authoritative.</strong> Optional viewing activity can suggest relevance, but it does not become a stated priority or willingness signal. Easy/hard feedback is explicit action feedback.</p>
-          <p>${content.facts.map((fact) => escapeHtml(fact)).join(" · ")}</p>
-          ${sidePanel("Profile basis", model.profile.causes, "")}
-          ${sidePanel("Feed rule", ["No guessed priorities", "No demo records", "No invented counterparties"], "")}
-          <a class="mt-feed-secondary-link" href="/profile/priorities">Review profile →</a>
-        </div>
-      </details>
-    </main></div>`;
+      <section class="panel attention">
+        <div class="iconbox bluebg">◎</div>
+        <div class="lead"><div class="eyebrow blue">How matching works</div><h3>Your priorities select the benefit. Your action model estimates the burden.</h3></div>
+        <div><b>Explicit choices remain authoritative.</b><p class="muted" style="font-size:11px">Optional viewing activity can suggest relevance, but it does not become a stated priority or willingness signal. Easy/hard feedback is explicit action feedback.</p></div>
+        <a class="btn" href="/complete-profile">Review profile →</a>
+      </section>
+    </main><aside class="stack">
+      ${sidePanel("Profile basis", model.profile.causes, "")}
+      ${sidePanel(
+        "Feed rule",
+        ["No guessed priorities", "No demo records", "No invented counterparties"],
+        "",
+      )}
+    </aside></div>`;
   }
 
   function weightedPriorityChips() {

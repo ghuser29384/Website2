@@ -6,6 +6,8 @@ import {
   type TimeHTMLAttributes,
 } from "react";
 
+import { INTERFACE_LOCALE } from "@/lib/interface-locale";
+
 export type LocalDateTimeValue = string | number | Date | null;
 
 type LocalDateTimeProps = Omit<
@@ -122,7 +124,7 @@ export function formatLocalDateTimeValue(
   value: LocalDateTimeValue,
   {
     dateOnly = false,
-    locale,
+    locale = INTERFACE_LOCALE,
     options,
     timeZone,
   }: {
@@ -178,7 +180,7 @@ export function LocalDateTime({
   value,
   fallback = "—",
   dateOnly = false,
-  locale,
+  locale = INTERFACE_LOCALE,
   options,
   ...timeProps
 }: LocalDateTimeProps) {

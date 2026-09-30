@@ -5,12 +5,12 @@ for (const width of [1440, 390, 320]) {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.setViewportSize({ width, height: 950 });
-    await page.goto("/about", { waitUntil: "domcontentloaded" });
-    await expect(page).toHaveTitle(/About/);
-    // The About removal was explicitly excluded from this release.
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("A service for cooperation across moral disagreement.");
+    await page.goto("/contact", { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveTitle(/Contact/);
+    // Shared header/footer geometry uses a retained page; About has HTTP redirect coverage.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Reach the Moral Trade team.");
     const header = page.locator(".mt-refined-header").first();
-    await expect(header.locator("[data-mt-primary-links] > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
+    await expect(header.locator("[data-mt-primary-links] > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
     await expect(header.locator('form[role="search"]')).toHaveAttribute("action", "/offers");
     await expect(header.locator('form[role="search"]')).toHaveAttribute("method", "get");
     await expect(header.getByRole("searchbox", { name: "Search offers" })).toBeVisible();
@@ -48,4 +48,8 @@ test("native offer search reaches the existing directory without an interpretati
   await expect.poll(() => new URL(page.url()).pathname).toBe("/offers");
   await expect.poll(() => new URL(page.url()).searchParams.get("search")).toBe("animal welfare");
   expect(interpretationRequests).toEqual([]);
+});
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/navigation/evidence", (route) => route.fulfill({ json: { available: true } }));
 });

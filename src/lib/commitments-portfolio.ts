@@ -1,4 +1,5 @@
 import {
+  DASHBOARD_PAGE_SIZE,
   listAgreementsForUser,
   type AgreementRecord,
   type OfferRecord,
@@ -140,6 +141,11 @@ export interface CartProjection {
 }
 
 export interface CommitmentsPortfolioData {
+  availability: {
+    recordsComplete: boolean;
+    savedOffersComplete: boolean;
+    openOffersComplete: boolean;
+  };
   generatedAt: string;
   displayName: string;
   capacityLabel: string;
@@ -684,7 +690,7 @@ function buildAgreementEvents(agreement: AgreementRecord, record: CommitmentReco
           : payment.status === "paid"
             ? "Payment recorded"
             : "Payment status updated",
-      detail: `${payment.currency.toUpperCase()} ${(payment.amount_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${payment.status.replaceAll("_", " ")}`,
+      detail: `${payment.currency.toUpperCase()} ${(payment.amount_cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${payment.status.replaceAll("_", " ")}`,
       href: record.href,
       kind: payment.status === "refunded" ? "return" : "payment",
       priority: payment.payer_id === userId && payment.authorization_status.includes("pending") ? 90 : 40,
@@ -844,12 +850,14 @@ function selectRecentActivity(events: PortfolioEvent[]) {
     .map(({ score: _score, ...event }) => event);
 }
 
-async function settle<T>(label: string, task: Promise<T>, fallback: T, warnings: string[]) {
+async function settle<T>(label: string, task: Promise<T>, fallback: T, warnings: string[], unavailable: () => void) {
   try {
     return await task;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    warnings.push(`${label}: ${message}`);
+    unavailable();
+    console.error(`[commitments] ${label} unavailable`, { message });
+    warnings.push(`${label} could not be loaded. Retry to refresh these records.`);
     return fallback;
   }
 }
@@ -864,10 +872,12 @@ export async function loadCommitmentsPortfolioData({
   now?: Date;
 }): Promise<CommitmentsPortfolioData> {
   const warnings: string[] = [];
+  const availability = { recordsComplete: true, savedOffersComplete: true, openOffersComplete: true };
+  const recordsUnavailable = () => { availability.recordsComplete = false; };
   const [agreements, cartItems, openOffers, participantState, redirectBundle] = await Promise.all([
-    settle("Agreements", listAgreementsForUser(userId), [] as AgreementRecord[], warnings),
-    settle("Cart", listCommitmentCartItems(userId), [] as CommitmentCartItem[], warnings),
-    settle("Open offers", listCommitmentOpenOffers(userId), [] as CommitmentOffer[], warnings),
+    settle("Agreements", listAgreementsForUser(userId), [] as AgreementRecord[], warnings, recordsUnavailable),
+    settle("Saved offers", listCommitmentCartItems(userId), [] as CommitmentCartItem[], warnings, () => { availability.savedOffersComplete = false; }),
+    settle("Open offers", listCommitmentOpenOffers(userId), [] as CommitmentOffer[], warnings, () => { availability.openOffersComplete = false; }),
     settle(
       "Threshold funding",
       loadMpgfParticipantState({ userId, displayName }),
@@ -884,6 +894,7 @@ export async function loadCommitmentsPortfolioData({
         warnings: [],
       } satisfies MpgfParticipantState,
       warnings,
+      recordsUnavailable,
     ),
     settle(
       "Donation redirects",
@@ -895,10 +906,26 @@ export async function loadCommitmentsPortfolioData({
         charitiesById: new Map(),
       } satisfies DonationOffsetRecordBundle,
       warnings,
+      recordsUnavailable,
     ),
   ]);
 
-  warnings.push(...participantState.warnings);
+  if (participantState.status !== "authenticated" || participantState.warnings.length) {
+    availability.recordsComplete = false;
+    warnings.push("Some threshold funding records are unavailable. Totals reflect loaded records only.");
+  }
+  if (agreements.some((agreement) => agreement.legacyEvidenceReviewAvailable === false)) {
+    availability.recordsComplete = false;
+    warnings.push("Some agreement evidence or review records are unavailable.");
+  }
+  if (agreements.length >= DASHBOARD_PAGE_SIZE) {
+    availability.recordsComplete = false;
+    warnings.push(`Only the ${DASHBOARD_PAGE_SIZE} most recent agreements were loaded. Counts are not account-wide totals.`);
+  }
+  if (cartItems.some((item) => !item.offer) || cartItems.length >= 100) {
+    availability.savedOffersComplete = false;
+    warnings.push("Some saved offers are unavailable or outside this loaded page. The projection is unavailable.");
+  }
   const agreementRecords = agreements.map((agreement) => agreementRecord(agreement, userId, now));
   const thresholdLedger = buildMpgfContributionProofLedger({ participantState, now });
   const campaignById = new Map(demoMpgfPublicGoodsCampaigns.map((campaign) => [campaign.id, campaign]));
@@ -965,6 +992,7 @@ export async function loadCommitmentsPortfolioData({
   ].toSorted((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
   return {
+    availability,
     generatedAt: now.toISOString(),
     displayName,
     capacityLabel: "Personal",

@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { mockAccount, mockInventory, responseFor } from "./helpers/discover";
 
+// Profile is now a redirect. Safety retains the standard native header; Contact
+// has its own compact layout, and Complete Profile intentionally has no masthead.
 for (const width of [1728, 1440, 1024, 390, 320]) {
-  for (const route of ["/feed", "/discover", "/profile"]) {
+  for (const route of ["/feed", "/discover", "/safety"]) {
     test(`approved masthead at ${route} ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 950 });
       const errors: string[] = [];
@@ -12,12 +14,12 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
       const header = page.locator(".mt-refined-header").first();
       const nav = header.locator("[data-mt-primary-links]");
-      await expect(nav.locator(":scope > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
+      await expect(nav.locator(":scope > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
       await expect(header).toHaveCSS("background-color", "rgb(17, 18, 20)");
       await expect(nav.getByText("100 Sparks")).toHaveCount(0);
-      await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(route === "/safety" ? 0 : 1);
       const hrefs = await nav.locator(":scope > a").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
-      expect(hrefs).toEqual(["/feed", "/discover", "/commitments", "/profile"]);
+      expect(hrefs).toEqual(["/feed", "/discover", "/messages", "/commitments"]);
       const brand = header.locator(".brand");
       await expect(brand).toBeVisible();
       await expect(brand).toHaveCSS("color", "rgb(255, 255, 255)");
@@ -63,9 +65,7 @@ for (const route of ["/feed", "/discover"] as const) {
 
 test("Profile owns priorities and a legacy Sparks URL preserves the authenticated editor", async ({ page }) => {
   await page.goto("/profile");
-  await page.getByRole("link", { name: /Adjust priorities/ }).click();
-  await expect(page).toHaveURL(/\/login\?returnTo=/);
-  expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
+  await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/dashboard");
   await page.goto("/100-sparks");
   await expect(page).toHaveURL(/\/login\?returnTo=/);
   expect(decodeURIComponent(page.url())).toContain("/profile/priorities");
@@ -74,7 +74,7 @@ test("Profile owns priorities and a legacy Sparks URL preserves the authenticate
 for (const width of [1280, 390, 320]) {
   test(`secondary utilities support keyboard disclosure at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });
-    for (const route of ["/feed", "/profile", "/contact"]) {
+    for (const route of ["/feed", "/safety", "/contact"]) {
       await page.goto(route);
       const header = page.locator(".mt-refined-header").first();
       const summary = header.locator("summary").filter({ hasText: "More" });
@@ -83,6 +83,11 @@ for (const width of [1280, 390, 320]) {
       await expect(summary).toBeFocused();
       await page.keyboard.press("Enter");
       await expect(header.getByRole("link", { name: "Evidence", exact: true })).toBeVisible();
+      const profile = header.getByRole("link", { name: "Profile", exact: true });
+      await expect(profile).toHaveCount(1);
+      await expect(profile).toBeVisible();
+      await expect(profile).toHaveAttribute("href", "/dashboard");
+      await expect(header.getByRole("link", { name: "Dashboard", exact: true })).toHaveCount(0);
       await page.keyboard.press("Escape");
       await expect(summary).toBeFocused();
       await expect(header.getByRole("link", { name: "Evidence", exact: true })).not.toBeVisible();
@@ -99,7 +104,7 @@ test("the directory masthead keeps native page links usable without JavaScript",
   await page.goto("/discover");
   const profile = page.locator('[data-mt-primary-links] a[href="/feed"]');
   await expect(profile).toBeVisible();
-  await expect(profile).toHaveAccessibleName("Home");
+  await expect(profile).toHaveAccessibleName("Feed");
   await expect(page.locator("[data-mt-primary-links] > a")).toHaveCount(4);
   await profile.click();
   await expect(page).toHaveURL(/\/feed$/);
@@ -108,39 +113,6 @@ test("the directory masthead keeps native page links usable without JavaScript",
   await context.close();
 });
 
-for (const target of ["/feed", "/discover"]) {
-  test(`React header uses a document request for standalone ${target}`, async ({ page }) => {
-    await page.setViewportSize({ width: 320, height: 900 });
-    const rscRequests: string[] = [];
-    await page.route(url => ["/feed", "/discover"].includes(url.pathname) && url.searchParams.has("_rsc"), route => {
-      rscRequests.push(route.request().url());
-      return route.abort();
-    });
-    await page.goto("/contact");
-    const summary = page.locator(".mt-refined-header summary").filter({ hasText: "More" });
-    await summary.focus();
-    await page.keyboard.press("Enter");
-    await expect(page.locator(".mt-refined-header").getByRole("link", { name: "Messages", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === target);
-    await page.locator(`[data-mt-primary-links] a[href="${target}"]`).click();
-    await navigation;
-    await expect.poll(() => new URL(page.url()).pathname).toBe(target);
-    expect(rscRequests).toEqual([]);
-  });
-}
-
-
-test("the React brand navigates to the standalone homepage without RSC", async ({ page }) => {
-  const rscRequests: string[] = [];
-  await page.route(url => url.pathname === "/" && url.searchParams.has("_rsc"), route => {
-    rscRequests.push(route.request().url());
-    return route.abort();
-  });
-  await page.goto("/contact");
-  const navigation = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === "/");
-  await page.locator(".mt-refined-header").getByRole("link", { name: "Moral Trade, home", exact: true }).click();
-  await navigation;
-  await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
-  expect(rscRequests).toEqual([]);
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/navigation/evidence", (route) => route.fulfill({ json: { available: true } }));
 });

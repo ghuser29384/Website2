@@ -26,8 +26,8 @@ test("the live loader accepts the exact checked-in core asset", () => {
   assert.equal(expectedDigest, actualDigest);
 });
 
-test("the live shell fetches private profile recommendations before rendering", () => {
-  assert.match(loader, /fetch\('\/api\/live-now'/);
+test("the live shell loads private recommendations without blocking navigation", () => {
+  assert.match(loader, /readJson\('\/api\/live-now'/);
   assert.match(loader, /credentials: 'same-origin'/);
   assert.match(loader, /__MT_LIVE_NOW_BOOTSTRAP__/);
   assert.match(loader, /moral-trade-live-now\.js/);

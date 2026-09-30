@@ -8,7 +8,9 @@
 
 body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) {
   background-color: var(--mt-paper) !important;
-  background-image: none !important;
+  background-image:
+    linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.035) 1px, transparent 1px) !important;
   background-size: 24px 24px !important;
 }
 
@@ -67,12 +69,12 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([
 }
 
 .mt-v75-route-board {
-  border: 1px solid var(--mt-line) !important;
-  background: #ffffff !important;
+  border: 1px solid var(--mt-black) !important;
+  background: rgba(255, 253, 248, 0.92) !important;
 }
 
 .mt-v75-side-nav {
-  border-right: 1px solid var(--mt-line) !important;
+  border-right: 1px solid var(--mt-black) !important;
   background: var(--mt-paper-strong) !important;
 }
 
@@ -189,8 +191,8 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([
 }
 
 .commitments-center {
-  border: 1px solid var(--mt-line) !important;
-  background: #ffffff !important;
+  border: 1px solid var(--mt-black) !important;
+  background: rgba(255, 253, 248, 0.9) !important;
 }
 
 .dashboard-page .dashboard-task-card:hover,
@@ -206,7 +208,7 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([
 
   .mt-v75-side-nav {
     border-right: 0 !important;
-    border-bottom: 1px solid var(--mt-line) !important;
+    border-bottom: 1px solid var(--mt-black) !important;
   }
 
   .mt-v75-side-link {

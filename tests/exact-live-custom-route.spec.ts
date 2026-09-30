@@ -161,11 +161,10 @@ test.describe("authoritative live route planner", () => {
 
     await expect(page.locator("[data-mt-live-route-composer]")).toBeVisible();
     await expect(page.locator('[data-mt-live-route-card="best-fit"]')).toBeVisible();
-    await expect(
-      page.getByRole("heading", {
-        name: "Routes for Reduce preventable animal suffering",
-      }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Suggested routes", exact: true })).toBeVisible();
+    await expect(page.getByLabel("What would you like to change?", { exact: true })).toHaveValue(
+      "Reduce preventable animal suffering",
+    );
     await expect(
       page.getByText("Fund a verified animal-welfare review", { exact: true }),
     ).toBeVisible();
@@ -197,7 +196,10 @@ test.describe("authoritative live route planner", () => {
     await expect(page.locator("[data-mt-live-route-composer]")).toBeVisible();
     await expect(page.locator('[data-mt-live-route-card="best-fit"]')).toBeVisible();
     await expect(page.getByRole("button", { name: "Update routes" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Guided goal interview" })).toBeVisible();
+    const preferences = page.locator('[data-mt-lrp-disclosure="preferences"]');
+    await expect(preferences).not.toHaveAttribute("open", "");
+    await preferences.locator("summary").click();
+    await expect(page.getByRole("button", { name: "Help with my goal" })).toBeVisible();
 
     const widths = await page.evaluate(() => ({
       innerWidth: window.innerWidth,

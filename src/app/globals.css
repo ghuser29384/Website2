@@ -6631,8 +6631,6 @@ output {
   display: grid;
   gap: 0.75rem;
   align-content: start;
-  /* Contract keys stay readable without expanding a card or clipping its text. */
-  overflow-wrap: anywhere;
 }
 
 .protocol-contract-card *,

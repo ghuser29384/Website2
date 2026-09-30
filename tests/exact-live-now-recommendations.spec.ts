@@ -616,7 +616,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await expect(page).toHaveURL(/\/feed$/);
     const home = page.locator('[data-mt-primary-links] a[data-mt-feed-link="true"]');
-    await expect(home).toHaveText("Home");
+    await expect(home).toHaveText("Feed");
     await expect(home).toHaveAttribute("href", "/feed");
     await expect(home).toHaveAttribute("aria-current", "page");
     const feed = page.locator('[data-mt-live-now="adaptive"]');
@@ -661,30 +661,27 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     const navigation = page.locator(".topbar nav").first();
     await expect(navigation.locator("button, a")).toHaveText([
-      "Home",
-      "Trades",
+      "Feed",
+      "Discover",
+      "Messages",
       "Commitments",
-      "Profile",
     ]);
 
     await page.locator(".header-more > summary").click();
-    await expect(page.locator(".header-more").getByRole("link", { name: "Messages", exact: true })).toBeVisible();
-    await page.locator(".header-more > summary").click();
-    const profile = navigation.getByRole("link", { name: "Profile", exact: true });
+    const profile = page.locator(".header-more").getByRole("link", { name: "Profile", exact: true });
     await expect(profile).toBeVisible();
+    await expect(profile).toHaveAttribute("href", "/dashboard");
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
 
     await profile.click();
-    await expect(page).toHaveURL(/\/profile$/);
-    await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "Your profile",
-      exact: true,
-    }),
-  ).toBeVisible();
+    await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/dashboard");
+    await expect(page.getByRole("heading", { level: 1, name: "Welcome back", exact: true })).toBeVisible();
   });
+});
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/navigation/evidence", (route) => route.fulfill({ json: { available: true } }));
 });

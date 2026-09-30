@@ -8,6 +8,7 @@ import { ParticipantOfferGroup } from "@/components/marketplace/participant-offe
 import { SmartQueryForm } from "@/components/search/smart-query-form";
 import { TradeTemplateLibrary } from "@/components/trade-templates/trade-template-library";
 import { getViewer, OFFERS_PAGE_SIZE } from "@/lib/app-data";
+import { recordedRespondentContribution, matchesRecordedContribution, OFFER_CONTRIBUTION_BOUNDARY, OUTCOME_VERIFICATION_BOUNDARY, type OffsetContributionRecord } from "@/lib/offer-discovery-facts";
 import { getFormMessage } from "@/lib/form-state";
 import { groupOffersByParticipant } from "@/lib/marketplace-participant-groups";
 import { getAbsoluteUrl } from "@/lib/seo";
@@ -17,10 +18,8 @@ import {
   smartDiscoveryScore,
 } from "@/lib/smart-discovery-ranking";
 import {
-  extractMoneyAmountsCents,
   getSmartDeadlineUrgency,
   getSmartQueryCauseLabel,
-  matchesSmartAmountConstraint,
   matchesSmartDeadlineConstraint,
   matchesSmartVerificationConstraint,
   parseSerializedSmartQueryFacets,
@@ -108,7 +107,7 @@ interface RankedOffer {
   offer: OfferRow;
   score: number;
   semanticRelevance: number;
-  verified: boolean;
+  verified: boolean | null;
 }
 
 interface LiveOffersResult {
@@ -131,10 +130,10 @@ const MODE_OPTIONS: ReadonlyArray<{ value: ModeFilter; label: string }> = [
 
 const SORT_OPTIONS: ReadonlyArray<{ value: OfferSort; label: string }> = [
   { value: "best_match", label: "Best match" },
-  { value: "most_verified", label: "Strongest evidence" },
+  { value: "most_verified", label: "Most detailed evidence terms" },
   { value: "soonest_deadline", label: "Soonest deadline" },
-  { value: "lowest_cost", label: "Lowest stated cost" },
-  { value: "highest_credit", label: "Highest transaction credit" },
+  { value: "lowest_cost", label: "Lowest recorded contribution" },
+  { value: "highest_credit", label: "Highest stated credibility" },
   { value: "newest", label: "Newest" },
 ];
 
@@ -180,16 +179,6 @@ function offerTextFields(offer: OfferRow) {
   ] as const;
 }
 
-function offerAmounts(offer: OfferRow) {
-  return extractMoneyAmountsCents(
-    offer.request_action,
-    offer.offer_action,
-    offer.discount_note,
-    offer.notes,
-    offer.duration,
-  );
-}
-
 function offerCauseIds(offer: OfferRow) {
   return parseSmartQuery(
     `${offer.offered_cause} ${offer.requested_cause} ${offer.compromise_cause}`,
@@ -197,19 +186,13 @@ function offerCauseIds(offer: OfferRow) {
   ).facets.causes;
 }
 
-function strictAmountMatch(facets: SmartQueryFacets, amounts: readonly number[]) {
-  if (facets.minAmountCents === null && facets.maxAmountCents === null) return true;
-  if (!amounts.length) return false;
-  return amounts.every((amount) => matchesSmartAmountConstraint(facets, [amount]));
-}
-
 function offerMatchesHardConstraints(
   offer: OfferRow,
   facets: SmartQueryFacets,
   causeIds: readonly string[],
-  amountCents: readonly number[],
+  contribution: ReturnType<typeof recordedRespondentContribution>,
   deadline: string | null,
-  verified: boolean,
+  verified: boolean | null,
 ) {
   if (facets.actionTypes.length) {
     const modeMatches = facets.actionTypes.some((actionType) => actionType === offer.mode);
@@ -220,12 +203,12 @@ function offerMatchesHardConstraints(
     if (causeScore < 0.42 && !facets.causes.some((cause) => causeIds.includes(cause))) return false;
   }
   if (!matchesSmartVerificationConstraint(facets, verified)) return false;
-  if (!strictAmountMatch(facets, amountCents)) return false;
+  if (!matchesRecordedContribution(facets, contribution)) return false;
   if (!matchesSmartDeadlineConstraint(facets, deadline)) return false;
   if (facets.minCredit !== null && normalizeCreditSignal(offer.trust_level) * 100 < facets.minCredit) {
     return false;
   }
-  if (facets.location || facets.participantKinds.length) return false;
+  if (facets.location || facets.participantKinds.length || facets.evidenceStates.length) return false;
   return true;
 }
 
@@ -234,9 +217,10 @@ function rankOffer(
   interpretation: SmartQueryInterpretation,
   personalPriorities: readonly string[],
   now: Date,
+  contribution: ReturnType<typeof recordedRespondentContribution>,
 ): RankedOffer | null {
   const fields = offerTextFields(offer);
-  const amountCents = offerAmounts(offer);
+  const amountCents = contribution ? [contribution.amountCents] : [];
   const causeIds = offerCauseIds(offer);
   const deadline = extractSmartRecordDeadline(
     [offer.duration, offer.discount_note, offer.notes, offer.request_action, offer.offer_action],
@@ -251,7 +235,7 @@ function rankOffer(
       offer,
       interpretation.facets,
       causeIds,
-      amountCents,
+      contribution,
       deadline,
       verified,
     )
@@ -440,8 +424,27 @@ async function listLiveOffers({
       };
     }
 
+    const contributions = new Map<string, OffsetContributionRecord>();
+    const needsContribution = facets.minAmountCents !== null || facets.maxAmountCents !== null || sort === "lowest_cost";
+    if (needsContribution) {
+      const ids = (data ?? []).filter((offer) => offer.mode === "offset").map((offer) => offer.id);
+      for (let start = 0; start < ids.length; start += 100) {
+        const result = await supabase.from("donation_offset_offers")
+          .select("offer_id,requested_matching_amount_cents,time_horizon,participation_mode")
+          .in("offer_id", ids.slice(start, start + 100));
+        if (result.error) {
+          // Do not turn an unavailable contribution source into a false zero or
+          // apparently complete budget result set.
+          return { items: [], total: 0, page, pageSize: OFFERS_PAGE_SIZE,
+            hasNextPage: false, hasPreviousPage: page > 1,
+            error: "Recorded contributions could not be loaded. Retry or remove the budget filter/sort.",
+            candidateLimitReached: false };
+        }
+        for (const row of result.data ?? []) contributions.set(row.offer_id, row);
+      }
+    }
     const ranked = (data ?? [])
-      .map((offer) => rankOffer(offer as OfferRow, { ...interpretation, facets }, personalPriorities, new Date()))
+      .map((offer) => rankOffer(offer as OfferRow, { ...interpretation, facets }, personalPriorities, new Date(), recordedRespondentContribution(offer.mode, contributions.get(offer.id))))
       .filter((entry): entry is RankedOffer => Boolean(entry));
     const sorted = sortRankedOffers(ranked, sort);
     return {
@@ -496,11 +499,11 @@ async function listLiveOffers({
 function formatMoneyConstraint(facets: SmartQueryFacets) {
   if (facets.maxAmountCents !== null) {
     const operator = facets.maxAmountInclusive ? "At most" : "Under";
-    return `${operator} $${(facets.maxAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    return `${operator} $${(facets.maxAmountCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   }
   if (facets.minAmountCents !== null) {
     const operator = facets.minAmountInclusive ? "At least" : "Over";
-    return `${operator} $${(facets.minAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    return `${operator} $${(facets.minAmountCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   }
   return null;
 }
@@ -546,10 +549,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
   const activeConstraintLabels = [
     ...facets.causes.map((cause) => `Cause: ${getSmartQueryCauseLabel(cause)}`),
-    facets.verified === true ? "Verified only" : facets.verified === false ? "Unverified only" : null,
+    facets.verified === true ? "Verified outcomes only" : facets.verified === false ? "Unverified only" : null,
     formatMoneyConstraint(facets),
     facets.deadlineBefore ? `${facets.deadlineBeforeInclusive ? "By" : "Before"} ${facets.deadlineBefore}` : null,
-    facets.minCredit !== null ? `Credit ≥ ${facets.minCredit}` : null,
+    facets.minCredit !== null ? `Stated credibility ≥ ${facets.minCredit}` : null,
   ].filter((label): label is string => Boolean(label));
   const hasFilters = Boolean(search || mode !== "all" || activeConstraintLabels.length || sort !== "newest");
   const pageCount = Math.max(1, Math.ceil(livePage.total / livePage.pageSize));
@@ -561,6 +564,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     mode !== "all" ? modeLabel : null,
     ...activeConstraintLabels,
   ].filter((label): label is string => Boolean(label));
+  const budgetRequested = facets.minAmountCents !== null || facets.maxAmountCents !== null || sort === "lowest_cost";
+  const verificationRequested = facets.verified !== null || facets.evidenceStates.length > 0;
   const topbarActions = getTopbarActions(isAuthenticated);
   const routeNavigation = getPrimaryNavLinks(isAuthenticated).flatMap((link) =>
     link.href
@@ -601,7 +606,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             ) : null}
             {livePage.candidateLimitReached ? (
               <div className="status-banner" role="status">
-                This semantic result set was ranked from the newest {SMART_OFFER_CANDIDATE_LIMIT.toLocaleString()} live candidates.
+                This semantic result set was ranked from the newest {SMART_OFFER_CANDIDATE_LIMIT.toLocaleString("en-US")} live candidates.
                 Tighten the cause, budget, or deadline to narrow a larger registry.
               </div>
             ) : null}
@@ -633,9 +638,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     <strong>Results unavailable</strong>
                   ) : (
                     <>
-                      <strong>{livePage.total.toLocaleString()}</strong> matching proposal{livePage.total === 1 ? "" : "s"}
+                      <strong>{livePage.total.toLocaleString("en-US")}</strong> matching proposal{livePage.total === 1 ? "" : "s"}
                       <span aria-hidden="true"> · </span>
-                      {livePage.items.length.toLocaleString()} on this page from {participantGroups.length.toLocaleString()} participant{participantGroups.length === 1 ? "" : "s"}
+                      {livePage.items.length.toLocaleString("en-US")} on this page from {participantGroups.length.toLocaleString("en-US")} participant{participantGroups.length === 1 ? "" : "s"}
                     </>
                   )}
                 </p>
@@ -691,8 +696,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   <summary>How ranking works</summary>
                   <p>
                     Hard constraints are applied before semantic and trust-aware ranking. Hard
-                    constraints → semantic relevance (46%) → evidence quality (20%) → personal
-                    cause fit (16%) → deadline urgency (10%) → transaction credit (8%). Explicit
+                    constraints → semantic relevance (46%) → specificity of proposed evidence terms (20%) → personal
+                    cause fit (16%) → deadline urgency (10%) → stated credibility (8%). Explicit
                     sort choices may reorder the surviving set.
                   </p>
                 </details>
@@ -705,6 +710,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             data-authoritative-directory="true"
             id="directory-results"
           >
+            {budgetRequested || verificationRequested ? (
+              <div className={densityStyles.searchBoundary} role="status" data-testid="proposal-search-boundary">
+                {budgetRequested ? <p>{OFFER_CONTRIBUTION_BOUNDARY}</p> : null}
+                {verificationRequested ? <p>{OUTCOME_VERIFICATION_BOUNDARY} <Link href="/evidence">Review evidence</Link></p> : null}
+              </div>
+            ) : null}
             {livePage.error ? (
               <div className={densityStyles.emptyState} data-directory-state="unavailable">
                 <h3>Live proposals are temporarily unavailable</h3>

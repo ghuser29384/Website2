@@ -81,9 +81,9 @@ test("live counts, error and empty states, and exact terms remain distinct", () 
   assert.equal(page.match(/data-authoritative-directory="true"/g)?.length, 1);
   assert.equal(page.match(/data-directory-state="unavailable"/g)?.length, 1);
   assert.equal(page.match(/data-directory-state="empty"/g)?.length, 1);
-  assert.match(page, /livePage\.total\.toLocaleString\(\)/);
-  assert.match(page, /livePage\.items\.length\.toLocaleString\(\)/);
-  assert.match(page, /participantGroups\.length\.toLocaleString\(\)/);
+  assert.match(page, /livePage\.total\.toLocaleString\("en-US"\)/);
+  assert.match(page, /livePage\.items\.length\.toLocaleString\("en-US"\)/);
+  assert.match(page, /participantGroups\.length\.toLocaleString\("en-US"\)/);
   assert.match(page, /buildLiveHref\(\{ facets, mode, page: page \+ 1, search, sort \}\)/);
   assert.match(participant, /data-participant-exact-terms-note/);
   assert.match(participant, /<form action=\{toggleCartAction\}>/);
