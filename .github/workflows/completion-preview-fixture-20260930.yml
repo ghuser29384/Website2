@@ -1,0 +1,103 @@
+name: Temporary completion Preview fixture 2026-09-30
+on:
+  push:
+    branches: [ops/completion-preview-fixture-20260930]
+    paths:
+      - .github/workflows/completion-preview-fixture-20260930.yml
+      - .completion-smoke/auth-resolution-supabase.mjs
+      - .completion-smoke/completion-fixture.mjs
+permissions:
+  contents: read
+concurrency:
+  group: completion-preview-fixture-20260930
+  cancel-in-progress: false
+jobs:
+  synthetic-fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out fixture-only branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Start bounded synthetic fixture and official tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/ops/completion-preview-fixture-20260930'
+          mkdir -p "$RUNNER_TEMP/completion-fixture" fixture-evidence
+          curl --fail --location --retry 2 https://github.com/cloudflare/cloudflared/releases/download/2026.9.3/cloudflared-linux-amd64 -o "$RUNNER_TEMP/completion-fixture/cloudflared"
+          echo "77e26d8d900e0b8469f416239d14b5f296525fdf79fee6f511ef55609e3fbac2  $RUNNER_TEMP/completion-fixture/cloudflared" | sha256sum --check -
+          chmod 700 "$RUNNER_TEMP/completion-fixture/cloudflared"
+          nohup "$RUNNER_TEMP/completion-fixture/cloudflared" tunnel --url http://127.0.0.1:3233 --no-autoupdate --protocol http2 > "$RUNNER_TEMP/completion-fixture/tunnel.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/completion-fixture/tunnel.pid"
+          origin=''
+          for attempt in $(seq 1 60); do
+            origin="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$RUNNER_TEMP/completion-fixture/tunnel.log" | head -1 || true)"
+            [[ -z "$origin" ]] || break
+            sleep 1
+          done
+          [[ "$origin" =~ ^https://[a-z0-9-]+\.trycloudflare\.com$ ]]
+          control="$(openssl rand -hex 32)"
+          echo "::add-mask::$control"
+          printf '%s' "$control" > "$RUNNER_TEMP/completion-fixture/control"
+          chmod 600 "$RUNNER_TEMP/completion-fixture/control"
+          AUTH_RESOLUTION_PUBLIC_URL="$origin" AUTH_RESOLUTION_SUPABASE_PORT=3233 AUTH_RESOLUTION_FIXTURE_CONTROL_SECRET="$control" nohup node .completion-smoke/auth-resolution-supabase.mjs > "$RUNNER_TEMP/completion-fixture/backend.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/completion-fixture/backend.pid"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3233/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent --show-error --request POST --header "x-auth-resolution-fixture-control: $control" 'http://127.0.0.1:3233/__fixture/completion-state?mode=milestone-completed' > /dev/null
+          curl --fail --silent --show-error --retry 10 --retry-delay 2 "$origin/" > /dev/null
+          printf '%s\n' "$origin" > fixture-evidence/fixture-origin.txt
+          git rev-parse HEAD > fixture-evidence/fixture-head.txt
+          printf 'Synthetic in-memory fixture only. No real accounts, production data, payments, or repository secrets. Maximum lifetime 40 minutes after startup; automatic shutdown after saved smoke feedback.\n' > fixture-evidence/scope.txt
+      - name: Publish public fixture origin only
+        uses: actions/upload-artifact@v4
+        with:
+          name: completion-fixture-origin-${{ github.run_id }}
+          path: fixture-evidence/
+          retention-days: 2
+      - name: Serve synthetic smoke and preserve safe state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            for kind in backend tunnel; do
+              [[ ! -f "$RUNNER_TEMP/completion-fixture/$kind.pid" ]] || kill "$(cat "$RUNNER_TEMP/completion-fixture/$kind.pid")" 2>/dev/null || true
+            done
+          }
+          trap cleanup EXIT INT TERM
+          control="$(cat "$RUNNER_TEMP/completion-fixture/control")"
+          echo "::add-mask::$control"
+          complete_at=0
+          deadline=$((SECONDS + 2400))
+          while (( SECONDS < deadline )); do
+            curl --fail --silent --show-error --header "x-auth-resolution-fixture-control: $control" http://127.0.0.1:3233/__fixture/completion-state > fixture-evidence/completion-state.json
+            if jq -e '.feedback.own_lights_gain == 4 and .feedback.satisfaction == 5 and .feedback.notes == "Synthetic Preview smoke only"' fixture-evidence/completion-state.json > /dev/null; then
+              if (( complete_at == 0 )); then complete_at=$((SECONDS + 90)); fi
+              if (( SECONDS >= complete_at )); then
+                printf 'Synthetic feedback persisted; state captured; tunnel stopped.\n' > fixture-evidence/result.txt
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          printf 'Timed out waiting for synthetic smoke feedback; tunnel stopped.\n' > fixture-evidence/result.txt
+          exit 1
+      - name: Stop fixture processes
+        if: always()
+        shell: bash
+        run: |
+          for kind in backend tunnel; do
+            [[ ! -f "$RUNNER_TEMP/completion-fixture/$kind.pid" ]] || kill "$(cat "$RUNNER_TEMP/completion-fixture/$kind.pid")" 2>/dev/null || true
+          done
+      - name: Preserve synthetic-only evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: completion-fixture-result-${{ github.run_id }}
+          path: fixture-evidence/
+          retention-days: 7
