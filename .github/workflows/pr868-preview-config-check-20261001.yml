@@ -1,0 +1,70 @@
+name: PR868 Preview configuration check
+on:
+  push:
+    branches: [ops/pr868-preview-reconcile-20261001]
+    paths: [.github/workflows/pr868-preview-config-check-20261001.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Read only the designated Preview environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test -n "$VERCEL_TOKEN"
+          umask 077
+          mkdir -p /tmp/pr868-config /tmp/pr868-config-evidence
+          cd /tmp/pr868-config
+          mkdir .vercel
+          printf '%s\n' '{"orgId":"team_ySu6sF3Uho1E1GnJtCQPVEuJ","projectId":"prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7"}' > .vercel/project.json
+          trap 'rm -f /tmp/pr868-config/preview.env' EXIT
+          npx --yes vercel@50.38.1 env pull preview.env --yes --environment=preview --git-branch=release/vercel-preview --token="$VERCEL_TOKEN" >/dev/null
+          node --env-file=preview.env --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const e=process.env;
+          const key=e.STRIPE_SECRET_KEY || '';
+          const expected='acct_1TLqUmAf75xWktVp';
+          const result={checkedAt:new Date().toISOString(),branch:'release/vercel-preview',environment:'preview',
+            stripeSecretPresent:!!key,stripeSecretIsTest:key.startsWith('sk_test_'),
+            configuredPlatformMatches:e.STRIPE_PLATFORM_ACCOUNT_ID===expected,
+            supabaseIsQa:e.NEXT_PUBLIC_SUPABASE_URL==='https://hvmxfjjbdcgjjudmthdz.supabase.co',
+            supabaseServicePresent:!!e.SUPABASE_SERVICE_ROLE_KEY,
+            supabasePublishablePresent:!!(e.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||e.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+            stripeProviderRead:'not_attempted',previewProtection:'unverified'};
+          for(const name of ['SITE_URL','NEXT_PUBLIC_SITE_URL']) {
+            try { const u=new URL(e[name]); result[name+'_isPreview']=u.protocol==='https:' && u.hostname.endsWith('.vercel.app'); }
+            catch {result[name+'_isPreview']=false;}
+          }
+          if(result.stripeSecretIsTest) {
+            try {
+              const headers={Authorization:`Bearer ${key}`};
+              const [a,b]=await Promise.all([
+                fetch('https://api.stripe.com/v1/account',{headers,signal:AbortSignal.timeout(12000)}),
+                fetch('https://api.stripe.com/v1/balance',{headers,signal:AbortSignal.timeout(12000)})]);
+              result.stripeProviderRead=[a.status,b.status];
+              if(a.ok&&b.ok) { const account=await a.json(),balance=await b.json(); result.actualSandboxMatches=account.id===expected;result.actualModeIsTest=balance.livemode===false; }
+            }catch{result.stripeProviderRead='request_failed';}
+          }
+          try {
+            const r=await fetch('https://api.vercel.com/v9/projects/prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7?teamId=team_ySu6sF3Uho1E1GnJtCQPVEuJ',{headers:{Authorization:`Bearer ${e.VERCEL_TOKEN}`},signal:AbortSignal.timeout(12000)});
+            if(r.ok){const p=await r.json();result.previewProtection=p.ssoProtection?.deploymentType || 'not_configured';}
+          }catch{}
+          fs.writeFileSync('/tmp/pr868-config-evidence/configuration.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify(result,null,2));
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr868-preview-config-${{ github.run_id }}
+          path: /tmp/pr868-config-evidence/configuration.json
+          retention-days: 7
+          if-no-files-found: warn
