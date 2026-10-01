@@ -1,0 +1,25 @@
+name: Homepage fix source
+on:
+  push:
+    branches: [ops/home-prefetch-20261001]
+    paths: [.github/workflows/home-prefetch-source-20261001.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ab6049702a9e70f29ccc95da6685f0e642e3c835
+          persist-credentials: false
+      - run: |
+          test "$(git rev-parse HEAD)" = ab6049702a9e70f29ccc95da6685f0e642e3c835
+          mkdir -p /tmp/home-prefetch-source
+          git archive --format=tar.gz HEAD > /tmp/home-prefetch-source/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: homepage-fix-source
+          path: /tmp/home-prefetch-source
+          retention-days: 2
