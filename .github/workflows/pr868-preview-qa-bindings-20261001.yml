@@ -1,0 +1,49 @@
+name: PR868 isolated Preview public bindings
+on:
+  push:
+    branches: [ops/pr868-preview-reconcile-20261001]
+    paths: [.github/workflows/pr868-preview-qa-bindings-20261001.yml]
+permissions:
+  contents: read
+jobs:
+  bind:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Add only absent branch-specific QA public settings; keep secrets and Production unchanged
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          mkdir -p /tmp/pr868-bindings
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const project='prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7',team='team_ySu6sF3Uho1E1GnJtCQPVEuJ',branch='release/vercel-preview';
+          const base=`https://api.vercel.com/v10/projects/${project}/env?teamId=${team}`;
+          const headers={Authorization:`Bearer ${process.env.VERCEL_TOKEN}`,'Content-Type':'application/json'};
+          const wanted={NEXT_PUBLIC_SUPABASE_URL:'https://hvmxfjjbdcgjjudmthdz.supabase.co',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8'};
+          const read=async()=>{const r=await fetch(base+'&decrypt=false',{headers,signal:AbortSignal.timeout(15000)});if(!r.ok)throw new Error(`Metadata HTTP ${r.status}`);return (await r.json()).envs||[];};
+          const before=await read();
+          const summarize=v=>({key:v.key,id:v.id,type:v.type,target:v.target,gitBranch:v.gitBranch||null,updatedAt:v.updatedAt,value:v.value});
+          const protectedBefore=JSON.stringify(before.filter(v=>!Object.hasOwn(wanted,v.key)||v.gitBranch!==branch).map(summarize).sort((a,b)=>a.id.localeCompare(b.id)));
+          for(const [key,value] of Object.entries(wanted)){
+            const existing=before.filter(v=>v.key===key&&v.gitBranch===branch&&(v.target||[]).includes('preview'));
+            if(existing.length)throw new Error(`Branch setting ${key} appeared since inspection; refusing replacement`);
+            const r=await fetch(base,{method:'POST',headers,body:JSON.stringify({key,value,type:'encrypted',target:['preview'],gitBranch:branch,comment:'Owner-authorized PR868 protected Preview; existing MoralTrade QA only.'}),signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw new Error(`Creating ${key} returned HTTP ${r.status}`);
+          }
+          const after=await read();
+          const protectedAfter=JSON.stringify(after.filter(v=>!Object.hasOwn(wanted,v.key)||v.gitBranch!==branch).map(summarize).sort((a,b)=>a.id.localeCompare(b.id)));
+          if(protectedBefore!==protectedAfter)throw new Error('Unrelated configuration changed during this operation; inspection required');
+          const result={checkedAt:new Date().toISOString(),branch,addedPublicQaKeys:Object.keys(wanted),secretValuesChanged:false,productionSettingsUnchanged:true,qaServiceCredentialValidity:'not_yet_verified'};
+          fs.writeFileSync('/tmp/pr868-bindings/result.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr868-qa-bindings-${{ github.run_id }}
+          path: /tmp/pr868-bindings/result.json
+          retention-days: 14
