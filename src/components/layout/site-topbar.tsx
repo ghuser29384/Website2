@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useId, useState, useTransition } from "react";
 

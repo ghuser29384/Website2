@@ -32,7 +32,7 @@ function render(authenticated: boolean, overrides = {}) {
     react: { Fragment: "fragment", useId: () => `field-${++id}`,
       useState: (value: unknown) => [value, () => undefined],
       useTransition: () => [false, (fn: () => Promise<unknown>) => pending.push(fn())] },
-    "next/link": (props: Record<string, unknown>) => jsx("a", props),
+    "@/components/layout/site-link": { SiteLink: (props: Record<string, unknown>) => jsx("a", props) },
     "next/navigation": { usePathname: () => "/feed", useRouter: () => ({
       push: (href: string) => calls.push(href), refresh: () => calls.push("refresh"),
     }) },
