@@ -1,0 +1,227 @@
+name: PR868 reconcile and stage Preview
+on:
+  push:
+    branches: [ops/pr868-preview-reconcile-20261001]
+    paths: [.github/workflows/pr868-reconcile-and-stage-20261001.yml]
+permissions:
+  contents: read
+concurrency:
+  group: pr868-preview-reconciliation
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    outputs:
+      payment: ${{ steps.prepare.outputs.payment }}
+      preview: ${{ steps.prepare.outputs.preview }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3ef9f86a41257b585c2a940df74c2bf03f16793b
+          fetch-depth: 0
+      - name: Reconcile only reviewed conflict and navigation assertions
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          MAIN=ab6049702a9e70f29ccc95da6685f0e642e3c835
+          PAYMENT=3ef9f86a41257b585c2a940df74c2bf03f16793b
+          PREVIEW=bc5c15c013ab971ac6b7902dcb05e6d770b61bc8
+          test "$(git rev-parse origin/main)" = "$MAIN"
+          test "$(git rev-parse origin/feat/account-payment-methods-20260928)" = "$PAYMENT"
+          test "$(git rev-parse origin/release/vercel-preview)" = "$PREVIEW"
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          set +e
+          git merge --no-commit --no-ff "$MAIN"
+          status=$?
+          set -e
+          test "$status" = 1
+          test "$(git diff --name-only --diff-filter=U)" = src/components/dashboard/dashboard-tools.tsx
+          python3 - <<'PY'
+          import pathlib,subprocess
+          main='ab6049702a9e70f29ccc95da6685f0e642e3c835'
+          path='src/components/dashboard/dashboard-tools.tsx'
+          text=subprocess.check_output(['git','show',f'{main}:{path}']).decode()
+          old='active: DashboardView }'
+          assert text.count(old)==1
+          text=text.replace(old,'active: DashboardView | "payments" }')
+          old='<a href="/dashboard?view=controls#payment-setup">Payment setup</a>'
+          assert text.count(old)==1
+          text=text.replace(old,'<Link href="/dashboard/payments" prefetch={false} aria-current={active === "payments" ? "page" : undefined}>\n        Payment setup\n      </Link>')
+          pathlib.Path(path).write_text(text)
+          for path in ['src/lib/dashboard-view.test.ts','src/lib/recommended-cleanup.test.ts']:
+              p=pathlib.Path(path);text=p.read_text()
+              old=r'/href="\/dashboard\?view=controls#payment-setup"[^>]*>Payment setup/'
+              assert text.count(old)==1
+              p.write_text(text.replace(old,r'/href="\/dashboard\/payments"[^>]*>\s*Payment setup/'))
+          p=pathlib.Path('tests/dashboard-sparks.spec.ts');text=p.read_text()
+          start=text.index('  test("Payment setup is direct, keyboard accessible, and does not save priority edits"')
+          end=text.index('\n  test(',start+10)
+          part=text[start:end].replace('"/dashboard?view=controls#payment-setup"','"/dashboard/payments"').replace('`${origin}/dashboard?view=controls#payment-setup`','`${origin}/dashboard/payments`').replace('page.locator("#payment-setup")','page.locator("#payment-methods")')
+          part=part.replace('    expect(requests.some((request)','    await expect(page.locator("#receive-payments")).toBeVisible();\n    expect(requests.some((request)',1)
+          p.write_text(text[:start]+part+text[end:])
+          PY
+          git add src/components/dashboard/dashboard-tools.tsx src/lib/dashboard-view.test.ts src/lib/recommended-cleanup.test.ts tests/dashboard-sparks.spec.ts
+          git diff --cached --check
+          test "$(git write-tree)" = 1d3dfc051bcb0faa7c0a2cd09910451758f8552b
+          git commit -m 'Reconcile payment setup with current Dashboard navigation'
+          payment=$(git rev-parse HEAD)
+          test "$(git show -s --format=%P HEAD)" = "$PAYMENT $MAIN"
+          git push origin "$payment:refs/heads/candidate/pr868-reconciled-20261001"
+          git checkout --detach "$PREVIEW"
+          git merge --no-commit --no-ff "$payment"
+          test "$(git write-tree)" = 0949c14bced1eaeed30eaef1943ff1a2ca598c51
+          git diff --cached --check
+          git commit -m 'Stage payment settings alongside preserved PR871 Preview work'
+          preview=$(git rev-parse HEAD)
+          test "$(git show -s --format=%P HEAD)" = "$PREVIEW $payment"
+          git diff --exit-code "$PREVIEW" "$preview" -- src/app/core-trade-actions-base.ts src/lib/recommendation-training.ts src/lib/recommendation-training.test.ts src/lib/trade-completion-persistence.ts src/lib/trade-completion-persistence.test.ts
+          git diff --exit-code "$MAIN" "$preview" -- .github/workflows package.json package-lock.json vercel.ts scripts/vercel-release-workflow.test.mjs
+          git push origin "$preview:refs/heads/candidate/pr868-preview-20261001"
+          echo "payment=$payment" >> "$GITHUB_OUTPUT"
+          echo "preview=$preview" >> "$GITHUB_OUTPUT"
+          mkdir -p /tmp/pr868-identity
+          printf 'payment=%s\npreview=%s\nmain=%s\npreserved_preview=%s\n' "$payment" "$preview" "$MAIN" "$PREVIEW" > /tmp/pr868-identity/source.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr868-identity-${{ github.run_id }}
+          path: /tmp/pr868-identity
+          retention-days: 14
+  quality:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate: [payment, preview]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs[matrix.candidate] }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Exact source gates without external credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr868-quality
+          git rev-parse HEAD HEAD^{tree} > /tmp/pr868-quality/identity.txt
+          git diff --check HEAD^
+          node --import tsx --test src/lib/payments/account-payment-service.test.ts src/lib/live-account-actions.test.ts src/lib/dashboard-view.test.ts src/lib/recommended-cleanup.test.ts src/live-account-data.test.ts | tee /tmp/pr868-quality/focused.log
+          npm test | tee /tmp/pr868-quality/unit.log
+          npm run lint -- --quiet | tee /tmp/pr868-quality/lint.log
+          npx tsc --noEmit --pretty false | tee /tmp/pr868-quality/types.log
+          npm run build | tee /tmp/pr868-quality/build.log
+      - name: Unchanged complete rendered release suite
+        if: matrix.candidate == 'preview'
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e:release -- --reporter=line | tee /tmp/pr868-quality/release-browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr868-quality-${{ matrix.candidate }}-${{ github.run_id }}
+          path: |
+            /tmp/pr868-quality
+            test-results
+          retention-days: 14
+  fixtures:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: [payments, dashboard]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.preview }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Production-built isolated account interaction tests
+        env:
+          FIXTURE_KIND: ${{ matrix.fixture }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          VERCEL_ENV: preview
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr868-fixtures
+          export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=fixture-publishable
+          export SUPABASE_SERVICE_ROLE_KEY=fixture-service
+          if [[ "$FIXTURE_KIND" == payments ]]; then
+            export ACCOUNT_PAYMENTS_FIXTURE=1
+            export NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54333
+            export STRIPE_SECRET_KEY=sk_test_account_payment_fixture
+            spec=tests/account-payment-settings.spec.ts
+          else
+            export DASHBOARD_SPARKS_FIXTURE=1
+            export NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54331
+            spec=tests/dashboard-sparks.spec.ts
+          fi
+          npm run build > /tmp/pr868-fixtures/build.log 2>&1
+          npx playwright install --with-deps chromium
+          if [[ "$FIXTURE_KIND" == payments ]]; then
+            export NODE_OPTIONS="--require=$GITHUB_WORKSPACE/tests/fixtures/account-payments-preload.cjs"
+          fi
+          npm run test:e2e -- "$spec" --workers=1 --reporter=line | tee /tmp/pr868-fixtures/browser.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr868-fixtures-${{ matrix.fixture }}-${{ github.run_id }}
+          path: |
+            /tmp/pr868-fixtures
+            /tmp/account-payment-settings-evidence
+            /tmp/dashboard-sparks-evidence
+            test-results
+          retention-days: 14
+  publish:
+    needs: [prepare, quality, fixtures]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.preview }}
+          fetch-depth: 0
+      - name: Advance only PR868 and Preview refs after every source and rendered gate
+        env:
+          PAYMENT_SHA: ${{ needs.prepare.outputs.payment }}
+          PREVIEW_SHA: ${{ needs.prepare.outputs.preview }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          git fetch origin main feat/account-payment-methods-20260928 release/vercel-preview
+          test "$(git rev-parse origin/main)" = ab6049702a9e70f29ccc95da6685f0e642e3c835
+          test "$(git rev-parse origin/feat/account-payment-methods-20260928)" = 3ef9f86a41257b585c2a940df74c2bf03f16793b
+          test "$(git rev-parse origin/release/vercel-preview)" = bc5c15c013ab971ac6b7902dcb05e6d770b61bc8
+          git merge-base --is-ancestor origin/feat/account-payment-methods-20260928 "$PAYMENT_SHA"
+          git merge-base --is-ancestor origin/release/vercel-preview "$PREVIEW_SHA"
+          test "$(git rev-parse "$PAYMENT_SHA^{tree}")" = 1d3dfc051bcb0faa7c0a2cd09910451758f8552b
+          test "$(git rev-parse "$PREVIEW_SHA^{tree}")" = 0949c14bced1eaeed30eaef1943ff1a2ca598c51
+          git push --atomic origin "$PAYMENT_SHA:refs/heads/feat/account-payment-methods-20260928" "$PREVIEW_SHA:refs/heads/release/vercel-preview"
+          printf 'PR868 reconciled: %s\nPreview staged: %s\nNo production branch or deployment changed. Gated Preview deployment is a separate next step.\n' "$PAYMENT_SHA" "$PREVIEW_SHA" >> "$GITHUB_STEP_SUMMARY"
