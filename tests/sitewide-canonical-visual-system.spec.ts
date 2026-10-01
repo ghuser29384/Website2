@@ -4,7 +4,6 @@ const PAPER = "rgb(245, 242, 233)";
 const BLACK = "rgb(5, 5, 5)";
 
 const publicEditorialRoutes = [
-  "/about",
   "/accessibility",
   "/contact",
   "/faq",
@@ -440,7 +439,7 @@ test("Moral Public Goods Labs gate uses a square evidence panel", async ({ page 
 test("keeps representative routes usable on mobile", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const route of [
-    "/about",
+    "/contact",
     "/offers?view=live",
     "/commitments",
     "/connectors",

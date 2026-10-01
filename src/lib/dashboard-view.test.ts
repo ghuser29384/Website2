@@ -59,10 +59,10 @@ test("both priority routes share account-bound reads and the existing save actio
   assert.match(editor, /name="success_to"[^\n]*returnTo/);
 });
 
-test("currency is a disclosure, controls do not prefetch, and control forms keep their return view", () => {
+test("Payment setup is a direct link, controls do not prefetch, and forms keep their return view", () => {
   const tools = readFileSync("src/components/dashboard/dashboard-tools.tsx", "utf8");
-  assert.match(tools, /<summary>Currency<\/summary>/);
-  assert.match(tools, /account-wide currency selector is not available/);
+  assert.match(tools, /href="\/dashboard\/payments"[^>]*>\s*Payment setup/);
+  assert.doesNotMatch(tools, /<summary>Currency|account-wide currency selector/);
   for (const link of tools.matchAll(/<Link\b[^>]+>/g)) assert.match(link[0], /prefetch=\{false\}/);
   assert.doesNotMatch(tools, /createClient|fetch\(|localStorage|sessionStorage/);
   const page = readFileSync("src/app/dashboard/page.tsx", "utf8");

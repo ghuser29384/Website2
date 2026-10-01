@@ -9,7 +9,7 @@ const legacySections = new Set([
   "#dashboard-overview", "#wish-profile", "#background-networking", "#privacy-controls",
   "#match-inbox", "#my-trades", "#advanced-setup", "#payments-and-fund", "#payment-setup",
   "#consent-center", "#saved-searches", "#notifications", "#incoming-responses",
-  "#outgoing-responses", "#agreements", "#saved-offers", "#account-security",
+  "#outgoing-responses", "#agreements", "#saved-offers", "#account-security", "#data-portability",
 ]);
 
 export function getLegacyDashboardTarget(search: string, hash: string): string | null {

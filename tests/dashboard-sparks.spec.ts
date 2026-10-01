@@ -139,20 +139,44 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
   });
 
-  test("Currency opens without a write or losing unsaved sparks and Escape closes it", async ({ page, context }) => {
+  test("Payment setup is direct, keyboard accessible, and does not save priority edits", async ({ page, context }) => {
     await signIn(context);
     await page.goto(`${origin}/dashboard`);
     await page.getByRole("button", { name: `Increase ${priority.name}`, exact: true }).click();
-    const draft = await page.locator('input[name="priority_allocation"]').inputValue();
-    const currency = page.getByRole("navigation", { name: "Dashboard controls" }).locator("summary");
-    await currency.click();
-    await expect(page.getByText("An account-wide currency selector is not available.", { exact: false })).toBeVisible();
-    await expect(page.locator('input[name="priority_allocation"]')).toHaveValue(draft);
+    const tools = page.getByRole("navigation", { name: "Dashboard controls" });
+    await expect(tools.locator("summary")).toHaveCount(0);
+    const payment = tools.getByRole("link", { name: "Payment setup", exact: true });
+    await expect(payment).toHaveAttribute("href", "/dashboard/payments");
+    await payment.focus();
+    await payment.press("Enter");
+    await expect(page).toHaveURL(`${origin}/dashboard/payments`);
+    await expect(page.locator("#payment-methods")).toBeVisible();
+    await expect(page.locator("#receive-payments")).toBeVisible();
     expect(requests.some((request) => request.path === "/rest/v1/cohort_onboarding_profiles" && request.method !== "GET")).toBe(false);
-    await page.screenshot({ path: "/tmp/dashboard-sparks-evidence/dashboard-currency.png" });
-    await currency.press("Escape");
-    await expect(currency.locator("..")).not.toHaveAttribute("open");
-    await expect(currency).toBeFocused();
+    expect(saved.get(a)).toEqual(buildPersistedProfilePriorities(allocation(4)));
+    await page.locator("#payment-methods").screenshot({ path: "/tmp/dashboard-sparks-evidence/direct-payment-setup.png" });
+  });
+
+  test("account links reach data and trades once, and legacy data bookmarks remain usable", async ({ page, context }) => {
+    await signIn(context);
+    await page.goto(`${origin}/contact`);
+    const header = page.locator(".mt-site-topbar");
+    await expect(header.locator('a[href="/cart"]')).toHaveCount(1);
+    await expect(header.getByText("Favourites", { exact: true })).toHaveCount(0);
+    for (const [name, id] of [["Profile data", "data-portability"], ["My trades", "my-trades"]]) {
+      await header.locator("summary").filter({ hasText: /^Account/ }).click();
+      const link = header.getByRole("link", { name, exact: true });
+      await expect(link).toHaveAttribute("href", `/dashboard?view=controls#${id}`);
+      await link.click();
+      await expect(page).toHaveURL(`${origin}/dashboard?view=controls#${id}`);
+      await expect(page.locator(`#${id}`)).toBeVisible();
+    }
+    await page.goto(`${origin}/dashboard#data-portability`);
+    await expect(page).toHaveURL(`${origin}/dashboard?view=controls#data-portability`);
+    await expect(page.locator("#data-portability")).toBeVisible();
+    await page.locator("#data-portability").screenshot({ path: "/tmp/dashboard-sparks-evidence/data-portability-link.png" });
+    expect(requests.some((request) => request.path === "/rest/v1/cohort_onboarding_profiles" && request.method !== "GET")).toBe(false);
+    expect(requests.some((request) => request.path.includes("payment") && !["GET", "OPTIONS"].includes(request.method))).toBe(false);
   });
 
   test("saving the actual server action remains owner-bound and returns to Dashboard", async ({ page, context }) => {
@@ -203,7 +227,6 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
       await expect(page).toHaveURL(new RegExp(`/dashboard\\?view=controls#${id}$`));
       await expect(page.locator(`#${id}`)).toBeVisible();
     }
-    await tools.locator("summary").click();
     await tools.getByRole("link", { name: "Payment setup", exact: true }).click();
     await expect(page).toHaveURL(`${origin}/dashboard/payments`);
     await expect(page.locator("#payment-methods")).toBeVisible();
@@ -217,7 +240,12 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     // Existing getViewer bootstrap claims unclaimed guest interests belonging to
     // this authenticated email. Permit only that exact, unchanged owner-bound
     // bootstrap operation; navigation must never write settings or allocations.
-    const mutations = requests.filter((request) => request.method !== "GET" && request.method !== "OPTIONS");
+    const publicRead = "/rest/v1/rpc/list_public_moral_trade_outcomes_v2";
+    for (const request of requests.filter((request) => request.path === publicRead)) {
+      expect(request.method).toBe("POST");
+      expect(request.body).toEqual({ p_limit: 1, p_offset: 0 });
+    }
+    const mutations = requests.filter((request) => request.method !== "GET" && request.method !== "OPTIONS" && request.path !== publicRead);
     for (const request of mutations) {
       expect(request.method).toBe("PATCH");
       expect(request.path).toBe("/rest/v1/guest_interests");
