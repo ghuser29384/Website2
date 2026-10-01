@@ -34,7 +34,12 @@ jobs:
             const existing=before.filter(v=>v.key===key&&v.gitBranch===branch&&(v.target||[]).includes('preview'));
             if(existing.length)throw new Error(`Branch setting ${key} appeared since inspection; refusing replacement`);
             const r=await fetch(base,{method:'POST',headers,body:JSON.stringify({key,value,type:'encrypted',target:['preview'],gitBranch:branch,comment:'Owner-authorized PR868 protected Preview; existing MoralTrade QA only.'}),signal:AbortSignal.timeout(15000)});
-            if(!r.ok)throw new Error(`Creating ${key} returned HTTP ${r.status}`);
+            if(!r.ok){
+              const body=await r.json();
+              const result={key,status:r.status,errorCode:body.error?.code,errorMessage:String(body.error?.message||'').slice(0,600),productionChanged:false};
+              fs.writeFileSync('/tmp/pr868-bindings/result.json',JSON.stringify(result,null,2));
+              throw new Error(JSON.stringify(result));
+            }
           }
           const after=await read();
           const protectedAfter=JSON.stringify(after.filter(v=>!Object.hasOwn(wanted,v.key)||v.gitBranch!==branch).map(summarize).sort((a,b)=>a.id.localeCompare(b.id)));
@@ -43,6 +48,7 @@ jobs:
           fs.writeFileSync('/tmp/pr868-bindings/result.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
           JS
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pr868-qa-bindings-${{ github.run_id }}
           path: /tmp/pr868-bindings/result.json
