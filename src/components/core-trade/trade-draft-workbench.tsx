@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";

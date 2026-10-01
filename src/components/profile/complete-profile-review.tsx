@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 import { useEffect, useState, type FormEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { completeWalkthroughProfileAction } from "@/app/complete-profile/actions";

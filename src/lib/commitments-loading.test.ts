@@ -14,7 +14,7 @@ function loadBoundary() {
   const compiledModule = { exports: {} };
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx, jsxs: jsx },
-    "next/link": { __esModule: true, default: "a" },
+    "@/components/layout/site-link": { SiteLink: "a" },
     "./loading.module.css": { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) },
   };
   new Function("require", "module", "exports", outputText)((name: string) => {

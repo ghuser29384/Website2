@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 
 import { oauthSignInAction, signInAction, signUpAction } from "@/app/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";

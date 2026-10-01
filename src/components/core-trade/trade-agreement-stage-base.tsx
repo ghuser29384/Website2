@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 import type { ReactNode } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
