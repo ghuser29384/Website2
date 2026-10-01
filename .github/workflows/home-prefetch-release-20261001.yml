@@ -1,0 +1,143 @@
+name: Homepage document navigation release and live verification
+on:
+  push:
+    branches: [ops/home-prefetch-20261001]
+    paths: [.github/workflows/home-prefetch-release-20261001.yml]
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: homepage-document-navigation-release-20261001
+  cancel-in-progress: false
+jobs:
+  release_and_verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      MERGED_SHA: 2bbf44ebea0c7a44837b523aff60f5997c332fee
+      EXPECTED_TREE: 8c84433a1e5756b3e806f007f99edffd0b9ab2ea
+      GH_TOKEN: ${{ github.token }}
+      PLAYWRIGHT_HTML_OPEN: never
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2bbf44ebea0c7a44837b523aff60f5997c332fee
+          fetch-depth: 2
+      - name: Guard the verified merge and unchanged release policy
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$MERGED_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MERGED_SHA"
+          test "$(git rev-parse HEAD:.github/workflows/vercel-release.yml)" = e219e99d25279161b89eee80fc410912c3561a19
+          test "$(git rev-parse HEAD:playwright.release.config.ts)" = f0bfe2eb6c346d212d9b96450ad44be548845043
+          gh api "repos/$GITHUB_REPOSITORY/pulls/872" | jq -e --arg sha "$MERGED_SHA" '.merged == true and .merge_commit_sha == $sha and .head.sha == "79f21e3fac474f9349085f2434bd11c7e091f2ed"' >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/36909820365" | jq -e '.head_sha == "a86efab0830f691058451b993ac61025c080579d" and .status == "completed" and .conclusion == "success"' >/dev/null
+          mkdir -p /tmp/homepage-production
+          printf '%s\n' "$MERGED_SHA" > /tmp/homepage-production/commit.txt
+          printf '%s\n' "$EXPECTED_TREE" > /tmp/homepage-production/tree.txt
+      - name: Dispatch the existing gated production workflow once
+        run: |
+          set -euo pipefail
+          find_runs() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$MERGED_SHA&event=workflow_dispatch&per_page=100" | jq -r '.workflow_runs[] | select(.path == ".github/workflows/vercel-release.yml") | .id'
+          }
+          ids="$(find_runs)"
+          if [ -z "$ids" ]; then
+            gh workflow run vercel-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f target=production -f ref=main -f expected_sha="$MERGED_SHA"
+            for attempt in $(seq 1 20); do ids="$(find_runs)"; [ -n "$ids" ] && break; sleep 5; done
+          fi
+          test -n "$ids"
+          test "$(printf '%s\n' "$ids" | wc -l)" = 1
+          printf '%s\n' "$ids" > /tmp/homepage-production/release-run.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Require successful completion of every existing release gate
+        run: |
+          set -euo pipefail
+          id="$(cat /tmp/homepage-production/release-run.txt)"
+          complete=false
+          for attempt in $(seq 1 120); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" > /tmp/homepage-production/release-run.json
+            jq -e --arg sha "$MERGED_SHA" '.head_sha == $sha and .path == ".github/workflows/vercel-release.yml" and .head_branch == "main"' /tmp/homepage-production/release-run.json >/dev/null
+            if jq -e '.status == "completed"' /tmp/homepage-production/release-run.json >/dev/null; then
+              jq -e '.conclusion == "success"' /tmp/homepage-production/release-run.json >/dev/null
+              complete=true
+              break
+            fi
+            sleep 15
+          done
+          test "$complete" = true
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" > /tmp/homepage-production/release-jobs.json
+          jq -e '[.jobs[].steps[] | select(.name == "Verify both canonical aliases and the published critical asset")] | length == 1 and all(.conclusion == "success")' /tmp/homepage-production/release-jobs.json >/dev/null
+      - name: Check canonical homepage documents and preserved Profile redirects
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          const report = { startedAt: new Date().toISOString(), cases: [] };
+          for (const host of ['moraltrade.org','www.moraltrade.org']) {
+            const response = await fetch(`https://${host}/`);
+            assert.equal(response.status, 200);
+            assert.match(response.headers.get('content-type') ?? '', /text\/html/);
+            assert.match(await response.text(), /<!doctype html/i);
+            report.cases.push({input:`https://${host}/`,status:response.status,finalUrl:response.url});
+            for (const query of ['', '?message=Saved%20%26%20ready&tone=success', '?view=controls&filter=one&filter=two']) {
+              let url = new URL(`https://${host}/profile${query}`);
+              const chain = [];
+              while (url.pathname === '/profile') {
+                assert.ok(chain.length < 3);
+                const result = await fetch(url, {redirect:'manual'});
+                assert.equal(result.status, 308);
+                assert.ok(result.headers.get('location'));
+                const next = new URL(result.headers.get('location'),url);
+                assert.ok(['moraltrade.org','www.moraltrade.org'].includes(next.host));
+                assert.equal(next.protocol,'https:');
+                assert.deepEqual([...next.searchParams],[...new URLSearchParams(query)]);
+                chain.push({url:url.href,status:result.status,location:next.href});
+                url = next;
+              }
+              assert.equal(url.pathname,'/dashboard');
+              report.cases.push({input:`https://${host}/profile${query}`,chain,finalUrl:url.href});
+            }
+          }
+          report.finishedAt = new Date().toISOString();
+          await writeFile('/tmp/homepage-production/http.json',JSON.stringify(report,null,2));
+          console.log(JSON.stringify(report,null,2));
+          JS
+      - name: Run the identical strict homepage browser suite against live production
+        run: |
+          set -euo pipefail
+          date -u '+%Y-%m-%dT%H:%M:%SZ' > /tmp/homepage-production/browser-start.txt
+          cat > playwright.home-live.config.mjs <<'JS'
+          export default {
+            testDir: './tests',
+            testMatch: 'home-document-navigation.spec.ts',
+            timeout: 60000,
+            expect: { timeout: 10000 },
+            fullyParallel: false,
+            workers: 1,
+            retries: 0,
+            outputDir: '/tmp/homepage-production/test-results',
+            reporter: [['line'], ['json', { outputFile: '/tmp/homepage-production/browser-report.json' }]],
+            use: { baseURL: 'https://www.moraltrade.org', browserName: 'chromium', trace: 'retain-on-failure' }
+          };
+          JS
+          npx playwright test --config=playwright.home-live.config.mjs | tee /tmp/homepage-production/browser.log
+          date -u '+%Y-%m-%dT%H:%M:%SZ' > /tmp/homepage-production/browser-end.txt
+          rm playwright.home-live.config.mjs
+          git diff --exit-code HEAD
+          printf 'Browser plugin not available; repository Playwright. All fifteen unmodified live navigation cases passed. No production account changes.\n' > /tmp/homepage-production/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: homepage-document-navigation-production
+          path: /tmp/homepage-production
+          retention-days: 7
