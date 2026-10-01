@@ -1,0 +1,93 @@
+name: Homepage prefetch baseline
+on:
+  push:
+    branches: [ops/home-prefetch-20261001]
+    paths: [.github/workflows/home-prefetch-baseline-20261001.yml]
+permissions:
+  contents: read
+concurrency:
+  group: homepage-prefetch-baseline-20261001
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      BASE: ab6049702a9e70f29ccc95da6685f0e642e3c835
+      PLAYWRIGHT_HTML_OPEN: never
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ab6049702a9e70f29ccc95da6685f0e642e3c835
+          persist-credentials: false
+      - name: Record the exact source without modifying main or production
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$BASE"
+          mkdir -p /tmp/home-prefetch-baseline
+          git rev-parse HEAD > /tmp/home-prefetch-baseline/commit.txt
+          git rev-parse HEAD^{tree} > /tmp/home-prefetch-baseline/tree.txt
+          git archive --format=tar.gz HEAD > /tmp/home-prefetch-baseline/source.tar.gz
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Reproduce the request and record browser behavior without account writes
+        run: |
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+          const dir = '/tmp/home-prefetch-baseline';
+          const report = { startedAt: new Date().toISOString(), browser: 'Browser plugin not available; repository Playwright', flow: 'Contact -> automatic homepage prefetch -> Profile -> canonical Dashboard login; Contact -> Home -> live homepage', http: [], viewports: [] };
+          for (const headers of [{}, {rsc:'1','next-router-prefetch':'1'}, {rsc:'1'}, {purpose:'prefetch'}]) {
+            const url = 'https://www.moraltrade.org/?_rsc=17yrj';
+            const res = await fetch(url, {headers, redirect:'manual'});
+            report.http.push({url, headers, status:res.status, location:res.headers.get('location'), type:res.headers.get('content-type'), body:(await res.text()).slice(0,500)});
+          }
+          const browser = await chromium.launch();
+          try {
+            for (const width of [1440,390,320]) {
+              const context = await browser.newContext({viewport:{width,height:900}});
+              const page = await context.newPage();
+              const row = {width, errors:[], failedRequests:[], badResponses:[], homepageRequests:[]};
+              page.on('pageerror', error => row.errors.push({type:'pageerror',message:error.message}));
+              page.on('console', message => {if(['error','warning'].includes(message.type())) row.errors.push({type:message.type(),message:message.text(),location:message.location()});});
+              page.on('requestfailed', request => row.failedRequests.push({url:request.url(),failure:request.failure()}));
+              page.on('response', response => {if(response.status() >= 400) row.badResponses.push({url:response.url(),status:response.status(),headers:response.request().headers()});});
+              page.on('request', request => {if(new URL(request.url()).pathname === '/') row.homepageRequests.push({url:request.url(),resource:request.resourceType(),headers:request.headers()});});
+              try {
+                await page.goto('https://www.moraltrade.org/contact');
+                await page.waitForTimeout(2500);
+                row.contact = {url:page.url(),title:await page.title(),text:(await page.locator('main').innerText()).slice(0,1200),links:await page.locator('.mt-refined-header a').evaluateAll(links=>links.map(link=>({text:link.textContent,href:link.getAttribute('href')})))};
+                await page.screenshot({path:`${dir}/contact-${width}.png`});
+                const header = page.locator('.mt-refined-header').first();
+                await header.locator('summary').filter({hasText:'More'}).click();
+                await header.getByRole('link',{name:'Profile',exact:true}).click();
+                await page.waitForURL(url=>url.pathname === '/login');
+                row.profile = {url:page.url(),title:await page.title(),overflow:await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth + 1)};
+                await page.goto('https://www.moraltrade.org/contact');
+                await page.locator('.mt-refined-header').first().getByRole('link',{name:'Home',exact:true}).click();
+                await page.waitForTimeout(2000);
+                row.home = {url:page.url(),title:await page.title(),text:(await page.locator('body').innerText()).slice(0,1000)};
+                await page.screenshot({path:`${dir}/home-${width}.png`});
+              } catch(error) {row.failure = String(error);}
+              report.viewports.push(row);
+              await writeFile(`${dir}/baseline.json`,JSON.stringify(report,null,2));
+              await context.close();
+            }
+          } finally {await browser.close();}
+          report.finishedAt = new Date().toISOString();
+          await writeFile(`${dir}/baseline.json`,JSON.stringify(report,null,2));
+          console.log(JSON.stringify(report,null,2));
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: homepage-prefetch-baseline
+          path: /tmp/home-prefetch-baseline
+          retention-days: 7
