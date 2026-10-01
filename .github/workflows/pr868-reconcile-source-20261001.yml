@@ -1,0 +1,67 @@
+name: PR868 reconciliation source inspection
+on:
+  push:
+    branches: [ops/pr868-preview-reconcile-20261001]
+    paths: [.github/workflows/pr868-reconcile-source-20261001.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ab6049702a9e70f29ccc95da6685f0e642e3c835
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact source snapshots and conflict paths only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          MAIN=ab6049702a9e70f29ccc95da6685f0e642e3c835
+          PAYMENT=3ef9f86a41257b585c2a940df74c2bf03f16793b
+          PREVIEW=bc5c15c013ab971ac6b7902dcb05e6d770b61bc8
+          test "$(git rev-parse origin/main)" = "$MAIN"
+          test "$(git rev-parse origin/feat/account-payment-methods-20260928)" = "$PAYMENT"
+          test "$(git rev-parse origin/release/vercel-preview)" = "$PREVIEW"
+          mkdir -p /tmp/pr868-source
+          for pair in main:$MAIN payment:$PAYMENT preview:$PREVIEW; do
+            label=${pair%%:*}; sha=${pair#*:}
+            git archive --format=zip "$sha" > "/tmp/pr868-source/$label.zip"
+            git ls-tree -r "$sha" > "/tmp/pr868-source/$label-tree.txt"
+            git show -s --format='%H%n%T%n%P%n%B' "$sha" > "/tmp/pr868-source/$label-identity.txt"
+          done
+          git diff --name-status "$MAIN" "$PREVIEW" > /tmp/pr868-source/preserved-preview.diffstat
+          git diff --name-status "$(git merge-base "$MAIN" "$PAYMENT")" "$PAYMENT" > /tmp/pr868-source/payment.diffstat
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git checkout --detach "$PAYMENT"
+          set +e
+          git merge --no-commit --no-ff "$MAIN" > /tmp/pr868-source/merge-check.txt 2>&1
+          status=$?
+          set -e
+          test "$status" -le 1
+          git diff --name-only --diff-filter=U > /tmp/pr868-source/conflicts.txt
+          git merge --abort
+          python3 - <<'PY'
+          import pathlib, zipfile, re
+          root=pathlib.Path('/tmp/pr868-source')
+          for path in root.glob('*.zip'):
+              filtered=path.with_suffix('.filtered.zip')
+              with zipfile.ZipFile(path) as source, zipfile.ZipFile(filtered,'w',zipfile.ZIP_DEFLATED) as out:
+                  for item in source.infolist():
+                      parts=pathlib.PurePosixPath(item.filename).parts
+                      if any((p.startswith('.env') and p != '.env.example') or p.startswith('..env') or p in ('.vercel','.git') for p in parts):
+                          continue
+                      out.writestr(item,source.read(item))
+              filtered.replace(path)
+          PY
+          cat /tmp/pr868-source/conflicts.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr868-reconcile-source-${{ github.run_id }}
+          path: /tmp/pr868-source
+          retention-days: 3
+          if-no-files-found: error
