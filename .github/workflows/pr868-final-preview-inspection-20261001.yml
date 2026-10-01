@@ -1,0 +1,111 @@
+name: PR868 final protected Preview inspection
+on:
+  push:
+    branches: [ops/pr868-preview-reconcile-20261001]
+    paths: [.github/workflows/pr868-final-preview-inspection-20261001.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  wait_for_release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require the successful unchanged final Preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          for(let n=0;n<120;n++){
+            const r=await fetch('https://api.github.com/repos/ghuser29384/Website2/actions/runs/36916154602',{headers:{Authorization:`Bearer ${process.env.GH_TOKEN}`,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw new Error(`Release status HTTP ${r.status}`);
+            const run=await r.json();
+            if(run.status==='completed'){if(run.conclusion!=='success')throw new Error('Gated Preview release failed; no runtime inspection attempted');console.log('Final gated Preview release passed.');process.exit(0);}
+            await new Promise(resolve=>setTimeout(resolve,15000));
+          }
+          throw new Error('Release is still pending; no runtime inspection attempted');
+          JS
+  inspect:
+    needs: wait_for_release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 06fdf5448a744784488f4419fb9a2b857aede565
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 683ada3aaa63ed92d795120784297a974a647286
+          path: .qa-inspection-source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Materialize the previously inspected read-only smoke with final SHA and both viewport diagnostics
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 06fdf5448a744784488f4419fb9a2b857aede565
+          test "$(git -C .qa-inspection-source hash-object .github/workflows/pr868-protected-preview-smoke-20261001.yml)" = d7c06b68804152755faaf5b9d0eb521591f5b9ed
+          umask 077
+          mkdir -p /tmp/pr868-private /tmp/pr868-runtime-evidence .vercel
+          printf '%s\n' '{"orgId":"team_ySu6sF3Uho1E1GnJtCQPVEuJ","projectId":"prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7"}' > .vercel/project.json
+          python3 - <<'PY'
+          import pathlib,re,textwrap
+          p=pathlib.Path('.qa-inspection-source/.github/workflows/pr868-protected-preview-smoke-20261001.yml')
+          match=re.search(r"(?m)^( +)cat > /tmp/pr868-private/smoke.cjs <<'JS'\n(.*?)^\1JS\n",p.read_text(),re.S)
+          assert match
+          script=textwrap.dedent(match.group(2))
+          old='29eae507ce13cfcff22bb665b9fd19e7cdc42189'
+          assert script.count(old)==1
+          script=script.replace(old,'06fdf5448a744784488f4419fb9a2b857aede565')
+          script=script.replace('pr868_preview_readonly_20261001','pr868_preview_readonly_20261001_final')
+          old="check(`Real test-mode Stripe configuration accepted at ${width}px`,text.includes('Test mode.'));"
+          assert script.count(old)==1
+          script=script.replace(old,"""const accepted=text.includes('Test mode.');
+          result.checks.push({name:`Real test-mode Stripe configuration accepted at ${width}px`,passed:accepted});
+          if(!accepted){
+            result.providerConfigurationBlocked=true;
+            result.alerts=(await page.locator('main [role=\"alert\"]').allTextContents()).map(redact);
+            check(`Both setup sections visible at ${width}px`,text.includes('Payment methods')&&text.includes('Receive payments'));
+            check(`No horizontal overflow at ${width}px`,await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+            await page.getByRole('link',{name:'Refresh payment settings',exact:true}).click();
+            await page.waitForLoadState('networkidle');
+            check(`Read-only refresh responds while blocked at ${width}px`,await page.getByRole('heading',{name:'Payment methods & receiving',exact:true}).isVisible());
+            continue;
+          }""")
+          old="result.result='passed read-only authenticated Preview smoke; hosted setup completion remains untested';"
+          assert script.count(old)==1
+          script=script.replace(old,"""if(result.providerConfigurationBlocked){
+            result.result='blocked: protected page and both viewport inspections completed, but provider configuration acceptance failed';
+            process.exitCode=1;
+          }else{
+            result.result='passed read-only authenticated Preview smoke; hosted setup completion remains untested';
+          }""")
+          assert 'paymentActionsSubmitted:false' in script and 'blockedPosts===0' in script
+          pathlib.Path('/tmp/pr868-private/smoke.cjs').write_text(script)
+          PY
+          node --check /tmp/pr868-private/smoke.cjs
+      - name: Inspect the deployed payment page with disposable isolated QA authentication
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/pr868-private/smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr868-final-preview-inspection-${{ github.run_id }}
+          path: /tmp/pr868-runtime-evidence
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Remove private session material
+        if: always()
+        run: rm -rf /tmp/pr868-private .qa-inspection-source
