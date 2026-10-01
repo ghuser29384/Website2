@@ -1,0 +1,149 @@
+name: PR868 sync concurrent PR872 and release Preview
+on:
+  push:
+    branches: [ops/pr868-preview-reconcile-20261001]
+    paths: [.github/workflows/pr868-sync-pr872-preview-20261001.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    outputs:
+      payment: ${{ steps.merge.outputs.payment }}
+      preview: ${{ steps.merge.outputs.preview }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ca557375101c5cba8990e280683ebe862f60b02e
+          fetch-depth: 0
+      - name: Merge only the newly landed non-overlapping homepage change
+        id: merge
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          MAIN=2bbf44ebea0c7a44837b523aff60f5997c332fee
+          OLD=ab6049702a9e70f29ccc95da6685f0e642e3c835
+          PAYMENT=ca557375101c5cba8990e280683ebe862f60b02e
+          PREVIEW=29eae507ce13cfcff22bb665b9fd19e7cdc42189
+          test "$(git rev-parse origin/main)" = "$MAIN"
+          test "$(git rev-parse origin/feat/account-payment-methods-20260928)" = "$PAYMENT"
+          test "$(git rev-parse origin/release/vercel-preview)" = "$PREVIEW"
+          test "$(git show -s --format=%P "$MAIN")" = "$OLD"
+          python3 - <<'PY'
+          import subprocess
+          def files(a,b):return set(subprocess.check_output(['git','diff','--name-only',a,b]).decode().splitlines())
+          old='ab6049702a9e70f29ccc95da6685f0e642e3c835'; main='2bbf44ebea0c7a44837b523aff60f5997c332fee'; payment='ca557375101c5cba8990e280683ebe862f60b02e'
+          a,b=files(old,payment),files(old,main)
+          assert len(a)==25 and len(b)==18 and not a.intersection(b)
+          assert all(not p.startswith(('.github/','supabase/')) for p in b)
+          print('The 18 newly landed homepage-navigation paths do not overlap the 25 payment paths.')
+          PY
+          git config user.name ghuser29384
+          git config user.email 262476329+ghuser29384@users.noreply.github.com
+          git merge --no-ff "$MAIN" -m 'Preserve concurrent homepage document-navigation fix in payment settings'
+          git diff --check HEAD^
+          payment=$(git rev-parse HEAD)
+          git push origin "$payment:refs/heads/candidate/pr868-pr872-sync-20261001"
+          git checkout --detach "$PREVIEW"
+          git merge --no-ff "$payment" -m 'Stage current-main payment settings with preserved completion Preview work'
+          preview=$(git rev-parse HEAD)
+          git diff --check HEAD^
+          git diff --exit-code "$PREVIEW" "$preview" -- src/app/core-trade-actions-base.ts src/lib/recommendation-training.ts src/lib/recommendation-training.test.ts src/lib/trade-completion-persistence.ts src/lib/trade-completion-persistence.test.ts
+          git diff --exit-code "$PREVIEW" "$preview" -- .github/workflows package.json package-lock.json supabase src/lib/payments src/app/dashboard/payments
+          python3 - "$payment" "$preview" <<'PY'
+          import subprocess,sys
+          old='ab6049702a9e70f29ccc95da6685f0e642e3c835'; prior='ca557375101c5cba8990e280683ebe862f60b02e'
+          paths=subprocess.check_output(['git','diff','--name-only',old,prior]).decode().splitlines()
+          for ref in sys.argv[1:]:
+              for p in paths:
+                  assert subprocess.check_output(['git','rev-parse',ref+':'+p])==subprocess.check_output(['git','rev-parse',prior+':'+p]),p
+          print('Every payment change is byte-identical; existing completion work and release protections are retained.')
+          PY
+          git push origin "$preview:refs/heads/candidate/pr868-preview-pr872-sync-20261001"
+          echo "payment=$payment" >> "$GITHUB_OUTPUT"
+          echo "preview=$preview" >> "$GITHUB_OUTPUT"
+          mkdir -p /tmp/pr868-current
+          printf 'payment=%s\npreview=%s\nmain=%s\n' "$payment" "$preview" "$MAIN" > /tmp/pr868-current/identity.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr868-current-identity-${{ github.run_id }}
+          path: /tmp/pr868-current
+          retention-days: 14
+  source_quality:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.preview }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Exact-source tests, lint and types; complete build and browser gates remain in the unchanged release workflow
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr868-current-quality
+          git rev-parse HEAD HEAD^{tree} > /tmp/pr868-current-quality/identity.txt
+          node --import tsx --test src/lib/payments/account-payment-service.test.ts src/lib/live-account-actions.test.ts src/lib/dashboard-view.test.ts src/lib/recommended-cleanup.test.ts src/lib/home-navigation.test.ts src/live-account-data.test.ts | tee /tmp/pr868-current-quality/focused.log
+          npm test | tee /tmp/pr868-current-quality/unit.log
+          npm run lint -- --quiet | tee /tmp/pr868-current-quality/lint.log
+          npx tsc --noEmit --pretty false | tee /tmp/pr868-current-quality/types.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr868-current-quality-${{ github.run_id }}
+          path: /tmp/pr868-current-quality
+          retention-days: 14
+  publish_and_dispatch:
+    needs: [prepare,source_quality]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.preview }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Fast-forward only payment and Preview refs, then invoke the existing gated Preview workflow
+        env:
+          PAYMENT_SHA: ${{ needs.prepare.outputs.payment }}
+          PREVIEW_SHA: ${{ needs.prepare.outputs.preview }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin main feat/account-payment-methods-20260928 release/vercel-preview
+          test "$(git rev-parse origin/main)" = 2bbf44ebea0c7a44837b523aff60f5997c332fee
+          test "$(git rev-parse origin/feat/account-payment-methods-20260928)" = ca557375101c5cba8990e280683ebe862f60b02e
+          test "$(git rev-parse origin/release/vercel-preview)" = 29eae507ce13cfcff22bb665b9fd19e7cdc42189
+          git merge-base --is-ancestor origin/feat/account-payment-methods-20260928 "$PAYMENT_SHA"
+          git merge-base --is-ancestor origin/release/vercel-preview "$PREVIEW_SHA"
+          test "$(git rev-parse "$PREVIEW_SHA:.github/workflows/vercel-release.yml")" = e219e99d25279161b89eee80fc410912c3561a19
+          test "$(git rev-parse 'origin/main:.github/workflows/vercel-release.yml')" = e219e99d25279161b89eee80fc410912c3561a19
+          git push --atomic origin "$PAYMENT_SHA:refs/heads/feat/account-payment-methods-20260928" "$PREVIEW_SHA:refs/heads/release/vercel-preview"
+          mkdir -p /tmp/pr868-current-dispatch
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const request={ref:'main',inputs:{target:'preview',ref:'release/vercel-preview',expected_sha:process.env.PREVIEW_SHA,synthetic_auth_fixture_url:''}};
+          const response=await fetch('https://api.github.com/repos/ghuser29384/Website2/actions/workflows/vercel-release.yml/dispatches',{method:'POST',headers:{Authorization:`Bearer ${process.env.GH_TOKEN}`,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(20000)});
+          if(response.status!==204)throw new Error(`Gated Preview dispatch HTTP ${response.status}; no alternative deployment attempted`);
+          const result={requestedAt:new Date().toISOString(),request,paymentSha:process.env.PAYMENT_SHA,productionChanged:false};
+          fs.writeFileSync('/tmp/pr868-current-dispatch/request.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr868-current-dispatch-${{ github.run_id }}
+          path: /tmp/pr868-current-dispatch
+          retention-days: 14
