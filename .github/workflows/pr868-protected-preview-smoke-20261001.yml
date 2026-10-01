@@ -1,0 +1,165 @@
+name: PR868 protected Preview read-only smoke
+on:
+  push:
+    branches: [ops/pr868-preview-reconcile-20261001]
+    paths: [.github/workflows/pr868-protected-preview-smoke-20261001.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  wait_for_gated_release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require successful existing gated Preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          for(let n=0;n<120;n++){
+            const r=await fetch('https://api.github.com/repos/ghuser29384/Website2/actions/runs/36909879885',{headers:{Authorization:`Bearer ${process.env.GH_TOKEN}`,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw new Error(`Release status HTTP ${r.status}`);
+            const run=await r.json();
+            if(run.status==='completed'){if(run.conclusion!=='success')throw new Error('Gated Preview release failed; no runtime smoke attempted');console.log('Existing gated Preview release passed.');process.exit(0);}
+            await new Promise(resolve=>setTimeout(resolve,15000));
+          }
+          throw new Error('Gated Preview release is still pending; no runtime smoke attempted');
+          JS
+  smoke:
+    needs: wait_for_gated_release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 29eae507ce13cfcff22bb665b9fd19e7cdc42189
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Read the actual protected Preview; never submit a payment or receiving action
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$(git rev-parse HEAD)" = 29eae507ce13cfcff22bb665b9fd19e7cdc42189
+          umask 077
+          mkdir -p /tmp/pr868-private /tmp/pr868-runtime-evidence .vercel
+          printf '%s\n' '{"orgId":"team_ySu6sF3Uho1E1GnJtCQPVEuJ","projectId":"prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7"}' > .vercel/project.json
+          cat > /tmp/pr868-private/smoke.cjs <<'JS'
+          const fs=require('node:fs');
+          const crypto=require('node:crypto');
+          const {execFileSync}=require('node:child_process');
+          const {createServerClient}=require('@supabase/ssr');
+          const {chromium}=require('playwright');
+          const dir='/tmp/pr868-runtime-evidence',priv='/tmp/pr868-private';
+          const project='prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7',team='team_ySu6sF3Uho1E1GnJtCQPVEuJ';
+          const expected='29eae507ce13cfcff22bb665b9fd19e7cdc42189';
+          const qa='https://hvmxfjjbdcgjjudmthdz.supabase.co',pub='sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8';
+          const result={checkedAt:new Date().toISOString(),expectedSha:expected,productionChanged:false,paymentActionsSubmitted:false,providerObjectsCreated:false,authFixtureCreated:false,authFixtureCleaned:false,browserPlugin:'absent; Playwright on GitHub runner',checks:[]};
+          let actor=null,browser=null,auth=null;
+          const redact=s=>String(s).replace(/(?:sk|rk)_(?:live|test)_[A-Za-z0-9]+/g,'[redacted]').replace(/eyJ[A-Za-z0-9_.-]+/g,'[redacted]').replace(/([?&](?:_vercel_share|client_secret)=)[^&\s]+/g,'$1[redacted]');
+          const check=(name,pass)=>{result.checks.push({name,passed:!!pass});if(!pass)throw new Error(name);};
+          const read=async(path)=>{const r=await fetch('https://api.vercel.com'+path,{headers:{Authorization:`Bearer ${process.env.VERCEL_TOKEN}`},signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error(`Vercel read HTTP ${r.status}`);return r.json();};
+          const sql=text=>{const file=priv+'/query.sql';fs.writeFileSync(file,'\\set ON_ERROR_STOP on\n'+text,{mode:0o600});try{return execFileSync('psql',[process.env.QA_SUPABASE_DB_URL,'--no-psqlrc','--tuples-only','--no-align','--file',file],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:{...process.env,PGSSLMODE:'require'},timeout:30000});}catch{throw new Error('Isolated QA SQL operation failed; no other database attempted');}};
+          async function run(){
+            const db=new URL(process.env.QA_SUPABASE_DB_URL||'');
+            check('Isolated QA database target guard',db.protocol.match(/^postgres(?:ql)?:$/)&&db.hostname==='aws-0-us-west-1.pooler.supabase.com'&&db.port==='5432'&&decodeURIComponent(db.username)==='postgres.hvmxfjjbdcgjjudmthdz'&&db.pathname==='/postgres'&&(db.searchParams.get('sslmode')||'require')==='require');
+            const list=await read(`/v6/deployments?projectId=${project}&teamId=${team}&limit=30`);
+            const match=(list.deployments||[]).find(d=>d.meta?.githubCommitSha===expected&&d.state==='READY'&&d.target!=='production');
+            check('Exact Preview deployment exists',!!match);
+            const deployed=await read(`/v13/deployments/${match.uid||match.id}?teamId=${team}`);
+            check('Deployment identity, source and environment match',(deployed.projectId||deployed.project?.id)===project&&deployed.meta.githubCommitSha===expected&&deployed.target!=='production'&&deployed.readyState==='READY');
+            result.deploymentId=deployed.id||deployed.uid;result.origin='https://'+deployed.url;
+            const config=await read(`/v9/projects/${project}?teamId=${team}`);
+            check('Vercel Preview authentication protection retained',!!config.ssoProtection?.deploymentType);
+            const protection=await fetch(result.origin+'/dashboard/payments',{redirect:'manual',signal:AbortSignal.timeout(20000)});
+            result.anonymousProtectionStatus=protection.status;
+            check('Unauthenticated internet access does not expose account page',[301,302,303,307,308,401,403].includes(protection.status));
+            try{execFileSync('npx',['--yes','vercel@50.38.1','curl','/login','--deployment',deployed.url,'--token',process.env.VERCEL_TOKEN,'--','--silent','--show-error','--max-time','40','--header','x-vercel-set-bypass-cookie: true','--cookie-jar',priv+'/vercel-cookies.txt','--output',priv+'/login.html'],{encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:120000});}
+            catch{throw new Error('Authorized Vercel CLI could not fetch protected Preview; no protection setting changed');}
+            const cookies=[];
+            for(let line of fs.readFileSync(priv+'/vercel-cookies.txt','utf8').split('\n')){
+              let httpOnly=false;if(line.startsWith('#HttpOnly_')){httpOnly=true;line=line.slice(10);}else if(line.startsWith('#'))continue;
+              const fields=line.split('\t');if(fields.length!==7)continue;
+              const [domain,,path,secure,expiry,name,value]=fields;
+              if(domain.replace(/^\./,'')!==new URL(result.origin).hostname)continue;
+              cookies.push({domain,path,name,value,httpOnly,secure:secure==='TRUE',...(Number(expiry)>0?{expires:Number(expiry)}:{})});
+            }
+            check('Authorized temporary Preview browser session obtained',cookies.length>0);
+            browser=await chromium.launch({headless:true});
+            const guest=await browser.newContext({viewport:{width:1440,height:1000}});await guest.addCookies(cookies);
+            const guestPage=await guest.newPage();await guestPage.goto(result.origin+'/dashboard/payments',{waitUntil:'networkidle',timeout:60000});
+            const guestUrl=new URL(guestPage.url());
+            check('Signed-out payment page redirects to login with return path',guestUrl.pathname==='/login'&&guestUrl.searchParams.get('returnTo')==='/dashboard/payments');
+            await guestPage.screenshot({path:dir+'/signed-out-1440.png',fullPage:true});await guest.close();
+            check('Reviewed account payment QA migration recorded',sql("select count(*) from supabase_migrations.schema_migrations where version='20260928182211' and name='account_payment_settings';").trim()==='1');
+            actor=crypto.randomUUID();process.env.PR868_ACTOR=actor;
+            process.env.PR868_PASSWORD=crypto.randomBytes(40).toString('base64url');
+            const email=`pr868-${actor}@qa.invalid`;
+            console.log('::add-mask::'+process.env.PR868_PASSWORD);
+            sql(`\\getenv actor PR868_ACTOR\n\\getenv password PR868_PASSWORD\nbegin;\ninsert into auth.users(id,instance_id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,confirmation_token,recovery_token,email_change,email_change_token_new,email_change_token_current,reauthentication_token,is_sso_user,is_anonymous,created_at,updated_at) values(:'actor'::uuid,'00000000-0000-0000-0000-000000000000','authenticated','authenticated','${email}',extensions.crypt(:'password',extensions.gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}',jsonb_build_object('display_name','QA payment Preview check','qa_fixture','pr868_preview_readonly_20261001'),'','','','','','',false,false,now(),now());\ninsert into auth.identities(provider_id,user_id,identity_data,provider,last_sign_in_at,created_at,updated_at) values(:'actor',:'actor'::uuid,jsonb_build_object('sub',:'actor','email','${email}','email_verified',true),'email',now(),now(),now());\ninsert into public.profiles(id,email,display_name,bio,affiliation) values(:'actor'::uuid,'${email}','QA payment Preview check','','Isolated QA') on conflict(id) do nothing;\ncommit;`);
+            result.authFixtureCreated=true;
+            const authCookies=[];
+            auth=createServerClient(qa,pub,{cookies:{getAll:()=>authCookies,setAll:values=>{for(const value of values){const i=authCookies.findIndex(c=>c.name===value.name);if(i>=0)authCookies[i]=value;else authCookies.push(value);}}}});
+            const signed=await auth.auth.signInWithPassword({email,password:process.env.PR868_PASSWORD});
+            check('Genuine isolated QA authentication succeeded',!signed.error&&signed.data.user?.id===actor);
+            const context=await browser.newContext({viewport:{width:1440,height:1000}});
+            await context.addCookies(cookies);
+            await context.addCookies(authCookies.map(c=>({name:c.name,value:c.value,domain:new URL(result.origin).hostname,path:'/',secure:true,sameSite:'Lax'})));
+            let blockedPosts=0;await context.route('**/*',route=>{const r=route.request();if(new URL(r.url()).origin===result.origin&&!['GET','HEAD','OPTIONS'].includes(r.method())){blockedPosts++;return route.abort();}return route.continue();});
+            const page=await context.newPage();const errors=[];
+            page.on('pageerror',e=>errors.push(redact(e.message).slice(0,500)));
+            page.on('console',m=>{if(['error','warning'].includes(m.type()))errors.push(redact(m.text()).slice(0,500));});
+            for(const width of [1440,390]){
+              await page.setViewportSize({width,height:1000});await page.goto(result.origin+'/dashboard/payments',{waitUntil:'networkidle',timeout:60000});
+              await page.screenshot({path:dir+`/payments-${width}.png`,fullPage:true});
+              const text=await page.locator('main').innerText();
+              check(`Payment page identity at ${width}px`,new URL(page.url()).pathname==='/dashboard/payments'&&text.includes('Payment methods & receiving'));
+              check(`Real test-mode Stripe configuration accepted at ${width}px`,text.includes('Test mode.'));
+              const alerts=await page.locator('main [role="alert"]').allTextContents();
+              if(alerts.length)result.alerts=alerts.map(redact);
+              check(`QA payment storage reads and provider reads succeed at ${width}px`,alerts.length===0&&text.includes('No payment methods saved.')&&await page.getByRole('button',{name:'Add payment method',exact:true}).isVisible());
+              check(`Receiving setup loads real country options at ${width}px`,await page.locator('#payout-country option').count()>1);
+              check(`No horizontal overflow at ${width}px`,await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+              await page.getByRole('link',{name:'Refresh payment settings',exact:true}).click();
+              await page.waitForLoadState('networkidle');
+              check(`Read-only refresh control responds at ${width}px`,await page.getByRole('heading',{name:'Payment methods & receiving',exact:true}).isVisible());
+            }
+            result.consoleMessages=errors;result.blockedApplicationPosts=blockedPosts;
+            check('No payment settings write was attempted',blockedPosts===0);
+            check('No provider mapping was created by rendering',sql(`select count(*) from public.account_payment_settings where profile_id='${actor}'::uuid;`).trim()==='0');
+            result.result='passed read-only authenticated Preview smoke; hosted setup completion remains untested';
+            await context.close();
+          }
+          (async()=>{try{await run();}catch(error){result.result='blocked';result.error=redact(error.message);process.exitCode=1;}finally{
+            if(auth)try{await auth.auth.signOut({scope:'local'});}catch{}
+            if(browser)try{await browser.close();}catch{}
+            if(actor&&result.authFixtureCreated){try{
+              sql(`begin;delete from auth.sessions where user_id='${actor}'::uuid;delete from auth.refresh_tokens where user_id='${actor}';delete from auth.identities where user_id='${actor}'::uuid;delete from moral_trade_private.person_accounts where profile_id='${actor}'::uuid;delete from public.profiles where id='${actor}'::uuid and email='pr868-${actor}@qa.invalid';delete from auth.users where id='${actor}'::uuid and raw_user_meta_data->>'qa_fixture'='pr868_preview_readonly_20261001';commit;`);
+              result.authFixtureCleaned=sql(`select (select count(*) from auth.users where id='${actor}'::uuid)+(select count(*) from public.profiles where id='${actor}'::uuid);`).trim()==='0';
+              if(!result.authFixtureCleaned)process.exitCode=1;
+            }catch{result.cleanupError='Disposable QA identity cleanup needs inspection';process.exitCode=1;}}
+            fs.writeFileSync(dir+'/result.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+          }})();
+          JS
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/pr868-private/smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr868-protected-preview-smoke-${{ github.run_id }}
+          path: /tmp/pr868-runtime-evidence
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Remove private session material
+        if: always()
+        run: rm -rf /tmp/pr868-private
