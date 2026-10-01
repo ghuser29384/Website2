@@ -28,7 +28,7 @@ import {
   X,
   type Icon,
 } from "@phosphor-icons/react";
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 import { useMemo, useState } from "react";
 
 import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";
