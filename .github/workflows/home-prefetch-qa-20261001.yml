@@ -15,7 +15,7 @@ jobs:
     env:
       BASE: ab6049702a9e70f29ccc95da6685f0e642e3c835
       CANDIDATE: 032c1d30b82eed61b248bdd1da0f24bc2b9d8ffc
-      EXPECTED_TREE: 7340b3aefd311a79e7b1d31fd5c9c61820a3d850
+      EXPECTED_TREE: 8c84433a1e5756b3e806f007f99edffd0b9ab2ea
       BRANCH: fix/homepage-document-navigation-20261001
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -49,6 +49,7 @@ jobs:
             'src/components/profile/complete-profile-review.tsx',
             'src/components/profile/profile-priority-editor.tsx',
             'src/components/trade-controls/trade-controls-workspace.tsx',
+            'src/components/trade-templates/trade-template-library.tsx',
             'src/components/ui/page-primitives.tsx',
             'src/components/walkthrough/immersive-walkthrough.tsx',
           ]
@@ -78,7 +79,7 @@ jobs:
           git rev-parse HEAD^{tree} > /tmp/home-prefetch-qa/tree.txt
           git diff "$BASE" HEAD > /tmp/home-prefetch-qa/change.patch
           git diff --stat "$BASE" HEAD > /tmp/home-prefetch-qa/diff-stat.txt
-          test "$(git diff --name-only "$BASE" HEAD | wc -l)" = 17
+          test "$(git diff --name-only "$BASE" HEAD | wc -l)" = 18
           test -z "$(git diff --name-only "$BASE" HEAD -- .github public supabase package.json package-lock.json next.config.ts vercel.ts playwright.release.config.ts)"
           echo 'Browser plugin not available; repository Playwright. Flow: homepage links -> document request -> live home controls; Profile -> Dashboard login with no RSC 404. No production/account writes.' > /tmp/home-prefetch-qa/scope.txt
       - uses: actions/setup-node@v4
