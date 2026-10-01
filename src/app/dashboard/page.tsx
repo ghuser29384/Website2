@@ -16,7 +16,6 @@ import {
   createAgreementRoomFromIntroductionPlanAction,
   createMatchConciergeRequestAction,
   createNetworkInviteAction,
-  createStripeConnectAccountAction,
   consentToMatchSuggestionAction,
   dismissMatchSuggestionAction,
   dismissClarificationQuestionAction,
@@ -25,7 +24,6 @@ import {
   rateAgreementAction,
   refreshBackgroundMatchesAction,
   refreshProfileSynthesisAction,
-  refreshStripeConnectAccountAction,
   reportMatchSuggestionAction,
   respondPrivacyAccessRequestAction,
   revokePrivacyGrantAction,
@@ -733,77 +731,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </details>
 
         <section className="section section-white" id="payment-setup">
-          <div className="section-head">
-            <p className="eyebrow">Payments</p>
-            <h2>Payment setup</h2>
-            <p>
-              Connect Stripe for payment-mediated trades. Moral Trade records payment state and
-              supports Stripe refund or dispute workflows; it is not legal escrow.
-            </p>
-          </div>
-
-          <div className="panel data-card data-card-wide">
-            {!stripeReady ? (
-              <div className="empty-state">
-                <div>
-                  <strong>Stripe is not configured yet.</strong>
-                  <p>Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and SUPABASE_SERVICE_ROLE_KEY in Vercel before live payments.</p>
-                </div>
-              </div>
-            ) : dashboardData?.errors.paymentAccount ? (
-              <div className="empty-state">
-                <div>
-                  <strong>We could not load your payment account.</strong>
-                  <p>The detailed Supabase error was logged on the server.</p>
-                </div>
-              </div>
-            ) : dashboardData?.paymentAccount ? (
-              <>
-                <div className="tag-row">
-                  <span className="badge">
-                    {dashboardData.paymentAccount.charges_enabled &&
-                    dashboardData.paymentAccount.payouts_enabled
-                      ? "Ready to receive payments"
-                      : "Onboarding incomplete"}
-                  </span>
-                  <span className="source-pill">
-                    {dashboardData.paymentAccount.details_submitted
-                      ? "Details submitted"
-                      : "Details needed"}
-                  </span>
-                </div>
-                <p className="route-text">
-                  Stripe account {dashboardData.paymentAccount.stripe_account_id}. Refresh this
-                  status after completing onboarding.
-                </p>
-                <div className="form-actions">
-                  <form action={createStripeConnectAccountAction}>
-                    <input name="return_to" type="hidden" value="/dashboard?view=controls" />
-                    <button className="button button-primary button-mini" type="submit">
-                      Continue onboarding
-                    </button>
-                  </form>
-                  <form action={refreshStripeConnectAccountAction}>
-                    <input name="return_to" type="hidden" value="/dashboard?view=controls" />
-                    <button className="button button-secondary button-mini" type="submit">
-                      Refresh status
-                    </button>
-                  </form>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="route-text">
-                  Connect a Stripe Express account before another party can route payment to you.
-                </p>
-                <form action={createStripeConnectAccountAction}>
-                  <input name="return_to" type="hidden" value="/dashboard?view=controls" />
-                  <button className="button button-primary" type="submit">
-                    Connect Stripe
-                  </button>
-                </form>
-              </>
-            )}
+          <div className="section-head"><p className="eyebrow">Payments</p><h2>Payment methods & receiving</h2></div>
+          <p>Manage saved payment methods and your receiving account separately.</p>
+          <div className="form-actions">
+            <Link className="button button-primary" href="/dashboard/payments" prefetch={false}>Manage payment methods</Link>
+            <Link className="button button-secondary" href="/dashboard/payments#receive-payments" prefetch={false}>Receive payments</Link>
           </div>
         </section>
 

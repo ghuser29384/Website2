@@ -98,7 +98,7 @@ function loadBridge(payload: unknown = { authenticated: true }) {
 }
 
 const destinations = {
-  "payment-account": "/dashboard#payment-setup",
+  "payment-account": "/dashboard/payments",
   notifications: "/dashboard#privacy-controls",
   "public-trust": "/dashboard#wish-profile",
   privacy: "/dashboard#privacy-controls",
@@ -137,7 +137,7 @@ test("truthy non-boolean authentication stays unknown, not authenticated or sign
   bridge.configureAction(row, "payment-account");
   assert.equal(bridge.accountState().authenticated, false);
   assert.equal(bridge.accountState().status, "unavailable");
-  assert.equal(row.action.getAttribute("href"), "/dashboard#payment-setup");
+  assert.equal(row.action.getAttribute("href"), "/dashboard/payments");
   assert.equal(row.action.textContent, "Manage");
 });
 

@@ -146,14 +146,15 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     const tools = page.getByRole("navigation", { name: "Dashboard controls" });
     await expect(tools.locator("summary")).toHaveCount(0);
     const payment = tools.getByRole("link", { name: "Payment setup", exact: true });
-    await expect(payment).toHaveAttribute("href", "/dashboard?view=controls#payment-setup");
+    await expect(payment).toHaveAttribute("href", "/dashboard/payments");
     await payment.focus();
     await payment.press("Enter");
-    await expect(page).toHaveURL(`${origin}/dashboard?view=controls#payment-setup`);
-    await expect(page.locator("#payment-setup")).toBeVisible();
+    await expect(page).toHaveURL(`${origin}/dashboard/payments`);
+    await expect(page.locator("#payment-methods")).toBeVisible();
+    await expect(page.locator("#receive-payments")).toBeVisible();
     expect(requests.some((request) => request.path === "/rest/v1/cohort_onboarding_profiles" && request.method !== "GET")).toBe(false);
     expect(saved.get(a)).toEqual(buildPersistedProfilePriorities(allocation(4)));
-    await page.locator("#payment-setup").screenshot({ path: "/tmp/dashboard-sparks-evidence/direct-payment-setup.png" });
+    await page.locator("#payment-methods").screenshot({ path: "/tmp/dashboard-sparks-evidence/direct-payment-setup.png" });
   });
 
   test("account links reach data and trades once, and legacy data bookmarks remain usable", async ({ page, context }) => {
@@ -227,7 +228,9 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
       await expect(page.locator(`#${id}`)).toBeVisible();
     }
     await tools.getByRole("link", { name: "Payment setup", exact: true }).click();
-    await expect(page.locator("#payment-setup")).toBeVisible();
+    await expect(page).toHaveURL(`${origin}/dashboard/payments`);
+    await expect(page.locator("#payment-methods")).toBeVisible();
+    await expect(page.locator("#receive-payments")).toBeVisible();
     await page.screenshot({ path: "/tmp/dashboard-sparks-evidence/dashboard-payment-controls.png" });
     await tools.getByRole("link", { name: "Priorities", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();

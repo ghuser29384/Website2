@@ -61,7 +61,7 @@ test("both priority routes share account-bound reads and the existing save actio
 
 test("Payment setup is a direct link, controls do not prefetch, and forms keep their return view", () => {
   const tools = readFileSync("src/components/dashboard/dashboard-tools.tsx", "utf8");
-  assert.match(tools, /href="\/dashboard\?view=controls#payment-setup"[^>]*>Payment setup/);
+  assert.match(tools, /href="\/dashboard\/payments"[^>]*>\s*Payment setup/);
   assert.doesNotMatch(tools, /<summary>Currency|account-wide currency selector/);
   for (const link of tools.matchAll(/<Link\b[^>]+>/g)) assert.match(link[0], /prefetch=\{false\}/);
   assert.doesNotMatch(tools, /createClient|fetch\(|localStorage|sessionStorage/);
