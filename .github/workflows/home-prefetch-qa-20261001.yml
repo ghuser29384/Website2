@@ -1,0 +1,153 @@
+name: Homepage document navigation QA
+on:
+  push:
+    branches: [ops/home-prefetch-20261001]
+    paths: [.github/workflows/home-prefetch-qa-20261001.yml]
+permissions:
+  contents: write
+concurrency:
+  group: homepage-document-navigation-qa-20261001
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      BASE: ab6049702a9e70f29ccc95da6685f0e642e3c835
+      CANDIDATE: 032c1d30b82eed61b248bdd1da0f24bc2b9d8ffc
+      EXPECTED_TREE: 7340b3aefd311a79e7b1d31fd5c9c61820a3d850
+      BRANCH: fix/homepage-document-navigation-20261001
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: 1
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_USE_PRODUCTION_SERVER: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 032c1d30b82eed61b248bdd1da0f24bc2b9d8ffc
+          fetch-depth: 0
+      - name: Apply only the reviewed import adaptations and prove the complete tree
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$CANDIDATE"
+          mkdir -p /tmp/home-prefetch-qa
+          python3 <<'PY'
+          from pathlib import Path
+          paths = [
+            'src/app/commitments/loading.tsx',
+            'src/app/guest-witness/[inviteToken]/page.tsx',
+            'src/components/auth/auth-card.tsx',
+            'src/components/core-trade/trade-agreement-stage-base.tsx',
+            'src/components/core-trade/trade-draft-workbench.tsx',
+            'src/components/layout/site-footer.tsx',
+            'src/components/layout/site-topbar.tsx',
+            'src/components/profile/complete-profile-review.tsx',
+            'src/components/profile/profile-priority-editor.tsx',
+            'src/components/trade-controls/trade-controls-workspace.tsx',
+            'src/components/ui/page-primitives.tsx',
+            'src/components/walkthrough/immersive-walkthrough.tsx',
+          ]
+          for name in paths:
+            p = Path(name)
+            text = p.read_text()
+            before = 'import Link from "next/link";'
+            assert text.count(before) == 1, name
+            p.write_text(text.replace(before, 'import { SiteLink as Link } from "@/components/layout/site-link";'))
+          adaptations = {
+            'src/lib/commitments-loading.test.ts': ('"next/link": { __esModule: true, default: "a" },', '"@/components/layout/site-link": { SiteLink: "a" },'),
+            'src/lib/selected-ui-cleanup.test.ts': ('"next/link": (props: Record<string, unknown>) => jsx("a", props),', '"@/components/layout/site-link": { SiteLink: (props: Record<string, unknown>) => jsx("a", props) },'),
+          }
+          for name, (before, after) in adaptations.items():
+            p = Path(name)
+            text = p.read_text()
+            assert text.count(before) == 1, name
+            p.write_text(text.replace(before, after))
+          PY
+          git add src
+          test "$(git write-tree)" = "$EXPECTED_TREE"
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Apply homepage document links without changing other destinations'
+          git rev-parse HEAD > /tmp/home-prefetch-qa/commit.txt
+          git rev-parse HEAD^{tree} > /tmp/home-prefetch-qa/tree.txt
+          git diff "$BASE" HEAD > /tmp/home-prefetch-qa/change.patch
+          git diff --stat "$BASE" HEAD > /tmp/home-prefetch-qa/diff-stat.txt
+          test "$(git diff --name-only "$BASE" HEAD | wc -l)" = 17
+          test -z "$(git diff --name-only "$BASE" HEAD -- .github public supabase package.json package-lock.json next.config.ts vercel.ts playwright.release.config.ts)"
+          echo 'Browser plugin not available; repository Playwright. Flow: homepage links -> document request -> live home controls; Profile -> Dashboard login with no RSC 404. No production/account writes.' > /tmp/home-prefetch-qa/scope.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Focused homepage transport and existing loading/header contracts
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/home-navigation.test.ts src/lib/commitments-loading.test.ts src/lib/selected-ui-cleanup.test.ts | tee /tmp/home-prefetch-qa/focused.log
+      - name: Complete repository tests, lint and types
+        run: |
+          set -euo pipefail
+          npm test | tee /tmp/home-prefetch-qa/tests.log
+          npm run lint -- --quiet | tee /tmp/home-prefetch-qa/lint.log
+          npx tsc --noEmit --pretty false | tee /tmp/home-prefetch-qa/types.log
+      - name: Clean credential-free production build
+        run: |
+          set -euo pipefail
+          npm run build | tee /tmp/home-prefetch-qa/build.log
+      - run: npx playwright install --with-deps chromium
+      - name: Targeted document navigation and Profile redirects
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.release.config.ts tests/home-document-navigation.spec.ts tests/profile-dashboard-redirect.spec.ts --reporter=line | tee /tmp/home-prefetch-qa/targeted-browser.log
+          cp -R test-results /tmp/home-prefetch-qa/targeted-test-results
+      - name: Complete unchanged release browser gate
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line | tee /tmp/home-prefetch-qa/release-browser.log
+          cp -R test-results /tmp/home-prefetch-qa/release-test-results
+      - name: Build with only the existing loopback account fixture
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: local-fixture-anon-key
+        run: |
+          set -euo pipefail
+          rm -rf .next
+          npm run build | tee /tmp/home-prefetch-qa/fixture-build.log
+      - name: Preserve signed-in Priorities saving and owner isolation
+        env:
+          DASHBOARD_SPARKS_FIXTURE: '1'
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54331
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: local-fixture-anon-key
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.release.config.ts tests/dashboard-sparks.spec.ts --reporter=line | tee /tmp/home-prefetch-qa/account-browser.log
+          cp -R test-results /tmp/home-prefetch-qa/account-test-results
+      - name: Publish the verified source only to its existing feature branch
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$CANDIDATE"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          git diff --exit-code HEAD
+          git diff --check "$BASE" HEAD
+          git push origin "HEAD:refs/heads/$BRANCH"
+          printf 'All candidate gates passed; feature branch only. No merge or deployment performed.\n' > /tmp/home-prefetch-qa/result.txt
+      - name: Preserve evidence including any failed tests
+        if: always()
+        run: |
+          mkdir -p /tmp/home-prefetch-qa
+          if [ -d test-results ]; then cp -R test-results /tmp/home-prefetch-qa/last-test-results; fi
+          if [ -d /tmp/dashboard-sparks-evidence ]; then cp -R /tmp/dashboard-sparks-evidence /tmp/home-prefetch-qa/; fi
+          for log in /tmp/home-prefetch-qa/*.log; do if [ -f "$log" ]; then echo "=== $log ==="; tail -18 "$log"; fi; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: homepage-document-navigation-qa
+          path: /tmp/home-prefetch-qa
+          retention-days: 7
