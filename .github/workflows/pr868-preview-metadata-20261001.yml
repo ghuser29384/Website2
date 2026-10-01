@@ -1,0 +1,39 @@
+name: PR868 Preview environment metadata
+on:
+  push:
+    branches: [ops/pr868-preview-reconcile-20261001]
+    paths: [.github/workflows/pr868-preview-metadata-20261001.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Read relevant configuration metadata without decrypting secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          mkdir -p /tmp/pr868-metadata
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const allowed=new Set(['STRIPE_SECRET_KEY','STRIPE_PLATFORM_ACCOUNT_ID','SUPABASE_SERVICE_ROLE_KEY','NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY','NEXT_PUBLIC_SITE_URL','SITE_URL']);
+          const url='https://api.vercel.com/v10/projects/prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7/env?teamId=team_ySu6sF3Uho1E1GnJtCQPVEuJ&decrypt=false';
+          const r=await fetch(url,{headers:{Authorization:`Bearer ${process.env.VERCEL_TOKEN}`},signal:AbortSignal.timeout(20000)});
+          if(!r.ok)throw new Error(`Environment metadata read returned HTTP ${r.status}`);
+          const data=await r.json();
+          const entries=(data.envs||[]).filter(v=>allowed.has(v.key) && (v.target||[]).includes('preview')).map(v=>({key:v.key,type:v.type,branch:v.gitBranch||null,appliesToReleasePreview:!v.gitBranch||v.gitBranch==='release/vercel-preview',updatedAt:v.updatedAt}));
+          const result={checkedAt:new Date().toISOString(),entries,pagination:data.pagination||null,valuesIncluded:false};
+          fs.writeFileSync('/tmp/pr868-metadata/metadata.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify(result,null,2));
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr868-preview-metadata-${{ github.run_id }}
+          path: /tmp/pr868-metadata/metadata.json
+          retention-days: 7
