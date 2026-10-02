@@ -114,3 +114,72 @@ jobs:
           path: evidence/*.json
           if-no-files-found: warn
           retention-days: 30
+
+  diagnose_protection:
+    needs: control
+    if: needs.control.outputs.authorized != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Read only sanitized protection metadata and bounded bootstrap probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$VERCEL_TOKEN"
+          echo "::add-mask::$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET"
+          python3 - <<'PY'
+          import importlib.util, json, re
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("bootstrap", ".github/scripts/pr547-every-org-replacement-bootstrap.py")
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          def mode(obj, name):
+              field = obj.get(name)
+              value = field.get("deploymentType") if isinstance(field, dict) else None
+              return value if isinstance(value, str) and re.fullmatch(r"[a-z_]{1,80}", value) else None
+          project = m.api("/v9/projects/" + m.PROJECT)
+          m.require(project.get("id") == m.PROJECT, "project_drift")
+          result = {"projectSsoFieldPresent": "ssoProtection" in project,
+                    "projectSsoMode": mode(project, "ssoProtection"),
+                    "projectPasswordMode": mode(project, "passwordProtection"),
+                    "projectSecurityFieldNames": sorted(key for key in project if re.search(r"protection|security|trusted", key, re.I))}
+          del project
+          deployment = m.api("/v13/deployments/" + m.BOOTSTRAP_ID)
+          m.validate_source_deployment(deployment)
+          result["deploymentSsoMode"] = mode(deployment, "ssoProtection")
+          result["deploymentPasswordMode"] = mode(deployment, "passwordProtection")
+          result["deploymentSecurityFieldNames"] = sorted(key for key in deployment if re.search(r"protection|security|trusted", key, re.I))
+          del deployment
+          for label, probe in (("actualNoBypassProtection", lambda: m.protected_host_probes(m.BOOTSTRAP_HOST)),
+                               ("queryBypassReachesFailClosedApp", lambda: m.bootstrap_probe(m.BOOTSTRAP_HOST))):
+              try:
+                  probe()
+                  result[label] = True
+              except RuntimeError as exc:
+                  result[label] = False
+                  result[label + "Failure"] = str(exc)
+          alias = m.api("/v4/aliases/" + m.ALIAS, absent_ok=True)
+          result["plannedAliasExists"] = alias is not None
+          result["aliasAssignmentAttempted"] = False
+          result["secretValuesRetained"] = False
+          Path("evidence").mkdir(exist_ok=True)
+          text = json.dumps(result, indent=2, sort_keys=True) + "\n"
+          for name in ("VERCEL_TOKEN", "EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET"):
+              m.require(m.os.environ[name] not in text, "secret_in_diagnostic")
+          Path("evidence/protection-diagnostic.json").write_text(text)
+          print(text)
+          PY
+      - name: Retain sanitized read-only diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: every-org-replacement-protection-diagnostic-${{ github.run_id }}
+          path: evidence/protection-diagnostic.json
+          if-no-files-found: warn
+          retention-days: 30
