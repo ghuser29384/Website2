@@ -1,0 +1,276 @@
+name: Rebuild and verify protected Every.org replacement Phase 2
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-replacement-566bb18-20261002
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr547-every-org-replacement-566bb18-20261002
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_CONTROLLER_BRANCH: ops/pr547-every-org-replacement-566bb18-20261002
+  EXPECTED_PR_HEAD: 321e10231bd03459208783bce3544d1fd4d54be7
+  EXPECTED_CANDIDATE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+  EXPECTED_CANDIDATE_TREE: 86c70b442272f5cff4cf29e63d030c949b4323cb
+  PHASE2_MARKER: .github/pr547-every-org-replacement-phase2-v1-20261002.authorize
+  PHASE2_SCRIPT: .github/scripts/pr547-every-org-replacement-phase2.py
+  PHASE2_TEST: .github/scripts/pr547-every-org-replacement-phase2.test.py
+
+jobs:
+  control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      authorized: ${{ steps.guard.outputs.authorized }}
+    steps:
+      - name: Check out exact controller without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test the controller without application or provider credentials
+        run: python3 "$PHASE2_TEST"
+      - name: Guard first-use owner-confirmed marker and separate source identities
+        id: guard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_CONTROLLER_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%T "$EXPECTED_CANDIDATE_SHA")" = "$EXPECTED_CANDIDATE_TREE"
+          test "$(git diff --name-status "$EXPECTED_CANDIDATE_SHA" "$EXPECTED_PR_HEAD")" = $'A\t.github/DO_NOT_COMMIT_PHASE2.tmp'
+          gh api "repos/$GITHUB_REPOSITORY/pulls/547" \
+            --jq '{state, draft, merged, head: .head.sha}' > "$RUNNER_TEMP/pr547-phase2-state.json"
+          jq -e --arg head "$EXPECTED_PR_HEAD" \
+            '.state == "open" and .draft == true and .merged == false and .head == $head' \
+            "$RUNNER_TEMP/pr547-phase2-state.json" >/dev/null
+          authorized=false
+          # Ordinary installation/review commits are inert. No token-presence trigger.
+          if [[ "$BEFORE_SHA" =~ ^[a-f0-9]{40}$ ]] && ! [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            git cat-file -e "$BEFORE_SHA^{commit}"
+            git diff --name-only "$BEFORE_SHA" HEAD > "$RUNNER_TEMP/phase2-changed-paths"
+            if grep -Fxq "$PHASE2_MARKER" "$RUNNER_TEMP/phase2-changed-paths"; then
+              test "$(git rev-parse HEAD^)" = "$BEFORE_SHA"
+              test "$(git show -s --format=%P HEAD | wc -w)" = 1
+              test "$(git diff --name-status "$BEFORE_SHA" HEAD)" = $'A\t'"$PHASE2_MARKER"
+              test -z "$(git log "$BEFORE_SHA" --format=%H -- "$PHASE2_MARKER")"
+              expected="$(cat <<EOF_AUTH
+          schema=every-org-replacement-phase2-v1
+          phase=fresh_preview_then_verified_stable_alias_cutover
+          candidate=$EXPECTED_CANDIDATE_SHA
+          tree=$EXPECTED_CANDIDATE_TREE
+          expected_pr_head=$EXPECTED_PR_HEAD
+          reviewed_controller=$BEFORE_SHA
+          alias=moraltrade-pr547-every-org-staging-20261002-566bb18.vercel.app
+          bootstrap_deployment=dpl_AZkecr8ZLLym3nwbwt4iAydmi5dD
+          owner_saved_replacement_pair_and_approved_phase2=yes
+          bounded_rollback=new_alias_to_exact_credential_free_bootstrap_only
+          authorization=AUTHORIZE_REPLACEMENT_STAGING_PHASE2_V1_20261002
+          EOF_AUTH
+              )"
+              printf '%s\n' "$expected" | cmp -s - "$PHASE2_MARKER"
+              authorized=true
+            fi
+          fi
+          echo "authorized=$authorized" >> "$GITHUB_OUTPUT"
+          printf 'source_and_pr_guards_passed=true\nphase2_authorized=%s\n' "$authorized"
+
+  build_deploy_verify:
+    needs: control
+    if: needs.control.outputs.authorized == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      PHASE2_AUTHORIZED: "true"
+      PHASE2_APP: app
+      PHASE2_EVIDENCE: evidence
+    steps:
+      - name: Check out reviewed controller without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out accepted application without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          path: app
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install and pin the CLI before any runtime credentials are loaded
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli_root="$RUNNER_TEMP/every-org-vercel-cli"
+          test ! -e "$cli_root"
+          npm install --prefix "$cli_root" --no-audit --no-fund --package-lock=false vercel@50.38.1
+          python3 - <<'PY_CLI'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "every-org-vercel-cli/node_modules/vercel"
+          package = json.loads((root / "package.json").read_text())
+          assert package["name"] == "vercel" and package["version"] == "50.38.1"
+          cli = root / "dist/vc.js"
+          assert cli.is_file()
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write("PHASE2_VERCEL_CLI=" + str(cli) + "\n")
+              output.write("PHASE2_VERCEL_CLI_SHA256=" + hashlib.sha256(cli.read_bytes()).hexdigest() + "\n")
+          PY_CLI
+      - name: Probe bootstrap and validate stored runtime prerequisites after authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+          EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+          EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: python3 "controller/$PHASE2_SCRIPT" preflight
+      - name: Run credential-free focused and complete repository gates
+        working-directory: app
+        shell: bash
+        env:
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+        run: |
+          set -euo pipefail
+          python3 ../controller/.github/scripts/pr547-every-org-replacement-build-guard.py
+          npm ci
+          node --import tsx --test \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/every-org-webhook-route-id-source-contract.test.ts \
+            src/lib/every-org-api-environment.test.ts \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-split.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/direct-donation-upgrade-environment-contract.test.ts \
+            src/lib/trade-donation.test.ts \
+            src/lib/mpgf.test.ts
+          npm test
+          npx tsc --noEmit --pretty false
+          npm run lint -- --quiet
+          git diff --exit-code HEAD --
+          git diff --check
+          mkdir -p ../evidence
+          printf '{"focusedTests":true,"completeRepositoryTests":true,"typecheck":true,"lint":true,"applicationCredentialsAvailable":false}\n' > ../evidence/gates.json
+      - name: Run separate disabled-money quality build without credentials
+        working-directory: app
+        shell: bash
+        env:
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+        run: |
+          set -euo pipefail
+          python3 ../controller/.github/scripts/pr547-every-org-replacement-build-guard.py
+          npm run build
+          git diff --exit-code HEAD --
+          printf '{"disabledMoneyQualityBuild":true,"providerCredentialsAvailable":false}\n' > ../evidence/disabled-build.json
+      - name: Build fresh staging standalone Preview with runtime credentials still absent
+        working-directory: app
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: https://moraltrade-pr547-every-org-staging-20261002-566bb18.vercel.app
+          SITE_URL: https://moraltrade-pr547-every-org-staging-20261002-566bb18.vercel.app
+          DIRECT_DONATION_UPGRADES_ENABLED: "true"
+          DIRECT_DONATION_UPGRADE_MODE: staging
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          EVERY_ORG_ENVIRONMENT: staging
+          EVERY_ORG_WEBHOOK_ROUTE_ID: du-staging-566bb18db56848b40a3a1ab58979a6be
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          VERCEL_TARGET_ENV: preview
+          VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+          VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+          VERCEL_TELEMETRY_DISABLED: "1"
+          DO_NOT_TRACK: "1"
+        run: |
+          set -euo pipefail
+          python3 ../controller/.github/scripts/pr547-every-org-replacement-build-guard.py staging-preview
+          # Project settings and an empty Preview dotenv file were prepared above.
+          # No --yes on build: missing settings must fail instead of pulling secrets.
+          rm -rf .next
+          node "$PHASE2_VERCEL_CLI" build --target=preview --standalone
+          test -f .vercel/output/config.json
+          test -f .vercel/output/builds.json
+          git diff --exit-code HEAD --
+          printf '{"freshStagingPreviewBuild":true,"standalonePrebuilt":true,"providerCredentialsAvailable":false,"privilegedDatabaseCredentialsAvailable":false}\n' > ../evidence/build.json
+      - name: Scan final artifacts then deploy verify and guarded-cutover only the new stable alias
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+          EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+          EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: python3 "controller/$PHASE2_SCRIPT" release
+      - name: Sanitize the bounded evidence before upload
+        id: sanitize
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+          EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+          EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: python3 "controller/$PHASE2_SCRIPT" sanitize
+      - name: Retain only successful sanitization output
+        if: always() && steps.sanitize.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: every-org-replacement-phase2-${{ github.run_id }}
+          path: evidence/*.json
+          if-no-files-found: error
+          retention-days: 30
