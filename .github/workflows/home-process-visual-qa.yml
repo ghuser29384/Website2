@@ -68,3 +68,12 @@ jobs:
 
       - name: Run adaptive feed browser QA
         run: npm run test:e2e -- tests/exact-live-now-recommendations.spec.ts
+
+      - name: Upload adaptive feed screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-feed-qa-${{ github.run_id }}
+          retention-days: 14
+          if-no-files-found: ignore
+          path: test-results
