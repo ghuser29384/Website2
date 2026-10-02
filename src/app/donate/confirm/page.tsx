@@ -65,8 +65,12 @@ export default async function DonationConfirmPage({ searchParams }: DonationConf
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Donation confirmation</p>
+            <p className="eyebrow">Legacy Every.org review</p>
             <h1>Every.org return state</h1>
+            <p className="hero-followup">
+              This is the separate Every.org review workflow. Official charity links in the
+              donation directory do not send payment evidence here. A return URL is not proof of a donation.
+            </p>
             <p className="hero-text">
               If you completed a gift to {targetTitle}, MPGF-linked routes stay pending until
               webhook import and review. Use the reviewed fallback only when provider metadata

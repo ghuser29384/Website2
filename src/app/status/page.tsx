@@ -34,7 +34,7 @@ const supportedCapabilities = [
   {
     title: "Direct-to-charity financial contributions",
     detail:
-      "Choose a reviewed Every.org destination and complete payment with the provider. The named external charity receives the gift; Moral Trade does not.",
+      "Choose a reviewed registered charity and open its own donation page. Moral Trade does not collect the gift or confirm payment in this directory.",
     href: "/donate",
     action: "Choose a charity route",
   },

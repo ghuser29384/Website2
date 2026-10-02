@@ -41,7 +41,7 @@ const startPaths = [
     key: "fund",
     title: "Make a financial contribution",
     description:
-      "Choose a reviewed Every.org destination and complete payment with the provider without Moral Trade taking custody.",
+      "Choose a reviewed registered charity and open its own donation page. This independent gift does not complete a Moral Trade agreement.",
     href: "/donate",
     icon: "payment",
     actionLabel: "Choose a funding route",
