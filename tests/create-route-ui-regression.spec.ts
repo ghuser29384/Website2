@@ -381,7 +381,7 @@ test.describe("Cause-step proportions", () => {
 });
 
 test.describe("Create wordmark and Request-step proportions", () => {
-  for (const width of [320, 375, 768, 900, 1024, 1180, 1181, 1440, 1644, 2048]) {
+  for (const width of [320, 375, 768, 900, 901, 1024, 1100, 1101, 1180, 1181, 1440, 1644, 2048]) {
     test(`keeps the canonical header and Request form balanced at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ reducedMotion: "reduce" });
@@ -411,8 +411,11 @@ test.describe("Create wordmark and Request-step proportions", () => {
         const panel = box("#screenRequest .request-panel");
         const cards = box("#requestKindGrid");
         const header = box(".topbar");
-        const brand = box(".brand");
+        const brand = box(".brand-heading");
         const back = box("#backToTrade");
+        const progress = required("#progress");
+        const nextHeaderControl = getComputedStyle(progress).display === "none"
+          ? back : progress.getBoundingClientRect();
         const headingStyle = getComputedStyle(required("#requestHeading"));
         const contentFits = (element: Element, container: Element) => {
           const range = document.createRange();
@@ -440,8 +443,10 @@ test.describe("Create wordmark and Request-step proportions", () => {
           clippedLabels: [...document.querySelectorAll("#requestKindGrid strong")]
             .filter((label) => !contentFits(label, label.closest("button")!))
             .map((label) => label.textContent),
-          brandFits: brand.left >= 0 && brand.right <= back.left - 8
-            && brand.top >= header.top && brand.bottom <= header.bottom,
+          brandFits: brand.left >= 0 && brand.right <= nextHeaderControl.left - 8
+            && brand.top >= header.top && brand.bottom <= header.bottom
+            && contentFits(required(".mt-canonical-wordmark-label"), required(".brand-heading"))
+            && contentFits(required(".brand-title"), required(".brand-heading")),
           horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
         };
       });
@@ -536,4 +541,29 @@ test.describe("Create wordmark and Request-step proportions", () => {
       expect(publishes).toBe(0);
     });
   }
+});
+
+
+test("keeps the Create shell usable after browser Back and Forward", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.goto("/create");
+  let create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await expect(create.locator("#screenCause")).toBeVisible();
+  await page.goto("/trades/new");
+  create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await create.getByRole("button", { name: "Building altruism", exact: true }).click();
+  await expectRequestTransitionClear(create, "Building altruism");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/create$/);
+  create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await expect(create.locator("#screenCause")).toBeVisible();
+  await expect(create.locator(".mt-canonical-wordmark-label")).toHaveText("Moral Trade");
+  await page.goForward();
+  await expect(page).toHaveURL(/\/trades\/new$/);
+  create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await expect(create.locator("#screenCause")).toBeVisible();
+  await create.getByRole("button", { name: "Building altruism", exact: true }).click();
+  await create.locator('[data-request-kind="skill"]').click();
+  await expect(create.locator('[data-request-kind="skill"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(create.locator("#requestActionInput")).toBeFocused();
 });
