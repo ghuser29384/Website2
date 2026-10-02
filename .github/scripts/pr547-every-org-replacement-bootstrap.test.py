@@ -27,6 +27,11 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("?", module.ROUTE)
         self.assertNotIn("moraltrade.org", module.ALIAS)
 
+    def test_current_official_protection_modes_are_explicit(self):
+        self.assertEqual(set(module.PROTECTION_MODES), {"all", "all_except_custom_domains", "preview", "prod_deployment_urls_and_all_previews"})
+        self.assertNotIn(None, module.PROTECTION_MODES)
+        self.assertNotIn("disabled", module.PROTECTION_MODES)
+
     def test_app_401_is_not_vercel_protection(self):
         self.assertFalse(module.valid_protection_response(401, {"server": "Vercel", "x-vercel-id": "id", "content-type": "application/json"}, b'{"ok":false}'))
 

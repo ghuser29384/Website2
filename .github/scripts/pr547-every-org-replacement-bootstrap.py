@@ -25,6 +25,7 @@ BOOTSTRAP_ID = "dpl_AZkecr8ZLLym3nwbwt4iAydmi5dD"
 BOOTSTRAP_HOST = "moraltrade-site-by44yr6wu-ellen-s.vercel.app"
 ALIAS = "moraltrade-pr547-every-org-staging-20261002-566bb18.vercel.app"
 ROUTE = "/api/connectors/every-org/du-staging-566bb18db56848b40a3a1ab58979a6be"
+PROTECTION_MODES = ("all", "all_except_custom_domains", "preview", "prod_deployment_urls_and_all_previews")
 EVIDENCE = Path("evidence")
 STATE = {"aliasAssignmentAttempted": False, "aliasAssignmentConfirmed": False,
          "bootstrapVerified": False, "rollbackAttempted": False, "rollbackConfirmed": False}
@@ -165,7 +166,7 @@ def main():
     project = api("/v9/projects/" + PROJECT)
     require(project.get("id") == PROJECT, "project_drift")
     mode = (project.get("ssoProtection") or {}).get("deploymentType")
-    require(mode in ("all", "preview", "prod_deployment_urls_and_all_previews"), "preview_protection_not_configured")
+    require(mode in PROTECTION_MODES, "preview_protection_not_configured")
     # Do not retain this response: project data can contain credential material.
     del project
     validate_source_deployment(api("/v13/deployments/" + BOOTSTRAP_ID))

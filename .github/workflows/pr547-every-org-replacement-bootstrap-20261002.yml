@@ -19,7 +19,7 @@ env:
   EXPECTED_PR_HEAD: 321e10231bd03459208783bce3544d1fd4d54be7
   EXPECTED_CANDIDATE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
   EXPECTED_CANDIDATE_TREE: 86c70b442272f5cff4cf29e63d030c949b4323cb
-  BOOTSTRAP_MARKER: .github/pr547-every-org-replacement-bootstrap-20261002.authorize
+  BOOTSTRAP_MARKER: .github/pr547-every-org-replacement-bootstrap-v2-20261002.authorize
 
 jobs:
   control:
@@ -70,7 +70,7 @@ jobs:
           pr_head=$EXPECTED_PR_HEAD
           alias=moraltrade-pr547-every-org-staging-20261002-566bb18.vercel.app
           bootstrap_deployment=dpl_AZkecr8ZLLym3nwbwt4iAydmi5dD
-          authorization=AUTHORIZE_PROTECTED_STAGING_REPLACEMENT_BOOTSTRAP_20261002
+          authorization=AUTHORIZE_PROTECTED_STAGING_REPLACEMENT_BOOTSTRAP_V2_20261002
           EOF_AUTH
           )"
           if grep -Fxq "$BOOTSTRAP_MARKER" /tmp/controller-changed-paths; then
