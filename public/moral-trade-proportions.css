@@ -197,8 +197,21 @@
   min-height: 44px;
 }
 
+[data-mt-live-now="adaptive"] .mt-feed-card-main {
+  padding: 14px 17px 9px;
+}
+
+[data-mt-live-now="adaptive"] .mt-feed-card .mt-feed-actions {
+  gap: 8px;
+  margin-bottom: 0;
+}
+
 @media (max-width: 600px) {
   [data-mt-live-now="adaptive"] .panel.urgent {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-mt-live-now="adaptive"] .panel.urgent .terms {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -218,5 +231,11 @@
 
   .mt-site-footer .mt-footer-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 360px) {
+  .mt-refined-header.mt-refined-header [data-mt-primary-links] {
+    gap: 8px;
   }
 }
