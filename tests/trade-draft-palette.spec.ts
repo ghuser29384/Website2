@@ -64,9 +64,27 @@ async function screenshot(page: Page, testInfo: TestInfo, name: string, fullPage
   await testInfo.attach(name, { path, contentType: "image/png" });
 }
 
+// Input assist can enhance these textareas into comboboxes after focus. The
+// accessible name excludes a controlled textarea's initial text content.
+function textControl(page: Page, name: string) {
+  const article = page.locator("article");
+  return article.getByRole("textbox", { name, exact: true })
+    .or(article.getByRole("combobox", { name, exact: true }));
+}
+
+async function clickOutsideSuggestions(page: Page, control: Locator) {
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toBeHidden();
+  await control.click();
+}
+
+async function navigateStep(page: Page, name: "Next" | "Back") {
+  await clickOutsideSuggestions(page, page.getByRole("button", { name, exact: true }));
+}
+
 async function goToReview(page: Page) {
   for (let step = 1; step < headings.length; step += 1) {
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await navigateStep(page, "Next");
     await expectStep(page, step);
   }
 }
@@ -134,18 +152,18 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
   await expect(page.locator("article input").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await screenshot(page, testInfo, "step-1-empty");
 
-  await next.click();
+  await navigateStep(page, "Next");
   await expect(page.getByRole("alert")).toHaveText("Name both priorities before continuing.");
   await expectTextContrast(page.getByRole("alert"));
   await screenshot(page, testInfo, "step-1-validation");
   await page.locator("article").getByLabel(/^Priority you advance/).fill(terms.offered);
   await page.locator("article").getByLabel(/^Priority you want advanced/).fill(terms.requested);
-  await next.click();
+  await navigateStep(page, "Next");
   await expectStep(page, 1);
-  await back.click();
+  await navigateStep(page, "Back");
   await expect(page.locator("article").getByLabel(/^Priority you advance/)).toHaveValue(terms.offered);
   await expect(page.locator("article").getByLabel(/^Priority you want advanced/)).toHaveValue(terms.requested);
-  await next.click();
+  await navigateStep(page, "Next");
 
   for (const [step, label, value, error] of [
     [1, /^Your commitment/, terms.action, "State the concrete action you are willing to take."],
@@ -153,51 +171,51 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
     [3, /^No-trade baseline/, terms.baseline, "Describe what both sides would actually do without this trade."],
   ] as const) {
     await expectStep(page, step);
-    await next.click();
+    await navigateStep(page, "Next");
     await expect(page.getByRole("alert")).toHaveText(error);
     await page.locator("article").getByLabel(label).fill(value);
     await expect(page.getByRole("alert")).toHaveCount(0);
     await screenshot(page, testInfo, `step-${step + 1}-filled`);
-    await next.click();
-    await back.click();
+    await navigateStep(page, "Next");
+    await navigateStep(page, "Back");
     await expect(page.locator("article").getByLabel(label)).toHaveValue(value);
-    await next.click();
+    await navigateStep(page, "Next");
   }
 
   await expectStep(page, 4);
   await expect(page.getByRole("button", { name: "Set a stricter limit" })).toBeDisabled();
-  await next.click();
+  await navigateStep(page, "Next");
   await expect(page.getByRole("alert")).toHaveText("Add the duration and commitment limit before continuing.");
   await page.locator("article").getByLabel(/^Duration/).fill(terms.duration);
   await page.locator("article").getByLabel("Start date", { exact: true }).fill("2031-01-15");
   await page.locator("article").getByLabel("Evidence due", { exact: true }).fill("2031-02-15");
-  await page.getByRole("button", { name: "Set a stricter limit" }).click();
-  await page.locator("article").getByLabel("Stricter commitment limit", { exact: true }).fill("A maximum of two hours at each session; no additional work.");
+  await clickOutsideSuggestions(page, page.getByRole("button", { name: "Set a stricter limit" }));
+  await textControl(page, "Stricter commitment limit").fill("A maximum of two hours at each session; no additional work.");
   await screenshot(page, testInfo, "step-5-custom-limit");
-  await next.click();
-  await back.click();
+  await navigateStep(page, "Next");
+  await navigateStep(page, "Back");
   await expect(page.locator("article").getByLabel(/^Duration/)).toHaveValue(terms.duration);
   await expect(page.locator("article").getByLabel("Start date", { exact: true })).toHaveValue("2031-01-15");
   await expect(page.locator("article").getByLabel("Evidence due", { exact: true })).toHaveValue("2031-02-15");
-  await expect(page.locator("article").getByLabel("Stricter commitment limit", { exact: true })).toHaveValue("A maximum of two hours at each session; no additional work.");
-  await page.getByRole("button", { name: "Use the generated limit" }).click();
+  await expect(textControl(page, "Stricter commitment limit")).toHaveValue("A maximum of two hours at each session; no additional work.");
+  await clickOutsideSuggestions(page, page.getByRole("button", { name: "Use the generated limit" }));
   await expect(page.locator('input[name="maximum_burden"]')).toHaveValue(new RegExp(`Limited to these two commitments for ${terms.duration}`));
-  await next.click();
+  await navigateStep(page, "Next");
 
   await expectStep(page, 5);
-  await next.click();
+  await navigateStep(page, "Next");
   await expect(page.getByRole("alert")).toHaveText("Add the evidence and privacy scope before continuing.");
   await page.locator('textarea[data-mt-autocomplete="evidence"]').fill(terms.evidence);
-  await page.locator("article").getByLabel("Evidence privacy and public metadata", { exact: true }).fill("");
-  await next.click();
+  await textControl(page, "Evidence privacy and public metadata").fill("");
+  await navigateStep(page, "Next");
   await expect(page.getByRole("alert")).toHaveText("Add the evidence and privacy scope before continuing.");
-  await page.locator("article").getByLabel("Evidence privacy and public metadata", { exact: true }).fill(terms.privacy);
+  await textControl(page, "Evidence privacy and public metadata").fill(terms.privacy);
   await screenshot(page, testInfo, "step-6-evidence");
-  await next.click();
-  await back.click();
+  await navigateStep(page, "Next");
+  await navigateStep(page, "Back");
   await expect(page.locator('textarea[data-mt-autocomplete="evidence"]')).toHaveValue(terms.evidence);
-  await expect(page.locator("article").getByLabel("Evidence privacy and public metadata", { exact: true })).toHaveValue(terms.privacy);
-  await next.click();
+  await expect(textControl(page, "Evidence privacy and public metadata")).toHaveValue(terms.privacy);
+  await navigateStep(page, "Next");
 
   await expectStep(page, 6);
   const save = page.getByRole("button", { name: "Save private draft", exact: true });
@@ -207,7 +225,7 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
   await expectTextContrast(submit);
   await expect(submit).toHaveCSS("background-color", "rgb(237, 240, 244)");
   await page.locator("article").getByLabel(/^Exit conditions/).fill(terms.exit);
-  await page.locator("article").getByLabel("Context or constraints (optional)", { exact: true }).fill(terms.notes);
+  await textControl(page, "Context or constraints (optional)").fill(terms.notes);
   await expect(save).toBeEnabled();
   await expect(submit).toBeDisabled();
   await expect(page.locator("article dl")).toContainText(terms.action);
@@ -218,12 +236,12 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
   await expect(submit).toBeEnabled();
   await certification.scrollIntoViewIfNeeded();
   await screenshot(page, testInfo, "step-7-certification", false);
-  await back.click();
-  await next.click();
+  await navigateStep(page, "Back");
+  await navigateStep(page, "Next");
   await expect(page.locator("article").getByLabel(/^Exit conditions/)).toHaveValue(terms.exit);
-  await expect(page.locator("article").getByLabel("Context or constraints (optional)", { exact: true })).toHaveValue(terms.notes);
+  await expect(textControl(page, "Context or constraints (optional)")).toHaveValue(terms.notes);
   await expect(certification).toBeChecked();
-  await submit.click();
+  await clickOutsideSuggestions(page, submit);
   await expect(page.getByRole("button", { name: "Submitting for review...", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Saving private draft...", exact: true })).toBeDisabled();
   await screenshot(page, testInfo, "step-7-pending", false);
@@ -307,7 +325,7 @@ test("command handoff is neutral and explicitly unsaved", async ({ page }, testI
   await expectStep(page, 0);
   await screenshot(page, testInfo, "command-loaded-unsaved");
   for (const step of [1, 2]) {
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await navigateStep(page, "Next");
     await expectStep(page, step);
   }
   await expect(page.locator("article").getByLabel(/^Counterparty commitment/)).toHaveValue(terms.reciprocal);
@@ -322,12 +340,12 @@ test("template notice is neutral and unresolved terms still block progress", asy
   await expect(message).toHaveText("Fixture template loaded as an editable starting point. Review every field before saving or submitting.");
   await expect(message).toHaveCSS("background-color", "rgb(238, 243, 255)");
   await expectTextContrast(message);
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await navigateStep(page, "Next");
   await expect(page.getByRole("alert")).toContainText("Replace every [Replace: ...] template prompt");
   await expectStep(page, 0);
   await screenshot(page, testInfo, "template-needs-review");
   await page.locator("article").getByLabel(/^Priority you advance/).fill(terms.offered);
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await navigateStep(page, "Next");
   await expectStep(page, 1);
 });
 
@@ -377,14 +395,14 @@ test("source context, imported confirmations, and duplicate acknowledgement rema
   await screenshot(page, testInfo, "source-imported-review", false);
 
   // Editing one imported field revokes only that field's stored confirmation.
-  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await navigateStep(page, "Back");
   await page.locator('textarea[data-mt-autocomplete="evidence"]').fill("An updated private activity log for the assigned reviewer.");
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await navigateStep(page, "Next");
   await expect(review.getByRole("checkbox", { name: /^Evidence requirements/ })).not.toBeChecked();
   await expect(review.getByRole("checkbox", { name: /^Duration/ })).toBeChecked();
   await expect(save).toBeDisabled();
   await review.getByRole("checkbox", { name: /^Evidence requirements/ }).check();
-  await save.click();
+  await clickOutsideSuggestions(page, save);
   await expect(page.getByRole("button", { name: "Saving private draft...", exact: true })).toBeDisabled();
   const submissions = await page.evaluate(() => window.__tradeDraftFixture.submissions);
   expect(submissions).toHaveLength(1);
