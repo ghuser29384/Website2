@@ -550,11 +550,11 @@ export function TradeDraftWorkbench({
               {formMessage.text}
             </div>
           ) : commandHandoffState === "loading" ? (
-            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+            <div className={`${styles.message} ${styles.messageInfo}`} role="status">
               Loading your command into the editor…
             </div>
           ) : commandHandoffState === "loaded" ? (
-            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+            <div className={`${styles.message} ${styles.messageInfo}`} role="status">
               Command loaded into the editable terms below. Review the no-trade baseline and add any missing dates and evidence before saving. No draft has been saved yet.
             </div>
           ) : commandHandoffState === "unavailable" ? (
@@ -562,7 +562,7 @@ export function TradeDraftWorkbench({
               The command could not be restored. Enter the terms below. No draft was created.
             </div>
           ) : templateLabel ? (
-            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+            <div className={`${styles.message} ${styles.messageInfo}`} role="status">
               {templateLabel} loaded as an editable starting point. Review every field before saving or submitting.
             </div>
           ) : null}
@@ -571,8 +571,6 @@ export function TradeDraftWorkbench({
         <section className={styles.main} aria-label="Trade proposal builder">
           <div />
           <div className={styles.deck}>
-            <div className={`${styles.ghostCard} ${styles.ghostTwo}`} />
-            <div className={`${styles.ghostCard} ${styles.ghostOne}`} />
             <article className={`${styles.card} ${styles.cardEnter}`} key={step}>
               <div className={styles.cardHead}>
                 <span className={styles.kicker}>{STEP_LABELS[step]}</span>
