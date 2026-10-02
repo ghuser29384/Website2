@@ -1,0 +1,116 @@
+name: Prepare protected Every.org replacement callback
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-replacement-566bb18-20261002
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr547-every-org-replacement-566bb18-20261002
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_CONTROLLER_BRANCH: ops/pr547-every-org-replacement-566bb18-20261002
+  EXPECTED_PR_HEAD: 321e10231bd03459208783bce3544d1fd4d54be7
+  EXPECTED_CANDIDATE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+  EXPECTED_CANDIDATE_TREE: 86c70b442272f5cff4cf29e63d030c949b4323cb
+  BOOTSTRAP_MARKER: .github/pr547-every-org-replacement-bootstrap-20261002.authorize
+
+jobs:
+  control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      authorized: ${{ steps.guard.outputs.authorized }}
+    steps:
+      - name: Check out the exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Validate controller source without credentials
+        run: python3 .github/scripts/pr547-every-org-replacement-bootstrap.test.py
+      - name: Guard exact source, PR state, and single-action marker
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_CONTROLLER_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+          test "$(git show -s --format=%T "$EXPECTED_CANDIDATE_SHA")" = "$EXPECTED_CANDIDATE_TREE"
+          git fetch --no-tags origin integration/direct-donation-upgrade-current-main-20260807
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_PR_HEAD"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE_SHA" "$EXPECTED_PR_HEAD")" = .github/DO_NOT_COMMIT_PHASE2.tmp
+          gh api "repos/$GITHUB_REPOSITORY/pulls/547" \
+            --jq '{state, draft, merged, head: .head.sha}' > /tmp/pr547-state.json
+          jq -e --arg head "$EXPECTED_PR_HEAD" \
+            '.state == "open" and .draft == true and .merged == false and .head == $head' \
+            /tmp/pr547-state.json >/dev/null
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            git diff-tree --no-commit-id --name-only -r HEAD > /tmp/controller-changed-paths
+          else
+            git diff --name-only "$BEFORE_SHA" HEAD > /tmp/controller-changed-paths
+          fi
+          sort -u -o /tmp/controller-changed-paths /tmp/controller-changed-paths
+          authorized=false
+          expected="$(cat <<EOF_AUTH
+          schema=every-org-replacement-bootstrap-v1
+          phase=bootstrap_alias_only
+          candidate=$EXPECTED_CANDIDATE_SHA
+          tree=$EXPECTED_CANDIDATE_TREE
+          pr_head=$EXPECTED_PR_HEAD
+          alias=moraltrade-pr547-every-org-staging-20261002-566bb18.vercel.app
+          bootstrap_deployment=dpl_AZkecr8ZLLym3nwbwt4iAydmi5dD
+          authorization=AUTHORIZE_PROTECTED_STAGING_REPLACEMENT_BOOTSTRAP_20261002
+          EOF_AUTH
+          )"
+          if grep -Fxq "$BOOTSTRAP_MARKER" /tmp/controller-changed-paths; then
+            test "$(wc -l < /tmp/controller-changed-paths | tr -d ' ')" = 1
+            test "$GITHUB_RUN_ATTEMPT" = 1
+            test "$(cat "$BOOTSTRAP_MARKER")" = "$expected"
+            authorized=true
+          fi
+          echo "authorized=$authorized" >> "$GITHUB_OUTPUT"
+          printf 'source_and_pr_guards_passed=true\nbootstrap_authorized=%s\n' "$authorized"
+
+  bootstrap:
+    needs: control
+    if: needs.control.outputs.authorized == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BOOTSTRAP_AUTHORIZED: "true"
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+    steps:
+      - name: Check out the reviewed controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Mask existing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          test -n "$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET"
+          echo "::add-mask::$VERCEL_TOKEN"
+          echo "::add-mask::$EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET"
+      - name: Create and verify only the dedicated protected bootstrap alias
+        run: python3 .github/scripts/pr547-every-org-replacement-bootstrap.py
+      - name: Retain only sanitized bootstrap result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: every-org-replacement-bootstrap-${{ github.run_id }}
+          path: evidence/*.json
+          if-no-files-found: warn
+          retention-days: 30
