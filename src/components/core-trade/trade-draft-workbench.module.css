@@ -19,6 +19,15 @@
   --flow-muted: #596574;
   --flow-muted-night: #c4ccd7;
   --flow-line-night: rgba(255, 255, 255, 0.19);
+  /* The canonical stylesheet uses these tokens in its important control rules. */
+  --mt-paper: var(--flow-canvas);
+  --mt-paper-strong: var(--flow-white);
+  --mt-ink: var(--flow-ink);
+  --mt-muted: var(--flow-muted);
+  --mt-line: var(--flow-line);
+  --mt-line-dark: var(--flow-input-line);
+  --mt-blue: var(--flow-blue);
+  --mt-blue-deep: var(--flow-blue-hover);
   --flow-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   --flow-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   --flow-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -998,4 +1007,40 @@
 .page :global(.mt-website-mention-preview a:focus-visible) {
   outline: 3px solid var(--flow-blue);
   outline-offset: 2px;
+}
+
+/* Keep this specialist palette intact beneath the site's broad important rules.
+   The existing main ID plus the local class limits every override to this flow. */
+.page:global(#main-content) :is(.input, .textarea, .button, .inlineButton) {
+  border-radius: 5px !important;
+}
+
+.page:global(#main-content) :is(.card, .gateCard) {
+  border-radius: 8px !important;
+  box-shadow: 0 8px 28px rgba(32, 39, 51, 0.07) !important;
+}
+
+.page:global(#main-content) .buttonPrimary:hover:not(:disabled) {
+  border-color: var(--flow-blue-hover) !important;
+  background: var(--flow-blue-hover) !important;
+}
+
+.page:global(#main-content) :is(.button, .inlineButton):disabled {
+  border-color: #c9d1dc !important;
+  background: #edf0f4 !important;
+  color: var(--flow-muted) !important;
+}
+
+.page:global(#main-content) :is(.input, .textarea):focus {
+  border-color: var(--flow-blue) !important;
+}
+
+.page:global(#main-content) :is(input, textarea, button, a):focus-visible,
+:global(body):has(.page:global(#main-content)) :global(.mt-input-assist-option:focus-visible) {
+  outline: 3px solid var(--flow-blue) !important;
+  outline-offset: 3px !important;
+}
+
+.page:global(#main-content) :is(.top, .gateHeader) .brandLink:focus-visible {
+  outline-color: #a9c0ff !important;
 }

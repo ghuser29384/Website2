@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 // The seven-step authenticated builder, mounted in a read-only local fixture.
+// Scope field labels to the active article: progress markers reuse step names.
 // This deliberately does not exercise the separate four-step /create surface.
 const headings = [
   "What priorities are being exchanged?",
@@ -30,7 +31,7 @@ async function openFixture(page: Page, scenario = "empty") {
   await expect(page).toHaveTitle("Trade builder palette fixture");
   await expect(page).toHaveURL(new RegExp(`/trades/new\\?scenario=${scenario}$`));
   await expect(page.getByRole("heading", { name: headings[0], exact: true })).toBeVisible();
-  await expect(page.getByLabel(/^Priority you advance/)).toHaveAttribute("data-mt-autocomplete-ready", "true");
+  await expect(page.locator("article").getByLabel(/^Priority you advance/)).toHaveAttribute("data-mt-autocomplete-ready", "true");
   await expect(page.locator("nextjs-portal, #webpack-dev-server-client-overlay")).toHaveCount(0);
 }
 
@@ -128,20 +129,22 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
   await expect(page.locator("form > header")).toHaveCSS("background-color", "rgb(32, 39, 51)");
   await expect(page.locator("form > footer")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expectTextContrast(next);
+  await expect(next).toHaveCSS("background-color", "rgb(49, 87, 183)");
   await expectTextContrast(back);
+  await expect(page.locator("article input").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await screenshot(page, testInfo, "step-1-empty");
 
   await next.click();
   await expect(page.getByRole("alert")).toHaveText("Name both priorities before continuing.");
   await expectTextContrast(page.getByRole("alert"));
   await screenshot(page, testInfo, "step-1-validation");
-  await page.getByLabel(/^Priority you advance/).fill(terms.offered);
-  await page.getByLabel(/^Priority you want advanced/).fill(terms.requested);
+  await page.locator("article").getByLabel(/^Priority you advance/).fill(terms.offered);
+  await page.locator("article").getByLabel(/^Priority you want advanced/).fill(terms.requested);
   await next.click();
   await expectStep(page, 1);
   await back.click();
-  await expect(page.getByLabel(/^Priority you advance/)).toHaveValue(terms.offered);
-  await expect(page.getByLabel(/^Priority you want advanced/)).toHaveValue(terms.requested);
+  await expect(page.locator("article").getByLabel(/^Priority you advance/)).toHaveValue(terms.offered);
+  await expect(page.locator("article").getByLabel(/^Priority you want advanced/)).toHaveValue(terms.requested);
   await next.click();
 
   for (const [step, label, value, error] of [
@@ -152,12 +155,12 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
     await expectStep(page, step);
     await next.click();
     await expect(page.getByRole("alert")).toHaveText(error);
-    await page.getByLabel(label).fill(value);
+    await page.locator("article").getByLabel(label).fill(value);
     await expect(page.getByRole("alert")).toHaveCount(0);
     await screenshot(page, testInfo, `step-${step + 1}-filled`);
     await next.click();
     await back.click();
-    await expect(page.getByLabel(label)).toHaveValue(value);
+    await expect(page.locator("article").getByLabel(label)).toHaveValue(value);
     await next.click();
   }
 
@@ -165,18 +168,18 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
   await expect(page.getByRole("button", { name: "Set a stricter limit" })).toBeDisabled();
   await next.click();
   await expect(page.getByRole("alert")).toHaveText("Add the duration and commitment limit before continuing.");
-  await page.getByLabel(/^Duration/).fill(terms.duration);
-  await page.getByLabel("Start date", { exact: true }).fill("2031-01-15");
-  await page.getByLabel("Evidence due", { exact: true }).fill("2031-02-15");
+  await page.locator("article").getByLabel(/^Duration/).fill(terms.duration);
+  await page.locator("article").getByLabel("Start date", { exact: true }).fill("2031-01-15");
+  await page.locator("article").getByLabel("Evidence due", { exact: true }).fill("2031-02-15");
   await page.getByRole("button", { name: "Set a stricter limit" }).click();
-  await page.getByLabel("Stricter commitment limit", { exact: true }).fill("A maximum of two hours at each session; no additional work.");
+  await page.locator("article").getByLabel("Stricter commitment limit", { exact: true }).fill("A maximum of two hours at each session; no additional work.");
   await screenshot(page, testInfo, "step-5-custom-limit");
   await next.click();
   await back.click();
-  await expect(page.getByLabel(/^Duration/)).toHaveValue(terms.duration);
-  await expect(page.getByLabel("Start date", { exact: true })).toHaveValue("2031-01-15");
-  await expect(page.getByLabel("Evidence due", { exact: true })).toHaveValue("2031-02-15");
-  await expect(page.getByLabel("Stricter commitment limit", { exact: true })).toHaveValue("A maximum of two hours at each session; no additional work.");
+  await expect(page.locator("article").getByLabel(/^Duration/)).toHaveValue(terms.duration);
+  await expect(page.locator("article").getByLabel("Start date", { exact: true })).toHaveValue("2031-01-15");
+  await expect(page.locator("article").getByLabel("Evidence due", { exact: true })).toHaveValue("2031-02-15");
+  await expect(page.locator("article").getByLabel("Stricter commitment limit", { exact: true })).toHaveValue("A maximum of two hours at each session; no additional work.");
   await page.getByRole("button", { name: "Use the generated limit" }).click();
   await expect(page.locator('input[name="maximum_burden"]')).toHaveValue(new RegExp(`Limited to these two commitments for ${terms.duration}`));
   await next.click();
@@ -185,15 +188,15 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
   await next.click();
   await expect(page.getByRole("alert")).toHaveText("Add the evidence and privacy scope before continuing.");
   await page.locator('textarea[data-mt-autocomplete="evidence"]').fill(terms.evidence);
-  await page.getByLabel("Evidence privacy and public metadata", { exact: true }).fill("");
+  await page.locator("article").getByLabel("Evidence privacy and public metadata", { exact: true }).fill("");
   await next.click();
   await expect(page.getByRole("alert")).toHaveText("Add the evidence and privacy scope before continuing.");
-  await page.getByLabel("Evidence privacy and public metadata", { exact: true }).fill(terms.privacy);
+  await page.locator("article").getByLabel("Evidence privacy and public metadata", { exact: true }).fill(terms.privacy);
   await screenshot(page, testInfo, "step-6-evidence");
   await next.click();
   await back.click();
   await expect(page.locator('textarea[data-mt-autocomplete="evidence"]')).toHaveValue(terms.evidence);
-  await expect(page.getByLabel("Evidence privacy and public metadata", { exact: true })).toHaveValue(terms.privacy);
+  await expect(page.locator("article").getByLabel("Evidence privacy and public metadata", { exact: true })).toHaveValue(terms.privacy);
   await next.click();
 
   await expectStep(page, 6);
@@ -201,8 +204,10 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
   const submit = page.getByRole("button", { name: "Submit for review", exact: true });
   await expect(save).toBeDisabled();
   await expect(submit).toBeDisabled();
-  await page.getByLabel(/^Exit conditions/).fill(terms.exit);
-  await page.getByLabel("Context or constraints (optional)", { exact: true }).fill(terms.notes);
+  await expectTextContrast(submit);
+  await expect(submit).toHaveCSS("background-color", "rgb(237, 240, 244)");
+  await page.locator("article").getByLabel(/^Exit conditions/).fill(terms.exit);
+  await page.locator("article").getByLabel("Context or constraints (optional)", { exact: true }).fill(terms.notes);
   await expect(save).toBeEnabled();
   await expect(submit).toBeDisabled();
   await expect(page.locator("article dl")).toContainText(terms.action);
@@ -215,8 +220,8 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
   await screenshot(page, testInfo, "step-7-certification", false);
   await back.click();
   await next.click();
-  await expect(page.getByLabel(/^Exit conditions/)).toHaveValue(terms.exit);
-  await expect(page.getByLabel("Context or constraints (optional)", { exact: true })).toHaveValue(terms.notes);
+  await expect(page.locator("article").getByLabel(/^Exit conditions/)).toHaveValue(terms.exit);
+  await expect(page.locator("article").getByLabel("Context or constraints (optional)", { exact: true })).toHaveValue(terms.notes);
   await expect(certification).toBeChecked();
   await submit.click();
   await expect(page.getByRole("button", { name: "Submitting for review...", exact: true })).toBeDisabled();
@@ -248,7 +253,7 @@ test("all seven steps preserve terms, validate omissions, and gate in-memory sub
 
 test("keyboard, focus, hover, field boundaries, and actual input suggestions remain usable", async ({ page }, testInfo) => {
   await openFixture(page);
-  const offered = page.getByLabel(/^Priority you advance/);
+  const offered = page.locator("article").getByLabel(/^Priority you advance/);
   await expect(offered).toBeFocused();
   await offered.fill("Animal");
   await expect(page.getByRole("listbox")).toBeVisible();
@@ -258,7 +263,7 @@ test("keyboard, focus, hover, field boundaries, and actual input suggestions rem
   await offered.press("Enter");
   await expect(offered).not.toHaveValue("Animal");
   await page.keyboard.press("Tab");
-  const requested = page.getByLabel(/^Priority you want advanced/);
+  const requested = page.locator("article").getByLabel(/^Priority you want advanced/);
   await expect(requested).toBeFocused();
   await page.keyboard.press("Escape");
   const focus = await requested.evaluate((element) => {
@@ -266,6 +271,7 @@ test("keyboard, focus, hover, field boundaries, and actual input suggestions rem
     return { outline: style.outlineStyle, width: style.outlineWidth, color: style.outlineColor, border: style.borderColor };
   });
   expect(focus.outline).toBe("solid");
+  expect(focus.color).toBe("rgb(49, 87, 183)");
   expect(parseFloat(focus.width)).toBeGreaterThanOrEqual(3);
   expect(contrast(focus.color, "rgb(255, 255, 255)")).toBeGreaterThanOrEqual(3);
   await screenshot(page, testInfo, "keyboard-input-focus", false);
@@ -295,7 +301,7 @@ test("command handoff is neutral and explicitly unsaved", async ({ page }, testI
   await expect(message).toHaveCSS("background-color", "rgb(238, 243, 255)");
   await expect(message).toHaveCSS("color", "rgb(52, 74, 112)");
   await expectTextContrast(message);
-  await expect(page.getByLabel(/^Priority you advance/)).toHaveValue(terms.offered);
+  await expect(page.locator("article").getByLabel(/^Priority you advance/)).toHaveValue(terms.offered);
   expect(await page.evaluate(() => sessionStorage.getItem("moral-trade.command-center.handoff.v1"))).toBeNull();
   expect(await page.evaluate(() => window.__tradeDraftFixture.submissions)).toEqual([]);
   await expectStep(page, 0);
@@ -304,9 +310,10 @@ test("command handoff is neutral and explicitly unsaved", async ({ page }, testI
     await page.getByRole("button", { name: "Next", exact: true }).click();
     await expectStep(page, step);
   }
-  await expect(page.getByLabel(/^Counterparty commitment/)).toHaveValue(terms.reciprocal);
+  await expect(page.locator("article").getByLabel(/^Counterparty commitment/)).toHaveValue(terms.reciprocal);
   await expect(message).toContainText("No draft has been saved yet.");
-  await screenshot(page, testInfo, "command-loaded-step-3-reference");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await screenshot(page, testInfo, "command-loaded-step-3-reference", false);
 });
 
 test("template notice is neutral and unresolved terms still block progress", async ({ page }, testInfo) => {
@@ -319,7 +326,7 @@ test("template notice is neutral and unresolved terms still block progress", asy
   await expect(page.getByRole("alert")).toContainText("Replace every [Replace: ...] template prompt");
   await expectStep(page, 0);
   await screenshot(page, testInfo, "template-needs-review");
-  await page.getByLabel(/^Priority you advance/).fill(terms.offered);
+  await page.locator("article").getByLabel(/^Priority you advance/).fill(terms.offered);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expectStep(page, 1);
 });
