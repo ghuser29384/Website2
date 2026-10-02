@@ -17,6 +17,7 @@ async function openCreate(page: import("@playwright/test").Page) {
 
 async function expectRequestTransitionClear(create: FrameLocator, expectedCause: string) {
   await expect(create.locator("#screenRequest")).toBeVisible();
+  await expect(create.locator("#requestHeading")).toHaveText("What would you like help with?");
   await expect(create.locator("#requestCause")).toHaveText(expectedCause);
 
   await expect

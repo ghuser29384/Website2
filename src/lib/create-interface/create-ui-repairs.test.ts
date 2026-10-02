@@ -98,3 +98,11 @@ test("Request uses padded form-scale typography and responsive contribution card
   assert.match(repairCss, /@media \(max-width: 1180px\)\s*\{\s*#screenRequest \.stage\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
   assert.match(repairCss, /#screenRequest \.request-choice strong\s*\{[\s\S]*?overflow-wrap: anywhere;/);
 });
+
+test("the Request heading keeps a friendly tone on entry and after changing the funding structure", () => {
+  const integrated = integrateCommonGroundCreateSource(source);
+  assert.equal((integrated.match(/What would you like help with\?/g) ?? []).length, 2);
+  assert.match(integrated, /<h1 id="requestHeading">What would you like help with\?<\/h1>/);
+  assert.match(integrated, /\$\("#requestHeading"\)\.textContent = "What would you like help with\?"/);
+  assert.doesNotMatch(integrated, /What do you want other people to do\?/);
+});
