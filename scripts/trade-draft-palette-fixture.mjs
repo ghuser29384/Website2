@@ -31,7 +31,13 @@ const bundled = await build({
   jsx: "automatic",
   platform: "browser",
   format: "iife",
-  define: { "process.env.NODE_ENV": '"development"' },
+  // Next's browser compiler normally replaces its internal process.env flags.
+  // Supply a fixed, public-only environment for the standalone fixture too;
+  // never copy the host process.env into a client bundle.
+  define: {
+    "process.env": JSON.stringify({ NODE_ENV: "development" }),
+    "process.env.NODE_ENV": '"development"',
+  },
   plugins: [{
     name: "real-layout-styles",
     setup(bundler) {
@@ -60,6 +66,11 @@ for (const required of [
   "src/lib/command-center-handoff.ts",
 ]) {
   if (!inputs.includes(required)) throw new Error(`Fixture omitted production source: ${required}`);
+}
+for (const file of bundled.outputFiles.filter((output) => output.path.endsWith(".js"))) {
+  if (/\bprocess\.env\b/.test(file.text.replaceAll("<define:process.env>", ""))) {
+    throw new Error("Fixture left an uncompiled Node environment reference in browser JavaScript.");
+  }
 }
 
 if (process.argv.includes("--check")) {
