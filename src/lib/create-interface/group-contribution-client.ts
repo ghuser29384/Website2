@@ -262,6 +262,11 @@ function scanForOptions(): void {
 
 function locateOfferStepRoot(): HTMLElement | null {
   const doc = createDocument();
+  // The Create wizard has a stable structural anchor. Editorial heading changes
+  // must not prevent the existing Co-Act / Co-Fund controls from mounting.
+  const offerStep = doc.querySelector<HTMLElement>("#screenOffer");
+  if (offerStep) return offerStep;
+
   const headings = doc.querySelectorAll<HTMLElement>(
     "h1, h2, h3, [role='heading'], [aria-label]",
   );

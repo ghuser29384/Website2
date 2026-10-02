@@ -498,3 +498,225 @@ html {
     line-height: 1;
   }
 }
+
+/* Keep the remaining form steps at the same readable scale as Cause and Request. */
+#screenOffer .stage,
+#screenOffer.detail-mode .stage {
+  min-height: 0;
+  grid-template-columns: minmax(280px, .78fr) minmax(0, 1.72fr);
+  gap: 0;
+  align-items: stretch;
+  padding-top: 0;
+}
+
+#screenOffer .intro {
+  align-self: stretch;
+  min-width: 0;
+  padding: clamp(24px, 2.5vw, 36px);
+  border-right: 1px solid var(--ink);
+}
+
+#screenOffer.detail-mode .intro {
+  align-self: start;
+}
+
+#screenOffer #offerHeading,
+#screenSummary #summaryHeading {
+  max-width: 18ch;
+  font-size: clamp(2rem, 2.75vw, 2.75rem);
+  line-height: 1.08 !important;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+#screenOffer .intro-copy {
+  max-width: 36ch;
+  margin-top: 20px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+#screenOffer .context-card {
+  width: 100%;
+  min-width: 0;
+  margin-top: 24px;
+  background: #fffdf8;
+  color: #111111;
+}
+
+#screenOffer .context-card strong {
+  color: #111111 !important;
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+#screenOffer .context-meta {
+  color: #4d4b46;
+}
+
+#screenOffer .offer-panel {
+  align-self: start;
+  padding: clamp(16px, 2vw, 28px);
+}
+
+#screenOffer .offer-choice {
+  min-width: 0;
+  min-height: 0;
+  padding: 20px;
+}
+
+#screenOffer .offer-mark {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 20px;
+}
+
+#screenOffer .offer-check {
+  top: 20px;
+  right: 20px;
+  width: 24px;
+  height: 24px;
+}
+
+#screenOffer .offer-choice strong {
+  font-size: clamp(1.5rem, 2.1vw, 1.75rem);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+#screenOffer .offer-choice small,
+#screenOffer .offer-details-head p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#screenOffer .offer-details-head h2 {
+  font-size: clamp(1.5rem, 2.1vw, 2rem);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+#screenOffer .offer-detail-card h3 {
+  font-size: 26px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+#screenOffer .offer-type-actions {
+  flex-wrap: wrap;
+}
+
+#screenOffer .add-offer-option,
+#screenOffer .selected-offer-chip {
+  max-width: 100%;
+  min-height: 44px;
+  padding: 10px 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+#screenSummary .summary-stage {
+  min-height: 0;
+  align-content: start;
+}
+
+#screenSummary .summary-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 0;
+  padding: clamp(24px, 2.5vw, 36px);
+  background: #050505;
+  color: #ffffff;
+}
+
+#screenSummary .summary-head p {
+  max-width: 52ch;
+  margin: 0;
+  color: #c9c5bd;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* The non-binding notice should never cover the context or editing controls. */
+body:has(#screenOffer.active) .boundary-note,
+body:has(#screenSummary.active) .boundary-note {
+  position: static;
+  width: min(1220px, calc(100% - 48px));
+  max-width: none;
+  margin: 0 auto 24px;
+}
+
+@media (max-width: 1180px) {
+  #screenOffer .stage,
+  #screenOffer.detail-mode .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #screenOffer .intro,
+  #screenOffer.detail-mode .intro {
+    position: static;
+    padding: 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  #screenOffer #offerHeading,
+  #screenSummary #summaryHeading {
+    max-width: 24ch;
+    font-size: clamp(2rem, 4.5vw, 2.5rem);
+  }
+
+  #screenOffer .intro-copy {
+    max-width: 62ch;
+    margin-top: 16px;
+  }
+
+  #screenOffer .context-card {
+    max-width: none;
+    margin-top: 20px;
+  }
+
+  #screenOffer .offer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 601px) and (max-width: 1180px) {
+  #screenOffer .context-card {
+    display: grid;
+    grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr);
+  }
+
+  #screenOffer .context-card-row + .context-card-row {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 600px) {
+  #screenOffer .offer-grid,
+  #screenSummary .summary-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #screenOffer .offer-details-head,
+  #screenOffer .offer-detail-card {
+    padding: 18px 16px;
+  }
+
+  #screenOffer .contribution-option {
+    padding: 14px;
+  }
+
+  #screenOffer .selected-offer-strip,
+  #screenOffer .offer-detail-footer {
+    padding: 16px;
+  }
+
+  #screenSummary .summary-head {
+    gap: 16px;
+  }
+}

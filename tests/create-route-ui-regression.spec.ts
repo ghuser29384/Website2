@@ -1,4 +1,4 @@
-import { expect, test, type FrameLocator } from "@playwright/test";
+import { expect, test, type FrameLocator, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -75,6 +75,159 @@ async function chooseExistentialRiskSkill(create: FrameLocator) {
   await expect(create.locator("#requestActionInput")).toBeFocused();
   await expect(create.locator("#actionSuggestions")).toBeVisible();
   return causeButton;
+}
+
+async function openContributionChoice(page: Page) {
+  const create = await openCreate(page);
+  await create.getByRole("button", { name: "Building altruism", exact: true }).click();
+  await create.locator('[data-request-kind="commitment"]').click();
+  await create.locator("#requestActionInput").fill("Read one introduction to building altruism");
+  await create.locator("#continueRequest").click();
+  await expect(create.locator("#offerHeading")).toHaveText("How would you like to contribute?");
+  await expect(create.locator("#offerSelectView")).toBeVisible();
+  return create;
+}
+
+function contributionField(create: FrameLocator, type: string, index: number, field: string) {
+  return create.locator(
+    `[data-offer-entry-block][data-offer-id="${type}"][data-entry-index="${index}"] [data-offer-field="${field}"]`,
+  );
+}
+
+async function fillContributionPair(create: FrameLocator, index = 0) {
+  // Mounting the group-contribution enhancement can replace the initial controls.
+  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount((index + 1) * 2);
+  await contributionField(create, "behavior", index, "action").fill(
+    index === 0 ? "Read one public article" : "Attend one community discussion",
+  );
+  await contributionField(create, "behavior", index, "duration").fill(
+    index === 0 ? "Within one week" : "Once this month",
+  );
+  await contributionField(create, "cause", index, "cause").fill(
+    index === 0 ? "Global health" : "Wild animal suffering",
+  );
+  await contributionField(create, "cause", index, "support").fill(
+    index === 0 ? "Volunteer for two hours" : "Read one research summary",
+  );
+}
+
+async function expectContributionLayout(create: FrameLocator, view: "choice" | "details" | "summary") {
+  const summary = view === "summary";
+  await create.locator("body").evaluate(async () => {
+    await document.fonts.ready;
+    window.scrollTo({ top: 0, behavior: "instant" });
+  });
+  const layout = await create.locator("body").evaluate((_body, { summary, view }) => {
+    const required = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+      return element;
+    };
+    const root = required(summary ? "#screenSummary" : "#screenOffer");
+    const intro = required(summary ? ".summary-head" : "#screenOffer .intro");
+    const heading = required(summary ? "#summaryHeading" : "#offerHeading");
+    const introRect = intro.getBoundingClientRect();
+    const headingRect = heading.getBoundingClientRect();
+    const headingStyle = getComputedStyle(heading);
+    const contentFits = (element: Element, container: Element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const bounds = container.getBoundingClientRect();
+      return [...range.getClientRects()].every((rect) =>
+        rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1
+        && rect.top >= bounds.top - 1 && rect.bottom <= bounds.bottom + 1,
+      );
+    };
+    const visible = (element: Element) => element.getClientRects().length > 0;
+    const clipped = (selector: string, containerSelector: string) =>
+      [...root.querySelectorAll(selector)].filter(visible).filter((element) => {
+        const container = element.closest(containerSelector);
+        return !container || !contentFits(element, container);
+      }).map((element) => element.textContent);
+    const parseColor = (value: string) => {
+      const channels = value.match(/[\d.]+/g)?.map(Number) || [];
+      if (channels.length < 3) throw new Error(`Unsupported color ${value}`);
+      return [channels[0], channels[1], channels[2], channels[3] ?? 1];
+    };
+    const luminance = (color: number[]) => color.slice(0, 3).reduce((sum, channel, index) => {
+      const value = channel / 255;
+      return sum + (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+        * [0.2126, 0.7152, 0.0722][index];
+    }, 0);
+    const contrast = (element: HTMLElement) => {
+      const ancestors: HTMLElement[] = [];
+      for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+        ancestors.unshift(ancestor);
+      }
+      let background = [255, 255, 255];
+      for (const ancestor of ancestors) {
+        const color = parseColor(getComputedStyle(ancestor).backgroundColor);
+        background = background.map((channel, index) => color[index] * color[3] + channel * (1 - color[3]));
+      }
+      const foreground = parseColor(getComputedStyle(element).color);
+      const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+      return (values[0] + 0.05) / (values[1] + 0.05);
+    };
+    const summaryCopy = summary ? required("#summaryIntro") : null;
+    return {
+      width: window.innerWidth,
+      fontSize: parseFloat(headingStyle.fontSize),
+      lineHeight: parseFloat(headingStyle.lineHeight),
+      headingHeight: headingRect.height,
+      headingLeftInset: headingRect.left - introRect.left,
+      headingRightInset: introRect.right - headingRect.right,
+      headingFits: contentFits(heading, intro),
+      introHeight: introRect.height,
+      introContentHeight: summary ? null : required("#screenOffer .context-card").getBoundingClientRect().bottom
+        - required("#offerStepLabel").getBoundingClientRect().top,
+      headingContrast: contrast(heading),
+      summaryCopyContrast: summaryCopy ? contrast(summaryCopy) : null,
+      summaryCopyFits: summaryCopy ? contentFits(summaryCopy, intro) : null,
+      summaryCopyLeftInset: summaryCopy ? summaryCopy.getBoundingClientRect().left - introRect.left : null,
+      summaryCopyRightInset: summaryCopy ? introRect.right - summaryCopy.getBoundingClientRect().right : null,
+      contextStrongColors: summary ? [] : [...root.querySelectorAll(".context-card strong")]
+        .map((element) => getComputedStyle(element).color),
+      contextBackgrounds: summary ? [] : [...root.querySelectorAll(".context-card-row")]
+        .map((element) => getComputedStyle(element).backgroundColor),
+      contextMutedColors: summary ? [] : [...root.querySelectorAll(".context-meta")]
+        .map((element) => getComputedStyle(element).color),
+      clippedCardText: view === "choice" ? clipped(".offer-choice strong, .offer-choice small", ".offer-choice")
+        : view === "details" ? clipped(".offer-detail-card h3, .offer-field label, .add-offer-option", ".offer-detail-card")
+          : clipped(".seed-offer-title, .seed-offer-detail", ".seed-side"),
+      outOfBoundsControls: [...root.querySelectorAll("button, input, select")].filter(visible)
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.left < -1 || rect.right > window.innerWidth + 1;
+        }).map((element) => element.id || element.textContent),
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    };
+  }, { summary, view });
+
+  expect(layout.fontSize).toBeGreaterThanOrEqual(32);
+  expect(layout.fontSize).toBeLessThanOrEqual(44);
+  expect(layout.lineHeight).toBeGreaterThanOrEqual(layout.fontSize * 1.04);
+  expect(layout.headingHeight).toBeLessThanOrEqual(layout.lineHeight * 5 + 1);
+  expect(layout.headingLeftInset).toBeGreaterThanOrEqual(23);
+  expect(layout.headingRightInset).toBeGreaterThanOrEqual(23);
+  expect(layout.headingFits).toBe(true);
+  expect(layout.headingContrast).toBeGreaterThanOrEqual(4.5);
+  expect(layout.clippedCardText).toEqual([]);
+  expect(layout.outOfBoundsControls).toEqual([]);
+  expect(layout.horizontalOverflow).toBe(false);
+  if (summary) {
+    expect(layout.introHeight).toBeLessThan(480);
+    expect(layout.summaryCopyContrast).toBeGreaterThanOrEqual(4.5);
+    expect(layout.summaryCopyFits).toBe(true);
+    expect(layout.summaryCopyLeftInset).toBeGreaterThanOrEqual(23);
+    expect(layout.summaryCopyRightInset).toBeGreaterThanOrEqual(23);
+  } else {
+    // A full-height desktop dark column may stretch alongside all six cards.
+    // Its actual introductory content must remain compact in either phase.
+    expect(layout.introContentHeight).toBeLessThan(layout.width > 1180 ? 560 : 620);
+    expect(layout.contextStrongColors).toEqual(["rgb(17, 17, 17)", "rgb(17, 17, 17)"]);
+    expect(layout.contextBackgrounds).toEqual(["rgb(255, 253, 248)", "rgb(255, 253, 248)"]);
+    expect(layout.contextMutedColors).toEqual(["rgb(77, 75, 70)", "rgb(77, 75, 70)"]);
+  }
 }
 
 test.describe("Create route UI regression repairs", () => {
@@ -546,6 +699,166 @@ test.describe("Create wordmark and Request-step proportions", () => {
   }
 });
 
+
+test.describe("Offer and Review tone and proportions", () => {
+  for (const width of [320, 390, 768, 1180, 1181, 1440, 2048]) {
+    test(`keeps contribution choice, details, and review readable at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const pageErrors: string[] = [];
+      const submissionRequests: string[] = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+      page.on("request", (request) => {
+        if (request.method() !== "GET" && new URL(request.url()).pathname.startsWith("/api/create/")) {
+          submissionRequests.push(request.url());
+        }
+      });
+      const create = await openContributionChoice(page);
+      const capture = async (view: string) => {
+        if (!captureVisuals || ![390, 1440].includes(width)) return;
+        await mkdir(captureDirectory, { recursive: true });
+        await create.locator("body").screenshot({
+          animations: "disabled",
+          path: path.join(captureDirectory, `offer-review-${view}-${width}.png`),
+        });
+        await page.locator("nextjs-portal").evaluateAll((portals) => portals.forEach((portal) => portal.remove()));
+        await page.screenshot({
+          animations: "disabled",
+          path: path.join(captureDirectory, `offer-review-${view}-${width}-viewport.png`),
+        });
+      };
+
+      await expect(create.locator("#offerGrid .offer-choice")).toHaveCount(6);
+      await expect(create.locator("#continueOffers")).toBeDisabled();
+      await expectContributionLayout(create, "choice");
+      await capture("choice");
+      await create.locator('.offer-choice[data-offer="behavior"]').click();
+      await create.locator('.offer-choice[data-offer="cause"]').click();
+      await expect(create.locator("#offerCount")).toHaveText("2 types selected");
+      await create.locator("#continueOffers").click();
+      await expect(create.locator("#offerHeading")).toHaveText("Add a few details");
+      await expect(create.locator(".offer-details-head h2")).toHaveText("Describe your contribution");
+      await expect(create.locator("#offerDetailsView")).toBeVisible();
+      await expect(create.locator("#reviewOffers")).toBeDisabled();
+      await fillContributionPair(create);
+      await expect(create.locator("#reviewOffers")).toBeEnabled();
+      await expectContributionLayout(create, "details");
+      await capture("details");
+
+      await create.locator("#reviewOffers").click();
+      await expect(create.locator("#screenSummary")).toBeVisible();
+      await expect(create.locator("#summaryHeading")).toHaveText("Take a look before review");
+      await expect(create.locator("#summaryIntro")).toContainText("private and non-binding");
+      await expect(create.locator("#summaryOffers .seed-offer-item")).toHaveCount(2);
+      await expect(create.locator("#summaryOffers")).toContainText("Read one public article");
+      await expect(create.locator("#summaryOffers")).toContainText("Global health");
+      await expect(create.locator("#publishOffer")).toHaveText("Submit for review →");
+      await expect(create.locator("#publishOffer")).toBeDisabled();
+      await expect(create.locator("#publishConfirm")).not.toBeChecked();
+      await expectContributionLayout(create, "summary");
+      await capture("summary");
+      expect(await page.locator("html").evaluate((element) =>
+        element.scrollWidth > element.clientWidth + 1,
+      )).toBe(false);
+      expect(submissionRequests).toEqual([]);
+      expect(pageErrors).toEqual([]);
+    });
+  }
+
+  for (const width of [390, 1440]) {
+    test(`preserves multiple alternatives through change types, Escape, and repeated review at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const submissionRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.method() !== "GET" && new URL(request.url()).pathname.startsWith("/api/create/")) {
+          submissionRequests.push(request.url());
+        }
+      });
+      const create = await openContributionChoice(page);
+      const behavior = create.locator('.offer-choice[data-offer="behavior"]');
+      const cause = create.locator('.offer-choice[data-offer="cause"]');
+      await behavior.focus();
+      await behavior.press("Space");
+      await cause.click();
+      await expect(behavior).toHaveAttribute("aria-pressed", "true");
+      await expect(cause).toHaveAttribute("aria-pressed", "true");
+      await create.locator("#continueOffers").click();
+      await fillContributionPair(create);
+      await expect(create.locator("#reviewOffers")).toBeEnabled();
+
+      await create.locator('[data-add-offer-option="behavior"]').click();
+      await expect(create.locator("#reviewOffers")).toBeDisabled();
+      await create.locator('[data-add-offer-option="cause"]').click();
+      await fillContributionPair(create, 1);
+      await expect(create.locator("[data-offer-entry-block]")).toHaveCount(4);
+      await expect(create.locator("#offerDetailStatus")).toHaveText("4 of 4 contribution options complete");
+      await expect(create.locator("#reviewOffers")).toBeEnabled();
+
+      await create.locator("#changeOfferTypes").click();
+      await expect(create.locator("#offerHeading")).toHaveText("How would you like to contribute?");
+      await expect(behavior).toHaveAttribute("aria-pressed", "true");
+      await expect(cause).toHaveAttribute("aria-pressed", "true");
+      await cause.click();
+      await expect(cause).toHaveAttribute("aria-pressed", "false");
+      await cause.click();
+      await expect(create.locator("#offerCount")).toHaveText("2 types selected");
+      await create.locator("#continueOffers").click();
+      await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(4);
+      await expect(contributionField(create, "cause", 1, "cause")).toHaveValue("Wild animal suffering");
+      await expect(contributionField(create, "behavior", 1, "action")).toHaveValue("Attend one community discussion");
+
+      await contributionField(create, "behavior", 0, "action").press("Escape");
+      await expect(create.locator("#offerSelectView")).toBeVisible();
+      await expect(create.locator("#offerHeading")).toHaveText("How would you like to contribute?");
+      await create.locator("#continueOffers").press("Escape");
+      await expect(create.locator("#screenRequest")).toBeVisible();
+      await expect(create.locator("#requestActionInput")).toHaveValue("Read one introduction to building altruism");
+      await create.locator("#continueRequest").click();
+      await expect(behavior).toHaveAttribute("aria-pressed", "true");
+      await expect(cause).toHaveAttribute("aria-pressed", "true");
+      await create.locator("#continueOffers").click();
+      await expect(create.locator("[data-offer-entry-block]")).toHaveCount(4);
+      await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(4);
+
+      for (const action of ["Read two public articles", "Read three public articles"]) {
+        await contributionField(create, "behavior", 0, "action").fill(action);
+        await create.locator("#reviewOffers").click();
+        await expect(create.locator("#summaryHeading")).toHaveText("Take a look before review");
+        await expect(create.locator("#summaryOffers .seed-offer-item")).toHaveCount(2);
+        await expect(create.locator("#summaryOffers .seed-offer-detail")).toHaveCount(4);
+        await expect(create.locator("#summaryOffers .seed-offer-or")).toHaveCount(2);
+        await expect(create.locator("#summaryOffers")).toContainText(action);
+        await expect(create.locator("#summaryOffers")).toContainText("Wild animal suffering");
+        await expect(create.locator("#publishOffer")).toBeDisabled();
+        await create.locator("#publishConfirm").check();
+        await expect(create.locator("#publishOffer")).toBeEnabled();
+        await create.locator("#changeOffer").click();
+        await expect(create.locator("#offerHeading")).toHaveText("Add a few details");
+        await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(4);
+        await expect(contributionField(create, "behavior", 0, "action")).toHaveValue(action);
+        await expect(contributionField(create, "cause", 1, "support")).toHaveValue("Read one research summary");
+      }
+
+      await create.locator('[data-add-offer-option="behavior"]').click();
+      await expect(create.locator("#reviewOffers")).toBeDisabled();
+      await create.locator('[data-remove-offer-option="behavior"][data-remove-entry="2"]').click();
+      await expect(create.locator("[data-offer-entry-block]")).toHaveCount(4);
+      await expect(create.locator("#reviewOffers")).toBeEnabled();
+      await create.locator("#reviewOffers").click();
+      await expect(create.locator("#publishConfirm")).not.toBeChecked();
+      await expect(create.locator("#publishOffer")).toBeDisabled();
+      await create.locator("#changeRequest").click();
+      await expect(create.locator("#requestActionInput")).toHaveValue("Read one introduction to building altruism");
+      await create.locator("#continueRequest").click();
+      await expect(create.locator("#offerDetailsView")).toBeVisible();
+      await expect(contributionField(create, "behavior", 0, "action")).toHaveValue("Read three public articles");
+      await create.locator("#reviewOffers").click();
+      await expect(create.locator("#summaryOffers .seed-offer-detail")).toHaveCount(4);
+      expect(submissionRequests).toEqual([]);
+    });
+  }
+});
 
 test("keeps the Create shell usable after browser Back and Forward", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 900 });

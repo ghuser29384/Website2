@@ -62,7 +62,7 @@ async function openConcreteOfferStep(page: Page): Promise<FrameLocator> {
   await create.locator("#continueRequest").click();
 
   await expect(
-    create.getByRole("heading", { level: 1, name: "What could you offer?" }),
+    create.getByRole("heading", { level: 1, name: "How would you like to contribute?" }),
   ).toBeVisible();
   await create.getByRole("button", { name: "A behavior change" }).click();
   await create.getByRole("button", { name: "Money" }).click();
@@ -300,7 +300,7 @@ test("restores proposal-only group terms after the Create authentication handoff
   await page.waitForURL(/\/trades\/new\?resume=create$/);
 
   const resumed = page.frameLocator('iframe[title="Moral Trade Create"]');
-  await expect(resumed.getByRole("heading", { level: 1, name: "Ready for review." })).toBeVisible();
+  await expect(resumed.getByRole("heading", { level: 1, name: "Take a look before review" })).toBeVisible();
   await expect(resumed.getByText("CO-ACT · PROPOSAL ONLY")).toBeVisible();
 
 const resumedDraftSnapshot = await resumed.locator("body").evaluate(() =>
@@ -322,7 +322,7 @@ expect(resumedDrafts.drafts?.["behavior:1"]).toMatchObject({
 
   await resumed.getByRole("button", { name: "Change contributions" }).click();
   await expect(
-    resumed.getByRole("heading", { level: 1, name: "What could you offer?" }),
+    resumed.getByRole("heading", { level: 1, name: "Add a few details" }),
   ).toBeVisible();
   await expect(resumed.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
 

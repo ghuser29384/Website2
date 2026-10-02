@@ -106,3 +106,23 @@ test("the Request heading keeps a friendly tone on entry and after changing the 
   assert.match(integrated, /\$\("#requestHeading"\)\.textContent = "What would you like help with\?"/);
   assert.doesNotMatch(integrated, /What do you want other people to do\?/);
 });
+
+test("Offer and Review keep friendly phase-specific headings without changing submission gates", () => {
+  const integrated = integrateCommonGroundCreateSource(source);
+  assert.match(integrated, /<h1 id="offerHeading">How would you like to contribute\?<\/h1>/);
+  assert.match(integrated, /\$\("#offerHeading"\)\.textContent = detailsMode\s*\? "Add a few details"\s*: "How would you like to contribute\?"/);
+  assert.match(integrated, /<h2>Describe your contribution<\/h2>/);
+  assert.match(integrated, /teamReviewRequired \? "Take a look before review" : "Take a look before you publish"/);
+  assert.match(integrated, /\$\("#summaryHeading"\)\.textContent = "Take a look before review"/);
+  assert.match(integrated, /It remains private and non-binding until the applicable review and bilateral-confirmation gates pass\./);
+  assert.match(integrated, /final trade will specify which option applies\./);
+  assert.match(integrated, /\$\("#reviewOffers"\)\.disabled = !selected\.length \|\| !totalOptions \|\| completeOptions !== totalOptions/);
+});
+
+test("Offer and Review explicitly bound their typography and light context-card contrast", () => {
+  assert.match(repairCss, /#screenOffer \.intro\s*\{[\s\S]*?padding: clamp\(24px, 2\.5vw, 36px\);/);
+  assert.match(repairCss, /#screenOffer #offerHeading,\s*#screenSummary #summaryHeading\s*\{[\s\S]*?font-size: clamp\(2rem, 2\.75vw, 2\.75rem\);[\s\S]*?line-height: 1\.08 !important;/);
+  assert.match(repairCss, /#screenOffer \.context-card strong\s*\{[\s\S]*?color: #111111 !important;/);
+  assert.match(repairCss, /#screenSummary \.summary-head\s*\{[\s\S]*?padding: clamp\(24px, 2\.5vw, 36px\);[\s\S]*?background: #050505;/);
+  assert.match(repairCss, /body:has\(#screenOffer\.active\) \.boundary-note,[\s\S]*?position: static;/);
+});
