@@ -149,6 +149,12 @@ jobs:
                     "projectSsoMode": mode(project, "ssoProtection"),
                     "projectPasswordMode": mode(project, "passwordProtection"),
                     "projectSecurityFieldNames": sorted(key for key in project if re.search(r"protection|security|trusted", key, re.I))}
+          node = project.get("nodeVersion")
+          result["projectNodeVersion"] = node if isinstance(node, str) and re.fullmatch(r"[0-9]{2}\.x", node) else None
+          result["projectFrameworkIsNextjs"] = project.get("framework") == "nextjs"
+          result["projectRootIsDefault"] = project.get("rootDirectory") in (None, "", ".")
+          result["projectBuildCommandIsDefaultOrNpmBuild"] = project.get("buildCommand") in (None, "", "npm run build")
+          result["projectInstallCommandIsDefaultOrNpmCi"] = project.get("installCommand") in (None, "", "npm ci")
           del project
           deployment = m.api("/v13/deployments/" + m.BOOTSTRAP_ID)
           m.validate_source_deployment(deployment)
