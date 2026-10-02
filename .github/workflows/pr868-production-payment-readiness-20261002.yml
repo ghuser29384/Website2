@@ -1,0 +1,84 @@
+name: PR868 production payment readiness
+
+on:
+  push:
+    branches:
+      - ops/pr868-production-readiness-20261002
+    paths:
+      - .github/workflows/pr868-production-payment-readiness-20261002.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_CLI_VERSION: 50.38.1
+      EXPECTED_STRIPE_ACCOUNT: acct_1U20YmAOdCwYqp6p
+      EXPECTED_SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull Production environment without printing secrets
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel evidence
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull             --yes             --environment=production             --token="$VERCEL_TOKEN"             >/dev/null
+          test -f .vercel/.env.production.local
+
+      - name: Verify Production provider and database identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          source .vercel/.env.production.local
+          set +a
+
+          test -n "${STRIPE_SECRET_KEY:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          echo "::add-mask::$STRIPE_SECRET_KEY"
+          echo "::add-mask::$SUPABASE_SERVICE_ROLE_KEY"
+
+          [[ "$STRIPE_SECRET_KEY" == sk_live_* ]]
+          test "${STRIPE_PLATFORM_ACCOUNT_ID:-}" = "$EXPECTED_STRIPE_ACCOUNT"
+          test "${NEXT_PUBLIC_SUPABASE_URL:-}" = "$EXPECTED_SUPABASE_URL"
+
+          account_json="$(curl -fsS -u "$STRIPE_SECRET_KEY:" https://api.stripe.com/v1/account)"
+          balance_json="$(curl -fsS -u "$STRIPE_SECRET_KEY:" https://api.stripe.com/v1/balance)"
+
+          account_id="$(jq -r '.id // empty' <<<"$account_json")"
+          balance_livemode="$(jq -r '.livemode // false' <<<"$balance_json")"
+          charges_enabled="$(jq -r '.charges_enabled // false' <<<"$account_json")"
+          payouts_enabled="$(jq -r '.payouts_enabled // false' <<<"$account_json")"
+          details_submitted="$(jq -r '.details_submitted // false' <<<"$account_json")"
+
+          test "$account_id" = "$EXPECTED_STRIPE_ACCOUNT"
+          test "$balance_livemode" = "true"
+
+          jq -n             --arg account_id "$account_id"             --argjson livemode true             --argjson charges_enabled "$charges_enabled"             --argjson payouts_enabled "$payouts_enabled"             --argjson details_submitted "$details_submitted"             --arg supabase_url "$EXPECTED_SUPABASE_URL"             '{
+              stripe_account_id: $account_id,
+              stripe_livemode: $livemode,
+              charges_enabled: $charges_enabled,
+              payouts_enabled: $payouts_enabled,
+              details_submitted: $details_submitted,
+              supabase_url: $supabase_url,
+              service_role_key_present: true
+            }' > evidence/production-payment-readiness.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr868-production-payment-readiness-${{ github.run_id }}
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 14
