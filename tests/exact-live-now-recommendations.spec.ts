@@ -677,7 +677,11 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     expect(overflow).toBeLessThanOrEqual(1);
 
     await profile.click();
-    await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/dashboard");
+    // Check the redirect itself without waiting for unrelated page load work.
+    await expect.poll(() => {
+      const url = new URL(page.url());
+      return { pathname: url.pathname, returnTo: url.searchParams.get("returnTo") };
+    }).toEqual({ pathname: "/login", returnTo: "/dashboard" });
     await expect(page.getByRole("heading", { level: 1, name: "Welcome back", exact: true })).toBeVisible();
   });
 });
