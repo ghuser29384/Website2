@@ -8,6 +8,13 @@ const client = readFileSync(
   "utf8",
 );
 
+test("Offer enhancement prefers a structural anchor so friendly copy cannot disable group controls", () => {
+  const body = functionBody("locateOfferStepRoot");
+  assert.match(body, /doc\.querySelector<HTMLElement>\("#screenOffer"\)/);
+  assert.match(body, /if \(offerStep\) return offerStep;/);
+  assert.ok(body.indexOf('"#screenOffer"') < body.indexOf("const headings"));
+});
+
 function functionBody(name: string): string {
   const start = client.indexOf(`function ${name}`);
   assert.ok(start >= 0, `${name} must exist`);
