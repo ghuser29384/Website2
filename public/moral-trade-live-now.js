@@ -553,15 +553,15 @@
 
     if (model.status === "profile_incomplete") {
       return {
-        eyebrow: "Profile needs priorities",
-        title: "Add priorities if you want personalized suggestions.",
+        eyebrow: "Your priorities",
+        title: "What matters to you?",
         copy:
-          "State outcomes or trade formats explicitly. Optional viewing activity can refine relevance only if you turn it on.",
-        facts: ["Signed in", "No cause priorities saved"],
+          "Choose the causes you care about to help us suggest relevant opportunities. You can also explore without setting priorities. Viewing activity only helps personalize suggestions if you turn it on.",
+        facts: ["Signed in", "No priorities selected yet"],
         primaryHref: "/complete-profile",
-        primaryLabel: "Set priorities →",
+        primaryLabel: "Choose priorities →",
         secondaryHref: "/offers?view=live",
-        secondaryLabel: "Browse without personalization →",
+        secondaryLabel: "Explore opportunities →",
       };
     }
 
