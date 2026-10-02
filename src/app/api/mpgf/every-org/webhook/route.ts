@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { authenticateEveryOrgPartnerWebhookRequest } from "@/lib/every-org-partner-webhook-auth";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
   type MpgfEveryOrgPartnerWebhookEvent,
@@ -24,31 +25,8 @@ interface DbErrorLike {
   message?: string | null;
 }
 
-function configuredWebhookSecret() {
-  return process.env.MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET?.trim() || undefined;
-}
-
 function hasServiceRoleEnv() {
   return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
-}
-
-function requestWebhookSecret(request: Request) {
-  return (
-    request.headers.get("mpgf-every-org-webhook-secret") ??
-    request.headers.get("x-mpgf-every-org-webhook-secret") ??
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
-    ""
-  ).trim();
-}
-
-function webhookVerified(request: Request) {
-  const expected = configuredWebhookSecret();
-
-  if (!expected) {
-    return true;
-  }
-
-  return requestWebhookSecret(request) === expected;
 }
 
 function safeTimestamp(value: string | undefined) {
@@ -230,11 +208,11 @@ async function persistPartnerWebhookEvent(partnerWebhookEvent: MpgfEveryOrgPartn
 }
 
 export async function POST(request: Request) {
-  const expectedSecret = configuredWebhookSecret();
+  const authorization = authenticateEveryOrgPartnerWebhookRequest(request.headers);
 
-  if (expectedSecret && !webhookVerified(request)) {
+  if (!authorization.authorized) {
     return NextResponse.json(
-      { ok: false, error: "Unauthorized MPGF Every.org partner webhook request." },
+      { ok: false },
       { status: 401, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
   }
@@ -249,7 +227,7 @@ export async function POST(request: Request) {
     const partnerWebhookEvent = recordMpgfEveryOrgPartnerWebhook(
       payload as MpgfEveryOrgPartnerWebhookPayload,
       {
-        webhookVerified: webhookVerified(request),
+        webhookVerified: true,
       },
     );
     const persistence = await persistPartnerWebhookEvent(partnerWebhookEvent);
