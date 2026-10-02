@@ -14,7 +14,7 @@ on:
       - "src/app/trades/new/page.tsx"
       - "src/app/*.css"
       - "public/moral-trade-input-*"
-      - "tests/trade-draft-palette.spec.ts"
+      - "tests/trade-draft-palette.fixture.ts"
       - "tests/fixtures/trade-draft-palette/**"
       - "scripts/trade-draft-palette-fixture.mjs"
       - "playwright.trade-draft-palette.config.ts"
@@ -34,7 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Verify exact candidate commit
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "Verifying candidate $EXPECTED_SHA"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -45,7 +52,7 @@ jobs:
         run: >-
           npx eslint
           src/components/core-trade/trade-draft-workbench.tsx
-          tests/trade-draft-palette.spec.ts
+          tests/trade-draft-palette.fixture.ts
           tests/fixtures/trade-draft-palette/fixture.tsx
           scripts/trade-draft-palette-fixture.mjs
           playwright.trade-draft-palette.config.ts

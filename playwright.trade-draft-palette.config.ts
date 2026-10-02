@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 // Never inherit authenticated storage or a hosted URL from the app's e2e config.
 export default defineConfig({
   testDir: "./tests",
-  testMatch: /trade-draft-palette\.spec\.ts/,
+  testMatch: /trade-draft-palette\.fixture\.ts/,
   timeout: 90_000,
   expect: { timeout: 7_000 },
   fullyParallel: true,

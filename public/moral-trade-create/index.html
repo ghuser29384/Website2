@@ -4098,8 +4098,8 @@
       <div class="stage">
         <div class="intro">
           <div class="step-label" id="offerStepLabel">Your contribution · 3 of 4</div>
-          <h1 id="offerHeading">What could you offer?</h1>
-          <p class="intro-copy" id="offerIntroCopy">Choose one or more contribution types. You can add several concrete alternatives inside each type before publishing.</p>
+          <h1 id="offerHeading">How would you like to contribute?</h1>
+          <p class="intro-copy" id="offerIntroCopy">Choose the ways you’d like to help. You can add more than one option for each type.</p>
           <div class="context-card" aria-live="polite">
             <div class="context-card-row">
               <span class="context-number">01</span>
@@ -4131,8 +4131,8 @@
             <div class="offer-details-head">
               <div>
                 <div class="offer-details-kicker">Concrete terms</div>
-                <h2>Make each option specific.</h2>
-                <p>Add one or more concrete alternatives inside each selected type. The final trade will specify which option applies.</p>
+                <h2>Describe your contribution</h2>
+                <p>Tell your collaborator what you could offer. You can add alternatives; the final trade will specify which option applies.</p>
               </div>
               <button type="button" class="change-offer-types" id="changeOfferTypes">Change types</button>
             </div>
@@ -4160,7 +4160,7 @@
           <div class="summary-head">
             <div>
               <div class="step-label" id="summaryStepLabel">Review and publish · 4 of 4</div>
-              <h1 id="summaryHeading">Ready to publish.</h1>
+              <h1 id="summaryHeading">Take a look before you publish</h1>
             </div>
             <p id="summaryIntro">This is the public preview potential collaborators will see. Edit anything that is inaccurate, then publish the offer directly.</p>
           </div>
@@ -4782,7 +4782,7 @@
       if (isExistingPoolRoute()) {
         return "Choose what you could offer in exchange for the counterparty’s contribution to the existing pool. Each type can contain several alternatives.";
       }
-      return "Choose one or more contribution types. You can add several concrete alternatives inside each type before publishing.";
+      return "Choose the ways you’d like to help. You can add more than one option for each type.";
     }
 
     function updateRequestPageCopy() {
@@ -6243,9 +6243,12 @@
       $("#offerSelectView").hidden = detailsMode;
       $("#offerDetailsView").hidden = !detailsMode;
       $("#screenOffer").classList.toggle("detail-mode", detailsMode);
+      $("#offerHeading").textContent = detailsMode
+        ? "Add a few details"
+        : "How would you like to contribute?";
       $("#offerIntroCopy").textContent = detailsMode
-        ? "Add and define one or more alternatives for every contribution type you selected."
-        : "Choose one or more contribution types. You can add several concrete alternatives inside each type before publishing.";
+        ? "Add the details for each contribution you selected. You can include alternatives if more than one option works for you."
+        : getOfferIntroCopy();
 
       if (detailsMode) {
         renderOfferDetails();
@@ -6991,7 +6994,7 @@
           $("#summaryJoin").textContent = "→";
           $("#summaryRightLabel").textContent = "Pool terms";
           $("#summaryRightFoot").textContent = "Pledges are collected only under the published terms and visibility policy.";
-          $("#summaryHeading").textContent = teamReviewRequired ? "Ready for review." : "Ready to publish.";
+          $("#summaryHeading").textContent = teamReviewRequired ? "Take a look before review" : "Take a look before you publish";
           $("#summaryStepLabel").textContent = teamReviewRequired ? "Review and submit · 3 of 3" : "Review and publish · 3 of 3";
           const poolTerms = [
             ...getThresholdSummaryRows(),
@@ -7040,7 +7043,7 @@
             ? `<strong>Review required</strong> This pool will not be public until Moral Trade resolves: ${escapeHTML(["recipient and implementation review", "underwriting and reserve review", "operator approval", ...poolReview.reasons].join("; "))}.`
             : "<strong>Publishing</strong> This creates a public multi-threshold pool with public exact thresholds, public failure-bonus timing terms, and the selected funding-progress display.";
         } else {
-          $("#summaryHeading").textContent = "Ready for review.";
+          $("#summaryHeading").textContent = "Take a look before review";
           $("#summaryStepLabel").textContent = "Review and submit · 4 of 4";
           $("#summaryIntro").textContent = "This is the exact proposal that will be saved for review. It remains private and non-binding until the applicable review and bilateral-confirmation gates pass.";
           $("#summaryLeftLabel").textContent = "What you want";
