@@ -472,7 +472,8 @@ test.describe("Create wordmark and Request-step proportions", () => {
 
       if (captureVisuals) {
         await mkdir(captureDirectory, { recursive: true });
-        await create.locator("body").screenshot({
+        await page.locator("nextjs-portal").evaluateAll((portals) => portals.forEach((portal) => portal.remove()));
+        await page.screenshot({
           animations: "disabled",
           path: path.join(captureDirectory, `request-proportions-${width}.png`),
         });
@@ -502,7 +503,8 @@ test.describe("Create wordmark and Request-step proportions", () => {
         )).toBe(false);
         if (captureVisuals) {
           await mkdir(captureDirectory, { recursive: true });
-          await create.locator("body").screenshot({
+          await page.locator("nextjs-portal").evaluateAll((portals) => portals.forEach((portal) => portal.remove()));
+          await page.screenshot({
             animations: "disabled",
             path: path.join(captureDirectory, `create-${step.toLowerCase()}-${width}.png`),
           });
@@ -515,7 +517,7 @@ test.describe("Create wordmark and Request-step proportions", () => {
       await create.locator("#requestActionInput").fill("Read one introduction to building altruism");
       await create.locator("#continueRequest").click();
       await expectStepHeader("Offer");
-      await create.getByRole("button", { name: "A behavior change", exact: true }).click();
+      await create.locator('.offer-choice[data-offer="behavior"]').click();
       await create.locator("#continueOffers").click();
       const action = create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]');
       const duration = create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]');
@@ -533,7 +535,7 @@ test.describe("Create wordmark and Request-step proportions", () => {
       await expect(duration).toHaveValue("Within one week");
       await action.press("Escape");
       await expect(create.locator("#offerSelectView")).toBeVisible();
-      await expect(create.getByRole("button", { name: "A behavior change", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(create.locator('.offer-choice[data-offer="behavior"]')).toHaveAttribute("aria-pressed", "true");
       await create.locator("#continueOffers").click();
       await expect(action).toHaveValue("Read one public article");
       await create.locator("#reviewOffers").click();
