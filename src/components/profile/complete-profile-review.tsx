@@ -1,7 +1,7 @@
 "use client";
 
 import { SiteLink as Link } from "@/components/layout/site-link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { completeWalkthroughProfileAction } from "@/app/complete-profile/actions";
 import { validateProfileUsername } from "@/lib/profile-username";
@@ -16,6 +16,7 @@ import { ProfilePrioritiesCard } from "./profile-priorities-card";
 import styles from "./profile-setup.module.css";
 
 interface CompleteProfileReviewProps {
+  headerActions?: ReactNode;
   accountId: string | null;
   accountEmail: string;
   initialAffiliation: string;
@@ -38,7 +39,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
 
 export function CompleteProfileReview({ accountId, accountEmail, initialAffiliation, initialBio,
   initialDisplayName, initialUsername, initialPublicInvitationMentionsEnabled,
-  loginHref, returnTo, signupHref, successTo, storageAvailable }: CompleteProfileReviewProps) {
+  loginHref, returnTo, signupHref, successTo, storageAvailable, headerActions }: CompleteProfileReviewProps) {
   const initial = (): ProfileSetupValues => ({ ...emptyProfileSetupValues(), displayName: initialDisplayName,
     username: initialUsername, affiliation: initialAffiliation, bio: initialBio });
   const [values, setValues] = useState<ProfileSetupValues>(initial);
@@ -135,7 +136,10 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
   return <section className={styles.setup} aria-labelledby="complete-profile-heading" data-profile-setup-owner={accountId ? "member" : "guest"}>
     <header className={styles.header}>
       <Link href="/" prefetch={false} aria-label="Moral Trade home" className={styles.brand}>Moral Trade</Link>
-      <Link href="/discover" prefetch={false}>Browse trades</Link>
+      <div className={styles.headerActions}>
+        <Link href="/discover" prefetch={false}>Browse trades</Link>
+        {headerActions}
+      </div>
     </header>
     <div className={styles.intro}><p className={styles.eyebrow}>Your account</p>
       <h1 id="complete-profile-heading">Set up your profile.</h1>

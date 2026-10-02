@@ -454,13 +454,14 @@
   gap: 28px;
   justify-content: space-between;
   margin-top: 20px;
-  padding: clamp(24px, 4vw, 54px);
+  padding: clamp(20px, 3vw, 32px);
 }
 
 .guidedEmpty h2,
 .unavailable h2 {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 2rem;
+  font-size: clamp(24px, 2.5vw, 30px);
+  line-height: 1.2;
   font-weight: 500;
   margin: 0;
 }
