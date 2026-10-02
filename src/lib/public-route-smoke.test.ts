@@ -505,7 +505,7 @@ test("visitor router exposes four live action paths before deeper marketplace me
   assert.match(visitorPathsSource, /key: "create"/);
   assert.match(visitorPathsSource, /key: "pool"/);
   assert.match(visitorPathsSource, /key: "explore"/);
-  assert.match(visitorPathsSource, /complete a real donation through Every\.org/);
+  assert.match(visitorPathsSource, /open its own donation page for an independent gift/);
   assert.match(visitorPathsSource, /href: "\/offers\?view=live"/);
   assert.match(sitemapSource, /\/start/);
 });

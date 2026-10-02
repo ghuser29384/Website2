@@ -43,8 +43,8 @@ test("public pages separate direct charity gifts from Moral Trade project suppor
   assert.match(supportPage, /sponsor\.taxReceiptDisclosure/);
   assert.match(supportPage, /sponsor\.refundPolicyUrl/);
   assert.match(donatePage, /These donations do not fund Moral Trade itself/);
-  assert.match(donatePage, /Existing charity is the recipient/);
-  assert.match(donatePage, /href="\/support"/);
+  assert.match(donatePage, /charity\.legalName/);
+  assert.doesNotMatch(donatePage, /getMoralTradeFundingReadiness|projectFundingAvailable/);
   assert.match(statusPage, /Project funding remains sponsor-gated/);
   assert.match(statusPage, /fundingReadiness\.projectFundingAvailable/);
   assert.match(siteSource, /href: "\/support", label: "Support"/);
