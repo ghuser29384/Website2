@@ -137,8 +137,8 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
     <header className={styles.header}>
       <Link href="/" prefetch={false} aria-label="Moral Trade home" className={styles.brand}>Moral Trade</Link>
       <div className={styles.headerActions}>
-        <Link href="/discover" prefetch={false}>Browse trades</Link>
         {headerActions}
+        <Link href="/discover" prefetch={false}>Browse trades</Link>
       </div>
     </header>
     <div className={styles.intro}><p className={styles.eyebrow}>Your account</p>
