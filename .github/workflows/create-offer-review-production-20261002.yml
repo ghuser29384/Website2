@@ -1,0 +1,78 @@
+name: Create Offer and Review production 2026-10-02
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/create-offer-review-production-20261002.yml
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: create-offer-review-production-20261002
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/create-offer-review-production-20261002.yml
+  RELEASE_WORKFLOW: vercel-release.yml
+  RELEASE_REF: main
+  RELEASE_TARGET: production
+  EXPECTED_TRIGGER_PARENT: 8303b97546a1d3295e4f7c21125f22db8989a416
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify exact one-file trigger and approved public assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD^1)" = "$EXPECTED_TRIGGER_PARENT"
+          changed="$(git diff --name-only HEAD^1 HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          printf '%s\n' \
+            'bdbe6570196ece61fee4b91469cb3febfbfeb976a724e62dacd75a74156112b8  public/moral-trade-live-now.js' \
+            '17edb4f3586baaf1dbd8329e8cbed4f444312ebbe778761288504da383b82c32  public/moral-trade-create/index.html' \
+            'ba7b3c992da61f4024255386eeb9e668b93072799e2b220f9cb87373ccf9b22a  public/moral-trade-create/ui-repairs.css' \
+            '98aa32dbb7ec477d10702616841c40583198d22fc8f37769be5f3a8543f9e164  src/lib/create-interface/group-contribution-client.ts' \
+            | sha256sum --check --strict
+          test "$RELEASE_TARGET" = 'production'
+          test "$RELEASE_REF" = 'main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$RELEASE_REF" | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+          workflow_state="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW" --jq .state)"
+          test "$workflow_state" = 'active'
+
+      - name: Dispatch exact gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg workflow_ref main \
+            --arg release_ref "$RELEASE_REF" \
+            --arg target "$RELEASE_TARGET" \
+            --arg expected_sha "$GITHUB_SHA" \
+            '{ref:$workflow_ref,inputs:{ref:$release_ref,target:$target,expected_sha:$expected_sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches" \
+                --input - >/dev/null
