@@ -208,7 +208,7 @@ body .mt-refined-header.mt-refined-header :is(.header-start, .button-nav:not(.bu
   .mt-refined-header.mt-refined-header [data-mt-primary-links] { gap: 24px; }
   .mt-refined-header.mt-refined-header :is(.topbar-actions, .top-actions, .header-actions) { gap: 10px; }
 }
-@media (max-width: 1050px) {
+@media (max-width: 900px) {
   .mt-refined-header.mt-refined-header,
   .mt-refined-header.mt-refined-header.topbar-with-search {
     grid-template-areas: "brand actions" "nav nav" "search search";

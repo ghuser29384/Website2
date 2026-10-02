@@ -202,7 +202,7 @@ html {
 
 #screenCause #causeHeading {
   max-width: 12ch;
-  font-size: clamp(2.25rem, 3.4vw, 3.5rem);
+  font-size: clamp(2.25rem, 3.4vw, 3rem);
   line-height: 1.08 !important; /* Override the canonical poster leading. */
   text-wrap: balance;
   overflow-wrap: anywhere;
