@@ -685,3 +685,58 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/navigation/evidence", (route) => route.fulfill({ json: { available: true } }));
 });
+
+
+const profileWithoutPriorities = {
+  authenticated: true,
+  generatedAt: "2026-10-02T05:00:00.000Z",
+  matchingOpportunityCount: 0,
+  ownedOpportunities: [],
+  profile: {
+    causes: [],
+    weightedCauses: [],
+    signalSources: [],
+    learningEnabled: false,
+  },
+  recentChanges: [],
+  recommendations: [],
+  status: "profile_incomplete",
+};
+
+for (const route of ["/", "/feed"]) {
+  for (const width of [1440, 390]) {
+    test(`invites optional priorities on ${route} at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.route("**/api/live-now", (request) =>
+        request.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify(profileWithoutPriorities),
+        }),
+      );
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+
+      const feed = page.locator('[data-mt-live-now="adaptive"]');
+      const hero = feed.locator("section.urgent");
+      await expect(feed).toHaveAttribute("data-mt-live-now-state", "profile_incomplete");
+      await expect(hero.getByText("Your priorities", { exact: true })).toBeVisible();
+      await expect(hero.getByRole("heading", { name: "What matters to you?" })).toBeVisible();
+      await expect(hero).toContainText("Choose the causes you care about to help us suggest relevant opportunities.");
+      await expect(hero).toContainText("You can also explore without setting priorities.");
+      await expect(hero).toContainText("Viewing activity only helps personalize suggestions if you turn it on.");
+      await expect(hero).toContainText("No priorities selected yet");
+      await expect(hero.getByRole("link", { name: "Choose priorities →" })).toHaveAttribute("href", "/complete-profile");
+      await expect(hero.getByRole("link", { name: "Explore opportunities →" })).toHaveAttribute("href", "/offers?view=live");
+      await expect(feed.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
+      await expect(hero).not.toContainText("Profile needs priorities");
+
+      await page.getByRole("button", { name: "Plan resources", exact: true }).click();
+      await page.getByRole("button", { name: "Focus", exact: true }).click();
+      await expect(hero.getByRole("heading", { name: "What matters to you?" })).toBeVisible();
+      await expect(hero.getByRole("link", { name: "Choose priorities →" })).toBeVisible();
+      await expect(hero.getByRole("link", { name: "Explore opportunities →" })).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      await hero.screenshot({ path: testInfo.outputPath(`priority-prompt-${width}.png`) });
+    });
+  }
+}
