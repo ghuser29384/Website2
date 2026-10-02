@@ -1,9 +1,9 @@
 .setup { --paper: #f3eee9; --ink: #171717; --muted: #595550; --line: #cfc7c0; --accent: #2450ff; box-sizing: border-box; margin: 0 auto; max-width: 58rem; padding: 1.5rem clamp(1rem, 4vw, 3rem) 4rem; color: var(--ink); background: var(--paper); font-family: Arial, Helvetica, sans-serif; line-height: 1.55; }
 .setup * { box-sizing: border-box; min-width: 0; }
-.setup a { color: inherit; text-underline-offset: .2em; }
+:where(.setup) a { color: inherit; text-underline-offset: .2em; }
 .header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 1.25rem; }
-.brand { font-size: 1.25rem; text-decoration: none; }
-.intro { padding: 2.25rem 0 1.75rem; max-width: 42rem; }
+.brand { font-size: 1.5rem; text-decoration: none; }
+.intro { padding: 1.75rem 0; max-width: 42rem; }
 .eyebrow { font-size: .75rem; text-transform: uppercase; letter-spacing: .12em; }
 .intro h1 { font-weight: 500; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; letter-spacing: -.03em; margin: .5rem 0 1rem; }
 .fields { display: grid; gap: 1.25rem; }
@@ -11,8 +11,8 @@
 .fields input, .fields textarea { width: 100%; border: 1px solid var(--line); border-radius: .25rem; background: #fff; color: var(--ink); font: inherit; font-weight: 400; padding: .75rem; }
 .fields textarea { min-height: 6rem; resize: vertical; }
 .fields small, .device p, .account { color: var(--muted); font-size: .85rem; font-weight: 400; }
-.setup button { font: inherit; cursor: pointer; }
-.setup button:not(.primary) { color: var(--ink); border: 1px solid var(--line); border-radius: .25rem; background: transparent; padding: .55rem .8rem; }
+.setup > form button { font: inherit; cursor: pointer; }
+.setup > form button:not(.primary) { color: var(--ink); border: 1px solid var(--line); border-radius: .25rem; background: transparent; padding: .55rem .8rem; }
 .setup :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .setup :disabled { opacity: .55; cursor: not-allowed; }
 .personalization { border-top: 1px solid var(--line); margin-top: 1.5rem; padding: 1.25rem 0; }
@@ -25,3 +25,10 @@
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; border-top: 1px solid var(--line); padding-top: 1.5rem; margin-top: 1rem; }
 .actions span { color: var(--muted); font-size: .85rem; flex-basis: 100%; }
 .primary { background: var(--accent); color: #fff !important; border: 1px solid var(--accent); border-radius: .25rem; padding: .8rem 1.2rem; text-decoration: none; font-weight: 600; }
+
+.headerActions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.headerActions > button { position: static; height: 44px; font-size: 14px; }
+.headerActions > button small { font-size: 11px; }
+@media (max-width: 480px) {
+  .headerActions { width: 100%; justify-content: space-between; gap: .75rem; }
+}

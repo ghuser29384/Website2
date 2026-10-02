@@ -11,7 +11,7 @@
   background: #f2f8f3;
   box-shadow: 6px 6px 0 rgba(7, 7, 7, 0.16);
   color: #216a36;
-  font: 10px / 1.45 var(--font-mono, "IBM Plex Mono", monospace);
+  font: 14px / 1.45 var(--font-mono, "IBM Plex Mono", monospace);
 }
 
 .statusError {
@@ -19,6 +19,3 @@
   background: #fff2ef;
   color: #8d2f22;
 }
-
-.sourcesBar { max-width: 58rem; margin: 0 auto; padding: .75rem 1rem 0; display: flex; justify-content: flex-end; }
-.sourcesBar > button { position: static; margin: 0; }

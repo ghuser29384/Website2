@@ -57,10 +57,11 @@ test("route-local styling replaces the legacy marketing hero and card stack", ()
   assert.match(page, /import styles from "\.\/contact\.module\.css"/);
   assert.match(page, /data-mt-surface="contact"/);
   assert.doesNotMatch(page, /className="(?:hero|hero-grid|hero-copy|hero-panel|flow-card|data-grid)/);
-  assert.match(css, /\.page \.masthead :global\(\.mt-site-topbar\)/);
-  assert.match(css, /flex-direction: row;\n  flex-wrap: nowrap/);
-  assert.match(css, /overflow-x: auto/);
-  assert.match(css, /grid-template-areas: "brand search actions" "nav nav nav"/);
+  // The shared masthead owns navigation geometry, including phone menu bounds.
+  assert.doesNotMatch(css, /grid-template-areas/);
+  const layout = readFileSync("src/app/layout.tsx", "utf8");
+  assert.match(layout, /moral-trade-refined-header\.css/);
+  assert.match(layout, /moral-trade-proportions\.css/);
   assert.match(css, /font-size: clamp\(2rem, 3\.5vw, 3rem\)/);
   assert.match(css, /@media \(max-width: 800px\)/);
   assert.match(css, /@media \(max-width: 560px\)/);

@@ -82,18 +82,6 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
 
   return (
     <div className={styles.pageShell} data-mt-surface="complete-profile">
-      <div className={styles.sourcesBar}><CompleteProfileConnections
-        feedback={formMessage}
-        initialOpen={initialConnectionsOpen}
-        isAuthenticated={Boolean(viewer)}
-        loginHref={loginHref}
-        returnTo={returnTo}
-        signupHref={signupHref}
-        xAvailabilityReason={xConnectorStatus.availability.reason}
-        xConnection={xConnection}
-        xEnabled={xConnectorStatus.availability.enabled}
-      /></div>
-
       <main id="main-content" tabIndex={-1}>
         {!supabaseReady ? (
           <div className={`${styles.statusBanner} ${styles.statusError}`} role="alert">
@@ -119,6 +107,19 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
         ) : null}
 
         <CompleteProfileReview
+          headerActions={
+            <CompleteProfileConnections
+              feedback={formMessage}
+              initialOpen={initialConnectionsOpen}
+              isAuthenticated={Boolean(viewer)}
+              loginHref={loginHref}
+              returnTo={returnTo}
+              signupHref={signupHref}
+              xAvailabilityReason={xConnectorStatus.availability.reason}
+              xConnection={xConnection}
+              xEnabled={xConnectorStatus.availability.enabled}
+            />
+          }
           accountEmail={viewer?.profile.email ?? ""}
           accountId={viewer?.authUser.id ?? null}
           key={viewer?.authUser.id ?? "guest"}

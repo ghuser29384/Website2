@@ -468,7 +468,7 @@
 /* One primary navigation system; compact cards never outrank the records. */
 .shell :global(.mt-v75-route-board) { grid-template-columns: minmax(0, 1fr) !important; }
 .shell :global(.mt-v75-route-workspace) { min-width: 0; }
-.shell .page { padding: 28px clamp(16px, 3vw, 40px) 48px !important; }
+.shell .page { width: min(100%, 1240px); margin-inline: auto; padding: 28px clamp(16px, 3vw, 32px) 48px !important; }
 .shell .hero h1 { font-size: clamp(2rem, 3vw, 2.75rem) !important; line-height: 1.15; }
 .shell .summary { margin-top: 10px; }
 .summaryCard > strong { font: 600 1.8rem/1.25 var(--font-body, sans-serif); margin: 0 0 6px; }
