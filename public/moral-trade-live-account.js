@@ -280,8 +280,8 @@
   const accountActions = {
     "payment-account": {
       label: "Manage",
-      name: "Manage payment account",
-      href: "/dashboard#payment-setup",
+      name: "Manage payment methods and receiving",
+      href: "/dashboard/payments",
     },
     notifications: {
       label: "Manage",
@@ -431,8 +431,8 @@
       {
         key: "payment-account",
         findLabel: "Escrow account",
-        label: "Payment account",
-        detail: signedInValue(account.paymentAccount.label),
+        label: "Payments",
+        detail: signedInValue("Payment methods and receiving"),
       },
       {
         key: "notifications",

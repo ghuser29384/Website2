@@ -46,7 +46,7 @@ test("the new navigation endpoint can only perform a bounded anonymous public re
   assert.match(route, /NextResponse.json\(\{ available \}/);
   assert.doesNotMatch(route, /createServiceClient|getSupabaseServiceEnv|cookies\(|request\.|\.from\(|export.*POST/);
   const tools = readFileSync("src/components/dashboard/dashboard-tools.tsx", "utf8");
-  assert.match(tools, /href="\/dashboard\?view=controls#payment-setup"[^>]*>Payment setup/);
+  assert.match(tools, /href="\/dashboard\/payments"[^>]*>\s*Payment setup/);
   assert.doesNotMatch(tools, /<summary>Currency|account-wide currency selector/);
   const header = readFileSync("src/components/layout/site-topbar.tsx", "utf8");
   assert.match(header, /\/dashboard\?view=controls#data-portability/);

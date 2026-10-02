@@ -1,5 +1,6 @@
 "use server";
 
+import { accountPayments } from "@/lib/payments/account-payments";
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -8358,6 +8359,14 @@ export async function createAgreementPaymentCheckoutAction(formData: FormData) {
   }
 
   const platformFeeCents = calculatePlatformFeeCents(amountCents);
+  let savedPaymentCustomer: string | null = null;
+  try {
+    savedPaymentCustomer = await (await accountPayments()).service.customerId({
+      id: viewer.authUser.id,
+    });
+  } catch {
+    redirectWithMessage(returnTo, "error", "Your saved payment profile could not be verified. Please review Payment methods before paying.");
+  }
   const { data: payment, error: paymentError } = await supabase
     .from("agreement_payments")
     .insert({
@@ -8392,6 +8401,7 @@ export async function createAgreementPaymentCheckoutAction(formData: FormData) {
   const siteUrl = getSiteUrl();
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
+    customer: savedPaymentCustomer ?? undefined,
     line_items: [
       {
         quantity: 1,

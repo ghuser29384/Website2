@@ -817,6 +817,46 @@ export interface Database {
         };
         Relationships: [];
       };
+      account_payment_setup_limits: {
+        Row: { profile_id: string; window_started_at: string; attempts: number };
+        Insert: { profile_id: string; window_started_at: string; attempts: number };
+        Update: { window_started_at?: string; attempts?: number };
+        Relationships: [];
+      };
+      account_payment_settings: {
+        Row: {
+          id: string;
+          profile_id: string;
+          platform_account_id: string;
+          livemode: boolean;
+          stripe_customer_id: string | null;
+          customer_started_at: string | null;
+          stripe_account_id: string | null;
+          account_started_at: string | null;
+          account_country: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          platform_account_id: string;
+          livemode: boolean;
+          stripe_customer_id?: string | null;
+          customer_started_at?: string | null;
+          stripe_account_id?: string | null;
+          account_started_at?: string | null;
+          account_country?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          stripe_customer_id?: string | null;
+          customer_started_at?: string | null;
+          stripe_account_id?: string | null;
+          account_started_at?: string | null;
+          account_country?: string | null;
+        };
+        Relationships: [];
+      };
       profile_payment_accounts: {
         Row: {
           profile_id: string;
@@ -11140,6 +11180,7 @@ export interface Database {
       };
     };
     Functions: {
+      take_account_payment_setup_slot: { Args: { p_profile_id: string }; Returns: boolean };
       normalize_profile_username_v1: {
         Args: { p_username: string };
         Returns: string;

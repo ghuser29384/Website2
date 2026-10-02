@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { getLegacyDashboardTarget, type DashboardView } from "@/lib/dashboard-view";
 import styles from "./dashboard-tools.module.css";
 
-export function DashboardTools({ active }: { active: DashboardView }) {
+export function DashboardTools({ active }: { active: DashboardView | "payments" }) {
   useEffect(() => {
     if (active !== "priorities") return;
     function preserveLegacySection() {
@@ -23,7 +23,9 @@ export function DashboardTools({ active }: { active: DashboardView }) {
       <Link href="/dashboard" prefetch={false} aria-current={active === "priorities" ? "page" : undefined}>
         Priorities
       </Link>
-      <a href="/dashboard?view=controls#payment-setup">Payment setup</a>
+      <Link href="/dashboard/payments" prefetch={false} aria-current={active === "payments" ? "page" : undefined}>
+        Payment setup
+      </Link>
       <Link href="/complete-profile" prefetch={false}>Profile details</Link>
       <a href="/dashboard?view=controls#privacy-controls">Privacy</a>
       <a href="/dashboard?view=controls#notifications">Notifications</a>

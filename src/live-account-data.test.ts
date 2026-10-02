@@ -42,7 +42,7 @@ test("the live account endpoint reads real profile and agreement state", () => {
 
 test("the bridge removes the escrow claim and uses truthful missing states", () => {
   assert.match(bridge, /findLabel: "Escrow account"/);
-  assert.match(bridge, /label: "Payment account"/);
+  assert.match(bridge, /label: "Payments"/);
   assert.match(bridge, /No default resolver selected/);
   assert.match(bridge, /Not configured/);
   assert.match(bridge, /Sign in to view account details/);
