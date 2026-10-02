@@ -166,6 +166,14 @@ jobs:
                   result[label + "Failure"] = str(exc)
           alias = m.api("/v4/aliases/" + m.ALIAS, absent_ok=True)
           result["plannedAliasExists"] = alias is not None
+          if alias is not None:
+              m.validate_alias(alias, m.BOOTSTRAP_ID)
+              uid = alias.get("uid")
+              m.require(isinstance(uid, str) and bool(re.fullmatch(r"[A-Za-z0-9_-]{1,128}", uid)), "invalid_alias_uid")
+              result["verifiedAliasUid"] = uid
+              result["verifiedAliasName"] = m.ALIAS
+              result["verifiedAliasProjectId"] = m.PROJECT
+              result["verifiedAliasDeploymentId"] = m.BOOTSTRAP_ID
           result["aliasAssignmentAttempted"] = False
           result["secretValuesRetained"] = False
           Path("evidence").mkdir(exist_ok=True)
