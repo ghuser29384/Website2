@@ -325,3 +325,176 @@ html {
     border-top: 1px solid var(--line);
   }
 }
+
+
+/* Reuse the shared mark + wordmark, with Create as a separate page label. */
+.topbar .brand-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.topbar .create-brand-wordmark {
+  color: #ffffff;
+  font-size: 24px;
+}
+
+.topbar .brand-title {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 1px solid #5d5b57;
+  font-size: 11px;
+  line-height: 20px;
+}
+
+.topbar .brand-subtitle {
+  margin-top: 6px;
+  max-width: 46ch;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+/* Match the repaired Cause step's form scale instead of inheriting the poster layout. */
+#screenRequest .stage {
+  min-height: 0;
+  grid-template-columns: minmax(280px, .78fr) minmax(0, 1.72fr);
+  gap: 0;
+  align-items: stretch;
+}
+
+#screenRequest .intro {
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0 !important;
+  padding: clamp(24px, 2.5vw, 36px);
+  border-right: 1px solid var(--ink);
+}
+
+#screenRequest #requestHeading {
+  max-width: 16ch;
+  font-size: clamp(2rem, 2.75vw, 2.75rem);
+  line-height: 1.08 !important;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+#screenRequest .intro-copy {
+  max-width: 36ch;
+  margin-top: 20px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+#screenRequest .chosen-strip {
+  min-width: 0;
+  width: 100%;
+  margin-top: 24px;
+}
+
+#screenRequest .chosen-strip strong {
+  overflow-wrap: anywhere;
+}
+
+#screenRequest .request-panel {
+  align-self: start;
+  padding: clamp(16px, 2vw, 28px);
+}
+
+#screenRequest .request-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 0;
+  padding: 20px;
+}
+
+#screenRequest .request-mark {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 20px;
+}
+
+#screenRequest .request-check {
+  top: 20px;
+  right: 20px;
+  width: 24px;
+  height: 24px;
+}
+
+#screenRequest .request-choice strong {
+  max-width: 100%;
+  font-size: clamp(1.5rem, 2.1vw, 2rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+#screenRequest .request-example {
+  margin-top: 20px;
+  padding-top: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1180px) {
+  #screenRequest .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #screenRequest .intro {
+    padding: 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  #screenRequest #requestHeading {
+    max-width: 24ch;
+    font-size: clamp(2rem, 4.5vw, 2.5rem);
+  }
+
+  #screenRequest .intro-copy {
+    max-width: 62ch;
+    margin-top: 16px;
+  }
+
+  #screenRequest .chosen-strip {
+    max-width: 420px;
+    margin-top: 20px;
+  }
+
+  #screenRequest .request-choice strong {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .topbar .brand-subtitle {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    gap: 12px;
+  }
+
+  .topbar .brand-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .topbar .create-brand-wordmark {
+    font-size: 20px;
+  }
+
+  .topbar .brand-title {
+    padding-left: 0;
+    border-left: 0;
+    font-size: 9px;
+    line-height: 1;
+  }
+}

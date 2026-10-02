@@ -17,6 +17,7 @@ async function openCreate(page: import("@playwright/test").Page) {
 
 async function expectRequestTransitionClear(create: FrameLocator, expectedCause: string) {
   await expect(create.locator("#screenRequest")).toBeVisible();
+  await expect(create.locator("#requestHeading")).toHaveText("What would you like help with?");
   await expect(create.locator("#requestCause")).toHaveText(expectedCause);
 
   await expect
@@ -378,4 +379,194 @@ test.describe("Cause-step proportions", () => {
     await input.press("Enter");
     await expectRequestTransitionClear(create, "Moral uncertainty");
   });
+});
+
+test.describe("Create wordmark and Request-step proportions", () => {
+  for (const width of [320, 375, 768, 900, 901, 1024, 1100, 1101, 1180, 1181, 1440, 1644, 2048]) {
+    test(`keeps the canonical header and Request form balanced at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const pageErrors: string[] = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+      const create = await openCreate(page);
+      const brand = create.locator(".create-brand-wordmark");
+      await expect(brand).toHaveAttribute("data-mt-brand-canonical", "true");
+      await expect(brand.locator(".mt-canonical-wordmark-label")).toHaveText("Moral Trade");
+      await expect(brand.locator('path[d="M160 784 784 160 864 240 240 864Z"]')).toHaveCount(1);
+      await expect(brand.locator('path[d="M80 784h160v160H80z"]')).toHaveCount(1);
+      await expect(brand.locator('path[d="M784 80h160v160H784z"]')).toHaveAttribute("fill", "#3158ff");
+      await expect(brand).toHaveCSS("color", "rgb(255, 255, 255)");
+      await expect(create.locator(".brand-title")).toHaveText("Create");
+      await create.getByRole("button", { name: "Building altruism", exact: true }).click();
+      await expectRequestTransitionClear(create, "Building altruism");
+
+      const layout = await create.locator("body").evaluate(() => {
+        const required = (selector: string) => {
+          const element = document.querySelector(selector);
+          if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+          return element;
+        };
+        const box = (selector: string) => required(selector).getBoundingClientRect();
+        const intro = box("#screenRequest .intro");
+        const heading = box("#requestHeading");
+        const panel = box("#screenRequest .request-panel");
+        const cards = box("#requestKindGrid");
+        const header = box(".topbar");
+        const brand = box(".brand-heading");
+        const back = box("#backToTrade");
+        const progress = required("#progress");
+        const nextHeaderControl = getComputedStyle(progress).display === "none"
+          ? back : progress.getBoundingClientRect();
+        const headingStyle = getComputedStyle(required("#requestHeading"));
+        const contentFits = (element: Element, container: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const bounds = container.getBoundingClientRect();
+          return [...range.getClientRects()].every((rect) =>
+            rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1
+            && rect.top >= bounds.top - 1 && rect.bottom <= bounds.bottom + 1,
+          );
+        };
+        return {
+          width: window.innerWidth,
+          fontSize: parseFloat(headingStyle.fontSize),
+          lineHeight: parseFloat(headingStyle.lineHeight),
+          headingHeight: heading.height,
+          headingInset: heading.left - intro.left,
+          headingFits: contentFits(required("#requestHeading"), required("#screenRequest .intro")),
+          introTop: intro.top,
+          introBottom: intro.bottom,
+          introHeight: intro.height,
+          panelTop: panel.top,
+          cardsTop: cards.top,
+          cardsBottom: cards.bottom,
+          cardCount: document.querySelectorAll("#requestKindGrid button").length,
+          clippedLabels: [...document.querySelectorAll("#requestKindGrid strong")]
+            .filter((label) => !contentFits(label, label.closest("button")!))
+            .map((label) => label.textContent),
+          brandFits: brand.left >= 0 && brand.right <= nextHeaderControl.left - 8
+            && brand.top >= header.top && brand.bottom <= header.bottom
+            && contentFits(required(".mt-canonical-wordmark-label"), required(".brand-heading"))
+            && contentFits(required(".brand-title"), required(".brand-heading")),
+          horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        };
+      });
+      expect(layout.fontSize).toBeGreaterThanOrEqual(32);
+      expect(layout.fontSize).toBeLessThanOrEqual(44);
+      expect(layout.lineHeight).toBeGreaterThanOrEqual(layout.fontSize * 1.04);
+      expect(layout.headingHeight).toBeLessThanOrEqual(layout.lineHeight * 5 + 1);
+      expect(layout.headingInset).toBeGreaterThanOrEqual(23);
+      expect(layout.headingFits).toBe(true);
+      expect(layout.cardCount).toBe(3);
+      expect(layout.clippedLabels).toEqual([]);
+      expect(layout.brandFits).toBe(true);
+      expect(layout.horizontalOverflow).toBe(false);
+      if (layout.width > 1180) {
+        expect(layout.panelTop).toBeCloseTo(layout.introTop, 0);
+        expect(layout.cardsTop - layout.introTop).toBeLessThanOrEqual(29);
+        expect(layout.introHeight).toBeLessThan(560);
+        expect(layout.cardsBottom).toBeLessThan(900);
+      } else {
+        expect(layout.panelTop).toBeGreaterThanOrEqual(layout.introBottom - 1);
+      }
+      expect(pageErrors).toEqual([]);
+
+      if (captureVisuals) {
+        await mkdir(captureDirectory, { recursive: true });
+        await page.locator("nextjs-portal").evaluateAll((portals) => portals.forEach((portal) => portal.remove()));
+        await page.screenshot({
+          animations: "disabled",
+          path: path.join(captureDirectory, `request-proportions-${width}.png`),
+        });
+        await create.locator(".topbar").screenshot({
+          animations: "disabled",
+          path: path.join(captureDirectory, `create-wordmark-${width}.png`),
+        });
+      }
+    });
+  }
+
+  for (const width of [320, 375, 768, 1440]) {
+    test(`preserves selection, interrupted editing, and all four Create steps at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      let publishes = 0;
+      page.on("request", (request) => {
+        if (new URL(request.url()).pathname === "/api/create/publish") publishes += 1;
+      });
+      const create = await openCreate(page);
+      const expectStepHeader = async (step: string) => {
+        await expect(create.locator(`#screen${step}`)).toBeVisible();
+        await expect(create.locator(".mt-canonical-wordmark-label")).toHaveText("Moral Trade");
+        await expect(create.locator("#backToTrade")).toBeVisible();
+        expect(await create.locator("html").evaluate((element) =>
+          element.scrollWidth > element.clientWidth + 1,
+        )).toBe(false);
+        if (captureVisuals) {
+          await mkdir(captureDirectory, { recursive: true });
+          await page.locator("nextjs-portal").evaluateAll((portals) => portals.forEach((portal) => portal.remove()));
+          await page.screenshot({
+            animations: "disabled",
+            path: path.join(captureDirectory, `create-${step.toLowerCase()}-${width}.png`),
+          });
+        }
+      };
+      await expectStepHeader("Cause");
+      await create.getByRole("button", { name: "Building altruism", exact: true }).click();
+      await expectStepHeader("Request");
+      await create.locator('[data-request-kind="commitment"]').click();
+      await create.locator("#requestActionInput").fill("Read one introduction to building altruism");
+      await create.locator("#continueRequest").click();
+      await expectStepHeader("Offer");
+      await create.locator('.offer-choice[data-offer="behavior"]').click();
+      await create.locator("#continueOffers").click();
+      const action = create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]');
+      const duration = create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]');
+      await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(1);
+      await action.fill("Read one public article");
+      await duration.fill("Within one week");
+      await duration.press("Tab");
+      await create.locator("#reviewOffers").click();
+      await expectStepHeader("Summary");
+      await create.locator("#changeRequest").click();
+      await expect(create.locator('[data-request-kind="commitment"]')).toHaveAttribute("aria-pressed", "true");
+      await expect(create.locator("#requestActionInput")).toHaveValue("Read one introduction to building altruism");
+      await create.locator("#continueRequest").click();
+      await expect(action).toHaveValue("Read one public article");
+      await expect(duration).toHaveValue("Within one week");
+      await action.press("Escape");
+      await expect(create.locator("#offerSelectView")).toBeVisible();
+      await expect(create.locator('.offer-choice[data-offer="behavior"]')).toHaveAttribute("aria-pressed", "true");
+      await create.locator("#continueOffers").click();
+      await expect(action).toHaveValue("Read one public article");
+      await create.locator("#reviewOffers").click();
+      await expect(create.locator("#screenSummary")).toBeVisible();
+      expect(publishes).toBe(0);
+    });
+  }
+});
+
+
+test("keeps the Create shell usable after browser Back and Forward", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.goto("/create");
+  let create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await expect(create.locator("#screenCause")).toBeVisible();
+  await page.goto("/trades/new");
+  create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await create.getByRole("button", { name: "Building altruism", exact: true }).click();
+  await expectRequestTransitionClear(create, "Building altruism");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/create$/);
+  create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await expect(create.locator("#screenCause")).toBeVisible();
+  await expect(create.locator(".mt-canonical-wordmark-label")).toHaveText("Moral Trade");
+  await page.goForward();
+  await expect(page).toHaveURL(/\/trades\/new$/);
+  create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await expect(create.locator("#screenCause")).toBeVisible();
+  await create.getByRole("button", { name: "Building altruism", exact: true }).click();
+  await create.locator('[data-request-kind="skill"]').click();
+  await expect(create.locator('[data-request-kind="skill"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(create.locator("#requestActionInput")).toBeFocused();
 });

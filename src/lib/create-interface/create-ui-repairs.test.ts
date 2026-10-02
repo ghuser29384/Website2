@@ -82,3 +82,27 @@ test("the repair script scopes examples and suggestions, preserves every request
   assert.match(repairScript, /submit\.disabled = input\.value\.trim\(\)\.length === 0/);
   assert.match(repairScript, /aria-current/);
 });
+
+test("Create reuses the shared Moral Trade wordmark and keeps its page label separate", () => {
+  const integrated = integrateCommonGroundCreateSource(source);
+  assert.equal((integrated.match(/src="\/moral-trade-brand\.js"/g) ?? []).length, 1);
+  assert.match(integrated, /<span class="create-brand-wordmark">Moral Trade<\/span>/);
+  assert.match(integrated, /<p class="brand-title">Create<\/p>/);
+  assert.doesNotMatch(integrated, /<span class="brand-mark"/);
+});
+
+test("Request uses padded form-scale typography and responsive contribution cards", () => {
+  assert.match(repairCss, /#screenRequest \.stage\s*\{[\s\S]*?min-height: 0;[\s\S]*?gap: 0;/);
+  assert.match(repairCss, /#screenRequest \.intro\s*\{[\s\S]*?padding: clamp\(24px, 2\.5vw, 36px\);/);
+  assert.match(repairCss, /#screenRequest #requestHeading\s*\{[\s\S]*?font-size: clamp\(2rem, 2\.75vw, 2\.75rem\);[\s\S]*?line-height: 1\.08 !important;/);
+  assert.match(repairCss, /@media \(max-width: 1180px\)\s*\{\s*#screenRequest \.stage\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
+  assert.match(repairCss, /#screenRequest \.request-choice strong\s*\{[\s\S]*?overflow-wrap: anywhere;/);
+});
+
+test("the Request heading keeps a friendly tone on entry and after changing the funding structure", () => {
+  const integrated = integrateCommonGroundCreateSource(source);
+  assert.equal((integrated.match(/What would you like help with\?/g) ?? []).length, 2);
+  assert.match(integrated, /<h1 id="requestHeading">What would you like help with\?<\/h1>/);
+  assert.match(integrated, /\$\("#requestHeading"\)\.textContent = "What would you like help with\?"/);
+  assert.doesNotMatch(integrated, /What do you want other people to do\?/);
+});
