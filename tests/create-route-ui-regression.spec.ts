@@ -831,7 +831,9 @@ test.describe("Offer and Review tone and proportions", () => {
         await expect(create.locator("#summaryOffers")).toContainText(action);
         await expect(create.locator("#summaryOffers")).toContainText("Wild animal suffering");
         await expect(create.locator("#publishOffer")).toBeDisabled();
-        await create.locator("#publishConfirm").check();
+        // The visible label owns this custom checkbox's pointer target.
+        await create.locator("label.publish-confirm").click();
+        await expect(create.locator("#publishConfirm")).toBeChecked();
         await expect(create.locator("#publishOffer")).toBeEnabled();
         await create.locator("#changeOffer").click();
         await expect(create.locator("#offerHeading")).toHaveText("Add a few details");
