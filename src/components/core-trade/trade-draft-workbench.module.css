@@ -1,4 +1,6 @@
-.page {
+/* Input-assist popovers are portaled to body; keep their palette builder-scoped. */
+.page,
+:global(body):has(.page) {
   --flow-ink: #202733;
   --flow-canvas: #f4f6f8;
   --flow-paper: #ffffff;
@@ -20,6 +22,9 @@
   --flow-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   --flow-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   --flow-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.page {
   min-height: 100svh;
   background: var(--flow-canvas);
   color: var(--flow-ink);
@@ -941,4 +946,56 @@
   .message {
     margin: 16px 18px 0;
   }
+}
+
+:global(body):has(.page) :global(.mt-input-assist-panel),
+:global(body):has(.page) :global(.mt-donation-hover-card) {
+  border-color: var(--flow-input-line);
+  border-radius: 6px;
+  background: var(--flow-white);
+  color: var(--flow-ink);
+  box-shadow: 0 8px 28px rgba(32, 39, 51, 0.12);
+}
+
+:global(body):has(.page) :global(.mt-input-assist-heading) {
+  border-color: var(--flow-line);
+  background: var(--flow-white);
+  color: var(--flow-muted);
+}
+
+:global(body):has(.page) :global(.mt-input-assist-heading strong),
+:global(body):has(.page) :global(.mt-input-assist-option),
+:global(body):has(.page) :global(.mt-input-assist-option strong),
+:global(body):has(.page) :global(.mt-donation-hover-card > strong) {
+  color: var(--flow-ink);
+}
+
+:global(body):has(.page) :global(.mt-input-assist-option span),
+:global(body):has(.page) :global(.mt-input-assist-empty),
+:global(body):has(.page) :global(.mt-donation-hover-kicker),
+:global(body):has(.page) :global(.mt-donation-hover-card p),
+.page :global(.mt-website-mention-preview) {
+  color: var(--flow-muted);
+}
+
+:global(body):has(.page) :global(.mt-input-assist-option:hover),
+:global(body):has(.page) :global(.mt-input-assist-option:focus-visible),
+:global(body):has(.page) :global(.mt-input-assist-option[aria-selected="true"]) {
+  border-color: var(--flow-blue);
+  background: var(--flow-blue-soft);
+}
+
+:global(body):has(.page) :global(.mt-input-assist-option[aria-selected="true"]) {
+  box-shadow: inset 3px 0 0 var(--flow-blue);
+}
+
+.page :global(.mt-website-mention-preview a) {
+  border-color: #c7d5f3;
+  background: var(--flow-blue-soft);
+  color: var(--flow-blue);
+}
+
+.page :global(.mt-website-mention-preview a:focus-visible) {
+  outline: 3px solid var(--flow-blue);
+  outline-offset: 2px;
 }

@@ -1,0 +1,73 @@
+name: Seven-step trade builder palette QA
+
+on:
+  pull_request:
+    paths:
+      - "src/components/core-trade/trade-draft-workbench*"
+      - "src/components/core-trade/pending-submit-button.tsx"
+      - "src/components/core-trade/trade-flow-icons.tsx"
+      - "src/components/brand/moral-trade-wordmark.tsx"
+      - "src/components/layout/site-link.tsx"
+      - "src/lib/command-center-handoff*"
+      - "src/lib/trade-draft-standards*"
+      - "src/app/layout.tsx"
+      - "src/app/trades/new/page.tsx"
+      - "src/app/*.css"
+      - "public/moral-trade-input-*"
+      - "tests/trade-draft-palette.spec.ts"
+      - "tests/fixtures/trade-draft-palette/**"
+      - "scripts/trade-draft-palette-fixture.mjs"
+      - "playwright.trade-draft-palette.config.ts"
+      - ".github/workflows/trade-draft-palette-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trade-draft-palette-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  palette-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint fixture and builder sources
+        run: >-
+          npx eslint
+          src/components/core-trade/trade-draft-workbench.tsx
+          tests/trade-draft-palette.spec.ts
+          tests/fixtures/trade-draft-palette/fixture.tsx
+          scripts/trade-draft-palette-fixture.mjs
+          playwright.trade-draft-palette.config.ts
+      - name: Check real-component bundle without starting a server
+        run: node scripts/trade-draft-palette-fixture.mjs --check
+      - name: Test existing draft and handoff safeguards
+        run: node --import tsx --test src/lib/command-center-handoff.test.ts src/lib/trade-input-assist.test.ts
+      - name: Verify production compilation without deployment
+        env:
+          VERCEL: "1"
+          NODE_OPTIONS: --max-old-space-size=3072
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify seven-step desktop and mobile states
+        run: npx playwright test --config=playwright.trade-draft-palette.config.ts
+      - name: Retain screenshots and failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trade-draft-palette-${{ github.run_id }}
+          path: test-results/trade-draft-palette
+          if-no-files-found: warn
+          retention-days: 7
