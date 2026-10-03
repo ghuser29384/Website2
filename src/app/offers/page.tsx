@@ -53,12 +53,12 @@ const LIVE_METADATA: Metadata = {
   title: "Explore live proposals",
   description:
     "Explore live Moral Trade proposals with explicit baselines, terms, evidence, payment boundaries, and current review states.",
-  alternates: { canonical: "/offers?view=live" },
+  alternates: { canonical: "/discover" },
   openGraph: {
     title: "Explore live Moral Trade proposals",
     description:
       "Browse participant proposals and open their complete terms without mixing examples or explanatory records into marketplace inventory.",
-    url: getAbsoluteUrl("/offers?view=live"),
+    url: getAbsoluteUrl("/discover"),
     type: "website",
   },
 };

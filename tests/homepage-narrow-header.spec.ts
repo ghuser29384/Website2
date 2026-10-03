@@ -40,6 +40,8 @@ for (const width of [1440, 320, 360, 390]) {
     await expect(tour).toBeVisible();
     await expect(tour).toHaveCSS("font-size", "14px");
     await tour.click();
+    await expect(page).toHaveURL(/\/what-is-moral-trade$/);
+    await page.getByRole("link", { name: "Take the optional tour" }).click();
     await expect(page).toHaveURL(/\/walkthrough$/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
     await page.goto("/", { waitUntil: "domcontentloaded" });
