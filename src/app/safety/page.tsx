@@ -120,14 +120,10 @@ export default async function SafetyPage() {
                 Read anti-threat rules
               </Link>
               <Link className="button button-secondary" href="/contact">
-                Ask about recourse
-              </Link>
-              <Link className="button button-secondary" href="/contact">
                 Report a concern
               </Link>
             </div>
           </section>
-
         </div>
       </header>
 

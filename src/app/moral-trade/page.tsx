@@ -146,7 +146,7 @@ export default async function MoralTradePrimerPage() {
               <Link className="button button-secondary" href="/worked-examples">
                 Browse worked examples
               </Link>
-
+              <Link className="button button-secondary" href="/walkthrough">Take the optional tour</Link>
             </>
           }
           description="Moral trade lets people with different moral priorities cooperate when each can make a concession that matters less to them and more to the other side."
@@ -159,10 +159,6 @@ export default async function MoralTradePrimerPage() {
 
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white" aria-label="Learning resources">
-          <div className="hero-actions">
-            <Link className="button button-secondary" href="/walkthrough">Take the optional tour</Link>
-            <Link className="button button-secondary" href="/worked-examples">Explore worked examples</Link>
-          </div>
           <details className="details-panel">
             <summary>Review notes and safeguard demonstrations</summary>
             <div className="details-content">
