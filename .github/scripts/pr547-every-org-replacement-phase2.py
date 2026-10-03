@@ -35,7 +35,7 @@ ROUTE = "/api/connectors/every-org/" + ROUTE_ID
 QA_URL = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
 PURPOSE = "every-org-replacement-phase2-20261002-566bb18"
 CLI = "vercel@50.38.1"
-MARKER = ".github/pr547-every-org-replacement-phase2-v2-20261003.authorize"
+MARKER = ".github/pr547-every-org-replacement-phase2-v3-20261003.authorize"
 TABLES = ("direct_donation_upgrade_offers", "direct_donation_upgrade_candidates",
           "direct_donation_upgrade_obligations", "direct_donation_upgrade_impact_credits",
           "direct_donation_upgrade_audit_events")

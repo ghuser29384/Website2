@@ -473,8 +473,8 @@ class Phase2Contracts(unittest.TestCase):
         self.assertIn('staged.is_dir() and not staged.is_symlink()', staging)
         self.assertIn('p.is_file() and not p.is_symlink()', staging)
         self.assertLess(staging.index(move), staging.index('build --target=preview --standalone'))
-        self.assertIn('phase2-v2-20261003.authorize', workflow)
-        self.assertIn('schema=every-org-replacement-phase2-v2', workflow)
+        self.assertIn('phase2-v3-20261003.authorize', workflow)
+        self.assertIn('schema=every-org-replacement-phase2-v3', workflow)
         self.assertNotIn('schema=every-org-replacement-phase2-v1', workflow)
 
     def test_artifact_upload_excludes_raw_logs_and_build_output(self):

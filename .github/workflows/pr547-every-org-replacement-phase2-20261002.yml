@@ -19,7 +19,7 @@ env:
   EXPECTED_PR_HEAD: 321e10231bd03459208783bce3544d1fd4d54be7
   EXPECTED_CANDIDATE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
   EXPECTED_CANDIDATE_TREE: 86c70b442272f5cff4cf29e63d030c949b4323cb
-  PHASE2_MARKER: .github/pr547-every-org-replacement-phase2-v2-20261003.authorize
+  PHASE2_MARKER: .github/pr547-every-org-replacement-phase2-v3-20261003.authorize
   PHASE2_SCRIPT: .github/scripts/pr547-every-org-replacement-phase2.py
   PHASE2_TEST: .github/scripts/pr547-every-org-replacement-phase2.test.py
 
@@ -69,7 +69,7 @@ jobs:
               test "$(git diff --name-status "$BEFORE_SHA" HEAD)" = $'A\t'"$PHASE2_MARKER"
               test -z "$(git log "$BEFORE_SHA" --format=%H -- "$PHASE2_MARKER")"
               expected="$(cat <<EOF_AUTH
-          schema=every-org-replacement-phase2-v2
+          schema=every-org-replacement-phase2-v3
           phase=fresh_preview_then_verified_stable_alias_cutover
           candidate=$EXPECTED_CANDIDATE_SHA
           tree=$EXPECTED_CANDIDATE_TREE
@@ -79,7 +79,7 @@ jobs:
           bootstrap_deployment=dpl_AZkecr8ZLLym3nwbwt4iAydmi5dD
           owner_saved_replacement_pair_and_approved_phase2=yes
           bounded_rollback=new_alias_to_exact_credential_free_bootstrap_only
-          authorization=AUTHORIZE_REPLACEMENT_STAGING_PHASE2_V2_20261003
+          authorization=AUTHORIZE_REPLACEMENT_STAGING_PHASE2_V3_20261003
           EOF_AUTH
               )"
               printf '%s\n' "$expected" | cmp -s - "$PHASE2_MARKER"
