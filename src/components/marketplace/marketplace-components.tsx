@@ -1130,10 +1130,12 @@ export function DealDetailObject({
   deal,
   headingId = "marketplace-detail-object-heading",
   actions,
+  compact = false,
 }: {
   deal: MarketplaceDeal;
   headingId?: string;
   actions?: ReactNode;
+  compact?: boolean;
 }) {
   const receipt = getDealReceiptAtom(deal);
   const recipientDisplay = getMarketplaceRecipientDisplay(deal);
@@ -1144,6 +1146,7 @@ export function DealDetailObject({
 
   return (
     <article className="mt-v75-detail-object" aria-labelledby={headingId}>
+      {!compact ? <>
       <div className="mt-v75-detail-breadcrumb">
         <Link href="/offers">Browse</Link>
         <span aria-hidden="true">/</span>
@@ -1163,6 +1166,7 @@ export function DealDetailObject({
           <IconMark name={deal.mechanismType === "public_goods_round" ? "fund" : "evidence"} />
         </span>
       </div>
+      </> : null}
       <div className="mt-v75-detail-copy">
         <div className="moral-deal-chip-row">
           <FallbackLivestreamEvidencePill deal={deal} />
@@ -1172,8 +1176,8 @@ export function DealDetailObject({
             </span>
           ))}
         </div>
-        <h1 id={headingId}>{deal.title}</h1>
-        <p>{deal.subtitle ?? "Review exposure, terms, and evidence before any commitment."}</p>
+        {compact ? <h2 id={headingId}>Funding and verification details</h2> : <h1 id={headingId}>{deal.title}</h1>}
+        {!compact ? <p>{deal.subtitle ?? "Review exposure, terms, and evidence before any commitment."}</p> : null}
         <div className="mt-v75-status-row">
           {statusChips.map((chip) => (
             <StatusChip label={chip} key={chip} />

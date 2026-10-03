@@ -7,7 +7,7 @@ const read = (path: string) => readFileSync(path, "utf8");
 
 test("the offer summary receives record-bound save and response actions", () => {
   const page = read("src/app/offers/[offerId]/page.tsx");
-  assert.match(page, /actions=\{recordActions\}/);
+  assert.match(page, /className=\{styles.actions\}>\{recordActions\}/);
   assert.match(page, /viewer && !isOwner \? \(\s*<form action=\{toggleCartAction\}>/);
   assert.match(page, /name="offer_id" type="hidden" value=\{offer.id\}/);
   assert.match(page, /name="return_to" type="hidden" value=\{offerReturnTo\}/);
