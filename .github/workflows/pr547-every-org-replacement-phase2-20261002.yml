@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - ops/pr547-every-org-replacement-566bb18-20261002
+    paths-ignore:
+      - .github/pr547-every-org-replacement-resume-v1-20261003.authorize
 
 permissions:
   contents: read
@@ -39,7 +41,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Test the controller without application or provider credentials
-        run: python3 "$PHASE2_TEST"
+        run: |
+          python3 "$PHASE2_TEST"
+          python3 .github/scripts/pr547-every-org-replacement-resume.test.py
       - name: Guard first-use owner-confirmed marker and separate source identities
         id: guard
         shell: bash

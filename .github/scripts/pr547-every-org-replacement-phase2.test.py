@@ -181,8 +181,28 @@ class Phase2Contracts(unittest.TestCase):
             value = m.runtime_readiness(m.ALIAS)
         self.assertFalse(value['providerSearchRequestSent'])
         self.assertEqual(req.call_count, 2)
-        self.assertTrue(all(not c.kwargs for c in req.call_args_list))
+        self.assertEqual(req.call_args_list[0].args[0], 'https://' + m.ALIAS + '/donation-upgrades')
+        self.assertEqual(req.call_args_list[0].kwargs['headers'], {'x-vercel-protection-bypass': os.environ['EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET']})
+        self.assertFalse(req.call_args_list[1].kwargs)
+        self.assertIn('x-vercel-protection-bypass=', req.call_args_list[1].args[0])
         self.assertNotIn('q=', req.call_args_list[1].args[0])
+
+    def test_header_page_readiness_still_rejects_every_configured_value(self):
+        for name in m.SECRET_NAMES:
+            body = b'Move part or all of a planned donation, then add to it. ' + os.environ[name].encode()
+            with self.subTest(name=name), patch.object(m, 'request', return_value=(200, {'content-type': 'text/html'}, body)):
+                with self.assertRaisesRegex(RuntimeError, '^secret_in_output$'):
+                    m.runtime_readiness(m.ALIAS)
+
+    def test_existing_deployment_origin_is_explicit_and_still_exact(self):
+        m.STATE['deploymentOriginController'] = 'c' * 40
+        m.STATE['deploymentOriginRun'] = '456'
+        value = deployment()
+        with self.assertRaisesRegex(RuntimeError, 'deployment_controller_drift'):
+            m.validate_deployment(value, 'dpl_New', 'new.vercel.app')
+        value['meta']['moralTradeControllerSha'] = 'c' * 40
+        value['meta']['moralTradeWorkflowRunId'] = '456'
+        m.validate_deployment(value, 'dpl_New', 'new.vercel.app')
 
     def test_fail_closed_rendered_page_blocks_release(self):
         with patch.object(m, 'request', return_value=(200, {'content-type': 'text/html'},

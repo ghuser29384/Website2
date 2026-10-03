@@ -180,8 +180,8 @@ def validate_deployment(value, deployment_id, host, *, bootstrap=False):
     if not bootstrap:
         require(meta.get("moralTradeExpectedPrHead") == PR_HEAD, "deployment_pr_head_drift")
         require(meta.get("moralTradePurpose") == PURPOSE, "deployment_purpose_drift")
-        require(meta.get("moralTradeControllerSha") == os.environ["GITHUB_SHA"], "deployment_controller_drift")
-        require(meta.get("moralTradeWorkflowRunId") == os.environ["GITHUB_RUN_ID"], "deployment_run_drift")
+        require(meta.get("moralTradeControllerSha") == STATE.get("deploymentOriginController", os.environ["GITHUB_SHA"]), "deployment_controller_drift")
+        require(meta.get("moralTradeWorkflowRunId") == STATE.get("deploymentOriginRun", os.environ["GITHUB_RUN_ID"]), "deployment_run_drift")
         require(meta.get("moralTradeBuildArtifactSha256") == STATE.get("artifactDigest") and bool(STATE.get("artifactDigest")), "deployment_artifact_digest_drift")
         require(deployment_id != BOOTSTRAP_ID, "deployment_not_fresh")
 
@@ -277,7 +277,8 @@ def auth_matrix(host):
 def runtime_readiness(host):
     # Both are read-only app requests. The empty search checks readiness before
     # returning []; it never contacts Every.org or creates a provider event.
-    status, headers, body = request(callback_url(host, "/donation-upgrades"))
+    status, headers, body = request("https://" + host + "/donation-upgrades",
+        headers={"x-vercel-protection-bypass": os.environ["EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET"]})
     require(status == 200 and "text/html" in headers.get("content-type", ""), "staging_page_not_rendered")
     require(b"Move part or all of a planned donation, then add to it." in body, "staging_page_identity_missing")
     require(b"The direct Donation Upgrade rail is fail-closed." not in body, "staging_runtime_not_ready")
@@ -289,7 +290,7 @@ def runtime_readiness(host):
     no_secret(body)
     return {"renderedStagingPageReady": True, "emptyNonprofitSearchReady": True,
             "providerSearchRequestSent": False, "providerSearchConnectivityVerified": False,
-            "pageBodySha256": page_hash}
+            "pageBodySha256": page_hash, "pageReadinessBypassMode": "header", "configuredValueScanPassed": True}
 
 
 def counts():

@@ -1,0 +1,182 @@
+name: Reverify existing Every.org Preview and finish guarded staging cutover
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-replacement-566bb18-20261002
+    paths:
+      - .github/pr547-every-org-replacement-resume-v1-20261003.authorize
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: pr547-every-org-replacement-566bb18-20261002
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_CONTROLLER_BRANCH: ops/pr547-every-org-replacement-566bb18-20261002
+  EXPECTED_PR_HEAD: 321e10231bd03459208783bce3544d1fd4d54be7
+  EXPECTED_CANDIDATE_SHA: 566bb18db56848b40a3a1ab58979a6be88ba45a8
+  EXPECTED_CANDIDATE_TREE: 86c70b442272f5cff4cf29e63d030c949b4323cb
+  EXPECTED_VALIDATION_SHA: 1ceebdc355b2f517e759a1e6131a8ee296bdfcce
+  EXPECTED_VALIDATION_TREE: abf0ce088bc3c9abbef2230687b9c2d47e35e0a7
+  PHASE2_MARKER: .github/pr547-every-org-replacement-resume-v1-20261003.authorize
+  PHASE2_SCRIPT: .github/scripts/pr547-every-org-replacement-phase2.py
+  PHASE2_TEST: .github/scripts/pr547-every-org-replacement-phase2.test.py
+
+jobs:
+  control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      authorized: ${{ steps.guard.outputs.authorized }}
+    steps:
+      - name: Check out exact controller without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test the controller without application or provider credentials
+        run: |
+          python3 "$PHASE2_TEST"
+          python3 .github/scripts/pr547-every-org-replacement-resume.test.py
+      - name: Guard first-use owner-confirmed marker and separate source identities
+        id: guard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_CONTROLLER_BRANCH"
+          test "$GITHUB_ACTOR" = ghuser29384
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%T "$EXPECTED_CANDIDATE_SHA")" = "$EXPECTED_CANDIDATE_TREE"
+          test "$(git diff --name-status "$EXPECTED_CANDIDATE_SHA" "$EXPECTED_PR_HEAD")" = $'A\t.github/DO_NOT_COMMIT_PHASE2.tmp'
+          test "$(git show -s --format=%T "$EXPECTED_VALIDATION_SHA")" = "$EXPECTED_VALIDATION_TREE"
+          test "$(git show -s --format=%P "$EXPECTED_VALIDATION_SHA")" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git diff --name-status "$EXPECTED_CANDIDATE_SHA" "$EXPECTED_VALIDATION_SHA")" = $'M\tsrc/lib/background-candidate-exposure.test.ts'
+          gh api "repos/$GITHUB_REPOSITORY/pulls/547" \
+            --jq '{state, draft, merged, head: .head.sha}' > "$RUNNER_TEMP/pr547-phase2-state.json"
+          jq -e --arg head "$EXPECTED_PR_HEAD" \
+            '.state == "open" and .draft == true and .merged == false and .head == $head' \
+            "$RUNNER_TEMP/pr547-phase2-state.json" >/dev/null
+          authorized=false
+          # Ordinary installation/review commits are inert. No token-presence trigger.
+          if [[ "$BEFORE_SHA" =~ ^[a-f0-9]{40}$ ]] && ! [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            git cat-file -e "$BEFORE_SHA^{commit}"
+            git diff --name-only "$BEFORE_SHA" HEAD > "$RUNNER_TEMP/phase2-changed-paths"
+            if grep -Fxq "$PHASE2_MARKER" "$RUNNER_TEMP/phase2-changed-paths"; then
+              test "$(git rev-parse HEAD^)" = "$BEFORE_SHA"
+              test "$(git show -s --format=%P HEAD | wc -w)" = 1
+              test "$(git diff --name-status "$BEFORE_SHA" HEAD)" = $'A\t'"$PHASE2_MARKER"
+              test -z "$(git log "$BEFORE_SHA" --format=%H -- "$PHASE2_MARKER")"
+              expected="$(cat <<EOF_AUTH
+          schema=every-org-replacement-resume-v1
+          phase=reverify_existing_preview_then_verified_stable_alias_cutover
+          candidate=$EXPECTED_CANDIDATE_SHA
+          tree=$EXPECTED_CANDIDATE_TREE
+          validation_candidate=$EXPECTED_VALIDATION_SHA
+          validation_tree=$EXPECTED_VALIDATION_TREE
+          owner_approved_fixed_test_dates=yes
+          existing_deployment=dpl_GmverGqmU6qf4N1xgei7GzUESFbu
+          origin_run=37094660246
+          origin_controller=c6be3728634758726cb698729825b9b3f3a4d19f
+          artifact_sha256=3d6c165be5232b3c0c187b4c922815ea0488d1b5588835dedb359e6dee3a95ea
+          page_readiness_bypass=header_with_full_configured_value_scan
+          callback_authentication_bypass=query
+          expected_pr_head=$EXPECTED_PR_HEAD
+          reviewed_controller=$BEFORE_SHA
+          alias=moraltrade-pr547-every-org-staging-20261002-566bb18.vercel.app
+          bootstrap_deployment=dpl_AZkecr8ZLLym3nwbwt4iAydmi5dD
+          owner_saved_replacement_pair_and_approved_phase2=yes
+          bounded_rollback=new_alias_to_exact_credential_free_bootstrap_only
+          authorization=AUTHORIZE_REPLACEMENT_STAGING_RESUME_V1_20261003
+          EOF_AUTH
+              )"
+              printf '%s\n' "$expected" | cmp -s - "$PHASE2_MARKER"
+              authorized=true
+            fi
+          fi
+          echo "authorized=$authorized" >> "$GITHUB_OUTPUT"
+          printf 'source_and_pr_guards_passed=true\nphase2_authorized=%s\n' "$authorized"
+
+  verify_existing:
+    needs: control
+    if: needs.control.outputs.authorized == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PHASE2_AUTHORIZED: "true"
+      PHASE2_RESUME_AUTHORIZED: "true"
+      PHASE2_APP: app
+      PHASE2_QUALITY: quality
+      PHASE2_EVIDENCE: evidence
+    steps:
+      - name: Check out reviewed continuation controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out exact accepted runtime source for identity verification only
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          path: app
+          persist-credentials: false
+      - name: Check out exact reviewed test-only validation source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_VALIDATION_SHA }}
+          path: quality
+          persist-credentials: false
+      - name: Download only the pinned original sanitized evidence
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: 11264100853
+          run-id: 37094660246
+          github-token: ${{ github.token }}
+          path: prior-evidence
+          merge-multiple: true
+      - name: Reverify exact existing Preview before guarded alias cutover and postchecks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+          EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+          EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: python3 controller/.github/scripts/pr547-every-org-replacement-resume.py
+      - name: Sanitize bounded continuation evidence
+        id: sanitize
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+          EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+          EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: python3 "controller/$PHASE2_SCRIPT" sanitize
+      - name: Retain only successfully sanitized continuation evidence
+        if: always() && steps.sanitize.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: every-org-replacement-resume-${{ github.run_id }}
+          path: evidence/*.json
+          if-no-files-found: error
+          retention-days: 30
