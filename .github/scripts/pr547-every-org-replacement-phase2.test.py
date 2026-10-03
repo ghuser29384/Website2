@@ -473,9 +473,52 @@ class Phase2Contracts(unittest.TestCase):
         self.assertIn('staged.is_dir() and not staged.is_symlink()', staging)
         self.assertIn('p.is_file() and not p.is_symlink()', staging)
         self.assertLess(staging.index(move), staging.index('build --target=preview --standalone'))
-        self.assertIn('phase2-v3-20261003.authorize', workflow)
-        self.assertIn('schema=every-org-replacement-phase2-v3', workflow)
+        self.assertIn('phase2-v4-20261003.authorize', workflow)
+        self.assertIn('schema=every-org-replacement-phase2-v4', workflow)
         self.assertNotIn('schema=every-org-replacement-phase2-v1', workflow)
+
+    def test_validation_tree_allows_only_the_reviewed_test_blob(self):
+        original = {m.VALIDATION_TEST: '100644 blob ' + m.ORIGINAL_TEST_BLOB, 'runtime.ts': '100644 blob runtime'}
+        fixed = {m.VALIDATION_TEST: '100644 blob ' + m.VALIDATION_TEST_BLOB, 'runtime.ts': '100644 blob runtime'}
+        m.validate_runtime_tree_equality(original, fixed)
+        for changed in ({**fixed, 'runtime.ts': '100644 blob changed'},
+                        {**fixed, 'extra.ts': '100644 blob extra'},
+                        {m.VALIDATION_TEST: fixed[m.VALIDATION_TEST]},
+                        {**fixed, m.VALIDATION_TEST: '100644 blob unreviewed'}):
+            with self.assertRaises(RuntimeError):
+                m.validate_runtime_tree_equality(original, changed)
+
+    def test_date_repair_cannot_change_assertions_or_other_cases(self):
+        start = 'test("candidate exposure allows only matching purpose'
+        end = 'test("candidate exposure requires finite current confirmation windows"'
+        line = '    cohortScopeId: "pilot-alpha",\n'
+        original = 'before\n' + start + '\n' + line * 4 + 'assert.equal(allowed, true);\n' + end + 'after'
+        fixed = original.replace(line, line + '    now: new Date("2026-06-14T00:00:00.000Z"),\n')
+        m.validate_test_date_change(original, fixed)
+        for changed in (fixed.replace('true', 'false'), fixed.replace('2026-06-14', '2026-08-01'), fixed + 'extra', original):
+            with self.assertRaises(RuntimeError):
+                m.validate_test_date_change(original, changed)
+
+    def test_workflow_keeps_validation_and_both_build_sources_distinct(self):
+        source = WORKFLOW.read_text()
+        gates = source.split('      - name: Run credential-free', 1)[1].split('      - name: Run separate disabled-money', 1)[0]
+        quality_build = source.split('      - name: Run separate disabled-money', 1)[1].split('      - name: Build fresh staging', 1)[0]
+        staging = source.split('      - name: Build fresh staging', 1)[1].split('      - name: Scan final', 1)[0]
+        self.assertIn('working-directory: quality', gates)
+        self.assertIn('working-directory: app', quality_build)
+        self.assertIn('working-directory: app', staging)
+        self.assertIn('npm ci', gates)
+        self.assertIn('npm ci', quality_build)
+        self.assertIn('npm test', gates)
+        self.assertIn('npx tsc --noEmit', gates)
+        self.assertIn('npm run lint -- --quiet', gates)
+        self.assertIn('validation-source', gates)
+        self.assertIn('validation-source', quality_build)
+        self.assertIn('validation-source', staging)
+        self.assertIn('validation_source()', SCRIPT.read_text().split('def release():', 1)[1])
+        self.assertIn('validation_candidate=$EXPECTED_VALIDATION_SHA', source)
+        self.assertIn('owner_approved_fixed_test_dates=yes', source)
+        self.assertNotIn('node_modules', source.split('run: |', 1)[0])
 
     def test_artifact_upload_excludes_raw_logs_and_build_output(self):
         source = WORKFLOW.read_text()

@@ -24,6 +24,11 @@ BRANCH = "ops/pr547-every-org-replacement-566bb18-20261002"
 PR_HEAD = "321e10231bd03459208783bce3544d1fd4d54be7"
 APP_SHA = "566bb18db56848b40a3a1ab58979a6be88ba45a8"
 APP_TREE = "86c70b442272f5cff4cf29e63d030c949b4323cb"
+VALIDATION_SHA = "1ceebdc355b2f517e759a1e6131a8ee296bdfcce"
+VALIDATION_TREE = "abf0ce088bc3c9abbef2230687b9c2d47e35e0a7"
+VALIDATION_TEST = "src/lib/background-candidate-exposure.test.ts"
+ORIGINAL_TEST_BLOB = "e53217ed8cdccf67c734cc2b56f26e49b8101e41"
+VALIDATION_TEST_BLOB = "41ac638019bad6a378db105b0710f41c29566f9e"
 TEAM = "team_ySu6sF3Uho1E1GnJtCQPVEuJ"
 PROJECT = "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7"
 BOOTSTRAP_ID = "dpl_AZkecr8ZLLym3nwbwt4iAydmi5dD"
@@ -35,7 +40,7 @@ ROUTE = "/api/connectors/every-org/" + ROUTE_ID
 QA_URL = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
 PURPOSE = "every-org-replacement-phase2-20261002-566bb18"
 CLI = "vercel@50.38.1"
-MARKER = ".github/pr547-every-org-replacement-phase2-v3-20261003.authorize"
+MARKER = ".github/pr547-every-org-replacement-phase2-v4-20261003.authorize"
 TABLES = ("direct_donation_upgrade_offers", "direct_donation_upgrade_candidates",
           "direct_donation_upgrade_obligations", "direct_donation_upgrade_impact_credits",
           "direct_donation_upgrade_audit_events")
@@ -48,6 +53,7 @@ PAIR = SECRET_NAMES[-2:]
 PRIVATE_BUILD_NAMES = tuple(n for n in SECRET_NAMES if n != "QA_SUPABASE_PUBLISHABLE_KEY")
 APP = Path(os.environ.get("PHASE2_APP", "app"))
 EVIDENCE = Path(os.environ.get("PHASE2_EVIDENCE", "evidence"))
+QUALITY = Path(os.environ.get("PHASE2_QUALITY", "quality"))
 STATE = {"deploymentAttempted": False, "cutoverAttempted": False,
          "cutoverConfirmed": False, "rollbackAttempted": False,
          "rollbackConfirmed": False, "phase2Verified": False}
@@ -347,8 +353,62 @@ def local_identity():
     require(clean.returncode == 0, "accepted_app_modified")
 
 
-def preflight():
+def validate_test_date_change(original, fixed):
+    start = 'test("candidate exposure allows only matching purpose'
+    end = 'test("candidate exposure requires finite current confirmation windows"'
+    require(original.count(start) == original.count(end) == 1, "validation_test_boundaries_drift")
+    before, rest = original.split(start, 1)
+    middle, after = rest.split(end, 1)
+    injection = '    now: new Date("2026-06-14T00:00:00.000Z"),\n'
+    count = 0
+    for cohort in ("pilot-alpha", "pilot-beta"):
+        line = '    cohortScopeId: "' + cohort + '",\n'
+        count += middle.count(line)
+        middle = middle.replace(line, line + injection)
+    require(count == 4, "validation_date_input_count_drift")
+    require(fixed == before + start + middle + end + after, "validation_test_edit_not_exact")
+
+
+def tracked_tree(path):
+    result = subprocess.run(["git", "ls-tree", "-rz", "HEAD"], cwd=path, capture_output=True)
+    require(result.returncode == 0, "tracked_tree_read_failed")
+    entries = {}
+    for row in result.stdout.split(b"\0"):
+        if row:
+            metadata, name = row.split(b"\t", 1)
+            entries[name.decode()] = metadata.decode()
+    return entries
+
+
+def validate_runtime_tree_equality(accepted, validation):
+    accepted = dict(accepted)
+    validation = dict(validation)
+    require(accepted.pop(VALIDATION_TEST, None) == "100644 blob " + ORIGINAL_TEST_BLOB, "original_validation_test_blob_drift")
+    require(validation.pop(VALIDATION_TEST, None) == "100644 blob " + VALIDATION_TEST_BLOB, "fixed_validation_test_blob_drift")
+    require(accepted == validation and bool(accepted), "validation_runtime_source_drift")
+
+
+def validation_source():
+    # Full tests run against a separately pinned, test-only derivative. All
+    # deployed bytes are built from the untouched accepted application checkout.
     local_identity()
+    result = subprocess.run(["git", "rev-parse", "HEAD", "HEAD^{tree}"], cwd=QUALITY,
+                            capture_output=True, text=True)
+    require(result.returncode == 0 and result.stdout.splitlines() == [VALIDATION_SHA, VALIDATION_TREE], "validation_checkout_drift")
+    clean = subprocess.run(["git", "diff", "--exit-code", "HEAD", "--"], cwd=QUALITY, capture_output=True)
+    require(clean.returncode == 0, "validation_source_modified")
+    validate_runtime_tree_equality(tracked_tree(APP), tracked_tree(QUALITY))
+    validate_test_date_change((APP / VALIDATION_TEST).read_text(), (QUALITY / VALIDATION_TEST).read_text())
+    evidence("validation-source.json", {"acceptedAppSha": APP_SHA, "acceptedAppTree": APP_TREE,
+        "validationSha": VALIDATION_SHA, "validationTree": VALIDATION_TREE,
+        "onlyDifferentFile": VALIDATION_TEST, "originalTestBlob": ORIGINAL_TEST_BLOB,
+        "validationTestBlob": VALIDATION_TEST_BLOB, "fixedDateInputsAdded": 4,
+        "runtimeTreesIdentical": True, "allAssertionsPreserved": True,
+        "globalClockOverrideUsed": False, "bothBuildsUseAcceptedApp": True})
+
+
+def preflight():
+    validation_source()
     credentials()
     for filename in ("src/app/donation-upgrades/page.tsx", "src/app/api/donation-upgrades/nonprofits/search/route.ts",
                      "src/app/api/connectors/every-org/[routeId]/route.ts"):
@@ -638,7 +698,7 @@ def rollback(deployment_id):
 
 
 def release():
-    local_identity()
+    validation_source()
     credentials()
     assert_pr()
     protection()
@@ -679,7 +739,8 @@ def release():
     evidence("result.json", {"acceptedAppSha": APP_SHA, "acceptedAppTree": APP_TREE, "expectedPrHead": PR_HEAD,
         "deploymentId": deployment_id, "deploymentHost": host, "alias": ALIAS, "aliasUid": ALIAS_UID,
         "target": "preview", "controllerCommit": os.environ["GITHUB_SHA"], "runId": os.environ["GITHUB_RUN_ID"],
-        "artifactSha256": STATE["artifactDigest"], "directDonationUpgradeEnabled": True, "directDonationUpgradeMode": "staging",
+        "artifactSha256": STATE["artifactDigest"], "validationSha": VALIDATION_SHA, "validationTree": VALIDATION_TREE,
+        "runtimeTreesIdentical": True, "bothBuildsUseAcceptedApp": True, "directDonationUpgradeEnabled": True, "directDonationUpgradeMode": "staging",
         "managedAndProductionMoneyPathsEnabled": False, "runtimeOnlyReplacementPair": True, "syntheticAuthenticationVerified": True,
         "providerOriginDeliveryObserved": False, "providerUatComplete": False,
         "checkoutAttempted": False, "donationAttempted": False, "databaseWriteRequestIssued": False,
@@ -714,8 +775,8 @@ def sanitize():
 def run():
     command = sys.argv[1] if len(sys.argv) == 2 else ""
     try:
-        require(command in ("preflight", "release", "sanitize"), "invalid_command")
-        {"preflight": preflight, "release": release, "sanitize": sanitize}[command]()
+        require(command in ("preflight", "release", "sanitize", "validation-source"), "invalid_command")
+        {"preflight": preflight, "release": release, "sanitize": sanitize, "validation-source": validation_source}[command]()
         return 0
     except RuntimeError as exc:
         # Controlled labels only; never format subprocess or network exceptions.
