@@ -35,7 +35,7 @@ ROUTE = "/api/connectors/every-org/" + ROUTE_ID
 QA_URL = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
 PURPOSE = "every-org-replacement-phase2-20261002-566bb18"
 CLI = "vercel@50.38.1"
-MARKER = ".github/pr547-every-org-replacement-phase2-v1-20261002.authorize"
+MARKER = ".github/pr547-every-org-replacement-phase2-v2-20261003.authorize"
 TABLES = ("direct_donation_upgrade_offers", "direct_donation_upgrade_candidates",
           "direct_donation_upgrade_obligations", "direct_donation_upgrade_impact_credits",
           "direct_donation_upgrade_audit_events")
@@ -379,8 +379,11 @@ def preflight():
     data = {"orgId": TEAM, "projectId": PROJECT, "projectName": project.get("name"), "settings": settings}
     require(bool(re.fullmatch(r"[A-Za-z0-9_-]+", data["projectName"] or "")), "invalid_project_name")
     no_secret(json.dumps(data).encode())
-    folder = APP / ".vercel"
-    folder.mkdir(exist_ok=True)
+    # Keep generated Preview linkage away from unchanged repository quality
+    # gates, whose production-target validator inspects app/.vercel/project.json.
+    folder = Path(os.environ["RUNNER_TEMP"]) / "every-org-phase2-build-settings"
+    require(not folder.exists(), "staged_project_settings_already_exist")
+    folder.mkdir(mode=0o700)
     (folder / "project.json").write_text(json.dumps(data) + "\n")
     # Empty, owned Preview dotenv input; never pull project credentials.
     (folder / ".env.preview.local").write_text("# Deliberately no project credentials\n")

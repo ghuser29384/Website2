@@ -456,6 +456,27 @@ class Phase2Contracts(unittest.TestCase):
         self.assertIn('npm run lint -- --quiet', gates)
         self.assertIn('if: always() && steps.sanitize.outcome', source)
 
+    def test_preview_project_settings_are_outside_unchanged_quality_gates(self):
+        source = SCRIPT.read_text()
+        preflight = source.split('def preflight():', 1)[1].split('def standalone_tree(', 1)[0]
+        self.assertIn('folder = Path(os.environ["RUNNER_TEMP"]) / "every-org-phase2-build-settings"', preflight)
+        self.assertNotIn('folder = APP / ".vercel"', preflight)
+        self.assertIn('require(not folder.exists()', preflight)
+        workflow = WORKFLOW.read_text()
+        gates = workflow.split('      - name: Run credential-free', 1)[1].split('      - name: Build fresh staging', 1)[0]
+        self.assertEqual(gates.count('test ! -e .vercel'), 2)
+        self.assertNotIn('mv ', gates)
+        staging = workflow.split('      - name: Build fresh staging', 1)[1].split('      - name: Scan final', 1)[0]
+        move = 'staged.rename(".vercel")'
+        self.assertLess(staging.index('test ! -e .vercel'), staging.index(move))
+        self.assertLess(staging.index('module.validate_project_link(staged'), staging.index(move))
+        self.assertIn('staged.is_dir() and not staged.is_symlink()', staging)
+        self.assertIn('p.is_file() and not p.is_symlink()', staging)
+        self.assertLess(staging.index(move), staging.index('build --target=preview --standalone'))
+        self.assertIn('phase2-v2-20261003.authorize', workflow)
+        self.assertIn('schema=every-org-replacement-phase2-v2', workflow)
+        self.assertNotIn('schema=every-org-replacement-phase2-v1', workflow)
+
     def test_artifact_upload_excludes_raw_logs_and_build_output(self):
         source = WORKFLOW.read_text()
         self.assertIn('path: evidence/*.json', source)
