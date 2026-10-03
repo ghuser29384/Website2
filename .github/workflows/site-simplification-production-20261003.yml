@@ -83,7 +83,7 @@ jobs:
           test "$GITHUB_REF" = 'refs/heads/main'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git hash-object public/moral-trade-live-core.txt)" = '73306f7b09508ce87fd4c3ef2e5ccf43d91ad976'
-          test "$(git hash-object public/moral-trade-live-now.js)" = 'eb9bde3d75ac75338840d25f141cada79deea892'
+          test "$(git hash-object public/moral-trade-live-now.js)" = 'd239fa6273cf111d41e02228bd84049e75dbf54b'
           test "$(git hash-object public/moral-trade-discover.html)" = 'ec0f0b371121319349baa12f120e193fdc7b7fd2'
           test "$(git hash-object public/moral-trade-discover-search.js)" = 'a101349d3348979674272463f460eb88fb6e500c'
           test "$(git hash-object public/moral-trade-create/index.html)" = 'f5e860ff0bee09a0aaa53acae3bfffa329597784'

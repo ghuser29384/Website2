@@ -43,6 +43,14 @@ test("unavailable public records never become zero-count or demo listings", asyn
   await expect(page.locator("[data-mt-public-listings]")).not.toContainText("No current trades");
 });
 
+test("partial public inventory does not imply the whole marketplace is empty", async ({ page }) => {
+  await page.route("**/api/live-now", (route) => fulfill(route, { authenticated: false, status: "signed_out", recommendations: [] }));
+  await mockInventory(page, (body) => responseFor(body, { sourceStatus: { offers: "partial" }, items: [], total: 0 }));
+  await page.goto("/");
+  await expect(page.locator("[data-mt-public-listings]")).toContainText("Some listing sources could not be loaded");
+  await expect(page.locator("[data-mt-public-listings]")).not.toContainText("No current trades");
+});
+
 test("learning examples are separate from live registry results", async ({ page }) => {
   await page.goto("/wish-registry");
   const examples = page.locator("#registry-examples");
