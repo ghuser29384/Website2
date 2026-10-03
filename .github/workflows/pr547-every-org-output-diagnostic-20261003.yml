@@ -1,0 +1,74 @@
+name: Diagnose replacement staging output without revealing values
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-replacement-566bb18-20261002
+    paths:
+      - .github/workflows/pr547-every-org-output-diagnostic-20261003.yml
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    if: github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Classify configured-value matches in memory only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+          EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+          EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET: ${{ secrets.EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET }}
+          EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+          EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+        run: |
+          python3 - <<'PY_DIAG'
+          import importlib.util, os, sys
+          spec = importlib.util.spec_from_file_location("phase2", ".github/scripts/pr547-every-org-replacement-phase2.py")
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          try:
+              m.credentials()
+              host = "moraltrade-site-c16vyp41l-ellen-s.vercel.app"
+              deployment_id = "dpl_GmverGqmU6qf4N1xgei7GzUESFbu"
+              m.STATE["deploymentHost"] = host
+              m.STATE["artifactDigest"] = "3d6c165be5232b3c0c187b4c922815ea0488d1b5588835dedb359e6dee3a95ea"
+              # Inspect an existing deployment against the exact original write.
+              original_sha, original_run = os.environ["GITHUB_SHA"], os.environ["GITHUB_RUN_ID"]
+              os.environ["GITHUB_SHA"] = "c6be3728634758726cb698729825b9b3f3a4d19f"
+              os.environ["GITHUB_RUN_ID"] = "37094660246"
+              m.validate_deployment(m.api("/v13/deployments/" + deployment_id), deployment_id, host)
+              os.environ["GITHUB_SHA"], os.environ["GITHUB_RUN_ID"] = original_sha, original_run
+              m.protection()
+              m.alias_read(m.BOOTSTRAP_ID)
+              result = {"deploymentId": deployment_id, "deploymentHost": host, "aliasStillAtBootstrap": True,
+                        "deploymentProvenanceVerified": True, "rawValuesRetained": False, "requests": []}
+              for mode in ("query", "header"):
+                  url = m.callback_url(host, "/donation-upgrades") if mode == "query" else "https://" + host + "/donation-upgrades"
+                  headers = [] if mode == "query" else [("x-vercel-protection-bypass", os.environ["EVERY_ORG_STAGING_VERCEL_BYPASS_SECRET"])]
+                  status, response_headers, body = m.request(url, headers=headers)
+                  matches = {name: any(value in body for value in m.secret_patterns((name,))) for name in m.SECRET_NAMES}
+                  result["requests"].append({"bypassMode": mode, "status": status,
+                      "isHtml": "text/html" in response_headers.get("content-type", ""),
+                      "pageIdentityPresent": b"Move part or all of a planned donation, then add to it." in body,
+                      "failClosedBannerPresent": b"The direct Donation Upgrade rail is fail-closed." in body,
+                      "configuredValueMatches": matches})
+              m.alias_read(m.BOOTSTRAP_ID)
+              m.evidence("output-diagnostic.json", result)
+          except Exception:
+              print("Read-only diagnostic halted; raw details suppressed", file=sys.stderr)
+              sys.exit(1)
+          PY_DIAG
+      - uses: actions/upload-artifact@v4
+        with:
+          name: every-org-output-diagnostic-${{ github.run_id }}
+          path: evidence/output-diagnostic.json
+          if-no-files-found: error
+          retention-days: 30
