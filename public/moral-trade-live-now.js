@@ -539,7 +539,7 @@
       return {
         eyebrow: "Personal suggestions are private",
         title: "Sign in to see a feed based on your moral priorities.",
-        copy: "This page does not guess your priorities or substitute demo recommendations.",
+        copy: "",
         facts: ["No profile loaded", "No recommendations shown"],
         primaryHref:
           window.location.pathname === "/feed"
@@ -574,9 +574,9 @@
         eyebrow: "Profile checked against live inventory",
         title: "No open opportunity currently matches your profile.",
         copy: causeSummary
-          ? `We checked other participants' proposals and donation redirects against ${causeSummary}. No filler suggestions were added.` +
+          ? `Priorities: ${causeSummary}.` +
             ownListingsCopy
-          : "No filler suggestions were added." + ownListingsCopy,
+          : ownListingsCopy.trim(),
         facts: [
           `${model.profile.causes.length} profile ${
             model.profile.causes.length === 1 ? "priority" : "priorities"
@@ -593,9 +593,8 @@
     return {
       eyebrow: "Personal suggestions unavailable",
       title: "Your recommendation feed could not load.",
-      copy:
-        "No generic or fabricated suggestions are shown while profile matching is unavailable.",
-      facts: ["Profile data not displayed", "No fallback claims"],
+      copy: "",
+      facts: ["Profile unavailable", "Recommendations unavailable"],
       primaryHref: "/moral-trade-live.html#now",
       primaryLabel: "Try again →",
       secondaryHref: "/offers?view=live",
@@ -612,9 +611,7 @@
       <section class="panel black urgent">
         <div><div class="eyebrow orange">${escapeHtml(
           content.eyebrow,
-        )}</div><h2>${escapeHtml(content.title)}</h2><p class="muted">${escapeHtml(
-          content.copy,
-        )}</p></div>
+        )}</div><h2>${escapeHtml(content.title)}</h2>${content.copy ? `<p class="muted">${escapeHtml(content.copy)}</p>` : ""}</div>
         <div class="terms">${content.facts
           .map(
             (fact, index) =>

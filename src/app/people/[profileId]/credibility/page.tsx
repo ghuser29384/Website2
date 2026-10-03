@@ -115,8 +115,7 @@ export default async function ProfileCredibilityPage({
             <p className="eyebrow">Credibility passport</p>
             <h1>{profile.resolvedName}</h1>
             <p className="hero-text">
-              {location || "Location not listed"}. This record estimates transaction reliability,
-              not moral worth. Select a role or trade class to discount unrelated history.
+              {location || "Location not listed"}
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={`/people/${profile.id}`}>

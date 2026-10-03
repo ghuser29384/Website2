@@ -309,9 +309,6 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             <h1>Find people by what they can offer and what they are open to.</h1>
             <p className="hero-text">
               Search public work, causes, locations, open offers, and explicit participation preferences.
-              Reviewed evidence can help you inspect a potential counterparty, but the directory does not
-              turn context-specific transaction history into a general ranking of people. These are
-              not follower, karma, or comment leaderboards.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/credibility">

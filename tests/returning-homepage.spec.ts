@@ -81,7 +81,7 @@ test.describe("Adaptive homepage", () => {
         "This page does not guess your priorities or substitute demo recommendations.",
         { exact: true },
       ),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(feed.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
 
     await expect(feed.getByRole("link", { name: /Sign in/ })).toHaveAttribute(

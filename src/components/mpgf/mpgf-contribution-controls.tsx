@@ -359,10 +359,6 @@ export function MpgfContributionControls({
       <div className="section-head">
         <p className="eyebrow">Stripe-backed contributions</p>
         <h2>Real-money payment state</h2>
-        <p>
-          These rows come from webhook-backed MPGF contribution records. They are separate from
-          pledge-only rows and depend on Stripe and Supabase production configuration.
-        </p>
       </div>
       <div className="mpgf-inline-actions">
         <button

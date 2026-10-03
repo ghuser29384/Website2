@@ -580,7 +580,7 @@ test("people directory avoids popularity leaderboards and keeps trust signals ev
   assert.doesNotMatch(peoplePage, /Most open offers/);
   assert.doesNotMatch(peoplePage, /Highest credit/);
   assert.match(peoplePage, /Newest is chronological/);
-  assert.match(peoplePage, /not follower, karma, or comment leaderboards/);
+  assert.doesNotMatch(peoplePage, /<option[^>]+value="(?:followers|karma|comments)"/);
   assert.equal(peoplePage.includes("Counterparty interest"), false);
   assert.equal(peoplePage.includes("Reviewer karma"), false);
   assert.equal(peoplePage.includes("Public discussion"), false);
@@ -627,7 +627,7 @@ test("private matching and reasoning routes remain distinct, reviewable, and pri
   assert.match(reasoningCenterPage, /"@type": "ItemList"/);
   assert.match(reasoningCenterPage, /getOptionalViewerForReasoningCenter/);
   assert.match(reasoningCenterPage, /MORAL_TRADE_REASONING_PACKET_FILTERS/);
-  assert.match(reasoningCenterPage, /not a live forum or autonomous moral-ranking system/);
+  assert.match(reasoningCenterPage, /Signed-in drafting and reviewer workflows remain separate from public examples until explicit publication/);
   assert.equal(reasoningCenterPage.includes("karma"), false);
 
   assert.match(standardsPage, /Make trade records specific enough to judge/);

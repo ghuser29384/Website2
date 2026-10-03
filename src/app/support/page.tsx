@@ -187,9 +187,8 @@ export default async function SupportPage() {
             ) : (
               <>
                 <p className="route-text">
-                  No fiscal sponsor relationship is currently represented as active. Do not send money
-                  to Moral Trade, its operators, or a personal payment account. The site will remain in
-                  this fail-closed state until an approved sponsor route is configured.
+                  No fiscal sponsor is active. Do not send money to Moral Trade, its operators,
+                  or a personal payment account.
                 </p>
                 <div className="offer-actions">
                   <Link className="button button-primary" href="/contact">
@@ -210,7 +209,7 @@ export default async function SupportPage() {
             <h2>Pledges remain non-custodial until an approved route exists</h2>
             <p>
               Moral Trade can record bounded pledge intent and evidence states. It does not store a
-              payment method or charge a participant in the current production posture.
+              payment method or charge a participant for these pledges.
             </p>
           </div>
           <div className="data-grid">

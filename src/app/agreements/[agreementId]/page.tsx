@@ -211,10 +211,6 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               Agreement with{" "}
               {agreement.counterparty ? agreement.counterparty.resolvedName : "counterparty"}.
             </h1>
-            <p className="hero-text">
-              This page keeps the negotiation, payment records, verification evidence, disputes,
-              cancellation requests, and ratings in one auditable place.
-            </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/dashboard">
                 Back to dashboard

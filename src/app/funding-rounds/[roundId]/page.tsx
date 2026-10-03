@@ -16,7 +16,6 @@ import {
   getPledgeFundingReceiptAtom,
   getPledgeFundingRoundById,
   getPledgeFundingRounds,
-  PLEDGE_FUNDING_BACKEND_REQUIREMENTS,
 } from "@/lib/moral-trade/pledge-funding-rounds";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -152,32 +151,16 @@ export default async function FundingRoundPage({ params }: FundingRoundPageProps
             </Link>
           </div>
 
-          <details className="v72-explain-row">
-            <summary>Requirements & rules</summary>
-            <p>
-              Live pledge funding still needs real contribution rows, idempotent payment
-              authorization, refund/release transitions, ledger rows, RLS policies, and sponsor
-              charity payout infrastructure before the route can claim live funding.
-            </p>
-          </details>
         </section>
 
         <section className="section section-white" aria-labelledby="funding-backend-heading">
           <div className="section-head section-head-compact">
-            <p className="eyebrow">Live blocker</p>
-            <h2 id="funding-backend-heading">Backend work required before live funding</h2>
+            <p className="eyebrow">Preview only</p>
+            <h2 id="funding-backend-heading">Funding is unavailable</h2>
             <p>
               These preview rounds do not create charges, refunds, charity payouts, sponsor
               bonuses, receipts, support codes, queues, or pledge commitments.
             </p>
-          </div>
-          <div className="data-grid">
-            {PLEDGE_FUNDING_BACKEND_REQUIREMENTS.slice(0, 4).map((requirement) => (
-              <article className="panel data-card" key={requirement}>
-                <p className="detail-kicker">Required</p>
-                <h3>{requirement}</h3>
-              </article>
-            ))}
           </div>
         </section>
       </main>

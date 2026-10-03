@@ -91,7 +91,7 @@ export default async function CredibilityPage() {
                 <span className="flow-number">01</span>
                 <div>
                   <strong>Versioned</strong>
-                  <p>{model.version}; parameters remain reproducible after future revisions.</p>
+                  <p>{model.version}</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -226,8 +226,7 @@ export default async function CredibilityPage() {
             <article className="panel data-card">
               <h3>Recency</h3>
               <p className="route-text">
-                Evidence decays exponentially with a {model.recencyHalfLifeDays}-day half-life. The
-                model can later replace this parameter after observing behavioural drift.
+                Evidence decays exponentially with a {model.recencyHalfLifeDays}-day half-life.
               </p>
             </article>
             <article className="panel data-card">
@@ -305,13 +304,7 @@ export default async function CredibilityPage() {
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Validation state</p>
-            <h2>Version one is deployed but not yet statistically calibrated</h2>
-            <p>
-              The event ledger, weighting rules, uncertainty calculation, public aggregate boundary,
-              and safety separation are active. Exact deal probabilities are labelled provisional
-              until enough resolved trades exist for out-of-time calibration by role, category, stake,
-              duration, and verification method.
-            </p>
+            <h2>Provisional estimates</h2>
           </div>
           <div className="hero-actions">
             <Link className="button button-secondary" href="/api/credibility/model">
