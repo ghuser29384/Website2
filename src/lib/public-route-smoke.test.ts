@@ -144,7 +144,8 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   assert.match(robotsSource, /OAI-SearchBot/);
   assert.match(robotsSource, /Claude-SearchBot/);
   assert.equal(robotsSource.includes("Disallow"), false);
-  assert.match(offerDetailPage, /Interest and saved-offer activity/);
+  assert.match(offerDetailPage, /Your interest status:/);
+  assert.match(offerDetailPage, /Save offer/);
   assert.match(actionsSource, /Saved offer/);
   assert.match(actionsSource, /revalidatePath\("\/saved-offers"\)/);
   assert.match(contractSources, /personalized saved-offer state/);
@@ -4415,7 +4416,7 @@ test("offer detail and worked examples expose instrumented review workflow cards
   assert.doesNotMatch(offerDetailSource, /participantReviewCopy\.safetyWarningCopy|participantReviewCopy\.needsEvidenceStatusCopy/);
   assert.match(offerDetailSource, /Why this status:/);
   assert.match(offerDetailSource, /review-factor-list/);
-  assert.match(offerDetailSource, /Contact after sign-in/);
+  assert.match(offerDetailSource, /Sign in to respond/);
   assert.match(offerDetailSource, /Save offer/);
   assert.match(offerDetailSource, /createSimilarHref/);
   assert.match(offerDetailSource, /returnTo=\$\{encodeURIComponent\(respondReturnTo\)\}/);

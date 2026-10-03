@@ -64,8 +64,8 @@ export default async function TeamPage() {
           showLogout={Boolean(viewer)}
         />
 
-        <div className="hero-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-          <section className="hero-copy">
+        <div className="hero-grid">
+          <section className="hero-copy" style={{ gridColumn: "1 / -1" }}>
             <p className="eyebrow">Team and governance</p>
             <h1>Who is accountable for Moral Trade.</h1>
             <div className="hero-actions">

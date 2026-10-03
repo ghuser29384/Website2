@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 
-import { OfferCredibilityLink } from "@/components/offer-credibility-link";
 import { isPostgresUuid } from "@/lib/uuid";
 
 export default async function OfferRecordLayout({
@@ -16,10 +15,5 @@ export default async function OfferRecordLayout({
     notFound();
   }
 
-  return (
-    <>
-      <OfferCredibilityLink offerId={offerId} />
-      {children}
-    </>
-  );
+  return children;
 }
