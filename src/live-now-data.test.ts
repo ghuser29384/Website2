@@ -392,7 +392,7 @@ test("legacy template-only snapshots cannot become feed inventory", () => {
 test("empty inventory displays no matches without substituting Atlas templates", () => {
   const rendered = renderFeedSnapshot([], "no_matches");
   assert.match(rendered, /No open opportunity currently matches your profile/);
-  assert.match(rendered, /0 matching live opportunities/);
+  assert.match(rendered, /Browse all opportunities/);
   assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=/);
 });
 

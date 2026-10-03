@@ -45,7 +45,7 @@ export default async function SupportPage() {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Support</p>
+            <p className="eyebrow">Support the project</p>
             <h1>Fund public goods now. Fund Moral Trade only through an approved sponsor.</h1>
             <p className="hero-text">
               Existing charities can receive donations directly through Every.org. Moral Trade does

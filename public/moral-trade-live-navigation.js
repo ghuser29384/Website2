@@ -125,8 +125,8 @@
         panel.className = "header-more-links";
         for (const [href, label] of [
           ["/dashboard", "Profile"], ["/trades/new", "Create a trade"],
-          ["/cart", "Saved offers"],
-          ["/invite", "Invite"], ["/evidence", "Evidence"], ["/walkthrough", "Tour"], ["/safety", "Safety"],
+          ["/saved-offers", "Saved offers"],
+          ["/invite", "Invite"], ["/evidence", "Evidence"], ["/what-is-moral-trade", "How it works"], ["/safety", "Safety"],
         ]) {
           const link = document.createElement("a");
           link.href = href;

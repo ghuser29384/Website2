@@ -126,3 +126,7 @@ input::placeholder { color: #6c6a66; opacity: 1; }
   .state-panel { padding: 24px 16px; }
   .pagination { gap: 10px; flex-wrap: wrap; }
 }
+
+.discover-views { display:flex; flex-wrap:wrap; gap:24px; margin:0 0 22px; border-bottom:1px solid var(--line); }
+.discover-views a { padding:12px 0; color:inherit; text-decoration:none; }
+.discover-views [aria-current="page"] { border-bottom:3px solid var(--blue, #3158ff); font-weight:700; }

@@ -12,7 +12,7 @@ const pagePaths = [
   "/what-is-moral-trade",
   "/sources",
   "/faq",
-  "/offers?view=live",
+  "/discover",
 ];
 
 const requiredSitemapUrls = [
@@ -21,7 +21,7 @@ const requiredSitemapUrls = [
   "/what-is-moral-trade",
   "/sources",
   "/faq",
-  "/offers",
+  "/discover",
   "/offers/new",
   "/paid-action-offers",
   "/pledge-swaps",

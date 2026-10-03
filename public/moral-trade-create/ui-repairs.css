@@ -720,3 +720,17 @@ body:has(#screenSummary.active) .boundary-note {
     gap: 16px;
   }
 }
+
+/* Optional drafting and progressive funding choices keep the four-step flow intact. */
+.description-draft { width:min(100%, 900px); margin:0 auto 20px; padding:18px; border:1px solid #d8d8d8; background:#fff; }
+.description-draft summary, .fund-intent summary { cursor:pointer; font-weight:600; line-height:1.5; }
+.description-draft .search { display:grid; gap:8px; margin:18px 0 12px; }
+.description-draft input { width:100%; padding:14px; border:1px solid #777; font:inherit; }
+.description-draft p { font-size:13px; line-height:1.5; margin-top:12px; }
+#fundModeGrid { grid-template-columns:1fr; }
+#fundModeGrid > .fund-mode-choice { min-height:0; }
+.fund-intent { border:1px solid #cbd0d8; background:#fff; padding:18px; }
+.fund-intent-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:16px; }
+@media(max-width:640px) { .fund-intent-options { grid-template-columns:1fr; } }
+
+.description-draft-submit { border:0; background:#1d5bff; color:white; font:inherit; padding:14px 20px; cursor:pointer; }

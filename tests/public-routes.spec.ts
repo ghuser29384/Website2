@@ -456,10 +456,10 @@ test("/cart redirects to the signed-out saved-offers planner without a commitmen
   expect(response?.status() ?? 200).toBeLessThan(400);
   await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/saved-offers");
   await waitForResolvedPage(page);
-  await expect(page.getByRole("heading", { level: 1, name: "Planner" })).toBeVisible();
-  await expect(page.getByText("Sign in to view your planner.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved offers" })).toBeVisible();
+  await expect(page.getByText("Sign in to view your saved offers.", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Plan — private selected items. No commitment created.", { exact: true }),
+    page.getByText("Your private shortlist. Saving an offer does not create a commitment.", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute(
     "href",

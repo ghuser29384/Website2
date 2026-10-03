@@ -95,7 +95,6 @@ test("examples remain available only as a secondary learning resource", () => {
 });
 
 test("the unscoped marketplace route defaults to live participant records", () => {
-  assert.match(marketplaceProxy, /searchParams\.has\("view"\)/);
-  assert.match(marketplaceProxy, /searchParams\.set\("view", "live"\)/);
-  assert.match(marketplaceProxy, /NextResponse\.redirect\(liveDirectoryUrl\)/);
+  assert.match(marketplaceProxy, /getDiscoverBrowseHref\(request.nextUrl.searchParams\)/);
+  assert.match(marketplaceProxy, /NextResponse\.redirect\(new URL\(discoverHref/);
 });

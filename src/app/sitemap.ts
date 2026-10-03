@@ -98,7 +98,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.42,
     },
     {
-      url: getAbsoluteUrl("/offers"),
+      url: getAbsoluteUrl("/discover"),
       lastModified: now,
       changeFrequency: "daily",
       priority: 0.98,

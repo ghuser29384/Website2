@@ -209,10 +209,10 @@ export function SiteTopbar({
         )}
       </div>
       {showSearch ? (
-        <form action="/offers" className="topbar-search" method="get" role="search">
+        <form action="/discover" className="topbar-search" method="get" role="search">
           <label className="sr-only" htmlFor={searchInputId}>Search offers</label>
           <div className="topbar-search-box" style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
-            <input id={searchInputId} name="search" placeholder="Search offers" type="search" />
+            <input id={searchInputId} name="q" placeholder="Search offers" type="search" />
             <button className="topbar-search-submit" type="submit">Search</button>
           </div>
         </form>
@@ -234,7 +234,7 @@ export function SiteTopbar({
               items={[
                 { href: "/dashboard?view=controls#my-trades", label: "My trades" },
                 { href: "/dashboard?view=controls#data-portability", label: "Profile data" },
-                ...(!refinedHeader ? [{ href: "/cart", label: "Saved offers" }] : []),
+                ...(!refinedHeader ? [{ href: "/saved-offers", label: "Saved offers" }] : []),
               ]}
               label="Account"
               nativeDisclosure={refinedHeader}

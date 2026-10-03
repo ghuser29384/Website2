@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse, userAgent } from "next/server";
 
+import { getDiscoverBrowseHref } from "@/lib/offer-browse-route";
 import { isPostgresUuid } from "@/lib/uuid";
 import { WALKTHROUGH_SEEN_COOKIE_NAME } from "@/lib/walkthrough-state";
 
@@ -118,19 +119,6 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (request.nextUrl.searchParams.size === 0) {
-    if (isPrefetch(request)) {
-      return NextResponse.next();
-    }
-
-    const discoverUrl = request.nextUrl.clone();
-    discoverUrl.pathname = "/discover";
-    discoverUrl.searchParams.set("domain", "offers");
-    discoverUrl.searchParams.set("view", "list");
-
-    return NextResponse.redirect(discoverUrl);
-  }
-
   if (
     request.nextUrl.searchParams.get("view") === "templates" ||
     request.nextUrl.searchParams.get("tab") === "templates"
@@ -138,14 +126,9 @@ export function proxy(request: NextRequest) {
     return rewriteToUnifiedCreate(request);
   }
 
-  if (request.nextUrl.searchParams.has("view")) {
-    return NextResponse.next();
-  }
-
-  const liveDirectoryUrl = request.nextUrl.clone();
-  liveDirectoryUrl.searchParams.set("view", "live");
-
-  return NextResponse.redirect(liveDirectoryUrl);
+  const discoverHref = getDiscoverBrowseHref(request.nextUrl.searchParams);
+  if (discoverHref) return NextResponse.redirect(new URL(discoverHref, request.url));
+  return NextResponse.next();
 }
 
 export const config = {

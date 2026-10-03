@@ -121,7 +121,7 @@ test("bg85 trust pages lead with concise background summaries and preserve techn
     ["src/app/privacy/page.tsx", /Private details remain participant-controlled/, /details-panel/],
     ["src/app/safety/page.tsx", /Safety rules for voluntary moral trade/, /operational controls|health/],
     ["src/app/measurement/page.tsx", /Measure useful cooperation, not moral worth/, /details-panel/],
-    ["src/app/transparency/page.tsx", /Public counts without public case files/, /BACKGROUND_PUBLIC_TECHNICAL_LINKS/],
+    ["src/app/transparency/page.tsx", /Public counts without public case files/, /Report JSON and source diagnostics/],
     ["src/app/accessibility/page.tsx", /Accessible review is part of trust/, /known limitations|test every review/i],
   ] as const;
 

@@ -3,19 +3,20 @@ import { expect, test } from "@playwright/test";
 const command = "$5 donation to animal welfare if you eat 1 vegetarian meal";
 const handoffKey = "moral-trade.command-center.handoff.v1";
 
-test.describe("live Command Center", () => {
+test.describe("Create description draft", () => {
   test("hands the command to the real private draft editor without a false success", async ({
     page,
   }) => {
-    await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
+    await page.goto("/trades/new", { waitUntil: "domcontentloaded" });
 
-    await page.getByRole("button", { name: /Command$/ }).click();
-    const input = page.getByLabel("Describe the proposed exchange");
+    const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+    await create.locator("#drawer summary").click();
+    const input = create.getByLabel("Describe the proposed exchange");
     await expect(input).toBeVisible();
     await expect(input).toHaveValue("");
     await input.fill(command);
 
-    await page.getByRole("button", { name: "Build this offer" }).click();
+    await create.getByRole("button", { name: "Review editable draft →" }).click();
 
     await expect(page).toHaveURL(/\/trades\/new\?handoff=command-center$/);
     await expect(

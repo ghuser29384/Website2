@@ -47,7 +47,7 @@ test("public pages separate direct charity gifts from Moral Trade project suppor
   assert.match(donatePage, /href="\/support"/);
   assert.match(statusPage, /Project funding remains sponsor-gated/);
   assert.match(statusPage, /fundingReadiness\.projectFundingAvailable/);
-  assert.match(siteSource, /href: "\/support", label: "Support"/);
+  assert.match(siteSource, /href: "\/support", label: "Support the project"/);
   assert.match(sitemapSource, /getAbsoluteUrl\("\/support"\)/);
 });
 

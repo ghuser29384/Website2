@@ -71,7 +71,9 @@ const COMMON_GROUND_PANEL = `
 const ASSET_LINKS = `  <link rel="stylesheet" href="/moral-trade-create/common-ground.css" />
   <link rel="stylesheet" href="/moral-trade-create/ui-repairs.css" />
 `;
-const DEFERRED_SCRIPT = `  <script defer src="/moral-trade-create/participant-picker.js"></script>
+const DEFERRED_SCRIPT = `  <script defer src="/moral-trade-live-command-center.js"></script>
+  <script defer src="/moral-trade-create/funding-choices.js"></script>
+  <script defer src="/moral-trade-create/participant-picker.js"></script>
   <script defer src="/moral-trade-create/common-ground.js"></script>
   <script defer src="/moral-trade-create/ui-repairs.js"></script>
 `;
@@ -146,5 +148,15 @@ export function integrateCommonGroundCreateSource(source: string) {
     "deferred-script insertion",
   );
 
+  integrated = integrated.replace(
+    '<button type="button" class="fund-mode-choice" data-fund-mode="redirect"',
+    '<details class="fund-intent"><summary>Redirect or increase a donation</summary><div class="fund-intent-options"><button type="button" class="fund-mode-choice" data-fund-mode="redirect"',
+  ).replace(
+    '<button type="button" class="fund-mode-choice" data-fund-mode="commonGround"',
+    '</div></details><details class="fund-intent"><summary>Fund a project together</summary><div class="fund-intent-options"><button type="button" class="fund-mode-choice" data-fund-mode="commonGround"',
+  ).replace(
+    '              </div>\n\n              <div class="conditional-donation-entry"',
+    '              </div></details></div>\n\n              <div class="conditional-donation-entry"',
+  );
   return integrated;
 }
