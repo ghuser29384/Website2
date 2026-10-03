@@ -22,18 +22,18 @@
     if (data.mode === "active") {
       return {
         label: "Active learned model",
-        detail: "Outcome-calibrated Pareto gates may rank and downgrade Feed candidates.",
+        detail: "A learned ranking layer may reorder candidates, but the interface does not treat its internal scores as verified acceptance, completion, additionality, safety, or impact.",
       };
     }
     if (data.mode === "shadow") {
       return {
         label: "Shadow learning",
-        detail: "A candidate model is evaluated, but the reciprocal heuristic remains authoritative unless a mature safety downgrade fires.",
+        detail: "A candidate ranking model is being evaluated without turning its internal outcome scores into user-facing factual claims.",
       };
     }
     return {
       label: "Cold-start heuristic",
-      detail: "The transparent reciprocal model remains authoritative while verified outcomes accumulate.",
+      detail: "Transparent relevance heuristics are used while outcome evidence accumulates; their internal scores are not presented as outcome probabilities.",
     };
   }
 
@@ -50,10 +50,10 @@
       : experiment.stoppedByGuardrail
         ? "Causal holdout stopped by guardrail"
         : "Causal holdout disabled";
-    return `<aside class="mt-learning-diagnostics" aria-label="Outcome-learning status">
-      <div><span>Outcome learning</span><strong>${escapeHtml(copy.label)}</strong><p>${escapeHtml(copy.detail)}</p></div>
+    return `<aside class="mt-learning-diagnostics" aria-label="Recommendation-ranking status">
+      <div><span>Recommendation ranking</span><strong>${escapeHtml(copy.label)}</strong><p>${escapeHtml(copy.detail)}</p></div>
       <dl>
-        <div><dt>Objective</dt><dd>Pareto-safe additionality</dd></div>
+        <div><dt>Role</dt><dd>Ranking aid under separate evidence and safety review</dd></div>
         <div><dt>Experiment</dt><dd>${escapeHtml(experimentLabel)}</dd></div>
         <div><dt>Audit</dt><dd>${escapeHtml(receipt)}</dd></div>
         <div><dt>Privacy</dt><dd>No raw private profile prose or sensitive demographic features</dd></div>
@@ -84,13 +84,12 @@
       if (!model || typeof model !== "object" || !prediction || typeof prediction !== "object") return;
       const details = card.querySelector(".mt-feed-details-grid");
       if (!details) return;
-      const estimate = Number(prediction.paretoSuccess);
-      const estimateText = Number.isFinite(estimate)
-        ? `${Math.round(Math.max(0, Math.min(1, estimate)) * 100)}/100 composite estimate`
-        : "Composite estimate unavailable";
       const note = document.createElement("p");
       note.className = "mt-pareto-note";
-      note.textContent = `${model.mode === "active" ? "Learned" : "Heuristic/shadow"} Pareto-safe layer · ${estimateText}. This is a prediction, not a guarantee or an intertheoretical moral-value score.`;
+      note.textContent =
+        model.mode === "active"
+          ? "Learned ranking layer active. Numerical outcome probabilities are not shown here; review the concrete terms, evidence, and counterparty response before relying on a recommendation."
+          : "Heuristic/shadow ranking layer active. Its internal scores are ranking aids, not estimates of acceptance, completion, additionality, safety, or moral value.";
       details.appendChild(note);
     });
   }

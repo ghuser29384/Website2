@@ -12,7 +12,7 @@
   );
 
   let account = normalizePayload(
-    hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { authenticated: false },
+    hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { status: "loading" },
   );
   let applying = false;
   let scheduled = false;
@@ -46,6 +46,7 @@
         : {};
 
     return {
+      status: typeof source.authenticated === "boolean" ? (source.authenticated ? "authenticated" : "signed_out") : source.status === "loading" ? "loading" : "unavailable",
       authenticated: source.authenticated === true,
       completedCommitments:
         Number.isInteger(details.completedCommitments) && details.completedCommitments >= 0
@@ -107,7 +108,7 @@
   }
 
   function patchGreeting() {
-    const greeting = document.querySelector(".head .date span.muted");
+    const greeting = document.querySelector(".head .date span.muted, .mt-feed-actions .date span.muted");
     if (!greeting) return;
 
     const suffix = account.authenticated && account.firstName ? `, ${account.firstName}.` : ".";
@@ -163,7 +164,7 @@
         text.includes("currency") &&
         text.includes("monthly safe cap") &&
         text.includes("standard terms") &&
-        text.includes("sign out")
+        (text.includes("sign out") || text.includes("manage account"))
       ) {
         current.setAttribute("data-mt-live-account-panel", "true");
         marker.setAttribute("data-mt-live-account-marker", "true");
@@ -206,6 +207,8 @@
   }
 
   function memberSummary() {
+    if (account.status === "loading") return "Loading account details…";
+    if (account.status === "unavailable") return "Account details could not be loaded. Refresh to retry.";
     if (!account.authenticated) {
       return "Sign in to view account details.";
     }
@@ -272,36 +275,113 @@
     return detail;
   }
 
-  function configureAction(row, key, state) {
-    const action = row.querySelector("button,a");
-    if (!action) return;
+  // Keep status readouts separate from actions. These destinations already own
+  // the authenticated forms; this drawer must never simulate saving a setting.
+  const accountActions = {
+    "payment-account": {
+      label: "Manage",
+      name: "Manage payment methods and receiving",
+      href: "/dashboard/payments",
+    },
+    notifications: {
+      label: "Manage",
+      name: "Manage notifications",
+      href: "/dashboard#privacy-controls",
+    },
+    "public-trust": {
+      label: "Review",
+      name: "Review public trust profile",
+      href: "/dashboard#wish-profile",
+    },
+    privacy: {
+      label: "Review",
+      name: "Review default privacy",
+      href: "/dashboard#privacy-controls",
+    },
+  };
+  const unavailableDetails = {
+    currency: "An account-wide currency preference cannot be set here. Review the currency shown in each payment or agreement before proceeding.",
+    "safe-cap": "An account-wide monthly safe cap cannot be set here. No monthly spending limit is enforced by this control. Review each commitment before agreeing.",
+    dispute: "A default dispute resolver cannot be selected here. Review the dispute terms for each agreement; this status does not assign a resolver.",
+  };
 
-    if (key === "terms") {
-      action.textContent = "View";
-      action.removeAttribute("disabled");
-      action.removeAttribute("aria-disabled");
-      if (action instanceof HTMLAnchorElement) {
-        action.href = account.standardTerms.href;
-      } else if (action.getAttribute("data-mt-live-account-terms-bound") !== "true") {
-        action.setAttribute("data-mt-live-account-terms-bound", "true");
-        action.addEventListener("click", (event) => {
-          event.preventDefault();
-          window.location.assign(account.standardTerms.href);
+  function accountHref(href) {
+    return account.status === "signed_out" ? `/login?returnTo=${encodeURIComponent(href)}` : href;
+  }
+
+  function termsHref() {
+    const href = account.standardTerms.href;
+    // Terms must remain a same-origin destination, including for signed-out users.
+    return /^\/(?!\/)/.test(href) && !/[\\\u0000-\u0020\u007f]/.test(href) ? href : "/terms";
+  }
+
+  function configureAction(row, key) {
+    const previous = row.querySelector("button,a");
+    if (!previous) return;
+    const explanation = Object.hasOwn(unavailableDetails, key) ? unavailableDetails[key] : null;
+    const destination = key === "terms"
+      ? { label: "View", name: "View standard terms", href: termsHref() }
+      : Object.hasOwn(accountActions, key) ? accountActions[key] : null;
+    if (!explanation && !destination) return;
+
+    const tag = explanation ? "button" : "a";
+    let action = previous;
+    if (
+      action.tagName.toLowerCase() !== tag ||
+      action.getAttribute("data-mt-live-account-action") !== key
+    ) {
+      // Do not retain prototype handlers or data-action hooks on the old control.
+      action = document.createElement(tag);
+      action.className = previous.className;
+      action.setAttribute("data-mt-live-account-action", key);
+      previous.replaceWith(action);
+    }
+
+    if (explanation) {
+      const helpId = `mt-account-${key}-help`;
+      let help = row.parentElement.querySelector(`[data-mt-live-account-help="${key}"]`);
+      if (!help) {
+        help = document.createElement("p");
+        help.id = helpId;
+        help.className = "muted";
+        help.setAttribute("data-mt-live-account-help", key);
+        help.style.cssText = "margin:0;padding:12px 0;font-size:13px;line-height:1.5;overflow-wrap:anywhere";
+        help.textContent = explanation;
+        help.hidden = true;
+        row.insertAdjacentElement("afterend", help);
+      }
+      action.type = "button";
+      if (action.textContent !== "Details") action.textContent = "Details";
+      const label = row.querySelector('[data-mt-live-account-label="true"]');
+      action.setAttribute("aria-label", `Details about ${label?.textContent || key}`);
+      action.setAttribute("aria-controls", helpId);
+      action.setAttribute("aria-expanded", String(!help.hidden));
+      if (action.getAttribute("data-mt-live-account-help-bound") !== "true") {
+        action.setAttribute("data-mt-live-account-help-bound", "true");
+        action.addEventListener("click", () => {
+          help.hidden = !help.hidden;
+          action.setAttribute("aria-expanded", String(!help.hidden));
         });
       }
       return;
     }
 
-    let actionLabel = "Status";
-    if (key === "safe-cap" && !account.monthlySafeCap) actionLabel = "Unavailable";
-    if (key === "notifications" && state !== null) actionLabel = state ? "On" : "Off";
-    if (key === "public-trust" && state !== null) actionLabel = state ? "On" : "Off";
+    const label = key !== "terms" && account.status === "signed_out" ? "Sign in" : destination.label;
+    // Idempotence matters: textContent writes trigger our MutationObserver.
+    if (action.textContent !== label) action.textContent = label;
+    action.setAttribute("href", key === "terms" ? destination.href : accountHref(destination.href));
+    action.setAttribute("aria-label", account.status !== "signed_out" || key === "terms"
+      ? destination.name : `Sign in to ${destination.name.toLowerCase()}`);
+  }
 
-    action.textContent = actionLabel;
-    action.setAttribute("aria-disabled", "true");
-    action.setAttribute("title", "This value is read-only in the current interface.");
-    if (action instanceof HTMLButtonElement) action.disabled = true;
-    if (state !== null) action.setAttribute("aria-pressed", String(state));
+  function patchManageAccount(panel) {
+    const action = panel.querySelector('[data-mt-live-account-manage="true"]') ||
+      panel.querySelector('a[href="/dashboard"]');
+    if (!action) return;
+    action.setAttribute("data-mt-live-account-manage", "true");
+    action.setAttribute("href", accountHref("/dashboard"));
+    const label = account.status === "signed_out" ? "Sign in" : "Manage account";
+    if (action.textContent !== label) action.textContent = label;
   }
 
   function patchRow(panel, definition) {
@@ -314,10 +394,12 @@
     const detail = findDetail(row);
     if (detail && detail.textContent !== definition.detail) detail.textContent = definition.detail;
 
-    configureAction(row, definition.key, definition.state ?? null);
+    configureAction(row, definition.key);
   }
 
   function signedInValue(value, missing = "Not configured") {
+    if (account.status === "loading") return "Loading…";
+    if (account.status === "unavailable") return "Unavailable";
     return account.authenticated ? value || missing : "Sign in to view";
   }
 
@@ -349,22 +431,20 @@
       {
         key: "payment-account",
         findLabel: "Escrow account",
-        label: "Payment account",
-        detail: signedInValue(account.paymentAccount.label),
+        label: "Payments",
+        detail: signedInValue("Payment methods and receiving"),
       },
       {
         key: "notifications",
         findLabel: "Notifications",
         label: "Notifications",
         detail: signedInValue(account.notifications.label),
-        state: account.authenticated ? account.notifications.enabled : null,
       },
       {
         key: "public-trust",
         findLabel: "Public trust profile",
         label: "Public trust profile",
         detail: signedInValue(account.publicTrustProfile.label),
-        state: account.authenticated ? account.publicTrustProfile.enabled : null,
       },
       {
         key: "privacy",
@@ -387,6 +467,7 @@
     ];
 
     rows.forEach((definition) => patchRow(panel, definition));
+    patchManageAccount(panel);
   }
 
   function patchAll() {
@@ -421,6 +502,10 @@
     if (document.visibilityState === "visible") schedulePatch();
   });
 
+  window.addEventListener("mt:live-account-ready", (event) => {
+    account = normalizePayload(event.detail);
+    schedulePatch();
+  });
   schedulePatch();
 
   if (!hasBootstrap) {
@@ -428,8 +513,8 @@
       credentials: "same-origin",
       headers: { Accept: "application/json" },
     })
-      .then((response) => (response.ok ? response.json() : { authenticated: false }))
-      .catch(() => ({ authenticated: false }))
+      .then((response) => (response.ok ? response.json() : { status: "unavailable" }))
+      .catch(() => ({ status: "unavailable" }))
       .then((payload) => {
         account = normalizePayload(payload);
         schedulePatch();

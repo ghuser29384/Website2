@@ -9,6 +9,7 @@ import {
   MORAL_PUBLIC_GOODS_LABS_POOL,
   MORAL_PUBLIC_GOODS_LABS_REFUND_BONUS_FEATURE_FLAG,
   MORAL_PUBLIC_GOODS_LABS_REFUND_BONUS_LIVE_MONEY_FLAG,
+  MORAL_PUBLIC_GOODS_LABS_SUCCESS_PREMIUM_SCHEDULE,
   evaluateMoralPublicGoodsLabsAccess,
   findProhibitedMoralPublicGoodsLabsCopy,
   formatUsd,
@@ -44,6 +45,16 @@ test("moral public goods labs fixture matches the required reviewed pool", () =>
       "Global Outbreak Coordination Network",
     ],
   );
+  assert.equal(MORAL_PUBLIC_GOODS_LABS_SUCCESS_PREMIUM_SCHEDULE.thresholds[0]?.premiumRateBps, 201);
+  assert.equal(MORAL_PUBLIC_GOODS_LABS_SUCCESS_PREMIUM_SCHEDULE.thresholds[0]?.successPremiumCents, 20_100);
+  assert.equal(
+    MORAL_PUBLIC_GOODS_LABS_SUCCESS_PREMIUM_SCHEDULE.thresholds[0]?.grossSuccessRequirementCents,
+    1_020_100,
+  );
+  assert.equal(
+    MORAL_PUBLIC_GOODS_LABS_SUCCESS_PREMIUM_SCHEDULE.thresholds[0]?.premiumIncludedInNetRecipientThreshold,
+    false,
+  );
   assert.deepEqual(
     MORAL_PUBLIC_GOODS_LABS_POOL.platformTiers.map((tier) => [
       tier.tierIndex,
@@ -77,6 +88,8 @@ test("dynamic sidebar copy preserves refund-bonus and platform-match semantics",
   assert.equal(refundNotes.some((note) => note.includes("No direct user payout")), false);
   assert.ok(refundNotes.some((note) => note === "Failure bonus is conditional and backed."));
   assert.ok(refundNotes.some((note) => note === "Exact progress is hidden until the round closes."));
+  assert.ok(refundNotes.some((note) => note.includes("Successful pools replenish the common reserve")));
+  assert.ok(refundNotes.some((note) => note === "The premium is separate from the net recipient threshold."));
   assert.ok(atLeastNotes.some((note) => note === "No direct user payout. Platform match goes to projects."));
   assert.ok(atLeastNotes.some((note) => note === "Your own commitment and same-control accounts do not count."));
 });
@@ -167,6 +180,8 @@ test("client UI source covers selector behavior, drawers, review modal, and acce
   assert.match(client, /disabled=\{!refundAcks\.allChecked \|\| !simulationOnly\}/);
   assert.match(client, /disabled=\{!platformAcks\.allChecked \|\| !simulationOnly\}/);
   assert.match(client, /No production commitment, payment-method setup, authorization, capture, routing, platform match, or bonus payment was created/);
+  assert.match(client, /Common Failure Bonus Reserve/);
+  assert.match(client, /The success premium is outside the net recipient threshold/);
 });
 
 test("route CSS preserves the simplified two-column desktop and single-column mobile layout", () => {
@@ -192,4 +207,6 @@ test("labs UI documentation records route, flags, copy choices, tests, and produ
   assert.match(docs, /Refund-Bonus Pledge sidebar does not say "No direct user payout"/);
   assert.match(docs, /Production\/public access renders an unavailable Labs page/);
   assert.match(docs, /integer-cent platform-match calculation/);
+  assert.match(docs, /Common Failure Bonus Reserve and Success Premium/);
+  assert.match(docs, /success premium is outside the net recipient threshold/);
 });

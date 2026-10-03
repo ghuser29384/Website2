@@ -56,6 +56,8 @@ function withFieldEncryptionEnv(
 function buildSubmission() {
   const submission = normalizeCompleteProfileSubmission({
     displayName: "Mina Park",
+    username: "mina-park",
+    publicInvitationMentionsEnabled: true,
     role: "Policy researcher",
     affiliation: "Future Institute",
     bio: "Interested in bounded, verifiable exchanges.",

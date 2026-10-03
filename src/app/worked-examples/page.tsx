@@ -112,6 +112,11 @@ export default async function WorkedExamplesPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <nav className="section hero-actions" aria-label="Related learning resources">
+          <Link className="button button-secondary" href="/reasoning-center">Worked-example review notes</Link>
+          <Link className="button button-secondary" href="/trade-controls">Safeguard demonstrations</Link>
+          <Link className="button button-secondary" href="/walkthrough">Optional walkthrough</Link>
+        </nav>
         <section className="section section-white" aria-labelledby="worked-example-list-heading">
           <div className="section-head">
             <p className="eyebrow">Canonical examples</p>

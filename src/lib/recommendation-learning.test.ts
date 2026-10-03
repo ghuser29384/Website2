@@ -47,7 +47,7 @@ test("action taxonomy distinguishes meat, plastic, and donation actions", () => 
   );
 });
 
-test("explicit difficulty feedback updates an action model without erasing willingness", () => {
+test("explicit difficulty feedback updates the action model without passive willingness inference", () => {
   const preferences = buildLearnedActionPreferences(
     [signal("save"), signal("hard"), signal("dwell", { dwellMs: 120_000 })],
     new Date("2026-07-21T12:00:00.000Z"),
@@ -56,8 +56,8 @@ test("explicit difficulty feedback updates an action model without erasing willi
 
   assert.ok(preference);
   assert.ok(preference.difficulty > 3.8);
-  assert.ok(preference.willingness > 50);
-  assert.equal(preference.observationCount, 3);
+  assert.ok(preference.willingness < 50);
+  assert.equal(preference.observationCount, 1);
 });
 
 test("browsing contributes bounded, lower-confidence cause weights", () => {

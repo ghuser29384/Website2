@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   decryptTradeInvitationToken,
   hashTradeInvitationToken,
@@ -48,7 +48,6 @@ export interface CoreOffer {
 
 export interface CoreProfile {
   id: string;
-  email: string;
   display_name: string | null;
 }
 
@@ -123,6 +122,16 @@ export interface CoreAgreementDetail {
   version: Record<string, any> | null;
   versions: Array<Record<string, any>>;
   confirmations: Array<Record<string, any>>;
+  milestones: Array<Record<string, any>>;
+  evidenceBundles: Array<Record<string, any>>;
+  evidenceBundleItems: Array<Record<string, any> & { signedUrl: string | null }>;
+  milestoneReviews: Array<Record<string, any>>;
+  milestoneAppeals: Array<Record<string, any>>;
+  milestonePayouts: Array<Record<string, any>>;
+  externalPaymentReceipts: Array<Record<string, any>>;
+  paymentReviewCases: Array<Record<string, any>>;
+  paymentReviewDecisions: Array<Record<string, any>>;
+  paymentAppeals: Array<Record<string, any>>;
   evidence: Array<Record<string, any> & { signedUrl: string | null }>;
   completionConfirmations: Array<Record<string, any>>;
   exitRequests: Array<Record<string, any>>;
@@ -167,7 +176,6 @@ function toProfile(row: Record<string, any> | null | undefined): CoreProfile | n
   if (!row?.id) return null;
   return {
     id: String(row.id),
-    email: String(row.email ?? ""),
     display_name: row.display_name ? String(row.display_name) : null,
   };
 }
@@ -177,11 +185,10 @@ async function loadProfiles(ids: string[]) {
   const result = new Map<string, CoreProfile>();
   if (!unique.length) return result;
 
-  const supabase = createServiceClient() as any;
-  const { data } = await supabase
-    .from("profiles")
-    .select("id,email,display_name")
-    .in("id", unique);
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase.rpc("get_safe_profile_labels_v1", {
+    p_profile_ids: unique,
+  });
 
   for (const row of data ?? []) {
     const profile = toProfile(row);
@@ -195,7 +202,7 @@ async function loadOffers(ids: string[]) {
   const result = new Map<string, CoreOffer>();
   if (!unique.length) return result;
 
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data } = await supabase.from("offers").select("*").in("id", unique);
   for (const row of data ?? []) {
     const offer = toCoreOffer(row);
@@ -205,7 +212,7 @@ async function loadOffers(ids: string[]) {
 }
 
 export async function getCoreOfferForOwner(offerId: string, ownerId: string) {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data, error } = await supabase
     .from("offers")
     .select("*")
@@ -219,7 +226,7 @@ export async function getCoreOfferForOwner(offerId: string, ownerId: string) {
 }
 
 export async function listCoreOffersForOwner(ownerId: string): Promise<CoreOffer[]> {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data } = await supabase
     .from("offers")
     .select("*")
@@ -233,7 +240,7 @@ export async function listTradeInvitationsForOffer(
   offerId: string,
   senderId: string,
 ): Promise<CoreInvitation[]> {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data } = await supabase
     .from("trade_invitations")
     .select(
@@ -265,7 +272,7 @@ export async function listTradeInvitationsForOffer(
 }
 
 export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer[]> {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data } = await supabase
     .from("offers")
     .select("*")
@@ -282,7 +289,7 @@ export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer
 
 export async function getInvitationByToken(token: string, actorId?: string | null) {
   if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return null;
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data, error } = await supabase.rpc("preview_trade_invitation_v2", {
     p_actor_id: actorId ?? null,
     p_token_hash: hashTradeInvitationToken(token),
@@ -292,7 +299,7 @@ export async function getInvitationByToken(token: string, actorId?: string | nul
 }
 
 export async function listThreadsForUser(userId: string): Promise<CoreThreadSummary[]> {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data: threads } = await supabase
     .from("trade_threads")
     .select("*")
@@ -353,7 +360,7 @@ export async function listThreadsForUser(userId: string): Promise<CoreThreadSumm
 }
 
 export async function getThreadForUser(threadId: string, userId: string): Promise<CoreThreadDetail | null> {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data: thread } = await supabase
     .from("trade_threads")
     .select("*")
@@ -408,7 +415,7 @@ export async function getCoreAgreementForUser(
   agreementId: string,
   userId: string,
 ): Promise<CoreAgreementDetail | null> {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data: agreement } = await supabase
     .from("agreements")
     .select("*")
@@ -417,8 +424,17 @@ export async function getCoreAgreementForUser(
     .maybeSingle();
   if (!agreement) return null;
 
-  const [offerMap, profileMap, versionsResult, confirmationsResult, evidenceResult, completionResult, exitResult, threadResult] =
-    await Promise.all([
+  const [
+    offerMap,
+    profileMap,
+    versionsResult,
+    confirmationsResult,
+    evidenceResult,
+    milestonesResult,
+    completionResult,
+    exitResult,
+    threadResult,
+  ] = await Promise.all([
       loadOffers(agreement.offer_id ? [String(agreement.offer_id)] : []),
       loadProfiles([String(agreement.proposer_id), String(agreement.responder_id)]),
       supabase
@@ -438,6 +454,11 @@ export async function getCoreAgreementForUser(
         .select("*")
         .eq("agreement_id", agreementId)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("trade_agreement_milestones")
+        .select("*")
+        .eq("agreement_version_id", String(agreement.current_version_id))
+        .order("position", { ascending: true }),
       supabase.from("trade_completion_confirmations").select("*").eq("agreement_id", agreementId),
       supabase
         .from("trade_exit_requests")
@@ -449,6 +470,86 @@ export async function getCoreAgreementForUser(
 
   const versions = versionsResult.data ?? [];
   const version = versions.find((row: any) => String(row.id) === String(agreement.current_version_id)) ?? versions[0] ?? null;
+  const milestones = milestonesResult.data ?? [];
+  const milestoneIds = milestones.map((row: any) => String(row.id));
+  const bundlesResult = milestoneIds.length
+    ? await supabase
+        .from("trade_evidence_bundles")
+        .select("*")
+        .in("milestone_id", milestoneIds)
+        .order("created_at", { ascending: false })
+    : { data: [] };
+  const evidenceBundles = bundlesResult.data ?? [];
+  const bundleIds = evidenceBundles.map((row: any) => String(row.id));
+  const [
+    bundleItemsResult,
+    milestoneReviewsResult,
+    milestoneAppealsResult,
+    milestonePayoutsResult,
+  ] = await Promise.all([
+    bundleIds.length
+      ? supabase
+          .from("trade_evidence_bundle_items")
+          .select("*")
+          .in("bundle_id", bundleIds)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    milestoneIds.length
+      ? supabase
+          .from("trade_milestone_reviews")
+          .select("*")
+          .in("milestone_id", milestoneIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    milestoneIds.length
+      ? supabase
+          .from("trade_milestone_appeals")
+          .select("*")
+          .in("milestone_id", milestoneIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    milestoneIds.length
+      ? supabase
+          .from("trade_milestone_payouts")
+          .select("*")
+          .in("milestone_id", milestoneIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const milestonePayouts = milestonePayoutsResult.data ?? [];
+  const payoutIds = milestonePayouts.map((row: any) => String(row.id));
+  const [externalPaymentReceiptsResult, paymentReviewCasesResult] =
+    payoutIds.length
+      ? await Promise.all([
+          supabase
+            .from("trade_external_payment_receipts")
+            .select("*")
+            .in("payout_id", payoutIds)
+            .order("payment_cycle", { ascending: false })
+            .order("attempt_number", { ascending: false }),
+          supabase
+            .from("trade_payment_review_cases")
+            .select("*")
+            .in("payout_id", payoutIds)
+            .order("payment_cycle", { ascending: false }),
+        ])
+      : [{ data: [] }, { data: [] }];
+  const paymentReviewCases = paymentReviewCasesResult.data ?? [];
+  const paymentCaseIds = paymentReviewCases.map((row: any) => String(row.id));
+  const [paymentReviewDecisionsResult, paymentAppealsResult] =
+    paymentCaseIds.length
+      ? await Promise.all([
+          supabase
+            .from("trade_payment_review_decisions")
+            .select("*")
+            .in("case_id", paymentCaseIds)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("trade_payment_appeals")
+            .select("*")
+            .in("case_id", paymentCaseIds)
+            .order("created_at", { ascending: false }),
+        ])
+      : [{ data: [] }, { data: [] }];
   const evidenceWithUrls = await Promise.all(
     (evidenceResult.data ?? []).map(async (item: any) => {
       let signedUrl: string | null = null;
@@ -459,6 +560,30 @@ export async function getCoreAgreementForUser(
       return { ...item, signedUrl };
     }),
   );
+  const bundleItemsWithUrls = await Promise.all(
+    (bundleItemsResult.data ?? []).map(async (item: any) => {
+      let signedUrl: string | null = null;
+      if (item.storage_path) {
+        const { data } = await supabase.storage
+          .from("trade-evidence")
+          .createSignedUrl(String(item.storage_path), 3600);
+        signedUrl = data?.signedUrl ?? null;
+      }
+      return { ...item, signedUrl };
+    }),
+  );
+  const externalPaymentReceiptsWithUrls = await Promise.all(
+    (externalPaymentReceiptsResult.data ?? []).map(async (receipt: any) => {
+      let signedUrl: string | null = null;
+      if (receipt.receipt_storage_path) {
+        const { data } = await supabase.storage
+          .from("trade-evidence")
+          .createSignedUrl(String(receipt.receipt_storage_path), 3600);
+        signedUrl = data?.signedUrl ?? null;
+      }
+      return { ...receipt, signedUrl };
+    }),
+  );
 
   return {
     agreement,
@@ -466,6 +591,16 @@ export async function getCoreAgreementForUser(
     version,
     versions,
     confirmations: confirmationsResult.data ?? [],
+    milestones,
+    evidenceBundles,
+    evidenceBundleItems: bundleItemsWithUrls,
+    milestoneReviews: milestoneReviewsResult.data ?? [],
+    milestoneAppeals: milestoneAppealsResult.data ?? [],
+    milestonePayouts,
+    externalPaymentReceipts: externalPaymentReceiptsWithUrls,
+    paymentReviewCases,
+    paymentReviewDecisions: paymentReviewDecisionsResult.data ?? [],
+    paymentAppeals: paymentAppealsResult.data ?? [],
     evidence: evidenceWithUrls,
     completionConfirmations: completionResult.data ?? [],
     exitRequests: exitResult.data ?? [],
@@ -476,7 +611,7 @@ export async function getCoreAgreementForUser(
 }
 
 export async function listTradeNotifications(userId: string, limit = 20) {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data } = await supabase
     .from("trade_notifications")
     .select("*")
@@ -486,8 +621,18 @@ export async function listTradeNotifications(userId: string, limit = 20) {
   return data ?? [];
 }
 
+export async function listTradeReviewerCandidates() {
+  const supabase = (await createClient()) as any;
+  const { data, error } = await supabase.rpc("list_trade_reviewer_candidates_v1");
+  if (error) return [];
+  return (data ?? []).map((row: Record<string, any>) => ({
+    id: String(row.profile_id),
+    label: String(row.display_name ?? "Neutral reviewer"),
+  }));
+}
+
 export async function listTradeReviewQueue() {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const [{ data: offers }, { data: reports }] = await Promise.all([
     supabase
       .from("offers")

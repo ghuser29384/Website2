@@ -28,13 +28,13 @@
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
   .mt-product-kicker {
-  color: var(--signal);
+  color: var(--accent-soft);
 }
 
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
   .mt-product-kicker::before {
-  background: var(--signal);
+  background: var(--accent-soft);
 }
 
 .marketplace-product-shell
@@ -124,8 +124,8 @@
   .mt-product-section:has(#process-heading)
   .mt-how-step:last-child > span {
   border-color: var(--ink);
-  background: var(--signal);
-  color: var(--signal-ink);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .marketplace-product-shell
@@ -209,7 +209,7 @@
   > .button:focus-visible {
   position: relative;
   z-index: 2;
-  outline: 3px solid var(--signal);
+  outline: 3px solid var(--accent);
   outline-offset: -3px;
 }
 

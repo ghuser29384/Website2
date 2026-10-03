@@ -6,6 +6,13 @@
 
   const BRAND_LABEL = "moral trade";
   const STYLE_ID = "mt-canonical-brand-styles";
+  const FAVICON_PATH = "/brand/moral-trade-mark.png?v=20260730";
+  const FAVICON_ATTRIBUTE = "data-mt-favicon-canonical";
+  const FAVICON_SPECS = [
+    { id: "mt-canonical-favicon", rel: "icon" },
+    { id: "mt-canonical-shortcut-icon", rel: "shortcut icon" },
+    { id: "mt-canonical-apple-touch-icon", rel: "apple-touch-icon" },
+  ];
   const ROOT_SELECTOR = [
     "header",
     '[role="banner"]',
@@ -22,6 +29,29 @@
     '[class*="wordmark" i]',
     '[class*="logo" i]',
   ].join(",");
+
+  function installFavicons() {
+    if (!document.head) return;
+
+    for (const link of document.head.querySelectorAll('link[rel*="icon" i]')) {
+      if (link.getAttribute(FAVICON_ATTRIBUTE) !== "true") link.remove();
+    }
+
+    for (const spec of FAVICON_SPECS) {
+      let link = document.getElementById(spec.id);
+      if (!(link instanceof HTMLLinkElement)) {
+        link = document.createElement("link");
+        link.id = spec.id;
+        document.head.appendChild(link);
+      }
+
+      link.setAttribute(FAVICON_ATTRIBUTE, "true");
+      link.rel = spec.rel;
+      link.href = FAVICON_PATH;
+      link.type = "image/png";
+      link.setAttribute("sizes", "512x512");
+    }
+  }
 
   function installStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -205,6 +235,7 @@
     patching = true;
 
     try {
+      installFavicons();
       installStyles();
       for (const element of findBrandElements()) patchBrand(element);
     } finally {

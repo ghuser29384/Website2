@@ -1,4 +1,4 @@
-import { listOpenOffersPreview } from "@/lib/app-data";
+import { listOpenOffersDirectory } from "@/lib/app-data";
 import {
   buildMoralTradeApiJsonResponse,
   buildMoralTradeApiRateLimitResponse,
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   const searchParams = new URL(request.url).searchParams;
   const liveMode = getPublicOffersLiveModeFromSearchParams(searchParams);
-  const liveOffers = hasSupabaseEnv() ? await listOpenOffersPreview(120, liveMode) : [];
+  const liveOffers = hasSupabaseEnv() ? await listOpenOffersDirectory(liveMode) : [];
   const payload = buildPublicOffersCollectionPayload({
     liveOffers,
     searchParams,

@@ -2738,8 +2738,7 @@ export function OfferCreateForm({
 
       {!supabaseReady ? (
         <div className="status-banner status-banner-error">
-          Supabase is not configured yet. Add environment variables before creating
-          live offers.
+          Publishing offers is unavailable. Please try again later.
         </div>
       ) : null}
 
@@ -2886,15 +2885,16 @@ export function OfferCreateForm({
         <div className="review-workflow-grid" aria-label="Draft review workflow cards">
           {reviewWorkflowCards.map((card) => (
             <article
-              className={`panel review-workflow-card review-workflow-card-${card.status}`}
+              className={`panel review-workflow-card review-workflow-card-${card.status === "pass" ? "screening" : card.status}`}
               key={card.key}
             >
               <div className="review-workflow-card-head">
                 <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
-                <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+                <span className="review-workflow-status">{card.assessmentLabel}</span>
               </div>
               <h4>{card.label}</h4>
               <p className="route-text">{card.summary}</p>
+              <p className="review-status-reason">{card.assessmentReason}</p>
               <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                 {card.factorCodes.map((factorCode) => (
                   <span key={factorCode}>{factorCode}</span>
@@ -3288,7 +3288,7 @@ export function OfferCreateForm({
                       onChange={(event) => setPerformanceBondAmountUsd(readFormControlValue(event))}
                     />
                     <small>
-                      Conservative v1 limit: {formatPerformanceBondAmount(performanceBondMinCents)} to{" "}
+                      Bond limit: {formatPerformanceBondAmount(performanceBondMinCents)} to{" "}
                       {formatPerformanceBondAmount(performanceBondMaxCents)}.
                     </small>
                   </label>

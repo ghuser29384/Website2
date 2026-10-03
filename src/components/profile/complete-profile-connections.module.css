@@ -36,7 +36,7 @@
   background: var(--paper-2);
   color: var(--ink);
   cursor: pointer;
-  font: 11px/1 var(--mono);
+  font: 14px/1 var(--mono);
   transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 
@@ -54,7 +54,7 @@
   place-items: center;
   border: 1px solid currentColor;
   border-radius: 50%;
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .launcher:focus-visible,
@@ -113,7 +113,7 @@
 
 .dialogHeader > div > span {
   color: var(--violet);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -122,17 +122,17 @@
   max-width: 680px;
   margin: 10px 0 0;
   font-family: var(--serif);
-  font-size: clamp(34px, 5vw, 49px);
+  font-size: clamp(26px, 3.5vw, 36px);
   font-weight: 400;
   letter-spacing: -0.05em;
-  line-height: 0.98;
+  line-height: 1.1;
 }
 
 .dialogHeader p {
   max-width: 72ch;
   margin: 14px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -187,7 +187,7 @@
 
 .boundaryBar p {
   margin: 0;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -197,7 +197,7 @@
   border: 1px solid rgba(25, 132, 72, 0.5);
   background: #f1f8f2;
   color: #126d3b;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -232,7 +232,7 @@
   border: 1px solid var(--ink);
   background: var(--paper-2);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.03em;
 }
@@ -282,7 +282,7 @@
   max-width: 72ch;
   margin: 9px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -295,7 +295,7 @@
   border: 1px solid var(--rule);
   background: var(--paper-2);
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -348,7 +348,7 @@
 
 .connectionFacts span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -366,7 +366,7 @@
 .unavailableNote > p {
   margin: 11px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -386,7 +386,7 @@
   gap: 10px;
   color: #4d4942;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -410,7 +410,7 @@
   border: 1px solid var(--ink);
   border-radius: 0;
   cursor: pointer;
-  font: 11px/1 var(--mono);
+  font: 14px/1 var(--mono);
   text-decoration: none;
 }
 
@@ -493,7 +493,7 @@
   max-width: 620px;
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -509,13 +509,13 @@
     right: 113px;
     gap: 7px;
     padding: 0 9px;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .launcher small {
     width: 17px;
     height: 17px;
-    font-size: 9px;
+    font-size: 14px;
   }
 
   .backdrop {
@@ -536,7 +536,7 @@
   }
 
   .dialogHeader h2 {
-    font-size: 34px;
+    font-size: 28px;
   }
 
   .boundaryBar {
@@ -560,7 +560,7 @@
   .sourceMark {
     width: 40px;
     height: 40px;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .sourceHeading {
@@ -594,7 +594,7 @@
   }
 
   .dialogHeader h2 {
-    font-size: 31px;
+    font-size: 28px;
   }
 
   .dialogFooter {

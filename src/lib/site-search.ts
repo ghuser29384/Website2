@@ -67,8 +67,8 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/trade-controls",
-    label: "Trade controls",
-    summary: "Review counterfactual integrity, multi-party clearing, dispute resolution, pool and threshold-failure governance, verifier governance, private preferences, evidence integrations, affected-party safeguards, and organizational authority.",
+    label: "Safeguard demonstrations",
+    summary: "Learning examples of integrity, coordination, review, privacy, evidence, and authority. No real trade settings are changed here.",
     kind: "learn",
     keywords: [
       "trade controls",
@@ -120,7 +120,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   {
     href: "/people",
     label: "Participant directory",
-    summary: "Browse public profiles and context-specific transaction records without a moral or popularity ranking.",
+    summary: "Browse public profiles by work, open offers, stated participation preferences, and reviewed evidence without a general person score.",
     kind: "community",
     keywords: ["people", "participants", "directory", "profile", "credibility", "offers", "counterparty"],
   },

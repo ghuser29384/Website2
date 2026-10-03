@@ -107,12 +107,12 @@
 
 .routeGlyph rect.glyphSignal,
 .routeGlyph circle.glyphSignal {
-  fill: var(--signal);
+  fill: var(--accent-soft);
   stroke: var(--ink);
 }
 
 .routeGlyph path.glyphSignal {
-  stroke: var(--signal-ink);
+  stroke: var(--accent-deep);
   stroke-width: 4;
 }
 
@@ -296,7 +296,7 @@
 }
 
 .successOutcome {
-  background: color-mix(in srgb, var(--signal) 32%, var(--surface));
+  background: var(--accent-soft);
 }
 
 .fallbackOutcome {
@@ -312,7 +312,7 @@
 }
 
 .successOutcome .outcomeGlyph {
-  color: var(--signal-ink);
+  color: var(--accent-deep);
 }
 
 .outcomeGlyph circle,
@@ -421,17 +421,17 @@
 }
 
 .actionPanel .routeGlyph .glyphAccent {
-  stroke: var(--signal);
+  stroke: var(--accent-soft);
 }
 
 .actionPanel .routeGlyph rect.glyphSignal,
 .actionPanel .routeGlyph circle.glyphSignal {
-  fill: var(--signal);
+  fill: var(--accent-soft);
   stroke: #ffffff;
 }
 
 .actionPanel .routeGlyph path.glyphSignal {
-  stroke: var(--signal);
+  stroke: var(--accent-soft);
 }
 
 .actionPanel :global(.button) {

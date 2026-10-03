@@ -3,13 +3,20 @@ name: Create route visual QA
 on:
   pull_request:
     paths:
+      - "public/moral-trade-create/**"
+      - "public/moral-trade-canonical-static.css"
       - "src/app/create/**"
+      - "src/app/trades/new/**"
       - "src/app/marketplace-ui.css"
       - "src/components/backing/**"
       - "src/components/create/**"
       - "src/components/marketplace/deal-receipt.tsx"
+      - "src/lib/create-interface/**"
       - "src/lib/create-routes*"
+      - "src/proxy.ts"
+      - "src/proxy.test.ts"
       - "tests/create-route-workbench.spec.ts"
+      - "tests/create-route-ui-regression.spec.ts"
       - ".github/workflows/create-route-visual-qa.yml"
 
 permissions:
@@ -18,7 +25,7 @@ permissions:
 jobs:
   create-route-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -33,26 +40,42 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint create-route changes
+      - name: Lint and syntax-check unified Create-route changes
         run: |
           npx eslint \
+            src/proxy.ts \
+            src/proxy.test.ts \
             src/app/create/page.tsx \
+            src/app/trades/new/page.tsx \
             src/components/backing/backing-create-form.tsx \
-            src/components/create/create-route-chooser.tsx \
+            src/components/create/create-interface-frame.tsx \
+            src/lib/create-interface/common-ground-integration.ts \
+            src/lib/create-interface/common-ground-integration.test.ts \
+            src/lib/create-interface/create-ui-repairs.test.ts \
             src/lib/create-routes.ts \
             src/lib/create-routes.test.ts \
-            tests/create-route-workbench.spec.ts
+            tests/create-route-workbench.spec.ts \
+            tests/create-route-ui-regression.spec.ts
+          node --check public/moral-trade-create/ui-repairs.js
 
-      - name: Run create-route unit tests
-        run: node --import tsx --test src/lib/create-routes.test.ts
+      - name: Run Create routing and integration unit tests
+        run: |
+          node --import tsx --test \
+            src/proxy.test.ts \
+            src/lib/create-routes.test.ts \
+            src/lib/create-interface/common-ground-integration.test.ts \
+            src/lib/create-interface/create-ui-repairs.test.ts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run create-route interaction and visual QA
+      - name: Run unified Create interaction and visual QA
         env:
           CREATE_ROUTE_CAPTURE: "1"
-        run: npm run test:e2e -- tests/create-route-workbench.spec.ts
+        run: |
+          npm run test:e2e -- \
+            tests/create-route-workbench.spec.ts \
+            tests/create-route-ui-regression.spec.ts
 
       - name: Upload visual comparison artifact
         if: always()

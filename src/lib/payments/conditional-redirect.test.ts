@@ -9,6 +9,7 @@ import {
   rankConditionalRedirectCandidates,
   validateConditionalRedirectTerms,
 } from "./conditional-redirect";
+import { loadConditionalRedirectPageData } from "./conditional-redirect-page-data";
 
 const now = Date.parse("2026-07-23T12:00:00.000Z");
 
@@ -144,6 +145,7 @@ test("server actions require consent and keep Next redirects outside caught work
   assert.match(actions, /function requireConsent/);
   assert.match(actions, /formData\.get\("consent"\) !== "on"/);
   assert.match(actions, /reauthorizeConditionalRedirectAction/);
+  assert.match(actions, /const RETURN_PATH = `\$\{CREATE_PATH\}\?structure=\$\{CONDITIONAL_STRUCTURE\}`/);
   assert.match(actions, /redirect\(checkoutUrl!\)/);
   assert.doesNotMatch(
     actions,
@@ -168,7 +170,13 @@ test("settlement reuses one batch per outcome and distinguishes uncertainty from
 
 test("the feature is discoverable and exposes recovery, withdrawal, and local deadlines", () => {
   const page = readFileSync(
-    "src/app/donation-offsets/conditional/page.tsx",
+    "src/app/trades/new/conditional-donation.tsx",
+    "utf8",
+  );
+  const createPage = readFileSync("src/app/trades/new/page.tsx", "utf8");
+  const nextConfig = readFileSync("next.config.ts", "utf8");
+  const createInterface = readFileSync(
+    "public/moral-trade-create/index.html",
     "utf8",
   );
   const deadlineField = readFileSync(
@@ -181,5 +189,87 @@ test("the feature is discoverable and exposes recovery, withdrawal, and local de
   assert.match(page, /backup and can be charged only if I/);
   assert.match(deadlineField, /toLocaleString/);
   assert.match(deadlineField, /seven days in your local/);
-  assert.match(offsetsPage, /href="\/donation-offsets\/conditional"/);
+  assert.match(createPage, /structure === "conditional-donation"/);
+  assert.match(createPage, /<ConditionalDonationCreate params=\{resolvedSearchParams\} \/>/);
+  assert.match(createInterface, /data-fund-mode="conditional"/);
+  assert.match(
+    createInterface,
+    /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation"\)/,
+  );
+  assert.match(
+    offsetsPage,
+    /href="\/trades\/new\?structure=conditional-donation"/,
+  );
+  assert.match(
+    nextConfig,
+    /source: "\/donation-offsets\/conditional"[\s\S]*destination: "\/trades\/new\?structure=conditional-donation"[\s\S]*permanent: true/,
+  );
+});
+
+test("conditional donation data fails closed when the service client is unavailable", async () => {
+  let warning = "";
+  const pageData = await loadConditionalRedirectPageData(
+    {
+      livemode: true,
+      nowIso: "2026-07-23T12:00:00.000Z",
+      viewerId: "viewer-1",
+    },
+    {
+      createClient: () => {
+        throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
+      },
+      warn: (message, details) => {
+        warning = `${message}: ${details.message}`;
+      },
+    },
+  );
+
+  assert.deepEqual(pageData, {
+    available: false,
+    destinations: [],
+    offers: [],
+    creatorOffers: [],
+    viewerCandidates: [],
+    settlementLegs: [],
+  });
+  assert.match(warning, /Missing SUPABASE_SERVICE_ROLE_KEY/);
+});
+
+test("the conditional donation page renders and enforces the unavailable state", () => {
+  const page = readFileSync(
+    "src/app/trades/new/conditional-donation.tsx",
+    "utf8",
+  );
+  assert.match(page, /loadConditionalRedirectPageData/);
+  assert.match(
+    page,
+    /Conditional donation authorizations are temporarily unavailable/,
+  );
+  assert.match(
+    page,
+    /disabled=\{!pageData\.available \|\| !readiness\.canCreateMandates\}/,
+  );
+});
+
+test("Stripe and server-action returns stay inside the Create route", () => {
+  const service = readFileSync(
+    "src/lib/payments/conditional-redirect-service.ts",
+    "utf8",
+  );
+  const actions = readFileSync(
+    "src/app/donation-offsets/conditional/actions.ts",
+    "utf8",
+  );
+
+  assert.match(
+    service,
+    /\/trades\/new\?structure=conditional-donation&setup=success&offer=/,
+  );
+  assert.match(
+    service,
+    /\/trades\/new\?structure=conditional-donation&setup=cancelled&offer=/,
+  );
+  assert.doesNotMatch(service, /\/donation-offsets\/conditional\?setup=/);
+  assert.match(actions, /returnPath\(\{ change: "cancelled" \}\)/);
+  assert.match(actions, /returnPath\(\{ change: "withdrawn" \}\)/);
 });

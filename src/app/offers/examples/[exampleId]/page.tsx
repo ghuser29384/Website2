@@ -4,10 +4,8 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
-  CommitmentSheet,
   DealDetailObject,
   MarketplaceBottomNav,
-  ReviewPlanPanel,
 } from "@/components/marketplace/marketplace-components";
 import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
@@ -206,20 +204,18 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
               Back to offers
             </Link>
           </div>
-          <div className="marketplace-detail-grid">
-            <DealDetailObject deal={marketplaceDeal} headingId="worked-example-decision-heading" />
-            <div className="marketplace-detail-side">
-              <ReviewPlanPanel deal={marketplaceDeal} />
-            </div>
-          </div>
-          <div className="v72-sticky-footer panel">
-            <span>Example · Preview only · No commitment</span>
-            <CommitmentSheet
-              commitHref={createHref}
+          <div className="marketplace-detail-grid marketplace-detail-single">
+            <DealDetailObject
               deal={marketplaceDeal}
-              paymentSupportAvailable={false}
+              headingId="worked-example-decision-heading"
+              actions={
+                <Link className="button button-primary" href={createHref}>
+                  Create a draft from this example
+                </Link>
+              }
             />
           </div>
+          <p className="route-text">Example · Preview only · No commitment</p>
           <details className="v72-explain-row">
             <summary>Requirements & rules</summary>
             <p>
@@ -266,6 +262,8 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
           </div>
         </section>
 
+        <details className="v72-explain-row review-assessment-disclosure">
+          <summary>Screening and review context</summary>
         <section className="section section-subtle" aria-labelledby="review-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Review context</p>
@@ -279,17 +277,17 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
           <div className="review-workflow-grid">
             {reviewWorkflowCards.map((card) => (
               <article
-                className={`panel review-workflow-card review-workflow-card-${card.status}`}
+                className={`panel review-workflow-card review-workflow-card-${card.status === "pass" ? "screening" : card.status}`}
                 key={card.key}
               >
                 <div className="review-workflow-card-head">
                   <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
-                  <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+                  <span className="review-workflow-status">{card.assessmentLabel}</span>
                 </div>
                 <h3>{card.label}</h3>
                 <p className="route-text">{card.summary}</p>
                 <p className="review-status-reason">
-                  <strong>Why this status:</strong> {card.statusReason}
+                  <strong>Why this status:</strong> {card.assessmentReason}
                 </p>
                 <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                   {card.factorCodes.map((factorCode) => (
@@ -353,6 +351,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
             </ul>
           </div>
         </section>
+        </details>
       </main>
 
       <MarketplaceBottomNav active="browse" />

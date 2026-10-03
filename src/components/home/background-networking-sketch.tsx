@@ -11,7 +11,7 @@ const networkingLayers = [
   },
   {
     title: "Rule-based scans",
-    text: "For now, matches come from explicit fields: shared causes, payment or pledge compatibility, and stated first-step boundaries.",
+    text: "Matches use shared causes, payment or pledge compatibility, and stated first-step boundaries.",
   },
   {
     title: "Consent-gated introductions",
@@ -32,8 +32,8 @@ const feasibilityTracks = [
     text: "Broad previews, field-level grants, and match-scoped consent keep exact wishes hidden while still leaving enough surface area for review and abuse prevention.",
   },
   {
-    title: "Portable before decentralised",
-    text: "Profile export and explicit source records make the registry easier to move later, even while the first prototype stays centralised and simple.",
+    title: "Profile export",
+    text: "Export your profile and source records.",
   },
   {
     title: "Cold-start niches",
@@ -88,12 +88,7 @@ export function BackgroundNetworkingSketch({ isAuthenticated }: { isAuthenticate
     <section className="section section-white background-networking-section" id="background-networking">
       <div className="section-head">
         <p className="eyebrow">Background networking</p>
-        <h2>A non-AI sketch for finding possible counterparties in the background</h2>
-        <p>
-          Moral trade needs people to find one another before they can bargain. This version turns
-          the Forethought design sketch into a cautious marketplace of profiles, searches, alerts,
-          and first-step proposals without ingesting private feeds or adding AI synthesis yet.
-        </p>
+        <h2>Find possible counterparties in the background</h2>
       </div>
 
       <div className="background-networking-grid">
@@ -156,12 +151,7 @@ export function BackgroundNetworkingSketch({ isAuthenticated }: { isAuthenticate
       <div className="privacy-callout panel">
         <div>
           <p className="detail-kicker">Privacy-first constraints</p>
-          <h3>The prototype is deliberately less powerful than the full AI idea</h3>
-          <p>
-            The sketch in the article imagines attentive helpers distilling many sensitive sources.
-            This site keeps the first milestone narrower: explicit wish profiles, manual notes,
-            rule-based matching, and consent-gated reveal.
-          </p>
+          <h3>You control what you share</h3>
         </div>
         <ul className="clean-list">
           {privacyControls.map((control) => (
@@ -174,10 +164,6 @@ export function BackgroundNetworkingSketch({ isAuthenticated }: { isAuthenticate
         <div>
           <p className="detail-kicker">Participation modes</p>
           <h3>Individuals, collectives, and delegates can all enter the network</h3>
-          <p>
-            The original sketch allows passive background help as well as deliberate wish entry.
-            This prototype exposes both shapes without turning on automatic ingestion yet.
-          </p>
         </div>
         <div className="networking-roadmap-rows">
           {participationModes.map((mode) => (
@@ -200,13 +186,7 @@ export function BackgroundNetworkingSketch({ isAuthenticated }: { isAuthenticate
 
       <div className="networking-roadmap panel">
         <div>
-          <p className="detail-kicker">Implementation boundary</p>
-          <h3>Move toward background networking without pretending the AI layer is ready</h3>
-          <p>
-            The article points toward personalised helpers, synthesis, and interviews. This
-            prototype first makes the institutional surface visible: what can be searched, what can
-            be revealed, who can consent, and what counts as a serious first step.
-          </p>
+          <h3>Available features</h3>
         </div>
         <div className="networking-roadmap-rows">
           {milestoneRows.map((row) => (

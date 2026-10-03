@@ -401,8 +401,8 @@
 }
 
 .statusSuccess {
-  background: var(--signal);
-  color: var(--signal-ink);
+  background: var(--success-soft);
+  color: var(--success-ink);
 }
 
 @media (max-width: 1080px) {

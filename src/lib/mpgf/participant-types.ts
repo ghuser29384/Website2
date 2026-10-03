@@ -1,4 +1,11 @@
 import type {
+  FailureBonusEligibilityPolicy,
+  FailureBonusSuccessPremiumPayer,
+  FailureBonusSuccessPremiumPricingAssumptions,
+  FailureBonusSuccessPremiumScheduleQuote,
+} from "./failure-bonus-success-premium";
+import type { FailureBonusScheduleStatus } from "./failure-bonus-threshold-editor";
+import type {
   MpgfBallot,
   MpgfPledge,
   MpgfPublicGoodsCaptureMode,
@@ -37,6 +44,21 @@ export interface MpgfPoolProposalRecord {
   publicGoodsDestinationRef?: string;
   publicGoodsThresholdAmountCents?: number;
   publicGoodsThresholdSupporters?: number;
+  publicGoodsFailureBonusEnabled?: boolean;
+  publicGoodsFailureBonusRateBps?: number;
+  publicGoodsFailureBonusEligibilityPolicy?: FailureBonusEligibilityPolicy;
+  publicGoodsFailureBonusMaxParticipants?: number;
+  publicGoodsFailureBonusMaxPerParticipantCents?: number;
+  publicGoodsThresholdSchedule?: FailureBonusSuccessPremiumScheduleQuote;
+  publicGoodsFailureBonusScheduleStatus?: FailureBonusScheduleStatus;
+  publicGoodsSuccessPremiumRateBps?: number;
+  publicGoodsSuccessPremiumCents?: number;
+  publicGoodsSuccessPremiumPayer?: FailureBonusSuccessPremiumPayer;
+  publicGoodsSuccessPremiumPolicyVersion?: string;
+  publicGoodsSuccessPremiumIncludedInNetThreshold?: false;
+  publicGoodsSuccessPremiumProvisional?: boolean;
+  publicGoodsGrossSuccessRequirementCents?: number;
+  publicGoodsSuccessPremiumPricingAssumptions?: FailureBonusSuccessPremiumPricingAssumptions;
   publicGoodsDeadlineAt?: string;
   publicGoodsVerificationMethod?: string;
   publicGoodsBaselineRule?: string;
@@ -45,7 +67,22 @@ export interface MpgfPoolProposalRecord {
   publicGoodsQfEnabled?: boolean;
   publicGoodsQfCapMultiple?: number;
   publicGoodsPayoutMethod?: MpgfPublicGoodsCaptureMode;
-  status: "draft" | "submitted" | "under_review" | "approved_as_candidate" | "rejected" | "withdrawn";
+  status:
+    | "draft"
+    | "submitted"
+    | "under_review"
+    | "changes_requested"
+    | "approved_as_candidate"
+    | "rejected"
+    | "withdrawn"
+    | "succeeded"
+    | "lapsed";
+  termsVersion?: number;
+  approvedTermsVersion?: number;
+  operativeTermsSha256?: string;
+  termsLockedAt?: string;
+  reviewedAt?: string;
+  reviewReason?: string;
   candidateAlternativeId?: string;
   createdAt?: string;
 }

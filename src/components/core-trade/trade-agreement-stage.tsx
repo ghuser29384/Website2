@@ -5,6 +5,7 @@ import {
 } from "@/lib/trade-donation-pool";
 import { loadTradeDonationAgreementContext } from "@/lib/trade-donation";
 
+import pageStyles from "./trade-agreement-page-visibility.module.css";
 import { TradeAgreementStage as BaseTradeAgreementStage } from "./trade-agreement-stage-base";
 import { TradeDonationAgreementStage } from "./trade-donation-agreement-stage";
 import { TradeDonationPoolAgreementStage } from "./trade-donation-pool-agreement-stage";
@@ -45,7 +46,7 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
   );
 
   return (
-    <>
+    <div className={pageStyles.scope}>
       {stage}
       {props.lifecycleStatus === "completed" && viewer ? (
         <section
@@ -58,10 +59,6 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
             <h2 id="outcome-learning-heading">
               Report this trade separately, by your own lights.
             </h2>
-            <p>
-              The report is private, does not alter the frozen deal, and is used only after
-              minimum-data, calibration, and safety gates pass.
-            </p>
           </div>
           <TradeOutcomeFeedback
             agreementId={props.agreementId}
@@ -69,6 +66,6 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
           />
         </section>
       ) : null}
-    </>
+    </div>
   );
 }

@@ -5,20 +5,28 @@ import {
   resolveTradeReportAction,
   reviewCoreOfferAction,
 } from "@/app/core-trade-actions";
+import {
+  adminAssignTradePaymentAppealReviewerAction,
+  adminAssignTradePaymentReviewerAction,
+  adminAssignTradeAppealReviewerAction,
+  adminAssignTradeMilestoneReviewerAction,
+} from "@/app/trade-milestone-actions";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
+import { FullNavigationActionForm } from "@/components/core-trade/full-navigation-action-form";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
-import { evaluateAdminOperatorAccess } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import {
   listTradeReviewQueue,
+  listTradeReviewerCandidates,
   type CoreOffer,
   type CoreProfile,
 } from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -42,21 +50,100 @@ function formatDate(value: string | null | undefined) {
   return <LocalDateTime value={value} fallback={value} />;
 }
 
+function currentReviewDeadlines() {
+  const now = new Date();
+  return {
+    fallbackCutoff: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    now: now.toISOString(),
+  };
+}
+
 export default async function TradeReviewPage({ searchParams }: TradeReviewPageProps) {
   const [viewer, resolvedSearchParams, security] = await Promise.all([
     requireViewer("/admin/trade-review"),
     searchParams,
     loadBackgroundAccountSecuritySummary(),
   ]);
-  const access = evaluateAdminOperatorAccess({
-    email: viewer.authUser.email,
-    mfaSummary: security,
-  });
+  const supabase = await createClient();
+  const { data: administratorGrant } = await (supabase as any)
+    .from("trade_review_role_grants")
+    .select("profile_id")
+    .eq("profile_id", viewer.authUser.id)
+    .eq("role", "administrator")
+    .eq("active", true)
+    .is("revoked_at", null)
+    .maybeSingle();
+  const hasAdministratorRole = Boolean(administratorGrant?.profile_id);
+  const access = {
+    allowed:
+      hasAdministratorRole &&
+      security?.verifiedTotpCount >= 1 &&
+      security.currentLevel === "aal2",
+    message: !hasAdministratorRole
+      ? "This profile does not have an active Moral Trade administrator grant."
+      : security?.verifiedTotpCount < 1
+        ? "Enroll a verified authenticator factor before using administrator assignment."
+        : security.currentLevel !== "aal2"
+          ? "Verify the authenticator for this session before using administrator assignment."
+          : "Profile-bound administrator access verified at AAL2.",
+  };
   const formMessage = getFormMessage(resolvedSearchParams);
-  const queue = access.allowed ? await listTradeReviewQueue() : { offers: [], reports: [] };
+  const deadlines = currentReviewDeadlines();
+  const [
+    queue,
+    reviewerCandidates,
+    milestoneFallbacksResult,
+    appealFallbacksResult,
+    paymentFallbacksResult,
+    paymentAppealFallbacksResult,
+  ] =
+    access.allowed
+      ? await Promise.all([
+          listTradeReviewQueue(),
+          listTradeReviewerCandidates(),
+          (supabase as any)
+            .from("trade_agreement_milestones")
+            .select("id,action_category,status,reviewer_selection_opened_at")
+            .is("assigned_reviewer_id", null)
+            .lte("reviewer_selection_opened_at", deadlines.fallbackCutoff)
+            .order("reviewer_selection_opened_at", { ascending: true }),
+          (supabase as any)
+            .from("trade_milestone_appeals")
+            .select("id,milestone_id,status,reviewer_selection_deadline_at,created_at")
+            .eq("status", "reviewer_selection")
+            .is("assigned_reviewer_id", null)
+            .lte("reviewer_selection_deadline_at", deadlines.now)
+            .order("created_at", { ascending: true }),
+          (supabase as any)
+            .from("trade_payment_review_cases")
+            .select("id,payout_id,payment_cycle,status,reviewer_selection_deadline_at,created_at")
+            .eq("status", "reviewer_selection")
+            .is("assigned_reviewer_id", null)
+            .lte("reviewer_selection_deadline_at", deadlines.now)
+            .order("created_at", { ascending: true }),
+          (supabase as any)
+            .from("trade_payment_appeals")
+            .select("id,case_id,status,reviewer_selection_deadline_at,created_at")
+            .eq("status", "reviewer_selection")
+            .is("assigned_reviewer_id", null)
+            .lte("reviewer_selection_deadline_at", deadlines.now)
+            .order("created_at", { ascending: true }),
+        ])
+      : [
+          { offers: [], reports: [] },
+          [],
+          { data: [] },
+          { data: [] },
+          { data: [] },
+          { data: [] },
+        ];
+  const milestoneFallbacks = milestoneFallbacksResult.data ?? [];
+  const appealFallbacks = appealFallbacksResult.data ?? [];
+  const paymentFallbacks = paymentFallbacksResult.data ?? [];
+  const paymentAppealFallbacks = paymentAppealFallbacksResult.data ?? [];
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className="page-shell marketplace-app-shell trade-workflow-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
@@ -120,9 +207,188 @@ export default async function TradeReviewPage({ searchParams }: TradeReviewPageP
                 <article className="panel data-card">
                   <p className="detail-kicker">Admin gate</p>
                   <h2>Verified</h2>
-                  <p className="route-text">Allowed email with active authenticator MFA.</p>
+                  <p className="route-text">Profile-bound administrator grant with active AAL2 MFA.</p>
                 </article>
               </div>
+
+              <div className="section-head section-head-compact">
+                <p className="eyebrow">Seven-day reviewer fallback</p>
+                <h2>Assign only after participant selection has expired.</h2>
+                <p>
+                  Database rules enforce the deadline, active reviewer role, participant conflicts,
+                  and a different reviewer for appeals. Assignment does not grant custody or payment
+                  authority.
+                </p>
+              </div>
+
+              <div className="data-grid">
+                {milestoneFallbacks.map((milestone: Record<string, any>) => (
+                  <form
+                    action={adminAssignTradeMilestoneReviewerAction}
+                    className="panel stack-form"
+                    key={String(milestone.id)}
+                  >
+                    <input name="milestone_id" type="hidden" value={String(milestone.id)} />
+                    <input name="return_to" type="hidden" value="/admin/trade-review" />
+                    <p className="detail-kicker">Initial neutral review</p>
+                    <h3>{String(milestone.action_category)}</h3>
+                    <p className="route-text">
+                      Participant selection opened {formatDate(String(milestone.reviewer_selection_opened_at))}.
+                    </p>
+                    <label className="field">
+                      <span>Eligible reviewer</span>
+                      <select name="reviewer_id" required>
+                        <option value="">Choose an active reviewer</option>
+                        {reviewerCandidates.map((reviewer: { id: string; label: string }) => (
+                          <option key={reviewer.id} value={reviewer.id}>
+                            {reviewer.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <PendingSubmitButton
+                      disabled={!reviewerCandidates.length}
+                      pendingLabel="Assigning reviewer…"
+                    >
+                      Assign neutral reviewer
+                    </PendingSubmitButton>
+                  </form>
+                ))}
+
+                {appealFallbacks.map((appeal: Record<string, any>) => (
+                  <form
+                    action={adminAssignTradeAppealReviewerAction}
+                    className="panel stack-form"
+                    key={String(appeal.id)}
+                  >
+                    <input name="appeal_id" type="hidden" value={String(appeal.id)} />
+                    <input name="return_to" type="hidden" value="/admin/trade-review" />
+                    <p className="detail-kicker">Appeal review</p>
+                    <h3>Assign a different neutral reviewer</h3>
+                    <p className="route-text">
+                      Selection deadline {formatDate(String(appeal.reviewer_selection_deadline_at))}.
+                    </p>
+                    <label className="field">
+                      <span>Eligible appeal reviewer</span>
+                      <select name="reviewer_id" required>
+                        <option value="">Choose an active reviewer</option>
+                        {reviewerCandidates.map((reviewer: { id: string; label: string }) => (
+                          <option key={reviewer.id} value={reviewer.id}>
+                            {reviewer.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <PendingSubmitButton
+                      disabled={!reviewerCandidates.length}
+                      pendingLabel="Assigning appeal reviewer…"
+                    >
+                      Assign appeal reviewer
+                    </PendingSubmitButton>
+                  </form>
+                ))}
+
+                {paymentFallbacks.map((reviewCase: Record<string, any>) => (
+                  <FullNavigationActionForm
+                    action={adminAssignTradePaymentReviewerAction}
+                    className="panel stack-form"
+                    key={String(reviewCase.id)}
+                  >
+                    <input
+                      name="payout_id"
+                      type="hidden"
+                      value={String(reviewCase.payout_id)}
+                    />
+                    <input name="return_to" type="hidden" value="/admin/trade-review" />
+                    <p className="detail-kicker">External-payment review</p>
+                    <h3>Assign a neutral payment reviewer</h3>
+                    <p className="route-text">
+                      Payment cycle {String(reviewCase.payment_cycle)} selection
+                      deadline {formatDate(String(reviewCase.reviewer_selection_deadline_at))}.
+                    </p>
+                    <label className="field">
+                      <span>Eligible payment reviewer</span>
+                      <select name="reviewer_id" required>
+                        <option value="">Choose an active reviewer</option>
+                        {reviewerCandidates.map((reviewer: { id: string; label: string }) => (
+                          <option key={reviewer.id} value={reviewer.id}>
+                            {reviewer.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <PendingSubmitButton
+                      disabled={!reviewerCandidates.length}
+                      pendingLabel="Assigning payment reviewer…"
+                    >
+                      Assign payment reviewer
+                    </PendingSubmitButton>
+                  </FullNavigationActionForm>
+                ))}
+
+                {paymentAppealFallbacks.map((appeal: Record<string, any>) => (
+                  <FullNavigationActionForm
+                    action={adminAssignTradePaymentAppealReviewerAction}
+                    className="panel stack-form"
+                    key={String(appeal.id)}
+                  >
+                    <input
+                      name="payment_appeal_id"
+                      type="hidden"
+                      value={String(appeal.id)}
+                    />
+                    <input name="return_to" type="hidden" value="/admin/trade-review" />
+                    <p className="detail-kicker">External-payment appeal</p>
+                    <h3>Assign a different payment-appeal reviewer</h3>
+                    <p className="route-text">
+                      Selection deadline {formatDate(String(appeal.reviewer_selection_deadline_at))}.
+                    </p>
+                    <label className="field">
+                      <span>Eligible appeal reviewer</span>
+                      <select name="reviewer_id" required>
+                        <option value="">Choose an active reviewer</option>
+                        {reviewerCandidates.map((reviewer: { id: string; label: string }) => (
+                          <option key={reviewer.id} value={reviewer.id}>
+                            {reviewer.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <PendingSubmitButton
+                      disabled={!reviewerCandidates.length}
+                      pendingLabel="Assigning payment-appeal reviewer…"
+                    >
+                      Assign payment-appeal reviewer
+                    </PendingSubmitButton>
+                  </FullNavigationActionForm>
+                ))}
+
+                {!milestoneFallbacks.length &&
+                !appealFallbacks.length &&
+                !paymentFallbacks.length &&
+                !paymentAppealFallbacks.length ? (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No reviewer-selection deadline has expired.</strong>
+                      <p>Participant nominations remain the primary assignment path.</p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {!reviewerCandidates.length &&
+              (milestoneFallbacks.length ||
+                appealFallbacks.length ||
+                paymentFallbacks.length ||
+                paymentAppealFallbacks.length) ? (
+                <div className="status-banner status-banner-warning">
+                  <strong>No eligible reviewer is currently available.</strong>
+                  <p>
+                    Assignment remains fail-closed until another profile receives an active reviewer
+                    grant and meets the conflict rules.
+                  </p>
+                </div>
+              ) : null}
 
               <div className="section-head section-head-compact">
                 <p className="eyebrow">Proposal review</p>
@@ -270,9 +536,6 @@ export default async function TradeReviewPage({ searchParams }: TradeReviewPageP
                         <span className="source-pill">{formatDate(String(report.created_at))}</span>
                       </div>
                       <div className="form-actions">
-                        <Link className="button button-primary button-mini" href={`/messages/${report.thread_id}`}>
-                          Open private thread
-                        </Link>
                         <form action={resolveTradeReportAction}>
                           <input name="report_id" type="hidden" value={report.id} />
                           <button

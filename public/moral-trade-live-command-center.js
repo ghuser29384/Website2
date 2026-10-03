@@ -277,12 +277,6 @@
 
   function commandTextFor(button) {
     if (!button || typeof button.closest !== "function") return "";
-    const setting = button.closest(".setting");
-    if (setting) {
-      const label = setting.querySelector("span");
-      return clean(label?.textContent);
-    }
-
     const drawer = button.closest("#drawer") || document;
     const input = drawer.querySelector?.(".search input");
     return clean(input?.value);
@@ -338,7 +332,11 @@
       return false;
     }
 
-    window.location.assign("/trades/new?handoff=command-center");
+    if (window.top !== window.self) {
+      window.top.location.assign("/trades/new?handoff=command-center");
+    } else {
+      window.location.assign("/trades/new?handoff=command-center");
+    }
     return true;
   }
 

@@ -5,17 +5,13 @@
 
 .statusBanner {
   width: min(620px, calc(100% - 24px));
-  position: fixed;
-  z-index: 260;
-  top: 12px;
-  left: 50%;
+  margin: 12px auto;
   padding: 12px 15px;
-  transform: translateX(-50%);
   border: 1px solid #8bb898;
   background: #f2f8f3;
   box-shadow: 6px 6px 0 rgba(7, 7, 7, 0.16);
   color: #216a36;
-  font: 10px / 1.45 var(--font-mono, "IBM Plex Mono", monospace);
+  font: 14px / 1.45 var(--font-mono, "IBM Plex Mono", monospace);
 }
 
 .statusError {

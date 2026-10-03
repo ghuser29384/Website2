@@ -61,7 +61,6 @@ const labsTopbarLinks = [
   { href: "/offers", label: "Explore" },
   { href: MORAL_PUBLIC_GOODS_LABS_ROUTE, label: "Moral Public Goods" },
   { href: "/dashboard", label: "My Activity" },
-  { href: "/about", label: "About" },
   { href: "/how-it-works", label: "Learn" },
 ] as const;
 
@@ -98,7 +97,7 @@ function SimpleLabsFooter() {
 
 function LabsUnavailablePage({ reasons }: { reasons: readonly string[] }) {
   return (
-    <div className={styles.pageShell}>
+    <div className={styles.pageShell} data-mt-surface="mpgf-labs">
       <SiteTopbar brandHref="/" links={[...labsTopbarLinks]} showSearch={false} />
       <main className={styles.unavailable} id="main-content" tabIndex={-1}>
         <a className={styles.backLink} href="/mpgf">
@@ -248,7 +247,7 @@ export default async function MoralPublicGoodsLabsPage({ params }: PageProps) {
   }
 
   return (
-    <div className={styles.pageShell}>
+    <div className={styles.pageShell} data-mt-surface="mpgf-labs">
       <SiteTopbar brandHref="/" links={[...labsTopbarLinks]} showSearch={false} />
       <MoralPublicGoodsLabsClient
         actorRole={actorRole}

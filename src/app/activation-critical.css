@@ -10,3 +10,15 @@
 .marketplace-app-shell > header.hero + main#main-content > .marketplace-detail-section {
   display: grid;
 }
+
+/*
+ * Durable Create receipts also use a section-based route beneath the compact
+ * app header. Keep this owner-only receipt visible without exposing other
+ * section routes hidden by the marketplace shell.
+ */
+.create-submission-receipt-shell.marketplace-app-shell
+  > header.v72-route-header
+  + main#main-content
+  > .section {
+  display: block;
+}

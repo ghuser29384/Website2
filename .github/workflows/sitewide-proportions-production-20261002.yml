@@ -1,0 +1,96 @@
+name: Sitewide proportions production 2026-10-02
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/sitewide-proportions-production-20261002.yml
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: sitewide-proportions-production-20261002
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/sitewide-proportions-production-20261002.yml
+  RELEASE_WORKFLOW: vercel-release.yml
+  RELEASE_REF: main
+  RELEASE_TARGET: production
+  EXPECTED_TRIGGER_PARENT: c7b8d220d76aead527278c9ba3217d93661ddbf5
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify exact one-file trigger and approved layout source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD^1)" = "$EXPECTED_TRIGGER_PARENT"
+          changed="$(git diff --name-only HEAD^1 HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          printf '%s\n' \
+            '83b1459ef1ea3faf5ba06a1a86ea0cde2f66227934f878a5d7a109c4b1c45557  public/moral-trade-create/ui-repairs.css' \
+            'c58694b6750603fb5b5aa1b9524219c8eee37eacc51b13a2afe644a2eaad30fb  public/moral-trade-discover.css' \
+            '6922ecb087265dc25e4f7173b91d6ad86de9578af5a32f67478bac49e2151151  public/moral-trade-discover.html' \
+            '170e6c24758e157cc3561a03bc34eecb73ad049da62b3538070e7248e7455fab  public/moral-trade-live.html' \
+            'b0350200a485283da7c8496a7be103a574a5ed1d210ec477df4bf0634f12807c  public/moral-trade-refined-header.css' \
+            '8c174412e45b2050f8bef11ad8035e7ba9fcb657e8c6e86da808d9ce85005114  src/app/commitments/commitments-redesign.module.css' \
+            'a8196af7c9e353f9ec39d1412310746d4c5eb12bcd430136e35da93b67e86c9b  src/app/commitments/commitments.module.css' \
+            '4f06a2d34d44a75e4235d322198ebeea2006c0a28bd8bb1436cd7806ed2319a8  src/app/complete-profile/page.module.css' \
+            '995ebb3147b09959ab5b9c75830346bba5aa6395468311cf6443ed69b4854bab  src/app/complete-profile/page.tsx' \
+            '7c0feadc6e5180aeaef5245675ec7f9b1f7827d6eaffa3510eff1d3da145e631  src/app/contact/contact.module.css' \
+            'f8461b9c79cb39a8f95aa7b5ea127395cd2e5b3474de06127106cc9a7811eb7b  src/app/layout.tsx' \
+            '4058875f66c7fa6df009c896658c5df4e9e01a9987c05a9e73f38da4fdb92767  src/app/offers/offers-density.module.css' \
+            '68dc45a222609b3381efd53f652cf6502cfe904401c34b2f7290aaa9930094a0  src/app/pledge-swaps/pledge-swaps.module.css' \
+            '32f6b0c27a065c231893806abd4ba74b8231b67cd1a60df7d2efa2f1a9ff3d27  src/app/start/start.module.css' \
+            '4c0a793eb622ce0d28d547593e5a82fd7f92af88c96c276b36abc36fb10f0ef2  src/components/auth/auth-card.module.css' \
+            '23a4e4b259d422925644ca14d4eb3ad231a37e71504ef74e1caf0f2a648241bf  src/components/marketplace/participant-offer-group.module.css' \
+            'b93b543658645f8fe401c0d7a1528cd3de3b1bff61404bda66d094a6f3033b6a  src/components/profile/complete-profile-connections.module.css' \
+            '3c03feb402d61ae65b741f72dbbde638003c8b963040bc2274f2dbbb0ecdfdce  src/components/profile/complete-profile-review.tsx' \
+            '9d19014d7eeb624ce055ba9d1406169b392b6cc3dbb141a26b27d713f414cef1  src/components/profile/profile-setup.module.css' \
+            '22c5ccea96515c5d2d0cc0146951ea42bdbe8022da09d9f78d40d1ce162b1613  src/components/trade-controls/trade-controls-workspace.module.css' \
+            '7c96eb05a4abdab7ec077a6f8be3771dc5d7bf254a6a2ab13e5ca9310d2bb4c3  src/lib/contact-page-layout.test.ts' \
+            'af1485661dbb06daca7d5e52c0a16fd8f4787fc040c3d843501e016732443a0d  public/moral-trade-proportions.css' \
+            | sha256sum --check --strict
+          test "$RELEASE_TARGET" = 'production'
+          test "$RELEASE_REF" = 'main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$RELEASE_REF" | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+          workflow_state="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW" --jq .state)"
+          test "$workflow_state" = 'active'
+
+      - name: Dispatch exact gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg workflow_ref main \
+            --arg release_ref "$RELEASE_REF" \
+            --arg target "$RELEASE_TARGET" \
+            --arg expected_sha "$GITHUB_SHA" \
+            '{ref:$workflow_ref,inputs:{ref:$release_ref,target:$target,expected_sha:$expected_sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches" \
+                --input - >/dev/null

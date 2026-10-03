@@ -4,7 +4,8 @@ import { getSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
 export function createClient() {
-  const { url, publishableKey } = getSupabaseEnv();
+  const hostname = typeof window === "undefined" ? undefined : window.location.hostname;
+  const { url, publishableKey } = getSupabaseEnv(hostname);
 
   return createBrowserClient<Database>(url, publishableKey);
 }
