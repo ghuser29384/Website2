@@ -50,16 +50,14 @@ test("the home priority invitation stays optional and opens the Complete Profile
   runInNewContext(liveNowBridge, context);
   runInNewContext(priorityRoute, context);
 
-  assert.equal(context.rendered.match(/href="\/complete-profile"/g)?.length, 2);
-  assert.match(context.rendered, /Your priorities/);
+  assert.equal(context.rendered.match(/href="\/complete-profile"/g)?.length, 1);
   assert.match(context.rendered, /What matters to you\?/);
   assert.match(context.rendered, /Choose the causes you care about to help us suggest relevant opportunities\./);
   assert.match(context.rendered, /You can also explore without setting priorities\./);
   assert.match(context.rendered, /Viewing activity only helps personalize suggestions if you turn it on\./);
-  assert.match(context.rendered, /No priorities selected yet/);
   assert.match(context.rendered, /Choose priorities →/);
-  assert.match(context.rendered, /href="\/offers\?view=live">Explore opportunities →/);
+  assert.match(context.rendered, /href="\/discover">Explore opportunities →/);
   assert.doesNotMatch(context.rendered, /Profile needs priorities|data-mt-live-now-recommendation/);
-  assert.match(context.rendered, /Review profile →/);
+  assert.doesNotMatch(context.rendered, /Review profile →|Profile basis|Feed rule/);
   assert.doesNotMatch(context.rendered, /\/profile\/priorities/);
 });

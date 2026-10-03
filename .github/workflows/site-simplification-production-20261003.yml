@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: site-simplification-production-20261003-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   validate:
