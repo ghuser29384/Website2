@@ -574,9 +574,9 @@
         eyebrow: "Profile checked against live inventory",
         title: "No open opportunity currently matches your profile.",
         copy: causeSummary
-          ? `We checked other participants' proposals and donation redirects against ${causeSummary}. No filler suggestions were added.` +
+          ? `Priorities: ${causeSummary}.` +
             ownListingsCopy
-          : "No filler suggestions were added." + ownListingsCopy,
+          : ownListingsCopy.trim(),
         facts: [
           `${model.profile.causes.length} profile ${
             model.profile.causes.length === 1 ? "priority" : "priorities"
@@ -593,9 +593,8 @@
     return {
       eyebrow: "Personal suggestions unavailable",
       title: "Your recommendation feed could not load.",
-      copy:
-        "No generic or fabricated suggestions are shown while profile matching is unavailable.",
-      facts: ["Profile data not displayed", "No fallback claims"],
+      copy: "",
+      facts: ["Profile unavailable", "Recommendations unavailable"],
       primaryHref: "/moral-trade-live.html#now",
       primaryLabel: "Try again →",
       secondaryHref: "/offers?view=live",

@@ -65,7 +65,7 @@ export default async function TeamPage() {
         />
 
         <div className="hero-grid">
-          <section className="hero-copy" style={{ gridColumn: "1 / -1" }}>
+          <section className="hero-copy" style={{ gridColumn: "1 / -1", maxWidth: "none" }}>
             <p className="eyebrow">Team and governance</p>
             <h1>Who is accountable for Moral Trade.</h1>
             <div className="hero-actions">
