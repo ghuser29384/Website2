@@ -209,7 +209,7 @@ export function MpgfDacCampaignView({ campaign, viewerPresent }: MpgfDacCampaign
           </p>
           <h3>Current pledge-only boundary</h3>
           <p>
-            Recording a pledge creates immutable consent and one canonical ledger row. It does not collect a payment method or authorize, charge, capture, settle, refund, or pay a failure bonus. Any later money-movement system requires a separate reviewed implementation and separate operative consent.
+            Pledges record your intent only. No payment method is collected, no money moves, and no failure bonus is paid. Any future payment requires separate consent.
           </p>
         </article>
 

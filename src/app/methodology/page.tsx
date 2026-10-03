@@ -231,11 +231,9 @@ export default async function MethodologyPage() {
           </div>
         </section>
         <section className="panel data-card data-card-wide">
-          <h2>Centralized first, portable later</h2>
+          <h2>Data portability</h2>
           <p>
-            The present implementation is centralized for simplicity, but the data model includes
-            export, import, and schema endpoints so wish profiles and source summaries can move if
-            a more interoperable or decentralized registry becomes preferable later.
+            Export, import, and schema endpoints support moving wish profiles and source summaries.
           </p>
         </section>
         <section className="panel data-card data-card-wide" id="faq">

@@ -539,7 +539,7 @@
       return {
         eyebrow: "Personal suggestions are private",
         title: "Sign in to see a feed based on your moral priorities.",
-        copy: "This page does not guess your priorities or substitute demo recommendations.",
+        copy: "",
         facts: ["No profile loaded", "No recommendations shown"],
         primaryHref:
           window.location.pathname === "/feed"
@@ -612,9 +612,7 @@
       <section class="panel black urgent">
         <div><div class="eyebrow orange">${escapeHtml(
           content.eyebrow,
-        )}</div><h2>${escapeHtml(content.title)}</h2><p class="muted">${escapeHtml(
-          content.copy,
-        )}</p></div>
+        )}</div><h2>${escapeHtml(content.title)}</h2>${content.copy ? `<p class="muted">${escapeHtml(content.copy)}</p>` : ""}</div>
         <div class="terms">${content.facts
           .map(
             (fact, index) =>

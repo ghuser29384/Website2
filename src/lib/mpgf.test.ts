@@ -3770,7 +3770,7 @@ test("MPGF procedural badges expose record facts without moral karma", () => {
   assert.match(migration, /appeal_cleared_contribution/);
   assert.match(migration, /early_supporter/);
   assert.match(migration, /no_score_issued boolean not null default true check \(no_score_issued = true\)/);
-  assert.match(peoplePage, /not follower,\s+karma, or comment leaderboards/);
+  assert.doesNotMatch(peoplePage, /<option[^>]+value="(?:followers|karma|comments)"/);
   assert.match(profileTrust, /reviewed proof badge/);
 
   for (const forbidden of [

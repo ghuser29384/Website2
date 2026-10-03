@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 const governanceRows = [
   {
     title: "Service operators",
-    status: "Public route active",
+    status: "Contact",
     detail:
       "The public operator route is support@moraltrade.org for safety, evidence, partnership, account, and network questions.",
   },
@@ -38,9 +38,9 @@ const governanceRows = [
   },
   {
     title: "Named external advisors and reviewers",
-    status: "Not represented as active",
+    status: "None listed",
     detail:
-      "No named external advisor or reviewer roster is implied until those roles are formal, consented, scoped, and listed here.",
+      "No external advisors or reviewers are listed.",
   },
 ] as const;
 
@@ -64,15 +64,10 @@ export default async function TeamPage() {
           showLogout={Boolean(viewer)}
         />
 
-        <div className="hero-grid">
+        <div className="hero-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
           <section className="hero-copy">
             <p className="eyebrow">Team and governance</p>
             <h1>Who is accountable for Moral Trade.</h1>
-            <p className="hero-text">
-              Moral Trade should not ask for trust through abstraction alone. This page separates
-              operator routes, reviewer responsibilities, decision rights, and roles that are not yet
-              represented as active.
-            </p>
             <div className="hero-actions">
               <a className="button button-primary" href="mailto:support@moraltrade.org?subject=Governance%20question">
                 Contact operators
@@ -83,25 +78,6 @@ export default async function TeamPage() {
             </div>
           </section>
 
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Trust posture</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Do not invent social proof</strong>
-                  <p>Unpublished advisors, reviewers, affiliations, or endorsements are not implied.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Name decision ownership</strong>
-                  <p>People should be able to see who owns a review, correction, disclosure, or incident decision.</p>
-                </div>
-              </div>
-            </div>
-          </aside>
         </div>
       </header>
 
@@ -110,10 +86,6 @@ export default async function TeamPage() {
           <div className="section-head">
             <p className="eyebrow">Current accountability</p>
             <h2 id="governance-now-heading">What is public now</h2>
-            <p>
-              This surface states the current operating reality without implying roles, endorsements,
-              or review capacity that have not been formalized.
-            </p>
           </div>
 
           <div className="data-grid">
@@ -130,7 +102,7 @@ export default async function TeamPage() {
         <section className="section section-subtle" aria-labelledby="governance-commitments-heading">
           <div className="section-head">
             <p className="eyebrow">Publication commitments</p>
-            <h2 id="governance-commitments-heading">What this page will add next</h2>
+            <h2 id="governance-commitments-heading">Governance commitments</h2>
           </div>
           <div className="panel data-card data-card-wide">
             <ul className="compact-list">

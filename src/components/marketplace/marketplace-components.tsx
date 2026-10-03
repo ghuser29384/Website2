@@ -1587,8 +1587,8 @@ export function PledgeFundingPanel({ round }: { round: PledgeFundingRound }) {
         <p>
           <strong>If the round clears:</strong>{" "}
           {round.mode === "capped_pivotal_cohort"
-            ? "The capped cohort would fund the pledge after backend gates pass."
-            : "The target would fund the pledge after backend gates pass."}
+            ? "The capped cohort would fund the pledge. Preview only; funding is unavailable."
+            : "The target would fund the pledge. Preview only; funding is unavailable."}
         </p>
         <p>
           <strong>If it does not clear:</strong> {round.refundPolicy}

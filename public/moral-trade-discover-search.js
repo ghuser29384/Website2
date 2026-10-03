@@ -313,7 +313,7 @@
       renderConstraints(data.constraints);
       if (data.domain !== "offers") {
         status.textContent = "Discover now lists trades, not people or standalone funding pools.";
-        showPanel("Search for an exchange", "Describe what you can provide or the outcome you want. The former People and Pools views are not available on this page.", [button("Clear search", clearSearch), link("Post a trade", "/trades/new", "primary-btn")]);
+        showPanel("Search for an exchange", "Describe what you can provide or the outcome you want.", [button("Clear search", clearSearch), link("Post a trade", "/trades/new", "primary-btn")]);
         return;
       }
       if (data.clarification) {
