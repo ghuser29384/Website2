@@ -113,7 +113,6 @@ h1{font-family:var(--serif);font-weight:400;font-size:54px;line-height:.98;lette
     <button data-page="activity">Commitments</button>
   </nav>
   <div class="top-actions">
-    <button class="text-btn" data-action="command">⌕ Command</button>
     <button class="avatar" data-action="profile" aria-label="Account">•</button>
   </div>
 </header>

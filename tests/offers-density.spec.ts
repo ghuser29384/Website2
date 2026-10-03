@@ -457,7 +457,7 @@ async function installBrowserStubs(page: Page) {
               options: ["$50", "$100"],
             },
           },
-          target: "/offers?view=live",
+          target: "/offers?view=live&render=server",
           usedLlm: false,
         }),
         contentType: "application/json",
@@ -468,7 +468,7 @@ async function installBrowserStubs(page: Page) {
     await route.fulfill({
       body: JSON.stringify({
         interpretation: { needsClarification: false },
-        target: `/offers?view=live&search=${encodeURIComponent(query)}&smart=1`,
+        target: `/offers?view=live&render=server&search=${encodeURIComponent(query)}&smart=1`,
         usedLlm: false,
       }),
       contentType: "application/json",
@@ -836,14 +836,14 @@ test.describe("Offers compact hybrid", () => {
     );
 
     const clearAll = publicPage.getByRole("link", { name: "Clear all" });
-    await expect(clearAll).toHaveAttribute("href", "/offers?view=live");
+    await expect(clearAll).toHaveAttribute("href", "/offers?view=live&render=server");
     const [clearRequest] = await Promise.all([
       publicPage.waitForRequest((request) => {
         if (!request.isNavigationRequest()) return false;
         const requestURL = new URL(request.url());
-        return requestURL.pathname === "/offers" && requestURL.search === "?view=live";
+        return requestURL.pathname === "/offers" && requestURL.search === "?view=live&render=server";
       }),
-      publicPage.waitForURL((url) => url.pathname === "/offers" && url.search === "?view=live"),
+      publicPage.waitForURL((url) => url.pathname === "/offers" && url.search === "?view=live&render=server"),
       clearAll.click(),
     ]);
     expect(clearRequest.resourceType()).toBe("document");
@@ -858,7 +858,7 @@ test.describe("Offers compact hybrid", () => {
     const next = pageOnePagination.getByRole("link", { name: "Next" });
     await expect(next).toHaveAttribute(
       "href",
-      "/offers?view=live&mode=pledge&sort=lowest_cost&page=2",
+      "/offers?view=live&render=server&mode=pledge&sort=lowest_cost&page=2",
     );
     const [nextRequest] = await Promise.all([
       publicPage.waitForRequest((request) => {
@@ -866,13 +866,13 @@ test.describe("Offers compact hybrid", () => {
         const requestURL = new URL(request.url());
         return (
           requestURL.pathname === "/offers" &&
-          requestURL.search === "?view=live&mode=pledge&sort=lowest_cost&page=2"
+          requestURL.search === "?view=live&render=server&mode=pledge&sort=lowest_cost&page=2"
         );
       }),
       publicPage.waitForURL(
         (url) =>
           url.pathname === "/offers" &&
-          url.search === "?view=live&mode=pledge&sort=lowest_cost&page=2",
+          url.search === "?view=live&render=server&mode=pledge&sort=lowest_cost&page=2",
       ),
       next.click(),
     ]);
@@ -891,7 +891,7 @@ test.describe("Offers compact hybrid", () => {
     const previous = pageTwoPagination.getByRole("link", { name: "Previous" });
     await expect(previous).toHaveAttribute(
       "href",
-      "/offers?view=live&mode=pledge&sort=lowest_cost",
+      "/offers?view=live&render=server&mode=pledge&sort=lowest_cost",
     );
     const [previousRequest] = await Promise.all([
       publicPage.waitForRequest((request) => {
@@ -899,13 +899,13 @@ test.describe("Offers compact hybrid", () => {
         const requestURL = new URL(request.url());
         return (
           requestURL.pathname === "/offers" &&
-          requestURL.search === "?view=live&mode=pledge&sort=lowest_cost"
+          requestURL.search === "?view=live&render=server&mode=pledge&sort=lowest_cost"
         );
       }),
       publicPage.waitForURL(
         (nextURL) =>
           nextURL.pathname === "/offers" &&
-          nextURL.search === "?view=live&mode=pledge&sort=lowest_cost",
+          nextURL.search === "?view=live&render=server&mode=pledge&sort=lowest_cost",
       ),
       previous.click(),
     ]);

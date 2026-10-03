@@ -106,7 +106,7 @@ export default async function SafetyPage() {
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
-        <div className="hero-grid">
+        <div className="hero-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
           <section className="hero-copy">
             <p className="eyebrow">Safety</p>
             <h1>Safety rules for voluntary moral trade.</h1>
@@ -119,35 +119,15 @@ export default async function SafetyPage() {
               <Link className="button button-primary" href="/anti-threat-rules">
                 Read anti-threat rules
               </Link>
-              <Link className="button button-secondary" href="/trust">
-                Review recourse routes
+              <Link className="button button-secondary" href="/contact">
+                Ask about recourse
               </Link>
               <Link className="button button-secondary" href="/contact">
                 Report a concern
               </Link>
             </div>
           </section>
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Current contract health</p>
-            <dl className="profile-stats profile-stats-hero">
-              <div>
-                <dt>Security</dt>
-                <dd>{securityValidation.status}</dd>
-              </div>
-              <div>
-                <dt>Operations</dt>
-                <dd>{operationsValidation.status}</dd>
-              </div>
-              <div>
-                <dt>Scale gates</dt>
-                <dd>{scaleGates.length}</dd>
-              </div>
-              <div>
-                <dt>Incident route</dt>
-                <dd>Public</dd>
-              </div>
-            </dl>
-          </aside>
+
         </div>
       </header>
 
@@ -181,6 +161,43 @@ export default async function SafetyPage() {
           </div>
         </section>
 
+        <section className="section section-white" aria-labelledby="nonclaims-heading">
+          <div className="section-head">
+            <p className="eyebrow">Non-claims</p>
+            <h2 id="nonclaims-heading">What the service does not promise</h2>
+          </div>
+          <div className="panel data-card data-card-wide">
+            <ul className="trust-check-list">
+              {securityProfile.publicNonClaims.map((nonClaim) => (
+                <li key={nonClaim}>{nonClaim}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+        <details className="section details-panel">
+          <summary>Technical controls and health checks</summary>
+          <div className="details-content">
+          <aside className="hero-panel panel">
+            <p className="eyebrow">Current contract health</p>
+            <dl className="profile-stats profile-stats-hero">
+              <div>
+                <dt>Security</dt>
+                <dd>{securityValidation.status}</dd>
+              </div>
+              <div>
+                <dt>Operations</dt>
+                <dd>{operationsValidation.status}</dd>
+              </div>
+              <div>
+                <dt>Scale gates</dt>
+                <dd>{scaleGates.length}</dd>
+              </div>
+              <div>
+                <dt>Incident route</dt>
+                <dd>Public</dd>
+              </div>
+            </dl>
+          </aside>
         <section className="section section-white" aria-labelledby="safety-contracts-heading">
           <div className="section-head">
             <p className="eyebrow">Public contracts</p>
@@ -231,19 +248,8 @@ export default async function SafetyPage() {
           </div>
         </section>
 
-        <section className="section section-white" aria-labelledby="nonclaims-heading">
-          <div className="section-head">
-            <p className="eyebrow">Non-claims</p>
-            <h2 id="nonclaims-heading">What the service does not promise</h2>
           </div>
-          <div className="panel data-card data-card-wide">
-            <ul className="trust-check-list">
-              {securityProfile.publicNonClaims.map((nonClaim) => (
-                <li key={nonClaim}>{nonClaim}</li>
-              ))}
-            </ul>
-          </div>
-        </section>
+        </details>
       </main>
 
       <SiteFooter />

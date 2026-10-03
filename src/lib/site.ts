@@ -68,8 +68,7 @@ export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
     title: "Help",
     links: [
       { href: "/what-is-moral-trade", label: "How it works" },
-      { href: "/walkthrough", label: "Tour" },
-      { href: "/support", label: "Support" },
+      { href: "/contact", label: "Contact" },
     ],
   },
   {
@@ -77,6 +76,7 @@ export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
     links: [
       { href: "/team-and-governance", label: "Team and governance" },
       { href: "/research", label: "Research" },
+      { href: "/support", label: "Support the project" },
     ],
   },
 ];

@@ -20,7 +20,7 @@ test("the live navigation bridge exposes four real destinations and keeps tools 
   assert.match(bridge, /data-mt-discover-link/);
   assert.match(bridge, /nav\.closest\("\.mt-site-topbar"\)/);
   assert.match(bridge, /header-more/);
-  assert.match(bridge, /"\/walkthrough", "Tour"/);
+  assert.match(bridge, /"\/what-is-moral-trade", "How it works"/);
   assert.doesNotMatch(bridge, /stopImmediatePropagation|preventDefault|window\.location\.assign|100 Sparks/);
   assert.match(bridge, /normalizeLiveLandmarks/);
   assert.match(bridge, /mtNestedMainNormalized/);
@@ -28,7 +28,7 @@ test("the live navigation bridge exposes four real destinations and keeps tools 
 
 test("Discover uses ordinary canonical navigation without a graph or navigation patcher", () => {
   const shell = readPublicFile("moral-trade-discover.html");
-  for (const href of ["/feed", "/discover", "/walkthrough", "/trades/new", "/commitments", "/evidence"]) {
+  for (const href of ["/feed", "/discover", "/what-is-moral-trade", "/trades/new", "/commitments", "/evidence"]) {
     assert.ok(shell.includes(`href="${href}"`));
   }
   assert.match(shell, /aria-current="page">Discover/);

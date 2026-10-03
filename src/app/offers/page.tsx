@@ -312,7 +312,7 @@ function buildLiveHref({
   search?: string;
   sort?: OfferSort;
 }) {
-  const params = new URLSearchParams({ view: "live" });
+  const params = new URLSearchParams({ view: "live", render: "server" });
   if (search) {
     params.set("search", search);
     params.set("smart", "1");
@@ -629,6 +629,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             surface="offers"
           >
             <input name="view" type="hidden" value="live" />
+            <input name="render" type="hidden" value="server" />
 
             <div className={densityStyles.searchStage} data-testid="directory-controls">
               <div className={densityStyles.resultsHeading}>

@@ -95,7 +95,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /href: "\/trades\/new",\s*label: "Create"/);
   assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
   assert.match(topbarSource, /placeholder="Search offers"/);
-  assert.match(topbarSource, /<form action="\/offers" className="topbar-search" method="get" role="search"/);
+  assert.match(topbarSource, /<form action="\/discover" className="topbar-search" method="get" role="search"/);
   assert.match(topbarSource, /showSearch = true/);
   assert.match(globalCss, /\.button-secondary\.button-nav\.is-active/);
 });
@@ -130,12 +130,12 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   ].join("\n");
 
   assert.match(savedOffersPage, /title: "Saved offers"/);
-  assert.match(savedOffersPage, /<h1 id="plan-heading">Planner<\/h1>/);
-  assert.match(savedOffersPage, /Plan — private selected items\. No commitment created\./);
-  assert.match(savedOffersPage, /Preview only · Private planning only · No commitment created\./);
+  assert.match(savedOffersPage, /<h1 id="plan-heading">Saved offers<\/h1>/);
+  assert.match(savedOffersPage, /Your private shortlist\. Saving an offer does not create a commitment\./);
+  assert.doesNotMatch(savedOffersPage, /Preview only · Private planning only/);
   assert.match(savedOffersPage, /await getViewer\(\)/);
-  assert.match(savedOffersPage, /Sign in to view your planner\./);
-  assert.match(savedOffersPage, /does not create demo planner rows, commitments, or pledge-funding contribution state/);
+  assert.match(savedOffersPage, /Sign in to view your saved offers\./);
+  assert.match(savedOffersPage, /Your saved offers are private to your account/);
   assert.equal(savedOffersPage.includes("requireViewer"), false);
   assert.match(savedOffersPage, /value="\/saved-offers"/);
   assert.match(cartRedirectPage, /redirect\("\/saved-offers"\)/);
@@ -461,7 +461,7 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(topbarSource, /placeholder="Search offers"/);
   assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
   assert.doesNotMatch(topbarSource, /\/api\/query\/interpret/);
-  assert.match(topbarSource, /<form action="\/offers" className="topbar-search" method="get" role="search"/);
+  assert.match(topbarSource, /<form action="\/discover" className="topbar-search" method="get" role="search"/);
   assert.match(offersPage, /SmartQueryForm/);
   assert.match(offersPage, /queryName="search"/);
   assert.match(offersPage, /Hard constraints are applied before semantic and trust-aware ranking/);

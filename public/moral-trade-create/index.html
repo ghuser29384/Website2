@@ -3501,6 +3501,12 @@
           <h1 id="causeHeading">What do you want to improve?</h1>
           <p class="intro-copy">Select one listed cause, or type another one to start.</p>
         </div>
+        <details class="description-draft" id="drawer">
+          <summary>Already have an exchange in mind? Draft it in your own words</summary>
+          <div class="search"><label for="exchange-description">Describe both sides of the exchange</label><input id="exchange-description" maxlength="4000" autocomplete="off" placeholder="I will do … if someone will …" /></div>
+          <button class="description-draft-submit" type="button" data-action="from-command">Review editable draft →</button>
+          <p>Review the terms before saving. This does not publish a trade or create a commitment.</p>
+        </details>
         <div class="cause-panel">
           <div class="cause-grid" id="causeGrid" aria-label="Choose one cause"></div>
           <form class="other-cause-form" id="otherCauseForm" novalidate>

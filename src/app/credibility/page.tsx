@@ -146,6 +146,9 @@ export default async function CredibilityPage() {
           </div>
         </section>
 
+        <details className="section details-panel">
+          <summary>Model formula and uncertainty</summary>
+          <div className="details-content">
         <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Bayesian calculation</p>
@@ -183,6 +186,8 @@ export default async function CredibilityPage() {
             </article>
           </div>
         </section>
+          </div>
+        </details>
 
         <section className="section section-white">
           <div className="section-head">
@@ -209,6 +214,9 @@ export default async function CredibilityPage() {
           </div>
         </section>
 
+        <details className="section details-panel">
+          <summary>Observation weighting details</summary>
+          <div className="details-content">
         <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Event weighting</p>
@@ -245,6 +253,8 @@ export default async function CredibilityPage() {
             </article>
           </div>
         </section>
+          </div>
+        </details>
 
         <section className="section section-white">
           <div className="section-head">

@@ -514,10 +514,10 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(page).toHaveURL(/\/feed$/);
     await expect(personalized).toHaveAttribute("data-mt-live-now-state", "signed_out");
     await expect(personalized).toContainText(
-      "Sign in to see a feed based on your moral priorities.",
+      "Sign in for personal suggestions",
     );
-    await expect(personalized).toContainText("No recommendations shown");
-    await expect(personalized.getByRole("link", { name: "Sign in →" })).toHaveAttribute(
+    await expect(personalized.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
+    await expect(personalized.getByRole("link", { name: "Sign in for personal suggestions" })).toHaveAttribute(
       "href",
       "/login?returnTo=%2Ffeed",
     );

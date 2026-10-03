@@ -40,6 +40,7 @@
       <div><h1>Browse trades</h1><p>Compare what you provide, what the counterparty provides, and the published terms.</p></div>
       <a class="primary-btn" href="/trades/new">Post a trade</a>
     </div>
+    <nav class="discover-views" aria-label="Discover views"><a href="/discover" aria-current="page">Browse trades</a><a href="/saved-offers">Saved offers</a></nav>
     <form id="command-form" class="search-form" role="search" aria-label="Search current trades">
       <label for="command-input">Find a trade</label>
       <div class="search-row">
@@ -49,6 +50,7 @@
       <div class="filter-row">
         <div><label for="offer-kind">Trade type</label><select id="offer-kind" name="offerKind"><option value="all">All trades</option><option value="individual">Individual trades</option><option value="co-fund">Co-Funds</option></select></div>
         <div><label for="maximum-offer">Maximum you provide (USD)</label><input id="maximum-offer" name="max" type="number" min="0" max="100000000" step="0.01" inputmode="decimal" placeholder="No limit" aria-describedby="amount-help"></div>
+        <div><label for="offer-sort">Sort</label><select id="offer-sort" name="sort"><option value="best-fit">Best fit</option><option value="newest">Newest</option><option value="deadline">Soonest deadline</option><option value="lowest-cost">Lowest cost</option><option value="strongest-evidence">Strongest evidence</option></select></div>
         <button type="button" id="clear-search" class="text-btn">Clear all</button>
       </div>
       <p id="amount-help" class="helper">Co-Funds are trades funded by a contributor group. Amount filters use published USD amounts, not currency conversions.</p>
@@ -68,9 +70,10 @@
         <button id="next-page" type="button" class="outline-btn">Next page</button>
       </nav>
     </section>
-    <noscript><p class="notice">JavaScript is needed to check current listings here. <a href="/offers?view=live">Open the live trade directory</a> or <a href="/worked-examples">read worked examples</a>.</p></noscript>
+    <noscript><p class="notice">JavaScript is needed to check current listings here. <a href="/offers?view=live&amp;render=server">Open the live trade directory</a> or <a href="/worked-examples">read worked examples</a>.</p></noscript>
     <footer class="discover-footer">
-      <p><a href="/dashboard">Dashboard</a> · <a href="/messages">Messages</a> · <a href="/walkthrough">How it works</a><template data-mt-evidence-navigation><span> · <a href="/evidence">Evidence</a></span></template> · <a href="/safety">Safety</a></p>
+      <p><a href="/dashboard">Profile</a> · <a href="/messages">Messages</a> · <a href="/what-is-moral-trade">How it works</a><template data-mt-evidence-navigation><span> · <a href="/evidence">Evidence</a></span></template> · <a href="/safety">Safety</a></p>
+      <details><summary>More ways to trade</summary><p><a href="/moral-goods-group-buying">Group buying</a> · <a href="/background-networking">Private matching</a> · <a href="/offers?view=live&amp;render=server">Advanced text directory</a></p></details>
       <p>New to moral trade? <a href="/worked-examples">Read worked examples</a>—illustrations, not available listings.</p>
       <p>Not finding the right exchange? <a href="/trades/new">Post a proposal</a> or <a href="/invite">invite a counterparty</a>.</p>
       <p class="helper">Review each listing’s evidence, availability, and conditions before making a commitment. Browsing does not create an agreement or authorize a payment.</p>

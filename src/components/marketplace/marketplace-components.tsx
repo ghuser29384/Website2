@@ -707,7 +707,7 @@ export function MarketplaceRouteShell({
   hideSidebar?: boolean;
 }) {
   return (
-    <div className="mt-v75-route-board">
+    <div className="mt-v75-route-board" style={hideSidebar ? { gridTemplateColumns: "minmax(0, 1fr)" } : undefined}>
       {!hideSidebar ? <MarketplaceSideNav active={active} /> : null}
       <div className="mt-v75-route-workspace">{children}</div>
     </div>
@@ -2420,7 +2420,7 @@ export function MarketplaceBottomNav({
   const normalizedActive = active === "account" ? "profile" : active;
   const items = [
     { key: "browse", href: "/discover", label: "Discover", icon: "marketplace" },
-    { key: "plan", href: "/saved-offers", label: "Plan", icon: "example" },
+    { key: "plan", href: "/saved-offers", label: "Saved offers", icon: "example" },
     { key: "track", href: "/commitments", label: "Commitments", icon: "evidence" },
     { key: "messages", href: "/messages", label: "Messages", icon: "review" },
     { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },

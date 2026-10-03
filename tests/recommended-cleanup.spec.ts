@@ -14,7 +14,7 @@ for (const width of [1440, 390, 320]) {
       await trigger.focus();
       await page.keyboard.press("Enter");
       await expect(header.getByRole("link", { name: "Evidence", exact: true })).toHaveCount(available ? 1 : 0);
-      await expect(header.getByRole("link", { name: "Tour", exact: true })).toBeVisible();
+      await expect(header.getByRole("link", { name: "How it works", exact: true })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(trigger).toBeFocused();
       const footer = page.locator(".mt-site-footer");
