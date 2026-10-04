@@ -19,9 +19,9 @@
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(290px, 0.52fr);
-  gap: 64px;
-  align-items: end;
-  padding: clamp(48px, 7vw, 96px) clamp(24px, 6vw, 88px) 52px;
+  gap: 32px;
+  align-items: start;
+  padding: clamp(24px, 3vw, 40px);
   border-bottom: 1px solid var(--connector-line-strong);
   background: color-mix(in srgb, var(--connector-paper) 95%, transparent);
 }
@@ -36,7 +36,7 @@
   margin: 0;
   color: var(--connector-blue);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -46,17 +46,18 @@
   max-width: 980px;
   margin: 12px 0 0;
   font-family: var(--font-heading);
-  font-size: clamp(48px, 6.6vw, 94px);
+  font-size: clamp(32px, 3.6vw, 48px);
   font-weight: 400;
   letter-spacing: -0.05em;
-  line-height: 0.92;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
 }
 
 .lead {
   max-width: 820px;
   margin: 20px 0 0;
   color: var(--connector-muted);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.65;
 }
 
@@ -68,7 +69,7 @@
 .heroFacts > div,
 .boundaries > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18px;
   padding: 12px 0;
   border-bottom: 1px solid var(--connector-line);
@@ -77,14 +78,15 @@
 .heroFacts dd,
 .boundaries dd {
   margin: 0;
-  font-size: 11px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
   font-weight: 700;
   text-align: right;
   text-transform: capitalize;
 }
 
 .registry {
-  padding: 54px clamp(24px, 6vw, 88px) 64px;
+  padding: clamp(24px, 3vw, 40px);
   border-bottom: 1px solid var(--connector-line-strong);
 }
 
@@ -97,18 +99,18 @@
   font-family: var(--font-heading);
   font-weight: 400;
   letter-spacing: -0.04em;
-  line-height: 1;
+  line-height: 1.15;
 }
 
 .sectionHeading h2 {
   max-width: 960px;
-  font-size: clamp(36px, 4.4vw, 64px);
+  font-size: clamp(26px, 2.5vw, 34px);
 }
 
 .connectorCard {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
-  gap: 54px;
+  gap: 28px;
   margin-top: 30px;
   padding: 28px;
   border: 1px solid var(--connector-line-strong);
@@ -139,14 +141,14 @@
 }
 
 .connectorSummary h3 {
-  font-size: clamp(30px, 3.4vw, 48px);
+  font-size: clamp(24px, 2.2vw, 30px);
 }
 
 .connectorSummary > p {
   max-width: 760px;
   margin: 15px 0 0;
   color: var(--connector-muted);
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.65;
 }
 
@@ -186,7 +188,7 @@
 .sourceGrid article > p {
   margin: 16px 0 0;
   color: var(--connector-muted);
-  font-size: 11px;
+  font-size: 16px;
   line-height: 1.6;
 }
 
@@ -199,7 +201,7 @@
 .checkedAt {
   color: var(--connector-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -213,7 +215,7 @@
 .targetLinks a,
 .sourceGrid article > a {
   color: var(--connector-blue);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
   text-underline-offset: 4px;
 }
@@ -229,21 +231,21 @@
 .guardrail {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr) auto;
-  gap: 44px;
+  gap: 24px;
   align-items: end;
-  padding: 56px clamp(24px, 6vw, 88px) 70px;
+  padding: clamp(24px, 3vw, 40px);
   background: var(--connector-paper);
 }
 
 .guardrail h2 {
   max-width: 720px;
-  font-size: clamp(34px, 4vw, 58px);
+  font-size: clamp(26px, 2.5vw, 34px);
 }
 
 .guardrail > p {
   margin: 0;
   color: var(--connector-muted);
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.65;
 }
 
