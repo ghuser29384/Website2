@@ -14,11 +14,11 @@ for (const width of [1440, 390, 320]) {
     await expect(page.getByLabel(/Remember this draft/)).not.toBeChecked();
     expect((await context.cookies()).find((cookie) => cookie.name === "mt_walkthrough_seen")).toBeUndefined();
     await expect(page.getByTestId("profile-priorities-card").getByRole("link", { name: "Adjust priorities", exact: true })).toBeVisible();
-    await page.getByText("Optional private matching preferences", { exact: true }).click();
+    await page.getByText("Optional trade preferences", { exact: true }).click();
     for (const label of ["Outcomes I care about", "What I can offer", "Limits or exclusions"]) {
       await expect(page.getByLabel(label, { exact: true })).toHaveValue("");
     }
-    await expect(page.getByLabel("Save the private matching notes I entered")).not.toBeChecked();
+    await expect(page.getByLabel("Save my trade preferences")).not.toBeChecked();
     await page.getByLabel("Outcomes I care about", { exact: true }).fill("A priority outside the suggested categories");
     await expect(page.getByRole("link", { name: "Adjust priorities", exact: true })).toHaveAttribute("href", "/profile/priorities?returnTo=%2Fcomplete-profile");
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
@@ -31,7 +31,7 @@ for (const width of [1440, 390, 320]) {
 test("draft recovery is opt-in, explicit, and clearable without account writes", async ({ page }) => {
   await page.goto("/complete-profile");
   await page.getByLabel("Display name", { exact: true }).fill("Guest example");
-  await page.getByText("Optional private matching preferences", { exact: true }).click();
+  await page.getByText("Optional trade preferences", { exact: true }).click();
   await page.getByLabel("Outcomes I care about", { exact: true }).fill("A restored personal priority");
   await page.getByLabel("What I can offer", { exact: true }).fill("A restored capability");
   expect(await page.evaluate((key) => localStorage.getItem(key), profileDraftKey(null))).toBeNull();
@@ -42,10 +42,10 @@ test("draft recovery is opt-in, explicit, and clearable without account writes",
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
   await page.getByRole("button", { name: "Restore this draft" }).click();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Guest example");
-  await page.getByText("Optional private matching preferences", { exact: true }).click();
+  await page.getByText("Optional trade preferences", { exact: true }).click();
   await expect(page.getByLabel("Outcomes I care about", { exact: true })).toHaveValue("A restored personal priority");
   await expect(page.getByLabel("What I can offer", { exact: true })).toHaveValue("A restored capability");
-  await expect(page.getByLabel("Save the private matching notes I entered")).not.toBeChecked();
+  await expect(page.getByLabel("Save my trade preferences")).not.toBeChecked();
   await page.getByRole("button", { name: "Clear device draft and reset edits" }).click();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
   await expect(page.getByLabel(/Remember this draft/)).not.toBeChecked();
@@ -77,7 +77,7 @@ test("expired guest drafts do not populate a form or offer restoration", async (
 test("walkthrough query parameters no longer preassign personal priorities", async ({ page }) => {
   await page.goto("/complete-profile?source=walkthrough&cause_area=Animal%20welfare&offer_type=Money&match_name=Example");
   await expect(page.getByRole("heading", { name: "Set up your profile." })).toBeVisible();
-  await page.getByText("Optional private matching preferences", { exact: true }).click();
+  await page.getByText("Optional trade preferences", { exact: true }).click();
   await expect(page.getByLabel("Outcomes I care about", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Limits or exclusions", { exact: true })).toHaveValue("");
   await page.getByRole("link", { name: "Create account & continue" }).click();

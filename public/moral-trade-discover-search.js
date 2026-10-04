@@ -319,7 +319,7 @@
       renderConstraints(data.constraints);
       if (data.domain !== "offers") {
         status.textContent = "Discover now lists trades, not people or standalone funding pools.";
-        showPanel("Search for an exchange", "Describe what you can provide or the outcome you want.", [button("Clear search", clearSearch), link("Post a trade", "/trades/new", "primary-btn")]);
+        showPanel("Search for an exchange", "Describe what you can provide or the outcome you want.", [button("Clear search", clearSearch), link("Create a trade", "/trades/new", "primary-btn")]);
         return;
       }
       if (data.clarification) {
@@ -352,7 +352,7 @@
           availability === "partial" ? "No matches in the available listings" : state.query || data.constraints?.some((item) => item.key !== "domain") ? "No current trades match" : "No current trades to show",
           availability === "partial" ? "Some listing sources are unavailable. Retry before concluding that there is no suitable trade."
             : "Try a different search, post the exchange you want to make, or invite someone to trade. Worked examples are kept separate from available listings.",
-          [button(availability === "partial" ? "Retry" : "Clear search", availability === "partial" ? () => executeSearch("none") : clearSearch), link("Post a trade", "/trades/new", "primary-btn"), link("Invite a counterparty", "/invite", "outline-btn")],
+          [button(availability === "partial" ? "Retry" : "Clear search", availability === "partial" ? () => executeSearch("none") : clearSearch), link("Create a trade", "/trades/new", "primary-btn"), link("Invite a counterparty", "/invite", "outline-btn")],
         );
       }
       previous.disabled = state.page <= 1;

@@ -51,13 +51,11 @@ test("partial public inventory does not imply the whole marketplace is empty", a
   await expect(page.locator("[data-mt-public-listings]")).not.toContainText("No current trades");
 });
 
-test("learning examples are separate from live registry results", async ({ page }) => {
+test("retired wish registry opens Discover without private profile previews", async ({ page }) => {
   await page.goto("/wish-registry");
-  const examples = page.locator("#registry-examples");
-  await expect(examples.getByText("Animal welfare and poverty donor", { exact: true })).toBeHidden();
-  await examples.locator("summary").click();
-  await expect(examples.getByText("Animal welfare and poverty donor", { exact: true })).toBeVisible();
-  await expect(examples).toContainText("not available participants or search results");
+  await expect(page).toHaveURL(url => url.pathname === "/discover");
+  await expect(page.getByRole("heading", { name: "Browse trades", exact: true })).toBeVisible();
+  await expect(page.locator("#registry-examples")).toHaveCount(0);
 });
 
 test("technical safety checks are optional while rules and reporting remain visible", async ({ page }) => {

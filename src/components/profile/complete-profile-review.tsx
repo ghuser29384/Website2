@@ -12,6 +12,7 @@ import {
   PROFILE_SETUP_LIMITS, profileDraftKey, readProfileDraft,
   type ProfileDraftEnvelope, type ProfileSetupValues,
 } from "@/lib/profile-setup-draft";
+import { ResourceLimits } from "./resource-limits";
 import { ProfilePrioritiesCard } from "./profile-priorities-card";
 import styles from "./profile-setup.module.css";
 
@@ -173,12 +174,12 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
         <label>Company, organization, or university (optional)<input name="affiliation" autoComplete="organization" maxLength={160}
           value={values.affiliation} onChange={(e) => update("affiliation", e.target.value)} /></label>
         <label>Profile introduction (optional)<textarea aria-label="Profile introduction (optional)" aria-describedby="profile-bio-help" name="bio" maxLength={500} value={values.bio}
-          onChange={(e) => update("bio", e.target.value)} /><small id="profile-bio-help">Public profile introduction. Keep sensitive information in private matching notes instead.</small></label>
+          onChange={(e) => update("bio", e.target.value)} /><small id="profile-bio-help">This introduction is public. Please leave out sensitive information.</small></label>
       </div>
       {accountId ? <p className={styles.account}>Signed in as {accountEmail}. Account email is not stored in device drafts.</p> :
         <p className={styles.notice}>You can browse without an account. Sign in to save these details; any guest draft stays separate until you explicitly import its matching notes.</p>}
       <details className={styles.personalization}>
-        <summary>Optional private matching preferences</summary>
+        <summary>Optional trade preferences</summary>
         <p>Describe your own priorities, including outcomes outside the suggested cause categories. New text is added to saved matching notes; existing constraints are not erased. Blank fields leave preferences unchanged. These notes do not publish an offer or enable outreach.</p>
         <div className={styles.fields}>
           <label>Outcomes I care about<textarea aria-label="Outcomes I care about" name="outcomes" maxLength={PROFILE_SETUP_LIMITS.outcomes} value={values.outcomes}
@@ -189,7 +190,7 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
             onChange={(e) => update("limits", e.target.value)} /><small id="profile-limits-help">Leave time and monetary limits unspecified unless you have chosen them.</small></label>
         </div>
         <label className={styles.check}><input type="checkbox" name="save_preferences" checked={savePreferences}
-          onChange={(e) => setSavePreferences(e.target.checked)} />Save the private matching notes I entered</label>
+          onChange={(e) => setSavePreferences(e.target.checked)} />Save my trade preferences</label>
         <p>Skipping this step preserves existing preferences and priority allocations. Private notes require encrypted account storage.</p>
       </details>
       <details className={styles.personalization}>
@@ -212,5 +213,6 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
         <span>Saving does not create a commitment, reserve money, or contact anyone.</span>
       </footer>
     </form>
+    {!accountChanged ? <ResourceLimits key={accountId ?? "guest"} /> : null}
   </section>;
 }

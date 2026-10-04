@@ -182,3 +182,19 @@ test("valid offer record identifiers and static offer routes pass through", () =
 test("the proxy matcher covers nested offer record paths", () => {
   assert.ok(config.matcher.includes("/offers/:path*"));
 });
+
+
+test("retired matching entry points lead to Discover", () => {
+  for (const path of ["/background-networking", "/wish-registry"]) {
+    const response = proxy(makeRequest(path));
+    assert.equal(response.status, 307);
+    assert.equal(response.headers.get("location"), "https://moraltrade.org/discover");
+  }
+});
+
+test("group funding uses Discover while existing pool detail links remain available", () => {
+  const browse = proxy(makeRequest("/moral-goods-group-buying"));
+  assert.equal(browse.headers.get("location"), "https://moraltrade.org/discover?offerKind=co-fund");
+  const detail = proxy(makeRequest("/moral-goods-group-buying?pool=existing-pool"));
+  assert.equal(detail.headers.get("x-middleware-next"), "1");
+});

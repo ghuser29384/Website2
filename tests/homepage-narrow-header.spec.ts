@@ -16,7 +16,7 @@ for (const width of [1440, 320, 360, 390]) {
     const create = page.locator('.page button[data-action="create"]');
     const tour = page.locator(".header-more").getByRole("link", { name: "How it works", exact: true, includeHidden: true });
     await expect(date.locator("time")).toHaveText("Wednesday, September 23, 2026");
-    await expect(create).toContainText("Create offer");
+    await expect(create).toContainText("Create a trade");
     await expect(create).toBeVisible();
     await expect(tour).toHaveCount(1);
     await page.evaluate(() => document.fonts.ready);

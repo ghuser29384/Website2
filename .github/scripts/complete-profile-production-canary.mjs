@@ -258,12 +258,12 @@ async function runReturningMobile(entry) {
   await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
   await page.getByRole("heading", { name: "Set up your profile." }).waitFor({ state: "visible", timeout: 60_000 });
   assertCanonicalFinalHost(page);
-  await page.locator("summary").filter({ hasText: /^Optional private matching preferences$/ }).click();
+  await page.locator("summary").filter({ hasText: /^Optional trade preferences$/ }).click();
   for (const label of ["Outcomes I care about", "What I can offer", "Limits or exclusions"]) {
     assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), "");
   }
   await page.getByLabel("Outcomes I care about", { exact: true }).fill("Canary custom outcome");
-  assert.equal(await page.getByLabel("Save the private matching notes I entered").isChecked(), false);
+  assert.equal(await page.getByLabel("Save my trade preferences").isChecked(), false);
   assert.equal(await page.getByRole("link", { name: "Advanced priority allocation (optional)" }).getAttribute("href"), "/profile/priorities");
   assert.equal(await page.locator('input[name="priority_allocation"]').count(), 0);
 

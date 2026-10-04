@@ -60,12 +60,9 @@ test("renders concise states on the affected routes", async ({ page }) => {
   await expect(page.locator("body")).not.toContainText("Current production inventory.");
 
   await page.goto("/moral-goods-group-buying");
-  await expect(page.getByRole("heading", { level: 1, name: /^(Live group buying\.|Group buying)$/ })).toBeVisible();
-  if (await page.getByRole("heading", { level: 1, name: "Group buying", exact: true }).count()) {
-    await expect(page.getByRole("heading", { name: "No open routes yet.", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Propose a pool", exact: true })).toHaveAttribute("href", "/mpgf/pools/new");
-  }
-  await expect(page.locator("body")).not.toContainText("Current production result");
+  await expect(page).toHaveURL(url => url.pathname === "/discover" && url.searchParams.get("offerKind") === "co-fund");
+  await expect(page.getByRole("heading", { level: 1, name: "Browse trades" })).toBeVisible();
+  await expect(page.getByLabel("Trade type", { exact: true })).toHaveValue("co-fund");
 
   await page.goto("/pilot");
   await expect(page).toHaveURL(/\/start(?:\?.*)?$/);
