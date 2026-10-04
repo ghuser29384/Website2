@@ -832,7 +832,7 @@ function TemplateTextareaSuggestions({
               </div>
             ) : (
               <div className="template-suggestion-empty" role="status">
-                No matching templates. Custom text is fine.
+                No matching templates yet. You can write your own.
               </div>
             )}
           </div>
