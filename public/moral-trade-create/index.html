@@ -4863,10 +4863,10 @@
           return { valid: false, index, message: `Enter threshold ${index + 1}.` };
         }
         if (!(amount > 0)) {
-          return { valid: false, index, message: `Threshold ${index + 1} must be greater than $0.` };
+          return { valid: false, index, message: `Please enter an amount above $0 for threshold ${index + 1}.` };
         }
         if (index > 0 && amount <= previous) {
-          return { valid: false, index, message: `Threshold ${index + 1} must be greater than threshold ${index}.` };
+          return { valid: false, index, message: `Please set threshold ${index + 1} higher than threshold ${index}.` };
         }
         previous = amount;
       }
@@ -5237,7 +5237,7 @@
           evaluate: (context) => evaluateFormulaAst(parsed.ast, context)
         };
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Formula validation failed.";
+        const message = error instanceof Error ? error.message : "We couldn’t check this formula. Please review it and try again.";
         if (!checks.parse.pass) checks.parse.detail = message;
         else checks.finite.detail = message;
         return { valid: false, checks, error: message, sampled: 0, min: NaN, max: NaN };
@@ -5255,15 +5255,15 @@
         const end = Number(bands[index].end);
         const multiplier = Number(bands[index].multiplier);
         if (!Number.isFinite(end) || end <= previousEnd || end > 100) {
-          return { valid: false, index, message: `Band ${index + 1} must end after the previous band and no later than 100%.` };
+          return { valid: false, index, message: `Please end band ${index + 1} after the previous band and at or before 100%.` };
         }
         if (!Number.isFinite(multiplier) || multiplier < 0 || multiplier > 100) {
-          return { valid: false, index, message: `Band ${index + 1} multiplier must be between 0% and 100%.` };
+          return { valid: false, index, message: `Please choose a multiplier from 0% to 100% for band ${index + 1}.` };
         }
         previousEnd = end;
       }
       if (Math.abs(previousEnd - 100) > 1e-9) {
-        return { valid: false, index: bands.length - 1, message: "The final timing band must end at 100% of the funding period." };
+        return { valid: false, index: bands.length - 1, message: "Please end the final timing band at 100% of the funding period." };
       }
       return { valid: true, index: -1, message: "" };
     }
@@ -5302,7 +5302,7 @@
       if (state.poolFailureTimingMode === "formula") {
         const validation = validateTimingFormula(state.poolTimingFormula);
         if (!validation.valid) {
-          return { valid: false, field: "timingFormulaInput", message: "The custom timing formula must pass every validation check." };
+          return { valid: false, field: "timingFormulaInput", message: "Please resolve the checks shown for your custom timing formula before continuing." };
         }
         if (!state.poolTimingFormulaAcknowledged) {
           return { valid: false, field: "timingFormulaAcknowledgement", message: "Confirm the custom-formula disclosure before review." };
@@ -5569,7 +5569,7 @@
     function getPlatformShareValidation() {
       const share = Number(state.moralTradeBonusShare);
       if (!Number.isFinite(share) || share < 0 || share > 100) {
-        return { valid: false, message: "The Moral Trade funding request must be between 0% and 100%." };
+        return { valid: false, message: "Please choose a Moral Trade funding request from 0% to 100%." };
       }
       return { valid: true, message: "" };
     }
@@ -5653,7 +5653,7 @@
         const raw = state.poolThresholds[index]?.amount || "";
         if (String(raw).trim()) {
           if (!(current > 0)) message = "Enter an amount greater than $0.";
-          else if (index > 0 && Number.isFinite(previous) && current <= previous) message = `Must exceed ${formatUSD(previous)}.`;
+          else if (index > 0 && Number.isFinite(previous) && current <= previous) message = `Please enter more than ${formatUSD(previous)}.`;
         }
         inlineError.textContent = message;
         inlineError.classList.toggle("visible", Boolean(message));
@@ -7299,7 +7299,7 @@
 
     async function publishOffer() {
       if (!$("#publishConfirm").checked) {
-        $("#publishError").textContent = "Confirm that the record is accurate and ready for review.";
+        $("#publishError").textContent = "Please confirm that the details are accurate and ready for review.";
         $("#publishConfirm").focus();
         return;
       }
@@ -7322,18 +7322,18 @@
         const result = await response.json().catch(() => null);
         if (response.status === 401 && result?.requiresAuth) {
           if (!saveDraftForResume()) {
-            throw new Error("Sign-in is required, but Create could not preserve this draft. Keep this page open and try again.");
+            throw new Error("Please sign in to submit. We couldn’t save a copy of your draft, so keep this page open and try again.");
           }
           window.top.location.assign(result.loginUrl || "/login?returnTo=%2Ftrades%2Fnew%3Fresume%3Dcreate");
           return;
         }
         if (!response.ok || !result?.ok || !result.submission) {
-          throw new Error(result?.message || `Submission failed with HTTP ${response.status}.`);
+          throw new Error(result?.message || `We couldn’t submit your proposal. Please try again. (Error ${response.status})`);
         }
         clearDraftForResume();
         renderSubmittedReceipt(result.submission);
       } catch (error) {
-        $("#publishError").textContent = error instanceof Error ? error.message : "The submission could not be saved.";
+        $("#publishError").textContent = error instanceof Error ? error.message : "We couldn’t save your submission. Please try again.";
         button.disabled = false;
         button.textContent = originalLabel;
       }

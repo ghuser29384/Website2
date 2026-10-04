@@ -381,7 +381,7 @@
         </div>
         <label class="mt-lrp-field" for="mt-lrp-otherwise" data-mt-lrp-baseline-fields>
           <span>What would you do without a trade?</span>
-          <textarea id="mt-lrp-otherwise" name="otherwiseBaseline" maxlength="700" rows="2" required placeholder="Your existing plan, or nothing yet">${escapeHtml(profile.otherwiseBaseline)}</textarea>
+          <textarea id="mt-lrp-otherwise" name="otherwiseBaseline" maxlength="700" rows="2" required placeholder="What you already plan to do, if anything">${escapeHtml(profile.otherwiseBaseline)}</textarea>
         </label>
         <details class="mt-lrp-options" data-mt-lrp-disclosure="options">
           <summary>More options <span>Timing and ways to help</span></summary>
@@ -537,7 +537,7 @@
       );
     } else if (currentStatus === "unavailable") {
       body = renderState(
-        "Routes are temporarily unavailable.",
+        "We couldn’t load your routes. Please try again.",
         "Your profile remains private. Refresh or try again shortly.",
         { state: "unavailable" },
       );
@@ -817,7 +817,7 @@
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(string(body.error, 220) || "Route preferences could not be saved.");
+        throw new Error(string(body.error, 220) || "We couldn’t save your route preferences. Please try again.");
       }
       preferencesSaved = true;
 
@@ -826,10 +826,10 @@
         cache: "no-store",
         headers: { Accept: "application/json" },
       });
-      if (!freshResponse.ok) throw new Error("Routes could not be refreshed.");
+      if (!freshResponse.ok) throw new Error("We couldn’t refresh your routes. Please try again.");
       const fresh = await freshResponse.json();
       if (!fresh || typeof fresh !== "object" || !fresh.routePlanner) {
-        throw new Error("The refreshed route plan was unavailable.");
+        throw new Error("We couldn’t load the updated route plan. Please try again.");
       }
       window.__MT_LIVE_NOW_BOOTSTRAP__ = fresh;
       planner = normalizePlanner(fresh.routePlanner);
@@ -838,7 +838,7 @@
         new CustomEvent("mt:live-route-planner-updated", { detail: { routePlanner: planner } }),
       );
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "Route preferences could not be saved.";
+      const detail = error instanceof Error ? error.message : "We couldn’t save your route preferences. Please try again.";
       requestError = preferencesSaved
         ? `Your preferences may have saved, but the routes could not be refreshed. ${detail}`
         : detail;
