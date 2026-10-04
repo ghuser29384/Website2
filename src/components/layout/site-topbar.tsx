@@ -2,7 +2,7 @@
 
 import { SiteLink as Link } from "@/components/layout/site-link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useId, useState, useTransition } from "react";
+import { Fragment, useId, useState, useTransition, type ReactNode } from "react";
 
 import { EvidenceNavGate } from "@/components/layout/evidence-nav-gate";
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
@@ -67,6 +67,7 @@ function NavMenu({
   onOpenChange,
   summary,
   nativeDisclosure = false,
+  children,
 }: {
   isOpen: boolean;
   items: NavRouteItem[];
@@ -74,6 +75,7 @@ function NavMenu({
   onOpenChange: (isOpen: boolean) => void;
   summary?: string;
   nativeDisclosure?: boolean;
+  children?: ReactNode;
 }) {
   const pathname = usePathname();
   const hasActiveItem = items.some((item) => (item.href ? isHrefActive(pathname, item.href) : false));
@@ -82,6 +84,8 @@ function NavMenu({
     <details
       className={["topbar-menu", hasActiveItem ? "is-active" : ""].filter(Boolean).join(" ")}
       open={nativeDisclosure ? undefined : isOpen}
+      // Native details may already be open when a user activates it before hydration.
+      suppressHydrationWarning={nativeDisclosure}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           if (nativeDisclosure) event.currentTarget.open = false;
@@ -148,6 +152,7 @@ function NavMenu({
             ? <EvidenceNavGate key={`${item.href}-${item.label}`}>{content}</EvidenceNavGate>
             : content;
         })}
+        {children ? <div className="topbar-menu-account">{children}</div> : null}
       </div>
     </details>
   );
@@ -158,13 +163,14 @@ export function SiteTopbar({
   links,
   authLink,
   primaryAction,
-  showSearch = true,
+  showSearch = false,
   showLogout = false,
   logoutRedirectTo = "/",
 }: SiteTopbarProps) {
   const router = useRouter();
   const refinedHeader = usesDefaultHeader(links);
   const headerLinks = refinedHeader ? REFINED_HEADER_LINKS : links;
+  const displaySearch = showSearch && !refinedHeader;
   const searchInputId = useId();
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
@@ -187,7 +193,7 @@ export function SiteTopbar({
   return (
     <nav
       aria-label="Primary"
-      className={["topbar mt-site-topbar", showSearch ? "topbar-with-search" : "", refinedHeader ? "mt-refined-header" : ""].filter(Boolean).join(" ")}
+      className={["topbar mt-site-topbar", displaySearch ? "topbar-with-search" : "", refinedHeader ? "mt-refined-header" : ""].filter(Boolean).join(" ")}
     >
       <Link prefetch={false} aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
         <MoralTradeWordmark />
@@ -208,7 +214,7 @@ export function SiteTopbar({
           ) : null,
         )}
       </div>
-      {showSearch ? (
+      {displaySearch ? (
         <form action="/discover" className="topbar-search" method="get" role="search">
           <label className="sr-only" htmlFor={searchInputId}>Search offers</label>
           <div className="topbar-search-box" style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
@@ -226,9 +232,20 @@ export function SiteTopbar({
               label="More"
               nativeDisclosure
               onOpenChange={(isOpen) => handleMenuOpenChange("utilities", isOpen)}
-            />
+            >
+              {authLink ? <NavItem className="topbar-menu-link" href={authLink.href} label={authLink.label} /> : null}
+              {showLogout ? (
+                <>
+                  <a className="topbar-menu-link" href="/dashboard?view=controls#my-trades">My trades</a>
+                  <a className="topbar-menu-link" href="/dashboard?view=controls#data-portability">Profile data</a>
+                  <button className="topbar-menu-link" disabled={isLoggingOut} type="button" onClick={handleLogout}>
+                    {isLoggingOut ? "Logging out..." : "Log out"}
+                  </button>
+                </>
+              ) : null}
+            </NavMenu>
           ) : null}
-          {showLogout ? (
+          {showLogout && !refinedHeader ? (
             <NavMenu
               isOpen={openMenuKey === "account"}
               items={[
@@ -244,14 +261,14 @@ export function SiteTopbar({
           {primaryAction ? (
             <NavItem className="button button-nav" href={primaryAction.href} label={primaryAction.label} />
           ) : null}
-          {authLink ? (
+          {authLink && !refinedHeader ? (
             <NavItem
               className="button button-secondary button-nav"
               href={authLink.href}
               label={authLink.label}
             />
           ) : null}
-          {showLogout ? (
+          {showLogout && !refinedHeader ? (
             <button
               className="topbar-utility"
               disabled={isLoggingOut}

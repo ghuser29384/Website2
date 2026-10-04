@@ -10,11 +10,11 @@ for(const width of [1440,390]) {
     await page.goto("/",{waitUntil:"commit"});
     await expect(page.locator('header [data-mt-primary-links="true"]')).toBeVisible();
     await expect(page.locator('button[data-now="focus"]')).toBeVisible();
-    await expect(page.locator('[data-mt-guest-only="true"]').first()).not.toBeVisible();
+    await expect(page.locator('.header-start[data-mt-guest-only="true"]')).not.toBeVisible();
     await expect.poll(()=>Boolean(account&&feed)).toBe(true);
     await page.screenshot({path:testInfo.outputPath(`independent-shell-${width}.png`)});
     await account!.fulfill({contentType:"application/json",body:JSON.stringify({authenticated:false})});
-    await expect(page.locator('[data-mt-guest-only="true"]').first()).toBeVisible();
+    await expect(page.locator('.header-start[data-mt-guest-only="true"]')).toBeVisible();
     // Feed still pending, but the resolved account and navigation are usable.
     await expect(page.locator('button[data-now="focus"]')).toBeVisible();
     await feed!.fulfill({contentType:"application/json",body:JSON.stringify(guest)});
@@ -36,7 +36,7 @@ test("feed can resolve first; account JSON is data, never executable document so
   await account!.fulfill({contentType:"application/json",body:JSON.stringify({authenticated:true,account:{displayName:"</script><script>window.auditInjected=1</script>",firstName:"Audit QA",initials:"AQ"}})});
   await expect(page.locator('button[data-action="profile"]')).toContainText("AQ");
   expect(await page.evaluate(()=>Object.hasOwn(window,"auditInjected"))).toBe(false);
-  await expect(page.locator('[data-mt-guest-only="true"]').first()).not.toBeVisible();
+  await expect(page.locator('.header-start[data-mt-guest-only="true"]')).not.toBeVisible();
 });
 
 test("failed optional sources show unavailable rather than demo records",async({page})=>{
@@ -45,8 +45,9 @@ test("failed optional sources show unavailable rather than demo records",async({
   await page.goto("/",{waitUntil:"commit"});
   await expect(page.locator('[data-mt-live-now-state="unavailable"]')).toBeVisible();
   await expect(page.locator('[data-mt-live-now-recommendation]')).toHaveCount(0);
-  await expect(page.locator('[data-mt-guest-only="true"]').first()).not.toBeVisible();
+  await expect(page.locator('.header-start[data-mt-guest-only="true"]')).not.toBeVisible();
   await expect(page.locator('header [data-mt-primary-links]')).toBeVisible();
+  await page.locator(".header-more > summary").click();
   await page.locator('button[data-action="profile"]').click();
   await expect(page.locator('[data-mt-live-account-summary="true"]')).toContainText("could not be loaded");
   await expect(page.locator('[data-mt-live-account-panel="true"]').getByText("Sign in to view", {exact:true})).toHaveCount(0);

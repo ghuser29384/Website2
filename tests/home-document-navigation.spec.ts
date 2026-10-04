@@ -74,7 +74,6 @@ for (const width of [1440, 390, 320]) {
     await page.waitForTimeout(2000);
     await page.goto("/contact");
     const header = page.locator(".mt-refined-header").first();
-    await header.locator("summary").filter({ hasText: "More" }).click();
     const profile = header.getByRole("link", { name: "Profile", exact: true });
     await expect(profile).toHaveCount(1);
     await expect(profile).toHaveAttribute("href", "/dashboard");
