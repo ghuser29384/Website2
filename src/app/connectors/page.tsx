@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
+import { getDirectDonationUpgradeConfig } from "@/lib/direct-donation-upgrade";
 import {
   getTradeDonationProviderConfig,
   TRADE_DONATION_TARGETS,
@@ -25,6 +26,7 @@ export default async function ConnectorsPage() {
   const viewer = await getViewer();
   const isAuthenticated = Boolean(viewer);
   const provider = getTradeDonationProviderConfig();
+  const directUpgrade = getDirectDonationUpgradeConfig();
 
   return (
     <div className="page-shell marketplace-product-shell">
@@ -80,6 +82,28 @@ export default async function ConnectorsPage() {
               <div><dt>Screenshot accepted</dt><dd>No</dd></div>
               <div><dt>Donor PII persisted</dt><dd>No</dd></div>
               <div><dt>Current blocker</dt><dd>{provider.ready ? "None" : provider.blockers[0] ?? "Configuration incomplete"}</dd></div>
+            </dl>
+          </article>
+
+          <article className={styles.connectorCard}>
+            <div className={styles.connectorSummary}>
+              <div className={`${styles.status} ${directUpgrade.readyForCommitments ? styles.ready : styles.blocked}`}>
+                <span />
+                {directUpgrade.readyForCommitments ? "Launch ready" : "Fail-closed"}
+              </div>
+              <h3>Direct verified Donation Upgrade</h3>
+              <p>
+                A creator publishes a planned donation without entering payment information. Once
+                the branch is fixed, each participant donates directly through Every.org. Moral
+                Trade holds no funds and awards impact only after the exact partner webhook.
+              </p>
+            </div>
+            <dl className={styles.boundaries}>
+              <div><dt>Environment</dt><dd>{directUpgrade.mode}</dd></div>
+              <div><dt>Platform custody</dt><dd>None</dd></div>
+              <div><dt>Automatic charge</dt><dd>No</dd></div>
+              <div><dt>Screenshot accepted</dt><dd>No</dd></div>
+              <div><dt>Current blocker</dt><dd>{directUpgrade.readyForCommitments ? "None" : directUpgrade.blockers[0] ?? "Configuration incomplete"}</dd></div>
             </dl>
           </article>
 

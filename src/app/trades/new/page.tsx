@@ -30,6 +30,7 @@ import {
   getTradeDraftTemplateLabel,
 } from "@/lib/trade-template-library";
 import { ConditionalDonationCreate } from "./conditional-donation";
+import { DirectDonationUpgradeCreate } from "./direct-donation-upgrade-create";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -178,6 +179,9 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
     : null;
   const structure = valueOf(resolvedSearchParams.structure);
   if (structure === "conditional-donation") {
+    if (valueOf(resolvedSearchParams.rail) === "direct") {
+      return <DirectDonationUpgradeCreate params={resolvedSearchParams} />;
+    }
     return <ConditionalDonationCreate params={resolvedSearchParams} />;
   }
 
