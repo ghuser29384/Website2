@@ -1,0 +1,36 @@
+name: Clear superseded Feed release queue
+on:
+  push:
+    branches: [ops/feed-release-queue-20261004]
+    paths: [.github/workflows/feed-release-queue-20261004.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  cancel-superseded:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify replacement contains the older release and cancel only its pre-deploy checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ghuser29384/Website2
+          test "$GITHUB_REF" = refs/heads/ops/feed-release-queue-20261004
+          old_sha=675f76a81ef45cc955a81de8438c8ecc10a691b0
+          replacement_sha=17527fffbc0cc13741afc1c94f3db9acdef9812a
+          git merge-base --is-ancestor "$old_sha" "$replacement_sha"
+          gh api repos/$GITHUB_REPOSITORY/actions/runs/37237578650 > replacement.json
+          jq -e --arg sha "$replacement_sha" '.name == "Gated Vercel release" and .head_sha == $sha and .head_branch == "main" and (.status == "pending" or .status == "queued" or .status == "in_progress")' replacement.json
+          gh api repos/$GITHUB_REPOSITORY/actions/runs/37237111744 > superseded.json
+          jq -e --arg sha "$old_sha" '.name == "Gated Vercel release" and .head_sha == $sha and .head_branch == "main"' superseded.json
+          if test "$(jq -r .status superseded.json)" = completed; then exit 0; fi
+          gh api repos/$GITHUB_REPOSITORY/actions/runs/37237111744/jobs > jobs.json
+          jq -e '[.jobs[].steps[] | select(.status == "in_progress") | .name] as $active | ($active | length) == 1 and ($active[0] == "Run complete repository quality gates" or $active[0] == "Run complete rendered browser gate")' jobs.json
+          gh api --method POST repos/$GITHUB_REPOSITORY/actions/runs/37237111744/cancel
