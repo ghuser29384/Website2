@@ -23,7 +23,7 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 2
           persist-credentials: false
-      - name: Verify the reviewed page recovery and exact main candidate
+      - name: Verify the reviewed loading recovery and exact main candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -34,6 +34,11 @@ jobs:
           test "$(git hash-object src/lib/home-navigation.test.ts)" = 'a0eed0f29e2bccfc26bbd0558f33cb353e858393'
           test "$(git hash-object src/lib/mpgf/phase-one-governance.ts)" = '1df014e14fd2272eff915e99120e56f47c06014b'
           test "$(git hash-object public/moral-trade-input-assist.js)" = 'c9944fe713efea34a2b6c1cf95ed9f19eedfd2dd'
+          test "$(git hash-object public/moral-trade-live.html)" = 'cfc12c29f5cd4479e0b521d557911ded882f1250'
+          test "$(git hash-object src/app/worked-examples/page.tsx)" = 'fbc314876a74f53e9e53a2c1fcfd70ae17718849'
+          test "$(git hash-object tests/feed-loading-recovery.spec.ts)" = '9d3e90a3153b9e61cb8f775d7e04be4b8411a43a'
+          test "$(git hash-object tests/home-bootstrap-resilience.spec.ts)" = '315bab1e12a97cc1e4ddd10c8b354a4489377222'
+          test "$(git hash-object tests/site-simplification.spec.ts)" = '45f5c169fbad96d5635efb42fa93413c4ad43e2e'
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_sha" = "$GITHUB_SHA"
