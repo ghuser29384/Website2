@@ -9,10 +9,12 @@ import { createClient } from "@/lib/supabase/browser";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import {
   clearProfileDraft, emptyProfileSetupValues, encodeProfileDraft, importGuestProfileNotes,
-  PROFILE_SETUP_LIMITS, profileDraftKey, readProfileDraft,
+  profileDraftKey, readProfileDraft,
   type ProfileDraftEnvelope, type ProfileSetupValues,
 } from "@/lib/profile-setup-draft";
 import { ProfilePrioritiesCard } from "./profile-priorities-card";
+import { MATCHING_PREFERENCE_GROUPS } from "@/lib/profile-matching-choices";
+import { MatchingPreferenceChoices } from "./matching-preference-choices";
 import styles from "./profile-setup.module.css";
 
 interface CompleteProfileReviewProps {
@@ -179,18 +181,14 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
         <p className={styles.notice}>You can browse without an account. Sign in to save these details; any guest draft stays separate until you explicitly import its matching notes.</p>}
       <details className={styles.personalization}>
         <summary>Optional private matching preferences</summary>
-        <p>Describe your own priorities, including outcomes outside the suggested cause categories. New text is added to saved matching notes; existing constraints are not erased. Blank fields leave preferences unchanged. These notes do not publish an offer or enable outreach.</p>
-        <div className={styles.fields}>
-          <label>Outcomes I care about<textarea aria-label="Outcomes I care about" name="outcomes" maxLength={PROFILE_SETUP_LIMITS.outcomes} value={values.outcomes}
-            onChange={(e) => update("outcomes", e.target.value)} /></label>
-          <label>What I can offer<textarea aria-label="What I can offer" name="capabilities" maxLength={PROFILE_SETUP_LIMITS.capabilities} value={values.capabilities}
-            onChange={(e) => update("capabilities", e.target.value)} /></label>
-          <label>Limits or exclusions<textarea aria-label="Limits or exclusions" aria-describedby="profile-limits-help" name="limits" maxLength={PROFILE_SETUP_LIMITS.limits} value={values.limits}
-            onChange={(e) => update("limits", e.target.value)} /><small id="profile-limits-help">Leave time and monetary limits unspecified unless you have chosen them.</small></label>
+        <p className={styles.preferenceHint}>Select all that apply, or skip. Add details only if you want to.</p>
+        <div className={styles.preferenceGroups}>
+          {MATCHING_PREFERENCE_GROUPS.map((group) => <MatchingPreferenceChoices key={group.name}
+            group={group} value={values[group.name]} disabled={!ready} onChange={(value) => update(group.name, value)} />)}
         </div>
         <label className={styles.check}><input type="checkbox" name="save_preferences" checked={savePreferences}
-          onChange={(e) => setSavePreferences(e.target.checked)} />Save the private matching notes I entered</label>
-        <p>Skipping this step preserves existing preferences and priority allocations. Private notes require encrypted account storage.</p>
+          onChange={(e) => setSavePreferences(e.target.checked)} />Save these private matching preferences</label>
+        <p className={styles.preferenceHint}>Saved choices add to your existing notes. They do not change your priorities, publish an offer, or contact anyone.</p>
       </details>
       <details className={styles.personalization}>
         <summary>Public invitation setting</summary>
