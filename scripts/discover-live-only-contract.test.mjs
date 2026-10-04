@@ -53,7 +53,7 @@ test("unavailable sources, stale requests and unsafe links fail closed", () => {
   assert.match(route, /discoverOffersAvailability/);
   assert.match(route, /needsPeople = plan\.domain === "people"/);
   assert.match(runtime, /availability === "partial"/);
-  assert.match(runtime, /This is not a zero-result search/);
+  assert.match(runtime, /We couldn’t check for matches this time/);
   assert.match(runtime, /requestNumber !== sequence/);
   assert.match(runtime, /controller\?\.abort/);
   assert.match(runtime, /cache: "no-store"/);

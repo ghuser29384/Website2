@@ -62,7 +62,7 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
       try {
         setSavedDraft(readProfileDraft(window.localStorage, accountId));
         setGuestDraft(accountId ? readProfileDraft(window.localStorage, null) : null);
-      } catch { setMessage("Device draft storage is unavailable. You can still edit and save your profile."); }
+      } catch { setMessage("We couldn’t access drafts on this device. You can still edit and save your profile."); }
       setReady(true);
     });
     return () => { cancelled = true; };
@@ -74,7 +74,7 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
     queueMicrotask(() => {
       if (cancelled) return;
       try { window.localStorage.setItem(profileDraftKey(accountId), encodeProfileDraft(accountId, values)); }
-      catch { setRemember(false); setMessage("The draft could not be saved on this device. Your edits are still in this tab."); }
+      catch { setRemember(false); setMessage("We couldn’t save the draft on this device. Your edits are still in this tab."); }
     });
     return () => { cancelled = true; };
   }, [accountId, values, ready, remember, accountChanged]);
@@ -110,7 +110,7 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
       if (!draft) { setSavedDraft(null); setMessage("That draft has expired or is no longer available."); return; }
       setValues(draft.values); setRemember(true); setSavedDraft(null); setSavePreferences(false);
       setMessage("Draft restored for this account. Review it before saving; publication settings were not imported.");
-    } catch { setMessage("The draft could not be restored."); }
+    } catch { setMessage("We couldn’t restore your draft. Please try again."); }
   }
   function importGuest() {
     try {
@@ -118,15 +118,15 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
       if (!guest) { setGuestDraft(null); setMessage("The guest draft is no longer available."); return; }
       setValues((current) => importGuestProfileNotes(current, guest.values));
       clearProfileDraft(window.localStorage, null); setGuestDraft(null); setSavePreferences(false);
-      setMessage("Guest notes imported by your choice. Account identity and publication settings were not changed.");
-    } catch { setMessage("Guest notes could not be imported."); }
+      setMessage("Your guest notes are imported. Your account identity and publication settings are unchanged.");
+    } catch { setMessage("We couldn’t import your guest notes. Please try again."); }
   }
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const username = validateProfileUsername(values.username);
     if (!accountId || accountChanged || !ready || !storageAvailable || !username.ok || values.displayName.trim().length < 2) {
       event.preventDefault();
-      setMessage(accountChanged ? "Your account changed. Reload before editing or saving."
-        : !username.ok ? username.message : "Enter a display name and sign in before saving.");
+      setMessage(accountChanged ? "You’re signed in to a different account. Please reload before editing or saving."
+        : !username.ok ? username.message : "Please add your display name and sign in to save your profile.");
     }
   }
 
@@ -145,7 +145,7 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
     </header>
     <div className={styles.intro}><p className={styles.eyebrow}>Your account</p>
       <h1 id="complete-profile-heading">Set up your profile.</h1>
-      <p>A name and username are enough. Matching preferences are optional; no tour or priority allocation is required.</p>
+      <p>Start with your name and a username. You can add your priorities and matching preferences whenever you’re ready.</p>
       <Link href={successTo} prefetch={false}>Skip setup and browse</Link>
     </div>
     <ProfilePrioritiesCard returnTo={returnTo} />
@@ -163,7 +163,7 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
       {guestDraft ? <div className={styles.notice}>
         <p>Guest matching notes exist on this device. They will not be imported automatically.</p>
         <button type="button" onClick={importGuest}>Import guest matching notes</button>{" "}
-        <button type="button" onClick={() => { try { clearProfileDraft(window.localStorage, null); setGuestDraft(null); } catch { setMessage("Guest draft could not be cleared."); } }}>Discard guest draft</button>
+        <button type="button" onClick={() => { try { clearProfileDraft(window.localStorage, null); setGuestDraft(null); } catch { setMessage("We couldn’t clear your guest draft. Please try again."); } }}>Discard guest draft</button>
       </div> : null}
       <div className={styles.fields}>
         <label>Display name<input name="display_name" autoComplete="name" maxLength={80} required minLength={2}
@@ -171,11 +171,11 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
         <label>Username<input aria-label="Username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false}
           maxLength={32} minLength={2} required pattern="[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
           value={values.username} onChange={(e) => update("username", e.target.value.toLowerCase().replace(/^@+/u, ""))} />
-          <small>Unique and public. Existing accounts are not assigned a generated username.</small></label>
+          <small>Choose a unique, public username that people can use to find you.</small></label>
         <label>Company, organization, or university (optional)<input name="affiliation" autoComplete="organization" maxLength={160}
           value={values.affiliation} onChange={(e) => update("affiliation", e.target.value)} /></label>
         <label>Profile introduction (optional)<textarea aria-label="Profile introduction (optional)" aria-describedby="profile-bio-help" name="bio" maxLength={500} value={values.bio}
-          onChange={(e) => update("bio", e.target.value)} /><small id="profile-bio-help">Public profile introduction. Keep sensitive information in private matching notes instead.</small></label>
+          onChange={(e) => update("bio", e.target.value)} /><small id="profile-bio-help">Tell people a little about yourself. This introduction is public, so keep sensitive details in your private matching notes.</small></label>
       </div>
       {accountId ? <p className={styles.account}>Signed in as {accountEmail}. Account email is not stored in device drafts.</p> :
         <p className={styles.notice}>You can browse without an account. Sign in to save these details; any guest draft stays separate until you explicitly import its matching notes.</p>}

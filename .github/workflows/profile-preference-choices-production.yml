@@ -29,7 +29,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "$GITHUB_REF" = 'refs/heads/main'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git hash-object src/components/profile/complete-profile-review.tsx)" = '5ee416e1760922c7971e32c4c145c1872153ebfc'
+          test "$(git hash-object src/components/profile/complete-profile-review.tsx)" = '85618bff2451568c7faded4fd8d005fa0688313a'
           test "$(git hash-object src/components/profile/matching-preference-choices.tsx)" = 'd4bd27405e6397ca157fd7ae0c6abacf8d56e907'
           test "$(git hash-object src/components/profile/profile-setup.module.css)" = '735720e3afc3892f36331e169c83a62661011f37'
           test "$(git hash-object src/lib/profile-matching-choices.ts)" = '1e5ce1c5bc56816dd1a4f94dcef660ef31b62c91'
