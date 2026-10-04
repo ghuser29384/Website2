@@ -5,6 +5,7 @@ import { createMatchConciergeRequestAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
+import { readPublicData } from "@/lib/public-read-deadline";
 import { formatLocation, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { loadSmartQueryCausePriorities } from "@/lib/smart-query-personalization";
@@ -175,14 +176,14 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
       }
 
       if (!budgetReservation?.limited) {
-        results = await searchWishRegistryPreviews({
+        results = await readPublicData(searchWishRegistryPreviews({
           cause,
           limit: 24,
           opennessToPayment,
           opennessToPledges,
           personalPriorities,
           query,
-        });
+        }));
       }
       sparsePrivacyFloorApplied = shouldApplySparseResultPrivacyFloor({
         resultCount: results.length,
