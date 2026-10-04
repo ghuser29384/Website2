@@ -9,6 +9,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { MarketplaceBottomNav } from "@/components/marketplace/marketplace-components";
 import { getViewer } from "@/lib/app-data";
 import { listThreadsForUser, listTradeNotifications } from "@/lib/core-trade";
+import { withMessagesDeadline } from "@/lib/messages-loading";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -20,11 +21,17 @@ export const metadata: Metadata = {
   robots: { follow: false, index: false },
 };
 
-export default async function MessagesPage({
-  searchParams,
-}: {
+interface MessagesPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+}
+
+export default function MessagesPage(props: MessagesPageProps) {
+  return withMessagesDeadline(() => renderMessagesPage(props));
+}
+
+async function renderMessagesPage({
+  searchParams,
+}: MessagesPageProps) {
   const supabaseReady = hasSupabaseEnv();
   const [viewer, query] = await Promise.all([
     supabaseReady ? getViewer() : null,

@@ -17,6 +17,7 @@ import { LocalDateTime } from "@/components/ui/local-date-time";
 import { requireViewer } from "@/lib/app-data";
 import { getThreadForUser } from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
+import { withMessagesDeadline } from "@/lib/messages-loading";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +43,11 @@ function changed(left: string | null | undefined, right: string | null | undefin
 
 export default async function ThreadPage({ params, searchParams }: ThreadPageProps) {
   const [{ threadId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const viewer = await requireViewer(`/messages/${threadId}`);
-  const detail = await getThreadForUser(threadId, viewer.authUser.id);
+  const { viewer, detail } = await withMessagesDeadline(async () => {
+    const viewer = await requireViewer(`/messages/${threadId}`);
+    const detail = await getThreadForUser(threadId, viewer.authUser.id);
+    return { viewer, detail };
+  });
   if (!detail) notFound();
   const formMessage = getFormMessage(resolvedSearchParams);
   const { offer, latestProposal } = detail;
