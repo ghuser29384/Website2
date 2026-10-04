@@ -61,18 +61,18 @@ export function validateProfileUsername(value: unknown): ProfileUsernameValidati
   const username = normalizeProfileUsername(value);
 
   if (!username) {
-    return { ok: false, message: "Choose a public username before continuing." };
+    return { ok: false, message: "Please choose a public username to continue." };
   }
   if (username.length < PROFILE_USERNAME_MIN_LENGTH) {
     return {
       ok: false,
-      message: `Usernames must contain at least ${PROFILE_USERNAME_MIN_LENGTH} characters.`,
+      message: `Please choose a username with at least ${PROFILE_USERNAME_MIN_LENGTH} characters.`,
     };
   }
   if (username.length > PROFILE_USERNAME_MAX_LENGTH) {
     return {
       ok: false,
-      message: `Usernames must contain at most ${PROFILE_USERNAME_MAX_LENGTH} characters.`,
+      message: `Please keep your username to ${PROFILE_USERNAME_MAX_LENGTH} characters or fewer.`,
     };
   }
   if (!PROFILE_USERNAME_PATTERN.test(username)) {
@@ -83,10 +83,10 @@ export function validateProfileUsername(value: unknown): ProfileUsernameValidati
     };
   }
   if (username.includes("--")) {
-    return { ok: false, message: "Usernames cannot contain consecutive hyphens." };
+    return { ok: false, message: "Please use one hyphen at a time in your username." };
   }
   if (RESERVED_PROFILE_USERNAMES.has(username)) {
-    return { ok: false, message: "That username is reserved. Choose another username." };
+    return { ok: false, message: "That username isn’t available. Please choose another." };
   }
 
   return { ok: true, username };

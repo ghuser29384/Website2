@@ -399,21 +399,21 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await save.click();
     await expect(save).toHaveAttribute("aria-pressed", "false");
     await expect(save).toHaveAttribute("aria-label", "Save offer");
-    await expect(feed.getByRole("status")).toContainText("Could not update saved offers.");
+    await expect(feed.getByRole("status")).toContainText("We couldn’t update your saved offers. Please try again.");
 
     await card.locator('summary[aria-label="Tune this recommendation"]').click();
     const hard = card.getByRole("button", { name: "Hard for me" });
     await hard.click();
     await expect(hard).toHaveAttribute("aria-pressed", "false");
     await expect(feed.getByRole("status")).toContainText(
-      "Could not save that rating. Your feed was not updated.",
+      "We couldn’t save your rating. Your feed is unchanged; please try again.",
     );
 
     await card.getByRole("button", { name: "Show fewer like this" }).click();
     await expect(card).toBeVisible();
     await expect(feed.locator(".mt-feed-empty-inline")).toHaveCount(0);
     await expect(feed.getByRole("status")).toContainText(
-      "Could not hide that opportunity. Your feed was not updated.",
+      "We couldn’t hide that opportunity. Your feed is unchanged; please try again.",
     );
   });
 
@@ -552,7 +552,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     const personalized = page.locator('[data-mt-live-now="adaptive"]');
     await expect(personalized).toHaveAttribute("data-mt-live-now-state", "no_matches");
-    await expect(personalized).toContainText("No open opportunity currently matches your profile.");
+    await expect(personalized).toContainText("No matches for your priorities just yet.");
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );

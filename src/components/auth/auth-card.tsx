@@ -424,7 +424,7 @@ export async function AuthPage({
 
             {!supabaseReady ? (
               <div className={`${styles.statusBanner} ${styles.statusError}`} role="alert">
-                Sign-in is unavailable. Please try again later.
+                We can’t sign you in right now. Please try again later.
               </div>
             ) : null}
 

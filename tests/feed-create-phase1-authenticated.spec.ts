@@ -626,7 +626,7 @@ test.describe.serial("authenticated Feed-to-Create Phase 1", () => {
     await interceptLiveNow(zeroPage, livePayload([]));
     await zeroPage.goto("/feed", { waitUntil: "domcontentloaded" });
     await waitForFeedTerminalState(zeroPage, "no_matches");
-    await expect(zeroPage.getByText(/No open opportunity currently matches your profile/)).toBeVisible();
+    await expect(zeroPage.getByText(/No matches for your priorities just yet/)).toBeVisible();
     await expect(zeroPage.getByRole("link", { name: "Create a trade from this" })).toHaveCount(0);
     const zeroHistory = await zeroPage.evaluate(
       () =>

@@ -381,20 +381,20 @@ test("mixed snapshots render only participant inventory and count only those car
 
 test("legacy template-only snapshots cannot become feed inventory", () => {
   const rendered = renderFeedSnapshot([atlasFixture]);
-  assert.match(rendered, /Your recommendation feed could not load/);
+  assert.match(rendered, /We couldn’t load your suggestions/);
   assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=|Digital-mind welfare research/);
 });
 
 test("empty inventory displays no matches without substituting Atlas templates", () => {
   const rendered = renderFeedSnapshot([], "no_matches");
-  assert.match(rendered, /No open opportunity currently matches your profile/);
+  assert.match(rendered, /No matches for your priorities just yet/);
   assert.match(rendered, /Browse all opportunities/);
   assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=/);
 });
 
 test("unavailable inventory stays unavailable even with legacy suggestions", () => {
   const rendered = renderFeedSnapshot([atlasFixture], "unavailable");
-  assert.match(rendered, /Your recommendation feed could not load/);
+  assert.match(rendered, /We couldn’t load your suggestions/);
   assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=|Digital-mind welfare research/);
 });
 
@@ -430,9 +430,9 @@ test("the mixed visual feed is compact, truthful, reversible, private, and mobil
   assert.match(bridge, /Easy for me/);
   assert.match(bridge, /Hard for me/);
   assert.match(bridge, /Show fewer like this/);
-  assert.match(bridge, /Could not update saved offers/);
-  assert.match(bridge, /Could not save that rating/);
-  assert.match(bridge, /Could not hide that opportunity/);
+  assert.match(bridge, /We couldn’t update your saved offers/);
+  assert.match(bridge, /We couldn’t save your rating/);
+  assert.match(bridge, /We couldn’t hide that opportunity/);
   assert.match(bridge, /card\.hidden = false/);
   assert.match(bridge, /syncReviewedBatchState\(root\)/);
   assert.match(bridge, /Your live routes/);

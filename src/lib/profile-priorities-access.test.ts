@@ -41,7 +41,7 @@ test("profile setup exposes the card outside its form and optional disclosure", 
   assert.ok(cardPosition < setup.indexOf("<form action={completeWalkthroughProfileAction}"));
   assert.ok(cardPosition < setup.indexOf("<details"));
   assert.doesNotMatch(setup, /Advanced priority allocation/);
-  assert.match(setup, /no tour or priority allocation is required/);
+  assert.match(setup, /You can add your priorities and matching preferences whenever you’re ready/);
   assert.doesNotMatch(setup, /name="priority_allocation"/);
 });
 

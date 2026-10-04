@@ -521,7 +521,7 @@
     if (model.status === "signed_out") {
       return {
         eyebrow: "Personal suggestions are private",
-        title: "Sign in to see a feed based on your moral priorities.",
+        title: "Sign in to explore opportunities that fit your priorities.",
         copy: "",
         facts: ["No profile loaded", "No recommendations shown"],
         primaryHref:
@@ -555,7 +555,7 @@
         : "";
       return {
         eyebrow: "Your priorities",
-        title: "No open opportunity currently matches your profile.",
+        title: "No matches for your priorities just yet.",
         copy: causeSummary
           ? `Priorities: ${causeSummary}.` +
             ownListingsCopy
@@ -575,7 +575,7 @@
 
     return {
       eyebrow: "Personal suggestions unavailable",
-      title: "Your recommendation feed could not load.",
+      title: "We couldn’t load your suggestions. Please try again.",
       copy: "",
       facts: ["Profile unavailable", "Recommendations unavailable"],
       primaryHref: "/moral-trade-live.html#now",
@@ -591,13 +591,13 @@
   function publicBrowseMarkup() {
     if (!publicListings) return '<p role="status">Loading current trades…</p>';
     if (publicListings.status === "unavailable") {
-      return '<p role="status">Current trades could not be loaded.</p><a class="btn" href="/discover">Retry in Discover →</a>';
+      return '<p role="status">We couldn’t load the trades. Please try again.</p><a class="btn" href="/discover">Retry in Discover →</a>';
     }
     if (!publicListings.items.length && publicListings.status === "partial") {
-      return '<p role="status">No listings were returned by the sources available right now. Some listing sources could not be loaded.</p><a class="btn" href="/discover">Retry in Discover →</a>';
+      return '<p role="status">We haven’t found trades in the listings we could load. Please try again to check the rest.</p><a class="btn" href="/discover">Retry in Discover →</a>';
     }
     if (!publicListings.items.length) return '<p>No current trades to show.</p><a class="btn" href="/trades/new">Create a trade →</a>';
-    return `${publicListings.status === "partial" ? '<p role="status">Some listing sources are unavailable.</p>' : ""}<div class="mt-public-trades">${publicListings.items.map((item) =>
+    return `${publicListings.status === "partial" ? '<p role="status">We couldn’t load all the listings. Some trades may be missing.</p>' : ""}<div class="mt-public-trades">${publicListings.items.map((item) =>
       `<article class="panel mt-public-trade"><p class="eyebrow">${escapeHtml(item.cause)}</p><h2><a href="${escapeHtml(item.href)}">${escapeHtml(item.title)}</a></h2><div class="mt-public-exchange"><section><h3>You provide</h3><p>${escapeHtml(item.youOffer.join("; "))}</p></section><section><h3>Counterparty provides</h3><p>${escapeHtml(item.youGet.join("; "))}</p></section></div><a class="btn" href="${escapeHtml(item.href)}">Review trade →</a></article>`
     ).join("")}</div><a class="btn" href="/discover">Browse all trades →</a>`;
   }
@@ -834,7 +834,7 @@
     if (!existing) {
       feed.insertAdjacentHTML(
         "beforeend",
-        '<section class="panel mt-feed-empty-inline"><h3>You have reviewed this batch.</h3><p class="muted">Refresh later or adjust your priorities to see a different set.</p></section>',
+        '<section class="panel mt-feed-empty-inline"><h3>You’ve seen all the suggestions in this batch.</h3><p class="muted">Refresh later or adjust your priorities to see a different set.</p></section>',
       );
     }
   }
@@ -869,7 +869,7 @@
           setPreferencePending(card, false);
           if (!result || result.saved !== !saved) {
             setSaveState(target, saved);
-            showToast(root, "Could not update saved offers.");
+            showToast(root, "We couldn’t update your saved offers. Please try again.");
             return;
           }
           showToast(root, saved ? "Removed from saved offers." : "Saved to your offers.");
@@ -899,7 +899,7 @@
               button.setAttribute("aria-pressed", pressed ? "true" : "false");
               button.classList.toggle("is-active", active);
             });
-            showToast(root, "Could not save that rating. Your feed was not updated.");
+            showToast(root, "We couldn’t save your rating. Your feed is unchanged; please try again.");
             return;
           }
           showToast(
@@ -922,7 +922,7 @@
             if (!feedbackEventAccepted(result)) {
               card.hidden = false;
               syncReviewedBatchState(root);
-              showToast(root, "Could not hide that opportunity. Your feed was not updated.");
+              showToast(root, "We couldn’t hide that opportunity. Your feed is unchanged; please try again.");
               return;
             }
             showToast(root, "Removed. Similar opportunities will rank lower.");
@@ -950,7 +950,7 @@
             control.setAttribute("aria-pressed", wasEnabled ? "true" : "false");
             control.textContent = `Use viewing activity: ${wasEnabled ? "on" : "off"}`;
             model.profile.learningEnabled = wasEnabled;
-            showToast(root, "Could not change learning. Your feed was not updated.");
+            showToast(root, "We couldn’t update that preference. Your feed is unchanged; please try again.");
             return;
           }
           showToast(
@@ -979,7 +979,7 @@
           })
           .catch(() => {
             control.removeAttribute("disabled");
-            showToast(root, "Learned signals could not be cleared.");
+            showToast(root, "We couldn’t clear your browsing preferences. Please try again.");
           });
       }
     });

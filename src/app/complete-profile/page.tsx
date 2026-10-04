@@ -85,7 +85,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
       <main id="main-content" tabIndex={-1}>
         {!supabaseReady ? (
           <div className={`${styles.statusBanner} ${styles.statusError}`} role="alert">
-            Account storage is unavailable. Contact support before continuing.
+            We can’t save your profile right now. Please contact us for help before continuing.
           </div>
         ) : null}
 
