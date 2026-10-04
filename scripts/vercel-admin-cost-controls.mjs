@@ -37,7 +37,6 @@ export const PRODUCTION_ROUTE_CHECKS = Object.freeze([
       "Additional resources you caused.",
       "Sign in to view your commitments.",
       "Portfolio",
-      "Ledger",
       "Completed",
       "Calendar",
     ]),
@@ -46,14 +45,14 @@ export const PRODUCTION_ROUTE_CHECKS = Object.freeze([
     requireDeploymentId: true,
   }),
   Object.freeze({
-    name: "ledger",
+    name: "legacy-ledger",
     path: "/commitments?tab=ledger",
     requiredText: Object.freeze([
       "Additional resources you caused.",
       "Sign in to view your commitments.",
     ]),
-    activeHref: "/commitments?tab=ledger",
-    activeLabel: "Ledger",
+    activeHref: "/commitments",
+    activeLabel: "Portfolio",
     requireDeploymentId: true,
   }),
   Object.freeze({

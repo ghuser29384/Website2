@@ -374,8 +374,8 @@ test("Commitments uses the approved single-navigation layout and preserves tab i
   await expect(workspace).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 
-  await page.getByRole("link", { exact: true, name: "Ledger" }).click();
-  await expect(page).toHaveURL(/\/commitments\?tab=ledger/);
+  await page.getByRole("link", { exact: true, name: "Completed" }).click();
+  await expect(page).toHaveURL(/\/commitments\?tab=completed/);
   await waitForMeaningfulSurface(page, "/commitments");
 });
 

@@ -71,7 +71,7 @@ test("private portfolio views use native document links without speculative read
   const page = readFileSync("src/app/commitments/page.tsx", "utf8");
   const controls = page.match(/<CommitmentsDocumentLink\b[^>]*aria-current=[^>]*>/g) ?? [];
   assert.equal(controls.length, 4, "tabs, grouping, and both calendar scopes are covered");
-  assert.ok(page.includes('<CommitmentsDocumentLink href="/commitments?tab=ledger">View all'));
+  assert.doesNotMatch(page, /LedgerView|tab=ledger/);
   assert.doesNotMatch(page, /<Link\b[^>]*aria-current=/);
 
   const source = readFileSync("src/components/commitments/commitments-document-link.tsx", "utf8");
@@ -88,9 +88,9 @@ test("private portfolio views use native document links without speculative read
   const { CommitmentsDocumentLink } = compiledModule.exports as {
     CommitmentsDocumentLink: (props: { href: string; children: string; "aria-current"?: "page" }) => Node;
   };
-  const selected = CommitmentsDocumentLink({ href: "/commitments?tab=ledger", children: "Ledger", "aria-current": "page" });
+  const selected = CommitmentsDocumentLink({ href: "/commitments?tab=completed", children: "Completed", "aria-current": "page" });
   assert.equal(selected.type, "a");
-  assert.deepEqual(selected.props, { href: "/commitments?tab=ledger", children: "Ledger", "aria-current": "page" });
+  assert.deepEqual(selected.props, { href: "/commitments?tab=completed", children: "Completed", "aria-current": "page" });
   const unselected = CommitmentsDocumentLink({ href: "/commitments", children: "Portfolio" });
   assert.equal(unselected.type, "a");
   assert.equal(unselected.props["aria-current"], undefined);
