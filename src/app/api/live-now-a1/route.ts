@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { GET as getReciprocalLiveNow } from "@/app/api/live-now/route";
-import { getViewer } from "@/lib/app-data";
+import { getLiveNowRequestContext } from "@/lib/live-now-request";
 import { buildHybridLiveNowFeed } from "@/lib/live-now-hybrid-feed";
 import { loadAdditionalPublicMechanisms } from "@/lib/live-now-additional-mechanisms";
 import {
@@ -399,8 +399,8 @@ async function attachExternalCandidateDiagnostics(
   };
 }
 
-export async function GET() {
-  const baseResponse = await getReciprocalLiveNow();
+export async function GET(request: Request) {
+  const baseResponse = await getReciprocalLiveNow(request);
   if (!baseResponse.ok) return baseResponse;
 
   let payload: ParetoRuntimePayload;
@@ -413,25 +413,25 @@ export async function GET() {
   if (payload.authenticated !== true || !Array.isArray(payload.recommendations)) {
     return privateJson(payload);
   }
-  const viewer = await getViewer();
-  if (!viewer) return privateJson(payload);
+  const { auth } = await getLiveNowRequestContext(request);
+  if (!auth.ok || !auth.user) return privateJson(payload);
 
   const service = createServiceClient() as any;
   const unified = await augmentWithAdditionalMechanisms({
     payload,
-    profileId: viewer.authUser.id,
+    profileId: auth.user.id,
     service,
   });
   const diagnosed = await attachExternalCandidateDiagnostics(
     unified,
-    viewer.authUser.id,
+    auth.user.id,
     service,
   );
 
   try {
     const enriched = await applyParetoLearningToLiveNowPayload({
       payload: diagnosed,
-      profileId: viewer.authUser.id,
+      profileId: auth.user.id,
     });
     return privateJson(enriched);
   } catch (error) {

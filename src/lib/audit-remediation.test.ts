@@ -108,7 +108,9 @@ test("exact proposal labels identify parties rather than reversing the responden
 test("homepage boot has usable links, bounded independent requests, and no user JSON in document.write", () => {
   const home = source("public/moral-trade-live.html");
   assert.match(home,/<nav class="boot-nav"/);
-  assert.match(home,/setTimeout\(\(\) => controller.abort\(\), 8000\)/);
+  assert.match(home,/timeoutMs = 8000, attempts = 1/);
+  assert.match(home,/setTimeout\(\(\) => controller.abort\(\), timeoutMs\)/);
+  assert.match(home,/timeoutMs: 25000, attempts: 2/);
   assert.doesNotMatch(home,/await Promise.all|accountJson|liveNowJson/);
   assert.ok(home.indexOf("document.close();") < home.indexOf("void accountPromise.then"));
   assert.match(home,/window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ = payload/);

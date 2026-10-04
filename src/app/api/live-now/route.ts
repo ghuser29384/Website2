@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { getViewer } from "@/lib/app-data";
+import { getLiveNowRequestContext } from "@/lib/live-now-request";
 import {
   BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE,
   decryptBackgroundSensitiveText,
@@ -33,7 +33,6 @@ import {
   classifyRoutePrivacyScope,
 } from "@/lib/route-recommendations";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -449,18 +448,20 @@ async function loadPublishedOfferCandidates(
   return candidates;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const cookieStore = await cookies();
   if (!hasSupabaseEnv() || !hasSupabaseAuthCookie(cookieStore)) {
     return privateJson(emptyPayload("signed_out", false));
   }
 
-  const viewer = await getViewer();
-  if (!viewer) return privateJson(emptyPayload("signed_out", false));
-
-  const supabase = await createClient();
+  const { supabase, auth } = await getLiveNowRequestContext(request);
+  if (!auth.ok || !auth.user) {
+    const signedOut = auth.outcome === "missing_identity" ||
+      auth.outcome === "definitive_invalid_or_expired_identity";
+    return privateJson(emptyPayload(signedOut ? "signed_out" : "unavailable", false));
+  }
   const typedSupabase = supabase as any;
-  const userId = viewer.authUser.id;
+  const userId = auth.user.id;
   const checkedAt = new Date();
   const [
     wishProfileResult,

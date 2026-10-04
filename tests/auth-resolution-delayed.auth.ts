@@ -29,6 +29,44 @@ if (!FIXTURE_CONTROL_SECRET) {
 const USER_ID = "fa100000-0000-4000-8000-000000000630";
 const OTHER_USER_ID = "fa100000-0000-4000-8000-000000000631";
 
+test("Feed request verifies once across both layers and re-verifies the next request", async ({ context, request }) => {
+  await resetFixture(request);
+  await setSession(context, await getFixtureSession(request, "fast"));
+  for (const expectedCalls of [1, 2]) {
+    const response = await context.request.get(`${APP_ORIGIN}/api/live-now`);
+    expect(response.ok()).toBeTruthy();
+    expect((await response.json()).authenticated).toBe(true);
+    expect((await getFixtureJson(request, "/__fixture/stats")).fast).toBe(expectedCalls);
+  }
+});
+
+test("Feed request reports a temporary auth timeout as unavailable", async ({ context, request }) => {
+  await resetFixture(request);
+  await enableVerificationGate(request);
+  await setSession(context, await getFixtureSession(request, "delayed"));
+  try {
+    const response = await context.request.get(`${APP_ORIGIN}/api/live-now`);
+    expect(response.ok()).toBeTruthy();
+    const payload = await response.json();
+    expect(payload.status).toBe("unavailable");
+    expect(payload.authenticated).toBe(false);
+    expect(payload.recommendations).toEqual([]);
+  } finally {
+    await resetFixture(request);
+  }
+});
+
+test("Feed request rejects an invalid identity without exposing recommendations", async ({ context, request }) => {
+  await resetFixture(request);
+  await setSession(context, await getFixtureSession(request, "invalid"));
+  const response = await context.request.get(`${APP_ORIGIN}/api/live-now`);
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+  expect(payload.status).toBe("signed_out");
+  expect(payload.authenticated).toBe(false);
+  expect(payload.recommendations).toEqual([]);
+});
+
 type FixtureMode = "delayed" | "expired" | "fast" | "invalid" | "mismatch";
 
 interface FixtureSession {
