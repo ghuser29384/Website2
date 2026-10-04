@@ -261,11 +261,11 @@ export function BackgroundLocalDraftsPanel({ syncDraftAction }: BackgroundLocalD
     } catch {
       await persistDraft({
         ...attempt,
-        lastError: "Draft sync failed before the server accepted it.",
+        lastError: "We couldn’t sync this draft. It hasn’t been saved to your account yet.",
         syncStatus: "failed",
         updatedAt: new Date().toISOString(),
       });
-      setStatus("Draft sync failed; it remains in the retry queue");
+      setStatus("We couldn’t sync your draft yet. It’s still queued for another try.");
     } finally {
       setIsSyncing(false);
     }

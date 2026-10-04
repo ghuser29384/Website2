@@ -273,7 +273,7 @@
           const phrase = answer === "Maximum" ? "under" : answer === "Minimum" ? "at least" : "exactly";
           state.normalizedQuery = state.query.replace(/\bfor\s+(\$\s*[\d,.]+)/i, `${phrase} $1`);
           if (state.normalizedQuery === state.query) {
-            status.textContent = "Edit the search to specify the maximum, minimum, or exact amount.";
+            status.textContent = "Please add a maximum, minimum, or exact amount to your search.";
             input.focus();
             return;
           }
@@ -323,20 +323,20 @@
         return;
       }
       if (data.clarification) {
-        status.textContent = "One detail needs clarification before checking listings.";
+        status.textContent = "A little more detail will help us find relevant trades.";
         showClarification(data.clarification);
         return;
       }
       const availability = data.sourceStatus?.offers;
       if (!["live", "partial", "unavailable"].includes(availability)) throw new Error("contract");
       if (availability === "unavailable") {
-        status.textContent = "Current availability could not be checked.";
-        showPanel("Listings are temporarily unavailable", "This is not a zero-result search. We could not read the current trade directory; no example listings have been substituted.", [button("Retry", () => executeSearch("none"))]);
+        status.textContent = "We couldn’t check current availability. Please try again.";
+        showPanel("We couldn’t load the trades", "Please try again to see current trades. We couldn’t check for matches this time.", [button("Retry", () => executeSearch("none"))]);
         return;
       }
       if (!data.items.every(validOffer) || new Set(data.items.map((item) => item.id)).size !== data.items.length || !Number.isSafeInteger(data.total) || data.total < data.items.length) throw new Error("contract");
       status.textContent = availability === "partial"
-        ? "Only part of the trade directory could be checked. Results below are from the available source; other listings may be missing."
+        ? "We could only load part of the directory. You can browse these results or try again for more."
         : "Current listings checked. Review each trade for its latest availability and conditions.";
       if (data.items.length) {
         results.replaceChildren(...data.items.map(renderOffer));
@@ -350,9 +350,9 @@
         count.textContent = availability === "partial" ? "No matches in the available source" : "0 matching trades";
         showPanel(
           availability === "partial" ? "No matches in the available listings" : state.query || data.constraints?.some((item) => item.key !== "domain") ? "No current trades match" : "No current trades to show",
-          availability === "partial" ? "Some listing sources are unavailable. Retry before concluding that there is no suitable trade."
-            : "Try a different search, post the exchange you want to make, or invite someone to trade. Worked examples are kept separate from available listings.",
-          [button(availability === "partial" ? "Retry" : "Clear search", availability === "partial" ? () => executeSearch("none") : clearSearch), link("Post a trade", "/trades/new", "primary-btn"), link("Invite a counterparty", "/invite", "outline-btn")],
+          availability === "partial" ? "We couldn’t check all the listings. Please try again to look for more matches."
+            : "Try a different search, share the trade you have in mind, or invite someone to join you.",
+          [button(availability === "partial" ? "Retry" : "Clear search", availability === "partial" ? () => executeSearch("none") : clearSearch), link("Post a trade", "/trades/new", "primary-btn"), link("Invite someone", "/invite", "outline-btn")],
         );
       }
       previous.disabled = state.page <= 1;
@@ -362,10 +362,10 @@
     } catch {
       if (requestNumber !== sequence) return;
       status.setAttribute("role", "alert");
-      status.textContent = timedOut ? "The directory took too long to respond." : "Current listings could not be loaded.";
+      status.textContent = timedOut ? "The directory is taking longer than usual. Please try again." : "We couldn’t load the current listings. Please try again.";
       count.textContent = "";
       results.replaceChildren();
-      showPanel("Unable to check current trades", "Your search is still here. Retry to check live records. No agreement or payment has been created.", [button("Retry", () => executeSearch("none"))]);
+      showPanel("We couldn’t check for trades", "Your search is still here. Please try again to see current trades. No agreement or payment has been created.", [button("Retry", () => executeSearch("none"))]);
     } finally {
       clearTimeout(timer);
       if (requestNumber === sequence) region.setAttribute("aria-busy", "false");

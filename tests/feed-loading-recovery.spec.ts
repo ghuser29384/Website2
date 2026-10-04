@@ -32,10 +32,10 @@ test("a response arriving after eight seconds still renders without reloading", 
   });
   await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
   await expect(page.locator("#app")).toBeVisible();
-  await page.waitForTimeout(8500);
-  await expect(page.getByText("Your recommendation feed could not load.")).toHaveCount(0);
-  release();
   const feed = page.locator('[data-mt-live-now="adaptive"]');
+  await page.waitForTimeout(8500);
+  await expect(feed).not.toHaveAttribute("data-mt-live-now-state", "unavailable");
+  release();
   await expect(feed).toHaveAttribute("data-mt-live-now-state", "ready");
   await expect(feed.getByRole("heading", { name: "Animal welfare", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Plan resources", exact: true }).click();

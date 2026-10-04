@@ -254,8 +254,8 @@ test.describe("Bottleneck Atlas and live inventory feed", () => {
       const feed = page.locator('[data-mt-live-now="adaptive"]');
       await expect(feed).toHaveAttribute("data-mt-live-now-state", legacyOnly ? "unavailable" : "no_matches");
       await expect(feed).toContainText(legacyOnly
-        ? "Your recommendation feed could not load."
-        : "No open opportunity currently matches your profile.");
+        ? "We couldn’t load your suggestions. Please try again."
+        : "No matches for your priorities just yet.");
       await expect(page.locator(".mt-feed-card")).toHaveCount(0);
       await expect(page.getByText("Stronger AI-governance execution")).toHaveCount(0);
     });

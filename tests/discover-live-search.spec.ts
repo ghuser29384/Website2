@@ -130,7 +130,7 @@ test("failed retrieval removes stale action links, preserves the query and retri
   fails = true;
   await page.locator("#command-input").fill("research");
   await page.locator("#command-input").press("Enter");
-  await expect(page.getByRole("heading", { name: "Unable to check current trades" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "We couldn’t check for trades" })).toBeVisible();
   await expect(page.locator('[data-live-record="true"]')).toHaveCount(0);
   await expect(page.locator(".result-count")).toBeEmpty();
   await expect(page.locator("#command-input")).toHaveValue("research");
@@ -145,12 +145,12 @@ for (const availability of ["live", "partial", "unavailable"]) {
     await page.goto("/discover");
     await expect(page.locator('[data-live-record="true"]')).toHaveCount(0);
     if (availability === "unavailable") {
-      await expect(page.getByRole("heading", { name: "Listings are temporarily unavailable" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "We couldn’t load the trades" })).toBeVisible();
       await expect(page.locator(".result-count")).toBeEmpty();
-      await expect(page.locator("body")).toContainText("This is not a zero-result search");
+      await expect(page.locator("body")).toContainText("We couldn’t check for matches this time");
     } else if (availability === "partial") {
       await expect(page.locator(".result-count")).toHaveText("No matches in the available source");
-      await expect(page.locator("#search-status")).toContainText("other listings may be missing");
+      await expect(page.locator("#search-status")).toContainText("We could only load part of the directory");
     } else {
       await expect(page.locator(".result-count")).toHaveText("0 matching trades");
       await expect(page.getByRole("heading", { name: "No current trades to show" })).toBeVisible();
@@ -202,7 +202,7 @@ for (const href of ["javascript:alert(1)", "https://example.org/steal", "/offers
   test(`unsafe or worked-example destination is not rendered: ${href}`, async ({ page }) => {
     await mockInventory(page, (body) => responseFor(body, { items: [{ ...liveOffer(), href }] }));
     await page.goto("/discover");
-    await expect(page.getByRole("heading", { name: "Unable to check current trades" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "We couldn’t check for trades" })).toBeVisible();
     await expect(page.locator('[data-live-record="true"]')).toHaveCount(0);
   });
 }

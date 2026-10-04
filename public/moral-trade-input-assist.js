@@ -890,7 +890,7 @@
     panel.className = "mt-input-assist-panel";
     panel.hidden = true;
     panel.setAttribute("role", "listbox");
-    panel.setAttribute("aria-label", "Suggested completions");
+    panel.setAttribute("aria-label", "Suggestions");
     panel.addEventListener("pointerdown", (event) => event.preventDefault());
     document.body.appendChild(panel);
     suggestionPanel = panel;
@@ -975,18 +975,18 @@
     const heading = document.createElement("div");
     heading.className = "mt-input-assist-heading";
     const title = document.createElement("strong");
-    title.textContent = "Suggested completions";
+    title.textContent = "Suggestions";
     const hint = document.createElement("span");
     hint.textContent = searchSubmitsOnEnter(control)
       ? "↑↓ choose · Enter search · Esc close"
-      : "↑↓ choose · Enter use · Esc close";
+      : "↑↓ choose · Enter select · Esc close";
     heading.append(title, hint);
     panel.appendChild(heading);
 
     if (!activeResults.length) {
       const empty = document.createElement("p");
       empty.className = "mt-input-assist-empty";
-      empty.textContent = "No standardized match yet. Custom text is fine.";
+      empty.textContent = "No matching suggestions yet. You can write your own.";
       panel.appendChild(empty);
     } else {
       activeResults.forEach((suggestion, index) => {

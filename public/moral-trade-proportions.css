@@ -9,10 +9,58 @@
   width: min(calc(100% - 2 * var(--mt-page-gutter)), var(--content-width));
 }
 
+/* The legacy app frame must not clip the full-bleed masthead or its menus. */
+.page-shell.marketplace-app-shell {
+  min-width: 0;
+  max-width: var(--content-width);
+  margin-inline: auto;
+  padding-inline: 0;
+  overflow: visible;
+}
+
+.page-shell > .v72-route-header {
+  padding-top: 0;
+}
+
+.mt-site-topbar.mt-refined-header {
+  padding-inline: max(var(--mt-page-gutter), calc((100vw - var(--content-width)) / 2));
+}
+
+.page-shell :is(.section-head, .section-head-compact, .legal-page, .page-hero-content, .data-card) h1 {
+  max-width: 30ch;
+  font-size: clamp(30px, 3.2vw, 44px);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.page-shell .legal-page h1 {
+  max-width: 100%;
+}
+
+.page-shell :is(.legal-page, .data-card) h2 {
+  font-size: clamp(24px, 2.3vw, 30px);
+  line-height: 1.2;
+}
+
+.page-shell .section-head {
+  margin-bottom: 24px;
+}
+
 .hero > .hero-grid .hero-copy {
   min-height: 0;
   padding: clamp(24px, 4vw, 48px);
   align-content: center;
+}
+
+/* These already have a padded hero; avoid padding the inner copy a second time. */
+[data-mt-surface="connectors"] > section:first-child > div:first-child {
+  padding: 0;
+}
+
+[data-mt-surface="connectors"] [class*="heroFacts"] {
+  align-self: start;
+  padding: 20px 24px;
 }
 
 .hero > .hero-grid .hero-copy :is(h1, h2),
