@@ -183,13 +183,6 @@ async function mountPlanner(
   return { posts };
 }
 
-async function openPreferences(page: Page) {
-  const details = page.locator('[data-mt-lrp-disclosure="preferences"]');
-  if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) {
-    await details.locator("summary").click();
-  }
-}
-
 test.describe("live route recommendation planner", () => {
   test("saves the progressive composer and refreshes the authoritative routePlanner in place", async ({
     page,
@@ -244,98 +237,40 @@ test.describe("live route recommendation planner", () => {
     await expect(page.locator(".alloc:visible")).toHaveCount(0);
   });
 
-  test("records a hypothetical comparison as preference-only structured input", async ({ page }) => {
-    const withComparison = readyPlanner({
+  test("keeps saved preferences without the extra preference tools", async ({ page }) => {
+    const savedProfile = profile({
+      calibrationCount: 2,
+      interviewCompleted: true,
+      evidencePreference: "standard",
+      uncertaintyPreference: "conservative",
+      interactionPreference: "solo",
+      privacyPreference: "private",
+    });
+    const savedPlanner = readyPlanner({
+      profile: savedProfile,
       comparison: {
-        key: "route-format:direct:personal",
-        left: {
-          title: "Fund one evidence review",
-          format: "direct",
-          detail: "$20 and about 30 minutes",
-        },
-        right: {
-          title: "Try a 30-day personal action",
-          format: "personal",
-          detail: "$0 and short weekly check-ins",
-        },
-        answeredCount: 0,
+        key: "direct:personal",
+        left: { title: "Donate", format: "direct", detail: "$20" },
+        right: { title: "Take an action", format: "personal", detail: "30 minutes" },
+        answeredCount: 2,
         targetCount: 5,
         hypothetical: true,
       },
     });
-    const { posts } = await mountPlanner(page, withComparison, (payload) =>
-      payload.action === "answer_comparison"
-        ? readyPlanner({ profile: profile({ calibrationCount: 1 }), comparison: undefined })
-        : withComparison,
-    );
-
-    await openPreferences(page);
-    await page.getByRole("button", { name: "Compare two options" }).click();
-    const dialog = page.getByRole("dialog", { name: "Which works better for you?" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText("Hypothetical — not a live offer");
-    await expect(dialog.locator("a")).toHaveCount(0);
-    await dialog.getByRole("button", { name: "About equal" }).click();
-
-    await expect(page.getByText("1 comparison saved", { exact: false })).toBeVisible();
-    expect(posts[0]).toEqual({
-      action: "answer_comparison",
-      answer: {
-        key: "route-format:direct:personal",
-        leftFormat: "direct",
-        rightFormat: "personal",
-        choice: "equal",
-      },
-    });
-  });
-
-  test("reviews and confirms the guided interview before posting it", async ({ page }) => {
-    const { posts } = await mountPlanner(page, readyPlanner(), (payload) =>
-      payload.action === "save_interview"
-        ? readyPlanner({
-            profile: profile({
-              goal: "Improve global health",
-              interviewCompleted: true,
-            }),
-          })
-        : readyPlanner(),
-    );
-
-    await openPreferences(page);
-    await page.getByRole("button", { name: "Help with my goal" }).click();
-    const dialog = page.getByRole("dialog", { name: "Tell us what should change." });
-    await dialog.getByLabel("Desired change").fill("Improve global health");
-    await dialog.getByLabel("Cause area used for matching").fill("Global health");
-    await dialog
-      .getByLabel("Without a trade, what happens?")
-      .fill("I make no additional health donation this month.");
-    const evidence = dialog.getByLabel("Evidence");
-    await expect(
-      evidence.getByRole("option", { name: "Connected proof — no eligible inventory yet" }),
-    ).toHaveAttribute("disabled", "");
-    await evidence.selectOption("standard");
-    await dialog.getByLabel("Privacy").selectOption("private");
-    await dialog.getByRole("button", { name: "Review answers" }).click();
-
-    await expect(dialog.getByText("Check the structured profile")).toBeVisible();
-    await expect(dialog.getByText("Improve global health", { exact: true })).toBeVisible();
-    expect(posts).toHaveLength(0);
-    await dialog.getByRole("button", { name: "Confirm profile" }).click();
-
-    await expect(page.getByText("Interview confirmed. Routes refreshed.", { exact: true })).toBeVisible();
+    const { posts } = await mountPlanner(page, savedPlanner, () => savedPlanner);
+    await expect(page.getByText("Refine preferences", { exact: true })).toHaveCount(0);
+    await expect(page.locator(".mt-lrp-tools, .mt-lrp-dialog")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Help with my goal|Compare two options|Reset comparisons/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "Update routes", exact: true }).click();
+    await expect(page.locator(".mt-lrp-composer [role=status]")).toHaveText("Routes updated from live sources.");
     expect(posts).toHaveLength(1);
-    expect(posts[0]).toEqual({
-      action: "save_interview",
-      interview: {
-        goal: "Improve global health",
-        causePriorities: ["Global health"],
-        otherwiseBaseline: "I make no additional health donation this month.",
-        evidencePreference: "standard",
-        uncertaintyPreference: "balanced",
-        interactionPreference: "open",
-        privacyPreference: "private",
-      },
+    expect(posts[0].profile).toMatchObject({
+      evidencePreference: "standard",
+      uncertaintyPreference: "conservative",
+      interactionPreference: "solo",
+      privacyPreference: "private",
     });
+    await expect(page.locator(".mt-lrp-tools, .mt-lrp-dialog")).toHaveCount(0);
   });
 
   test("renders at most three result cards and links only sanitized live sources", async ({ page }) => {
@@ -426,39 +361,13 @@ test.describe("live route recommendation planner", () => {
     );
   });
 
-  test("keeps the planner and comparison dialog within a 390px viewport", async ({ page }) => {
+  test("keeps the planner within a 390px viewport without an empty tools row", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    const withComparison = readyPlanner({
-      comparison: {
-        key: "threshold:coalition:v1",
-        left: {
-          title: "Join a verified threshold pool with a longer descriptive title",
-          format: "threshold",
-          detail: "Contribute only if the activation terms are met.",
-        },
-        right: {
-          title: "Invite one compatible person to coordinate",
-          format: "coalition",
-          detail: "Create an invitation; this example itself is not live.",
-        },
-        answeredCount: 2,
-        targetCount: 5,
-        hypothetical: true,
-      },
-    });
-    await mountPlanner(page, withComparison);
-
-    let overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    await mountPlanner(page, readyPlanner());
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(1);
-    await openPreferences(page);
-    await page.getByRole("button", { name: "Compare two options" }).click();
-    await expect(page.getByRole("dialog", { name: "Which works better for you?" })).toBeVisible();
-    overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    expect(overflow).toBeLessThanOrEqual(1);
-    const box = await page.getByRole("dialog").boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    await expect(page.locator(".plan-grid.mt-lrp-layout")).toHaveCSS("grid-template-areas", '"composer" "results"');
+    await expect(page.locator(".mt-lrp-tools, .mt-lrp-dialog")).toHaveCount(0);
   });
 
   test("reveals an invalid collapsed field and keeps input-only planning free of status clutter", async ({ page }) => {
@@ -466,7 +375,7 @@ test.describe("live route recommendation planner", () => {
     const options = page.locator('[data-mt-lrp-disclosure="options"]');
     const preferences = page.locator('[data-mt-lrp-disclosure="preferences"]');
     await expect(options).not.toHaveAttribute("open", "");
-    await expect(preferences).not.toHaveAttribute("open", "");
+    await expect(preferences).toHaveCount(0);
     await expect(page.locator(".mt-lrp-truth-card, .mt-lrp-tool-card")).toHaveCount(0);
     await options.locator("summary").click();
     await page.getByLabel("Maximum actions").fill("");
