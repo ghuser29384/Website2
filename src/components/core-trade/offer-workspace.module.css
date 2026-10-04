@@ -102,3 +102,10 @@
 @media (max-width: 420px) {
   .page .header :global(.topbar-links) { gap: 10px !important; flex-wrap: wrap; }
 }
+.page[data-offer-workspace] .main .invitationActions > div { min-width: 0; }
+.page[data-offer-workspace] .main .invitationActions :global(.form-actions) { display: grid; grid-template-columns: repeat(4, max-content); }
+@media (max-width: 760px) {
+  .page[data-offer-workspace] .main .invitationActions > div { width: 100%; }
+  .page[data-offer-workspace] .main .invitationActions :global(.form-actions) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page[data-offer-workspace] .main .invitationActions :global(.form-actions) > * { width: 100%; min-width: 0; }
+}
