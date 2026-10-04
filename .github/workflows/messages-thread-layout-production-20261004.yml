@@ -1,0 +1,56 @@
+name: Messages thread layout production 2026-10-04
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/messages-thread-layout-production-20261004.yml
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: messages-thread-layout-production-20261004
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact release candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify approved Messages layout source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object 'src/app/messages/[threadId]/page.tsx')" = 'ba2d4cfe81ee360854264669e062422b0766784f'
+          test "$(git hash-object 'src/app/messages/[threadId]/thread.module.css')" = '9f380f53632468fb44257f04ced218b2ccb8795f'
+          git diff --check HEAD^
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+
+      - name: Dispatch the existing gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml" --jq .state)" = 'active'
+          jq -n --arg sha "$GITHUB_SHA" \
+            '{ref:"main",inputs:{ref:"main",target:"production",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+                --input - >/dev/null

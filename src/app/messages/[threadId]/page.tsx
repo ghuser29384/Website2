@@ -18,6 +18,7 @@ import { requireViewer } from "@/lib/app-data";
 import { getThreadForUser } from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import styles from "./thread.module.css";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -75,7 +76,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
   ] as const;
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className={`page-shell marketplace-app-shell ${styles.page}`}>
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
@@ -97,7 +98,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
           </div>
         ) : null}
 
-        <section className="section section-white" aria-labelledby="thread-heading">
+        <section className={`section section-white ${styles.thread}`} aria-labelledby="thread-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Private counterparty thread</p>
             <h1 id="thread-heading">
@@ -110,20 +111,24 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
           </div>
 
           {detail.agreementId ? (
-            <div className="status-banner status-banner-success">
-              <strong>Agreement record exists</strong>
-              <p>Negotiated terms moved into an immutable bilateral agreement version.</p>
+            <div className={`status-banner status-banner-success ${styles.agreement}`}>
+              <div>
+                <strong>Agreement record exists</strong>
+                <p>Negotiated terms moved into an immutable bilateral agreement version.</p>
+              </div>
               <Link className="button button-primary button-mini" href={`/trade-agreements/${detail.agreementId}`}>
                 Open agreement
               </Link>
             </div>
           ) : null}
 
-          <div className="detail-grid detail-grid-wide">
-            <article className="panel detail-block">
-              <p className="detail-kicker">Conversation</p>
-              <h2>{detail.messages.length} message{detail.messages.length === 1 ? "" : "s"}</h2>
-              <div className="mini-list">
+          <div className={styles.layout}>
+            <article className={`panel detail-block ${styles.conversation}`}>
+              <div className={styles.panelHeading}>
+                <p className="detail-kicker">Conversation</p>
+                <h2>{detail.messages.length} message{detail.messages.length === 1 ? "" : "s"}</h2>
+              </div>
+              <div className={styles.messages}>
                 {detail.messages.length ? (
                   detail.messages.map((message) => {
                     const senderId = message.sender_id ? String(message.sender_id) : null;
@@ -134,10 +139,10 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
                           ? "You"
                           : detail.counterpart?.display_name ?? "Counterparty";
                     return (
-                      <div className="panel subtle-panel" key={message.id}>
-                        <div className="tag-row">
-                          <span className="badge">{senderLabel}</span>
-                          <span className="source-pill">{formatDate(String(message.created_at))}</span>
+                      <div className={styles.message} key={message.id}>
+                        <div className={styles.messageMeta}>
+                          <strong>{senderLabel}</strong>
+                          <span>{formatDate(String(message.created_at))}</span>
                         </div>
                         <p className="route-text">{message.body}</p>
                       </div>
@@ -149,7 +154,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
               </div>
 
               {!detail.blocked ? (
-                <form action={sendTradeMessageAction} className="stack-form">
+                <form action={sendTradeMessageAction} className={`stack-form ${styles.composer}`}>
                   <input name="thread_id" type="hidden" value={threadId} />
                   <label className="field">
                     <span>Message</span>
@@ -170,11 +175,13 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
               )}
             </article>
 
-            <aside className="panel detail-block">
-              <p className="detail-kicker">Current negotiable version</p>
-              <h2>
-                {latestProposal ? `Counterproposal v${latestProposal.version}` : "Published offer terms"}
-              </h2>
+            <aside className={`panel detail-block ${styles.terms}`}>
+              <div className={styles.panelHeading}>
+                <p className="detail-kicker">Current negotiable version</p>
+                <h2>
+                  {latestProposal ? `Counterproposal v${latestProposal.version}` : "Published offer terms"}
+                </h2>
+              </div>
               {latestProposal ? (
                 <div className="tag-row">
                   <span className="badge">{latestProposal.status}</span>
@@ -183,7 +190,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
                   </span>
                 </div>
               ) : null}
-              <dl className="detail-grid">
+              <dl className={styles.termList}>
                 <div>
                   <dt>Action A</dt>
                   <dd>{current.proposed_action}</dd>
