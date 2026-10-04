@@ -102,8 +102,8 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
       await page.goto(`${origin}${entry}`);
       await expect(page).toHaveURL(`${origin}/dashboard`);
       await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
-      await expect(page).toHaveTitle(/Dashboard/);
-      const tools = page.getByRole("navigation", { name: "Dashboard controls" });
+      await expect(page).toHaveTitle(/Profile/);
+      const tools = page.getByRole("navigation", { name: "Profile controls" });
       await expect(tools.getByRole("link", { name: "Priorities", exact: true })).toHaveAttribute("aria-current", "page");
       await expect(page.locator('input[name="priority_allocation"]')).toHaveValue(serializeProfilePriorityAllocation(allocation(4)));
       await expect(page.locator("#dashboard-overview")).toHaveCount(0);
@@ -134,7 +134,7 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     await page.goto(`${origin}/profile?view=controls#payment-setup`);
     await expect(page).toHaveURL(`${origin}/dashboard?view=controls#payment-setup`);
     await expect(page.locator("#payment-setup")).toBeVisible();
-    await page.getByRole("navigation", { name: "Dashboard controls" }).getByRole("link", { name: "Priorities", exact: true }).click();
+    await page.getByRole("navigation", { name: "Profile controls" }).getByRole("link", { name: "Priorities", exact: true }).click();
     await expect(page).toHaveURL(`${origin}/dashboard`);
     await expect(page.getByRole("heading", { name: "Priorities", exact: true })).toBeVisible();
   });
@@ -143,7 +143,7 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     await signIn(context);
     await page.goto(`${origin}/dashboard`);
     await page.getByRole("button", { name: `Increase ${priority.name}`, exact: true }).click();
-    const tools = page.getByRole("navigation", { name: "Dashboard controls" });
+    const tools = page.getByRole("navigation", { name: "Profile controls" });
     await expect(tools.locator("summary")).toHaveCount(0);
     const payment = tools.getByRole("link", { name: "Payment setup", exact: true });
     await expect(payment).toHaveAttribute("href", "/dashboard/payments");
@@ -200,7 +200,7 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     await page.goto(`${origin}/dashboard`);
     await expect(page.getByRole("alert").filter({ hasText: "Existing priority data could not be loaded" })).toBeVisible();
     await expect(page.locator('input[name="priority_allocation"]')).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Dashboard controls" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Profile controls" })).toBeVisible();
     unavailable = false;
     await page.reload();
     await expect(page.locator('input[name="priority_allocation"]')).toHaveValue(serializeProfilePriorityAllocation(allocation(4)));
@@ -216,7 +216,7 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
   test("every secondary toolbar destination and legacy section remains visible", async ({ page, context }) => {
     await signIn(context);
     await page.goto(`${origin}/dashboard`);
-    const tools = page.getByRole("navigation", { name: "Dashboard controls" });
+    const tools = page.getByRole("navigation", { name: "Profile controls" });
     await expect(tools.getByRole("link", { name: "Profile details" })).toHaveAttribute("href", "/complete-profile");
     await tools.getByRole("link", { name: "More controls" }).click();
     await expect(page).toHaveURL(/\/dashboard\?view=controls$/);

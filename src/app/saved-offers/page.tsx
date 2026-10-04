@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 
 import { toggleCartAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";

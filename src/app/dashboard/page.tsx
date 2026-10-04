@@ -111,7 +111,7 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { hasStripeEnv } from "@/lib/stripe";
 
 export const metadata: Metadata = {
-  title: "Dashboard",
+  title: "Profile",
   robots: {
     index: false,
     follow: false,

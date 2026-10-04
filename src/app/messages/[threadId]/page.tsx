@@ -99,7 +99,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
 
         <section className="section section-white" aria-labelledby="thread-heading">
           <div className="section-head section-head-compact">
-            <p className="eyebrow">Private counterparty thread</p>
+            <Link href="/messages">Back to Messages</Link>
             <h1 id="thread-heading">
               {offer.offered_cause} ↔ {offer.requested_cause}
             </h1>
@@ -111,8 +111,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
 
           {detail.agreementId ? (
             <div className="status-banner status-banner-success">
-              <strong>Agreement record exists</strong>
-              <p>Negotiated terms moved into an immutable bilateral agreement version.</p>
+              <strong>Agreement created</strong>
               <Link className="button button-primary button-mini" href={`/trade-agreements/${detail.agreementId}`}>
                 Open agreement
               </Link>

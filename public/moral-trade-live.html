@@ -58,13 +58,19 @@
         // are bounded; failures stay unavailable, not fabricated signed-out data.
         async function readJson(url, fallback) {
           const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 8000);
+          let timer;
+          const deadline = new Promise((resolve) => {
+            timer = setTimeout(() => { resolve(fallback); controller.abort(); }, 8000);
+          });
           try {
-            const response = await fetch(url, { credentials: 'same-origin',
-              headers: { Accept: 'application/json' }, signal: controller.signal });
-            if (!response.ok) return fallback;
-            const payload = await response.json();
-            return payload && typeof payload === 'object' ? payload : fallback;
+            const request = (async () => {
+              const response = await fetch(url, { credentials: 'same-origin',
+                headers: { Accept: 'application/json' }, signal: controller.signal });
+              if (!response.ok) return fallback;
+              const payload = await response.json();
+              return payload && typeof payload === 'object' ? payload : fallback;
+            })();
+            return await Promise.race([request, deadline]);
           } catch { return fallback; }
           finally { clearTimeout(timer); }
         }

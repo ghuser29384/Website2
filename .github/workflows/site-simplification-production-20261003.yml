@@ -1,10 +1,10 @@
-name: Site simplification validation and production 2026-10-03
+name: Site cleanup validation and production 2026-10-04
 
 on:
   push:
     branches:
       - main
-      - codex/site-simplification
+      - codex/site-cleanup-20261004
     paths:
       - .github/workflows/site-simplification-production-20261003.yml
 
@@ -12,12 +12,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: site-simplification-production-20261003-${{ github.ref }}
+  group: site-cleanup-production-20261004-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/codex/site-simplification'
+    if: github.ref == 'refs/heads/codex/site-cleanup-20261004'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -93,6 +93,11 @@ jobs:
           test "$(git hash-object src/lib/create-interface/common-ground-integration.ts)" = '32ef9425e15554420d76366df7b22a1a6284d608'
           test "$(git hash-object src/app/saved-offers/page.tsx)" = '03b51853e3ae03a9ec1ef897adfe094f90bf846a'
           test "$(git hash-object src/app/wish-registry/page.tsx)" = '9f3a85b1f97b8e8d92fcdff276545a38b49d90c4'
+          test "$(git hash-object public/moral-trade-live.html)" = '57fb7aad962c43164788adafd98d9e5f253ec011'
+          test "$(git hash-object src/app/messages/page.tsx)" = 'cc2bedfa54a0fbd2b325704844ed238ed3af1176'
+          test "$(git hash-object src/components/layout/site-link.tsx)" = '386db5418b18767417d47a2c24e0816e4b794c67'
+          test "$(git hash-object src/components/dashboard/dashboard-tools.tsx)" = '89dabaf5a1997de52bb7b7709e74a14bf6b8647f'
+          test "$(git hash-object src/lib/site.ts)" = '0ce1022d1aa109cc6f20a034e7677b049a37f16c'
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_sha" = "$GITHUB_SHA"
