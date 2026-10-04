@@ -1,6 +1,14 @@
 name: Route planner simplification production 2026-10-04
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - public/moral-trade-live-route-recommendations.js
+      - public/moral-trade-live-route-planner-compact.css
+      - src/live-now-data.test.ts
+      - tests/exact-live-route-recommendations.spec.ts
+      - .github/workflows/route-planner-simplification-production-20261004.yml
   push:
     branches:
       - main
@@ -12,11 +20,44 @@ permissions:
   contents: read
 
 concurrency:
-  group: route-planner-simplification-production-20261004
+  group: route-planner-simplification-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify repository and production build
+        env:
+          VERCEL: '1'
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+        run: |
+          npm test
+          node --import tsx --test src/live-now-data.test.ts
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Verify route planner interactions and responsive layout
+        env:
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: '1'
+        run: npx playwright test tests/exact-live-route-recommendations.spec.ts --reporter=line
   dispatch:
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
