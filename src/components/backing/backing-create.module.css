@@ -12,7 +12,7 @@
   min-width: 0;
   align-content: center;
   gap: 1.25rem;
-  padding: clamp(2rem, 5vw, 5rem);
+  padding: clamp(1.25rem, 3vw, 2.5rem);
 }
 
 .heroCopy {
@@ -20,14 +20,14 @@
 }
 
 .heroCopy h1 {
-  max-width: 10ch;
+  max-width: 22ch;
   margin: 0;
   overflow-wrap: anywhere;
   font-family: var(--font-heading);
-  font-size: clamp(3.6rem, 6.4vw, 6.8rem);
+  font-size: clamp(2rem, 3.5vw, 3rem);
   font-weight: 500;
   letter-spacing: -0.06em;
-  line-height: 0.9;
+  line-height: 1.1;
 }
 
 .heroBody {
@@ -111,7 +111,7 @@
   max-width: 15ch;
   margin: 0.65rem 0 0;
   font-family: var(--font-heading);
-  font-size: clamp(2.75rem, 5vw, 5rem);
+  font-size: clamp(1.75rem, 2.8vw, 2.25rem);
   font-weight: 500;
   letter-spacing: -0.055em;
   line-height: 0.94;
@@ -434,7 +434,7 @@
 
   .heroCopy h1 {
     max-width: 100%;
-    font-size: clamp(2.65rem, 12.75vw, 4rem);
+    font-size: clamp(2rem, 6vw, 2.5rem);
   }
 
   .section {
