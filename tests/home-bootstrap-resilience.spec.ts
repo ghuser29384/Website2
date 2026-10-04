@@ -54,11 +54,17 @@ test("failed optional sources show unavailable rather than demo records",async({
 });
 
 test("a stalled feed reaches an unavailable state within its bounded wait",async({page})=>{
+  test.setTimeout(65_000);
+  let attempts = 0;
   await page.route("**/api/live-account",route=>route.fulfill({contentType:"application/json",body:JSON.stringify({authenticated:false})}));
-  await page.route("**/api/live-now",()=>{});
+  await page.route("**/api/live-now",()=>{ attempts += 1; });
   await page.goto("/",{waitUntil:"commit"});
   await expect(page.locator('header [data-mt-primary-links]')).toBeVisible();
-  await expect(page.locator('[data-mt-live-now-state="unavailable"]')).toBeVisible({timeout:12000});
+  // Two 25-second reads and a 500ms backoff must still end in an honest error state.
+  await expect(page.locator('[data-mt-live-now-state="unavailable"]')).toBeVisible({timeout:55_000});
+  expect(attempts).toBe(2);
+  await expect(page.locator('[data-mt-live-now-recommendation]')).toHaveCount(0);
+  await expect(page.locator('header [data-mt-primary-links]')).toBeVisible();
 });
 
 test("a failed core download keeps escape links and a retry explanation",async({page})=>{

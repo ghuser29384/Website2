@@ -35,6 +35,10 @@ jobs:
           assert.ok(source.includes('timeoutMs: 25000, attempts: 2'));
           const route = readFileSync('src/app/api/live-now-a1/route.ts', 'utf8');
           assert.ok(route.includes('getLiveNowRequestContext(request)'));
+          // Resume the already-approved runtime release after its stale timeout assertion is repaired.
+          const boundedWaitTest = readFileSync('tests/home-bootstrap-resilience.spec.ts', 'utf8');
+          assert.ok(boundedWaitTest.includes('expect(attempts).toBe(2)'));
+          assert.ok(boundedWaitTest.includes('timeout:55_000'));
           JS
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"

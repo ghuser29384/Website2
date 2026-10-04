@@ -401,6 +401,17 @@ jobs:
             | tee "$RELEASE_EVIDENCE_DIR/published-critical-asset.sha256"
           echo 'verified=true' >> "$GITHUB_OUTPUT"
 
+      - name: Upload rendered browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-release-failure-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload immutable release evidence
         if: always()
         uses: actions/upload-artifact@v4
