@@ -48,7 +48,7 @@ test("the live shell loads private recommendations without blocking navigation",
 test("the live-now endpoint combines explicit priorities, browsing, actions, and multiple opportunity types", () => {
   assert.match(route, /hasSupabaseEnv\(\)/);
   assert.match(route, /hasSupabaseAuthCookie\(cookieStore\)/);
-  assert.match(route, /getViewer\(\)/);
+  assert.match(route, /getLiveNowRequestContext\(request\)/);
   assert.match(route, /from\("wish_profiles"\)/);
   assert.match(route, /from\("saved_searches"\)/);
   assert.match(route, /from\("cohort_onboarding_profiles"\)/);
