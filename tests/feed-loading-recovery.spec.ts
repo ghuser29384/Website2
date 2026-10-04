@@ -47,6 +47,13 @@ test("a response arriving after eight seconds still renders without reloading", 
 for (const failure of ["http", "auth-unavailable"] as const) {
   test(`automatically recovers from a temporary ${failure} failure`, async ({ page }) => {
     let calls = 0;
+    // A quick API failure used to schedule its retry before document.open(),
+    // which clears timers when the slightly slower shell replaces the document.
+    await page.route("**/moral-trade-live-core.txt", async (route) => {
+      const response = await route.fetch();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await route.fulfill({ response });
+    });
     await page.route("**/api/live-now", (route) => {
       calls += 1;
       return route.fulfill(calls === 1

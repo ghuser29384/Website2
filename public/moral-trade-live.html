@@ -81,12 +81,6 @@
           }
           return latest;
         }
-        const accountPromise = readJson('/api/live-account', { status: 'unavailable' });
-        // The server's identity check alone can take eight seconds; leave room
-        // for inventory/ranking and retry temporary failures without blocking navigation.
-        const liveNowPromise = readJson('/api/live-now', unavailableLiveNow(), {
-          timeoutMs: 25000, attempts: 2,
-        });
         const coreController = new AbortController();
         const coreTimer = setTimeout(() => coreController.abort(), 8000);
         let raw;
@@ -149,6 +143,13 @@
         document.write(enhancedSource);
         document.close();
 
+        // document.open() clears the previous document's timers. Start optional
+        // reads here so their abort deadlines and retry delays survive boot.
+        const accountPromise = readJson('/api/live-account', { status: 'unavailable' });
+        // Leave room for the identity check and inventory/ranking, then retry once.
+        const liveNowPromise = readJson('/api/live-now', unavailableLiveNow(), {
+          timeoutMs: 25000, attempts: 2,
+        });
         const shellReady = document.readyState === 'loading'
           ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
           : Promise.resolve();

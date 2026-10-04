@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs, StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import { readPublicData } from "@/lib/public-read-deadline";
 import { formatMode } from "@/lib/offers";
 import {
   getActionEvidenceSummary,
@@ -38,7 +39,8 @@ export const metadata: Metadata = {
 };
 
 export default async function WorkedExamplesPage() {
-  const viewer = await getViewer();
+  // Identity only personalizes the header; it must not hide these public examples.
+  const viewer = await readPublicData(getViewer()).catch(() => undefined);
   const itemListStructuredData = {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -77,7 +79,7 @@ export default async function WorkedExamplesPage() {
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
+          {...(viewer === undefined ? {} : getTopbarActions(Boolean(viewer)))}
           showLogout={Boolean(viewer)}
         />
         <Breadcrumbs items={[{ href: "/worked-examples", label: "Worked examples" }]} />
