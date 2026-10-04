@@ -32,7 +32,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/create",
-    label: "Create",
+    label: "Create a trade",
     summary: "Choose Trade, Offset, Pool, or the later Back lane, then make the no-deal default explicit before drafting terms.",
     kind: "trade",
     keywords: ["create", "draft", "new offer", "trade", "offset", "pool", "back", "proposal", "terms", "receipt"],

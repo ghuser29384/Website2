@@ -1,32 +1,31 @@
 name: Trade experience simplification 2026-10-04
 
 on:
-  push:
-    branches:
-      - main
-      - fix/simplify-trade-experience-20261004
+  pull_request:
+    branches: [main]
     paths:
       - .github/workflows/trade-experience-simplification-20261004.yml
-      - src/components/profile/resource-limits.tsx
-      - tests/exact-live-custom-route.spec.ts
-      - tests/exact-live-route-recommendations.spec.ts
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/trade-experience-simplification-20261004.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: trade-experience-simplification-${{ github.ref }}
+  group: trade-experience-simplification-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/fix/simplify-trade-experience-20261004'
+    if: github.event_name == 'pull_request' && github.head_ref == 'fix/simplify-trade-experience-20261004'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
