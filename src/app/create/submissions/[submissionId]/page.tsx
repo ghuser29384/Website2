@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { SubmissionReceipt } from "@/components/create/submission-receipt";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
@@ -19,10 +18,6 @@ export const metadata: Metadata = {
 
 interface SubmissionPageProps {
   params: Promise<{ submissionId: string }>;
-}
-
-function label(value: string) {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 export default async function CreateSubmissionPage({ params }: SubmissionPageProps) {
@@ -47,7 +42,7 @@ export default async function CreateSubmissionPage({ params }: SubmissionPagePro
       : null;
 
   return (
-    <div className="page-shell marketplace-app-shell create-submission-receipt-shell">
+    <div className="page-shell create-submission-receipt-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
@@ -58,35 +53,7 @@ export default async function CreateSubmissionPage({ params }: SubmissionPagePro
         />
       </header>
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-subtle">
-          <div className="section-head">
-            <p className="eyebrow">Durable Create receipt</p>
-            <h1>{label(submission.submission_kind)}</h1>
-            <p>
-              This record was saved atomically. It is not public and creates no payment, pledge,
-              trade, or payout obligation while its status is {label(submission.status).toLowerCase()}.
-            </p>
-          </div>
-          <article className="panel">
-            <dl className="deal-economics-grid">
-              <div><dt>Submission ID</dt><dd>{submission.id}</dd></div>
-              <div><dt>Target type</dt><dd>{submission.target_type ? label(submission.target_type) : "Unavailable"}</dd></div>
-              <div><dt>Target ID</dt><dd>{submission.target_id ?? "Unavailable"}</dd></div>
-              <div><dt>Status</dt><dd>{label(submission.status)}</dd></div>
-              <div><dt>Cause</dt><dd>{submission.cause_area}</dd></div>
-              <div><dt>Requested action</dt><dd>{submission.requested_action}</dd></div>
-              <div>
-                <dt>Created</dt>
-                <dd><LocalDateTime value={submission.created_at} fallback="Date unavailable" /></dd>
-              </div>
-              <div><dt>Interface version</dt><dd>{submission.interface_version}</dd></div>
-            </dl>
-            <div className="offer-actions">
-              {targetHref ? <Link className="button button-primary" href={targetHref}>Open target record</Link> : null}
-              <Link className="button button-secondary" href="/trades/new">Create another</Link>
-            </div>
-          </article>
-        </section>
+        <SubmissionReceipt submission={submission} targetHref={targetHref} />
       </main>
       <SiteFooter />
     </div>

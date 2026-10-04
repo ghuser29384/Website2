@@ -38,7 +38,7 @@ const receiptPage = readFileSync(
   "src/app/create/submissions/[submissionId]/page.tsx",
   "utf8",
 );
-const activationCritical = readFileSync("src/app/activation-critical.css", "utf8");
+const receiptView = readFileSync("src/components/create/submission-receipt.tsx", "utf8");
 const nextConfig = readFileSync("next.config.ts", "utf8");
 const migration = readFileSync(
   "supabase/migrations/20260727041000_moral_trade_create_interface_adapter.sql",
@@ -115,17 +115,20 @@ test("the browser waits for a durable server receipt and contains no simulated p
 });
 
 test("the owner-only durable receipt remains visibly rendered with its review boundary", () => {
-  assert.match(
-    receiptPage,
-    /page-shell marketplace-app-shell create-submission-receipt-shell/,
-  );
-  assert.match(receiptPage, /Durable Create receipt/);
-  assert.match(receiptPage, /It is not public/);
-  assert.match(receiptPage, /<dt>Status<\/dt><dd>\{label\(submission\.status\)\}<\/dd>/);
-  assert.match(
-    activationCritical,
-    /\.create-submission-receipt-shell\.marketplace-app-shell[\s\S]*header\.v72-route-header[\s\S]*main#main-content[\s\S]*> \.section[\s\S]*display:\s*block/,
-  );
+  assert.match(receiptPage, /page-shell create-submission-receipt-shell/);
+  // The dedicated receipt no longer inherits the app frame's hidden sections.
+  assert.doesNotMatch(receiptPage, /marketplace-app-shell/);
+  assert.match(receiptPage, /if \(!viewer\) redirect/);
+  assert.match(receiptPage, /\.eq\("owner_profile_id", viewer\.authUser\.id\)/);
+  assert.match(receiptPage, /if \(!submission\) notFound\(\)/);
+  assert.match(receiptPage, /<SubmissionReceipt submission=\{submission\} targetHref=\{targetHref\}/);
+  assert.match(receiptView, /Durable Create receipt/);
+  assert.match(receiptView, /It is not public/);
+  assert.match(receiptView, /<dt>Status<\/dt><dd>\{label\(submission\.status\)\}<\/dd>/);
+  assert.match(receiptView, /<details[\s\S]*<summary>Record details<\/summary>/);
+  for (const field of ["submission.id", "submission.target_type", "submission.target_id", "submission.interface_version"]) {
+    assert.ok(receiptView.includes(field), `${field} remains available in record details`);
+  }
 });
 
 test("the API validates, authenticates, and uses the atomic database adapter", () => {
