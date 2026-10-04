@@ -47,11 +47,14 @@ for (const width of [1440, 390, 320]) {
 }
 
 for (const target of [undefined, "/complete-profile", "https://example.com", "//example.com"]) {
-  test(`100-sparks entry preserves a safe return destination: ${target ?? "default"}`, async ({ page }) => {
+  test(`100-sparks entry preserves a safe return destination: ${target ?? "default"}`, async ({ page, baseURL }) => {
     const query = target ? `?returnTo=${encodeURIComponent(target)}` : "";
     await page.goto(`/100-sparks${query}`);
-    await expect(page).toHaveURL((url) => url.pathname === "/login");
+    // Predicate URL matchers also wait for load, which can lag a chained streaming redirect.
+    // Check the routing contract directly, including the final origin and nested destinations.
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/login");
     const login = new URL(page.url());
+    expect(login.origin).toBe(new URL(baseURL!).origin);
     const editor = new URL(login.searchParams.get("returnTo")!, login.origin);
     expect(editor.pathname).toBe("/profile/priorities");
     expect(editor.searchParams.get("returnTo")).toBe(target === "/complete-profile" ? target : "/profile");
