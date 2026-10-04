@@ -6,6 +6,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs, StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
+import { readPublicData } from "@/lib/public-read-deadline";
 import {
   getActionEvidenceSummary,
   getBaselineConfidence,
@@ -38,7 +39,8 @@ export const metadata: Metadata = {
 };
 
 export default async function WorkedExamplesPage() {
-  const viewer = await getViewer();
+  // This public, static inventory must not wait indefinitely for optional account navigation.
+  const viewer = await readPublicData(getViewer()).catch(() => null);
   const itemListStructuredData = {
     "@context": "https://schema.org",
     "@type": "ItemList",

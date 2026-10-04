@@ -56,8 +56,9 @@ for (const failure of ["http", "auth-unavailable"] as const) {
         : { json: ready });
     });
     await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
+    // Core bootstrap and the first enhancement each have an eight-second budget.
     await expect(page.locator('[data-mt-live-now="adaptive"]'))
-      .toHaveAttribute("data-mt-live-now-state", "ready");
+      .toHaveAttribute("data-mt-live-now-state", "ready", { timeout: 20_000 });
     expect(calls).toBe(2);
   });
 }

@@ -38,7 +38,8 @@ test("unavailable public records never become zero-count or demo listings", asyn
   await page.route("**/api/live-now", (route) => fulfill(route, { authenticated: false, status: "signed_out", recommendations: [] }));
   await mockInventory(page, (body) => responseFor(body, { sourceStatus: { offers: "unavailable" }, items: [], total: 0 }));
   await page.goto("/");
-  await expect(page.locator("[data-mt-public-listings]")).toContainText("Current trades could not be loaded");
+  await expect(page.locator("[data-mt-public-listings]").getByRole("status")).toHaveText("We couldn’t load the trades. Please try again.");
+  await expect(page.locator("[data-mt-public-listings]").getByRole("link", { name: "Retry in Discover →" })).toHaveAttribute("href", "/discover");
   await expect(page.locator(".mt-public-trade")).toHaveCount(0);
   await expect(page.locator("[data-mt-public-listings]")).not.toContainText("No current trades");
 });
@@ -47,7 +48,8 @@ test("partial public inventory does not imply the whole marketplace is empty", a
   await page.route("**/api/live-now", (route) => fulfill(route, { authenticated: false, status: "signed_out", recommendations: [] }));
   await mockInventory(page, (body) => responseFor(body, { sourceStatus: { offers: "partial" }, items: [], total: 0 }));
   await page.goto("/");
-  await expect(page.locator("[data-mt-public-listings]")).toContainText("Some listing sources could not be loaded");
+  await expect(page.locator("[data-mt-public-listings]").getByRole("status")).toHaveText("We haven’t found trades in the listings we could load. Please try again to check the rest.");
+  await expect(page.locator("[data-mt-public-listings]").getByRole("link", { name: "Retry in Discover →" })).toHaveAttribute("href", "/discover");
   await expect(page.locator("[data-mt-public-listings]")).not.toContainText("No current trades");
 });
 
