@@ -50,10 +50,10 @@ export function PublicRouteError({
         <section className="section section-white" aria-labelledby="route-recovery-heading">
           <div className="section-head">
             <p className="eyebrow">No action taken</p>
-            <h2 id="route-recovery-heading">The requested data was not changed.</h2>
+            <h2 id="route-recovery-heading">Your records are unchanged.</h2>
             <p>
-              This page could not load its live data. Retrying is safe; no donation, pledge,
-              commitment, publication, or payment was created by this failed request.
+              We couldn’t load this page’s latest data. You can safely try again; this request
+              didn’t create a donation, pledge, commitment, publication, or payment.
             </p>
           </div>
         </section>
