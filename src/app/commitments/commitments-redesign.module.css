@@ -472,6 +472,7 @@
 .shell .hero h1 { font-size: clamp(2rem, 3vw, 2.75rem) !important; line-height: 1.15; }
 .shell .summary { margin-top: 10px; }
 .summaryCard > strong { font: 600 1.8rem/1.25 var(--font-body, sans-serif); margin: 0 0 6px; }
+.summaryCard > strong[data-count-unavailable="true"] { font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
 .summaryCard > span:not(.summaryIcon) { font-size: 0.875rem; }
 .summaryCard > small { font-size: 0.75rem; margin-top: 4px; color: #68707c; }
 .coverageWarning { padding: 16px; margin: 20px 0 12px; border: 1px solid #9ba9c3; border-left: 4px solid #2858ff; background: #f4f7fb; line-height: 1.5; }
