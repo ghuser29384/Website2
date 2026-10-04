@@ -642,7 +642,9 @@
     return `<div data-mt-live-now="adaptive" data-mt-live-now-state="${escapeHtml(model.status)}">
       <section class="panel mt-feed-empty-inline">
         <h2>${escapeHtml(content.title)}</h2>${content.copy ? `<p>${escapeHtml(content.copy)}</p>` : ""}
-        <div class="mt-public-browse-tools"><a class="btn primary" href="${escapeHtml(content.primaryHref)}">${escapeHtml(content.primaryLabel)}</a><a class="btn" href="${escapeHtml(content.secondaryHref)}">${escapeHtml(content.secondaryLabel)}</a></div>
+        <div class="mt-public-browse-tools">${model.status === "unavailable"
+          ? '<button class="btn primary" type="button" data-mt-feed-retry>Try again</button>'
+          : `<a class="btn primary" href="${escapeHtml(content.primaryHref)}">${escapeHtml(content.primaryLabel)}</a>`}<a class="btn" href="${escapeHtml(content.secondaryHref)}">${escapeHtml(content.secondaryLabel)}</a></div>
       </section>${renderOwnedOpportunities()}
     </div>`;
   }
@@ -845,6 +847,10 @@
     if (!root || root.dataset.bound === "true") return;
     root.dataset.bound = "true";
     loadPublicBrowse();
+
+    root.querySelector("[data-mt-feed-retry]")?.addEventListener("click", () => {
+      window.location.reload();
+    });
 
     root.addEventListener("click", (event) => {
       const target = event.target instanceof Element ? event.target.closest("[data-action]") : null;

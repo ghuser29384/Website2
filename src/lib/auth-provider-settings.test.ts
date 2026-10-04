@@ -155,3 +155,31 @@ test("Supabase OAuth provider settings do not include X when authorize rejects i
     restoreEnv(previousUrl, previousKey);
   }
 });
+
+for (const stalledRequest of ["settings", "authorize"] as const) {
+  test(`OAuth discovery stops a stalled ${stalledRequest} request without inventing providers`, async (context) => {
+    context.mock.timers.enable({ apis: ["setTimeout"] });
+    let started: () => void = () => {};
+    const stalled = new Promise<void>((resolve) => { started = resolve; });
+    globalThis.fetch = async (input, init) => {
+      if (stalledRequest === "authorize" && input.toString().endsWith("/settings")) {
+        return new Response(JSON.stringify({ external: { google: true } }), { status: 200 });
+      }
+      const signal = init?.signal;
+      assert.ok(signal);
+      started();
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      });
+    };
+    try {
+      const providers = getEnabledOAuthProviders();
+      await stalled;
+      context.mock.timers.tick(2_000);
+      assert.deepEqual(await providers, stalledRequest === "settings" ? [] : ["google"]);
+    } finally {
+      globalThis.fetch = ORIGINAL_FETCH;
+      context.mock.timers.reset();
+    }
+  });
+}
