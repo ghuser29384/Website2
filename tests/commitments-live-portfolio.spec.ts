@@ -83,9 +83,11 @@ test("Commitments exposes truthful live-data sections and no visual-fixture valu
   await openCommitments(page);
 
   const tabs = page.getByRole("navigation", { name: "Commitments sections" });
-  for (const label of ["Portfolio", "Ledger", "Completed", "Calendar"]) {
+  for (const label of ["Portfolio", "Completed", "Calendar"]) {
     await expect(tabs.getByRole("link", { name: label })).toBeVisible();
   }
+
+  await expect(tabs.getByRole("link", { name: "Ledger", exact: true })).toHaveCount(0);
 
   await expect(page.getByRole("heading", { name: "Sign in to view your commitments." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute(
@@ -104,7 +106,7 @@ test("Commitments exposes truthful live-data sections and no visual-fixture valu
   }
 
   for (const [label, path] of [
-    ["Ledger", "/commitments?tab=ledger"],
+    ["Portfolio", "/commitments?tab=ledger"],
     ["Completed", "/commitments?tab=completed"],
     ["Calendar", "/commitments?tab=calendar"],
   ] as const) {

@@ -269,16 +269,15 @@ test("the deletion allowlist is narrow, immutable, and excludes live projects", 
 });
 
 test("production route evaluation verifies exact tab state without retaining HTML", () => {
-  const check = PRODUCTION_ROUTE_CHECKS.find((entry) => entry.name === "ledger");
+  const check = PRODUCTION_ROUTE_CHECKS.find((entry) => entry.name === "legacy-ledger");
   const html = `<!doctype html><html data-dpl-id="dpl_exact"><body>
     <h1>Additional resources you caused.</h1>
     <h2>Sign in to view your commitments.</h2>
-    <a href="/commitments">Portfolio</a>
-    <a aria-current="page" href="/commitments?tab=ledger">Ledger</a>
+    <a aria-current="page" href="/commitments">Portfolio</a>
   </body></html>`;
 
   assert.equal(
-    hasActiveAnchor(html, "/commitments?tab=ledger", "Ledger"),
+    hasActiveAnchor(html, "/commitments", "Portfolio"),
     true,
   );
   const result = evaluateProductionRoute(check, {
@@ -296,7 +295,7 @@ test("production route evaluation rejects billing-disabled and wrong-tab respons
   const check = PRODUCTION_ROUTE_CHECKS.find((entry) => entry.name === "calendar");
   const result = evaluateProductionRoute(check, {
     status: 402,
-    body: `Payment Required\nDEPLOYMENT_DISABLED\n<a aria-current="page" href="/commitments?tab=ledger">Ledger</a>`,
+    body: `Payment Required\nDEPLOYMENT_DISABLED\n<a aria-current="page" href="/commitments?tab=completed">Completed</a>`,
     contentType: "text/plain; charset=utf-8",
     finalUrl: "https://www.moraltrade.org/commitments?tab=calendar",
   });
@@ -320,7 +319,8 @@ test("production smoke retries all canonical routes and requires one deployment"
       });
     }
 
-    const tab = parsed.searchParams.get("tab") ?? "portfolio";
+    const requestedTab = parsed.searchParams.get("tab");
+    const tab = requestedTab === "completed" || requestedTab === "calendar" ? requestedTab : "portfolio";
     const label =
       tab === "portfolio"
         ? "Portfolio"
@@ -335,7 +335,7 @@ test("production smoke retries all canonical routes and requires one deployment"
             <h1>Additional resources you caused.</h1>
             <h2>Sign in to view your commitments.</h2>
             <a aria-current="page" href="${href}">${label}</a>
-            <span>Portfolio Ledger Completed Calendar</span>
+            <span>Portfolio Completed Calendar</span>
           </body></html>`;
     return new Response(body, {
       status,

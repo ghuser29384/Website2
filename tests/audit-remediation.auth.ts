@@ -43,15 +43,15 @@ test.describe("Audit remediation with isolated account and source states",()=>{
       await page.evaluate(()=>document.fonts.ready);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
       await page.screenshot({path:testInfo.outputPath(`commitments-${width}.png`),fullPage:false});
-      await page.getByRole("navigation",{name:"Commitments sections"}).getByRole("link",{name:"Ledger",exact:true}).click();
-      await expect(page).toHaveURL(/tab=ledger/);
-      await expect(page.getByRole("navigation",{name:"Commitments sections"}).getByRole("link",{name:"Ledger",exact:true})).toHaveAttribute("aria-current","page");
+      await page.getByRole("navigation",{name:"Commitments sections"}).getByRole("link",{name:"Completed",exact:true}).click();
+      await expect(page).toHaveURL(/tab=completed/);
+      await expect(page.getByRole("navigation",{name:"Commitments sections"}).getByRole("link",{name:"Completed",exact:true})).toHaveAttribute("aria-current","page");
       expect(errors).toEqual([]);
     });
   }
   test("partial records expose a warning above qualified counts and retry keeps the view",async({page,request,context},testInfo)=>{
     await session(request,context);await state(request,"partial");
-    await page.goto("/commitments?tab=ledger&group=mechanism");
+    await page.goto("/commitments?tab=completed&group=mechanism");
     const warning=page.getByTestId("commitments-incomplete");
     await expect(warning).toBeVisible();
     const summary=page.getByRole("region",{name:"Commitment summary"});
@@ -60,7 +60,7 @@ test.describe("Audit remediation with isolated account and source states",()=>{
     await expect(page.getByText("Deliberate isolated source failure")).toHaveCount(0);
     await page.screenshot({path:testInfo.outputPath("partial-records.png"),fullPage:false});
     await state(request,"populated");await warning.getByRole("link",{name:"Retry loading records"}).click();
-    await expect(page).toHaveURL(/tab=ledger&group=mechanism/);
+    await expect(page).toHaveURL(/tab=completed&group=mechanism/);
     await expect(warning).toHaveCount(0);await expect(summary.locator("strong")).toHaveText(["1","0","0","1","0"]);
   });
   test("failed source is unknown rather than an empty account, and failed cart suppresses the projection",async({page,request,context})=>{
