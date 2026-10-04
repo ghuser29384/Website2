@@ -87,6 +87,7 @@ test.describe("account-bound Co-Fund participants in Create", () => {
 
     await create.getByRole("button", { name: "Future flourishing" }).click();
     await create.locator('[data-request-kind="fund"]').click();
+    await create.getByText("Fund a project together", { exact: true }).click();
     await create.locator('[data-fund-mode="commonGround"]').click();
 
     await expect(
@@ -191,6 +192,7 @@ test.describe("account-bound Co-Fund participants in Create", () => {
 
     await create.getByRole("button", { name: "Future flourishing" }).click();
     await create.locator('[data-request-kind="fund"]').click();
+    await create.getByText("Fund a project together", { exact: true }).click();
     await create.locator('[data-fund-mode="commonGround"]').click();
 
     await expect(
@@ -212,6 +214,7 @@ test.describe("account-bound Co-Fund participants in Create", () => {
 
     await create.getByRole("button", { name: "Future flourishing" }).click();
     await create.locator('[data-request-kind="fund"]').click();
+    await create.getByText("Fund a project together", { exact: true }).click();
     await create.locator('[data-fund-mode="commonGround"]').click();
     await expect(create.locator("#commonGroundFields")).toBeVisible();
 

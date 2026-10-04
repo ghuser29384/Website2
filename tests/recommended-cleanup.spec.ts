@@ -14,7 +14,7 @@ for (const width of [1440, 390, 320]) {
       await trigger.focus();
       await page.keyboard.press("Enter");
       await expect(header.getByRole("link", { name: "Evidence", exact: true })).toHaveCount(available ? 1 : 0);
-      await expect(header.getByRole("link", { name: "Tour", exact: true })).toBeVisible();
+      await expect(header.getByRole("link", { name: "How it works", exact: true })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(trigger).toBeFocused();
       const footer = page.locator(".mt-site-footer");
@@ -52,8 +52,8 @@ test("failed availability requests hide only Evidence, not native search or acco
   await header.locator("summary").filter({ hasText: "More" }).click();
   await expect(header.locator("a[href='/evidence']")).toHaveCount(0);
   await expect(header.locator("a[href='/dashboard']")).toBeVisible();
-  await expect(header.locator("a[href='/cart']")).toHaveCount(1);
-  await expect(header.locator("form[role='search']")).toHaveAttribute("action", "/offers");
+  await expect(header.locator("a[href='/saved-offers']")).toHaveCount(1);
+  await expect(header.locator("form[role='search']")).toHaveAttribute("action", "/discover");
 });
 
 test("without JavaScript the retired About route and remaining navigation still work", async ({ browser, baseURL }) => {

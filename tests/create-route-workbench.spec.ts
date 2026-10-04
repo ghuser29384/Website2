@@ -74,6 +74,8 @@ test.describe("Create route workbench", () => {
     );
     await expect(create.locator('[data-fund-mode="dac"]')).toContainText("Threshold pool");
 
+    await create.getByText("Redirect or increase a donation", { exact: true }).click();
+
     await create.locator('[data-fund-mode="conditional"]').click();
     await expect(create.locator("#conditionalDonationEntry")).toBeVisible();
     await expect(create.getByRole("button", { name: "Set up donation →" })).toBeVisible();
@@ -82,6 +84,8 @@ test.describe("Create route workbench", () => {
     if (captureVisuals) {
       await captureFrame(create, "implementation-conditional-donation-desktop.png");
     }
+
+    await create.getByText("Fund a project together", { exact: true }).click();
 
     await create.locator('[data-fund-mode="commonGround"]').click();
     await expect(create.locator("#commonGroundFields")).toBeVisible();
@@ -126,6 +130,7 @@ test.describe("Create route workbench", () => {
 
     await create.getByRole("button", { name: "Future flourishing" }).click();
     await create.locator('[data-request-kind="fund"]').click();
+    await create.getByText("Fund a project together", { exact: true }).click();
     await create.locator('[data-fund-mode="commonGround"]').click();
     await expect(create.locator("#commonGroundFields")).toBeVisible();
 
@@ -154,6 +159,7 @@ test.describe("Create route workbench", () => {
 
     await create.getByRole("button", { name: "Future flourishing" }).click();
     await create.locator('[data-request-kind="fund"]').click();
+    await create.getByText("Redirect or increase a donation", { exact: true }).click();
     await create.locator('[data-fund-mode="conditional"]').click();
     await expect(create.locator("#conditionalDonationEntry")).toBeVisible();
     await expect(create.getByRole("button", { name: "Set up donation →" })).toBeVisible();

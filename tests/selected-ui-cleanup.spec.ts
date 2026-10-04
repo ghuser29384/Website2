@@ -11,14 +11,14 @@ for (const width of [1440, 390, 320]) {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Reach the Moral Trade team.");
     const header = page.locator(".mt-refined-header").first();
     await expect(header.locator("[data-mt-primary-links] > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
-    await expect(header.locator('form[role="search"]')).toHaveAttribute("action", "/offers");
+    await expect(header.locator('form[role="search"]')).toHaveAttribute("action", "/discover");
     await expect(header.locator('form[role="search"]')).toHaveAttribute("method", "get");
     await expect(header.getByRole("searchbox", { name: "Search offers" })).toBeVisible();
     const more = header.locator("summary").filter({ hasText: "More" });
     await more.focus();
     await page.keyboard.press("Enter");
     await expect(header.getByRole("link", { name: "Evidence", exact: true })).toBeVisible();
-    await expect(header.getByRole("link", { name: "Tour", exact: true })).toBeVisible();
+    await expect(header.getByRole("link", { name: "How it works", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(more).toBeFocused();
     await expect(header.getByRole("link", { name: "Evidence", exact: true })).not.toBeVisible();
@@ -45,8 +45,8 @@ test("native offer search reaches the existing directory without an interpretati
   const header = page.locator(".mt-refined-header").first();
   await header.getByRole("searchbox", { name: "Search offers" }).fill("animal welfare");
   await header.getByRole("button", { name: "Search", exact: true }).click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/offers");
-  await expect.poll(() => new URL(page.url()).searchParams.get("search")).toBe("animal welfare");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
+  await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe("animal welfare");
   expect(interpretationRequests).toEqual([]);
 });
 

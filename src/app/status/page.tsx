@@ -181,7 +181,7 @@ export default async function StatusPage() {
             <p className="hero-text">
               Moral Trade is an operating coordination service with direct-to-charity Every.org
               routes plus backed account, offer, onboarding, matching, evidence, review, and public-good
-              workflows. Project funding remains sponsor-gated. This page states the limits in force.
+              workflows. Project funding remains sponsor-gated.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/support">

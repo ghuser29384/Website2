@@ -494,7 +494,7 @@ export function MpgfConsole({
     "Every.org fast-route donations return to a pending state until webhook import and review.",
   );
   const [savedCommitmentMessage, setSavedCommitmentMessage] = useState(
-    "Production participation is pledge-only and uses external handoff. Moral Trade does not store a payment method.",
+    "Pledge-only. Payments use an external provider; Moral Trade does not store a payment method.",
   );
   const [proposalTitle, setProposalTitle] = useState(
     poolTemplateApplied ? "New conditional public-good pool" : "Community public-goods evaluation reserve",
@@ -1254,7 +1254,7 @@ export function MpgfConsole({
             <p>
               Save a non-custodial pledge intent. When the published conditions clear, the
               participant pays the approved external recipient through Every.org or a sponsor-backed
-              route. Moral Trade does not store a payment method in the current production posture.
+              route. Moral Trade does not store a payment method for these pledges.
             </p>
             <div className="mpgf-form-grid">
               <label>

@@ -424,8 +424,7 @@ export async function AuthPage({
 
             {!supabaseReady ? (
               <div className={`${styles.statusBanner} ${styles.statusError}`} role="alert">
-                Supabase is not configured yet. Add the environment variables before using live
-                authentication.
+                Sign-in is unavailable. Please try again later.
               </div>
             ) : null}
 

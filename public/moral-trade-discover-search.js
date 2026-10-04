@@ -7,6 +7,8 @@
   if (!form) return;
   const input = document.getElementById("command-input");
   const kind = document.getElementById("offer-kind");
+  const sortControl = document.getElementById("offer-sort");
+  const sorts = new Set(["best-fit", "newest", "deadline", "lowest-cost", "strongest-evidence"]);
   const maximum = document.getElementById("maximum-offer");
   const results = document.getElementById("trade-results");
   const region = document.getElementById("results");
@@ -53,7 +55,8 @@
     const params = new URLSearchParams(location.search);
     const csv = (name) => [...new Set((params.get(name) || "").split(",").filter(Boolean))];
     return {
-      query: (params.get("q") || params.get("query") || "").slice(0, 500),
+      sort: sorts.has(params.get("sort")) ? params.get("sort") : "best-fit",
+      query: (params.get("q") || params.get("query") || params.get("search") || "").slice(0, 500),
       normalizedQuery: (params.get("nq") || "").slice(0, 500),
       offerKind: kinds.has(params.get("offerKind")) ? params.get("offerKind") : "all",
       excludedConstraints: csv("exclude"),
@@ -76,6 +79,7 @@
   function syncControls() {
     input.value = state.query;
     kind.value = state.offerKind;
+    sortControl.value = state.sort;
     maximum.value = state.manual.maximumOfferAmountCents === null
       ? "" : String(state.manual.maximumOfferAmountCents / 100);
   }
@@ -91,6 +95,7 @@
       if (value !== "" && value !== null && value !== undefined) params.set(key, String(value));
     };
     put("q", state.query);
+    if (state.sort !== "best-fit") put("sort", state.sort);
     if (state.normalizedQuery !== state.query) put("nq", state.normalizedQuery);
     if (state.offerKind !== "all") put("offerKind", state.offerKind);
     if (state.page > 1) put("page", state.page);
@@ -133,6 +138,7 @@
     }
     state.query = query;
     state.offerKind = kind.value;
+    state.sort = sortControl.value;
     state.manual.maximumOfferAmountCents = cents(maximum.value);
     state.page = 1;
     executeSearch("push");
@@ -304,7 +310,7 @@
         credentials: "same-origin",
         cache: "no-store",
         signal: current.signal,
-        body: JSON.stringify({ ...state, domain: "offers", sort: "best-fit" }),
+        body: JSON.stringify({ ...state, domain: "offers" }),
       });
       if (!response.ok) throw new Error("retrieval");
       const data = await response.json();
@@ -313,7 +319,7 @@
       renderConstraints(data.constraints);
       if (data.domain !== "offers") {
         status.textContent = "Discover now lists trades, not people or standalone funding pools.";
-        showPanel("Search for an exchange", "Describe what you can provide or the outcome you want. The former People and Pools views are not available on this page.", [button("Clear search", clearSearch), link("Post a trade", "/trades/new", "primary-btn")]);
+        showPanel("Search for an exchange", "Describe what you can provide or the outcome you want.", [button("Clear search", clearSearch), link("Post a trade", "/trades/new", "primary-btn")]);
         return;
       }
       if (data.clarification) {
@@ -368,6 +374,7 @@
 
   form.addEventListener("submit", (event) => { event.preventDefault(); submitFields(); });
   kind.addEventListener("change", submitFields);
+  sortControl.addEventListener("change", submitFields);
   maximum.addEventListener("change", submitFields);
   document.getElementById("clear-search").addEventListener("click", clearSearch);
   previous.addEventListener("click", () => { state.page = Math.max(1, state.page - 1); executeSearch("push"); });

@@ -251,9 +251,9 @@
   }
 
   function browseHref(cause) {
-    const query = new URLSearchParams({ view: "live", sort: "match" });
-    if (cause) query.set("cause", cause);
-    return `/offers?${query.toString()}`;
+    const query = new URLSearchParams({ domain: "offers", view: "list" });
+    if (cause) query.set("causeFilter", cause);
+    return `/discover?${query.toString()}`;
   }
 
   function sourceLabel(source) {
@@ -517,36 +517,19 @@
     ].join('');
   }
 
-  function sidePanel(title, items, footer) {
-    const rows = items.length
-      ? items
-          .map(
-            (item) =>
-              `<div class="side-row"><i class="dot info"></i><div>${escapeHtml(
-                item,
-              )}</div></div>`,
-          )
-          .join("")
-      : '<div class="side-row"><i class="dot"></i><div>None yet</div></div>';
-
-    return `<section class="panel side-card"><h4>${escapeHtml(title)}</h4>${rows}${
-      footer || ""
-    }</section>`;
-  }
-
   function emptyStateContent() {
     if (model.status === "signed_out") {
       return {
         eyebrow: "Personal suggestions are private",
         title: "Sign in to see a feed based on your moral priorities.",
-        copy: "This page does not guess your priorities or substitute demo recommendations.",
+        copy: "",
         facts: ["No profile loaded", "No recommendations shown"],
         primaryHref:
           window.location.pathname === "/feed"
             ? "/login?returnTo=%2Ffeed"
             : "/login?returnTo=%2F",
         primaryLabel: "Sign in →",
-        secondaryHref: "/offers?view=live",
+        secondaryHref: "/discover",
         secondaryLabel: "Browse all live proposals →",
       };
     }
@@ -560,7 +543,7 @@
         facts: ["Signed in", "No priorities selected yet"],
         primaryHref: "/complete-profile",
         primaryLabel: "Choose priorities →",
-        secondaryHref: "/offers?view=live",
+        secondaryHref: "/discover",
         secondaryLabel: "Explore opportunities →",
       };
     }
@@ -571,12 +554,12 @@
         ? " Your own live routes remain available below for sharing and invitations."
         : "";
       return {
-        eyebrow: "Profile checked against live inventory",
+        eyebrow: "Your priorities",
         title: "No open opportunity currently matches your profile.",
         copy: causeSummary
-          ? `We checked other participants' proposals and donation redirects against ${causeSummary}. No filler suggestions were added.` +
+          ? `Priorities: ${causeSummary}.` +
             ownListingsCopy
-          : "No filler suggestions were added." + ownListingsCopy,
+          : ownListingsCopy.trim(),
         facts: [
           `${model.profile.causes.length} profile ${
             model.profile.causes.length === 1 ? "priority" : "priorities"
@@ -593,57 +576,75 @@
     return {
       eyebrow: "Personal suggestions unavailable",
       title: "Your recommendation feed could not load.",
-      copy:
-        "No generic or fabricated suggestions are shown while profile matching is unavailable.",
-      facts: ["Profile data not displayed", "No fallback claims"],
+      copy: "",
+      facts: ["Profile unavailable", "Recommendations unavailable"],
       primaryHref: "/moral-trade-live.html#now",
       primaryLabel: "Try again →",
-      secondaryHref: "/offers?view=live",
+      secondaryHref: "/discover",
       secondaryLabel: "Browse all live proposals →",
     };
   }
 
-  function renderEmptyState() {
-    const content = emptyStateContent();
+  let publicListings = null;
+  let publicListingsRequest = null;
 
-    return `<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="${escapeHtml(
-      model.status,
-    )}"><main>
-      <section class="panel black urgent">
-        <div><div class="eyebrow orange">${escapeHtml(
-          content.eyebrow,
-        )}</div><h2>${escapeHtml(content.title)}</h2><p class="muted">${escapeHtml(
-          content.copy,
-        )}</p></div>
-        <div class="terms">${content.facts
-          .map(
-            (fact, index) =>
-              `<div><span class="eyebrow">${
-                index === 0 ? "Profile state" : "Feed state"
-              }</span><strong>${escapeHtml(fact)}</strong></div>`,
-          )
-          .join("")}</div>
-        <div class="stack"><a class="btn primary" href="${escapeHtml(
-          content.primaryHref,
-        )}">${escapeHtml(content.primaryLabel)}</a><a class="btn ghost" href="${escapeHtml(
-          content.secondaryHref,
-        )}">${escapeHtml(content.secondaryLabel)}</a></div>
-      </section>
-      ${renderOwnedOpportunities()}
-      <section class="panel attention">
-        <div class="iconbox bluebg">◎</div>
-        <div class="lead"><div class="eyebrow blue">How matching works</div><h3>Your priorities select the benefit. Your action model estimates the burden.</h3></div>
-        <div><b>Explicit choices remain authoritative.</b><p class="muted" style="font-size:11px">Optional viewing activity can suggest relevance, but it does not become a stated priority or willingness signal. Easy/hard feedback is explicit action feedback.</p></div>
-        <a class="btn" href="/complete-profile">Review profile →</a>
-      </section>
-    </main><aside class="stack">
-      ${sidePanel("Profile basis", model.profile.causes, "")}
-      ${sidePanel(
-        "Feed rule",
-        ["No guessed priorities", "No demo records", "No invented counterparties"],
-        "",
-      )}
-    </aside></div>`;
+  function publicBrowseMarkup() {
+    if (!publicListings) return '<p role="status">Loading current trades…</p>';
+    if (publicListings.status === "unavailable") {
+      return '<p role="status">Current trades could not be loaded.</p><a class="btn" href="/discover">Retry in Discover →</a>';
+    }
+    if (!publicListings.items.length && publicListings.status === "partial") {
+      return '<p role="status">No listings were returned by the sources available right now. Some listing sources could not be loaded.</p><a class="btn" href="/discover">Retry in Discover →</a>';
+    }
+    if (!publicListings.items.length) return '<p>No current trades to show.</p><a class="btn" href="/trades/new">Post a trade →</a>';
+    return `${publicListings.status === "partial" ? '<p role="status">Some listing sources are unavailable.</p>' : ""}<div class="mt-public-trades">${publicListings.items.map((item) =>
+      `<article class="panel mt-public-trade"><p class="eyebrow">${escapeHtml(item.cause)}</p><h2><a href="${escapeHtml(item.href)}">${escapeHtml(item.title)}</a></h2><div class="mt-public-exchange"><section><h3>You provide</h3><p>${escapeHtml(item.youOffer.join("; "))}</p></section><section><h3>Counterparty provides</h3><p>${escapeHtml(item.youGet.join("; "))}</p></section></div><a class="btn" href="${escapeHtml(item.href)}">Review trade →</a></article>`
+    ).join("")}</div><a class="btn" href="/discover">Browse all trades →</a>`;
+  }
+
+  function loadPublicBrowse() {
+    if (model.status !== "signed_out" || typeof fetch !== "function") return;
+    const show = () => {
+      const target = document.querySelector("[data-mt-public-listings]");
+      if (target) target.innerHTML = publicBrowseMarkup();
+    };
+    if (publicListings) { show(); return; }
+    if (publicListingsRequest) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    publicListingsRequest = fetch("/api/discover/search", {
+      method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({ query: "", domain: "offers", offerKind: "all", sort: "newest", page: 1 }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("unavailable");
+      const data = await response.json();
+      if (!data.ok || data.domain !== "offers" || !["live", "partial"].includes(data.sourceStatus?.offers) || !Array.isArray(data.items)) throw new Error("unavailable");
+      const items = data.items.filter((item) => item?.kind === "offer" && item.isWorkedExample !== true && item.source !== "example" &&
+        typeof item.title === "string" && typeof item.cause === "string" &&
+        typeof item.href === "string" && /^(?:\/offers\/[a-f0-9-]{36}|\/moral-goods-group-buying(?:[?#].*)?)$/.test(item.href) &&
+        [item.youOffer, item.youGet].every((side) => Array.isArray(side) && side.length && side.every((term) => typeof term === "string")));
+      if (data.items.length && !items.length) throw new Error("unavailable");
+      publicListings = { status: data.sourceStatus.offers, items: items.slice(0, 6) };
+    }).catch(() => { publicListings = { status: "unavailable", items: [] }; })
+      .finally(() => { clearTimeout(timer); show(); });
+  }
+
+  function renderEmptyState() {
+    if (model.status === "signed_out") {
+      return `<div data-mt-live-now="adaptive" data-mt-live-now-state="signed_out">
+        <div class="mt-public-browse-tools"><a class="btn" href="/discover">Search and filter trades</a><a href="/login?returnTo=%2Ffeed">Sign in for personal suggestions</a></div>
+        <section data-mt-public-listings aria-label="Public trades">${publicBrowseMarkup()}</section>
+      </div>`;
+    }
+    const content = emptyStateContent();
+    return `<div data-mt-live-now="adaptive" data-mt-live-now-state="${escapeHtml(model.status)}">
+      <section class="panel mt-feed-empty-inline">
+        <h2>${escapeHtml(content.title)}</h2>${content.copy ? `<p>${escapeHtml(content.copy)}</p>` : ""}
+        <div class="mt-public-browse-tools"><a class="btn primary" href="${escapeHtml(content.primaryHref)}">${escapeHtml(content.primaryLabel)}</a><a class="btn" href="${escapeHtml(content.secondaryHref)}">${escapeHtml(content.secondaryLabel)}</a></div>
+      </section>${renderOwnedOpportunities()}
+    </div>`;
   }
 
   function weightedPriorityChips() {
@@ -843,6 +844,7 @@
     const root = document.querySelector('[data-mt-live-now="adaptive"]');
     if (!root || root.dataset.bound === "true") return;
     root.dataset.bound = "true";
+    loadPublicBrowse();
 
     root.addEventListener("click", (event) => {
       const target = event.target instanceof Element ? event.target.closest("[data-action]") : null;

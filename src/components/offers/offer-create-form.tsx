@@ -2738,8 +2738,7 @@ export function OfferCreateForm({
 
       {!supabaseReady ? (
         <div className="status-banner status-banner-error">
-          Supabase is not configured yet. Add environment variables before creating
-          live offers.
+          Publishing offers is unavailable. Please try again later.
         </div>
       ) : null}
 
@@ -3289,7 +3288,7 @@ export function OfferCreateForm({
                       onChange={(event) => setPerformanceBondAmountUsd(readFormControlValue(event))}
                     />
                     <small>
-                      Conservative v1 limit: {formatPerformanceBondAmount(performanceBondMinCents)} to{" "}
+                      Bond limit: {formatPerformanceBondAmount(performanceBondMinCents)} to{" "}
                       {formatPerformanceBondAmount(performanceBondMaxCents)}.
                     </small>
                   </label>

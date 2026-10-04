@@ -56,7 +56,6 @@ const openQuestions = [
 ] as const;
 
 const notices = [
-  "This page is a public index, not a live forum or autonomous moral-ranking system.",
   "Signed-in drafting and reviewer workflows remain separate from public examples until explicit publication.",
   "Public entries should cite factor codes, evidence state, uncertainty, and the next human-controlled step.",
 ] as const;

@@ -95,7 +95,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /href: "\/trades\/new",\s*label: "Create"/);
   assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
   assert.match(topbarSource, /placeholder="Search offers"/);
-  assert.match(topbarSource, /<form action="\/offers" className="topbar-search" method="get" role="search"/);
+  assert.match(topbarSource, /<form action="\/discover" className="topbar-search" method="get" role="search"/);
   assert.match(topbarSource, /showSearch = true/);
   assert.match(globalCss, /\.button-secondary\.button-nav\.is-active/);
 });
@@ -130,12 +130,12 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   ].join("\n");
 
   assert.match(savedOffersPage, /title: "Saved offers"/);
-  assert.match(savedOffersPage, /<h1 id="plan-heading">Planner<\/h1>/);
-  assert.match(savedOffersPage, /Plan — private selected items\. No commitment created\./);
-  assert.match(savedOffersPage, /Preview only · Private planning only · No commitment created\./);
+  assert.match(savedOffersPage, /<h1 id="plan-heading">Saved offers<\/h1>/);
+  assert.match(savedOffersPage, /Your private shortlist\. Saving an offer does not create a commitment\./);
+  assert.doesNotMatch(savedOffersPage, /Preview only · Private planning only/);
   assert.match(savedOffersPage, /await getViewer\(\)/);
-  assert.match(savedOffersPage, /Sign in to view your planner\./);
-  assert.match(savedOffersPage, /does not create demo planner rows, commitments, or pledge-funding contribution state/);
+  assert.match(savedOffersPage, /Sign in to view your saved offers\./);
+  assert.match(savedOffersPage, /Your saved offers are private to your account/);
   assert.equal(savedOffersPage.includes("requireViewer"), false);
   assert.match(savedOffersPage, /value="\/saved-offers"/);
   assert.match(cartRedirectPage, /redirect\("\/saved-offers"\)/);
@@ -144,7 +144,8 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   assert.match(robotsSource, /OAI-SearchBot/);
   assert.match(robotsSource, /Claude-SearchBot/);
   assert.equal(robotsSource.includes("Disallow"), false);
-  assert.match(offerDetailPage, /Interest and saved-offer activity/);
+  assert.match(offerDetailPage, /Your interest status:/);
+  assert.match(offerDetailPage, /Save offer/);
   assert.match(actionsSource, /Saved offer/);
   assert.match(actionsSource, /revalidatePath\("\/saved-offers"\)/);
   assert.match(contractSources, /personalized saved-offer state/);
@@ -460,7 +461,7 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(topbarSource, /placeholder="Search offers"/);
   assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
   assert.doesNotMatch(topbarSource, /\/api\/query\/interpret/);
-  assert.match(topbarSource, /<form action="\/offers" className="topbar-search" method="get" role="search"/);
+  assert.match(topbarSource, /<form action="\/discover" className="topbar-search" method="get" role="search"/);
   assert.match(offersPage, /SmartQueryForm/);
   assert.match(offersPage, /queryName="search"/);
   assert.match(offersPage, /Hard constraints are applied before semantic and trust-aware ranking/);
@@ -579,7 +580,7 @@ test("people directory avoids popularity leaderboards and keeps trust signals ev
   assert.doesNotMatch(peoplePage, /Most open offers/);
   assert.doesNotMatch(peoplePage, /Highest credit/);
   assert.match(peoplePage, /Newest is chronological/);
-  assert.match(peoplePage, /not follower, karma, or comment leaderboards/);
+  assert.doesNotMatch(peoplePage, /<option[^>]+value="(?:followers|karma|comments)"/);
   assert.equal(peoplePage.includes("Counterparty interest"), false);
   assert.equal(peoplePage.includes("Reviewer karma"), false);
   assert.equal(peoplePage.includes("Public discussion"), false);
@@ -626,7 +627,7 @@ test("private matching and reasoning routes remain distinct, reviewable, and pri
   assert.match(reasoningCenterPage, /"@type": "ItemList"/);
   assert.match(reasoningCenterPage, /getOptionalViewerForReasoningCenter/);
   assert.match(reasoningCenterPage, /MORAL_TRADE_REASONING_PACKET_FILTERS/);
-  assert.match(reasoningCenterPage, /not a live forum or autonomous moral-ranking system/);
+  assert.match(reasoningCenterPage, /Signed-in drafting and reviewer workflows remain separate from public examples until explicit publication/);
   assert.equal(reasoningCenterPage.includes("karma"), false);
 
   assert.match(standardsPage, /Make trade records specific enough to judge/);
@@ -4415,7 +4416,7 @@ test("offer detail and worked examples expose instrumented review workflow cards
   assert.doesNotMatch(offerDetailSource, /participantReviewCopy\.safetyWarningCopy|participantReviewCopy\.needsEvidenceStatusCopy/);
   assert.match(offerDetailSource, /Why this status:/);
   assert.match(offerDetailSource, /review-factor-list/);
-  assert.match(offerDetailSource, /Contact after sign-in/);
+  assert.match(offerDetailSource, /Sign in to respond/);
   assert.match(offerDetailSource, /Save offer/);
   assert.match(offerDetailSource, /createSimilarHref/);
   assert.match(offerDetailSource, /returnTo=\$\{encodeURIComponent\(respondReturnTo\)\}/);

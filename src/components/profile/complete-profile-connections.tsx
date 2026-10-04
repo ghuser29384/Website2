@@ -80,7 +80,7 @@ function getUnavailableReason(reason: XConnectorAvailabilityReason) {
     return "The X callback URL does not match the supported Moral Trade route.";
   }
 
-  return "The production X connection has not been enabled.";
+  return "Connecting to X is unavailable.";
 }
 
 function SourceMark({ children, tone }: { children: string; tone: string }) {

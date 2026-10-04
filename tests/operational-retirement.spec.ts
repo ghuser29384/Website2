@@ -39,21 +39,21 @@ test("legacy activity hash opens real commitments before loading any simulated v
 });
 
 test("command center starts empty, with one user-authored draft action and no pretend history", async ({ page }, testInfo) => {
-  await page.goto("/");
-  await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
-  await page.getByRole("button", { name: /Command$/ }).click();
-  const drawer = page.locator("#drawer");
+  await page.goto("/trades/new");
+  const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await create.locator("#drawer summary").click();
+  const drawer = create.locator("#drawer");
   await expect(drawer.getByLabel("Describe the proposed exchange")).toHaveValue("");
   await expect(drawer.locator('[data-action="from-command"]')).toHaveCount(1);
   await expect(drawer.getByRole("button", { name: "Run", exact: true })).toHaveCount(0);
   await expect(drawer).not.toContainText("Counter Mina");
   await expect(drawer).not.toContainText("Recent commands");
-  await drawer.getByRole("button", { name: "Build this offer" }).click();
+  await drawer.getByRole("button", { name: "Review editable draft →" }).click();
   await expect(drawer.getByRole("alert")).toContainText("Describe both sides");
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/trades\/new$/);
   await page.screenshot({ path: testInfo.outputPath("empty-command.png"), fullPage: true });
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#overlay")).not.toHaveClass(/open/);
+  await drawer.locator("summary").click();
+  await expect(drawer.getByLabel("Describe the proposed exchange")).toBeHidden();
 });
 
 test("retired source bundles are unavailable over HTTP", async ({ request }) => {

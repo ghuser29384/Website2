@@ -113,7 +113,6 @@ h1{font-family:var(--serif);font-weight:400;font-size:54px;line-height:.98;lette
     <button data-page="activity">Commitments</button>
   </nav>
   <div class="top-actions">
-    <button class="text-btn" data-action="command">⌕ Command</button>
     <button class="avatar" data-action="profile" aria-label="Account">•</button>
   </div>
 </header>
@@ -143,7 +142,7 @@ function nowPage() {
 }
 // The authenticated live feed replaces this fail-closed loading state.
 function nowFocus() {
-  return '<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="loading"><main><section class="panel black urgent"><div><div class="eyebrow orange">Loading your profile</div><h2>Finding live moral opportunities that match your priorities and action preferences.</h2><p class="muted">No generic or demo suggestions are shown.</p></div></section></main></div>';
+  return '<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="loading"><main><section class="panel black urgent"><div><div class="eyebrow orange">Loading your profile</div><h2>Finding live moral opportunities that match your priorities and action preferences.</h2></div></section></main></div>';
 }
 // Preserve all three mount points required by the authoritative route planner.
 function nowPlan() {

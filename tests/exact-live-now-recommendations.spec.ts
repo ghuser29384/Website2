@@ -514,10 +514,10 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(page).toHaveURL(/\/feed$/);
     await expect(personalized).toHaveAttribute("data-mt-live-now-state", "signed_out");
     await expect(personalized).toContainText(
-      "Sign in to see a feed based on your moral priorities.",
+      "Sign in for personal suggestions",
     );
-    await expect(personalized).toContainText("No recommendations shown");
-    await expect(personalized.getByRole("link", { name: "Sign in →" })).toHaveAttribute(
+    await expect(personalized.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
+    await expect(personalized.getByRole("link", { name: "Sign in for personal suggestions" })).toHaveAttribute(
       "href",
       "/login?returnTo=%2Ffeed",
     );
@@ -720,16 +720,14 @@ for (const route of ["/", "/feed"]) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
 
       const feed = page.locator('[data-mt-live-now="adaptive"]');
-      const hero = feed.locator("section.urgent");
+      const hero = feed.locator(".mt-feed-empty-inline");
       await expect(feed).toHaveAttribute("data-mt-live-now-state", "profile_incomplete");
-      await expect(hero.getByText("Your priorities", { exact: true })).toBeVisible();
       await expect(hero.getByRole("heading", { name: "What matters to you?" })).toBeVisible();
       await expect(hero).toContainText("Choose the causes you care about to help us suggest relevant opportunities.");
       await expect(hero).toContainText("You can also explore without setting priorities.");
       await expect(hero).toContainText("Viewing activity only helps personalize suggestions if you turn it on.");
-      await expect(hero).toContainText("No priorities selected yet");
       await expect(hero.getByRole("link", { name: "Choose priorities →" })).toHaveAttribute("href", "/complete-profile");
-      await expect(hero.getByRole("link", { name: "Explore opportunities →" })).toHaveAttribute("href", "/offers?view=live");
+      await expect(hero.getByRole("link", { name: "Explore opportunities →" })).toHaveAttribute("href", "/discover");
       await expect(feed.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
       await expect(hero).not.toContainText("Profile needs priorities");
 

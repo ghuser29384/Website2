@@ -332,7 +332,11 @@
       return false;
     }
 
-    window.location.assign("/trades/new?handoff=command-center");
+    if (window.top !== window.self) {
+      window.top.location.assign("/trades/new?handoff=command-center");
+    } else {
+      window.location.assign("/trades/new?handoff=command-center");
+    }
     return true;
   }
 

@@ -707,7 +707,7 @@ export function MarketplaceRouteShell({
   hideSidebar?: boolean;
 }) {
   return (
-    <div className="mt-v75-route-board">
+    <div className="mt-v75-route-board" style={hideSidebar ? { gridTemplateColumns: "minmax(0, 1fr)" } : undefined}>
       {!hideSidebar ? <MarketplaceSideNav active={active} /> : null}
       <div className="mt-v75-route-workspace">{children}</div>
     </div>
@@ -1130,10 +1130,12 @@ export function DealDetailObject({
   deal,
   headingId = "marketplace-detail-object-heading",
   actions,
+  compact = false,
 }: {
   deal: MarketplaceDeal;
   headingId?: string;
   actions?: ReactNode;
+  compact?: boolean;
 }) {
   const receipt = getDealReceiptAtom(deal);
   const recipientDisplay = getMarketplaceRecipientDisplay(deal);
@@ -1144,6 +1146,7 @@ export function DealDetailObject({
 
   return (
     <article className="mt-v75-detail-object" aria-labelledby={headingId}>
+      {!compact ? <>
       <div className="mt-v75-detail-breadcrumb">
         <Link href="/offers">Browse</Link>
         <span aria-hidden="true">/</span>
@@ -1163,6 +1166,7 @@ export function DealDetailObject({
           <IconMark name={deal.mechanismType === "public_goods_round" ? "fund" : "evidence"} />
         </span>
       </div>
+      </> : null}
       <div className="mt-v75-detail-copy">
         <div className="moral-deal-chip-row">
           <FallbackLivestreamEvidencePill deal={deal} />
@@ -1172,8 +1176,8 @@ export function DealDetailObject({
             </span>
           ))}
         </div>
-        <h1 id={headingId}>{deal.title}</h1>
-        <p>{deal.subtitle ?? "Review exposure, terms, and evidence before any commitment."}</p>
+        {compact ? <h2 id={headingId}>Funding and verification details</h2> : <h1 id={headingId}>{deal.title}</h1>}
+        {!compact ? <p>{deal.subtitle ?? "Review exposure, terms, and evidence before any commitment."}</p> : null}
         <div className="mt-v75-status-row">
           {statusChips.map((chip) => (
             <StatusChip label={chip} key={chip} />
@@ -1587,8 +1591,8 @@ export function PledgeFundingPanel({ round }: { round: PledgeFundingRound }) {
         <p>
           <strong>If the round clears:</strong>{" "}
           {round.mode === "capped_pivotal_cohort"
-            ? "The capped cohort would fund the pledge after backend gates pass."
-            : "The target would fund the pledge after backend gates pass."}
+            ? "The capped cohort would fund the pledge. Preview only; funding is unavailable."
+            : "The target would fund the pledge. Preview only; funding is unavailable."}
         </p>
         <p>
           <strong>If it does not clear:</strong> {round.refundPolicy}
@@ -2416,7 +2420,7 @@ export function MarketplaceBottomNav({
   const normalizedActive = active === "account" ? "profile" : active;
   const items = [
     { key: "browse", href: "/discover", label: "Discover", icon: "marketplace" },
-    { key: "plan", href: "/saved-offers", label: "Plan", icon: "example" },
+    { key: "plan", href: "/saved-offers", label: "Saved offers", icon: "example" },
     { key: "track", href: "/commitments", label: "Commitments", icon: "evidence" },
     { key: "messages", href: "/messages", label: "Messages", icon: "review" },
     { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },

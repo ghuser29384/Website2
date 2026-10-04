@@ -38,7 +38,7 @@ test("a visitor without JavaScript has a direct live-directory fallback", async 
   const context = await browser.newContext({ javaScriptEnabled: false, baseURL });
   const page = await context.newPage();
   await page.goto("/discover");
-  await expect(page.locator('noscript a[href="/offers?view=live"]')).toBeVisible();
+  await expect(page.locator('noscript a[href="/offers?view=live&render=server"]')).toBeVisible();
   await expect(page.locator(".trade-row")).toHaveCount(0);
   await context.close();
 });

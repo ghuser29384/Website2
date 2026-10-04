@@ -45,7 +45,7 @@ test.describe("Adaptive homepage", () => {
     await expect(primary.getByText("100 Sparks")).toHaveCount(0);
     await expect(page.locator(".header-start")).toHaveText("Get Started");
 
-    await expect(page.locator('button[data-action="command"]')).toBeVisible();
+    await expect(page.locator('button[data-action="command"]')).toHaveCount(0);
     await expect(page.locator('button[data-action="profile"]')).toHaveAccessibleName("Account");
     await expect(page.locator('button[data-action="create"]')).toContainText("Create offer");
 
@@ -68,42 +68,16 @@ test.describe("Adaptive homepage", () => {
 
     const feed = page.locator('[data-mt-live-now="adaptive"]');
     await expect(feed).toHaveAttribute("data-mt-live-now-state", "signed_out");
-    await expect(
-      feed.getByRole("heading", {
-        level: 2,
-        name: "Sign in to see a feed based on your moral priorities.",
-      }),
-    ).toBeVisible();
-    await expect(feed.getByText("No profile loaded", { exact: true })).toBeVisible();
-    await expect(feed.getByText("No recommendations shown", { exact: true })).toBeVisible();
-    await expect(
-      feed.getByText(
-        "This page does not guess your priorities or substitute demo recommendations.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    await expect(feed.getByRole("link", { name: "Sign in for personal suggestions" })).toHaveAttribute("href", "/login?returnTo=%2Ffeed");
     await expect(feed.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
-
-    await expect(feed.getByRole("link", { name: /Sign in/ })).toHaveAttribute(
-      "href",
-      "/login?returnTo=%2F",
-    );
-    await expect(feed.getByRole("link", { name: "Browse all live proposals →" })).toHaveAttribute(
-      "href",
-      "/offers?view=live",
-    );
-    await expect(feed.getByRole("link", { name: "Review profile →" })).toHaveAttribute(
-      "href",
-      "/complete-profile",
-    );
-
-    for (const rule of ["No guessed priorities", "No demo records", "No invented counterparties"]) {
-      await expect(feed.getByText(rule, { exact: true })).toBeVisible();
-    }
-
+    await expect(feed.getByRole("link", { name: "Search and filter trades" })).toHaveAttribute("href", "/discover");
+    await expect(feed).not.toContainText("Profile basis");
+    await expect(feed).not.toContainText("Feed rule");
+    await expect(feed).not.toContainText("This page does not guess your priorities");
     await expect(page.getByTestId("home-offer-trade")).toHaveCount(0);
     await expect(page.getByRole("slider")).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Recommended moral trade" })).toHaveCount(0);
+
     await expectNoHorizontalOverflow(page);
   });
 
@@ -119,7 +93,7 @@ test.describe("Adaptive homepage", () => {
       timeout: 30_000,
     });
     await page.getByRole("link", { name: /Sign in/ }).click();
-    await expect(page).toHaveURL(/\/login\?returnTo=%2F$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/login\?returnTo=%2Ffeed$/, { timeout: 30_000 });
   });
 
   test("stacks the adaptive signed-out feed without horizontal overflow on mobile", async ({
@@ -133,13 +107,10 @@ test.describe("Adaptive homepage", () => {
     await expect(page.locator('button[data-action="create"]')).toBeVisible();
     await expect(page.locator('[data-mt-live-now-state="signed_out"]')).toBeVisible();
     await expect(
-      page.getByRole("heading", {
-        level: 2,
-        name: "Sign in to see a feed based on your moral priorities.",
-      }),
+      page.getByRole("link", { name: "Sign in for personal suggestions" }),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: /Sign in/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Review profile →" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Search and filter trades" })).toBeVisible();
 
     await expect(page.getByTestId("home-offer-trade")).toHaveCount(0);
     await expect(page.getByRole("slider")).toHaveCount(0);

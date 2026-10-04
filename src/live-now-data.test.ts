@@ -35,7 +35,7 @@ test("the live shell loads private recommendations without blocking navigation",
   assert.match(loader, /moral-trade-live-route-recommendations\.js/);
   assert.match(loader, /moral-trade-live-route-recommendations\.css/);
   assert.match(loader, /moral-trade-live-core\.txt/);
-  assert.match(core, /No generic or demo suggestions are shown/);
+  assert.match(core, /Loading your profile/);
   assert.match(loader, /unavailableLiveNow/);
   assert.match(loader, /routePlanner:[\s\S]*status: 'unavailable'/);
   assert.match(
@@ -131,14 +131,9 @@ test("offer, pool, and cause browsing is learned without retaining arbitrary URL
   assert.doesNotMatch(tracker, /document\.referrer|window\.location\.href/);
 });
 
-test("fallback states explicitly refuse generic or fabricated suggestions", () => {
-  for (const phrase of [
-    "does not guess your priorities",
-    "No filler suggestions were added",
-    "No generic or fabricated suggestions",
-  ]) {
-    assert.match(bridge, new RegExp(phrase));
-  }
+test("fallback states show concise status without fabricated suggestions", () => {
+  assert.match(bridge, /No recommendations shown/);
+  assert.match(bridge, /Recommendations unavailable/);
   assert.match(bridge, /\/login\?returnTo=%2Ffeed/);
 
   for (const hardCodedSuggestion of [
@@ -397,7 +392,7 @@ test("legacy template-only snapshots cannot become feed inventory", () => {
 test("empty inventory displays no matches without substituting Atlas templates", () => {
   const rendered = renderFeedSnapshot([], "no_matches");
   assert.match(rendered, /No open opportunity currently matches your profile/);
-  assert.match(rendered, /No filler suggestions were added/);
+  assert.match(rendered, /Browse all opportunities/);
   assert.doesNotMatch(rendered, /data-mt-live-now-recommendation=/);
 });
 

@@ -41,10 +41,6 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
             <h2 id="outcome-learning-heading">
               Report this trade separately, by your own lights.
             </h2>
-            <p>
-              The report is private, does not alter the frozen deal, and is used only after
-              minimum-data, calibration, and safety gates pass.
-            </p>
           </div>
           <TradeOutcomeFeedback
             agreementId={props.agreementId}

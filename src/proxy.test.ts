@@ -97,15 +97,10 @@ test("a human queryless offers navigation transfers to Discover", () => {
   );
 });
 
-test("a queryless offers prefetch stays on the source route", () => {
-  const response = proxy(
-    makeRequest("/offers", { "next-router-prefetch": "1", purpose: "prefetch" }),
-  );
-
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get("x-middleware-next"), "1");
-  assert.equal(response.headers.get("location"), null);
-  assert.equal(response.headers.get("x-middleware-rewrite"), null);
+test("prefetch and navigation share the same Discover destination", () => {
+  const response = proxy(makeRequest("/offers", { "next-router-prefetch": "1", purpose: "prefetch" }));
+  assert.equal(response.status, 307);
+  assert.equal(response.headers.get("location"), "https://moraltrade.org/discover?domain=offers&view=list");
 });
 
 test("query-driven offer searches continue to default to the live list", () => {
@@ -114,7 +109,7 @@ test("query-driven offer searches continue to default to the live list", () => {
   assert.equal(response.status, 307);
   assert.equal(
     response.headers.get("location"),
-    "https://moraltrade.org/offers?search=Climate&view=live",
+    "https://moraltrade.org/discover?domain=offers&view=list&q=Climate",
   );
 });
 
@@ -140,12 +135,13 @@ test("legacy template tabs are also replaced by the unified Create interface", (
   assert.equal(response.headers.get("location"), null);
 });
 
-test("non-template explicit offer views pass through without redirecting", () => {
-  const response = proxy(makeRequest("/offers?view=live"));
-
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get("x-middleware-next"), "1");
-  assert.equal(response.headers.get("location"), null);
+test("the old live directory redirects while advanced and no-JS filters remain usable", () => {
+  assert.equal(proxy(makeRequest("/offers?view=live")).status, 307);
+  for (const url of ["/offers?view=live&render=server", "/offers?mode=pledge&view=live"]) {
+    const response = proxy(makeRequest(url));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-middleware-next"), "1");
+  }
 });
 
 test("invalid offer record identifiers fail closed before the dynamic route", () => {
