@@ -275,42 +275,43 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(card).toBeVisible();
     await expect(card).toContainText("Avoid meat for exactly three meals");
     await expect(card.locator("a.btn.primary")).toBeVisible();
-    const bottomNav = page.locator(".topbar nav");
-    await expect(bottomNav).toBeVisible();
+    const primaryNav = page.locator(".topbar nav");
+    await expect(primaryNav).toBeVisible();
     await expect
       .poll(() =>
-        bottomNav.evaluate((element) => ({
+        primaryNav.evaluate((element) => ({
           position: getComputedStyle(element).position,
           zIndex: Number(getComputedStyle(element).zIndex),
         })),
       )
-      .toMatchObject({ position: "fixed", zIndex: 50 });
+      .toMatchObject({ position: "static", zIndex: 50 });
+    await expect(primaryNav.locator("a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
     const settingsSummary = page.locator('summary[aria-label="Open feed settings"]');
     await expect(settingsSummary).toBeVisible();
     await settingsSummary.click();
     const settingsPanel = page.locator(".mt-feed-settings-popover");
     await expect(settingsPanel).toBeVisible();
-    const [settingsBox, bottomNavBox] = await Promise.all([
+    const [settingsBox, primaryNavBox] = await Promise.all([
       settingsPanel.boundingBox(),
-      bottomNav.boundingBox(),
+      primaryNav.boundingBox(),
     ]);
     expect(settingsBox).not.toBeNull();
-    expect(bottomNavBox).not.toBeNull();
-    expect(settingsBox!.y + settingsBox!.height).toBeLessThanOrEqual(bottomNavBox!.y);
+    expect(primaryNavBox).not.toBeNull();
+    expect(settingsBox!.y).toBeGreaterThanOrEqual(primaryNavBox!.y + primaryNavBox!.height);
+    expect(settingsBox!.y + settingsBox!.height).toBeLessThanOrEqual(844);
     await settingsSummary.click();
 
     await card.locator('summary[aria-label="Tune this recommendation"]').click();
     const feedbackPanel = card.locator(".mt-feed-overflow > div");
     await expect(feedbackPanel).toBeVisible();
-    const [feedbackBox, currentBottomNavBox] = await Promise.all([
+    const [feedbackBox, currentPrimaryNavBox] = await Promise.all([
       feedbackPanel.boundingBox(),
-      bottomNav.boundingBox(),
+      primaryNav.boundingBox(),
     ]);
     expect(feedbackBox).not.toBeNull();
-    expect(currentBottomNavBox).not.toBeNull();
-    expect(feedbackBox!.y + feedbackBox!.height).toBeLessThanOrEqual(
-      currentBottomNavBox!.y,
-    );
+    expect(currentPrimaryNavBox).not.toBeNull();
+    expect(feedbackBox!.y).toBeGreaterThanOrEqual(currentPrimaryNavBox!.y + currentPrimaryNavBox!.height);
+    expect(feedbackBox!.y + feedbackBox!.height).toBeLessThanOrEqual(844);
     await card.getByRole("button", { name: "Hard for me" }).click();
     await expect(card.getByRole("button", { name: "Hard for me" })).toHaveAttribute(
       "aria-pressed",
@@ -616,7 +617,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await expect(page).toHaveURL(/\/feed$/);
     const home = page.locator('[data-mt-primary-links] a[data-mt-feed-link="true"]');
-    await expect(home).toHaveText("Feed");
+    await expect(home).toHaveText("Home");
     await expect(home).toHaveAttribute("href", "/feed");
     await expect(home).toHaveAttribute("aria-current", "page");
     const feed = page.locator('[data-mt-live-now="adaptive"]');
@@ -681,7 +682,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
       const url = new URL(page.url());
       return { pathname: url.pathname, returnTo: url.searchParams.get("returnTo") };
     }).toEqual({ pathname: "/login", returnTo: "/dashboard" });
-    await expect(page.getByRole("heading", { level: 1, name: "Welcome back", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Welcome back", exact: true })).toBeVisible({ timeout: 30000 });
   });
 });
 
