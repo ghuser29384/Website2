@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 import { redirect } from "next/navigation";
 
 import { SiteTopbar } from "@/components/layout/site-topbar";

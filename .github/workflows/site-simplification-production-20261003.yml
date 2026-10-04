@@ -91,7 +91,7 @@ jobs:
           test "$(git hash-object src/lib/offer-browse-route.ts)" = '808eeefecee6804f294025cda884ef9de9b1900f'
           test "$(git hash-object src/proxy.ts)" = 'bf3b5fcf49f93a63ef24a8f09e693060ae80d043'
           test "$(git hash-object src/lib/create-interface/common-ground-integration.ts)" = '32ef9425e15554420d76366df7b22a1a6284d608'
-          test "$(git hash-object src/app/saved-offers/page.tsx)" = '03b51853e3ae03a9ec1ef897adfe094f90bf846a'
+          test "$(git hash-object src/app/saved-offers/page.tsx)" = 'ea8dd0beb82ba9ef239cc828aa00bedc32a0cab5'
           test "$(git hash-object src/app/wish-registry/page.tsx)" = '9f3a85b1f97b8e8d92fcdff276545a38b49d90c4'
           test "$(git hash-object public/moral-trade-live.html)" = '57fb7aad962c43164788adafd98d9e5f253ec011'
           test "$(git hash-object src/app/messages/page.tsx)" = 'cc2bedfa54a0fbd2b325704844ed238ed3af1176'

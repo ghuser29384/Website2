@@ -30,3 +30,15 @@ test("footer avoids duplicate Contact links and keeps FAQ accessible", async ({ 
   await footer.getByRole("link", { name: "FAQ", exact: true }).click();
   await expect(page).toHaveTitle(/FAQ/);
 });
+
+for (const [source, destination] of [["/start", "/walkthrough"], ["/moral-goods-group-buying", "/discover"]]) {
+  test(`${source} opens ${destination} as a complete document`, async ({ page }) => {
+    await page.goto(source);
+    const navigation = page.waitForRequest(request => request.isNavigationRequest()
+      && new URL(request.url()).pathname === destination);
+    await page.locator(`main a[href="${destination}"]`).first().click();
+    expect((await navigation).resourceType()).toBe("document");
+    await expect(page).toHaveURL(new RegExp(`${destination}$`));
+    await expect(page.locator("nextjs-portal")).toHaveCount(0);
+  });
+}

@@ -379,7 +379,7 @@ test("Commitments uses the approved single-navigation layout and preserves tab i
   await waitForMeaningfulSurface(page, "/commitments");
 });
 
-test("Dashboard guest route preserves the existing authentication experience", async ({ page }, testInfo) => {
+test("Profile guest route preserves the existing authentication experience", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const response = await page.goto("/dashboard", { timeout: 60_000, waitUntil: "domcontentloaded" });
   expect(response?.status() ?? 200).toBeLessThan(400);
@@ -387,7 +387,9 @@ test("Dashboard guest route preserves the existing authentication experience", a
   await expectNoHorizontalOverflow(page);
 
   await expect(page).toHaveURL(/\/login\?returnTo=%2Fdashboard$/);
-  await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible();
+  // Match the adjacent direct-login check: this redirect may stream the shell
+  // before the sign-in content is ready.
+  await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible({ timeout: 45_000 });
   await expect(page.getByRole("heading", { exact: true, name: "Welcome back" })).toBeVisible();
   const visibleText = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
   expect(visibleText.length).toBeGreaterThan(300);

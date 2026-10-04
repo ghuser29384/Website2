@@ -66,8 +66,15 @@ test("lazy input assist enhances topbar and route controls without racing React 
   for (let pass = 0; pass < 3; pass += 1) {
     for (const scenario of cases) {
       const errorCountBeforeNavigation = hydrationErrors.length;
+      // The assist is lazy-loaded. Test enhancement after its asset arrives,
+      // rather than spending the assertion deadline on delayed CI delivery.
+      const assistResponse = page.waitForResponse(response =>
+        new URL(response.url()).pathname === "/moral-trade-input-assist.js");
       await page.goto(scenario.route, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("load");
+      const assist = await assistResponse;
+      expect(assist.ok()).toBe(true);
+      expect(await assist.finished()).toBeNull();
 
       const control = page.locator(scenario.control).first();
       await expect(control).toBeVisible();
