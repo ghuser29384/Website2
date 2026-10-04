@@ -62,6 +62,28 @@ for (const failure of ["http", "auth-unavailable"] as const) {
   });
 }
 
+test("a temporary failure still retries across core document replacement", async ({ page }) => {
+  await page.route("**/moral-trade-account-identity.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.route("**/moral-trade-live-core.txt", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.continue();
+  });
+  let calls = 0;
+  await page.route("**/api/live-now", (route) => {
+    calls += 1;
+    return route.fulfill(calls === 1
+      ? { status: 503, json: { error: "temporary" } }
+      : { json: ready });
+  });
+  await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
+  await expect(page.locator('[data-mt-live-now="adaptive"]'))
+    .toHaveAttribute("data-mt-live-now-state", "ready");
+  expect(calls).toBe(2);
+});
+
 test("persistent errors stop retrying and Try again starts a fresh request", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   let calls = 0;

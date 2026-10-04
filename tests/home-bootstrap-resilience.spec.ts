@@ -54,11 +54,16 @@ test("failed optional sources show unavailable rather than demo records",async({
 });
 
 test("a stalled feed reaches an unavailable state within its bounded wait",async({page})=>{
+  test.setTimeout(75_000);
+  let attempts=0;
   await page.route("**/api/live-account",route=>route.fulfill({contentType:"application/json",body:JSON.stringify({authenticated:false})}));
-  await page.route("**/api/live-now",()=>{});
+  await page.route("**/api/live-now",()=>{attempts+=1;});
   await page.goto("/",{waitUntil:"commit"});
   await expect(page.locator('header [data-mt-primary-links]')).toBeVisible();
-  await expect(page.locator('[data-mt-live-now-state="unavailable"]')).toBeVisible({timeout:12000});
+  // The approved Feed policy allows two 25-second attempts plus a 500ms backoff.
+  // Allow the bounded enhancement download to finish after that request budget.
+  await expect(page.locator('[data-mt-live-now-state="unavailable"]')).toBeVisible({timeout:60000});
+  expect(attempts).toBe(2);
 });
 
 test("a failed core download keeps escape links and a retry explanation",async({page})=>{

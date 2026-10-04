@@ -1,4 +1,4 @@
-name: Publish count clarification and public-read recovery 2026-10-04
+name: Publish count clarification after release-contract alignment 2026-10-04
 
 on:
   push:
@@ -41,6 +41,7 @@ jobs:
             'src/lib/moral-trade/group-buying-live.ts',
           ]) assert.ok(readFileSync(path, 'utf8').includes('readPublicData('), path);
           assert.ok(readFileSync('src/lib/public-read-deadline.ts', 'utf8').includes('timeoutMs = 4_000'));
+          assert.ok(readFileSync('tests/home-bootstrap-resilience.spec.ts', 'utf8').includes('expect(attempts).toBe(2)'));
           JS
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
