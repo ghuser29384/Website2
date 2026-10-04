@@ -40,7 +40,7 @@ export function ProfilePortabilityPanel() {
     } catch {
       setStatus({
         tone: "error",
-        text: "Import failed before upload: the payload is not valid JSON.",
+        text: "We couldn’t read this file as JSON. Please choose a Moral Trade profile export. Nothing has been uploaded.",
       });
       return;
     }
@@ -48,7 +48,7 @@ export function ProfilePortabilityPanel() {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       setStatus({
         tone: "error",
-        text: "Import failed before upload: the payload must be a JSON object.",
+        text: "Please choose a Moral Trade profile export containing a JSON object. Nothing has been uploaded.",
       });
       return;
     }
@@ -74,7 +74,7 @@ export function ProfilePortabilityPanel() {
       if (!response.ok) {
         setStatus({
           tone: "error",
-          text: body?.error ?? "Import failed. Check the export format and try again.",
+          text: body?.error ?? "We couldn’t import your profile. Please check the export format and try again.",
         });
         return;
       }
@@ -91,7 +91,7 @@ export function ProfilePortabilityPanel() {
     } catch {
       setStatus({
         tone: "error",
-        text: "Import failed because the request could not reach the server.",
+        text: "We couldn’t reach the server to import your profile. Please try again.",
       });
     } finally {
       setIsSubmitting(false);

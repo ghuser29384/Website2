@@ -109,7 +109,7 @@
     panel.style.marginTop = "14px";
 
     const title = document.createElement("strong");
-    title.textContent = "One detail changes the results.";
+    title.textContent = "A quick question to help your search";
     const question = document.createElement("span");
     question.textContent = clarification.question;
     panel.append(title, question);
@@ -260,7 +260,7 @@
       });
       const payload = await response.json();
       if (!response.ok || !payload.interpretation || !payload.target) {
-        throw new Error(payload.error || "Query interpretation failed");
+        throw new Error(payload.error || "We couldn’t understand that search. Please try rephrasing it.");
       }
 
       const interpretation = payload.interpretation;

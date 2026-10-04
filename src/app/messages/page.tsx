@@ -71,7 +71,7 @@ export default async function MessagesPage({
             <p>
               {supabaseReady
                 ? "Sign in to view your private conversations and trade updates."
-                : "Messages are not available in this environment. You can still browse offers."}
+                : "We can’t load messages right now. You can still browse offers."}
             </p>
             <Link
               className={styles.primaryLink}
