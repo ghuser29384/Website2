@@ -1,0 +1,49 @@
+name: Publish walkthrough proportions 2026-10-04
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/walkthrough-proportions-production-20261004.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify walkthrough layout and exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object 'public/walkthrough-layout.css')" = 'a6b19d9bc2b72a790bae4a23c982cda96ece5310'
+          test "$(git hash-object 'public/moral-trade-interactive-walkthroughs.html')" = '240c0f89b979346b7eb27cbbca6c4bfcc57765f4'
+          test "$(git hash-object 'public/moral-trade-production.html')" = 'babf27bc47af6cf9ad5f65b39edd7f09cf0193a0'
+          test "$(git hash-object 'src/app/walkthrough/page.tsx')" = '090597450e128efcaab20ed717c4f0c406dd1ac7'
+          git diff --check HEAD^
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+      - name: Dispatch existing gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n --arg sha "$GITHUB_SHA" \
+            '{ref:"main",inputs:{ref:"main",target:"production",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+                --input - >/dev/null
