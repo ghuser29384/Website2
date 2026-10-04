@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
+import { readPublicData } from "@/lib/public-read-deadline";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 
@@ -92,10 +93,10 @@ async function listPublicOutcomes(page: number): Promise<{
   error: string | null;
 }> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("list_public_moral_trade_outcomes_v2" as never, {
+  const { data, error } = await readPublicData(supabase.rpc("list_public_moral_trade_outcomes_v2" as never, {
     p_limit: PAGE_SIZE + 1,
     p_offset: (page - 1) * PAGE_SIZE,
-  } as never);
+  } as never)).catch(() => ({ data: null, error: { message: "Public data unavailable" } }));
 
   if (error) {
     return {

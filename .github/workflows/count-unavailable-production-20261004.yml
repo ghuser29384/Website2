@@ -1,4 +1,4 @@
-name: Publish count label clarification 2026-10-04
+name: Publish count clarification and public-read recovery 2026-10-04
 
 on:
   push:
@@ -34,6 +34,13 @@ jobs:
           const source = readFileSync('src/lib/commitments-summary.ts', 'utf8');
           assert.ok(source.includes('"Count unavailable"'));
           assert.ok(!source.includes('"Unknown"'));
+          for (const path of [
+            'src/app/people/page.tsx',
+            'src/app/evidence/[[...recordId]]/page.tsx',
+            'src/app/wish-registry/page.tsx',
+            'src/lib/moral-trade/group-buying-live.ts',
+          ]) assert.ok(readFileSync(path, 'utf8').includes('readPublicData('), path);
+          assert.ok(readFileSync('src/lib/public-read-deadline.ts', 'utf8').includes('timeoutMs = 4_000'));
           JS
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"

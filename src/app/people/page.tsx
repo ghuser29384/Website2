@@ -14,6 +14,7 @@ import {
   type PublicProfileSummary,
 } from "@/lib/app-data";
 import { listPublicCredibilitySummaries } from "@/lib/credibility-data";
+import { readPublicData } from "@/lib/public-read-deadline";
 import {
   collectPeopleCauseOptions,
   PEOPLE_DISCOVERY_SORT_OPTIONS,
@@ -208,27 +209,27 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
       "match",
     ),
   };
-  const candidatePage = hasSupabaseEnv()
-    ? await listPublicProfilesPage(
-        "reviewed",
-        1,
-        PEOPLE_DISCOVERY_LIMIT,
-        viewer?.authUser.id,
-      )
-    : {
-        items: [] as PublicProfileSummary[],
-        page: 1,
-        pageSize: PEOPLE_DISCOVERY_LIMIT,
-        hasNextPage: false,
-        hasPreviousPage: false,
-      };
-  const candidates = candidatePage.items.map((profile) => ({
+  const directory = hasSupabaseEnv()
+    ? await readPublicData((async () => {
+        const candidatePage = await listPublicProfilesPage(
+          "reviewed",
+          1,
+          PEOPLE_DISCOVERY_LIMIT,
+          viewer?.authUser.id,
+        );
+        const credibility = await listPublicCredibilitySummaries(
+          candidatePage.items.map((profile) => profile.id),
+        );
+        return { items: candidatePage.items, credibility };
+      })()).catch(() => null)
+    : null;
+  const directoryUnavailable = directory === null;
+  const candidates = (directory?.items ?? [] as PublicProfileSummary[]).map((profile) => ({
     ...profile,
     publicLocation: formatPublicProfileLocation(profile),
   }));
-  const credibilityByProfile = await listPublicCredibilitySummaries(
-    candidates.map((profile) => profile.id),
-  );
+  const credibilityByProfile: Awaited<ReturnType<typeof listPublicCredibilitySummaries>> =
+    directory?.credibility ?? new Map();
   const discoveryFilters: PeopleDiscoveryFilters = {
     cause: filters.cause,
     credit: "any",
@@ -347,7 +348,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        {!hasSupabaseEnv() ? (
+        {directoryUnavailable ? (
           <div className="status-banner status-banner-error">
             The public data service is unavailable. Participant search is paused until the
             connection is restored; no fallback ranking is shown.
@@ -469,7 +470,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             ) : null}
             <div className={filterStyles.filterMeta}>
               <div className={filterStyles.activeFilters} aria-live="polite">
-                <strong>{rankedProfiles.length} matching member(s)</strong>
+                <strong>{directoryUnavailable ? "Count unavailable" : `${rankedProfiles.length} matching member(s)`}</strong>
                 {activeFilterLabels.map((label) => (
                   <span className={filterStyles.activeChip} key={label}>{label}</span>
                 ))}
@@ -599,6 +600,12 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                   </article>
                 );
               })
+            ) : directoryUnavailable ? (
+              <div className="empty-state">
+                <strong>Public members could not be loaded.</strong>
+                <p>Please try again in a moment. Your search and filters are preserved.</p>
+                <a className="button button-secondary" href={currentHref}>Try again</a>
+              </div>
             ) : (
               <div className="empty-state">
                 <div>
