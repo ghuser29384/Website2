@@ -47,6 +47,7 @@ jobs:
           test "$(git hash-object 'src/components/create/submission-receipt.tsx')" = '93d58443980cedd08e5a183d17994fede0f746e5'
           test "$(git hash-object 'src/components/create/submission-receipt.module.css')" = '6888c362c3c370507328bcb9fe3a789d6e67597b'
           test "$(git hash-object 'tests/site-proportions.spec.ts')" = '897b132099a7d74188642e42d6c081ff2e4f3bd6'
+          test "$(git hash-object 'src/lib/create-interface/source-contract.test.ts')" = 'fb04873e945b3f2c06d8b6d8864daf9610f45274'
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_sha" = "$GITHUB_SHA"
