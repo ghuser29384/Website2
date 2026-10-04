@@ -22,6 +22,7 @@
   <script defer src="/moral-trade-account-identity.js?v=20260923"></script>
   <script defer src="/moral-trade-discover-search.js?v=20260923"></script>
   <script defer src="/moral-trade-evidence-navigation.js"></script>
+  <script defer src="/moral-trade-menu.js"></script>
   <script defer src="/moral-trade-input-assist.js?v=20260923"></script>
   <link rel="stylesheet" href="/moral-trade-refined-header.css">
   <link rel="stylesheet" href="/moral-trade-proportions.css">
@@ -31,14 +32,28 @@
   <header class="app-header mt-refined-header">
     <a class="brand" href="/" aria-label="Moral Trade home">Moral Trade</a>
     <nav class="top-nav" aria-label="Primary navigation" data-mt-primary-links="true">
-      <a href="/feed">Feed</a>
-      <a href="/discover" aria-current="page">Discover</a>
-      <a href="/messages">Messages</a>
+      <a href="/feed">Home</a>
+      <a href="/discover" aria-current="page">Trades</a>
       <a href="/commitments">Commitments</a>
+      <a href="/dashboard">Profile</a>
     </nav>
     <div class="header-actions">
+      <details class="header-more">
+        <summary class="text-btn">More</summary>
+        <div class="header-more-links">
+          <a href="/messages">Messages</a>
+          <a href="/trades/new">Create a trade</a>
+          <a href="/saved-offers">Saved offers</a>
+          <a href="/invite">Invite</a>
+          <template data-mt-evidence-navigation="true"><a href="/evidence">Evidence</a></template>
+          <a href="/what-is-moral-trade">How it works</a>
+          <a href="/safety">Safety</a>
+          <a data-mt-guest-only="true" hidden href="/login">Sign in</a>
+          <div class="header-account-row"><a class="avatar" href="/dashboard" aria-label="Account"><span data-mt-account-avatar="true">•</span></a><span>Account settings</span></div>
+        </div>
+      </details>
     <a class="header-start" data-mt-guest-only="true" hidden href="/start">Get Started</a>
-    <a class="avatar" href="/dashboard" aria-label="Account"><span data-mt-account-avatar="true">•</span></a>
+
     </div>
   </header>
   <main id="discover-main" class="discover-main">

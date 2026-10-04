@@ -10,10 +10,8 @@ for (const width of [1440, 390, 320]) {
     // Shared header/footer geometry uses a retained page; About has HTTP redirect coverage.
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Reach the Moral Trade team.");
     const header = page.locator(".mt-refined-header").first();
-    await expect(header.locator("[data-mt-primary-links] > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
-    await expect(header.locator('form[role="search"]')).toHaveAttribute("action", "/discover");
-    await expect(header.locator('form[role="search"]')).toHaveAttribute("method", "get");
-    await expect(header.getByRole("searchbox", { name: "Search offers" })).toBeVisible();
+    await expect(header.locator("[data-mt-primary-links] > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
+    await expect(header.locator('form[role="search"]')).toHaveCount(0);
     const more = header.locator("summary").filter({ hasText: "More" });
     await more.focus();
     await page.keyboard.press("Enter");
@@ -43,8 +41,10 @@ test("native offer search reaches the existing directory without an interpretati
   });
   await page.goto("/contact");
   const header = page.locator(".mt-refined-header").first();
-  await header.getByRole("searchbox", { name: "Search offers" }).fill("animal welfare");
-  await header.getByRole("button", { name: "Search", exact: true }).click();
+  await header.getByRole("link", { name: "Trades", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
+  await page.locator("#command-input").fill("animal welfare");
+  await page.locator("#command-form").getByRole("button", { name: "Search", exact: true }).click();
   await expect.poll(() => new URL(page.url()).pathname).toBe("/discover");
   await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe("animal welfare");
   expect(interpretationRequests).toEqual([]);

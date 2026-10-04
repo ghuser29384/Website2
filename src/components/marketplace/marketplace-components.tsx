@@ -657,10 +657,9 @@ function MarketplaceSideNav({
   createHref?: string;
 }) {
   const items = [
-    { key: "browse", href: "/discover", label: "Discover", icon: "browse" },
-    { key: "plan", href: "/saved-offers", label: "Saved offers", icon: "planner" },
+    { key: "home", href: "/feed", label: "Home", icon: "browse" },
+    { key: "browse", href: "/discover", label: "Trades", icon: "planner" },
     { key: "track", href: "/commitments", label: "Commitments", icon: "track" },
-    { key: "messages", href: "/messages", label: "Messages", icon: "messages" },
     { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },
   ] as const;
 
@@ -2419,10 +2418,9 @@ export function MarketplaceBottomNav({
 }) {
   const normalizedActive = active === "account" ? "profile" : active;
   const items = [
-    { key: "browse", href: "/discover", label: "Discover", icon: "marketplace" },
-    { key: "plan", href: "/saved-offers", label: "Saved offers", icon: "example" },
+    { key: "home", href: "/feed", label: "Home", icon: "marketplace" },
+    { key: "browse", href: "/discover", label: "Trades", icon: "example" },
     { key: "track", href: "/commitments", label: "Commitments", icon: "evidence" },
-    { key: "messages", href: "/messages", label: "Messages", icon: "review" },
     { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },
   ] as const;
 

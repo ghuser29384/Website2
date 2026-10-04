@@ -42,8 +42,8 @@ test("primary acquisition routes lead with real actions instead of pilot languag
     /inspect (?:an |the |one )?(?:complete )?(?:worked )?example/i,
   );
   assert.match(site, /href: "\/start",\s*label: "Get started"/);
-  assert.match(site, /href: "\/feed", label: "Feed"/);
-  assert.match(site, /href: "\/discover", label: "Discover"/);
+  assert.match(site, /href: "\/feed", label: "Home"/);
+  assert.match(site, /href: "\/discover", label: "Trades"/);
   assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });
   assert.match(start, /Open the walkthrough/);
   assert.match(start, /Go to sign in/);

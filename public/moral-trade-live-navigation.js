@@ -93,10 +93,10 @@
       if (!header) continue;
       if (nav.dataset.mtPrimaryLinks === "true") { patched = true; continue; }
       const links = [
-        ["/feed", "Feed", "data-mt-feed-link"],
-        ["/discover", "Discover", "data-mt-discover-link"],
-        ["/messages", "Messages", ""],
+        ["/feed", "Home", "data-mt-feed-link"],
+        ["/discover", "Trades", "data-mt-discover-link"],
         ["/commitments", "Commitments", ""],
+        ["/dashboard", "Profile", ""],
       ];
       const fragment = document.createDocumentFragment();
       const path = window.location.pathname;
@@ -124,7 +124,7 @@
         const panel = document.createElement("div");
         panel.className = "header-more-links";
         for (const [href, label] of [
-          ["/dashboard", "Profile"], ["/trades/new", "Create a trade"],
+          ["/messages", "Messages"], ["/trades/new", "Create a trade"],
           ["/saved-offers", "Saved offers"],
           ["/invite", "Invite"], ["/evidence", "Evidence"], ["/what-is-moral-trade", "How it works"], ["/safety", "Safety"],
         ]) {
@@ -139,6 +139,22 @@
           } else {
             panel.appendChild(link);
           }
+        }
+        const signIn = document.createElement("a");
+        signIn.href = "/login";
+        signIn.textContent = "Sign in";
+        signIn.dataset.mtGuestOnly = "true";
+        signIn.hidden = true;
+        panel.appendChild(signIn);
+        // Keep the feed's existing account drawer available inside More.
+        const account = actions.querySelector(".avatar");
+        if (account) {
+          const accountRow = document.createElement("div");
+          accountRow.className = "header-account-row";
+          const accountLabel = document.createElement("span");
+          accountLabel.textContent = "Account settings";
+          accountRow.append(account, accountLabel);
+          panel.appendChild(accountRow);
         }
         more.append(trigger, panel);
         more.addEventListener("keydown", (event) => {

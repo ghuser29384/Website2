@@ -31,7 +31,8 @@ import {
 import { SiteLink as Link } from "@/components/layout/site-link";
 import { useMemo, useState } from "react";
 
-import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";
+import { SiteTopbar } from "@/components/layout/site-topbar";
+import { getPrimaryNavLinks } from "@/lib/site";
 
 import styles from "./trade-controls-workspace.module.css";
 
@@ -793,22 +794,7 @@ export function TradeControlsWorkspace({ protocols }: { protocols: TradeControlP
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topbar}>
-        <Link aria-label="Moral Trade home" className={styles.brand} href="/">
-          <MutualStepMark className={styles.brandMark} />
-          <span>Moral Trade</span>
-        </Link>
-        <nav aria-label="Primary" className={styles.primaryNav}>
-          <Link href="/">Now</Link>
-          <Link href="/discover">Discover</Link>
-          <Link href="/create">Offer</Link>
-          <Link href="/commitments">Activity</Link>
-          <Link href="/worked-examples">Learn</Link>
-        </nav>
-        <Link className={styles.accountLink} href="/dashboard" aria-label="Open account">
-          <UserCircle aria-hidden="true" size={31} weight="thin" />
-        </Link>
-      </header>
+      <SiteTopbar brandHref="/" links={getPrimaryNavLinks()} />
 
       <div className={styles.mobileFeatureBar}>
         <button aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)} type="button">

@@ -661,14 +661,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     const navigation = page.locator(".topbar nav").first();
     await expect(navigation.locator("button, a")).toHaveText([
-      "Feed",
-      "Discover",
-      "Messages",
+      "Home",
+      "Trades",
       "Commitments",
+      "Profile",
     ]);
 
-    await page.locator(".header-more > summary").click();
-    const profile = page.locator(".header-more").getByRole("link", { name: "Profile", exact: true });
+    const profile = navigation.getByRole("link", { name: "Profile", exact: true });
     await expect(profile).toBeVisible();
     await expect(profile).toHaveAttribute("href", "/dashboard");
     const overflow = await page.evaluate(

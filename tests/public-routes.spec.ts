@@ -44,7 +44,7 @@ const dataDependentPublicRoutes = [
 ] as const;
 
 const protectedRoutes = ["/dashboard"] as const;
-const standardNavLabels = ["Feed", "Discover", "Messages", "Commitments"] as const;
+const standardNavLabels = ["Home", "Trades", "Commitments", "Profile"] as const;
 
 function isExpectedLocalSupabaseDiagnostic(message: string) {
   return (
@@ -227,12 +227,12 @@ test("the live home workspace has one semantic page heading and its dedicated na
   await expect(feedControl).toHaveCount(1);
   await expect(discoverControl).toHaveCount(1);
   await expect(evidenceControl).toHaveCount(0);
-  await expect(feedControl).toHaveAccessibleName("Feed");
+  await expect(feedControl).toHaveAccessibleName("Home");
   await expect(feedControl).toHaveAttribute("href", "/feed");
-  await expect(discoverControl).toHaveAccessibleName("Discover");
+  await expect(discoverControl).toHaveAccessibleName("Trades");
   await expect(discoverControl).toHaveAttribute("href", "/discover");
   await expect(page.locator("[data-mt-primary-links] > a")).toHaveText([
-    "Feed", "Discover", "Messages", "Commitments",
+    "Home", "Trades", "Commitments", "Profile",
   ]);
   expect(errors).toEqual([]);
 });
