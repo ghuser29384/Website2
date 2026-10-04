@@ -32,6 +32,7 @@ import { buildAgreementPaymentAuthorizationPreview } from "@/lib/agreement-payme
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasStripeEnv } from "@/lib/stripe";
 import type { Database } from "@/lib/supabase/database.types";
+import styles from "./agreement-page.module.css";
 
 export const metadata: Metadata = {
   title: "Agreement",
@@ -195,8 +196,8 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
   });
 
   return (
-    <div className="page-shell">
-      <header className="hero">
+    <div className={`page-shell ${styles.page}`}>
+      <header className={styles.siteHeader}>
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(true)}
@@ -204,67 +205,43 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
           showLogout
         />
 
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Agreement record</p>
-            <h1>
-              Agreement with{" "}
-              {agreement.counterparty ? agreement.counterparty.resolvedName : "counterparty"}.
-            </h1>
-            <div className="hero-actions">
-              <Link className="button button-secondary" href="/dashboard">
-                Back to dashboard
-              </Link>
-              {agreement.offer ? (
-                <Link className="button button-primary" href={`/offers/${agreement.offer.id}`}>
-                  View offer
-                </Link>
-              ) : null}
-            </div>
-          </section>
-
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Current state</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>{formatState(agreement.completion_state)}</strong>
-                  <p>
-                    Status last updated{" "}
-                    <LocalDateTime value={agreement.updated_at} fallback="Date unavailable" dateOnly />.
-                  </p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>{agreement.payments.length} payment record(s)</strong>
-                  <p>{agreement.paymentSchedules.length} reminder schedule(s).</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  {agreement.legacyEvidenceReviewAvailable ? (
-                    <>
-                      <strong>{agreement.reviewCases.length} review case(s)</strong>
-                      <p>{agreement.evidenceItems.length} evidence item(s) submitted.</p>
-                    </>
-                  ) : (
-                    <>
-                      <strong>Current milestone review workflow</strong>
-                      <p>The retired agreement-room evidence console is not enabled.</p>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
       </header>
 
-      <main id="main-content" tabIndex={-1}>
+      <main className={styles.content} id="main-content" tabIndex={-1}>
+        <section className={styles.overview} aria-labelledby="agreement-title">
+          <Link className={styles.backLink} href="/dashboard">
+            Back to dashboard
+          </Link>
+          <div className={styles.headingRow}>
+            <div>
+              <p className={styles.kicker}>Agreement record</p>
+              <h1 id="agreement-title">
+                Agreement with {agreement.counterparty?.resolvedName ?? "counterparty"}
+              </h1>
+            </div>
+            {agreement.offer ? (
+              <Link className="button button-secondary" href={`/offers/${agreement.offer.id}`}>
+                View offer
+              </Link>
+            ) : null}
+          </div>
+          <div className={styles.statusRow}>
+            <span className={styles.status}>{formatState(agreement.completion_state)}</span>
+            <span>
+              Updated <LocalDateTime value={agreement.updated_at} fallback="Date unavailable" dateOnly />
+            </span>
+          </div>
+          <dl className={styles.recordSummary}>
+            <div><dt>Payment records</dt><dd>{agreement.payments.length}</dd></div>
+            <div><dt>Reminder schedules</dt><dd>{agreement.paymentSchedules.length}</dd></div>
+            {agreement.legacyEvidenceReviewAvailable ? (
+              <>
+                <div><dt>Evidence submitted</dt><dd>{agreement.evidenceItems.length}</dd></div>
+                <div><dt>Review cases</dt><dd>{agreement.reviewCases.length}</dd></div>
+              </>
+            ) : null}
+          </dl>
+        </section>
         {formMessage ? (
           <div
             className={`status-banner ${
@@ -277,8 +254,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
 
         <section className="section section-white">
           <div className="section-head">
-            <p className="eyebrow">Terms</p>
-            <h2>What the parties are tracking</h2>
+            <h2>Agreement terms</h2>
             <p>
               {agreement.offer
                 ? `${agreement.offer.offered_cause} for ${agreement.offer.requested_cause}`
@@ -299,9 +275,9 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
             </article>
           </div>
 
-          <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">Agreement room</p>
-            <h3>Structured terms before evidence review</h3>
+          <details className={styles.editor}>
+            <summary>Edit agreement terms</summary>
+            <div className={styles.disclosureBody}>
             <form action={saveAgreementTermsAction} className="stack-form">
               <input name="agreement_id" type="hidden" value={agreement.id} />
               <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
@@ -359,14 +335,14 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                 Save agreement terms
               </button>
             </form>
-          </div>
+            </div>
+          </details>
         </section>
 
         {agreement.performanceBonds.length ? (
           <section className="section section-white" aria-labelledby="performance-bonds-heading">
             <div className="section-head">
-              <p className="eyebrow">Pledge performance bonds</p>
-              <h2 id="performance-bonds-heading">Evidence, challenge windows, and review status</h2>
+              <h2 id="performance-bonds-heading">Performance bonds</h2>
               <p>
                 These bonds support factual trust about whether each pledged act was performed.
                 They do not replace the no-trade baseline or additionality explanation.
@@ -666,15 +642,16 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
         {agreement.legacyEvidenceReviewAvailable ? (
           <section className="section section-subtle">
           <div className="section-head">
-            <p className="eyebrow">Evidence review</p>
-            <h2>Completion states, evidence schemas, and challenge lane</h2>
+            <h2>Evidence review</h2>
             <p>
               A participant can submit evidence, then an operator reviews it with SLA, conflict
               notes, public reasoning, and an appeal path before the room earns completion trust.
             </p>
           </div>
 
-          <div className="data-grid">
+          <details className={styles.editor}>
+            <summary>Completion states</summary>
+          <div className={`data-grid ${styles.disclosureBody}`}>
             {COMPLETION_STATES.map((state) => (
               <article className="panel data-card" key={state}>
                 <p className="detail-kicker">Completion state</p>
@@ -685,6 +662,8 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               </article>
             ))}
           </div>
+
+          </details>
 
           <div className="data-grid">
             <article className="panel data-card">
@@ -822,23 +801,15 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
             ) : null}
           </div>
           </section>
-        ) : (
-          <section className="section section-subtle">
-            <div className="section-head">
-              <p className="eyebrow">Evidence review</p>
-              <h2>Current milestone evidence workflow</h2>
-              <p>
-                This agreement record does not use the retired agreement-room evidence console.
-                Its terms, events, payments, and performance-bond evidence remain available here.
-              </p>
-            </div>
-          </section>
-        )}
+        ) : null}
 
-        <section className="section section-subtle">
+        <details
+          className={`section section-subtle ${styles.paymentSection}`}
+          open={agreement.payments.length > 0 || agreement.paymentSchedules.length > 0}
+        >
+          <summary>Payments and reminders</summary>
+          <div className={styles.disclosureBody}>
           <div className="section-head">
-            <p className="eyebrow">Payments</p>
-            <h2>Payment, reminders, refund review, and disputes</h2>
             <p>
               Payment capture is gated by agreement type. Donation offsets, pledge swaps, and
               compensated moral-action agreements record no-capture authorization stubs until
@@ -1033,12 +1004,12 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               ))
             ) : null}
           </div>
-        </section>
+          </div>
+        </details>
 
         <section className="section section-white">
           <div className="section-head">
-            <p className="eyebrow">Lifecycle</p>
-            <h2>Counterproposals, evidence, cancellation, and rating</h2>
+            <h2>Activity</h2>
             <p>Every material change should be recorded as an event.</p>
           </div>
 
