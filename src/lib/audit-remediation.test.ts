@@ -77,7 +77,7 @@ test("each summary has stable count units and creation is not mistaken for activ
   const row: SummaryRecord = {lifecycle:"activated",createdAt:"2026-08-20T00:00:00Z",action:null,verifiedOutcome:false};
   const result = summarizeCommitmentRecords([row,{...row,lifecycle:"completed",createdAt:"2026-09-20T00:00:00Z",verifiedOutcome:true}],"2026-09-26T23:00:00Z");
   assert.deepEqual(result,{active:1,actionNeeded:0,underReview:0,createdThisMonth:1,verified:1});
-  assert.equal(commitmentCountLabel(0,false),"Unknown");
+  assert.equal(commitmentCountLabel(0,false),"Count unavailable");
   assert.equal(commitmentCountLabel(3,false),"3 found");
   assert.equal(commitmentCountLabel(0,true),"0");
   assert.equal(commitmentCountLabel(null,true),"Unavailable");

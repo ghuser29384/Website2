@@ -513,8 +513,21 @@
   font-size: 0.75rem;
 }
 
+.activityRail > header {
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.activityRail h2 {
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin-top: 6px;
+}
+
 .activityRail > header a {
   color: var(--commitments-blue);
+  font-size: 0.875rem;
   font-weight: 650;
   text-decoration: none;
   white-space: nowrap;
@@ -531,21 +544,22 @@
 .activityRail li {
   border-bottom: 1px solid var(--commitments-rule);
   display: grid;
-  gap: 12px;
-  grid-template-columns: 74px 1fr;
-  padding: 15px 0;
-  position: relative;
+  column-gap: 12px;
+  grid-template-columns: 8px minmax(0, 1fr);
+  row-gap: 6px;
+  padding: 18px 0;
 }
 
 .activityRail li::before {
   background: var(--commitments-blue);
   border-radius: 50%;
   content: "";
-  height: 9px;
-  left: 64px;
-  position: absolute;
-  top: 21px;
-  width: 9px;
+  align-self: start;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  height: 8px;
+  margin-top: 0.4rem;
+  width: 8px;
 }
 
 .activityRail li[data-kind="outcome"]::before { background: var(--commitments-orange); }
@@ -555,31 +569,41 @@
 .activityRail time {
   color: var(--commitments-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.64rem;
+  font-size: 0.8125rem;
+  grid-column: 2;
+  grid-row: 1;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .activityRail li > div {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-left: 10px;
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .activityRail li strong {
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.05rem;
   font-weight: 500;
+  line-height: 1.35;
 }
 
 .activityRail li span {
   color: var(--commitments-muted);
-  font-size: 0.72rem;
-  line-height: 1.4;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .activityRail li a {
   color: var(--commitments-blue);
-  font-size: 0.7rem;
+  align-self: flex-start;
+  font-size: 0.875rem;
+  line-height: 1.5;
   text-decoration: none;
 }
 
@@ -826,6 +850,4 @@
   .recordHeadingLine { flex-direction: column; }
   .calendarList li { grid-template-columns: 64px 1fr; }
   .calendarList li > a { grid-column: 2; }
-  .activityRail li { grid-template-columns: 66px 1fr; }
-  .activityRail li::before { left: 57px; }
 }

@@ -98,6 +98,7 @@ jobs:
           test "$(git hash-object src/components/layout/site-link.tsx)" = '386db5418b18767417d47a2c24e0816e4b794c67'
           test "$(git hash-object src/components/dashboard/dashboard-tools.tsx)" = '89dabaf5a1997de52bb7b7709e74a14bf6b8647f'
           test "$(git hash-object src/lib/site.ts)" = '0ce1022d1aa109cc6f20a034e7677b049a37f16c'
+          test "$(git hash-object src/app/commitments/page.tsx)" = '40f82bf335c966ba53744afb7f362053955938ea'
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_sha" = "$GITHUB_SHA"

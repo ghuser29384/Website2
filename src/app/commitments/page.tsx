@@ -104,7 +104,7 @@ function SummaryMetric({ icon, label, count, complete, detail }: {
   return (
     <div className={redesignStyles.summaryCard}>
       <span className={redesignStyles.summaryIcon}><CommitmentSummaryIcon name={icon} /></span>
-      <strong className={redesignStyles.summaryValue}>{commitmentCountLabel(count, complete)}</strong>
+      <strong className={redesignStyles.summaryValue} data-count-unavailable={!complete && count === 0 ? "true" : undefined}>{commitmentCountLabel(count, complete)}</strong>
       <span className={redesignStyles.summaryLabel}>{label}</span>
       {detail ? <small>{detail}</small> : null}
     </div>
@@ -425,7 +425,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
                 {data.warnings.length ? (
                   <div className={redesignStyles.coverageWarning} role="alert" data-testid="commitments-incomplete">
                     <strong>Some records could not be fully loaded</strong>
-                    <p>Counts marked “found” reflect loaded records only. “Unknown” does not mean zero.</p>
+                    <p>Counts marked “found” reflect loaded records only. “Count unavailable” does not mean zero.</p>
                     <ul>{data.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
                     <CommitmentsDocumentLink href={retryHref}>Retry loading records</CommitmentsDocumentLink>
                   </div>
