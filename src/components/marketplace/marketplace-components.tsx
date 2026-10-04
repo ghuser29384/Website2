@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 import type { CSSProperties, FormHTMLAttributes, ReactNode } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
@@ -2430,7 +2430,7 @@ export function MarketplaceBottomNav({
     <nav className="marketplace-bottom-nav" aria-label="Marketplace bottom navigation">
       {items.map((item) => (
         <Link
-          aria-current={active === item.key ? "page" : undefined}
+          aria-current={normalizedActive === item.key ? "page" : undefined}
           className={joinClassName([
             "marketplace-bottom-nav-item",
             normalizedActive === item.key && "is-active",

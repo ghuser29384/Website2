@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 
 import { markTradeNotificationReadAction } from "@/app/core-trade-actions";
 import { MessagesInbox } from "@/components/messages/messages-inbox";

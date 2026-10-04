@@ -7,7 +7,7 @@ import ts from "typescript";
 
 import { SiteLink } from "../components/layout/site-link";
 
-for (const href of ["/", "/?filter=one&filter=two", "/#main-content", "/?from=contact#main-content"]) {
+for (const href of ["/", "/?filter=one&filter=two", "/#main-content", "/?from=contact#main-content", "/feed", "/feed/", "/discover?q=climate", "/walkthrough#start"]) {
   test(`homepage ${href} is a document link, even when prefetch was requested`, () => {
     const onClick = () => undefined;
     const ref = { current: null };
@@ -20,7 +20,7 @@ for (const href of ["/", "/?filter=one&filter=two", "/#main-content", "/?from=co
   });
 }
 
-for (const href of ["/dashboard", "/profile", "/dashboard?view=controls#privacy-controls", "/discover", "/feed", "/login", "#details", "https://example.invalid/"]) {
+for (const href of ["/dashboard", "/profile", "/dashboard?view=controls#privacy-controls", "/discover/details", "/feedback", "/login", "#details", "https://example.invalid/"]) {
   test(`${href} retains Next.js transport and explicit prefetch settings`, () => {
     for (const prefetch of [undefined, false, true] as const) {
       const link = SiteLink({ href, children: "Continue", prefetch });

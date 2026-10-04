@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 import { notFound } from "next/navigation";
 
 import { saveCoreOfferAction } from "@/app/core-trade-actions";

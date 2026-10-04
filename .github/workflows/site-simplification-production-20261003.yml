@@ -1,10 +1,10 @@
-name: Site simplification validation and production 2026-10-03
+name: Site cleanup validation and production 2026-10-04
 
 on:
   push:
     branches:
       - main
-      - codex/site-simplification
+      - codex/site-cleanup-20261004
     paths:
       - .github/workflows/site-simplification-production-20261003.yml
 
@@ -12,12 +12,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: site-simplification-production-20261003-${{ github.ref }}
+  group: site-cleanup-production-20261004-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/codex/site-simplification'
+    if: github.ref == 'refs/heads/codex/site-cleanup-20261004'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -83,16 +83,22 @@ jobs:
           test "$GITHUB_REF" = 'refs/heads/main'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git hash-object public/moral-trade-live-core.txt)" = '73306f7b09508ce87fd4c3ef2e5ccf43d91ad976'
-          test "$(git hash-object public/moral-trade-live-now.js)" = 'd239fa6273cf111d41e02228bd84049e75dbf54b'
+          test "$(git hash-object public/moral-trade-live-now.js)" = '52d03851162c4b2301f44c91d15368e4805f20d1'
           test "$(git hash-object public/moral-trade-discover.html)" = 'ec0f0b371121319349baa12f120e193fdc7b7fd2'
-          test "$(git hash-object public/moral-trade-discover-search.js)" = 'a101349d3348979674272463f460eb88fb6e500c'
-          test "$(git hash-object public/moral-trade-create/index.html)" = 'f5e860ff0bee09a0aaa53acae3bfffa329597784'
+          test "$(git hash-object public/moral-trade-discover-search.js)" = '518becbea73a60abcc209d99995dbe455fa4c866'
+          test "$(git hash-object public/moral-trade-create/index.html)" = '0932412eb272ff9b389ec3b408dfe201541ff367'
           test "$(git hash-object public/moral-trade-create/ui-repairs.css)" = 'b3e5a62f39bce27a9c7cb729ff60aae555672214'
           test "$(git hash-object src/lib/offer-browse-route.ts)" = '808eeefecee6804f294025cda884ef9de9b1900f'
           test "$(git hash-object src/proxy.ts)" = 'bf3b5fcf49f93a63ef24a8f09e693060ae80d043'
           test "$(git hash-object src/lib/create-interface/common-ground-integration.ts)" = '32ef9425e15554420d76366df7b22a1a6284d608'
-          test "$(git hash-object src/app/saved-offers/page.tsx)" = '03b51853e3ae03a9ec1ef897adfe094f90bf846a'
+          test "$(git hash-object src/app/saved-offers/page.tsx)" = 'ea8dd0beb82ba9ef239cc828aa00bedc32a0cab5'
           test "$(git hash-object src/app/wish-registry/page.tsx)" = '9f3a85b1f97b8e8d92fcdff276545a38b49d90c4'
+          test "$(git hash-object public/moral-trade-live.html)" = '57fb7aad962c43164788adafd98d9e5f253ec011'
+          test "$(git hash-object src/app/messages/page.tsx)" = '1e814864ec23bfbd68624eaefaf1eafc388f8bc0'
+          test "$(git hash-object src/components/layout/site-link.tsx)" = '386db5418b18767417d47a2c24e0816e4b794c67'
+          test "$(git hash-object src/components/dashboard/dashboard-tools.tsx)" = '89dabaf5a1997de52bb7b7709e74a14bf6b8647f'
+          test "$(git hash-object src/lib/site.ts)" = '0ce1022d1aa109cc6f20a034e7677b049a37f16c'
+          test "$(git hash-object src/app/commitments/page.tsx)" = '40f82bf335c966ba53744afb7f362053955938ea'
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_sha" = "$GITHUB_SHA"

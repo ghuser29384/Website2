@@ -58,7 +58,7 @@ export default async function PaymentsPage({ searchParams }: Props) {
     <DashboardTools active="payments" />
     <main id="main-content" className={styles.content} tabIndex={-1}>
       <header className={styles.heading}>
-        <Link href="/dashboard" prefetch={false}>← Dashboard</Link>
+        <Link href="/dashboard" prefetch={false}>Back to Profile</Link>
         <h1>Payment methods & receiving</h1>
         <p>Add a way to pay, or set up where you receive money.</p>
         {available && !live ? <p className={styles.notice}><strong>Test mode.</strong> Use Stripe test details only. No live payment methods or payouts.</p> : null}

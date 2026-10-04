@@ -19,7 +19,7 @@ export function DashboardTools({ active }: { active: DashboardView | "payments" 
   }, [active]);
 
   return (
-    <nav className={styles.tools} aria-label="Dashboard controls">
+    <nav className={styles.tools} aria-label="Profile controls">
       <Link href="/dashboard" prefetch={false} aria-current={active === "priorities" ? "page" : undefined}>
         Priorities
       </Link>
