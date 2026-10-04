@@ -28,5 +28,5 @@ export function summarizeCommitmentRecords(records: readonly SummaryRecord[], ge
 export function commitmentCountLabel(count: number | null, complete: boolean) {
   if (count === null) return "Unavailable";
   if (complete) return String(count);
-  return count > 0 ? `${count} found` : "Unknown";
+  return count > 0 ? `${count} found` : "Count unavailable";
 }

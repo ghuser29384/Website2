@@ -55,7 +55,7 @@ test.describe("Audit remediation with isolated account and source states",()=>{
     const warning=page.getByTestId("commitments-incomplete");
     await expect(warning).toBeVisible();
     const summary=page.getByRole("region",{name:"Commitment summary"});
-    await expect(summary.locator("strong")).toHaveText(["1 found","Unknown","Unknown","1 found","Unknown"]);
+    await expect(summary.locator("strong")).toHaveText(["1 found","Count unavailable","Count unavailable","1 found","Count unavailable"]);
     expect((await warning.boundingBox())!.y).toBeLessThan((await summary.boundingBox())!.y);
     await expect(page.getByText("Deliberate isolated source failure")).toHaveCount(0);
     await page.screenshot({path:testInfo.outputPath("partial-records.png"),fullPage:false});
@@ -66,7 +66,7 @@ test.describe("Audit remediation with isolated account and source states",()=>{
   test("failed source is unknown rather than an empty account, and failed cart suppresses the projection",async({page,request,context})=>{
     await session(request,context);await state(request,"unavailable");await page.goto("/commitments");
     await expect(page.getByRole("heading",{name:"No commitments could be loaded."})).toBeVisible();
-    await expect(page.getByRole("region",{name:"Commitment summary"}).locator("strong")).toHaveText(["Unknown","Unknown","Unknown","Unknown","Unknown"]);
+    await expect(page.getByRole("region",{name:"Commitment summary"}).locator("strong")).toHaveText(["Count unavailable","Count unavailable","Count unavailable","Count unavailable","Count unavailable"]);
     await state(request,"cart-unavailable");await page.reload();
     await expect(page.getByText("Saved offers could not be fully loaded. No projection is shown.",{exact:false})).toBeVisible();
     await expect(page.getByText("If everything succeeds",{exact:true})).toHaveCount(0);
