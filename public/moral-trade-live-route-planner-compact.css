@@ -1,4 +1,4 @@
-/* Presentation only: keep the existing route payloads, controls, and dialog styles. */
+/* Compact layout for the route form and results. */
 .plan-grid.mt-lrp-layout {
   --lrp-line: #deddd7;
   --lrp-muted: #656760;
@@ -7,9 +7,9 @@
   box-sizing: border-box;
   display: grid;
   gap: 16px 32px;
-  grid-template-areas: "composer results" "tools results";
+  grid-template-areas: "composer results";
   grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto;
   margin: 24px auto 48px;
   max-width: 1160px;
   padding: 20px;
@@ -184,21 +184,6 @@
 .mt-lrp-layout .mt-lrp-missing { margin-top: 14px; }
 .mt-lrp-layout .mt-lrp-missing summary { font-size: 12px; }
 .mt-lrp-layout .mt-lrp-missing ul { color: var(--lrp-muted); font: 13px/1.75 var(--sans, Arial, sans-serif); margin: 0; padding-left: 20px; }
-.mt-lrp-layout .mt-lrp-tools { display: block; grid-area: tools; margin: 0; padding: 0 24px; position: static; }
-.mt-lrp-layout .mt-lrp-preferences { border: 0; margin: 0; }
-.mt-lrp-layout .mt-lrp-preferences > summary { padding: 0 0 12px; }
-.mt-lrp-layout .mt-lrp-tool-button {
-  background: #fff;
-  border: 1px solid #c7c9c2;
-  border-radius: 5px;
-  color: #343631;
-  font: 400 13px/1.5 var(--sans, Arial, sans-serif);
-  margin: 0 0 8px;
-  min-height: 44px;
-  padding: 10px 12px;
-  width: 100%;
-}
-.mt-lrp-layout .mt-lrp-preferences small { color: var(--lrp-muted); display: block; font: 12px/1.5 var(--sans, Arial, sans-serif); margin-top: 8px; }
 .mt-lrp-layout .mt-lrp-text-button { background: none; border: 0; color: #1644b5; cursor: pointer; font: 13px/1.5 var(--sans, Arial, sans-serif); padding: 10px 0; text-decoration: none; }
 .mt-lrp-layout .mt-lrp-source-note { border-top: 1px solid var(--lrp-line); margin-top: 20px; }
 .mt-lrp-layout .mt-lrp-source-note p { color: var(--lrp-muted); font: 13px/1.6 var(--sans, Arial, sans-serif); margin: 0 0 8px; }
@@ -239,7 +224,7 @@
 @media (max-width: 800px) {
   .plan-grid.mt-lrp-layout {
     gap: 24px;
-    grid-template-areas: "composer" "results" "tools";
+    grid-template-areas: "composer" "results";
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
     margin: 16px auto 32px;
@@ -251,7 +236,6 @@
   .mt-lrp-layout .mt-lrp-results-head { margin-bottom: 16px; }
   .mt-lrp-layout .mt-lrp-state { min-height: 220px; padding: 26px; }
   .mt-lrp-layout .mt-lrp-state h3 { font-size: 24px; }
-  .mt-lrp-layout .mt-lrp-tools { padding: 0 4px; }
   .mt-lrp-layout .mt-lrp-field input,
   .mt-lrp-layout .mt-lrp-field select,
   .mt-lrp-layout .mt-lrp-field textarea { font-size: 16px; }

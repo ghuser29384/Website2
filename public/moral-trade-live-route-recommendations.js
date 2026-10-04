@@ -168,8 +168,6 @@
             : null,
       plannedDonationCents: integer(input.plannedDonationCents, 0, 0, 100_000_000),
       otherwiseBaseline: string(input.otherwiseBaseline, 700),
-      calibrationCount: integer(input.calibrationCount, 0, 0, 1_000),
-      interviewCompleted: input.interviewCompleted === true,
     };
   }
 
@@ -225,30 +223,6 @@
     };
   }
 
-  function normalizeComparisonOption(value) {
-    if (!value || typeof value !== "object") return null;
-    const title = string(value.title, 180);
-    const format = string(value.format, 24);
-    if (!title || !FORMAT_VALUES.has(format)) return null;
-    return { title, format, detail: string(value.detail, 360) };
-  }
-
-  function normalizeComparison(value) {
-    if (!value || typeof value !== "object") return null;
-    const key = string(value.key, 120);
-    const left = normalizeComparisonOption(value.left);
-    const right = normalizeComparisonOption(value.right);
-    if (!key || !left || !right || left.format === right.format) return null;
-    return {
-      key,
-      left,
-      right,
-      answeredCount: integer(value.answeredCount, 0, 0, 1_000),
-      targetCount: integer(value.targetCount, 5, 1, 1_000),
-      hypothetical: value.hypothetical === true,
-    };
-  }
-
   function normalizePlanner(value) {
     const input = value && typeof value === "object" ? value : {};
     const rawStatus = string(input.status, 40);
@@ -261,7 +235,6 @@
         .map(normalizeRoute)
         .filter(Boolean)
         .slice(0, 3),
-      comparison: normalizeComparison(input.comparison),
       candidateCount: integer(input.candidateCount, 0, 0, 1_000_000),
     };
   }
@@ -421,6 +394,7 @@
         </div>
         <p class="mt-lrp-form-error" data-mt-lrp-form-error role="alert"></p>
         <button class="btn primary mt-lrp-save" type="submit" ${disableSave ? "disabled" : ""}>${busy ? "Updating…" : currentStatus === "incomplete" ? "Find routes" : "Update routes"}</button>
+        <p class="mt-lrp-request-status" role="status">${escapeHtml(requestMessage)}</p>
       </form>
     </aside>`;
   }
@@ -571,110 +545,10 @@
     </section>`;
   }
 
-  function renderComparisonDialog() {
-    const comparison = planner.comparison;
-    if (!comparison) return "";
-    const progress = `${Math.min(comparison.answeredCount, comparison.targetCount)} of ${comparison.targetCount}`;
-    return `<dialog class="mt-lrp-dialog mt-lrp-comparison-dialog" id="mt-lrp-comparison-dialog" aria-labelledby="mt-lrp-comparison-title">
-      <form method="dialog" class="mt-lrp-dialog-shell">
-        <header class="mt-lrp-dialog-head">
-          <div><div class="eyebrow blue">PREFERENCE CHECK · ${progress}</div><h2 id="mt-lrp-comparison-title">Which works better for you?</h2></div>
-          <button class="mt-lrp-close" value="cancel" aria-label="Close comparison">×</button>
-        </header>
-        ${comparison.hypothetical ? '<p class="mt-lrp-hypothetical"><b>Preference example.</b> Hypothetical — not a live offer.</p>' : ""}
-        <div class="mt-lrp-comparison-options">
-          <button type="button" class="mt-lrp-comparison-option" data-mt-lrp-comparison-choice="left" aria-label="Choose A: ${escapeHtml(comparison.left.title)}">
-            <span>A · ${escapeHtml(formatSourceType(comparison.left.format))}</span>
-            <strong>${escapeHtml(comparison.left.title)}</strong>
-            <small>${escapeHtml(comparison.left.detail)}</small>
-          </button>
-          <button type="button" class="mt-lrp-comparison-option" data-mt-lrp-comparison-choice="right" aria-label="Choose B: ${escapeHtml(comparison.right.title)}">
-            <span>B · ${escapeHtml(formatSourceType(comparison.right.format))}</span>
-            <strong>${escapeHtml(comparison.right.title)}</strong>
-            <small>${escapeHtml(comparison.right.detail)}</small>
-          </button>
-        </div>
-        <div class="mt-lrp-comparison-neutral" aria-label="Other comparison answers">
-          <button type="button" class="btn" data-mt-lrp-comparison-choice="equal">About equal</button>
-          <button type="button" class="btn" data-mt-lrp-comparison-choice="neither">Neither</button>
-          <button type="button" class="btn ghost" data-mt-lrp-comparison-choice="unsure">Unsure</button>
-        </div>
-        <p class="mt-lrp-dialog-note">This adjusts preferences only. It never accepts or starts an offer.</p>
-      </form>
-    </dialog>`;
-  }
-
   function selectOptions(options, selected) {
     return options
       .map(([value, label, unavailable = false]) => `<option value="${value}" ${value === selected ? "selected" : ""} ${unavailable && value !== selected ? "disabled" : ""}>${label}</option>`)
       .join("");
-  }
-
-  function renderInterviewDialog() {
-    const profile = planner.profile;
-    return `<dialog class="mt-lrp-dialog mt-lrp-interview-dialog" id="mt-lrp-interview-dialog" aria-labelledby="mt-lrp-interview-title">
-      <div class="mt-lrp-dialog-shell">
-        <header class="mt-lrp-dialog-head">
-          <div><div class="eyebrow blue">GUIDED GOAL INTERVIEW</div><h2 id="mt-lrp-interview-title">Tell us what should change.</h2></div>
-          <button class="mt-lrp-close" type="button" data-mt-lrp-action="close-dialog" aria-label="Close goal interview">×</button>
-        </header>
-        <form data-mt-lrp-interview-form>
-          <div data-mt-lrp-interview-edit>
-            <label class="mt-lrp-field" for="mt-lrp-interview-goal"><span>Desired change</span><textarea id="mt-lrp-interview-goal" name="goal" maxlength="180" rows="2" required>${escapeHtml(profile.goal)}</textarea></label>
-            <label class="mt-lrp-field" for="mt-lrp-interview-cause"><span>Cause area used for matching</span><input id="mt-lrp-interview-cause" name="causePriority" maxlength="120" required value="${escapeHtml(profile.causePriorities[0] || "")}" placeholder="For example: Global health"></label>
-            <label class="mt-lrp-field" for="mt-lrp-interview-baseline"><span>Without a trade, what happens?</span><textarea id="mt-lrp-interview-baseline" name="otherwiseBaseline" maxlength="700" rows="3" required>${escapeHtml(profile.otherwiseBaseline)}</textarea></label>
-            <div class="mt-lrp-interview-grid">
-              <label class="mt-lrp-field" for="mt-lrp-interview-evidence"><span>Evidence</span><select id="mt-lrp-interview-evidence" name="evidencePreference">${selectOptions([["standard", "Standard"], ["high", "High"], ["connected", "Connected proof — no eligible inventory yet", true]], profile.evidencePreference)}</select></label>
-              <label class="mt-lrp-field" for="mt-lrp-interview-uncertainty"><span>Uncertainty</span><select id="mt-lrp-interview-uncertainty" name="uncertaintyPreference">${selectOptions([["conservative", "Conservative — no bounded inventory yet", true], ["balanced", "Balanced"], ["exploratory", "Exploratory"]], profile.uncertaintyPreference)}</select></label>
-              <label class="mt-lrp-field" for="mt-lrp-interview-interaction"><span>People</span><select id="mt-lrp-interview-interaction" name="interactionPreference">${selectOptions([["solo", "Solo only"], ["open", "Open to people"], ["invite", "Invite only — no invitation-backed inventory yet", true]], profile.interactionPreference)}</select></label>
-              <label class="mt-lrp-field" for="mt-lrp-interview-privacy"><span>Privacy</span><select id="mt-lrp-interview-privacy" name="privacyPreference">${selectOptions([["private", "Private"], ["public-safe", "Match-safe"], ["public", "Public"]], profile.privacyPreference)}</select></label>
-            </div>
-            <p class="mt-lrp-inventory-note">Unavailable modes stay fail-closed until a verified source supplies the required metadata.</p>
-            <footer class="mt-lrp-dialog-actions"><button class="btn" type="button" data-mt-lrp-action="close-dialog">Cancel</button><button class="btn primary" type="submit">Review answers</button></footer>
-          </div>
-          <div data-mt-lrp-interview-review hidden>
-            <p class="mt-lrp-review-intro">Check the structured profile before it changes your routes.</p>
-            <dl class="mt-lrp-review-list">
-              <div><dt>Desired change</dt><dd data-mt-lrp-review="goal"></dd></div>
-              <div><dt>Matching cause</dt><dd data-mt-lrp-review="causePriorities"></dd></div>
-              <div><dt>Without a trade</dt><dd data-mt-lrp-review="otherwiseBaseline"></dd></div>
-              <div><dt>Evidence</dt><dd data-mt-lrp-review="evidencePreference"></dd></div>
-              <div><dt>Uncertainty</dt><dd data-mt-lrp-review="uncertaintyPreference"></dd></div>
-              <div><dt>Interaction</dt><dd data-mt-lrp-review="interactionPreference"></dd></div>
-              <div><dt>Privacy</dt><dd data-mt-lrp-review="privacyPreference"></dd></div>
-            </dl>
-            <footer class="mt-lrp-dialog-actions"><button class="btn" type="button" data-mt-lrp-action="edit-interview">Edit</button><button class="btn primary" type="button" data-mt-lrp-action="confirm-interview">Confirm profile</button></footer>
-          </div>
-        </form>
-      </div>
-    </dialog>`;
-  }
-
-  function renderTools() {
-    const profile = planner.profile;
-    if (statusKind(planner.status) === "signed_out") {
-      return '<aside class="mt-lrp-tools" data-mt-live-route-tools></aside>';
-    }
-    const compareButton = planner.comparison
-      ? '<button class="btn mt-lrp-tool-button" type="button" data-mt-lrp-action="open-comparison">Compare two options</button>'
-      : "";
-    const resetButton = profile.calibrationCount > 0
-      ? '<button class="mt-lrp-text-button" type="button" data-mt-lrp-action="reset-calibration">Reset comparisons</button>'
-      : "";
-    return `<aside class="mt-lrp-tools" data-mt-live-route-tools>
-      <details class="mt-lrp-options mt-lrp-preferences" data-mt-lrp-disclosure="preferences">
-        <summary>Refine preferences</summary>
-        <div class="mt-lrp-options-body">
-          <button class="btn mt-lrp-tool-button" type="button" data-mt-lrp-action="open-interview">Help with my goal</button>
-          ${compareButton}${resetButton}
-          ${profile.calibrationCount > 0 ? `<small>${profile.calibrationCount} comparison${profile.calibrationCount === 1 ? "" : "s"} saved</small>` : ""}
-          ${profile.interviewCompleted ? "<small>Goal interview confirmed</small>" : ""}
-        </div>
-      </details>
-      <p class="mt-lrp-request-status" aria-live="polite">${escapeHtml(requestMessage)}</p>
-      ${renderComparisonDialog()}
-      ${renderInterviewDialog()}
-    </aside>`;
   }
 
   function patchPlanSurface() {
@@ -685,7 +559,6 @@
       mount.innerHTML = `<div class="plan-grid" data-mt-live-route-planner="loading">
         <aside class="panel plan-control"></aside>
         <main><section class="panel route"></section></main>
-        <aside class="stack"></aside>
       </div>`;
       grid = mount.querySelector(".plan-grid");
     }
@@ -702,7 +575,7 @@
     const route = grid.querySelector(".route");
     const tools =
       grid.querySelector("[data-mt-live-route-tools]") || grid.querySelector(":scope > aside.stack");
-    if (!composer || !route || !tools) return false;
+    if (!composer || !route) return false;
     const openDisclosures = new Set(Array.from(
       grid.querySelectorAll("details[data-mt-lrp-disclosure][open]"),
       (detail) => detail.getAttribute("data-mt-lrp-disclosure"),
@@ -719,8 +592,7 @@
     route.setAttribute("data-mt-live-route-panel", "true");
     route.innerHTML = renderResults();
 
-    const replacementTools = document.createRange().createContextualFragment(renderTools());
-    tools.replaceWith(replacementTools);
+    tools?.remove();
     grid.querySelectorAll("details[data-mt-lrp-disclosure]").forEach((detail) => {
       detail.open = openDisclosures.has(detail.getAttribute("data-mt-lrp-disclosure"));
     });
@@ -804,7 +676,7 @@
     if (busy) return;
     busy = true;
     requestError = "";
-    requestMessage = "Saving private route preferences…";
+    requestMessage = "Updating your routes…";
     rerender();
 
     let preferencesSaved = false;
@@ -849,49 +721,6 @@
     }
   }
 
-  function openDialog(id) {
-    const dialog = document.getElementById(id);
-    if (!dialog) return;
-    if (typeof dialog.showModal === "function") dialog.showModal();
-    else dialog.setAttribute("open", "");
-    const focusTarget = dialog.querySelector("input, textarea, select, button");
-    if (focusTarget instanceof HTMLElement) focusTarget.focus();
-  }
-
-  function closeDialog(control) {
-    const dialog = control?.closest("dialog") || document.querySelector("dialog[open]");
-    if (!dialog) return;
-    if (typeof dialog.close === "function") dialog.close();
-    else dialog.removeAttribute("open");
-  }
-
-  function interviewDraft(form) {
-    const data = new FormData(form);
-    const causePriority = string(data.get("causePriority"), 120);
-    return {
-      goal: string(data.get("goal"), 180),
-      causePriorities: causePriority ? [causePriority] : [],
-      otherwiseBaseline: string(data.get("otherwiseBaseline"), 700),
-      evidencePreference: string(data.get("evidencePreference"), 40),
-      uncertaintyPreference: string(data.get("uncertaintyPreference"), 40),
-      interactionPreference: string(data.get("interactionPreference"), 40),
-      privacyPreference: string(data.get("privacyPreference"), 40),
-    };
-  }
-
-  function showInterviewReview(form) {
-    if (!form.reportValidity()) return;
-    const draft = interviewDraft(form);
-    form.__mtLiveRouteInterviewDraft = draft;
-    Object.entries(draft).forEach(([key, value]) => {
-      const output = form.querySelector(`[data-mt-lrp-review="${key}"]`);
-      if (output) output.textContent = value || "None stated";
-    });
-    form.querySelector("[data-mt-lrp-interview-edit]").hidden = true;
-    form.querySelector("[data-mt-lrp-interview-review]").hidden = false;
-    form.querySelector('[data-mt-lrp-action="confirm-interview"]')?.focus();
-  }
-
   // Browser validation must reveal a required field before trying to focus it.
   document.addEventListener("invalid", (event) => {
     if (!(event.target instanceof Element)) return;
@@ -931,63 +760,6 @@
       if (error) error.textContent = "";
       postAction({ action: "save_profile", profile }, "Routes updated from live sources.");
       return;
-    }
-
-    if (form.matches("[data-mt-lrp-interview-form]")) {
-      event.preventDefault();
-      showInterviewReview(form);
-    }
-  });
-
-  document.addEventListener("click", (event) => {
-    const control = event.target instanceof Element
-      ? event.target.closest("button, a")
-      : null;
-    if (!control) return;
-
-    const comparisonChoice = control.getAttribute("data-mt-lrp-comparison-choice");
-    if (comparisonChoice && planner.comparison) {
-      event.preventDefault();
-      const comparison = planner.comparison;
-      closeDialog(control);
-      postAction(
-        {
-          action: "answer_comparison",
-          answer: {
-            key: comparison.key,
-            leftFormat: comparison.left.format,
-            rightFormat: comparison.right.format,
-            choice: comparisonChoice,
-          },
-        },
-        "Preference saved. Routes refreshed.",
-      );
-      return;
-    }
-
-    const action = control.getAttribute("data-mt-lrp-action");
-    if (!action) return;
-    if (action === "open-comparison") openDialog("mt-lrp-comparison-dialog");
-    if (action === "open-interview") openDialog("mt-lrp-interview-dialog");
-    if (action === "close-dialog") closeDialog(control);
-    if (action === "reset-calibration") {
-      postAction({ action: "reset_calibration" }, "Comparisons reset. Routes refreshed.");
-    }
-    if (action === "edit-interview") {
-      const form = control.closest("form");
-      form.querySelector("[data-mt-lrp-interview-edit]").hidden = false;
-      form.querySelector("[data-mt-lrp-interview-review]").hidden = true;
-      form.querySelector('[name="goal"]')?.focus();
-    }
-    if (action === "confirm-interview") {
-      const form = control.closest("form");
-      const draft = form?.__mtLiveRouteInterviewDraft;
-      if (!draft) return;
-      closeDialog(control);
-      postAction(
-        { action: "save_interview", interview: draft },
-        "Interview confirmed. Routes refreshed.",
-      );
     }
   });
 
