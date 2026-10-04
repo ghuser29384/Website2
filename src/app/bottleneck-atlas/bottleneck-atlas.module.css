@@ -20,8 +20,8 @@
 
 .hero h1 {
   margin: 0;
-  font-size: clamp(3rem, 6vw, 5rem);
-  line-height: 0.96;
+  font-size: clamp(2rem, 3.2vw, 2.75rem);
+  line-height: 1.1;
   letter-spacing: -0.05em;
 }
 
@@ -522,7 +522,7 @@
   }
 
   .hero h1 {
-    font-size: clamp(2.9rem, 11vw, 4.2rem);
+    font-size: clamp(2rem, 4vw, 2.75rem);
   }
 
   .coreInputs,
@@ -570,7 +570,7 @@
   }
 
   .hero h1 {
-    font-size: clamp(2.75rem, 14vw, 3.7rem);
+    font-size: clamp(1.875rem, 7vw, 2.25rem);
   }
 
   .hero > p:last-child {
