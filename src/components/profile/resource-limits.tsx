@@ -3,8 +3,10 @@
 import { useState, type FormEvent } from "react";
 import styles from "./profile-setup.module.css";
 
-type Limits = { moneyBudgetCents: number; timeBudgetMinutes: number; actionBudgetCount: number | null; horizon: string };
+type Limits = { moneyBudgetCents: number | null; timeBudgetMinutes: number | null; actionBudgetCount: number | null; horizon: string | null };
 const horizons = ["day", "week", "month", "quarter", "year"];
+const validLimit = (value: unknown, maximum: number) => value === null ||
+  (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= maximum);
 
 export function ResourceLimits() {
   const [limits, setLimits] = useState<Limits | null>(null);
@@ -22,9 +24,10 @@ export function ResourceLimits() {
       if (payload.authenticated === false || response.status === 401) { setSignedOut(true); return; }
       const planner = payload.routePlanner;
       const profile = planner?.profile;
-      if (!response.ok || planner?.status === "unavailable" || !profile ||
-          !Number.isInteger(profile.moneyBudgetCents) || !Number.isInteger(profile.timeBudgetMinutes) ||
-          !horizons.includes(profile.horizon)) throw new Error("unavailable");
+      if (!response.ok || !["ready", "no_live", "incomplete"].includes(planner?.status) || !profile ||
+          !validLimit(profile.moneyBudgetCents, 100000000) || !validLimit(profile.timeBudgetMinutes, 100000) ||
+          !validLimit(profile.actionBudgetCount, 1000) ||
+          !(profile.horizon === null || horizons.includes(profile.horizon))) throw new Error("unavailable");
       setLimits({ moneyBudgetCents: profile.moneyBudgetCents, timeBudgetMinutes: profile.timeBudgetMinutes,
         actionBudgetCount: profile.actionBudgetCount ?? null, horizon: profile.horizon });
       setSignedOut(false);
@@ -58,10 +61,10 @@ export function ResourceLimits() {
     {signedOut ? <p><a href="/login?returnTo=%2Fcomplete-profile">Sign in to manage your limits</a></p> : limits ?
       <form onSubmit={save}>
         <div className={styles.fields}>
-          <label>Time period<select name="horizon" defaultValue={limits.horizon}>{horizons.map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select></label>
-          <label>Money limit (USD)<input name="money" type="number" min="0" max="1000000" step="0.01" defaultValue={limits.moneyBudgetCents / 100} required /></label>
-          <label>Time limit (minutes)<input name="time" type="number" min="0" max="100000" step="1" defaultValue={limits.timeBudgetMinutes} required /></label>
-          <label>Action limit (optional)<input name="actions" type="number" min="0" max="1000" step="1" defaultValue={limits.actionBudgetCount ?? ""} /></label>
+          <label>Time period<select name="horizon" defaultValue={limits.horizon ?? ""} required><option value="" disabled>Choose a time period</option>{horizons.map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select></label>
+          <label>Money limit (USD)<input name="money" type="number" min="0" max="1000000" step="0.01" defaultValue={limits.moneyBudgetCents === null ? "" : limits.moneyBudgetCents / 100} required /></label>
+          <label>Time limit (minutes)<input name="time" type="number" min="0" max="100000" step="1" defaultValue={limits.timeBudgetMinutes ?? ""} required /></label>
+          <label>Action limit (optional)<input name="actions" type="number" min="0" max="1000" step="1" defaultValue={limits.actionBudgetCount ?? ""} /><small>Leave blank to keep your existing action limit unchanged.</small></label>
         </div>
         <button className={styles.primary} disabled={busy} type="submit">{busy ? "Saving…" : "Save limits"}</button>
       </form> : busy ? <p role="status">Loading your limits…</p> : <button type="button" onClick={() => void load()}>Try again</button>}

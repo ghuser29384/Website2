@@ -38,6 +38,30 @@ test("unavailable limits cannot be overwritten with invented defaults", async ({
   await expect(page.getByRole("button", { name: "Save limits", exact: true })).toHaveCount(0);
 });
 
+test("new accounts choose their own limits without prefilled budgets", async ({ page }) => {
+  let saved: unknown;
+  await page.route("**/api/live-now", route => route.fulfill({ json: {
+    authenticated: true, routePlanner: { status: "incomplete", profile: {
+      moneyBudgetCents: null, timeBudgetMinutes: null, actionBudgetCount: null, horizon: null,
+    } },
+  } }));
+  await page.route("**/api/live-now/route-profile", async route => {
+    saved = route.request().postDataJSON();
+    await route.fulfill({ json: { authenticated: true, saved: true } });
+  });
+  await page.goto("/complete-profile");
+  await page.getByText("Optional resource limits", { exact: true }).click();
+  await expect(page.getByLabel("Money limit (USD)")).toHaveValue("");
+  await expect(page.getByLabel("Time limit (minutes)")).toHaveValue("");
+  await expect(page.getByLabel("Time period")).toHaveValue("");
+  await page.getByLabel("Money limit (USD)").fill("10");
+  await page.getByLabel("Time limit (minutes)").fill("0");
+  await page.getByLabel("Time period").selectOption("week");
+  await page.getByRole("button", { name: "Save limits", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Your resource limits are saved." })).toBeVisible();
+  expect(saved).toEqual({ action: "save_profile", profile: { moneyBudgetCents: 1000, timeBudgetMinutes: 0, horizon: "week" } });
+});
+
 test("resource limits ask signed-out visitors to sign in", async ({ page }) => {
   await page.route("**/api/live-now", route => route.fulfill({ json: { authenticated: false } }));
   await page.goto("/complete-profile");
