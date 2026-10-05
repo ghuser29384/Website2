@@ -47,7 +47,7 @@ test("partial public inventory does not imply the whole marketplace is empty", a
   await page.route("**/api/live-now", (route) => fulfill(route, { authenticated: false, status: "signed_out", recommendations: [] }));
   await mockInventory(page, (body) => responseFor(body, { sourceStatus: { offers: "partial" }, items: [], total: 0 }));
   await page.goto("/");
-  await expect(page.locator("[data-mt-public-listings]")).toContainText("Please try again to check the rest.");
+  await expect(page.locator("[data-mt-public-listings]")).toContainText("We haven’t found trades in the listings we could load. Please try again to check the rest.");
   await expect(page.locator("[data-mt-public-listings]")).not.toContainText("No current trades");
 });
 

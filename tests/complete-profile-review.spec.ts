@@ -6,6 +6,7 @@ for (const width of [1440, 390, 320]) {
     await context.clearCookies(); await page.setViewportSize({ width, height: 900 });
     const errors: string[] = []; page.on("pageerror", (e) => errors.push(e.message));
     await page.goto("/complete-profile", { waitUntil: "domcontentloaded" });
+    await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
     await expect(page).toHaveURL(/\/complete-profile$/);
     await expect(page.getByRole("heading", { name: "Set up your profile." })).toBeVisible();
     await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
@@ -16,10 +17,20 @@ for (const width of [1440, 390, 320]) {
     await expect(page.getByTestId("profile-priorities-card").getByRole("link", { name: "Adjust priorities", exact: true })).toBeVisible();
     await page.getByText("Optional trade preferences", { exact: true }).click();
     for (const label of ["Outcomes I care about", "What I can offer", "Limits or exclusions"]) {
-      await expect(page.getByLabel(label, { exact: true })).toHaveValue("");
+      const group = page.getByRole("group", { name: label, exact: true });
+      await expect(group.locator('input[type="checkbox"]:checked')).toHaveCount(0);
+      await expect(group.locator("textarea")).not.toBeVisible();
     }
     await expect(page.getByLabel("Save my trade preferences")).not.toBeChecked();
-    await page.getByLabel("Outcomes I care about", { exact: true }).fill("A priority outside the suggested categories");
+    await page.getByLabel("Global health", { exact: true }).check();
+    await page.getByLabel("Animal welfare", { exact: true }).check();
+    await page.getByLabel("Time & volunteering", { exact: true }).check();
+    await page.getByLabel("No travel", { exact: true }).check();
+    await expect(page.locator('input[name="outcomes"]')).toHaveValue("Selected options:\n- Global health\n- Animal welfare");
+    await page.getByLabel("Global health", { exact: true }).uncheck();
+    await expect(page.locator('input[name="outcomes"]')).toHaveValue("Selected options:\n- Animal welfare");
+    await page.getByRole("group", { name: "Outcomes I care about", exact: true }).getByText("Other / add details", { exact: true }).click();
+    await page.getByLabel("Outcomes I care about — other details", { exact: true }).fill("A priority outside the suggested categories");
     await expect(page.getByRole("link", { name: "Adjust priorities", exact: true })).toHaveAttribute("href", "/profile/priorities?returnTo=%2Fcomplete-profile");
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath(`profile-setup-${width}.png`), fullPage: true });
@@ -30,21 +41,26 @@ for (const width of [1440, 390, 320]) {
 
 test("draft recovery is opt-in, explicit, and clearable without account writes", async ({ page }) => {
   await page.goto("/complete-profile");
+  await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
   await page.getByLabel("Display name", { exact: true }).fill("Guest example");
   await page.getByText("Optional trade preferences", { exact: true }).click();
-  await page.getByLabel("Outcomes I care about", { exact: true }).fill("A restored personal priority");
-  await page.getByLabel("What I can offer", { exact: true }).fill("A restored capability");
+  await page.getByLabel("Animal welfare", { exact: true }).check();
+  await page.getByRole("group", { name: "Outcomes I care about", exact: true }).getByText("Other / add details", { exact: true }).click();
+  await page.getByLabel("Outcomes I care about — other details", { exact: true }).fill("A restored personal priority");
+  await page.getByLabel("Research & writing", { exact: true }).check();
   expect(await page.evaluate((key) => localStorage.getItem(key), profileDraftKey(null))).toBeNull();
   await page.getByLabel(/Remember this draft/).check();
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), profileDraftKey(null))).not.toBeNull();
   await page.reload();
+  await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
   await expect(page.getByRole("button", { name: "Restore this draft" })).toBeVisible();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
   await page.getByRole("button", { name: "Restore this draft" }).click();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Guest example");
   await page.getByText("Optional trade preferences", { exact: true }).click();
-  await expect(page.getByLabel("Outcomes I care about", { exact: true })).toHaveValue("A restored personal priority");
-  await expect(page.getByLabel("What I can offer", { exact: true })).toHaveValue("A restored capability");
+  await expect(page.getByLabel("Animal welfare", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("Outcomes I care about — other details", { exact: true })).toHaveValue("A restored personal priority");
+  await expect(page.getByLabel("Research & writing", { exact: true })).toBeChecked();
   await expect(page.getByLabel("Save my trade preferences")).not.toBeChecked();
   await page.getByRole("button", { name: "Clear device draft and reset edits" }).click();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
@@ -60,6 +76,7 @@ test("guest setup does not restore member drafts or the legacy unscoped profile"
     b: encodeProfileDraft("account-b", { ...emptyProfileSetupValues(), displayName: "Private B" }),
     ka: profileDraftKey("account-a"), kb: profileDraftKey("account-b") });
   await page.goto("/complete-profile");
+  await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
   await expect(page.getByRole("button", { name: "Restore this draft" })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("mt_complete_profile_refinement"))).toBeNull();
@@ -69,6 +86,7 @@ test("expired guest drafts do not populate a form or offer restoration", async (
   const expired = encodeProfileDraft(null, { ...emptyProfileSetupValues(), displayName: "Expired" }, Date.now() - PROFILE_DRAFT_TTL_MS - 1000);
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: profileDraftKey(null), value: expired });
   await page.goto("/complete-profile");
+  await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
   await expect(page.getByRole("button", { name: "Restore this draft" })).toHaveCount(0);
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), profileDraftKey(null))).toBeNull();
@@ -76,10 +94,11 @@ test("expired guest drafts do not populate a form or offer restoration", async (
 
 test("walkthrough query parameters no longer preassign personal priorities", async ({ page }) => {
   await page.goto("/complete-profile?source=walkthrough&cause_area=Animal%20welfare&offer_type=Money&match_name=Example");
+  await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
   await expect(page.getByRole("heading", { name: "Set up your profile." })).toBeVisible();
   await page.getByText("Optional trade preferences", { exact: true }).click();
-  await expect(page.getByLabel("Outcomes I care about", { exact: true })).toHaveValue("");
-  await expect(page.getByLabel("Limits or exclusions", { exact: true })).toHaveValue("");
+  await expect(page.locator('input[name="outcomes"]')).toHaveValue("");
+  await expect(page.locator('input[name="limits"]')).toHaveValue("");
   await page.getByRole("link", { name: "Create account & continue" }).click();
   await expect(page).toHaveURL(/\/signup\?method=email&returnTo=%2Fcomplete-profile/);
 });
@@ -88,6 +107,7 @@ test("the profile brand still avoids rewritten-home prefetch", async ({ page }) 
   const requests: string[] = [];
   page.on("request", (request) => { const url = new URL(request.url()); if (url.pathname === "/" && url.searchParams.has("_rsc")) requests.push(request.url()); });
   await page.goto("/complete-profile");
+  await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
   await expect(page.getByRole("heading", { name: "Set up your profile." })).toBeVisible();
   await page.waitForTimeout(500); expect(requests).toEqual([]);
 });

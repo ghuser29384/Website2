@@ -259,12 +259,13 @@ async function runReturningMobile(entry) {
   await page.getByRole("heading", { name: "Set up your profile." }).waitFor({ state: "visible", timeout: 60_000 });
   assertCanonicalFinalHost(page);
   await page.locator("summary").filter({ hasText: /^Optional trade preferences$/ }).click();
-  for (const label of ["Outcomes I care about", "What I can offer", "Limits or exclusions"]) {
-    assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), "");
+  for (const field of ["outcomes", "capabilities", "limits"]) {
+    assert.equal(await page.locator(`input[name="${field}"]`).inputValue(), "");
   }
-  await page.getByLabel("Outcomes I care about", { exact: true }).fill("Canary custom outcome");
+  await page.getByRole("group", { name: "Outcomes I care about", exact: true }).getByText("Other / add details", { exact: true }).click();
+  await page.getByLabel("Outcomes I care about — other details", { exact: true }).fill("Canary custom outcome");
   assert.equal(await page.getByLabel("Save my trade preferences").isChecked(), false);
-  assert.equal(await page.getByRole("link", { name: "Advanced priority allocation (optional)" }).getAttribute("href"), "/profile/priorities");
+  assert.equal(await page.getByRole("link", { name: "Adjust priorities", exact: true }).getAttribute("href"), "/profile/priorities?returnTo=%2Fcomplete-profile");
   assert.equal(await page.locator('input[name="priority_allocation"]').count(), 0);
 
   const dimensions = await page.evaluate(() => ({

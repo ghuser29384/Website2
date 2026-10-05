@@ -1,11 +1,11 @@
-name: Publish count clarification and public-read recovery 2026-10-04
+name: Publish Feed loading recovery 2026-10-04
 
 on:
   push:
     branches:
       - main
     paths:
-      - .github/workflows/count-unavailable-production-20261004.yml
+      - .github/workflows/feed-loading-production-20261004.yml
 
 permissions:
   contents: read
@@ -21,7 +21,7 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 2
           persist-credentials: false
-      - name: Verify approved count label and exact candidate
+      - name: Verify approved Feed recovery and exact candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -31,16 +31,10 @@ jobs:
           node --input-type=module <<'JS'
           import { readFileSync } from 'node:fs';
           import assert from 'node:assert/strict';
-          const source = readFileSync('src/lib/commitments-summary.ts', 'utf8');
-          assert.ok(source.includes('"Count unavailable"'));
-          assert.ok(!source.includes('"Unknown"'));
-          for (const path of [
-            'src/app/people/page.tsx',
-            'src/app/evidence/[[...recordId]]/page.tsx',
-            'src/app/wish-registry/page.tsx',
-            'src/lib/moral-trade/group-buying-live.ts',
-          ]) assert.ok(readFileSync(path, 'utf8').includes('readPublicData('), path);
-          assert.ok(readFileSync('src/lib/public-read-deadline.ts', 'utf8').includes('timeoutMs = 4_000'));
+          const source = readFileSync('public/moral-trade-live.html', 'utf8');
+          assert.ok(source.includes('timeoutMs: 25000, attempts: 2'));
+          const route = readFileSync('src/app/api/live-now-a1/route.ts', 'utf8');
+          assert.ok(route.includes('getLiveNowRequestContext(request)'));
           JS
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
