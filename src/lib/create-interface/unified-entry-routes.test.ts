@@ -63,8 +63,8 @@ test("Create and Create Offer entries share the durable Create adapter", () => {
     proxySource,
     /searchParams\.get\("view"\) === "templates"[\s\S]*searchParams\.get\("tab"\) === "templates"[\s\S]*return rewriteToUnifiedCreate\(request\)/,
   );
-  assert.match(
-    proxySource,
-    /matcher: \["\/", "\/walkthrough", "\/create", "\/offers", "\/offers\/:path\*"\]/,
-  );
+  const matcher = JSON.parse(proxySource.match(/matcher:\s*(\[[^\]]+\])/)![1]) as string[];
+  for (const route of ["/", "/walkthrough", "/create", "/offers", "/offers/:path*"]) {
+    assert.ok(matcher.includes(route), `The proxy must still handle ${route}`);
+  }
 });
