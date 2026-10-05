@@ -2,6 +2,7 @@ import "server-only";
 
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { readPublicData } from "@/lib/public-read-deadline";
 
 import {
   MPGF_PHASE_ONE_BALLOT_POLICY,
@@ -215,10 +216,10 @@ export async function loadMpgfPhaseOneGovernanceState(
 
   try {
     const client = await getRpcClient();
-    const { data, error } = await client.rpc(
+    const { data, error } = await readPublicData(client.rpc(
       "get_mpgf_phase_one_governance_state",
       { p_round_id: roundId ?? null },
-    );
+    ));
 
     if (error) {
       if (!isMissingRpc(error)) {

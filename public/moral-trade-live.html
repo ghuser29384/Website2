@@ -56,20 +56,31 @@
         });
         // Optional account/feed reads must not gate the usable shell. All reads
         // are bounded; failures stay unavailable, not fabricated signed-out data.
-        async function readJson(url, fallback) {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 8000);
-          try {
-            const response = await fetch(url, { credentials: 'same-origin',
-              headers: { Accept: 'application/json' }, signal: controller.signal });
-            if (!response.ok) return fallback;
-            const payload = await response.json();
-            return payload && typeof payload === 'object' ? payload : fallback;
-          } catch { return fallback; }
-          finally { clearTimeout(timer); }
+        async function readJson(url, fallback, { timeoutMs = 8000, attempts = 1 } = {}) {
+          let latest = fallback;
+          for (let attempt = 0; attempt < attempts; attempt += 1) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+              const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store',
+                headers: { Accept: 'application/json' }, signal: controller.signal });
+              if (response.ok) {
+                const payload = await response.json();
+                if (payload && typeof payload === 'object') {
+                  latest = payload;
+                  if (payload.status !== 'unavailable') return payload;
+                }
+              } else if (response.status < 500 && response.status !== 429) {
+                return latest;
+              }
+            } catch { /* A failed read may recover on the one bounded retry. */ }
+            finally { clearTimeout(timer); }
+            if (attempt + 1 < attempts) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+          }
+          return latest;
         }
-        const accountPromise = readJson('/api/live-account', { status: 'unavailable' });
-        const liveNowPromise = readJson('/api/live-now', unavailableLiveNow());
         const coreController = new AbortController();
         const coreTimer = setTimeout(() => coreController.abort(), 8000);
         let raw;
@@ -132,6 +143,13 @@
         document.write(enhancedSource);
         document.close();
 
+        // document.open() clears the previous document's timers. Start optional
+        // reads here so their abort deadlines and retry delays survive boot.
+        const accountPromise = readJson('/api/live-account', { status: 'unavailable' });
+        // Leave room for the identity check and inventory/ranking, then retry once.
+        const liveNowPromise = readJson('/api/live-now', unavailableLiveNow(), {
+          timeoutMs: 25000, attempts: 2,
+        });
         const shellReady = document.readyState === 'loading'
           ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
           : Promise.resolve();

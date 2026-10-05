@@ -14,6 +14,7 @@ on:
       - "src/live-now-data.test.ts"
       - "src/live-now-priority-route.test.ts"
       - "tests/exact-live-now-recommendations.spec.ts"
+      - "tests/feed-loading-recovery.spec.ts"
       - ".github/workflows/home-process-visual-qa.yml"
   push:
     branches:
@@ -53,7 +54,8 @@ jobs:
             src/lib/recommendation-learning.ts \
             src/live-now-data.test.ts \
             src/live-now-priority-route.test.ts \
-            tests/exact-live-now-recommendations.spec.ts
+            tests/exact-live-now-recommendations.spec.ts \
+            tests/feed-loading-recovery.spec.ts
 
       - name: Run adaptive feed unit tests
         run: |
@@ -66,8 +68,13 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      # Exercise the compiled app, without development rebuilds interrupting
+      # navigation to a route that has not yet been compiled.
+      - name: Build production candidate for browser QA
+        run: npm run build
+
       - name: Run adaptive feed browser QA
-        run: npm run test:e2e -- tests/exact-live-now-recommendations.spec.ts
+        run: npm run test:e2e -- tests/exact-live-now-recommendations.spec.ts tests/feed-loading-recovery.spec.ts
 
       - name: Upload adaptive feed screenshots and traces
         if: always()

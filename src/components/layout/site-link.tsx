@@ -6,9 +6,9 @@ type SiteLinkProps = Omit<ComponentPropsWithRef<"a">, "href"> & {
   prefetch?: LinkProps["prefetch"];
 };
 
-/** The homepage is a standalone HTML document, not an App Router RSC page. */
+/** These routes are rewritten to standalone HTML documents in next.config.ts. */
 export function SiteLink({ href, prefetch, ...props }: SiteLinkProps) {
-  if (/^\/(?:[?#]|$)/.test(href)) {
+  if (/^\/(?:(?:feed|discover|walkthrough)\/?)?(?:[?#]|$)/.test(href)) {
     // Native navigation avoids requesting a nonexistent Flight payload both
     // during prefetch and on click. Keep the URL, styling and anchor semantics.
     return <a {...props} href={href} />;

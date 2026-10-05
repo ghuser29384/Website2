@@ -110,6 +110,7 @@ const verificationEvents = [];
 let verificationGateEnabled = false;
 let verificationGateSequence = 0;
 const pendingVerificationGates = new Map();
+let delayMessages = false;
 
 function fixtureSession(mode) {
   const accessToken = tokens[mode];
@@ -230,7 +231,14 @@ const server = http.createServer((request, response) => {
     attempts.clear();
     verificationEvents.splice(0, verificationEvents.length);
     verificationGateEnabled = false;
+    delayMessages = false;
     json(response, 200, { cancelledVerificationGateIds, reset: true });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/__fixture/messages-delay") {
+    delayMessages = url.searchParams.get("enabled") === "true";
+    json(response, 200, { enabled: delayMessages });
     return;
   }
 
@@ -365,6 +373,11 @@ const server = http.createServer((request, response) => {
   }
 
   if (url.pathname.startsWith("/rest/v1/")) {
+    if (delayMessages && url.pathname === "/rest/v1/trade_threads") {
+      const timer = setTimeout(() => emptyPostgrest(response, request), 20_000);
+      response.once("close", () => clearTimeout(timer));
+      return;
+    }
     if (selectedPostgrest(response, request, url)) return;
     emptyPostgrest(response, request);
     return;
