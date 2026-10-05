@@ -213,7 +213,7 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     expect(requests.some((request) => request.path === "/rest/v1/cohort_onboarding_profiles")).toBe(false);
   });
 
-  test("every secondary toolbar destination and legacy section remains visible", async ({ page, context }) => {
+  test("Profile retains account controls while private matching stays deferred", async ({ page, context }) => {
     await signIn(context);
     await page.goto(`${origin}/dashboard`);
     const tools = page.getByRole("navigation", { name: "Dashboard controls" });
@@ -222,7 +222,10 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     await expect(page).toHaveURL(/\/dashboard\?view=controls$/);
     await expect(page.locator("#account-heading")).toBeVisible();
     await expect(page.locator("#account-security")).toBeVisible();
-    for (const [name, id] of [["Privacy", "privacy-controls"], ["Notifications", "notifications"]]) {
+    await expect(tools.getByRole("link", { name: "Notifications", exact: true })).toHaveCount(0);
+    await expect(page.locator("#wish-profile, #match-inbox, #notifications")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Run rule-based matching" })).toHaveCount(0);
+    for (const [name, id] of [["Privacy", "privacy-controls"]]) {
       await tools.getByRole("link", { name, exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/dashboard\\?view=controls#${id}$`));
       await expect(page.locator(`#${id}`)).toBeVisible();

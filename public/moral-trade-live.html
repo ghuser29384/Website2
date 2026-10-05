@@ -93,7 +93,7 @@
           .map((value) => value.toString(16).padStart(2, '0'))
           .join('');
 
-        if (digest !== 'cb65ab003b3364f35c1918a587ce7bbeb8e27f1459a1279aa24d3c01fbef3966') {
+        if (digest !== '3effe7d17228bc20a40ce30ac071af83cc08535d7ebae3d0a10bb908a440ee4b') {
           throw new Error('integrity');
         }
 
@@ -111,7 +111,6 @@
           '<link id="mt-reciprocal-feed-diagnostics-styles" rel="stylesheet" href="/moral-trade-live-feed-diagnostics.css">',
           '<link id="mt-pareto-feed-learning-styles" rel="stylesheet" href="/moral-trade-live-learning-diagnostics.css">',
           '<link id="mt-home-offer-cta-styles" rel="stylesheet" href="/moral-trade-live-home-offer.css">',
-          '<link id="mt-live-route-recommendations-styles" rel="stylesheet" href="/moral-trade-live-route-recommendations.css">',
           '<link id="mt-input-assist-styles" rel="stylesheet" href="/moral-trade-input-assist.css">',
           '<link id="mt-refined-header-styles" rel="stylesheet" href="/moral-trade-refined-header.css">',
           '<link id="mt-proportions-styles" rel="stylesheet" href="/moral-trade-proportions.css">',
@@ -178,7 +177,6 @@
             '/moral-trade-live-feed-create.js',
             '/moral-trade-live-feed-diagnostics.js',
             '/moral-trade-live-learning-diagnostics.js',
-            '/moral-trade-live-route-recommendations.js',
           ]) await loadEnhancement(src);
         }).catch(() => {
           const main = document.getElementById('app');

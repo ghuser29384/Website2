@@ -9,18 +9,17 @@ for(const width of [1440,390]) {
     await page.route("**/api/live-now",route=>{feed=route;});
     await page.goto("/",{waitUntil:"commit"});
     await expect(page.locator('header [data-mt-primary-links="true"]')).toBeVisible();
-    await expect(page.locator('button[data-now="focus"]')).toBeVisible();
+    await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
     await expect(page.locator('[data-mt-guest-only="true"]').first()).not.toBeVisible();
     await expect.poll(()=>Boolean(account&&feed)).toBe(true);
     await page.screenshot({path:testInfo.outputPath(`independent-shell-${width}.png`)});
     await account!.fulfill({contentType:"application/json",body:JSON.stringify({authenticated:false})});
     await expect(page.locator('[data-mt-guest-only="true"]').first()).toBeVisible();
     // Feed still pending, but the resolved account and navigation are usable.
-    await expect(page.locator('button[data-now="focus"]')).toBeVisible();
+    await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
     await feed!.fulfill({contentType:"application/json",body:JSON.stringify(guest)});
     await expect(page.locator('[data-mt-live-now-state="signed_out"]')).toBeVisible();
-    await page.locator('button[data-now="plan"]').click();
-    await expect(page.locator('button[data-now="plan"]')).toHaveClass(/active/);
+    await expect(page.locator('button[data-now="plan"]')).toHaveCount(0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
     expect(errors).toEqual([]);
   });

@@ -3,6 +3,7 @@ import type { MetadataRoute } from "next";
 import { getPublicSitemapEntries, getAbsoluteUrl } from "@/lib/seo";
 import { PARTNER_COHORTS } from "@/lib/growth";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
+import { readPublicData } from "@/lib/public-read-deadline";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -292,7 +293,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const { offers, profiles } = await getPublicSitemapEntries();
+    const { offers, profiles } = await readPublicData(getPublicSitemapEntries());
 
     return [
       ...entries,

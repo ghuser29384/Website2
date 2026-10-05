@@ -124,7 +124,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const state = { page: (location.hash || '#now').slice(1), now: 'focus' };
 const date = () => '<div class="date"><b>Today</b>Loading local date…<br><span class="muted">Good morning.</span></div>';
-const actions = (label = 'Create offer') => `<div class="h mt-feed-actions">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+const actions = (label = 'Create a trade') => `<div class="h mt-feed-actions">${date()}<button class="btn primary" data-action="create">+ ${label}</button></div>`;
 const tab = (items, key, attr) => `<div class="tabs">${items.map(item => `<button class="${state[key] === item[0] ? 'active' : ''}" data-${attr}="${item[0]}">${item[1]}</button>`).join('')}</div>`;
 const pageHead = (title, subtitle, cta) => `<div class="head"><div><h1>${title}</h1><div class="subtitle">${subtitle}</div></div>${actions(cta)}</div>`;
 
@@ -132,21 +132,16 @@ function render() {
   if (state.page === 'trade') { window.location.replace('/trades/new'); return; }
   if (state.page === 'activity') { window.location.replace('/commitments'); return; }
   state.page = 'now';
-  if (!['focus', 'plan'].includes(state.now)) state.now = 'focus';
+  state.now = 'focus';
   $$('.topbar nav button').forEach(button => button.classList.toggle('active', button.dataset.page === state.page));
   $('#app').innerHTML = nowPage();
 }
 function nowPage() {
-  return `<section class="page">${actions()}${tab([['focus', 'Focus'], ['plan', 'Plan resources']], 'now', 'now')}
-    ${state.now === 'plan' ? nowPlan() : nowFocus()}</section>`;
+  return `<section class="page">${actions()}${nowFocus()}</section>`;
 }
 // The authenticated live feed replaces this fail-closed loading state.
 function nowFocus() {
   return '<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="loading"><main><section class="panel black urgent"><div><div class="eyebrow orange">Loading your profile</div><h2>Finding live moral opportunities that match your priorities and action preferences.</h2></div></section></main></div>';
-}
-// Preserve all three mount points required by the authoritative route planner.
-function nowPlan() {
-  return '<div class="plan-grid" data-mt-live-route-planner="loading"><aside class="panel plan-control"><div class="eyebrow orange">Private route profile</div><p class="muted">Loading your limits…</p></aside><main><section class="panel route"><div class="eyebrow orange">Checking live routes</div><h2>Loading private limits and current opportunities.</h2><p class="muted">No fixed or fallback route is shown.</p></section></main><aside class="stack"><section class="panel"><div class="eyebrow">Route tools</div><p class="muted">Loading only when useful…</p></section></aside></div>';
 }
 function profileDrawer() {
   const rows = [
@@ -186,8 +181,6 @@ document.addEventListener('click', event => {
   if (!target) return;
   const page = target.closest('[data-page]');
   if (page) { setPage(page.dataset.page); return; }
-  const section = target.closest('[data-now]');
-  if (section && ['focus', 'plan'].includes(section.dataset.now)) { state.now = section.dataset.now; render(); return; }
   const action = target.closest('[data-action]')?.dataset.action;
   if (action === 'profile') openDrawer(profileDrawer());
   else if (action === 'command') openDrawer(commandDrawer());

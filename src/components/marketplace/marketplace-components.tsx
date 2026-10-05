@@ -689,7 +689,7 @@ function MarketplaceSideNav({
       {createHref ? (
         <Link className="mt-v77-create-offer" href={createHref}>
           <span aria-hidden="true">+</span>
-          Create offer
+          Create a trade
         </Link>
       ) : null}
 

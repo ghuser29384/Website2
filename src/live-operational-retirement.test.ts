@@ -40,8 +40,8 @@ test("obsolete executable bundles and planner/editor assets are deleted, not mer
   }
 });
 
-test("real feed, route planning, privacy, identity, and command handoffs stay wired", () => {
-  for (const asset of ["moral-trade-live-now.js", "moral-trade-live-route-recommendations.js", "moral-trade-live-feed-identity.js", "moral-trade-live-feed-create.js", "moral-trade-live-account.js", "moral-trade-live-command-center.js", "moral-trade-input-assist.js"]) {
+test("real feed, privacy, identity, and command handoffs stay wired", () => {
+  for (const asset of ["moral-trade-live-now.js", "moral-trade-live-feed-identity.js", "moral-trade-live-feed-create.js", "moral-trade-live-account.js", "moral-trade-live-command-center.js", "moral-trade-input-assist.js"]) {
     assert.ok(existsSync(`public/${asset}`), asset);
     assert.ok(loader.includes(asset), asset);
   }

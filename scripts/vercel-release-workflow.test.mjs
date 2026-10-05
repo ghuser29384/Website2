@@ -569,6 +569,6 @@ test("the profile canary follows independent setup and explicit draft recovery w
   assert.match(source, /Direct setup must not require or mark the optional tour/);
   assert.match(source, /Device drafts must never restore automatically/);
   assert.match(source, /Clear device draft and reset edits/);
-  assert.match(source, /Optional private matching preferences/);
+  assert.match(source, /Optional trade preferences/);
   assert.doesNotMatch(source, /Spend 100 sparks|Assign one spark|isExpectedFirstTimeStandardsAbort/);
 });

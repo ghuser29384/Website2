@@ -805,10 +805,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <strong>Funding pools</strong>
                 <span>Conditional funding</span>
               </Link>
-              <Link href="/background-networking">
-                <strong>Consent-gated introductions</strong>
-                <span>Private matching</span>
-              </Link>
             </nav>
           </section>
         </section>

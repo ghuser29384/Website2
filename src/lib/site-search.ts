@@ -32,7 +32,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/create",
-    label: "Create",
+    label: "Create a trade",
     summary: "Choose Trade, Offset, Pool, or the later Back lane, then make the no-deal default explicit before drafting terms.",
     kind: "trade",
     keywords: ["create", "draft", "new offer", "trade", "offset", "pool", "back", "proposal", "terms", "receipt"],
@@ -111,13 +111,6 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["template", "reviewed", "draft", "prefill", "clone", "adapt", "terms"],
   },
   {
-    href: "/background-networking",
-    label: "Private matching",
-    summary: "Request staged, consent-gated matching when the proposal should not be publicly searchable.",
-    kind: "community",
-    keywords: ["private", "matching", "wish", "counterparty", "consent", "privacy", "concierge", "back"],
-  },
-  {
     href: "/people",
     label: "Participant directory",
     summary: "Browse public profiles by work, open offers, stated participation preferences, and reviewed evidence without a general person score.",
@@ -174,9 +167,9 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["donation", "offset", "advanced", "baseline", "match", "moderation", "payment", "refund", "transfer"],
   },
   {
-    href: "/moral-goods-group-buying",
-    label: "Advanced pool and group-buying tools",
-    summary: "Open reviewed rounds, lots, baskets, standing budgets, and detailed settlement records.",
+    href: "/discover?offerKind=co-fund",
+    label: "Co-Funds",
+    summary: "Browse trades funded by a contributor group.",
     kind: "fund",
     keywords: ["group buying", "moral goods", "round", "lot", "basket", "standing budget", "settlement", "pool"],
   },
@@ -193,13 +186,6 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "Inspect public reasoning, destination types, evidence requirements, and review states for candidate pools.",
     kind: "fund",
     keywords: ["candidate", "pool", "public goods", "recipient", "evidence", "review", "fund"],
-  },
-  {
-    href: "/wish-registry",
-    label: "Wish registry",
-    summary: "Search broad wish previews without revealing exact private wishes before consent.",
-    kind: "community",
-    keywords: ["wish", "registry", "background networking", "match", "preview", "privacy"],
   },
   {
     href: "/validation",

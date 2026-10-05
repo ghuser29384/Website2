@@ -506,6 +506,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const profileCompletenessPercent = Math.round(
     (profileCompletenessDone / profileCompletenessTotal) * 100,
   );
+  const privateMatchingEnabled = false;
   const dashboardAnchorLinks = [
     { href: "#dashboard-overview", label: "Overview" },
     { href: "#wish-profile", label: "Wish profile" },
@@ -514,7 +515,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { href: "#match-inbox", label: "Matches" },
     { href: "#my-trades", label: "Trades" },
     { href: "#advanced-setup", label: "Advanced" },
-  ];
+  ].filter((link) => privateMatchingEnabled || ["#dashboard-overview", "#privacy-controls", "#my-trades"].includes(link.href));
   const dashboardSnapshot = [
     {
       label: "Open matches",
@@ -536,7 +537,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       value: `${dashboardData?.agreements.length ?? 0}`,
       note: `${dashboardData?.cartItems.length ?? 0} saved offers`,
     },
-  ];
+  ].filter((item) => privateMatchingEnabled || ["Offers", "Agreements"].includes(item.label));
   const dashboardNextActions = [
     {
       href: dashboardData?.wishProfile ? "#background-networking" : "/wish-registry",
@@ -562,7 +563,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         ? "Background networking is paused until you release the freeze."
         : `${activePrivacyGrantCount} active grants, ${openDataRightRequestCount} open data requests.`,
     },
-  ];
+  ].filter((action) => privateMatchingEnabled || action.href === "#privacy-controls");
 
   return (
     <div className="page-shell dashboard-page marketplace-app-shell">
@@ -642,8 +643,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <p className="eyebrow">Start here</p>
             <h2>What needs attention</h2>
             <p>
-              Pick the next thing to handle, then jump directly to matching, privacy, trades, or
-              setup.
+              Manage your trades, payments, and privacy settings.
             </p>
           </div>
 
@@ -739,7 +739,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white" id="wish-profile">
+        {privateMatchingEnabled ? <><section className="section section-white" id="wish-profile">
           <div className="section-head">
             <p className="eyebrow">Private wish profile</p>
             <h2>Your private matching profile</h2>
@@ -867,19 +867,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             </div>
           )}
-        </section>
+        </section></> : null}
 
         <section className="section section-subtle dashboard-workspace" id="background-networking">
-          <div className="section-head">
-            <p className="eyebrow">Background networking</p>
-            <h2>{possibleOpportunityCopy?.participantLabel ?? "Possible opportunities"}</h2>
-            <p>
-              Suggestions show enough to decide whether to ask to explore. Identity and exact
-              details stay hidden until both sides opt in.
-            </p>
-          </div>
+          <div className="section-head"><h2>Privacy &amp; existing data</h2></div>
 
-          <div className="panel data-card data-card-wide">
+          {privateMatchingEnabled ? <><div className="panel data-card data-card-wide">
             <p className="detail-kicker">
               {backgroundSetupState.statusLabel} | {activityReceiptCopy?.participantLabel ?? "Activity receipt"}
             </p>
@@ -932,9 +925,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </details>
               </article>
             </div>
-          </div>
+          </div></> : null}
 
-          <div className="panel data-card data-card-wide">
+          {privateMatchingEnabled ? <><div className="panel data-card data-card-wide">
             <p className="detail-kicker">Match inbox</p>
             <h3>Matching status</h3>
             <p className="route-text">
@@ -995,10 +988,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </dd>
               </div>
             </dl>
-          </div>
+          </div></> : null}
 
           <div className="data-grid">
-            <article className="panel data-card">
+            {privateMatchingEnabled ? <><article className="panel data-card">
               <p className="detail-kicker">{inboundExposureState.statusLabel}</p>
               <h3>{letOthersFindMeCopy?.participantLabel ?? inboundExposureState.actionLabel}</h3>
               <p className="route-text">
@@ -1132,7 +1125,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </dl>
                 </div>
               </details>
-            </article>
+            </article></> : null}
 
             <article className="panel data-card" id="privacy-controls">
               <p className="detail-kicker">Privacy dashboard</p>
@@ -1455,7 +1448,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
-          <details className="dashboard-disclosure-group">
+          {privateMatchingEnabled ? <><details className="dashboard-disclosure-group">
             <summary>
               <span>
                 <strong>Why suggestions appear</strong>
@@ -1573,9 +1566,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
             </div>
-          </details>
+          </details></> : null}
 
-          <div className="panel data-card data-card-wide dashboard-core-card">
+          {privateMatchingEnabled ? <><div className="panel data-card data-card-wide dashboard-core-card">
             <p className="detail-kicker">Scan controls</p>
             <h3>Run rule-based matching</h3>
             <p className="route-text">
@@ -1618,9 +1611,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 Search broad registry
               </a>
             </div>
-          </div>
+          </div></> : null}
 
-          <details className="dashboard-disclosure-group">
+          {privateMatchingEnabled ? <><details className="dashboard-disclosure-group">
             <summary>
               <span>
                 <strong>Release controls</strong>
@@ -1648,9 +1641,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <p className="route-text">Rollback: {backgroundRolloutPlan.rollbackPlan.summary}</p>
               </div>
             </div>
-          </details>
+          </details></> : null}
 
-          <div className="panel data-card data-card-wide">
+          {privateMatchingEnabled ? <><div className="panel data-card data-card-wide">
             <p className="detail-kicker">Opportunity briefs</p>
             <h3>Leads with safe next steps</h3>
             <p className="route-text">
@@ -1828,9 +1821,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ) : (
               <p className="route-text">No opportunity briefs yet.</p>
             )}
-          </div>
+          </div></> : null}
 
-          <div className="panel data-card data-card-wide">
+          {privateMatchingEnabled ? <><div className="panel data-card data-card-wide">
             <p className="detail-kicker">Reviewed intro help</p>
             <h3>Ask an operator to review an intro path</h3>
             <p className="route-text">
@@ -1960,9 +1953,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
               )}
             </div>
-          </div>
+          </div></> : null}
 
-          <details className="dashboard-disclosure-group" id="advanced-setup">
+          {privateMatchingEnabled ? <><details className="dashboard-disclosure-group" id="advanced-setup">
             <summary>
               <span>
                 <strong>Advanced setup and source controls</strong>
@@ -3597,9 +3590,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </article>
           </div>
             </div>
-          </details>
+          </details></> : null}
 
-          <div className="data-grid" id="match-inbox">
+          {privateMatchingEnabled ? <><div className="data-grid" id="match-inbox">
             {dashboardData?.errors.matchSuggestions ? (
               <div className="empty-state">
                 <div>
@@ -3817,10 +3810,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
               </div>
             )}
-          </div>
+          </div></> : null}
         </section>
 
-        <section className="section section-white" id="notifications">
+        {privateMatchingEnabled ? <><section className="section section-white" id="notifications">
           <div className="section-head">
             <p className="eyebrow">Notifications</p>
             <h2>Match alerts</h2>
@@ -3875,7 +3868,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
           </div>
-        </section>
+        </section></> : null}
 
         <section className="section section-white" id="my-trades">
           <div className="section-head">

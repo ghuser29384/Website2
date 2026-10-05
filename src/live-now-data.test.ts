@@ -32,17 +32,13 @@ test("the live shell loads private recommendations without blocking navigation",
   assert.match(loader, /__MT_LIVE_NOW_BOOTSTRAP__/);
   assert.match(loader, /moral-trade-live-now\.js/);
   assert.match(loader, /moral-trade-live-feed\.css/);
-  assert.match(loader, /moral-trade-live-route-recommendations\.js/);
-  assert.match(loader, /moral-trade-live-route-recommendations\.css/);
+  assert.doesNotMatch(loader, /moral-trade-live-route-recommendations\.js/);
+  assert.doesNotMatch(loader, /moral-trade-live-route-recommendations\.css/);
   assert.match(loader, /moral-trade-live-core\.txt/);
   assert.match(core, /Loading your profile/);
   assert.match(loader, /unavailableLiveNow/);
   assert.match(loader, /routePlanner:[\s\S]*status: 'unavailable'/);
-  assert.match(
-    core,
-    /function nowPlan[\s\S]*class="plan-grid"[\s\S]*class="panel plan-control"[\s\S]*class="panel route"[\s\S]*class="stack"/,
-    "the fail-closed Plan shell must retain every mount point used by the recommendation UI",
-  );
+  assert.doesNotMatch(core, /function nowPlan|Plan resources/);
 });
 
 test("the live-now endpoint combines explicit priorities, browsing, actions, and multiple opportunity types", () => {
@@ -148,9 +144,9 @@ test("fallback states show concise status without fabricated suggestions", () =>
 
 test("the delivered core contains only loading states, never legacy feed or route suggestions", () => {
   assert.match(core, /function nowFocus\(/);
-  assert.match(core, /function nowPlan\(/);
+  assert.doesNotMatch(core, /function nowPlan\(/);
   assert.match(core, /data-mt-live-now-state="loading"/);
-  assert.match(core, /data-mt-live-route-planner="loading"/);
+  assert.doesNotMatch(core, /data-mt-live-route-planner/);
   assert.doesNotMatch(core, /Counteroffer from Mina|AI-safety research under \$100/);
   assert.doesNotMatch(core, /Recommended mixed route|Redirect \$20 of political donations/);
   assert.doesNotMatch(core, /function nowRules|function activityPage|function exportCSV/);

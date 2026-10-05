@@ -2728,7 +2728,7 @@ export function OfferCreateForm({
     <article className="panel auth-card">
       <div className="section-head auth-head">
         <p className="eyebrow">{directTemplateEntry ? "Template ready" : "Offer details"}</p>
-        <h2>{directTemplateEntry ? "Edit this trade" : "Create offer"}</h2>
+        <h2>{directTemplateEntry ? "Edit this trade" : "Create a trade"}</h2>
         <p>
           {directTemplateEntry
             ? "The template is already applied. Replace its facts with your terms, then save the trade for review."

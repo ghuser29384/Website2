@@ -49,9 +49,8 @@ for (const width of [1440, 390, 320]) {
       expect(request.resourceType()).toBe("document");
       await expect(page).toHaveURL((url) => url.pathname === "/" && !url.searchParams.has("_rsc"));
       await expect(page.locator(".mt-refined-header").first()).toBeVisible();
-      await expect(page.locator('button[data-now="focus"]')).toBeVisible();
-      await page.locator('button[data-now="plan"]').click();
-      await expect(page.locator('button[data-now="plan"]')).toHaveClass(/active/);
+      await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+      await expect(page.locator('button[data-now="plan"]')).toHaveCount(0);
       await expect(page.locator("nextjs-portal")).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`home-${entry.name.replaceAll(" ", "-")}-${width}.png`) });
@@ -78,7 +77,10 @@ for (const width of [1440, 390, 320]) {
     const profile = header.getByRole("link", { name: "Profile", exact: true });
     await expect(profile).toHaveCount(1);
     await expect(profile).toHaveAttribute("href", "/dashboard");
+    const profileNavigation = page.waitForRequest(request => request.isNavigationRequest()
+      && request.frame() === page.mainFrame() && new URL(request.url()).pathname === "/dashboard");
     await profile.click();
+    expect((await profileNavigation).resourceType()).toBe("document");
     await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/dashboard");
     await expect(page).toHaveTitle(/Log in/);
     await page.waitForTimeout(2000);
