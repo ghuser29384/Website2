@@ -11,10 +11,6 @@ import {
   validateMoralTradeTransparencyReportContract,
   validateMoralTradeTransparencyReportSnapshot,
 } from "@/lib/moral-trade/transparency-report";
-import {
-  BACKGROUND_PUBLIC_PAGE_SUMMARIES,
-  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
-} from "@/lib/background-public-pages";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -51,6 +47,8 @@ export default async function TransparencyPage() {
   const hasBlockers =
     contractValidation.blockers.length > 0 || reportValidation.blockers.length > 0;
 
+  const metricsAvailable = report.reportMode === "live_aggregate" && report.metricErrors.length === 0;
+
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "Report",
@@ -84,14 +82,7 @@ export default async function TransparencyPage() {
               timing metrics so the service can be inspected without exposing private wishes,
               counterparties, report bodies, source notes, or evidence artifacts.
             </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/api/moral-trade/transparency/report">
-                Open report JSON
-              </Link>
-              <Link className="button button-secondary" href="/measurement">
-                Measurement plan
-              </Link>
-            </div>
+            <Link className="button button-primary" href="#aggregate-metrics">View report</Link>
           </section>
 
           <aside className="hero-panel panel">
@@ -112,7 +103,7 @@ export default async function TransparencyPage() {
               </div>
               <div>
                 <dt>Status</dt>
-                <dd>{hasBlockers ? "Review" : "Pass"}</dd>
+                <dd>{!metricsAvailable ? "Unavailable" : hasBlockers ? "Review" : "Available"}</dd>
               </div>
             </dl>
           </aside>
@@ -120,31 +111,7 @@ export default async function TransparencyPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white">
-          <div className="panel data-card data-card-wide">
-            <p className="eyebrow">{BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.eyebrow}</p>
-            <h2>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.heading}</h2>
-            <p>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.summary}</p>
-            <ul className="compact-list">
-              {BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.cards.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <details className="details-panel">
-              <summary>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.technicalDetailsLabel}</summary>
-              <div className="details-content">
-                <div className="hero-actions">
-                  {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
-                    <Link className="button button-secondary" href={link.href} key={link.href}>
-                      {link.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </details>
-          </div>
-        </section>
-        <section className="section section-white">
+        <section className="section section-white" id="aggregate-metrics">
           <div className="section-head">
             <p className="eyebrow">Aggregate metrics</p>
             <h2>Review outcomes, disclosures, appeals, and timing</h2>
@@ -161,13 +128,13 @@ export default async function TransparencyPage() {
             </p>
           </div>
 
-          {report.metricErrors.length ? (
-            <div className="status-banner status-banner-error">
-              Live aggregate source unavailable for: {report.metricErrors.join("; ")}.
+          {!metricsAvailable ? (
+            <div className="status-banner" role="status">
+              This report’s live metrics are unavailable. No zero counts or successful checks can be inferred.
             </div>
           ) : null}
 
-          <div className="data-grid">
+          {metricsAvailable ? <div className="data-grid">
             {report.metrics.map((metric) => (
               <article className="panel data-card" key={metric.key}>
                 <p className="detail-kicker">{metric.kind.replaceAll("_", " ")}</p>
@@ -188,7 +155,7 @@ export default async function TransparencyPage() {
                 ) : null}
               </article>
             ))}
-          </div>
+          </div> : null}
         </section>
 
         <section className="section section-muted">
@@ -211,6 +178,11 @@ export default async function TransparencyPage() {
           <details className="details-panel">
             <summary>Report validation details</summary>
             <div className="details-content">
+              <div className="hero-actions">
+                <Link href="/api/moral-trade/transparency/report">Report JSON and source diagnostics</Link>
+                <Link href="/measurement">Measurement plan</Link>
+              </div>
+              {report.metricErrors.length ? <p>Unavailable sources: {report.metricErrors.join("; ")}</p> : null}
               <div className="protocol-validator-card panel">
                 <div>
                   <p className="detail-kicker">Validator</p>

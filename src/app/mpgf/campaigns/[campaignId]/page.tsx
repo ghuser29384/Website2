@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { MpgfDacCampaignView } from "@/components/mpgf/mpgf-dac-campaign-view";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
+import { loadMpgfDacPublicCampaign } from "@/lib/mpgf/dac-lifecycle";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import {
   getMpgfPublicGoodsAllocationReportApi,
@@ -50,6 +52,26 @@ function formatPublicCount(value: number | null | undefined) {
 
 export async function generateMetadata({ params }: MpgfCampaignPageProps): Promise<Metadata> {
   const { campaignId } = await params;
+  try {
+    const liveCampaign = await loadMpgfDacPublicCampaign({ campaignIdOrSlug: campaignId });
+    if (liveCampaign) {
+      const campaignPath = `/mpgf/campaigns/${liveCampaign.slug || liveCampaign.id}`;
+      return {
+        title: `${liveCampaign.title} | Dominant Assurance Contract`,
+        description: liveCampaign.publicSummary,
+        alternates: { canonical: campaignPath },
+        openGraph: {
+          title: `${liveCampaign.title} | Dominant Assurance Contract`,
+          description: liveCampaign.publicSummary,
+          type: "website",
+          url: getAbsoluteUrl(campaignPath),
+        },
+      };
+    }
+  } catch {
+    // Preserve the existing fixture-backed metadata path if the stacked DAC schema is unavailable.
+  }
+
   const result = getMpgfPublicGoodsCampaignApi(campaignId);
 
   if (!result) {
@@ -85,6 +107,21 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
     getViewer(),
     loadMpgfRealMoneyReadiness(),
   ]);
+  let liveCampaign: Awaited<ReturnType<typeof loadMpgfDacPublicCampaign>> = null;
+  let liveCampaignUnavailable = false;
+  try {
+    liveCampaign = await loadMpgfDacPublicCampaign({
+      campaignIdOrSlug: campaignId,
+      viewerId: viewer?.authUser.id,
+    });
+  } catch {
+    liveCampaignUnavailable = true;
+  }
+
+  if (liveCampaign) {
+    return <MpgfDacCampaignView campaign={liveCampaign} viewerPresent={Boolean(viewer)} />;
+  }
+
   const result = getMpgfPublicGoodsCampaignApi(campaignId);
   const round = getMpgfPublicGoodsRoundApi();
   const preview = getMpgfPublicGoodsMatchPreviewApi();
@@ -92,6 +129,20 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
   const ledger = getMpgfPublicGoodsLedgerApi();
 
   if (!result || !round || !preview || !allocation) {
+    if (liveCampaignUnavailable) {
+      return (
+        <MpgfPageFrame
+          description="The exact-version campaign audit view failed closed instead of showing stale or partial pledge data."
+          eyebrow="Temporary data boundary"
+          title="DAC campaign unavailable."
+          viewerPresent={Boolean(viewer)}
+        >
+          <section className="mpgf-panel">
+            <p>Refresh after the isolated campaign data service is available. No pledge or payment state changed.</p>
+          </section>
+        </MpgfPageFrame>
+      );
+    }
     notFound();
   }
 

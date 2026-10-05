@@ -9,7 +9,9 @@ type SupabaseAuthSettingsResponse = {
   external?: Partial<Record<OAuthProvider, boolean>>;
 };
 
-async function isXProviderEnabled(url: string, publishableKey: string) {
+const PRODUCT_DISABLED_OAUTH_PROVIDERS = new Set<OAuthProvider>(["apple"]);
+
+async function isXProviderEnabled(url: string, publishableKey: string, signal: AbortSignal) {
   const target = new URL(`${url}/auth/v1/authorize`);
   target.searchParams.set("provider", "x");
   target.searchParams.set(
@@ -18,6 +20,7 @@ async function isXProviderEnabled(url: string, publishableKey: string) {
   );
 
   const response = await fetch(target, {
+    signal,
     headers: {
       apikey: publishableKey,
       authorization: `Bearer ${publishableKey}`,
@@ -34,9 +37,14 @@ export async function getEnabledOAuthProviders(): Promise<OAuthProvider[]> {
     return [];
   }
 
+  // Optional sign-in buttons must not hold the whole login page indefinitely.
+  // Both discovery requests share one deadline and retain only verified providers.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2_000);
   try {
     const { publishableKey, url } = getSupabaseEnv();
     const response = await fetch(`${url}/auth/v1/settings`, {
+      signal: controller.signal,
       headers: {
         apikey: publishableKey,
         authorization: `Bearer ${publishableKey}`,
@@ -49,10 +57,12 @@ export async function getEnabledOAuthProviders(): Promise<OAuthProvider[]> {
     }
 
     const settings = (await response.json()) as SupabaseAuthSettingsResponse;
-    const providers = getEnabledOAuthProvidersFromSettings(settings.external);
+    const providers = getEnabledOAuthProvidersFromSettings(settings.external).filter(
+      (provider) => !PRODUCT_DISABLED_OAUTH_PROVIDERS.has(provider),
+    );
     if (!providers.includes("x") && settings.external?.twitter !== true) {
       try {
-        if (await isXProviderEnabled(url, publishableKey)) {
+        if (await isXProviderEnabled(url, publishableKey, controller.signal)) {
           return [...providers, "x"];
         }
       } catch {
@@ -63,6 +73,8 @@ export async function getEnabledOAuthProviders(): Promise<OAuthProvider[]> {
     return providers;
   } catch {
     return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 

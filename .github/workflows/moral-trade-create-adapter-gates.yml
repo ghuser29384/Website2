@@ -1,0 +1,220 @@
+name: Moral Trade Create adapter gates
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/moral-trade-create-adapter-gates.yml"
+      - "docs/moral-trade-create-interface-adapter.md"
+      - "public/moral-trade-create/**"
+      - "src/app/api/create/**"
+      - "src/app/create/submissions/**"
+      - "src/app/trades/new/page.tsx"
+      - "src/components/create/**"
+      - "src/lib/create-interface/**"
+      - "src/lib/live-discover-navigation.test.ts"
+      - "src/lib/public-route-smoke.test.ts"
+      - "supabase/migrations/2026072704*.sql"
+      - "supabase/tests/moral_trade_create_interface_adapter.sql"
+  push:
+    branches:
+      - feature/moral-trade-create-interface-adapter-20260727
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: moral-trade-create-adapter-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gates:
+    name: Unit, lint, typecheck, build, and diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify static interface JavaScript syntax
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('public/moral-trade-create/index.html', 'utf8');
+          const match = html.match(/<script>([\s\S]*)<\/script>/);
+          if (!match) throw new Error('Create interface script was not found.');
+          new Function(match[1]);
+          NODE
+
+      - name: Run focused Create adapter and Discover loader tests
+        run: >-
+          node --import tsx --test
+          src/lib/create-interface/*.test.ts
+          src/lib/command-center-handoff.test.ts
+          src/lib/live-discover-navigation.test.ts
+          src/live-template-system.test.ts
+          src/lib/public-route-smoke.test.ts
+
+      - name: Run full repository tests
+        id: tests
+        continue-on-error: true
+        run: npm test > repository-tests.log 2>&1
+
+      - name: Run full repository lint
+        id: lint
+        continue-on-error: true
+        run: npm run lint -- --quiet > repository-lint.log 2>&1
+
+      - name: Run TypeScript check
+        id: typecheck
+        continue-on-error: true
+        run: npx tsc --noEmit > repository-typecheck.log 2>&1
+
+      - name: Build production application
+        id: build
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build > production-build.log 2>&1
+
+      - name: Check exact integration diff
+        id: diff
+        continue-on-error: true
+        run: git diff --check 94d76c8bdc835a1aec7d61663d105e1f193a0b9d HEAD > diff-check.log 2>&1
+
+      - name: Upload gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moral-trade-create-adapter-gates-${{ github.run_id }}
+          path: |
+            repository-tests.log
+            repository-lint.log
+            repository-typecheck.log
+            production-build.log
+            diff-check.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Require every gate
+        if: always()
+        shell: bash
+        env:
+          TESTS: ${{ steps.tests.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          DIFF: ${{ steps.diff.outcome }}
+        run: |
+          failed=0
+          report() {
+            local name="$1" outcome="$2" log="$3"
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+              echo "::error title=${name} failed::Last 160 lines follow"
+              tail -n 160 "$log" || true
+            fi
+          }
+          report "Repository tests" "$TESTS" repository-tests.log
+          report "Repository lint" "$LINT" repository-lint.log
+          report "Repository typecheck" "$TYPECHECK" repository-typecheck.log
+          report "Production build" "$BUILD" production-build.log
+          report "Diff check" "$DIFF" diff-check.log
+          exit "$failed"
+
+  qa-database:
+    name: QA migration and transactional SQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+
+      - name: Validate exact QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected = os.environ["EXPECTED_QA_REF"]
+          if expected not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside the exact MoralTrade QA project.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit(f"Refusing unexpected database host: {parsed.hostname}")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Verify exact adapter migrations are recorded
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$({
+            printf '%s\n' \
+              moral_trade_create_interface_adapter \
+              moral_trade_create_adapter_offer_mode_fix \
+              moral_trade_create_service_rpc_hardening \
+              moral_trade_create_adapter_idempotency_guard
+          } | sort)"
+          recorded="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | sed '/^[[:space:]]*$/d' | sort
+          select name
+          from supabase_migrations.schema_migrations
+          where name in (
+            'moral_trade_create_interface_adapter',
+            'moral_trade_create_adapter_offer_mode_fix',
+            'moral_trade_create_service_rpc_hardening',
+            'moral_trade_create_adapter_idempotency_guard'
+          );
+          SQL
+          )"
+          if [[ "$recorded" != "$actual" ]]; then
+            echo "Expected adapter migration names:" >&2
+            printf '%s\n' "$actual" >&2
+            echo "Recorded adapter migration names:" >&2
+            printf '%s\n' "$recorded" >&2
+            exit 1
+          fi
+
+      - name: Run transactional Create adapter SQL regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/moral_trade_create_interface_adapter.sql \
+            | tee qa-create-adapter-sql.log
+
+      - name: Upload QA database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moral-trade-create-adapter-qa-db-${{ github.run_id }}
+          path: qa-create-adapter-sql.log
+          if-no-files-found: warn
+          retention-days: 30

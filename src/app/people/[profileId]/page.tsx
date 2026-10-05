@@ -16,6 +16,7 @@ import {
 import {
   formatPublicProfileLocation,
   getPublicProfilePageData,
+  getPublicProfileSummary,
   getViewer,
   listRecommendableOffers,
 } from "@/lib/app-data";
@@ -26,7 +27,7 @@ import {
 } from "@/lib/public-profile-trust";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { hasSupabaseEnv } from "@/lib/supabase/config";
+import { parsePublicProfileOfferPage } from "@/lib/public-profile-offers";
 
 interface ProfilePageProps {
   params: Promise<{ profileId: string }>;
@@ -36,20 +37,14 @@ interface ProfilePageProps {
 export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
   const { profileId } = await params;
 
-  if (!hasSupabaseEnv()) {
-    return {
-      title: "Profile",
-    };
-  }
-
-  const data = await getPublicProfilePageData(profileId);
+  const profile = await getPublicProfileSummary(profileId);
 
   return {
-    title: data.profile ? data.profile.resolvedName : "Profile",
-    description: data.profile
+    title: profile ? profile.resolvedName : "Profile",
+    description: profile
       ? truncateDescription(
-          getPublicProfileMetaSummary(data.profile, {
-            publicLocation: formatPublicProfileLocation(data.profile),
+          getPublicProfileMetaSummary(profile, {
+            publicLocation: formatPublicProfileLocation(profile),
           }),
         )
       : "Public Moral Trade member profile.",
@@ -57,11 +52,11 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
       canonical: `/people/${profileId}`,
     },
     openGraph: {
-      title: data.profile ? data.profile.resolvedName : "Profile",
-      description: data.profile
+      title: profile ? profile.resolvedName : "Profile",
+      description: profile
         ? truncateDescription(
-            getPublicProfileMetaSummary(data.profile, {
-              publicLocation: formatPublicProfileLocation(data.profile),
+            getPublicProfileMetaSummary(profile, {
+              publicLocation: formatPublicProfileLocation(profile),
             }),
           )
         : "Public Moral Trade member profile.",
@@ -82,21 +77,19 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
   const { profileId } = await params;
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
+  const offerPage = parsePublicProfileOfferPage(resolvedSearchParams.offersPage);
   const viewer = await getViewer();
-  const data = hasSupabaseEnv()
-    ? await getPublicProfilePageData(profileId, viewer?.authUser.id)
-    : {
-        profile: null,
-        offers: [],
-        profileRecommendations: [],
-        authoredCommentCount: 0,
-      };
+  const data = await getPublicProfilePageData(profileId, viewer?.authUser.id, offerPage);
 
   if (!data.profile) {
     notFound();
   }
 
   const profile = data.profile;
+  const visibleOfferStart = data.offers.length
+    ? (data.offersPage.page - 1) * data.offersPage.pageSize + 1
+    : 0;
+  const visibleOfferEnd = visibleOfferStart + data.offers.length - 1;
   const isOwnProfile = viewer?.authUser.id === profile.id;
   const publicLocation = formatPublicProfileLocation(profile);
   const visibleTrustSignals = getPublicProfileTrustSignals(profile, {
@@ -320,10 +313,15 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
           )}
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" id="open-offers">
           <div className="section-head">
             <p className="eyebrow">Open offers</p>
             <h2>Public commitments from this member</h2>
+            <p>
+              {data.offers.length
+                ? `Showing ${visibleOfferStart}–${visibleOfferEnd} of ${profile.offerCount} open offers.`
+                : "No open offers are visible on this page."}
+            </p>
           </div>
 
           <div className="data-grid">
@@ -369,6 +367,30 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
               </div>
             )}
           </div>
+
+          {data.offersPage.hasPreviousPage || data.offersPage.hasNextPage ? (
+            <nav aria-label="Open-offer pages" className="offer-actions">
+              {data.offersPage.hasPreviousPage ? (
+                <Link
+                  className="button button-secondary"
+                  href={`/people/${profile.id}?offersPage=${data.offersPage.page - 1}#open-offers`}
+                >
+                  Previous page
+                </Link>
+              ) : (
+                <span />
+              )}
+              <span className="source-pill">Page {data.offersPage.page}</span>
+              {data.offersPage.hasNextPage ? (
+                <Link
+                  className="button button-secondary"
+                  href={`/people/${profile.id}?offersPage=${data.offersPage.page + 1}#open-offers`}
+                >
+                  Next page
+                </Link>
+              ) : null}
+            </nav>
+          ) : null}
         </section>
 
         <section className="section section-white">

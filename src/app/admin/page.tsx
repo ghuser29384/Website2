@@ -32,6 +32,7 @@ import {
   splitConfigFromJson,
 } from "@/lib/performance-bonds";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
+import { isMissingOptionalLegacyAgreementRelation } from "@/lib/optional-legacy-agreement-relations";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -311,6 +312,11 @@ async function loadAdminQueues() {
     .in("review_status", ["open", "under_review", "escalated"])
     .order("created_at", { ascending: false })
     .limit(50);
+  const agreementReviewCasesUnavailable =
+    isMissingOptionalLegacyAgreementRelation(
+      agreementReviewCases.error,
+      "agreement_review_cases",
+    );
 
   const errors = [
     reports.error,
@@ -323,7 +329,7 @@ async function loadAdminQueues() {
     matchExplanationSnapshots.error,
     backgroundQueryEvents.error,
     profileDataRightRequests.error,
-    agreementReviewCases.error,
+    agreementReviewCasesUnavailable ? null : agreementReviewCases.error,
     verificationBadges.error,
     flaggedOffsetsResult.error,
     baselineBondReviewsResult.error,
@@ -369,11 +375,19 @@ async function loadAdminQueues() {
       ? supabase.from("agreement_evidence_items").select("*").in("id", reviewEvidenceIds)
       : Promise.resolve({ data: [] as AgreementEvidenceItemRow[], error: null }),
   ]);
+  const reviewEvidenceItemsUnavailable =
+    isMissingOptionalLegacyAgreementRelation(
+      reviewEvidenceItemsResult.error,
+      "agreement_evidence_items",
+    );
 
   if (conciergeEventsResult.error) {
     throw new Error(conciergeEventsResult.error.message);
   }
-  if (reviewAgreementsResult.error || reviewEvidenceItemsResult.error) {
+  if (
+    reviewAgreementsResult.error ||
+    (reviewEvidenceItemsResult.error && !reviewEvidenceItemsUnavailable)
+  ) {
     throw new Error(
       reviewAgreementsResult.error?.message ??
         reviewEvidenceItemsResult.error?.message ??
@@ -593,6 +607,8 @@ async function loadAdminQueues() {
 
   return {
     loadedAtIso,
+    legacyAgreementReviewAvailable:
+      !agreementReviewCasesUnavailable && !reviewEvidenceItemsUnavailable,
     reports: (reports.data ?? []) as MatchReportRow[],
     payments: (payments.data ?? []) as AgreementPaymentRow[],
     events: (events.data ?? []) as AgreementEventRow[],
@@ -991,7 +1007,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 </p>
               </div>
               <div className="data-grid">
-                {queues?.agreementEvidenceReviews.length ? (
+                {queues && !queues.legacyAgreementReviewAvailable ? (
+                  <div className="empty-state">
+                    <div>
+                      <strong>The legacy agreement review queue is retired.</strong>
+                      <p>
+                        Current evidence-weighted payment cases are available in the trade review
+                        console.
+                      </p>
+                      <Link className="inline-link" href="/admin/trade-review">
+                        Open trade review
+                      </Link>
+                    </div>
+                  </div>
+                ) : queues?.agreementEvidenceReviews.length ? (
                   queues.agreementEvidenceReviews.map(({ reviewCase, evidenceItem, agreement }) => {
                     const reviewerConsolePreview = buildAgreementReviewerConsolePreview({
                       appealReason: reviewCase.appeal_reason,

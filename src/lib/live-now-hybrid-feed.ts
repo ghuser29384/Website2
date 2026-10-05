@@ -355,8 +355,8 @@ function matchClass(
 }
 
 function matchReason(match: LiveNowMatchClass, cause: string) {
-  if (match === "direct") return `Direct reciprocal match for your ${cause} priority`;
-  if (match === "near") return `Promising near-match for your ${cause} priority`;
+  if (match === "direct") return `Strong terms fit for your ${cause} priority`;
+  if (match === "near") return `Potential terms fit for your ${cause} priority`;
   if (match === "adjacent") return `Adjacent to your ${cause} priority`;
   return "Exploration candidate outside your strongest current matches";
 }
@@ -364,27 +364,28 @@ function matchReason(match: LiveNowMatchClass, cause: string) {
 function explainClass(
   match: LiveNowMatchClass,
   semanticBasis: HybridLiveNowRecommendation["semanticBasis"],
-  estimates: ReciprocalAcceptanceEstimates,
+  _estimates: ReciprocalAcceptanceEstimates,
 ) {
   const details = [
     semanticBasis === "public_embedding"
       ? "Semantic retrieval used only public opportunity text and fixed public cause concepts; private profile prose was not sent to the provider."
       : semanticBasis === "deterministic_fallback"
         ? "The provider was unavailable or disabled, so this result used the deterministic local semantic fallback."
-        : "No canonical profile concept was available, so this result relies on local lexical and behavioral signals.",
-    [
-      `Estimated fit: ${Math.round(estimates.substantiveCompatibility * 100)}/100 substantive compatibility,`,
-      `${Math.round(estimates.user * 100)}/100 likelihood that the requested action is workable for you,`,
-      `${Math.round(estimates.counterparty * 100)}/100 counterparty acceptance, and`,
-      `${Math.round(estimates.completion * 100)}/100 completion confidence.`,
-    ].join(" "),
+        : "No canonical profile concept was available, so this result relies on local lexical and explicit preference signals.",
+    "The feed uses stated terms, explicit preferences, evidence fields, and public history as relevance signals. It does not establish willingness, counterparty acceptance, completion, additionality, externality safety, or impact.",
   ];
   if (match === "direct") {
-    details.push("This clears the current direct-match thresholds; it is still a prediction, not a guarantee of acceptance or impact.");
+    details.push(
+      "The stated terms clear the current relevance thresholds. Counterparty acceptance and completion remain unverified until the relevant person responds and the required review occurs.",
+    );
   } else if (match === "near") {
-    details.push("One or more estimates remain below the direct-match threshold; review the terms before treating it as a feasible trade.");
+    details.push(
+      "The terms look potentially relevant, but reciprocal feasibility has not been established. Review the requested action and evidence before relying on it.",
+    );
   } else if (match === "adjacent") {
-    details.push("This is relevant to a stated priority, but reciprocal feasibility is not yet established.");
+    details.push(
+      "This is relevant to a stated priority, but reciprocal feasibility has not been established.",
+    );
   } else {
     details.push("This is deliberately exploratory and is not presented as a match.");
   }

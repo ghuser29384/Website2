@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Learn moral trade through an interactive walkthrough of value exchanges, conditional public-goods funding, and an all-or-nothing salary-gap pool for a higher-impact career.">
+  <meta name="description" content="Learn moral trade through value exchanges, donation redirects, coalition group-buying, conditional public-goods funding, and a higher-impact career pool.">
   <title>Moral Trade — Interactive Walkthrough Concepts</title>
   <style>
     @font-face {
@@ -1561,6 +1561,523 @@
         transition-duration: .01ms !important;
       }
     }
+
+
+/* Donation Redirect: rescue opposed donations, then amplify one side through a coalition trade. */
+.redirect-comparison-scene,
+.coalition-scene,
+.group-deal-scene,
+.coalition-settlement-scene {
+  align-content: center;
+}
+
+.redirect-comparison-scene .scene-title,
+.coalition-scene .scene-title,
+.group-deal-scene .scene-title,
+.coalition-settlement-scene .scene-title {
+  max-width: 15ch;
+  font-size: clamp(40px, 5.4vw, 80px);
+}
+
+.stream-stage .stream-label span {
+  max-width: 210px;
+  line-height: 1.05;
+}
+
+.impact-options {
+  width: min(1080px, 100%);
+  margin-top: 26px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.impact-option {
+  min-height: 190px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid rgba(25, 25, 21, 0.16);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.impact-option.is-group-buy {
+  border-color: rgba(45, 85, 61, 0.45);
+  background: #dce8da;
+  box-shadow: 0 18px 38px rgba(29, 58, 39, 0.1);
+  transform: translateY(-7px);
+}
+
+.impact-option > span,
+.group-deal-card > span,
+.coalition-profile > span,
+.governance-panel > span {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.58;
+}
+
+.impact-option strong {
+  margin-top: auto;
+  font-family: var(--serif);
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+
+.impact-option b {
+  font-size: 17px;
+}
+
+.impact-option small,
+.group-deal-card small,
+.governance-choices small {
+  line-height: 1.35;
+  opacity: 0.64;
+}
+
+.example-note,
+.fallback-note {
+  width: min(900px, 100%);
+  margin: 16px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.65;
+}
+
+.coalition-layout,
+.settlement-layout {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(430px, 1.18fr);
+  align-items: center;
+  gap: clamp(30px, 6vw, 92px);
+}
+
+.coalition-card,
+.governance-panel {
+  padding: clamp(20px, 3vw, 34px);
+  border: 1px solid rgba(25, 25, 21, 0.16);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 24px 50px rgba(25, 25, 21, 0.08);
+}
+
+.coalition-profile {
+  display: grid;
+  gap: 5px;
+}
+
+.coalition-profile strong {
+  font-family: var(--serif);
+  font-size: 29px;
+  font-weight: 400;
+}
+
+.priority-list {
+  margin-top: 20px;
+  display: grid;
+  gap: 11px;
+}
+
+.priority-list > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  font-size: 12px;
+}
+
+.priority-list > div > i {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(25, 25, 21, 0.09);
+}
+
+.priority-list em {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: #536bc8;
+}
+
+.coalition-dots {
+  width: min(210px, 62%);
+  margin: 22px auto 0;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 5px;
+}
+
+.coalition-dots > i {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #65785b;
+  opacity: 0.78;
+}
+
+.coalition-math {
+  margin-top: 18px;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.coalition-math strong {
+  font-family: var(--serif);
+  font-size: 27px;
+  font-weight: 400;
+}
+
+.coalition-math span {
+  font-size: 13px;
+  opacity: 0.62;
+}
+
+.group-deal-board {
+  width: min(1050px, 100%);
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+}
+
+.group-deal-card {
+  min-height: 215px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid rgba(25, 25, 21, 0.17);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.group-deal-card.is-coalition {
+  background: #dce8da;
+}
+
+.group-deal-card strong {
+  margin: auto 0;
+  font-family: var(--serif);
+  font-size: clamp(27px, 3.2vw, 45px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.group-deal-arrow {
+  align-self: center;
+  font-size: 34px;
+  opacity: 0.5;
+}
+
+.coalition-progress {
+  width: min(560px, 100%);
+  margin-top: 30px;
+}
+
+.coalition-progress > div {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 13px;
+}
+
+.coalition-progress strong {
+  font-size: 22px;
+}
+
+.coalition-progress > i {
+  height: 16px;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(25, 25, 21, 0.1);
+}
+
+.coalition-progress em {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #536bc8, #65785b);
+}
+
+.governance-choices {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.governance-choices button {
+  padding: 18px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(25, 25, 21, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.42);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.governance-choices button:hover,
+.governance-choices button[aria-pressed="true"] {
+  border-color: rgba(25, 25, 21, 0.52);
+  background: #fff;
+  transform: translateY(-2px);
+}
+
+.governance-panel .primary-action {
+  width: 100%;
+}
+
+.redirect-amplified-success .success-copy {
+  width: min(1060px, 100%);
+}
+
+.redirect-amplified-success .scene-title {
+  max-width: 14ch;
+  font-size: clamp(42px, 6vw, 88px);
+}
+
+@media (max-width: 900px) {
+  .impact-options {
+    grid-template-columns: 1fr;
+  }
+
+  .impact-option {
+    min-height: 0;
+  }
+
+  .impact-option.is-group-buy {
+    transform: none;
+  }
+
+  .coalition-layout,
+  .settlement-layout {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+}
+
+@media (max-width: 740px) {
+  .experience[data-concept="redirect"] {
+    overflow-y: auto;
+  }
+
+  .experience[data-concept="redirect"] .step-mark span {
+    width: 14px;
+  }
+
+  .redirect-comparison-scene,
+  .coalition-scene,
+  .group-deal-scene,
+  .coalition-settlement-scene {
+    min-height: 100%;
+    padding: 74px 20px 34px;
+    align-content: start;
+  }
+
+  .redirect-comparison-scene .scene-title,
+  .coalition-scene .scene-title,
+  .group-deal-scene .scene-title,
+  .coalition-settlement-scene .scene-title {
+    font-size: 40px;
+  }
+
+  .impact-options {
+    margin-top: 18px;
+    gap: 8px;
+  }
+
+  .impact-option {
+    padding: 14px;
+    gap: 4px;
+  }
+
+  .impact-option strong {
+    font-size: 27px;
+  }
+
+  .coalition-card,
+  .governance-panel {
+    padding: 18px;
+  }
+
+  .coalition-dots {
+    width: 180px;
+  }
+
+  .group-deal-board {
+    grid-template-columns: 1fr;
+    margin-top: 20px;
+  }
+
+  .group-deal-card {
+    min-height: 0;
+    padding: 18px;
+  }
+
+  .group-deal-arrow {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+
+  .redirect-amplified-success .scene-title {
+    font-size: 46px;
+  }
+}
+
+
+/* Donation Redirect scheduled-notification reflow. */
+.redirect-comparison-scene {
+  grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.1fr);
+  grid-template-areas:
+    "redirect-head redirect-options"
+    "redirect-note redirect-options"
+    "redirect-action redirect-options";
+  align-items: start;
+  column-gap: clamp(30px, 4vw, 64px);
+}
+
+.redirect-comparison-scene .scene-head {
+  grid-area: redirect-head;
+  width: 100%;
+  max-width: 540px;
+}
+
+.redirect-comparison-scene .scene-title {
+  max-width: 10ch;
+  font-size: clamp(48px, 5.2vw, 72px);
+}
+
+.redirect-comparison-scene .scene-line {
+  max-width: 520px;
+  margin-top: 18px;
+  font-size: clamp(17px, 1.55vw, 21px);
+  line-height: 1.28;
+}
+
+.redirect-comparison-scene .impact-options {
+  grid-area: redirect-options;
+  width: 100%;
+  margin-top: 0;
+  grid-template-columns: 1fr;
+  align-self: center;
+  gap: 10px;
+}
+
+.redirect-comparison-scene .impact-option {
+  min-height: 0;
+  padding: 15px 17px;
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-areas:
+    "impact-label impact-label"
+    "impact-amount impact-result"
+    "impact-detail impact-detail";
+  align-items: end;
+  gap: 5px 16px;
+}
+
+.redirect-comparison-scene .impact-option.is-group-buy {
+  transform: none;
+}
+
+.redirect-comparison-scene .impact-option > span {
+  grid-area: impact-label;
+}
+
+.redirect-comparison-scene .impact-option > strong {
+  grid-area: impact-amount;
+  margin: 0;
+  font-size: clamp(28px, 2.6vw, 40px);
+}
+
+.redirect-comparison-scene .impact-option > b {
+  grid-area: impact-result;
+  align-self: end;
+  font-size: 16px;
+}
+
+.redirect-comparison-scene .impact-option > small {
+  grid-area: impact-detail;
+}
+
+.redirect-comparison-scene > .example-note {
+  grid-area: redirect-note;
+  width: 100%;
+  max-width: 500px;
+  margin-top: 16px;
+}
+
+.redirect-comparison-scene > .primary-action {
+  grid-area: redirect-action;
+  margin-top: 18px;
+}
+
+@media (max-width: 1100px) {
+  .experience[data-concept="redirect"] {
+    overflow-y: auto;
+  }
+
+  .redirect-comparison-scene {
+    position: relative;
+    min-height: 980px;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "redirect-head"
+      "redirect-options"
+      "redirect-note"
+      "redirect-action";
+    align-content: start;
+    row-gap: 0;
+  }
+
+  .redirect-comparison-scene .impact-options {
+    margin-top: 24px;
+  }
+}
+
+@media (max-width: 740px) {
+  .redirect-comparison-scene {
+    min-height: 1280px;
+  }
+
+  .redirect-comparison-scene .scene-title {
+    max-width: 11ch;
+    font-size: 40px;
+  }
+
+  .redirect-comparison-scene .scene-line {
+    font-size: 17px;
+  }
+
+  .redirect-comparison-scene .impact-option {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "impact-label"
+      "impact-amount"
+      "impact-result"
+      "impact-detail";
+    align-items: start;
+  }
+
+  .redirect-comparison-scene > .primary-action {
+    width: 100%;
+  }
+}
+
   </style>
 </head>
 <body>
@@ -1596,7 +2113,7 @@
     const concepts = [
       { id: "two-moves", short: "Third option", title: "The Third Option", caption: "A cinematic two-person exchange" },
       { id: "crowd", short: "The crowd", title: "The Crowd", caption: "All-or-nothing funding that unlocks impact" },
-      { id: "redirect", short: "Redirect", title: "Redirect", caption: "Turn opposed spending into shared impact" },
+      { id: "redirect", short: "Redirect", title: "Redirect", caption: "Rescue waste, then group-buy more impact" },
       { id: "mix", short: "Find the mix", title: "Find the Mix", caption: "Tune the terms until both say yes" },
       { id: "match", short: "Your match", title: "Your Match", caption: "Marketplace discovery that starts with you" }
     ];
@@ -1612,6 +2129,7 @@
       crowdGrowing: false,
       careerFunding: false,
       sharedCause: null,
+      coalitionRule: null,
       mix: null,
       mixAttempt: 0,
       offer: null,
@@ -1856,6 +2374,7 @@
       state.crowdGrowing = false;
       state.careerFunding = false;
       state.sharedCause = null;
+      state.coalitionRule = null;
       state.mix = null;
       state.mixAttempt = 0;
       state.offer = null;
@@ -1970,22 +2489,49 @@
     }
 
     function renderRedirect() {
+      const coalitionDots = Array.from({ length: 100 }, function(_, index) {
+        return '<i style="--dot-delay:' + ((index % 10) * 18) + 'ms"></i>';
+      }).join("");
+
       if (state.step === 0) {
-        stage.innerHTML = '<div class="scene stream-stage">' + stepMark(0, 3) + '<div class="stream stream-a"><div class="stream-label"><strong>$100</strong><span>Democrats</span></div></div><div class="stream stream-b"><div class="stream-label"><strong>$100</strong><span>Republicans</span></div></div><div class="collision">Opposite<br>directions</div><div class="stream-copy"><div class="scene-prompt">Click to intervene</div><h1 class="scene-title">Two donations. Pulling against each other.</h1><button class="primary-action" type="button" data-action="pause-streams"><span>Pause the tug-of-war</span><span aria-hidden="true">Ⅱ</span></button></div></div>';
+        stage.innerHTML = `<div class="scene stream-stage">${stepMark(0, 7)}<div class="stream stream-a"><div class="stream-label"><strong>$10</strong><span>Democrat · environment</span></div></div><div class="stream stream-b"><div class="stream-label"><strong>$10</strong><span>Republican · environment</span></div></div><div class="collision">Mostly<br>cancel out</div><div class="stream-copy"><div class="scene-prompt">Donation Redirect</div><h1 class="scene-title">Two political donations. Almost no shared impact.</h1><p class="scene-line">Both donors care most about protecting the environment, but their $10 donations pull in opposite directions.</p><button class="primary-action" type="button" data-action="show-basic-redirect"><span>Redirect the matched $20</span><span aria-hidden="true">→</span></button></div></div>`;
         return;
       }
 
       if (state.step === 1) {
-        stage.innerHTML = '<div class="scene">' + stepMark(1, 3) + '<div class="scene-head"><div class="scene-prompt">Choose a shared destination</div><h1 class="scene-title">Where would both donors rather create $200 of impact?</h1></div><div class="shared-causes"><button class="shared-cause" type="button" data-action="choose-shared" data-value="Malaria prevention"><span aria-hidden="true">+</span>Malaria prevention</button><button class="shared-cause" type="button" data-action="choose-shared" data-value="Disaster response"><span aria-hidden="true">⌁</span>Disaster response</button><button class="shared-cause" type="button" data-action="choose-shared" data-value="Open science"><span aria-hidden="true">✦</span>Open science</button></div></div>';
+        stage.innerHTML = `<div class="scene stream-stage redirected">${stepMark(1, 7)}<div class="stream stream-a"><div class="stream-label"><strong>$20</strong><span>matched amount</span></div></div><div class="stream stream-b"></div><div class="redirect-target"><div><strong>$20</strong><span>to environmental protection</span></div></div><div class="stream-copy"><div class="scene-prompt">First gain · rescue the waste</div><h1 class="scene-title">The matched money now creates shared impact.</h1><p class="scene-line">Neither donor changes political beliefs. Their opposed spending simply stops fighting.</p><button class="primary-action" type="button" data-action="show-amplification"><span>See how one $10 can go further</span><span aria-hidden="true">→</span></button></div></div>`;
         return;
       }
 
       if (state.step === 2) {
-        stage.innerHTML = '<div class="scene stream-stage redirected">' + stepMark(2, 3) + '<div class="stream stream-a"><div class="stream-label"><strong>$200</strong><span>matched amount</span></div></div><div class="stream stream-b"></div><div class="redirect-target"><div><strong>$200</strong><span>to ' + state.sharedCause + '</span></div></div><div class="stream-copy"><div class="scene-prompt">Same beliefs · same budget</div><h1 class="scene-title">Now the matched money moves together.</h1><button class="primary-action" type="button" data-action="finish-redirect"><span>See the result</span><span aria-hidden="true">→</span></button></div></div>';
+        stage.innerHTML = `<div class="scene redirect-comparison-scene">${stepMark(2, 7)}<div class="scene-head"><div class="scene-prompt">Redirect scheduled · users notified</div><h1 class="scene-title">The $10 redirect is already scheduled.</h1><p class="scene-line">In 7 days, the Republican environmentalist's $10 goes to an environmental protection organization. Moral Trade notifies users now; they may propose a trade she values more for the same $10. Without an accepted and completed trade, the donation proceeds automatically.</p></div><div class="impact-options" aria-label="Compare uses of ten dollars"><article class="impact-option"><span>Scheduled redirect</span><strong>$10</strong><b>Environmental organization</b><small>Donated automatically in 7 days unless an accepted trade is completed.</small></article><article class="impact-option"><span>One-to-one proposal</span><strong>1 × 10 weeks</strong><b>10 person-weeks</b><small>One person avoids buying single-use plastic bags.</small></article><article class="impact-option is-group-buy"><span>Group-buy proposal</span><strong>100 × 2.1 days</strong><b>210 person-days · 30 person-weeks</b><small>Equivalent to 30 people for one week.</small></article></div><p class="example-note">Here, she prefers 210 verified person-days to the scheduled $10 donation.</p><button class="primary-action" type="button" data-action="notify-coalition"><span>See a notified user start a coalition</span><span aria-hidden="true">→</span></button></div>`;
         return;
       }
 
-      stage.innerHTML = '<div class="scene success-scene">' + stepMark(2, 3) + burstMarkup(28) + '<div class="success-copy"><div class="scene-prompt">Donation offset</div><h1 class="scene-title">Keep your beliefs. Redirect the matched part.</h1><p class="scene-line">Opposed donors can move the amount they match to something both value.</p>' + conversionDeck("join", { create: "Offer", chip: "Leverage $1", chipAction: "open-crowd" }) + '</div></div>';
+      if (state.step === 3) {
+        stage.innerHTML = `<div class="scene coalition-scene">${stepMark(3, 7)}<div class="coalition-layout"><div><div class="scene-prompt">Platform notification · 7 days remaining</div><h1 class="scene-title">A notified user finds 99 close matches.</h1><p class="scene-line">She uses Moral Trade to find 99 users whose priorities are as similar as possible and whose small actions can add up.</p><button class="primary-action" type="button" data-action="form-coalition"><span>Form the 100-person coalition</span><span aria-hidden="true">→</span></button></div><div class="coalition-card"><div class="coalition-profile"><span>Lead member's priorities</span><strong>Future-focused coalition</strong></div><div class="priority-list" aria-label="Lead member priority allocation"><div><span>Future flourishing</span><b>60 / 100</b><i><em style="width:60%"></em></i></div><div><span>Existential risk</span><b>25 / 100</b><i><em style="width:25%"></em></i></div><div><span>Other priorities</span><b>15 / 100</b><i><em style="width:15%"></em></i></div></div><div class="coalition-dots" aria-hidden="true">${coalitionDots}</div><div class="coalition-math"><strong>100 × 2.1 days</strong><span>= 210 verified person-days</span></div></div></div></div>`;
+        return;
+      }
+
+      if (state.step === 4) {
+        stage.innerHTML = `<div class="scene group-deal-scene">${stepMark(4, 7)}<div class="scene-head"><div class="scene-prompt">A coalition can trade as one counterparty</div><h1 class="scene-title">The coalition becomes one offer.</h1></div><div class="group-deal-board"><article class="group-deal-card"><span>Environmentalist Republican gives</span><strong>$10 coalition payment</strong><small>Released only after the group's verified completion.</small></article><div class="group-deal-arrow" aria-hidden="true">↔</div><article class="group-deal-card is-coalition"><span>100-person coalition gives</span><strong>210 person-days without buying single-use plastic bags</strong><small>Each member commits 2.1 days.</small></article></div><p class="fallback-note">If the coalition does not form or complete, the scheduled environmental donation proceeds after 7 days.</p><button class="primary-action" type="button" data-action="accept-group-trade"><span>Accept the group trade</span><span aria-hidden="true">→</span></button></div>`;
+        return;
+      }
+
+      if (state.step === 5) {
+        const releaseLabel = state.coalitionRule === "vote"
+          ? "Open the member vote"
+          : state.coalitionRule === "pre-agree"
+            ? "Release $10 to the pre-agreed destination"
+            : "Choose how the coalition will allocate $10";
+        stage.innerHTML = `<div class="scene coalition-settlement-scene">${stepMark(5, 7)}<div class="settlement-layout"><div><div class="scene-prompt">Completion verified</div><h1 class="scene-title">100 members complete 2.1 days each.</h1><div class="coalition-progress" role="progressbar" aria-label="Coalition completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div><strong>100 / 100</strong><span>members verified</span></div><i><em></em></i></div></div><div class="governance-panel"><span>How should the coalition use the $10?</span><div class="governance-choices" role="group" aria-label="Choose the coalition allocation rule"><button aria-pressed="${state.coalitionRule === "pre-agree"}" type="button" data-action="choose-coalition-rule" data-value="pre-agree"><strong>Pre-agree the destination</strong><small>Send the full $10 to the coalition's chosen future-focused fund.</small></button><button aria-pressed="${state.coalitionRule === "vote"}" type="button" data-action="choose-coalition-rule" data-value="vote"><strong>Vote after completion</strong><small>One verified member, one vote on the full $10.</small></button></div><button class="primary-action" type="button" data-action="release-coalition" ${state.coalitionRule ? "" : "disabled"}><span>${releaseLabel}</span><span aria-hidden="true">→</span></button></div></div></div>`;
+        return;
+      }
+
+      const coalitionSettlement = state.coalitionRule === "vote"
+        ? "A one-member-one-vote decision now allocates the coalition's $10."
+        : "The coalition's $10 goes to its pre-agreed future-focused destination.";
+      stage.innerHTML = `<div class="scene success-scene redirect-amplified-success">${stepMark(6, 7)}${burstMarkup(32)}<div class="success-copy"><div class="scene-prompt">Donation redirected · impact amplified</div><h1 class="scene-title">One $10 bought 30 person-weeks of environmental action.</h1><p class="scene-line">The environmentalist gets 210 verified person-days. The coalition gets the same $10 for its shared priorities. ${coalitionSettlement}</p><p class="example-note">Money moved where it was scarcer; small actions moved where they were cheaper. Both sides prefer this outcome to the scheduled donation.</p>${conversionDeck("join", { create: "Offer", chip: "Leverage $1", chipAction: "open-crowd" })}</div></div>`;
     }
 
     function equalizerMarkup() {
@@ -2097,9 +2643,13 @@
         schedule(function() { state.careerFunding = false; state.step = 7; render(); focusStageHeading(); }, delay);
       }
 
-      if (action === "pause-streams") { state.step = 1; render(); }
-      if (action === "choose-shared") { state.sharedCause = control.dataset.value; state.step = 2; render(); }
-      if (action === "finish-redirect") { state.step = 3; render(); }
+      if (action === "show-basic-redirect") { state.step = 1; render(); focusStageHeading(); }
+      if (action === "show-amplification") { state.step = 2; render(); focusStageHeading(); }
+      if (action === "notify-coalition") { state.step = 3; render(); focusStageHeading(); }
+      if (action === "form-coalition") { state.step = 4; render(); focusStageHeading(); }
+      if (action === "accept-group-trade") { state.step = 5; render(); focusStageHeading(); }
+      if (action === "choose-coalition-rule") { state.coalitionRule = control.dataset.value; render(); }
+      if (action === "release-coalition" && state.coalitionRule) { state.step = 6; render(); focusStageHeading(); }
 
       if (action === "choose-mix") {
         state.mix = control.dataset.value;

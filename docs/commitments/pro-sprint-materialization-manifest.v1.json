@@ -1,0 +1,70 @@
+{
+  "schema_version": "moral-trade-commitments-pro-sprint-materialization-v1.1",
+  "status": "repository_only_candidate_not_merged",
+  "issue": 755,
+  "materialization_source_base_sha": "7e993158363710e5fe2c3eaa1cbccdb5cd56c235",
+  "materialization_source_base_tree": "e5283317d448e35106ca0179a267b20087ce0492",
+  "implementation_base_policy": {
+    "fresh_live_main_selected_at_implementation_start": true,
+    "Q_and_initial_R_identical_base_required": true,
+    "historical_materialization_base_may_be_reused_if_stale": false
+  },
+  "hash_policy": {
+    "algorithm": "sha256",
+    "mode": "validator_computes_every_bound_file_and_one_canonical_package_digest",
+    "evidence_file": "commitments-pro-sprint-materialization-sha256.json",
+    "precommitted_digest_is_not_used_to_avoid_a_self_referential_manifest": true
+  },
+  "files": [
+    ".github/workflows/commitments-pro-sprint-specification-gates.yml",
+    "docs/commitments/pro-sprint-source-of-truth-v1.md",
+    "docs/commitments/pro-sprint-artifact-precedence-v1.md",
+    "docs/commitments/pro-sprint-orchestration-v1.md",
+    "docs/commitments/trust-resolution-v3-contract.v1.json",
+    "docs/commitments/zero-dollar-pilot-contract.v1.json",
+    "docs/commitments/qri-orchestration-contract.v1.json",
+    "docs/commitments/zero-dollar-owner-uat-release-contract.v1.json",
+    "docs/commitments/pilot-operations-contract.v1.json",
+    "docs/commitments/free-rider-portfolio-contract.v1.json",
+    "scripts/commitments/validate-pro-sprint-materialization.mjs",
+    "scripts/commitments/pro-sprint-materialization.test.mjs"
+  ],
+  "source_bindings": {
+    "merged_pr_733": "c2d7be6a895f1bb8c9ced1b257eb8b4381d50ac3",
+    "materialization_source_pr_747": "7e993158363710e5fe2c3eaa1cbccdb5cd56c235",
+    "merged_separate_dac_pr_758": "f1cd364bf058b28b3b29501aa6528c48f8f39bb7",
+    "preserved_pr_722": "1a52f46d5d877e155dba697300296be32ed87d43",
+    "stale_pr_718": "e7359a046d67391a37c92505f4c50694d5b24e1e",
+    "trust_source_issue": 715,
+    "materialization_issue": 755
+  },
+  "required_invariants": {
+    "factual_fulfillment_is_additionality": false,
+    "reliability_has_active_product_effect": false,
+    "safety_is_compensatory": false,
+    "raw_evidence_public": false,
+    "learned_ranking_active": false,
+    "participant_specific_causal_credit_active": false,
+    "self_classified_human_subjects_exemption": false,
+    "recruitment_before_written_determination": false,
+    "dac_is_default_free_rider_solution": false,
+    "stale_Q_R_implementation_base_allowed": false
+  },
+  "authorization": {
+    "runtime_implementation": false,
+    "Q_R_I_implementation": false,
+    "ready_transition": false,
+    "merge": false,
+    "migration": false,
+    "database_access_or_mutation": false,
+    "preview_or_production_deployment": false,
+    "provider_activity": false,
+    "money_movement": false,
+    "real_user_contact": false,
+    "recruitment": false,
+    "screening": false,
+    "consent_collection": false,
+    "research_execution": false,
+    "public_impact_claim": false
+  }
+}

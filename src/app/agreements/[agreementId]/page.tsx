@@ -211,10 +211,6 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               Agreement with{" "}
               {agreement.counterparty ? agreement.counterparty.resolvedName : "counterparty"}.
             </h1>
-            <p className="hero-text">
-              This page keeps the negotiation, payment records, verification evidence, disputes,
-              cancellation requests, and ratings in one auditable place.
-            </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/dashboard">
                 Back to dashboard
@@ -250,8 +246,17 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>{agreement.reviewCases.length} review case(s)</strong>
-                  <p>{agreement.evidenceItems.length} evidence item(s) submitted.</p>
+                  {agreement.legacyEvidenceReviewAvailable ? (
+                    <>
+                      <strong>{agreement.reviewCases.length} review case(s)</strong>
+                      <p>{agreement.evidenceItems.length} evidence item(s) submitted.</p>
+                    </>
+                  ) : (
+                    <>
+                      <strong>Current milestone review workflow</strong>
+                      <p>The retired agreement-room evidence console is not enabled.</p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -658,7 +663,8 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
           </section>
         ) : null}
 
-        <section className="section section-subtle">
+        {agreement.legacyEvidenceReviewAvailable ? (
+          <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Evidence review</p>
             <h2>Completion states, evidence schemas, and challenge lane</h2>
@@ -815,7 +821,19 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               ))
             ) : null}
           </div>
-        </section>
+          </section>
+        ) : (
+          <section className="section section-subtle">
+            <div className="section-head">
+              <p className="eyebrow">Evidence review</p>
+              <h2>Current milestone evidence workflow</h2>
+              <p>
+                This agreement record does not use the retired agreement-room evidence console.
+                Its terms, events, payments, and performance-bond evidence remain available here.
+              </p>
+            </div>
+          </section>
+        )}
 
         <section className="section section-subtle">
           <div className="section-head">

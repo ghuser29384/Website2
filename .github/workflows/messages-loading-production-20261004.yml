@@ -1,0 +1,76 @@
+name: Messages loading checks and production release
+
+on:
+  pull_request:
+    paths:
+      - src/app/messages/**
+      - src/lib/messages-loading*
+      - tests/messages-loading.auth.ts
+      - playwright.messages.config.ts
+      - scripts/auth-resolution-supabase.mjs
+      - .github/workflows/messages-loading-production-20261004.yml
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/messages-loading-production-20261004.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint -- --quiet
+      - run: npx tsc --noEmit
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: preview
+      - run: npx playwright install --with-deps chromium
+      - name: Check delayed Messages loading and retry with isolated test data
+        run: npx playwright test --config=playwright.messages.config.ts --reporter=line
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: messages-loading-${{ github.run_id }}
+          path: test-results/messages-loading
+          if-no-files-found: warn
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Dispatch the existing gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+          jq -n --arg sha "$GITHUB_SHA" \
+            '{ref:"main",inputs:{ref:"main",target:"production",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+                --input - >/dev/null

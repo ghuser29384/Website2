@@ -1,3 +1,4 @@
+import { OUTCOME_VERIFICATION_BOUNDARY } from "@/lib/offer-discovery-facts";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -70,14 +71,14 @@ interface RankedPoolRoute {
   route: LiveGroupBuyingRoute;
   score: number;
   semanticRelevance: number;
-  verified: boolean;
+  verified: boolean | null;
 }
 
 const POOL_SORT_OPTIONS: ReadonlyArray<{ value: PoolSort; label: string }> = [
   { value: "best_match", label: "Best match" },
   { value: "soonest_deadline", label: "Soonest deadline" },
   { value: "lowest_cost", label: "Lowest maximum funding" },
-  { value: "most_verified", label: "Strongest evidence" },
+  { value: "most_verified", label: "Most detailed evidence terms" },
 ];
 
 const mechanismFacts = [
@@ -166,7 +167,7 @@ function poolMatchesHardConstraints(
   route: LiveGroupBuyingRoute,
   facets: SmartQueryFacets,
   causeIds: readonly string[],
-  verified: boolean,
+  verified: boolean | null,
 ) {
   if (facets.causes.length) {
     const direct = facets.causes.some((cause) => causeIds.includes(cause));
@@ -301,6 +302,7 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
       </header>
 
       <main className="mt-product-main" id="main-content" tabIndex={-1}>
+        {facets.verified !== null ? <p role="status" className="status-banner">{OUTCOME_VERIFICATION_BOUNDARY}</p> : null}
         <section className="mt-mechanism-hero" aria-labelledby="pools-heading">
           <div className="mt-mechanism-copy">
             <h1 id="pools-heading">Live conditional pools.</h1>

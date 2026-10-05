@@ -1,0 +1,200 @@
+name: Pledge impact live foundation gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+    paths:
+      - "src/app/api/mpgf/pledge-impact/**"
+      - "src/lib/mpgf/pledge-impact-live*"
+      - "supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql"
+      - "supabase/tests/mpgf_pledge_impact_live_foundation.sql"
+      - ".github/workflows/pledge-impact-live-foundation-gates.yml"
+  push:
+    branches:
+      - feature/pledge-impact-live-foundation-20260801
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pledge-impact-live-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code-gates:
+    name: Test, lint, typecheck, build, and diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused live pledge-impact tests
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/lib/mpgf/pledge-impact-live.test.ts \
+            src/lib/mpgf/pledge-impact-live-integration.test.ts \
+            2>&1 | tee focused-pledge-impact-live.log
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee repository-tests.log
+
+      - name: Run complete ESLint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee repository-lint.log
+
+      - name: Run production build and TypeScript
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee production-build.log
+
+      - name: Check exact current-main diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          git diff --check "$base" "$GITHUB_SHA" | tee diff-check.log
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
+          cat > expected-files.txt <<'EOF'
+          .github/workflows/pledge-impact-live-foundation-gates.yml
+          src/app/api/mpgf/pledge-impact/route.ts
+          src/lib/mpgf/pledge-impact-live-integration.test.ts
+          src/lib/mpgf/pledge-impact-live-server.ts
+          src/lib/mpgf/pledge-impact-live.test.ts
+          src/lib/mpgf/pledge-impact-live.ts
+          supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
+          supabase/tests/mpgf_pledge_impact_live_foundation.sql
+          EOF
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
+
+      - name: Upload code evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pledge-impact-live-code-${{ github.run_id }}
+          path: |
+            focused-pledge-impact-live.log
+            repository-tests.log
+            repository-lint.log
+            production-build.log
+            diff-check.log
+            expected-files.txt
+            actual-files.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  qa-sql-regression:
+    name: Transactional MoralTrade QA migration regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      MIGRATION_VERSION: "20260801030000"
+      MIGRATION_BLOB: c83ab30d7a84b2c97a70181fb5ba909cbebb75f4
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+
+      - name: Validate exact MoralTrade QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected = os.environ["EXPECTED_QA_REF"]
+          if expected not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside the exact MoralTrade QA project.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit(f"Refusing unexpected database host: {parsed.hostname}")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Run migration or persistent-schema live regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          registered="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+            "select count(*) from supabase_migrations.schema_migrations where version = '$MIGRATION_VERSION';")"
+
+          case "$registered" in
+            0)
+              {
+                printf '%s\n' '\set ON_ERROR_STOP on' 'begin;'
+                cat supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
+                tail -n +2 supabase/tests/mpgf_pledge_impact_live_foundation.sql | sed '$d'
+                printf '%s\n' 'rollback;'
+              } > qa-pledge-impact-live-transaction.sql
+              ;;
+            1)
+              marker="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+                "select coalesce(statements[1], '') from supabase_migrations.schema_migrations where version = '$MIGRATION_VERSION';")"
+              [[ "$marker" == *"$MIGRATION_BLOB"* ]] || {
+                echo 'Registered migration source does not match this candidate.' >&2
+                exit 1
+              }
+              cp supabase/tests/mpgf_pledge_impact_live_foundation.sql \
+                qa-pledge-impact-live-transaction.sql
+              ;;
+            *)
+              echo "Unexpected migration inventory count: $registered" >&2
+              exit 1
+              ;;
+          esac
+
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file qa-pledge-impact-live-transaction.sql \
+            2>&1 | tee qa-pledge-impact-live.log
+
+      - name: Upload QA database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pledge-impact-live-qa-${{ github.run_id }}
+          path: |
+            qa-pledge-impact-live-transaction.sql
+            qa-pledge-impact-live.log
+          if-no-files-found: warn
+          retention-days: 30

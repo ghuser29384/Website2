@@ -38,12 +38,12 @@
   font-family: var(--font-heading, Georgia, serif);
   font-weight: 400;
   letter-spacing: -0.04em;
-  line-height: 0.98;
+  line-height: 1.12;
 }
 
 .stageHeader h1 {
   max-width: 880px;
-  font-size: clamp(40px, 5.4vw, 72px);
+  font-size: clamp(30px, 3.2vw, 44px);
 }
 
 .eyebrow,
@@ -560,10 +560,10 @@
   margin-top: 10px;
   color: var(--connector-blue);
   font-family: var(--font-heading, Georgia, serif);
-  font-size: clamp(58px, 7vw, 104px);
+  font-size: clamp(36px, 4vw, 56px);
   font-weight: 400;
   letter-spacing: -0.055em;
-  line-height: 0.9;
+  line-height: 1.1;
 }
 
 .activationAmount h2 {

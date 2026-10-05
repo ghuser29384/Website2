@@ -1,0 +1,176 @@
+name: PR 212 lint-baseline staging controller v12
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/pr212-lint-baseline-stage-v12-trigger.txt
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-lint-baseline-stage-v12-20260804
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    if: contains(github.event.head_commit.message, 'Trigger PR 212 lint baseline stage v12')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feat/institutional-trade-system
+      EXPECTED_HEAD: 0f5c352cafaa6225665049a44f492ebad5ea2e4d
+      STAGE_BRANCH: ops/pr212-lint-baseline-stage-v12-20260804
+      QA_WORKFLOW_PATH: .github/workflows/institutional-trade-qa.yml
+      STAGED_PATH: .github/pr212-staged/institutional-trade-qa-v12.yml.txt
+
+    steps:
+      - name: Check out the exact draft feature head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Confirm exact PR and branch state
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git rev-parse HEAD)"
+          remote="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          [[ "$current" == "$EXPECTED_HEAD" ]] || {
+            echo "Checkout moved: expected $EXPECTED_HEAD, found $current" >&2
+            exit 1
+          }
+          [[ "$remote" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature branch advanced concurrently: expected $EXPECTED_HEAD, found $remote" >&2
+            exit 1
+          }
+          pr="$(gh api repos/$GITHUB_REPOSITORY/pulls/212)"
+          [[ "$(jq -r .state <<<"$pr")" == "open" ]]
+          [[ "$(jq -r .draft <<<"$pr")" == "true" ]]
+          [[ "$(jq -r .head.ref <<<"$pr")" == "$TARGET_BRANCH" ]]
+          [[ "$(jq -r .head.sha <<<"$pr")" == "$EXPECTED_HEAD" ]]
+          test -s "$QA_WORKFLOW_PATH"
+
+      - name: Generate the narrowly patched workflow as a non-workflow staging blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$STAGED_PATH")"
+          python - <<'PY'
+          from __future__ import annotations
+
+          import os
+          from pathlib import Path
+
+          source = Path(os.environ["QA_WORKFLOW_PATH"])
+          staged = Path(os.environ["STAGED_PATH"])
+          text = source.read_text()
+
+          anchor = "\n".join(
+              [
+                  "              (",
+                  '                  "public.moral_trade_create_submit_service",',
+                  '                  "warning",',
+                  '                  "42804",',
+                  '                  "target type is different type than source type",',
+                  "              ),",
+              ]
+          ) + "\n"
+          additions = "\n".join(
+              [
+                  "              (",
+                  '                  "public.record_person_verification_result_v1",',
+                  '                  "warning",',
+                  '                  "42804",',
+                  '                  "target type is different type than source type",',
+                  "              ),",
+                  "              (",
+                  '                  "public.cleanup_one_person_qa_fixture_v1",',
+                  '                  "warning",',
+                  '                  "42804",',
+                  '                  "target type is different type than source type",',
+                  "              ),",
+              ]
+          ) + "\n"
+
+          markers = (
+              "public.record_person_verification_result_v1",
+              "public.cleanup_one_person_qa_fixture_v1",
+          )
+          present = tuple(marker in text for marker in markers)
+          if present == (True, True):
+              patched = text
+          elif present != (False, False):
+              raise SystemExit(f"Partial lint-baseline patch detected: {present}")
+          else:
+              if text.count(anchor) != 1:
+                  raise SystemExit("Could not locate the unique QA lint-baseline insertion point.")
+              patched = text.replace(anchor, anchor + additions, 1)
+
+          for marker in markers:
+              if patched.count(marker) != 1:
+                  raise SystemExit(f"Expected exactly one {marker} entry after patching.")
+          if patched.count("Institutional lint issues remain") != 1:
+              raise SystemExit("Institutional fail-closed lint gate was unexpectedly altered or missing.")
+          if patched.count("if observed != expected_preexisting") != 1:
+              raise SystemExit("Exact pre-existing lint-baseline comparison was unexpectedly altered or missing.")
+          if present == (False, False) and patched.replace(additions, "", 1) != text:
+              raise SystemExit("The generated workflow differs by more than the two observed baseline tuples.")
+
+          staged.write_text(patched)
+          PY
+
+          test -s "$STAGED_PATH"
+          grep -Fq 'public.record_person_verification_result_v1' "$STAGED_PATH"
+          grep -Fq 'public.cleanup_one_person_qa_fixture_v1' "$STAGED_PATH"
+          grep -Fq 'if institutional:' "$STAGED_PATH"
+          grep -Fq 'if observed != expected_preexisting:' "$STAGED_PATH"
+          status=0
+          diff -u "$QA_WORKFLOW_PATH" "$STAGED_PATH" | tee /tmp/pr212-lint-baseline-v12.diff || status=$?
+          [[ "$status" == "1" ]] || {
+            echo "Expected one narrow staged diff; diff exit was $status." >&2
+            exit 1
+          }
+          grep -Fq '+                  "public.record_person_verification_result_v1",' /tmp/pr212-lint-baseline-v12.diff
+          grep -Fq '+                  "public.cleanup_one_person_qa_fixture_v1",' /tmp/pr212-lint-baseline-v12.diff
+          added="$(grep -Ec '^\+[^+]' /tmp/pr212-lint-baseline-v12.diff || true)"
+          removed="$(grep -Ec '^-[^-]' /tmp/pr212-lint-baseline-v12.diff || true)"
+          [[ "$added" == "12" && "$removed" == "0" ]] || {
+            echo "Unexpected diff shape: added=$added removed=$removed" >&2
+            cat /tmp/pr212-lint-baseline-v12.diff >&2
+            exit 1
+          }
+
+      - name: Publish the generated content on an isolated helper branch
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$STAGE_BRANCH" "$EXPECTED_HEAD"
+          git add "$STAGED_PATH"
+          git commit -m 'Stage PR 212 refreshed QA lint baseline'
+          stage_sha="$(git rev-parse HEAD)"
+          git push origin "HEAD:refs/heads/$STAGE_BRANCH" --force
+          echo "stage_sha=$stage_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Report the staged blob on draft PR 212
+        env:
+          STAGE_SHA: ${{ steps.publish.outputs.stage_sha }}
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-lint-baseline-stage-v12 -->
+          ## Exact QA lint-baseline repair staged
+
+          - Source head: \`$EXPECTED_HEAD\`
+          - Helper branch: \`$STAGE_BRANCH\`
+          - Staging commit: \`$STAGE_SHA\`
+          - Staged path: \`$STAGED_PATH\`
+          - Scope: adds only the two non-institutional QA lint signatures observed in failed run 30835353373; the fail-closed institutional lint gate is preserved.
+          - PR #212 remains draft and unmerged. No production database, custody, payout, or feature-flag state changed."

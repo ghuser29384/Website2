@@ -30,6 +30,13 @@ export interface Database {
           id: string;
           email: string;
           display_name: string | null;
+          username: string | null;
+          public_invitation_mentions_enabled: boolean;
+          avatar_url: string | null;
+          account_kind: "individual" | "organization";
+          accepts_group_invitations: boolean;
+          organization_approval_count: number;
+          affiliation: string;
           city: string | null;
           region: string | null;
           country: string | null;
@@ -48,6 +55,13 @@ export interface Database {
           id: string;
           email: string;
           display_name?: string | null;
+          username?: string | null;
+          public_invitation_mentions_enabled?: boolean;
+          avatar_url?: string | null;
+          account_kind?: "individual" | "organization";
+          accepts_group_invitations?: boolean;
+          organization_approval_count?: number;
+          affiliation?: string;
           city?: string | null;
           region?: string | null;
           country?: string | null;
@@ -65,6 +79,13 @@ export interface Database {
         Update: {
           email?: string;
           display_name?: string | null;
+          username?: string | null;
+          public_invitation_mentions_enabled?: boolean;
+          avatar_url?: string | null;
+          account_kind?: "individual" | "organization";
+          accepts_group_invitations?: boolean;
+          organization_approval_count?: number;
+          affiliation?: string;
           city?: string | null;
           region?: string | null;
           country?: string | null;
@@ -78,6 +99,30 @@ export interface Database {
           rating_count?: number;
           offer_count?: number;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      profile_username_claims: {
+        Row: {
+          username: string;
+          profile_id: string;
+          is_current: boolean;
+          claimed_at: string;
+          superseded_at: string | null;
+        };
+        Insert: {
+          username: string;
+          profile_id: string;
+          is_current?: boolean;
+          claimed_at?: string;
+          superseded_at?: string | null;
+        };
+        Update: {
+          username?: string;
+          profile_id?: string;
+          is_current?: boolean;
+          claimed_at?: string;
+          superseded_at?: string | null;
         };
         Relationships: [];
       };
@@ -769,6 +814,46 @@ export interface Database {
         };
         Update: {
           score?: number;
+        };
+        Relationships: [];
+      };
+      account_payment_setup_limits: {
+        Row: { profile_id: string; window_started_at: string; attempts: number };
+        Insert: { profile_id: string; window_started_at: string; attempts: number };
+        Update: { window_started_at?: string; attempts?: number };
+        Relationships: [];
+      };
+      account_payment_settings: {
+        Row: {
+          id: string;
+          profile_id: string;
+          platform_account_id: string;
+          livemode: boolean;
+          stripe_customer_id: string | null;
+          customer_started_at: string | null;
+          stripe_account_id: string | null;
+          account_started_at: string | null;
+          account_country: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          platform_account_id: string;
+          livemode: boolean;
+          stripe_customer_id?: string | null;
+          customer_started_at?: string | null;
+          stripe_account_id?: string | null;
+          account_started_at?: string | null;
+          account_country?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          stripe_customer_id?: string | null;
+          customer_started_at?: string | null;
+          stripe_account_id?: string | null;
+          account_started_at?: string | null;
+          account_country?: string | null;
         };
         Relationships: [];
       };
@@ -11015,6 +11100,34 @@ export interface Database {
       };
     };
     Views: {
+      public_profile_cards_v1: {
+        Row: {
+          id: string;
+          username: string | null;
+          display_name: string | null;
+          avatar_url: string | null;
+          account_kind: "individual" | "organization";
+          accepts_group_invitations: boolean;
+          public_invitation_mentions_enabled: boolean;
+          organization_approval_count: number;
+          bio: string;
+          follower_count: number;
+          following_count: number;
+          karma: number;
+          comment_count: number;
+          rating_avg: number | null;
+          rating_count: number;
+          offer_count: number;
+          created_at: string;
+          public_location_granularity: "hidden" | "country" | "region" | "city";
+          city: string | null;
+          region: string | null;
+          country: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       wish_profile_previews: {
         Row: {
           profile_id: string;
@@ -11067,6 +11180,39 @@ export interface Database {
       };
     };
     Functions: {
+      take_account_payment_setup_slot: { Args: { p_profile_id: string }; Returns: boolean };
+      normalize_profile_username_v1: {
+        Args: { p_username: string };
+        Returns: string;
+      };
+      safe_participant_display_name_v1: {
+        Args: { p_display_name: string | null; p_username: string };
+        Returns: string;
+      };
+      search_create_participants_v2: {
+        Args: { p_actor_profile_id: string; p_query: string; p_limit?: number };
+        Returns: {
+          profile_id: string;
+          username: string;
+          display_name: string;
+          avatar_url: string | null;
+          account_type: "individual" | "organization";
+          verification: "none" | "identity-verified" | "organization-verified";
+          public_invitation_mentions_enabled: boolean;
+        }[];
+      };
+      resolve_create_participants_v2: {
+        Args: { p_actor_profile_id: string; p_profile_ids: string[] };
+        Returns: {
+          profile_id: string;
+          username: string;
+          display_name: string;
+          avatar_url: string | null;
+          account_type: "individual" | "organization";
+          verification: "none" | "identity-verified" | "organization-verified";
+          public_invitation_mentions_enabled: boolean;
+        }[];
+      };
       viewer_can_access_collective: {
         Args: {
           target_collective_id: string;

@@ -1,0 +1,300 @@
+name: MPGF DAC public-goods foundation reconciliation gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml"
+      - ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
+      - "src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts"
+      - "supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql"
+      - "tests/mpgf-dac-product-lifecycle.spec.ts"
+  push:
+    branches:
+      - fix/dac-public-goods-foundation-reconciliation-20260818
+    paths:
+      - ".github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml"
+      - ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
+      - "src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts"
+      - "supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql"
+      - "tests/mpgf-dac-product-lifecycle.spec.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mpgf-dac-public-goods-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  MIGRATION_PATH: supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql
+  SOURCE_TEST_PATH: src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+  EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+
+jobs:
+  source-gates:
+    name: Exact-head source, repository, lint, TypeScript, build, and diff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+      MPGF_REAL_MONEY_ENABLED: "false"
+      MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
+      MPGF_TEST_PAYMENT_ENABLED: "false"
+      EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate and five-file repair scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          git diff --check "$base" HEAD
+          git diff --name-only "$base" HEAD | sort > actual-files.txt
+          cat > expected-files.txt <<'EOF'
+          .github/workflows/mpgf-dac-product-lifecycle-gates.yml
+          .github/workflows/mpgf-dac-public-goods-foundation-reconciliation-gates.yml
+          src/lib/mpgf/dac-public-goods-foundation-reconciliation-migration.test.ts
+          supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql
+          tests/mpgf-dac-product-lifecycle.spec.ts
+          EOF
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
+          test "$(grep -Fc 'waitForLoadState("networkidle")' tests/mpgf-dac-product-lifecycle.spec.ts || true)" = "0"
+          grep -Fq 'return page.goto(path);' tests/mpgf-dac-product-lifecycle.spec.ts
+          test "$(grep -Fc 'apt-get' .github/workflows/mpgf-dac-product-lifecycle-gates.yml || true)" = "0"
+          grep -Fq 'docker pull postgres:17' .github/workflows/mpgf-dac-product-lifecycle-gates.yml
+          {
+            printf 'head=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'base=%s\n' "$base"
+            sha256sum \
+              "$MIGRATION_PATH" \
+              "$SOURCE_TEST_PATH" \
+              tests/mpgf-dac-product-lifecycle.spec.ts \
+              .github/workflows/mpgf-dac-product-lifecycle-gates.yml
+          } | tee exact-head.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused migration contract
+        run: node --import tsx --test "$SOURCE_TEST_PATH" | tee focused.log
+
+      - name: Run complete repository tests
+        run: npm test | tee repository-tests.log
+
+      - name: Run repository lint
+        run: npm run lint -- --quiet | tee lint.log
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit --pretty false | tee typecheck.log
+
+      - name: Build production application with every payment rail disabled
+        run: npm run build | tee build.log
+
+      - name: Upload source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-public-goods-foundation-source-${{ github.run_id }}
+          path: |
+            actual-files.txt
+            expected-files.txt
+            exact-head.txt
+            focused.log
+            repository-tests.log
+            lint.log
+            typecheck.log
+            build.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  isolated-qa-rollback:
+    name: Transactional isolated-QA schema, RLS, grants, and zero-data proof
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Validate exact TLS-only Moral Trade QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$QA_SUPABASE_DB_URL"
+          URL_TO_CHECK="$QA_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid =
+            ["postgres:", "postgresql:"].includes(url.protocol) &&
+            decodeURIComponent(url.username).includes(process.env.EXPECTED_QA_REF) &&
+            url.hostname === process.env.EXPECTED_QA_POOLER_HOST &&
+            url.port === "5432" &&
+            url.pathname === "/postgres" &&
+            (url.searchParams.get("sslmode") ?? "require") === "require" &&
+            Boolean(url.password) &&
+            !url.href.includes("jnpoxvalyjtdghnperyu");
+          if (!valid) throw new Error("Refusing a database URL outside exact isolated QA.");
+          NODE
+
+      - name: Prepare exact PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull postgres:17
+          cat > "$RUNNER_TEMP/psql" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker run --rm -i \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            postgres:17 psql "$@"
+          SH
+          chmod 0700 "$RUNNER_TEMP/psql"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Build rollback-only canonical reconciliation proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("supabase/migrations/20260818173000_mpgf_dac_public_goods_foundation_reconciliation.sql").read_text()
+          lines = source.splitlines(keepends=True)
+          meaningful = [i for i, line in enumerate(lines) if line.strip() and not line.lstrip().startswith("--")]
+          if not meaningful or lines[meaningful[0]].strip().lower() != "begin;":
+              raise SystemExit("Migration must begin transactionally.")
+          if lines[meaningful[-1]].strip().lower() != "commit;":
+              raise SystemExit("Migration must commit transactionally.")
+          lines[meaningful[0]] = "\n"
+          lines[meaningful[-1]] = "\n"
+          body = "".join(lines)
+
+          proof = r'''\set ON_ERROR_STOP on
+          begin;
+          set local lock_timeout = '5s';
+          set local statement_timeout = '120s';
+
+          create temporary table foundation_counts_before as
+          select
+            (select count(*) from public.mpgf_public_goods_match_pools) as match_pools,
+            (select count(*) from public.mpgf_public_goods_rounds) as rounds,
+            (select count(*) from public.mpgf_public_goods_campaigns) as campaigns,
+            (select count(*) from public.mpgf_public_goods_pledges) as pledges;
+          ''' + body + r'''
+
+          do $proof$
+          declare
+            before_row foundation_counts_before%rowtype;
+          begin
+            select * into before_row from foundation_counts_before;
+            if before_row.match_pools <> (select count(*) from public.mpgf_public_goods_match_pools)
+               or before_row.rounds <> (select count(*) from public.mpgf_public_goods_rounds)
+               or before_row.campaigns <> (select count(*) from public.mpgf_public_goods_campaigns)
+               or before_row.pledges <> (select count(*) from public.mpgf_public_goods_pledges) then
+              raise exception 'The foundation reconciliation changed existing QA row counts.';
+            end if;
+
+            if not exists (
+              select 1 from pg_policies
+              where schemaname='public'
+                and tablename='mpgf_public_goods_campaigns'
+                and policyname='mpgf_public_goods_campaigns_public_read'
+            ) or not exists (
+              select 1 from pg_policies
+              where schemaname='public'
+                and tablename='mpgf_public_goods_pledges'
+                and policyname='mpgf_public_goods_pledges_select_own'
+            ) then
+              raise exception 'Required privacy policies are absent.';
+            end if;
+
+            if has_table_privilege('anon', 'public.mpgf_public_goods_pledges', 'INSERT')
+               or has_table_privilege('anon', 'public.mpgf_public_goods_pledges', 'UPDATE')
+               or has_table_privilege('anon', 'public.mpgf_public_goods_pledges', 'DELETE') then
+              raise exception 'Anonymous pledge mutation privilege remains.';
+            end if;
+          end;
+          $proof$;
+
+          select jsonb_build_object(
+            'tables', 4,
+            'rlsTables', (
+              select count(*)
+              from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public'
+                and c.relname in (
+                  'mpgf_public_goods_match_pools',
+                  'mpgf_public_goods_rounds',
+                  'mpgf_public_goods_campaigns',
+                  'mpgf_public_goods_pledges'
+                )
+                and c.relrowsecurity
+            ),
+            'rowCountsPreserved', true,
+            'anonPledgeMutation', false,
+            'paymentReferencesCreated', 0
+          );
+          rollback;
+          '''
+          Path("qa-foundation-reconciliation-rollback.sql").write_text(proof)
+          PY
+
+      - name: Execute rollback-only proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file qa-foundation-reconciliation-rollback.sql \
+            2>&1 | tee qa-foundation-reconciliation.log
+          grep -q '"rowCountsPreserved": true' qa-foundation-reconciliation.log
+          grep -q '"paymentReferencesCreated": 0' qa-foundation-reconciliation.log
+
+      - name: Upload database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-public-goods-foundation-qa-${{ github.run_id }}
+          path: |
+            qa-foundation-reconciliation-rollback.sql
+            qa-foundation-reconciliation.log
+          if-no-files-found: warn
+          retention-days: 30

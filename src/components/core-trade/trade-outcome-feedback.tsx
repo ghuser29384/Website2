@@ -37,11 +37,6 @@ export async function TradeOutcomeFeedback({
       <h3 id="outcome-feedback-heading">
         Did this completed trade improve matters by your lights?
       </h3>
-      <p className="route-text">
-        Each participant reports separately. Moral Trade does not collapse different moral views into one
-        platform utility score. These answers train acceptance, completion, satisfaction, and additionality
-        estimates only after minimum-data and calibration gates pass.
-      </p>
 
       <form action={submitRecommendationOutcomeFeedbackAction} className="stack-form">
         <input name="agreement_id" type="hidden" value={agreementId} />
@@ -104,8 +99,7 @@ export async function TradeOutcomeFeedback({
           />
         </label>
         <p className="panel-note">
-          This record is visible only to you and the server-side learning system. It is not published on the
-          evidence page and does not alter the frozen agreement terms.
+          Private feedback for improving matches. Your agreement terms stay unchanged.
         </p>
         <PendingSubmitButton pendingLabel="Saving private feedback...">
           {feedback ? "Update outcome feedback" : "Save outcome feedback"}

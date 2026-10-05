@@ -44,9 +44,9 @@ import { getMpgfPublicGoodsGovernanceApi } from "@/lib/mpgf/public-goods-governa
 import { getAbsoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Trade controls",
+  title: "Safeguard demonstrations",
   description:
-    "Review ten interactive controls for integrity, multi-party coordination, resolution, governance, verification, privacy, evidence, affected parties, and team authority.",
+    "Optional learning demonstrations of trade safeguards. Exercises do not change a real trade, consent, verification, payment, or authority.",
   robots: {
     index: false,
     follow: false,
@@ -59,9 +59,9 @@ export const metadata: Metadata = {
     canonical: "/trade-controls",
   },
   openGraph: {
-    title: "Trade controls | Moral Trade",
+    title: "Safeguard demonstrations | Moral Trade",
     description:
-      "Interactive, fail-closed controls for building and reviewing safer moral trades.",
+      "Learning examples only; not operational trade settings or safety certification.",
     type: "website",
     url: getAbsoluteUrl("/trade-controls"),
   },

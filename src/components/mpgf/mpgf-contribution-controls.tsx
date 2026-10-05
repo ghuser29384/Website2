@@ -239,7 +239,7 @@ export function MpgfContributionControls({
             <span>{subscription.poolId.replaceAll("-", " ")}</span>
             <span>{formatUsd(subscription.amountCents)}</span>
             <span>{subscription.status.replaceAll("_", " ")}</span>
-            <span>{new Date(subscription.nextChargeAt).toLocaleDateString()}</span>
+            <span>{new Date(subscription.nextChargeAt).toLocaleDateString("en-US")}</span>
           </div>
         ))}
       </div>
@@ -359,10 +359,6 @@ export function MpgfContributionControls({
       <div className="section-head">
         <p className="eyebrow">Stripe-backed contributions</p>
         <h2>Real-money payment state</h2>
-        <p>
-          These rows come from webhook-backed MPGF contribution records. They are separate from
-          pledge-only rows and depend on Stripe and Supabase production configuration.
-        </p>
       </div>
       <div className="mpgf-inline-actions">
         <button
@@ -420,7 +416,7 @@ export function MpgfContributionControls({
               <span>{refund.id.slice(0, 8)}</span>
               <span>{formatUsd(refund.amountCents)}</span>
               <span>{refund.status.replaceAll("_", " ")}</span>
-              <span>{refund.processedAt ? new Date(refund.processedAt).toLocaleDateString() : "Pending review"}</span>
+              <span>{refund.processedAt ? new Date(refund.processedAt).toLocaleDateString("en-US") : "Pending review"}</span>
             </div>
           ))}
         </div>

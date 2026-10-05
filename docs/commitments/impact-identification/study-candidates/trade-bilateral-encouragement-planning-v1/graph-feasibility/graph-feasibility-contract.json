@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "commitments-trade-graph-feasibility-contract-v1",
+  "status": "synthetic_implementation_only",
+  "boundStudyKey": "synthetic:trade-bilateral-encouragement-planning-v1",
+  "boundStudyInstancePayloadHash": "sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2",
+  "boundPrecisionReportPayloadHash": "sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f",
+  "boundProtocolPayloadHash": "sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a",
+  "boundTemplatePayloadHash": "sha256:cf0a7a96294b431dcd79879fa01b7d1031ea50a842cebca6986e13351bcbb1e1",
+  "snapshotSchemaHash": "sha256:14371c9be667ad4a9b570e45c3f02fd95e93eb69af07428e258163de4a46deb4",
+  "diagnosticCodeHash": "sha256:3e4586df466327de17ee0a058fb302a5ff3f0a3f8ad97b53f1628782def3b506",
+  "runnerCodeHash": "sha256:9c89256de78d497ac3ae21b6bbebe2a46a61b9915a9d9dc8af9e326c49834c5f",
+  "syntheticSpecPayloadHash": "sha256:b75aebdcf7272baa07ba8616693170ec07e05594aced78771c9cb2b40d0d54a8",
+  "privacyBoundary": {
+    "repositoryInputs": "synthetic_only",
+    "realSnapshotPolicy": "A future real eligible-graph snapshot requires a separate protected-data authorization. It must replace internal identifiers with keyed one-way pseudonyms before analysis, keep the secret and any reversible mapping outside the repository, export only the minimum topology and frozen study covariates, and publish only aggregate diagnostics.",
+    "rawIdentifiersPermitted": false,
+    "reversibleMappingPermitted": false,
+    "aggregateReportOnly": true
+  },
+  "clusterDefinition": {
+    "method": "weakly_connected_components_of_frozen_eligible_directed_dyads",
+    "rationale": "Repeated counterparties and multi-hop paths remain inside one cluster. The implementation does not split a connected component, because an unreviewed split would create cross-cluster interference.",
+    "partitioningAuthorized": false
+  },
+  "frozenPlanningEnvelope": {
+    "minimumIndependentClusters": 3200,
+    "frozenMeanEligibleDyadsPerCluster": 8,
+    "maximumClusterSizeCoefficientOfVariation": 0.75,
+    "maximumEligibleDyadsPerCluster": 40,
+    "requiredArmCount": 4
+  },
+  "decisionPolicy": {
+    "compatibleSyntheticFixtureDoesNotCompleteRealDiagnostics": true,
+    "anyRealDistributionMismatchRequiresNewPrecisionSimulation": true,
+    "insufficientClustersAction": "no_launch",
+    "oversizedComponentAction": "no_launch_or_separately_reviewed_partition",
+    "incompleteBlockAction": "no_launch",
+    "assignmentGenerationPermitted": false,
+    "assignmentSeedGenerationPermitted": false
+  },
+  "realGraphDiagnosticsStatus": "required_not_completed",
+  "executionAuthorized": false,
+  "realUserAssignmentAllowed": false,
+  "contractPayloadHash": "sha256:6c6879a80062a6e923714bdf3e7e79105de8049a3347088a6f4b77507b8e6c95"
+}

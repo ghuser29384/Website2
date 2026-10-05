@@ -79,8 +79,8 @@
 }
 
 .statusMutual {
-  background: var(--signal);
-  color: var(--signal-ink);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .statusCaution {
@@ -221,7 +221,7 @@
 
 .candidate:hover .candidateDot,
 .candidate:focus .candidateDot {
-  fill: var(--signal);
+  fill: var(--accent-soft);
   stroke: var(--ink);
   stroke-width: 2.2;
   r: 8px;
@@ -257,7 +257,7 @@
 }
 
 .selectedOuter {
-  fill: var(--signal);
+  fill: var(--accent-soft);
   stroke: var(--ink);
   stroke-width: 2.4;
 }
@@ -412,7 +412,7 @@
 }
 
 .isPositive {
-  color: var(--signal-ink);
+  color: var(--accent-deep);
 }
 
 .isNegative {
@@ -512,8 +512,8 @@
 
 .optionButtonActive {
   border-color: var(--ink);
-  background: var(--signal);
-  color: var(--signal-ink);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .explainer {

@@ -71,6 +71,17 @@ test("the exact live trade clauses autocomplete causes, charities, and organizat
   await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-ready", "true");
   await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-context", "recipients");
 
+  await recipientToken.fill("Globla poverty");
+  await expect(recipientToken).toHaveText("Global poverty", { timeout: 2_000 });
+  const correctionNotice = page.locator(".mt-input-assist-correction");
+  await expect(correctionNotice).toContainText(
+    "Changed “Globla poverty” to “Global poverty”.",
+  );
+  await correctionNotice.getByRole("button", { name: "Undo" }).click();
+  await expect(recipientToken).toHaveText("Globla poverty");
+  await page.waitForTimeout(800);
+  await expect(recipientToken).toHaveText("Globla poverty");
+
   const activationToken = page
     .locator(".clause")
     .filter({ has: page.locator(".clause-label", { hasText: "Activation condition" }) })
@@ -121,6 +132,54 @@ test("the exact live trade clauses autocomplete causes, charities, and organizat
   await page.locator('[data-trade="match"]').click();
   await page.locator('[data-trade="build"]').click();
   await expect(page.locator('.token[data-mt-autocomplete-ready="true"]')).toHaveCount(6);
+});
+
+test("the exact live commitment field composes topic-specific semantic matches", async ({
+  page,
+}, testInfo) => {
+  await installLiveFixtures(page);
+  await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
+  await page.locator('[data-mt-offer-type="behavior"]').click();
+
+  const behaviorClause = page.locator(".clause").filter({
+    has: page.locator(".clause-label", { hasText: "Behavior or commitment" }),
+  });
+  const commitmentToken = behaviorClause.locator(
+    '.mt-offer-primary [data-mt-autocomplete-context="commitments"]',
+  );
+  const panel = page.locator('[data-mt-live-token-panel="true"]');
+
+  await commitmentToken.fill("I'll do wild-animal-suffering research");
+  await expect(panel).toBeVisible();
+  const optionLabels = panel.locator(".mt-input-assist-option strong");
+  await expect(optionLabels.nth(0)).toHaveText(
+    "Research wild animal suffering for fixed hours",
+  );
+  await expect(optionLabels.nth(1)).toHaveText(
+    "Complete a defined wild animal suffering research deliverable",
+  );
+  await expect(optionLabels.nth(2)).toHaveText(
+    "Complete a wild animal suffering literature review",
+  );
+  await expect(optionLabels.nth(3)).toHaveText(
+    "Publish a wild animal suffering research output",
+  );
+
+  await page.keyboard.press("Enter");
+  await expect(commitmentToken).toHaveText(
+    "Research wild animal suffering for fixed hours",
+  );
+
+  await commitmentToken.fill("I'll do insect consciousness reserch");
+  await expect(
+    panel.getByText("Research insect consciousness for fixed hours", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("semantic-commitment-options.png"),
+    fullPage: false,
+  });
 });
 
 test("the exact live offer palette uses three offer types and collects shared attributes", async ({

@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import filterStyles from "@/components/discovery/discovery-filters.module.css";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { ParticipantOfferGroup } from "@/components/marketplace/participant-offer-group";
 import { SmartQueryForm } from "@/components/search/smart-query-form";
 import { TradeTemplateLibrary } from "@/components/trade-templates/trade-template-library";
 import { getViewer, OFFERS_PAGE_SIZE } from "@/lib/app-data";
+import { recordedRespondentContribution, matchesRecordedContribution, OFFER_CONTRIBUTION_BOUNDARY, OUTCOME_VERIFICATION_BOUNDARY, type OffsetContributionRecord } from "@/lib/offer-discovery-facts";
 import { getFormMessage } from "@/lib/form-state";
-import { formatMode } from "@/lib/offers";
+import { groupOffersByParticipant } from "@/lib/marketplace-participant-groups";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import {
@@ -16,10 +18,8 @@ import {
   smartDiscoveryScore,
 } from "@/lib/smart-discovery-ranking";
 import {
-  extractMoneyAmountsCents,
   getSmartDeadlineUrgency,
   getSmartQueryCauseLabel,
-  matchesSmartAmountConstraint,
   matchesSmartDeadlineConstraint,
   matchesSmartVerificationConstraint,
   parseSerializedSmartQueryFacets,
@@ -47,16 +47,18 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
+import densityStyles from "./offers-density.module.css";
+
 const LIVE_METADATA: Metadata = {
   title: "Explore live proposals",
   description:
     "Explore live Moral Trade proposals with explicit baselines, terms, evidence, payment boundaries, and current review states.",
-  alternates: { canonical: "/offers?view=live" },
+  alternates: { canonical: "/discover" },
   openGraph: {
     title: "Explore live Moral Trade proposals",
     description:
       "Browse participant proposals and open their complete terms without mixing examples or explanatory records into marketplace inventory.",
-    url: getAbsoluteUrl("/offers?view=live"),
+    url: getAbsoluteUrl("/discover"),
     type: "website",
   },
 };
@@ -105,7 +107,7 @@ interface RankedOffer {
   offer: OfferRow;
   score: number;
   semanticRelevance: number;
-  verified: boolean;
+  verified: boolean | null;
 }
 
 interface LiveOffersResult {
@@ -128,14 +130,15 @@ const MODE_OPTIONS: ReadonlyArray<{ value: ModeFilter; label: string }> = [
 
 const SORT_OPTIONS: ReadonlyArray<{ value: OfferSort; label: string }> = [
   { value: "best_match", label: "Best match" },
-  { value: "most_verified", label: "Strongest evidence" },
+  { value: "most_verified", label: "Most detailed evidence terms" },
   { value: "soonest_deadline", label: "Soonest deadline" },
-  { value: "lowest_cost", label: "Lowest stated cost" },
-  { value: "highest_credit", label: "Highest transaction credit" },
+  { value: "lowest_cost", label: "Lowest recorded contribution" },
+  { value: "highest_credit", label: "Highest stated credibility" },
   { value: "newest", label: "Newest" },
 ];
 
 const SMART_OFFER_CANDIDATE_LIMIT = 2_000;
+const WORKED_EXAMPLE_VIEWS = new Set(["examples", "worked_examples", "worked-examples"]);
 
 function readParam(
   searchParams: Record<string, string | string[] | undefined>,
@@ -176,16 +179,6 @@ function offerTextFields(offer: OfferRow) {
   ] as const;
 }
 
-function offerAmounts(offer: OfferRow) {
-  return extractMoneyAmountsCents(
-    offer.request_action,
-    offer.offer_action,
-    offer.discount_note,
-    offer.notes,
-    offer.duration,
-  );
-}
-
 function offerCauseIds(offer: OfferRow) {
   return parseSmartQuery(
     `${offer.offered_cause} ${offer.requested_cause} ${offer.compromise_cause}`,
@@ -193,19 +186,13 @@ function offerCauseIds(offer: OfferRow) {
   ).facets.causes;
 }
 
-function strictAmountMatch(facets: SmartQueryFacets, amounts: readonly number[]) {
-  if (facets.minAmountCents === null && facets.maxAmountCents === null) return true;
-  if (!amounts.length) return false;
-  return amounts.every((amount) => matchesSmartAmountConstraint(facets, [amount]));
-}
-
 function offerMatchesHardConstraints(
   offer: OfferRow,
   facets: SmartQueryFacets,
   causeIds: readonly string[],
-  amountCents: readonly number[],
+  contribution: ReturnType<typeof recordedRespondentContribution>,
   deadline: string | null,
-  verified: boolean,
+  verified: boolean | null,
 ) {
   if (facets.actionTypes.length) {
     const modeMatches = facets.actionTypes.some((actionType) => actionType === offer.mode);
@@ -216,12 +203,12 @@ function offerMatchesHardConstraints(
     if (causeScore < 0.42 && !facets.causes.some((cause) => causeIds.includes(cause))) return false;
   }
   if (!matchesSmartVerificationConstraint(facets, verified)) return false;
-  if (!strictAmountMatch(facets, amountCents)) return false;
+  if (!matchesRecordedContribution(facets, contribution)) return false;
   if (!matchesSmartDeadlineConstraint(facets, deadline)) return false;
   if (facets.minCredit !== null && normalizeCreditSignal(offer.trust_level) * 100 < facets.minCredit) {
     return false;
   }
-  if (facets.location || facets.participantKinds.length) return false;
+  if (facets.location || facets.participantKinds.length || facets.evidenceStates.length) return false;
   return true;
 }
 
@@ -230,9 +217,10 @@ function rankOffer(
   interpretation: SmartQueryInterpretation,
   personalPriorities: readonly string[],
   now: Date,
+  contribution: ReturnType<typeof recordedRespondentContribution>,
 ): RankedOffer | null {
   const fields = offerTextFields(offer);
-  const amountCents = offerAmounts(offer);
+  const amountCents = contribution ? [contribution.amountCents] : [];
   const causeIds = offerCauseIds(offer);
   const deadline = extractSmartRecordDeadline(
     [offer.duration, offer.discount_note, offer.notes, offer.request_action, offer.offer_action],
@@ -247,7 +235,7 @@ function rankOffer(
       offer,
       interpretation.facets,
       causeIds,
-      amountCents,
+      contribution,
       deadline,
       verified,
     )
@@ -324,7 +312,7 @@ function buildLiveHref({
   search?: string;
   sort?: OfferSort;
 }) {
-  const params = new URLSearchParams({ view: "live" });
+  const params = new URLSearchParams({ view: "live", render: "server" });
   if (search) {
     params.set("search", search);
     params.set("smart", "1");
@@ -354,6 +342,28 @@ async function loadPersonalCausePriorities(viewerId: string | null) {
     return [];
   }
   return data?.cause_priorities ?? [];
+}
+
+async function listSavedOfferIds(viewerId: string | null, offerIds: readonly string[]) {
+  if (!viewerId || !offerIds.length || !hasSupabaseEnv()) return new Set<string>();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("offer_carts")
+    .select("offer_id")
+    .eq("user_id", viewerId)
+    .in("offer_id", [...offerIds]);
+
+  if (error) {
+    console.error("[offers] Failed to load saved-offer state for participant groups", {
+      code: error.code,
+      message: error.message,
+      viewerId,
+    });
+    return new Set<string>();
+  }
+
+  return new Set((data ?? []).map((row) => row.offer_id));
 }
 
 async function listLiveOffers({
@@ -414,8 +424,27 @@ async function listLiveOffers({
       };
     }
 
+    const contributions = new Map<string, OffsetContributionRecord>();
+    const needsContribution = facets.minAmountCents !== null || facets.maxAmountCents !== null || sort === "lowest_cost";
+    if (needsContribution) {
+      const ids = (data ?? []).filter((offer) => offer.mode === "offset").map((offer) => offer.id);
+      for (let start = 0; start < ids.length; start += 100) {
+        const result = await supabase.from("donation_offset_offers")
+          .select("offer_id,requested_matching_amount_cents,time_horizon,participation_mode")
+          .in("offer_id", ids.slice(start, start + 100));
+        if (result.error) {
+          // Do not turn an unavailable contribution source into a false zero or
+          // apparently complete budget result set.
+          return { items: [], total: 0, page, pageSize: OFFERS_PAGE_SIZE,
+            hasNextPage: false, hasPreviousPage: page > 1,
+            error: "Recorded contributions could not be loaded. Retry or remove the budget filter/sort.",
+            candidateLimitReached: false };
+        }
+        for (const row of result.data ?? []) contributions.set(row.offer_id, row);
+      }
+    }
     const ranked = (data ?? [])
-      .map((offer) => rankOffer(offer as OfferRow, { ...interpretation, facets }, personalPriorities, new Date()))
+      .map((offer) => rankOffer(offer as OfferRow, { ...interpretation, facets }, personalPriorities, new Date(), recordedRespondentContribution(offer.mode, contributions.get(offer.id))))
       .filter((entry): entry is RankedOffer => Boolean(entry));
     const sorted = sortRankedOffers(ranked, sort);
     return {
@@ -470,58 +499,25 @@ async function listLiveOffers({
 function formatMoneyConstraint(facets: SmartQueryFacets) {
   if (facets.maxAmountCents !== null) {
     const operator = facets.maxAmountInclusive ? "At most" : "Under";
-    return `${operator} $${(facets.maxAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    return `${operator} $${(facets.maxAmountCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   }
   if (facets.minAmountCents !== null) {
     const operator = facets.minAmountInclusive ? "At least" : "Over";
-    return `${operator} $${(facets.minAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    return `${operator} $${(facets.minAmountCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   }
   return null;
-}
-
-function LiveProposalCard({ offer }: { offer: OfferRow }) {
-  const participantName = offer.owner_alias || "Participant";
-  const verified = isVerifiedEvidenceText(offer.verification);
-
-  return (
-    <article className="mt-market-card">
-      <div className="mt-market-card-head">
-        <span className="mt-market-eyebrow">{formatMode(offer.mode)}</span>
-        <span className="mt-market-state is-live">Live proposal</span>
-      </div>
-      <h3>
-        {offer.offered_cause}
-        <span aria-hidden="true">↔</span>
-        {offer.requested_cause}
-      </h3>
-      <p className="listing-alias">By {participantName}</p>
-      <div className="tag-row" aria-label="Proposal boundaries">
-        <span className="badge">{offer.discount_note || "Bounded terms"}</span>
-        <span className={verified ? "impact-pill" : "source-pill"}>
-          {verified ? "Verification evidence named" : "Verification terms stated"}
-        </span>
-      </div>
-      <dl>
-        <div><dt>Offers</dt><dd>{offer.offer_action}</dd></div>
-        <div><dt>Requests</dt><dd>{offer.request_action}</dd></div>
-        <div>
-          <dt>Terms</dt>
-          <dd>{offer.discount_note || "Open the complete proposal for its baseline and boundaries."}</dd>
-        </div>
-        <div><dt>Evidence</dt><dd>{offer.verification}</dd></div>
-      </dl>
-      <div className="mt-market-card-foot">
-        <span>{offer.duration}</span>
-        <Link href={`/offers/${offer.id}`}>Open proposal ↗</Link>
-      </div>
-    </article>
-  );
 }
 
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const view = readParam(resolvedSearchParams, "view");
   const legacyTab = readParam(resolvedSearchParams, "tab");
+  if (
+    WORKED_EXAMPLE_VIEWS.has(view.toLowerCase()) ||
+    WORKED_EXAMPLE_VIEWS.has(legacyTab.toLowerCase())
+  ) {
+    redirect("/worked-examples");
+  }
   if (view === "templates" || legacyTab === "templates") return <TradeTemplateLibrary />;
 
   const page = parsePage(resolvedSearchParams.page);
@@ -544,188 +540,277 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     sort,
   });
   const isAuthenticated = Boolean(viewer);
+  const participantGroups = groupOffersByParticipant(livePage.items);
+  const savedOfferIds = await listSavedOfferIds(
+    viewer?.authUser.id ?? null,
+    livePage.items.map((offer) => offer.id),
+  );
   const formMessage = getFormMessage(resolvedSearchParams);
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
   const activeConstraintLabels = [
     ...facets.causes.map((cause) => `Cause: ${getSmartQueryCauseLabel(cause)}`),
-    facets.verified === true ? "Verified only" : facets.verified === false ? "Unverified only" : null,
+    facets.verified === true ? "Verified outcomes only" : facets.verified === false ? "Unverified only" : null,
     formatMoneyConstraint(facets),
     facets.deadlineBefore ? `${facets.deadlineBeforeInclusive ? "By" : "Before"} ${facets.deadlineBefore}` : null,
-    facets.minCredit !== null ? `Credit ≥ ${facets.minCredit}` : null,
+    facets.minCredit !== null ? `Stated credibility ≥ ${facets.minCredit}` : null,
   ].filter((label): label is string => Boolean(label));
   const hasFilters = Boolean(search || mode !== "all" || activeConstraintLabels.length || sort !== "newest");
   const pageCount = Math.max(1, Math.ceil(livePage.total / livePage.pageSize));
+  const currentReturnTo = buildLiveHref({ facets, mode, page, search, sort });
+  const modeLabel = MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode;
+  const sortLabel = SORT_OPTIONS.find((option) => option.value === sort)?.label ?? sort;
+  const activeFilterLabels = [
+    search ? `Query: ${search}` : null,
+    mode !== "all" ? modeLabel : null,
+    ...activeConstraintLabels,
+  ].filter((label): label is string => Boolean(label));
+  const budgetRequested = facets.minAmountCents !== null || facets.maxAmountCents !== null || sort === "lowest_cost";
+  const verificationRequested = facets.verified !== null || facets.evidenceStates.length > 0;
+  const topbarActions = getTopbarActions(isAuthenticated);
+  const routeNavigation = getPrimaryNavLinks(isAuthenticated).flatMap((link) =>
+    link.href
+      ? [{ href: link.href, label: link.label, description: link.summary }]
+      : link.items ?? [],
+  );
 
   return (
-    <div className="page-shell marketplace-product-shell">
-      <div className="mt-beta-strip">
-        <span>Live marketplace</span>
-        <span>Hard constraints are applied before semantic and trust-aware ranking.</span>
-        <Link href="/donate">Financial route available</Link>
-      </div>
-
-      <header>
-        <SiteTopbar
-          brandHref="/"
-          links={getPrimaryNavLinks(isAuthenticated)}
-          {...getTopbarActions(isAuthenticated)}
-          showLogout={isAuthenticated}
-        />
+    <div className={densityStyles.shell}>
+      <header className={densityStyles.routeHeader}>
+        <div className={densityStyles.routeTopbar}>
+          <SiteTopbar
+            authLink={topbarActions.authLink}
+            brandHref="/"
+            links={[
+              {
+                items: routeNavigation,
+                label: "Navigate",
+                summary: "Global navigation for the Moral Trade marketplace.",
+              },
+            ]}
+            primaryAction={{ href: createHref, label: "Create a proposal" }}
+            showLogout={isAuthenticated}
+          />
+        </div>
       </header>
 
-      <main className="mt-product-main" id="main-content" tabIndex={-1}>
-        <section className="mt-explore-hero" aria-labelledby="explore-heading">
-          <div className="mt-explore-copy">
-            <p className="mt-product-kicker">Marketplace</p>
-            <h1 id="explore-heading">Find a live proposal you can evaluate quickly.</h1>
-            <p>
-              Describe the outcome, evidence standard, budget, or deadline in ordinary language.
-              Explicit constraints are enforced first; remaining results are ranked by semantic fit,
-              evidence quality, your saved cause priorities, urgency, and a modest transaction-credit signal.
-            </p>
-            <div className="mt-product-actions">
-              <Link className="button button-primary" href={createHref}>Create a proposal</Link>
-              <Link className="button button-secondary" href="/donate">Make a financial contribution</Link>
-            </div>
-          </div>
-          <aside className="mt-explore-side">
-            <p className="mt-product-kicker">Directory rule</p>
-            <strong>Live participant records only.</strong>
-            <p>
-              Search never substitutes examples for live demand. A result with an unknown amount,
-              deadline, or verification state does not pass a hard constraint on that field.
-            </p>
-          </aside>
-        </section>
-
-        {formMessage ? (
-          <div className={`status-banner ${formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"}`}>
-            {formMessage.text}
-          </div>
-        ) : null}
-        {livePage.error ? <div className="status-banner status-banner-error" role="alert">{livePage.error}</div> : null}
-        {livePage.candidateLimitReached ? (
-          <div className="status-banner" role="status">
-            This semantic result set was ranked from the newest {SMART_OFFER_CANDIDATE_LIMIT.toLocaleString()} live candidates.
-            Tighten the cause, budget, or deadline to narrow a larger registry.
-          </div>
-        ) : null}
-
-        <section className="mt-product-section is-white" aria-labelledby="directory-heading">
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker">Live directory</p>
-              <h2 id="directory-heading">Open participant proposals</h2>
-            </div>
-            <p>
-              {livePage.total.toLocaleString()} live proposal{livePage.total === 1 ? "" : "s"} in the
-              current result set. Open a record to review its complete terms and evidence state.
-            </p>
-          </div>
-
-          <SmartQueryForm action="/offers" className={filterStyles.filterPanel} method="get" queryName="search" surface="offers">
-            <input name="view" type="hidden" value="live" />
-            <div className={filterStyles.filterGrid}>
-              <label className={filterStyles.field}>
-                <span>Search proposals</span>
-                <input
-                  className={filterStyles.control}
-                  defaultValue={search}
-                  name="search"
-                  placeholder="e.g. verified civic work under $50 before August 1"
-                  type="search"
-                />
-              </label>
-              <label className={filterStyles.field}>
-                <span>Proposal type</span>
-                <select className={filterStyles.control} defaultValue={mode} name="mode">
-                  {MODE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-              <label className={filterStyles.field}>
-                <span>Sort</span>
-                <select className={filterStyles.control} defaultValue={sort} name="sort">
-                  {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-            </div>
-            <div className={filterStyles.actions}>
-              <button className="button button-primary" type="submit">Apply smart search</button>
-              {hasFilters ? <Link className="button button-secondary" href={buildLiveHref({})}>Clear all</Link> : null}
-            </div>
-            <div className={filterStyles.filterMeta}>
-              <div className={filterStyles.activeFilters} aria-live="polite">
-                <strong>{livePage.total.toLocaleString()} matching offer(s)</strong>
-                {search ? <span className={filterStyles.activeChip}>Query: {search}</span> : null}
-                {mode !== "all" ? (
-                  <span className={filterStyles.activeChip}>{MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode}</span>
-                ) : null}
-                {activeConstraintLabels.map((label) => <span className={filterStyles.activeChip} key={label}>{label}</span>)}
+      <main className={densityStyles.main} id="main-content" tabIndex={-1}>
+        {formMessage || livePage.error || livePage.candidateLimitReached ? (
+          <div className={densityStyles.statusStack}>
+            {formMessage ? (
+              <div className={`status-banner ${formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"}`}>
+                {formMessage.text}
               </div>
-              <p className={filterStyles.rankingNote}>
-                Hard constraints → semantic relevance (46%) → evidence quality (20%) → personal cause fit (16%) →
-                deadline urgency (10%) → transaction credit (8%). Explicit sort choices may reorder the surviving set.
-              </p>
+            ) : null}
+            {livePage.error ? (
+              <div className="status-banner status-banner-error" role="alert">{livePage.error}</div>
+            ) : null}
+            {livePage.candidateLimitReached ? (
+              <div className="status-banner" role="status">
+                This semantic result set was ranked from the newest {SMART_OFFER_CANDIDATE_LIMIT.toLocaleString("en-US")} live candidates.
+                Tighten the cause, budget, or deadline to narrow a larger registry.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <section className={densityStyles.workspace} aria-labelledby="directory-heading">
+          <header className={densityStyles.introRail}>
+            <h1 id="directory-heading">Live proposals</h1>
+            <p className={densityStyles.introCopy}>
+              Search by outcome, evidence, budget, or deadline. Open a proposal to review its exact terms.
+            </p>
+          </header>
+
+          <SmartQueryForm
+            action="/offers"
+            className={densityStyles.directoryForm}
+            method="get"
+            queryName="search"
+            surface="offers"
+          >
+            <input name="view" type="hidden" value="live" />
+            <input name="render" type="hidden" value="server" />
+
+            <div className={densityStyles.searchStage} data-testid="directory-controls">
+              <div className={densityStyles.resultsHeading}>
+                <h2 className="sr-only">Open participant proposals</h2>
+                <p aria-live="polite" className={densityStyles.resultCount}>
+                  {livePage.error ? (
+                    <strong>Results unavailable</strong>
+                  ) : (
+                    <>
+                      <strong>{livePage.total.toLocaleString("en-US")}</strong> matching proposal{livePage.total === 1 ? "" : "s"}
+                      <span aria-hidden="true"> · </span>
+                      {livePage.items.length.toLocaleString("en-US")} on this page from {participantGroups.length.toLocaleString("en-US")} participant{participantGroups.length === 1 ? "" : "s"}
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div aria-label="Search live proposals" className={densityStyles.searchControl} role="search">
+                <label htmlFor="offers-search">Search proposals</label>
+                <div>
+                  <input
+                    defaultValue={search}
+                    id="offers-search"
+                    name="search"
+                    placeholder="Search by cause, action, budget, or deadline"
+                    type="search"
+                  />
+                  <button type="submit">Search</button>
+                </div>
+              </div>
+
+              {hasFilters ? (
+                <div className={densityStyles.activeState}>
+                  <span>{activeFilterLabels.length ? activeFilterLabels.join(" · ") : sortLabel}</span>
+                  <a href={buildLiveHref({})}>Clear all</a>
+                </div>
+              ) : null}
             </div>
+
+            <details className={densityStyles.filterDisclosure}>
+              <summary>
+                <span>Filter &amp; sort</span>
+                <small>{modeLabel} · {sortLabel}</small>
+              </summary>
+              <div className={densityStyles.filterContent}>
+                <label>
+                  <span>Proposal type</span>
+                  <select defaultValue={mode} name="mode">
+                    {MODE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Sort</span>
+                  <select defaultValue={sort} name="sort">
+                    {SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <button className={densityStyles.filterSubmit} type="submit">Apply filters</button>
+
+                <details className={densityStyles.rankingDisclosure}>
+                  <summary>How ranking works</summary>
+                  <p>
+                    Hard constraints are applied before semantic and trust-aware ranking. Hard
+                    constraints → semantic relevance (46%) → specificity of proposed evidence terms (20%) → personal
+                    cause fit (16%) → deadline urgency (10%) → stated credibility (8%). Explicit
+                    sort choices may reorder the surviving set.
+                  </p>
+                </details>
+              </div>
+            </details>
           </SmartQueryForm>
 
-          <div className="mt-directory-view">
-            {livePage.items.length ? (
-              <div className="mt-market-grid">
-                {livePage.items.map((offer) => <LiveProposalCard key={offer.id} offer={offer} />)}
+          <div
+            className={`${densityStyles.resultsStage} mt-directory-view`}
+            data-authoritative-directory="true"
+            id="directory-results"
+          >
+            {budgetRequested || verificationRequested ? (
+              <div className={densityStyles.searchBoundary} role="status" data-testid="proposal-search-boundary">
+                {budgetRequested ? <p>{OFFER_CONTRIBUTION_BOUNDARY}</p> : null}
+                {verificationRequested ? <p>{OUTCOME_VERIFICATION_BOUNDARY} <Link href="/evidence">Review evidence</Link></p> : null}
+              </div>
+            ) : null}
+            {livePage.error ? (
+              <div className={densityStyles.emptyState} data-directory-state="unavailable">
+                <h3>Live proposals are temporarily unavailable</h3>
+                <p>The directory could not be loaded. No result or open-state conclusion is shown until the live records are available.</p>
+                <div><Link className={densityStyles.emptyPrimary} href={currentReturnTo}>Try again</Link></div>
+              </div>
+            ) : livePage.items.length ? (
+              <div className={densityStyles.groupList}>
+                {participantGroups.map((group) => (
+                  <ParticipantOfferGroup
+                    currentReturnTo={currentReturnTo}
+                    isAuthenticated={isAuthenticated}
+                    key={group.ownerId}
+                    offers={group.offers}
+                    participantName={group.participantName}
+                    savedOfferIds={savedOfferIds}
+                    viewerId={viewer?.authUser.id ?? null}
+                  />
+                ))}
               </div>
             ) : (
-              <div className="panel empty-state">
+              <div className={densityStyles.emptyState} data-directory-state="empty">
                 <h3>{hasFilters ? "No live proposals satisfy every hard constraint" : "No live proposals are open"}</h3>
                 <p>
-                  Unknown budget, deadline, or verification data is not treated as a match. Remove one hard constraint
-                  or create a proposal with structured terms.
+                  Unknown budget, deadline, or verification data is not treated as a match. Remove
+                  one hard constraint or create a proposal with structured terms.
                 </p>
-                <div className="hero-actions">
-                  {hasFilters ? <Link className="button button-primary" href={buildLiveHref({})}>Clear filters</Link> :
-                    <Link className="button button-primary" href={createHref}>Create the first proposal</Link>}
-                  <Link className="button button-secondary" href="/donate">Fund a public good</Link>
+                <div>
+                  {hasFilters ? (
+                    <Link className={densityStyles.emptyPrimary} href={buildLiveHref({})}>Clear filters</Link>
+                  ) : (
+                    <Link className={densityStyles.emptyPrimary} href={createHref}>Create the first proposal</Link>
+                  )}
+                  <Link href="/donate">Fund a public good</Link>
                 </div>
               </div>
             )}
 
-            {livePage.hasPreviousPage || livePage.hasNextPage ? (
-              <nav className="pagination" aria-label="Live proposal pages">
+            {!livePage.error && (livePage.hasPreviousPage || livePage.hasNextPage) ? (
+              <nav className={densityStyles.pagination} aria-label="Live proposal pages">
                 {livePage.hasPreviousPage ? (
-                  <Link className="button button-secondary button-mini" href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}>
+                  <a href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}>
                     Previous
-                  </Link>
-                ) : null}
+                  </a>
+                ) : <span />}
                 <span>Page {page} of {pageCount}</span>
                 {livePage.hasNextPage ? (
-                  <Link className="button button-secondary button-mini" href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}>
+                  <a href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}>
                     Next
-                  </Link>
-                ) : null}
+                  </a>
+                ) : <span />}
               </nav>
             ) : null}
           </div>
-        </section>
 
-        <section className="mt-product-section" aria-labelledby="other-routes-heading">
-          <div className="mt-product-section-head">
-            <div><p className="mt-product-kicker">Other live routes</p><h2 id="other-routes-heading">Coordinate without a bilateral listing</h2></div>
-            <p>Use an offset, conditional pool, or consent-gated introduction when a public proposal is not the right structure.</p>
+          <div className={densityStyles.directoryHelp}>
+            <details className={densityStyles.infoDisclosure}>
+              <summary>Directory rule</summary>
+              <div>
+                <strong>Live participant records only.</strong>
+                <p>
+                  Search never substitutes examples for live demand. A result with an unknown
+                  amount, deadline, or verification state does not pass a hard constraint on that
+                  field.
+                </p>
+              </div>
+            </details>
+
+            <nav aria-label="Offers supporting routes" className={densityStyles.introLinks}>
+              <Link href="/donate">Make a financial contribution</Link>
+              <Link href="/offers?view=templates">Browse trade templates</Link>
+            </nav>
           </div>
-          <div className="mt-pool-link-grid">
-            <Link className="mt-pool-link-card" href="/offsets">
-              <div><p className="mt-market-eyebrow">Opposed donations</p><h3>Donation offsets</h3></div>
-              <p>Redirect matched planned donations toward a destination both participants prefer.</p><span>Open offsets ↗</span>
-            </Link>
-            <Link className="mt-pool-link-card" href="/pools">
-              <div><p className="mt-market-eyebrow">Conditional funding</p><h3>Funding pools</h3></div>
-              <p>Review maximum exposure, threshold, deadline, recipient, and failure behavior.</p><span>Open pools ↗</span>
-            </Link>
-            <Link className="mt-pool-link-card" href="/background-networking">
-              <div><p className="mt-market-eyebrow">Private matching</p><h3>Consent-gated introductions</h3></div>
-              <p>Share a broad preview without publishing exact wishes or contact details.</p><span>Request matching ↗</span>
-            </Link>
-          </div>
+
+          <section className={densityStyles.otherRoutes} aria-labelledby="other-routes-heading">
+            <div>
+              <p className={densityStyles.sectionLabel}>Other live routes</p>
+              <h2 id="other-routes-heading">Related coordination routes</h2>
+            </div>
+            <nav aria-label="Related live routes">
+              <Link href="/offsets">
+                <strong>Donation offsets</strong>
+                <span>Opposed donations</span>
+              </Link>
+              <Link href="/pools">
+                <strong>Funding pools</strong>
+                <span>Conditional funding</span>
+              </Link>
+              <Link href="/background-networking">
+                <strong>Consent-gated introductions</strong>
+                <span>Private matching</span>
+              </Link>
+            </nav>
+          </section>
         </section>
       </main>
 

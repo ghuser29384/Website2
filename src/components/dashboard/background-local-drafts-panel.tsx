@@ -247,7 +247,7 @@ export function BackgroundLocalDraftsPanel({ syncDraftAction }: BackgroundLocalD
       const formData = new FormData();
       formData.set("draft_id", attempt.id);
       formData.set("draft_body", attempt.body);
-      formData.set("draft_label", `Local draft ${new Date(attempt.updatedAt).toLocaleDateString()}`);
+      formData.set("draft_label", `Local draft ${new Date(attempt.updatedAt).toLocaleDateString("en-US")}`);
 
       const result = await syncDraftAction(formData);
       await persistDraft({
@@ -261,11 +261,11 @@ export function BackgroundLocalDraftsPanel({ syncDraftAction }: BackgroundLocalD
     } catch {
       await persistDraft({
         ...attempt,
-        lastError: "Draft sync failed before the server accepted it.",
+        lastError: "We couldn’t sync this draft. It hasn’t been saved to your account yet.",
         syncStatus: "failed",
         updatedAt: new Date().toISOString(),
       });
-      setStatus("Draft sync failed; it remains in the retry queue");
+      setStatus("We couldn’t sync your draft yet. It’s still queued for another try.");
     } finally {
       setIsSyncing(false);
     }
@@ -334,7 +334,7 @@ export function BackgroundLocalDraftsPanel({ syncDraftAction }: BackgroundLocalD
         <ul className="clean-list">
           {drafts.map((draft) => (
             <li key={draft.id}>
-              <strong>{new Date(draft.updatedAt).toLocaleDateString()}</strong> ·{" "}
+              <strong>{new Date(draft.updatedAt).toLocaleDateString("en-US")}</strong> ·{" "}
               {formatBackgroundLocalDraftSyncStatus(draft.syncStatus)} · attempts{" "}
               {draft.retryCount}
               <br />

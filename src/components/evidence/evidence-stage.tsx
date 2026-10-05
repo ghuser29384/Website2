@@ -194,7 +194,7 @@ function stateCopy(item: EvidenceStageItem | undefined, canReview: boolean, revi
     return {
       label: "Awaiting evidence",
       title: "No evidence has been submitted",
-      copy: "This page is ready for the first artifact. The agreed evidence requirements and trade history remain visible in the meantime.",
+      copy: "Submit evidence that meets the agreed requirements.",
     };
   }
   if (item.state === "accepted") {

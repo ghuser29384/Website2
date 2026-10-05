@@ -1,9 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { getViewer } from "@/lib/app-data";
-import type { MpgfParticipantActionResult } from "@/lib/mpgf/participant-types";
+import type {
+  FailureBonusEligibilityPolicy,
+  FailureBonusSuccessPremiumPricingAssumptions,
+  FailureBonusSuccessPremiumScheduleQuote,
+} from "@/lib/mpgf/failure-bonus-success-premium";
+import {
+  mapMpgfDacPledgeReceipt,
+  type MpgfDacPledgeReceipt,
+} from "@/lib/mpgf/dac-lifecycle-model";
+import type { MpgfParticipantActionResult, MpgfPoolProposalRecord } from "@/lib/mpgf/participant-types";
 import {
   loadMpgfParticipantState,
   mpgfPersistenceMappers,
@@ -27,6 +37,7 @@ import type {
   MpgfManualEvidenceProvider,
   MpgfRealMoneyCheckoutResult,
 } from "@/lib/mpgf/real-money-types";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   MpgfPublicGoodsCaptureMode,
   MpgfPublicGoodsDestinationType,
@@ -188,6 +199,137 @@ export async function recordMpgfPublicGoodsPledgeAction(input: {
       state: await loadMpgfParticipantState(viewer),
     };
   }
+}
+
+export async function recordMpgfDacPledgeAction(input: {
+  idempotencyKey: string;
+  campaignId: string;
+  amountDollars: number;
+  visibilityMode: MpgfPublicGoodsVisibilityMode;
+  supporterReason?: string;
+}): Promise<MpgfParticipantActionResult<MpgfDacPledgeReceipt>> {
+  const viewer = await requireMpgfActionViewer();
+
+  if (!isActionViewer(viewer)) {
+    return viewer as MpgfParticipantActionResult<MpgfDacPledgeReceipt>;
+  }
+
+  const campaignId = input.campaignId.trim();
+  const idempotencyKey = input.idempotencyKey.trim();
+  const supporterReason = input.supporterReason?.trim() || null;
+  const scaledAmount = input.amountDollars * 100;
+  const roundedAmount = Math.round(scaledAmount);
+  const amountCents = roundedAmount;
+
+  if (!campaignId) {
+    return { ok: false, message: "A published DAC campaign is required." };
+  }
+  if (
+    !Number.isFinite(scaledAmount) ||
+    !Number.isSafeInteger(roundedAmount) ||
+    Math.abs(scaledAmount - roundedAmount) > 1e-7 ||
+    amountCents <= 0
+  ) {
+    return { ok: false, message: "Enter a positive pledge amount with at most two decimal places." };
+  }
+  if (idempotencyKey.length < 8 || idempotencyKey.length > 256) {
+    return { ok: false, message: "The pledge request key is invalid; refresh the page and try again." };
+  }
+  if (!["private_amount", "public_supporter", "public_reason"].includes(input.visibilityMode)) {
+    return { ok: false, message: "Choose a valid pledge visibility setting." };
+  }
+  if (input.visibilityMode === "public_reason" && !supporterReason) {
+    return { ok: false, message: "Add a supporter reason before making it public." };
+  }
+  if (supporterReason && supporterReason.length > 500) {
+    return { ok: false, message: "Supporter reason must be 500 characters or fewer." };
+  }
+
+  try {
+    const supabase = await createClient() as unknown as {
+      rpc: (name: string, args: Record<string, unknown>) => Promise<{
+        data: unknown;
+        error: { message: string } | null;
+      }>;
+    };
+    const result = await supabase.rpc("mpgf_create_dac_pledge", {
+      p_campaign_id: campaignId,
+      p_amount_cents: amountCents,
+      p_visibility_mode: input.visibilityMode,
+      p_supporter_reason: supporterReason,
+      p_idempotency_key: idempotencyKey,
+    });
+
+    if (result.error) {
+      return {
+        ok: false,
+        message: `Could not record the conditional DAC pledge: ${result.error.message}`,
+      };
+    }
+
+    const row = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!row) {
+      return { ok: false, message: "The DAC pledge RPC returned no immutable receipt." };
+    }
+
+    const receipt = mapMpgfDacPledgeReceipt(row);
+    revalidatePath(`/mpgf/campaigns/${campaignId}`);
+    revalidatePath(`/mpgf/pools/proposals/${receipt.poolProposalId}`);
+    revalidateMpgfParticipantRoutes();
+
+    return {
+      ok: true,
+      message: `Recorded conditional pledge ${receipt.pledgeId} against frozen terms v${receipt.termsVersion}. No payment method, authorization, charge, or capture was created.`,
+      data: receipt,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Could not record the conditional DAC pledge.",
+    };
+  }
+}
+
+export async function linkMpgfDacProposalRevisionAction(formData: FormData): Promise<void> {
+  const viewer = await getViewer();
+  if (!viewer) {
+    throw new Error("Sign in as the proposal creator before linking a revision.");
+  }
+
+  const priorProposalId = String(formData.get("prior_proposal_id") ?? "").trim();
+  const newProposalId = String(formData.get("new_proposal_id") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  if (!uuidPattern.test(priorProposalId) || !uuidPattern.test(newProposalId)) {
+    throw new Error("Both the prior and successor proposal IDs must be valid UUIDs.");
+  }
+  if (reason.length < 20 || reason.length > 1_000) {
+    throw new Error("Revision rationale must be 20–1,000 characters.");
+  }
+
+  const service = createServiceClient() as unknown as {
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{
+      data: unknown;
+      error: { message: string } | null;
+    }>;
+  };
+  const result = await service.rpc("mpgf_link_pool_proposal_revision", {
+    p_prior_proposal_id: priorProposalId,
+    p_new_proposal_id: newProposalId,
+    p_actor_id: viewer.authUser.id,
+    p_reason: reason,
+  });
+
+  if (result.error) {
+    throw new Error(`Could not link the proposal revision: ${result.error.message}`);
+  }
+
+  revalidatePath(`/mpgf/pools/proposals/${priorProposalId}`);
+  revalidatePath(`/mpgf/pools/proposals/${newProposalId}`);
+  revalidatePath("/mpgf/pools/new");
+  revalidatePath("/mpgf/admin/dac-lifecycle");
+  redirect(`/mpgf/pools/proposals/${newProposalId}`);
 }
 
 export async function createMpgfRealMoneyCheckoutAction(input: {
@@ -396,6 +538,20 @@ export async function saveMpgfPoolProposalAction(input: {
   publicGoodsDestinationRef?: string;
   publicGoodsThresholdAmountDollars?: number;
   publicGoodsThresholdSupporters?: number;
+  publicGoodsFailureBonusEnabled?: boolean;
+  publicGoodsFailureBonusRateBps?: number;
+  publicGoodsFailureBonusEligibilityPolicy?: FailureBonusEligibilityPolicy;
+  publicGoodsFailureBonusMaxParticipants?: number;
+  publicGoodsFailureBonusMaxPerParticipantCents?: number;
+  publicGoodsThresholdSchedule?: FailureBonusSuccessPremiumScheduleQuote;
+  publicGoodsSuccessPremiumRateBps?: number;
+  publicGoodsSuccessPremiumCents?: number;
+  publicGoodsSuccessPremiumPayer?: "pool_creator_or_sponsor";
+  publicGoodsSuccessPremiumPolicyVersion?: string;
+  publicGoodsSuccessPremiumIncludedInNetThreshold?: false;
+  publicGoodsSuccessPremiumProvisional?: true;
+  publicGoodsGrossSuccessRequirementCents?: number;
+  publicGoodsSuccessPremiumPricingAssumptions?: FailureBonusSuccessPremiumPricingAssumptions;
   publicGoodsDeadlineAt?: string;
   publicGoodsVerificationMethod?: string;
   publicGoodsBaselineRule?: string;
@@ -405,11 +561,11 @@ export async function saveMpgfPoolProposalAction(input: {
   publicGoodsQfCapMultiple?: number;
   publicGoodsPayoutMethod?: MpgfPublicGoodsCaptureMode;
   intent: "draft" | "submitted";
-}): Promise<MpgfParticipantActionResult> {
+}): Promise<MpgfParticipantActionResult<MpgfPoolProposalRecord>> {
   const viewer = await requireMpgfActionViewer();
 
   if (!isActionViewer(viewer)) {
-    return viewer;
+    return viewer as MpgfParticipantActionResult<MpgfPoolProposalRecord>;
   }
 
   try {
@@ -447,6 +603,23 @@ export async function saveMpgfPoolProposalAction(input: {
           ? undefined
           : Math.max(0, centsFromDollars(input.publicGoodsThresholdAmountDollars)),
       publicGoodsThresholdSupporters: input.publicGoodsThresholdSupporters,
+      publicGoodsFailureBonusEnabled: input.publicGoodsFailureBonusEnabled,
+      publicGoodsFailureBonusRateBps: input.publicGoodsFailureBonusRateBps,
+      publicGoodsFailureBonusEligibilityPolicy: input.publicGoodsFailureBonusEligibilityPolicy,
+      publicGoodsFailureBonusMaxParticipants: input.publicGoodsFailureBonusMaxParticipants,
+      publicGoodsFailureBonusMaxPerParticipantCents:
+        input.publicGoodsFailureBonusMaxPerParticipantCents,
+      publicGoodsThresholdSchedule: input.publicGoodsThresholdSchedule,
+      publicGoodsSuccessPremiumRateBps: input.publicGoodsSuccessPremiumRateBps,
+      publicGoodsSuccessPremiumCents: input.publicGoodsSuccessPremiumCents,
+      publicGoodsSuccessPremiumPayer: input.publicGoodsSuccessPremiumPayer,
+      publicGoodsSuccessPremiumPolicyVersion: input.publicGoodsSuccessPremiumPolicyVersion,
+      publicGoodsSuccessPremiumIncludedInNetThreshold:
+        input.publicGoodsSuccessPremiumIncludedInNetThreshold,
+      publicGoodsSuccessPremiumProvisional: input.publicGoodsSuccessPremiumProvisional,
+      publicGoodsGrossSuccessRequirementCents: input.publicGoodsGrossSuccessRequirementCents,
+      publicGoodsSuccessPremiumPricingAssumptions:
+        input.publicGoodsSuccessPremiumPricingAssumptions,
       publicGoodsDeadlineAt: input.publicGoodsDeadlineAt,
       publicGoodsVerificationMethod: input.publicGoodsVerificationMethod,
       publicGoodsBaselineRule: input.publicGoodsBaselineRule,

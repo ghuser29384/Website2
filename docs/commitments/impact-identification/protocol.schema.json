@@ -1,0 +1,1050 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/commitments-impact-identification-artifact-v2.json",
+  "title": "Moral Trade Commitments impact-identification artifacts v2",
+  "description": "Machine-readable schema for the master protocol, mechanism study templates, and evidence-to-product mapping. Passing this schema does not validate a causal design or authorize execution.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/masterProtocolWrapper"
+    },
+    {
+      "$ref": "#/$defs/studyTemplateWrapper"
+    },
+    {
+      "$ref": "#/$defs/evidenceMappingWrapper"
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonEmptyStringArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "valueType"
+      ],
+      "properties": {
+        "status": {
+          "const": "study_instance_required"
+        },
+        "valueType": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "methodRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "citation",
+        "identifier",
+        "role"
+      ],
+      "properties": {
+        "citation": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "identifier": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "ethicsGovernance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independentDeterminationRequired",
+        "gatekeeperPermissionIsNotParticipantConsent",
+        "requiredDeterminations",
+        "requiredProtections",
+        "status"
+      ],
+      "properties": {
+        "independentDeterminationRequired": {
+          "const": true
+        },
+        "gatekeeperPermissionIsNotParticipantConsent": {
+          "const": true
+        },
+        "requiredDeterminations": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "requiredProtections": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "status": {
+          "const": "required_not_completed"
+        }
+      }
+    },
+    "concealment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligibilityFrozenBeforeSeedGeneration",
+        "entropySourceMustBeFrozen",
+        "seedShoppingProhibited",
+        "undisclosedRerandomizationProhibited",
+        "constrainedRandomizationRequiresFrozenAdmissibleSetAndSelectionRule",
+        "assignmentConcealedUntilEligibilityIrreversible",
+        "outcomeAdjudicatorBlindingRequiredWhereFeasible",
+        "allUnblindingAndPostAssignmentEligibilityChangesLogged",
+        "differentialEvidenceResolutionAuditedByArm"
+      ],
+      "properties": {
+        "eligibilityFrozenBeforeSeedGeneration": {
+          "const": true
+        },
+        "entropySourceMustBeFrozen": {
+          "const": true
+        },
+        "seedShoppingProhibited": {
+          "const": true
+        },
+        "undisclosedRerandomizationProhibited": {
+          "const": true
+        },
+        "constrainedRandomizationRequiresFrozenAdmissibleSetAndSelectionRule": {
+          "const": true
+        },
+        "assignmentConcealedUntilEligibilityIrreversible": {
+          "const": true
+        },
+        "outcomeAdjudicatorBlindingRequiredWhereFeasible": {
+          "const": true
+        },
+        "allUnblindingAndPostAssignmentEligibilityChangesLogged": {
+          "const": true
+        },
+        "differentialEvidenceResolutionAuditedByArm": {
+          "const": true
+        }
+      }
+    },
+    "precision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provisionalObservationFloorsAreNotStudySampleSizes",
+        "simulationRequiredBeforeLaunch",
+        "requiredInputs",
+        "requiredOutputs",
+        "optionalStoppingProhibited",
+        "fixedHorizonOrValidSequentialDesignRequired",
+        "scientificIntervalLevelBps",
+        "productPredictiveIntervalLevelBps"
+      ],
+      "properties": {
+        "provisionalObservationFloorsAreNotStudySampleSizes": {
+          "const": true
+        },
+        "simulationRequiredBeforeLaunch": {
+          "const": true
+        },
+        "requiredInputs": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "requiredOutputs": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "optionalStoppingProhibited": {
+          "const": true
+        },
+        "fixedHorizonOrValidSequentialDesignRequired": {
+          "const": true
+        },
+        "scientificIntervalLevelBps": {
+          "const": 9500
+        },
+        "productPredictiveIntervalLevelBps": {
+          "const": 8000
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "safetyOutcomesAreVetoes",
+        "noImplicitMoralAggregation",
+        "requiredBlockingOutcomes",
+        "prohibitedStudyArms"
+      ],
+      "properties": {
+        "safetyOutcomesAreVetoes": {
+          "const": true
+        },
+        "noImplicitMoralAggregation": {
+          "const": true
+        },
+        "requiredBlockingOutcomes": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "prohibitedStudyArms": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalPayloadHashRequired",
+        "signedProtectedTagOrEquivalentRequiredBeforeApproval",
+        "appendOnlyRegistryRequiredBeforeAssignment",
+        "registryMustBind",
+        "preAssignmentAmendmentsAndPostAssignmentDeviationsSeparated"
+      ],
+      "properties": {
+        "canonicalPayloadHashRequired": {
+          "const": true
+        },
+        "signedProtectedTagOrEquivalentRequiredBeforeApproval": {
+          "const": true
+        },
+        "appendOnlyRegistryRequiredBeforeAssignment": {
+          "const": true
+        },
+        "registryMustBind": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "preAssignmentAmendmentsAndPostAssignmentDeviationsSeparated": {
+          "const": true
+        }
+      }
+    },
+    "productClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimId",
+        "scope",
+        "condition"
+      ],
+      "properties": {
+        "claimId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "scope": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "condition": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "aggregationRule": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "productNoClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimId",
+        "pr534Component",
+        "reason"
+      ],
+      "properties": {
+        "claimId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "pr534Component": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "templateProductMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supports",
+        "conditionallySupports",
+        "doesNotSupport",
+        "participantCausalComponentsDefault",
+        "localEffectsArePopulationSpecific",
+        "localEffectsAreNonAdditive"
+      ],
+      "properties": {
+        "supports": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/productClaim"
+          }
+        },
+        "conditionallySupports": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/productClaim"
+          }
+        },
+        "doesNotSupport": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "$ref": "#/$defs/productNoClaim"
+          }
+        },
+        "participantCausalComponentsDefault": {
+          "const": "withheld"
+        },
+        "localEffectsArePopulationSpecific": {
+          "const": true
+        },
+        "localEffectsAreNonAdditive": {
+          "const": true
+        },
+        "mechanismSpecificNotes": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
+      }
+    },
+    "studyVariant": {
+      "type": "object",
+      "minProperties": 3,
+      "required": [
+        "variantKey",
+        "status"
+      ],
+      "properties": {
+        "variantKey": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "const": "specified_not_validated"
+        }
+      },
+      "additionalProperties": true
+    },
+    "templatePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mechanismFamily",
+        "templateKey",
+        "displayName",
+        "templateStatus",
+        "executionAuthorized",
+        "studyVariants",
+        "fixedDesignChoices",
+        "requiredStudyInstanceBindings",
+        "ethicsGovernance",
+        "allocationConcealment",
+        "precisionAndStopping",
+        "safetyVetoPolicy",
+        "provenanceAndImmutability",
+        "evidenceToProductMapping",
+        "mechanismSpecificRequirements",
+        "launchBlockers"
+      ],
+      "properties": {
+        "mechanismFamily": {
+          "enum": [
+            "trade",
+            "co_fund",
+            "threshold_funding",
+            "donation_upgrade",
+            "threshold_sign_on",
+            "donation_redirect"
+          ]
+        },
+        "templateKey": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "templateStatus": {
+          "const": "under_review"
+        },
+        "executionAuthorized": {
+          "const": false
+        },
+        "studyVariants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/studyVariant"
+          }
+        },
+        "fixedDesignChoices": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "assignmentUnit",
+            "exposureUnit",
+            "outcomeUnit",
+            "analysisUnit",
+            "primaryEstimatorFamily",
+            "participantSpecificCreditAuthorized"
+          ],
+          "properties": {
+            "assignmentUnit": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "exposureUnit": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "outcomeUnit": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "analysisUnit": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "primaryEstimatorFamily": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "participantSpecificCreditAuthorized": {
+              "const": false
+            }
+          }
+        },
+        "requiredStudyInstanceBindings": {
+          "type": "object",
+          "minProperties": 66,
+          "additionalProperties": {
+            "$ref": "#/$defs/binding"
+          },
+          "required": [
+            "studyKey",
+            "studyVersion",
+            "mechanismFamily",
+            "studyVariant",
+            "eligiblePopulationSnapshotHash",
+            "eligibilityRules",
+            "exclusionRules",
+            "assignmentUnit",
+            "exposureUnit",
+            "outcomeUnit",
+            "analysisUnit",
+            "interferenceClusterDefinition",
+            "assignmentDesign",
+            "assignmentProbabilities",
+            "blockingAndStratificationVariables",
+            "exposureMapping",
+            "supportedExposureCells",
+            "emptyExposureCellAction",
+            "primaryEstimand",
+            "potentialOutcomeContrast",
+            "targetPopulation",
+            "primaryOutcome",
+            "outcomeWindow",
+            "estimator",
+            "varianceProcedure",
+            "finiteSampleInference",
+            "unequalClusterSizeHandling",
+            "covariateAdjustmentPolicy",
+            "missingnessEstimand",
+            "attritionBounds",
+            "sensitivityAnalyses",
+            "graphDiagnostics",
+            "precisionSimulation",
+            "fixedHorizonOrSequentialDesign",
+            "ethicsDetermination",
+            "participantDefinition",
+            "consentOrWaiver",
+            "controlConditionJustification",
+            "vulnerableParticipantProtections",
+            "debriefingPolicy",
+            "adverseEventMonitoring",
+            "stopAndSuspensionRules",
+            "privacyRetentionAndDeletion",
+            "accessControl",
+            "incidentResponse",
+            "entropySource",
+            "seedGenerationProcedure",
+            "seedCommitment",
+            "constrainedRandomizationRule",
+            "assignmentConcealment",
+            "outcomeAdjudicatorBlinding",
+            "unblindingLog",
+            "postAssignmentEligibilityChangeLog",
+            "differentialEvidenceResolutionAudit",
+            "blockingSafetyOutcomes",
+            "contaminationAndSpilloverMonitoring",
+            "offPlatformSubstitutionAudit",
+            "resourceClaimDeduplication",
+            "analysisCodeHash",
+            "protocolPayloadHash",
+            "templatePayloadHash",
+            "studyInstancePayloadHash",
+            "appendOnlyRegistryRecord",
+            "protectedTagOrEquivalent",
+            "amendmentLog",
+            "deviationLog"
+          ]
+        },
+        "ethicsGovernance": {
+          "$ref": "#/$defs/ethicsGovernance"
+        },
+        "allocationConcealment": {
+          "$ref": "#/$defs/concealment"
+        },
+        "precisionAndStopping": {
+          "$ref": "#/$defs/precision"
+        },
+        "safetyVetoPolicy": {
+          "$ref": "#/$defs/safety"
+        },
+        "provenanceAndImmutability": {
+          "$ref": "#/$defs/provenance"
+        },
+        "evidenceToProductMapping": {
+          "$ref": "#/$defs/templateProductMapping"
+        },
+        "mechanismSpecificRequirements": {
+          "type": "object",
+          "minProperties": 3
+        },
+        "launchBlockers": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
+      }
+    },
+    "studyTemplateWrapper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactSchemaVersion",
+        "artifactKind",
+        "mechanismFamily",
+        "templateKey",
+        "version",
+        "status",
+        "payloadSha256",
+        "payload"
+      ],
+      "properties": {
+        "artifactSchemaVersion": {
+          "const": "moral-trade-impact-identification-artifact-v2"
+        },
+        "artifactKind": {
+          "const": "mechanism_study_template"
+        },
+        "mechanismFamily": {
+          "enum": [
+            "trade",
+            "co_fund",
+            "threshold_funding",
+            "donation_upgrade",
+            "threshold_sign_on",
+            "donation_redirect"
+          ]
+        },
+        "templateKey": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "const": 2
+        },
+        "status": {
+          "const": "under_review"
+        },
+        "payloadSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "payload": {
+          "$ref": "#/$defs/templatePayload"
+        }
+      }
+    },
+    "templateManifestEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mechanismFamily",
+        "templateKey",
+        "file",
+        "payloadSha256",
+        "status",
+        "executionAuthorized"
+      ],
+      "properties": {
+        "mechanismFamily": {
+          "enum": [
+            "trade",
+            "co_fund",
+            "threshold_funding",
+            "donation_upgrade",
+            "threshold_sign_on",
+            "donation_redirect"
+          ]
+        },
+        "templateKey": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "file": {
+          "pattern": "^study-templates/[a-z_]+\\.v2\\.json$"
+        },
+        "payloadSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "status": {
+          "const": "under_review"
+        },
+        "executionAuthorized": {
+          "const": false
+        }
+      }
+    },
+    "masterPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocolKey",
+        "protocolStatus",
+        "preparedAgainst",
+        "purpose",
+        "executionAuthorization",
+        "sourceBoundary",
+        "evidenceStreams",
+        "productClaimPolicy",
+        "masterStudyInstanceContract",
+        "templateManifest",
+        "schemaFile",
+        "validatorFile",
+        "qualityGatePolicy",
+        "approvalBlockers"
+      ],
+      "properties": {
+        "protocolKey": {
+          "const": "commitments-causal-identification-and-calibration-master-v2"
+        },
+        "protocolStatus": {
+          "const": "under_review"
+        },
+        "preparedAgainst": {
+          "type": "object",
+          "minProperties": 6
+        },
+        "purpose": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "executionAuthorization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authorized",
+            "environment",
+            "prohibitedActions"
+          ],
+          "properties": {
+            "authorized": {
+              "const": false
+            },
+            "environment": {
+              "const": "none"
+            },
+            "prohibitedActions": {
+              "$ref": "#/$defs/nonEmptyStringArray"
+            }
+          }
+        },
+        "sourceBoundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "conceptualBasisRefs",
+            "statisticalMethodRefs",
+            "calibrationEvidenceRefs",
+            "rule"
+          ],
+          "properties": {
+            "conceptualBasisRefs": {
+              "$ref": "#/$defs/nonEmptyStringArray"
+            },
+            "statisticalMethodRefs": {
+              "type": "array",
+              "minItems": 6,
+              "items": {
+                "$ref": "#/$defs/methodRef"
+              }
+            },
+            "calibrationEvidenceRefs": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "rule": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          }
+        },
+        "evidenceStreams": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcomePrediction",
+            "causalIdentification",
+            "transportability"
+          ],
+          "properties": {
+            "outcomePrediction": {
+              "type": "object",
+              "minProperties": 3
+            },
+            "causalIdentification": {
+              "type": "object",
+              "minProperties": 4
+            },
+            "transportability": {
+              "type": "object",
+              "minProperties": 3
+            }
+          }
+        },
+        "productClaimPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "evidenceToProductMappingFile",
+            "policyLevelEvidenceMaySupportPolicyClaims",
+            "policyLevelEvidenceAuthorizesParticipantCausalCredit",
+            "localEffectsArePopulationSpecific",
+            "localEffectsAreNonAdditive",
+            "participantExpectedAdditionalDefault",
+            "participantDirectCausalAttributionDefault",
+            "verifiedOutcomeEstablishesCounterfactual",
+            "highConfidenceAllowed"
+          ],
+          "properties": {
+            "evidenceToProductMappingFile": {
+              "const": "evidence-to-product-mapping.v2.json"
+            },
+            "policyLevelEvidenceMaySupportPolicyClaims": {
+              "const": true
+            },
+            "policyLevelEvidenceAuthorizesParticipantCausalCredit": {
+              "const": false
+            },
+            "localEffectsArePopulationSpecific": {
+              "const": true
+            },
+            "localEffectsAreNonAdditive": {
+              "const": true
+            },
+            "participantExpectedAdditionalDefault": {
+              "const": "withheld"
+            },
+            "participantDirectCausalAttributionDefault": {
+              "const": "withheld"
+            },
+            "verifiedOutcomeEstablishesCounterfactual": {
+              "const": false
+            },
+            "highConfidenceAllowed": {
+              "const": false
+            }
+          }
+        },
+        "masterStudyInstanceContract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredBindingNames",
+            "ethicsGovernance",
+            "allocationConcealment",
+            "precisionAndStopping",
+            "safetyVetoPolicy",
+            "provenanceAndImmutability",
+            "primaryOutcomeRule",
+            "missingnessRule",
+            "covariateAdjustmentRule",
+            "noLaunchRule"
+          ],
+          "properties": {
+            "requiredBindingNames": {
+              "type": "array",
+              "minItems": 66,
+              "items": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "uniqueItems": true
+            },
+            "ethicsGovernance": {
+              "$ref": "#/$defs/ethicsGovernance"
+            },
+            "allocationConcealment": {
+              "$ref": "#/$defs/concealment"
+            },
+            "precisionAndStopping": {
+              "$ref": "#/$defs/precision"
+            },
+            "safetyVetoPolicy": {
+              "$ref": "#/$defs/safety"
+            },
+            "provenanceAndImmutability": {
+              "$ref": "#/$defs/provenance"
+            },
+            "primaryOutcomeRule": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "missingnessRule": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "covariateAdjustmentRule": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "noLaunchRule": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          }
+        },
+        "templateManifest": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/templateManifestEntry"
+          }
+        },
+        "schemaFile": {
+          "const": "protocol.schema.json"
+        },
+        "validatorFile": {
+          "const": "scripts/validate-commitments-impact-identification.mjs"
+        },
+        "qualityGatePolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "validatorRequired",
+            "negativeSelfTestRequired",
+            "exactDiffCheckRequired",
+            "runtimeBuildRequired",
+            "reason"
+          ],
+          "properties": {
+            "validatorRequired": {
+              "const": true
+            },
+            "negativeSelfTestRequired": {
+              "const": true
+            },
+            "exactDiffCheckRequired": {
+              "const": true
+            },
+            "runtimeBuildRequired": {
+              "const": false
+            },
+            "reason": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          }
+        },
+        "approvalBlockers": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
+      }
+    },
+    "masterProtocolWrapper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactSchemaVersion",
+        "artifactKind",
+        "protocolKey",
+        "version",
+        "status",
+        "payloadSha256",
+        "payload"
+      ],
+      "properties": {
+        "artifactSchemaVersion": {
+          "const": "moral-trade-impact-identification-artifact-v2"
+        },
+        "artifactKind": {
+          "const": "master_protocol"
+        },
+        "protocolKey": {
+          "const": "commitments-causal-identification-and-calibration-master-v2"
+        },
+        "version": {
+          "const": 2
+        },
+        "status": {
+          "const": "under_review"
+        },
+        "payloadSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "payload": {
+          "$ref": "#/$defs/masterPayload"
+        }
+      }
+    },
+    "mappingComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "minimumEvidence",
+        "causalStudyRequired",
+        "policyStudyCanSupport",
+        "participantCreditAuthorized",
+        "displayRule"
+      ],
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "minimumEvidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "causalStudyRequired": {
+          "type": "boolean"
+        },
+        "policyStudyCanSupport": {
+          "type": "boolean"
+        },
+        "participantCreditAuthorized": {
+          "const": false
+        },
+        "displayRule": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "mappingPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mappingKey",
+        "mappingStatus",
+        "governingRule",
+        "pr534Components",
+        "evidenceStreams",
+        "mechanismNotes",
+        "globalFailClosedRules"
+      ],
+      "properties": {
+        "mappingKey": {
+          "const": "commitments-impact-evidence-to-product-v2"
+        },
+        "mappingStatus": {
+          "const": "under_review"
+        },
+        "governingRule": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "pr534Components": {
+          "type": "array",
+          "minItems": 10,
+          "items": {
+            "$ref": "#/$defs/mappingComponent"
+          }
+        },
+        "evidenceStreams": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "object",
+            "minProperties": 3
+          }
+        },
+        "mechanismNotes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "trade",
+            "co_fund",
+            "threshold_funding",
+            "donation_upgrade",
+            "threshold_sign_on",
+            "donation_redirect"
+          ],
+          "properties": {
+            "trade": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "co_fund": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "threshold_funding": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "donation_upgrade": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "threshold_sign_on": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "donation_redirect": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          }
+        },
+        "globalFailClosedRules": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
+      }
+    },
+    "evidenceMappingWrapper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactSchemaVersion",
+        "artifactKind",
+        "mappingKey",
+        "version",
+        "status",
+        "payloadSha256",
+        "payload"
+      ],
+      "properties": {
+        "artifactSchemaVersion": {
+          "const": "moral-trade-impact-identification-artifact-v2"
+        },
+        "artifactKind": {
+          "const": "evidence_to_product_mapping"
+        },
+        "mappingKey": {
+          "const": "commitments-impact-evidence-to-product-v2"
+        },
+        "version": {
+          "const": 2
+        },
+        "status": {
+          "const": "under_review"
+        },
+        "payloadSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "payload": {
+          "$ref": "#/$defs/mappingPayload"
+        }
+      }
+    }
+  }
+}

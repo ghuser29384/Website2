@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { getViewer } from "@/lib/app-data";
+import { getLiveNowRequestContext } from "@/lib/live-now-request";
 import {
   BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE,
   decryptBackgroundSensitiveText,
@@ -33,7 +33,6 @@ import {
   classifyRoutePrivacyScope,
 } from "@/lib/route-recommendations";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -42,7 +41,7 @@ const OFFER_BATCH_SIZE = 1_000;
 const OWNED_OPPORTUNITY_LIMIT = 6;
 const INTERACTION_LIMIT = 500;
 const OFFER_PUBLIC_SELECT =
-  "id,owner_id,owner_alias,mode,offered_cause,requested_cause,compromise_cause,offer_action,request_action,verification,duration,trust_level,maximum_burden,privacy_scope,status,workflow_status,published_at,closed_at,deleted_at,created_at,updated_at";
+  "id,owner_id,owner_alias,mode,offered_cause,requested_cause,compromise_cause,offer_action,request_action,verification,duration,trust_level,maximum_burden,privacy_scope,status,workflow_status,published_at,closed_at,deleted_at,created_at,updated_at,terms_version";
 const OWNED_OFFER_SELECT = `${OFFER_PUBLIC_SELECT},no_trade_baseline`;
 const ROUTE_PROFILE_SELECT =
   "profile_id,goal,cause_priorities,money_budget_cents,time_budget_minutes,action_budget_count,horizon,route_formats,evidence_preference,uncertainty_preference,interaction_preference,privacy_preference,planned_donation_baseline,planned_donation_cents,otherwise_baseline,pairwise_answers,interview_answers,sensitive_ciphertexts,sensitive_encryption_version,created_at,updated_at";
@@ -116,6 +115,7 @@ interface OfferInventoryRow {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  terms_version: number;
 }
 
 function privateJson(body: unknown) {
@@ -318,6 +318,7 @@ function buildPoolCandidate(
       durationDays: poolDurationDays(pool.assurance_deadline_at, checkedAt),
       privacyLevel: "public-safe",
       invitationBacked: false,
+      mechanism: "donation_offset_pool",
     },
   };
 }
@@ -348,7 +349,7 @@ function emptyPayload(
       openToPayment: null,
       openToPledges: null,
       signalSources: [] as string[],
-      learningEnabled: true,
+      learningEnabled: false,
       explorationPercent: 12,
       browsingSignalCount: 0,
       actionFeedbackCount: 0,
@@ -417,6 +418,7 @@ async function loadPublishedOfferCandidates(
           trustLevel: offer.trust_level,
           createdAt: offer.created_at,
           updatedAt: offer.updated_at,
+          sourceRevision: offer.terms_version,
           opportunityType,
           sourceLabel: opportunityType === "donation_redirect" ? "Donation redirect" : undefined,
           summary: text(
@@ -436,6 +438,7 @@ async function loadPublishedOfferCandidates(
             maximumBurden: text(offer.maximum_burden, 180),
             privacyLevel: classifyRoutePrivacyScope(offer.privacy_scope),
             invitationBacked: false,
+            mechanism: "published_offer",
           },
         } satisfies LiveNowOfferCandidate;
       }),
@@ -445,18 +448,20 @@ async function loadPublishedOfferCandidates(
   return candidates;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const cookieStore = await cookies();
   if (!hasSupabaseEnv() || !hasSupabaseAuthCookie(cookieStore)) {
     return privateJson(emptyPayload("signed_out", false));
   }
 
-  const viewer = await getViewer();
-  if (!viewer) return privateJson(emptyPayload("signed_out", false));
-
-  const supabase = await createClient();
+  const { supabase, auth } = await getLiveNowRequestContext(request);
+  if (!auth.ok || !auth.user) {
+    const signedOut = auth.outcome === "missing_identity" ||
+      auth.outcome === "definitive_invalid_or_expired_identity";
+    return privateJson(emptyPayload(signedOut ? "signed_out" : "unavailable", false));
+  }
   const typedSupabase = supabase as any;
-  const userId = viewer.authUser.id;
+  const userId = auth.user.id;
   const checkedAt = new Date();
   const [
     wishProfileResult,
@@ -466,6 +471,8 @@ export async function GET() {
     routeProfileResult,
     preferenceResult,
     interactionsResult,
+    explicitExclusionsResult,
+    savedOffersResult,
     ownedOffersResult,
   ] = await Promise.all([
     supabase
@@ -509,6 +516,20 @@ export async function GET() {
       .order("occurred_at", { ascending: false })
       .limit(INTERACTION_LIMIT),
     typedSupabase
+      .from("recommendation_interactions")
+      .select(
+        "opportunity_type,opportunity_id,event_type,benefit_causes,action_causes,action_key,action_label,inferred_difficulty,dwell_ms,occurred_at",
+      )
+      .eq("profile_id", userId)
+      .in("event_type", ["hide", "not_for_me"])
+      .order("occurred_at", { ascending: false })
+      .limit(1_000),
+    typedSupabase
+      .from("offer_carts")
+      .select("offer_id")
+      .eq("user_id", userId)
+      .limit(1_000),
+    typedSupabase
       .from("offers")
       .select(OWNED_OFFER_SELECT)
       .eq("status", "open")
@@ -547,6 +568,8 @@ export async function GET() {
     ["route recommendation profile", routeProfileResult],
     ["recommendation preferences", preferenceResult],
     ["recommendation interactions", interactionsResult],
+    ["explicit recommendation exclusions", explicitExclusionsResult],
+    ["saved offers", savedOffersResult],
     ["owned live listings", ownedOffersResult],
   ] as const) {
     if (result.error) {
@@ -576,7 +599,9 @@ export async function GET() {
   const preference = (preferenceResult.error
     ? null
     : preferenceResult.data) as RecommendationPreferenceRow | null;
-  const learningEnabled = preference?.learn_from_browsing ?? true;
+  // Browsing-based learning is opt-in and fails closed. A missing row or a
+  // failed preference read must never silently resume behavioral learning.
+  const learningEnabled = preference?.learn_from_browsing === true;
   const explorationPercent = Math.max(
     0,
     Math.min(30, Number(preference?.exploration_percent ?? 12) || 12),
@@ -584,6 +609,18 @@ export async function GET() {
   const interactionSignals = interactionsResult.error
     ? []
     : ((interactionsResult.data ?? []) as RecommendationInteractionRow[]).map(normalizeInteraction);
+  const explicitExclusionSignals = explicitExclusionsResult.error
+    ? []
+    : ((explicitExclusionsResult.data ?? []) as RecommendationInteractionRow[]).map(
+        normalizeInteraction,
+      );
+  const savedOfferIds = new Set<string>(
+    savedOffersResult.error
+      ? []
+      : (savedOffersResult.data ?? [])
+          .map((row: { offer_id?: string | null }) => row.offer_id ?? "")
+          .filter(Boolean),
+  );
   const browsingCauses = learningEnabled
     ? buildBrowsingCauseWeights(interactionSignals)
     : [];
@@ -696,13 +733,26 @@ export async function GET() {
     );
   }
 
-  const actionLearningSignals = learningEnabled
-    ? interactionSignals
-    : interactionSignals.filter(
-        (signal) => !["impression", "open", "dwell", "cause_view"].includes(signal.eventType),
-      );
+  // Action willingness/difficulty comes only from explicit feedback or actual
+  // proposal outcomes, never from opens, dwell time, or bookmarks.
+  const actionLearningSignals = interactionSignals.filter((signal) =>
+    ["easy", "hard", "hide", "not_for_me", "propose", "accept", "complete"].includes(
+      signal.eventType,
+    ),
+  );
   const actionPreferences = buildLearnedActionPreferences(actionLearningSignals);
-  const feedbackState = buildOpportunityFeedbackState(interactionSignals);
+  const feedbackState = buildOpportunityFeedbackState(explicitExclusionSignals);
+  const savedOpportunityKeys = new Set<string>();
+  for (const candidate of candidates) {
+    if (
+      savedOfferIds.has(candidate.id) &&
+      candidate.metadata?.mechanism === "published_offer"
+    ) {
+      savedOpportunityKeys.add(
+        `${candidate.opportunityType ?? (candidate.mode === "offset" ? "donation_redirect" : "offer")}:${candidate.id}`,
+      );
+    }
+  }
   const profile = {
     causes,
     causeSignals,
@@ -710,7 +760,7 @@ export async function GET() {
     openToPledges: wishProfile?.openness_to_pledges ?? null,
     actionPreferences,
     hiddenOpportunityKeys: feedbackState.hiddenOpportunityKeys,
-    savedOpportunityKeys: feedbackState.savedOpportunityKeys,
+    savedOpportunityKeys,
     explorationPercent,
   };
   // The hybrid builder retains rankLiveNowOffers as its lexical and action-learning prior,
@@ -732,6 +782,8 @@ export async function GET() {
       feasibilityProbe.blockedSources,
     );
   }
+  // Feed cards must come from current inventory. Atlas research templates belong
+  // on the Atlas pages and must never fill an empty or partially filled feed.
   const recommendations = hybridFeed.recommendations.slice(0, 12);
   const routePlannerResult = presentRoutePlanner(
     buildRoutePlanner({
@@ -746,13 +798,11 @@ export async function GET() {
     : routePlannerResult;
   const browsingSignalCount = learningEnabled
     ? interactionSignals.filter((signal) =>
-        ["cause_view", "open", "dwell", "save", "unsave", "hide", "not_for_me"].includes(
-          signal.eventType,
-        ),
+        ["cause_view", "open", "dwell"].includes(signal.eventType),
       ).length
     : 0;
   const actionFeedbackCount = interactionSignals.filter((signal) =>
-    ["easy", "hard", "save", "hide", "not_for_me", "propose", "accept", "complete"].includes(
+    ["easy", "hard", "hide", "not_for_me", "propose", "accept", "complete"].includes(
       signal.eventType,
     ),
   ).length;
@@ -767,8 +817,10 @@ export async function GET() {
     generatedAt: checkedAt.toISOString(),
     matchingOfferCount: hybridFeed.diagnostics.directCount,
     matchingOpportunityCount: hybridFeed.diagnostics.directCount,
+    suggestedOpportunityCount: 0,
     feedOpportunityCount: recommendations.length,
     feedDiagnostics: hybridFeed.diagnostics,
+    opportunitySynthesisDiagnostics: null,
     profile: {
       causes,
       weightedCauses: causeSignals,

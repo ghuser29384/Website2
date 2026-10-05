@@ -68,19 +68,19 @@ function formatRetentionDate(value: string | null) {
 
 function getUnavailableReason(reason: XConnectorAvailabilityReason) {
   if (reason === "missing_credentials") {
-    return "The approved X Web App credentials have not been configured.";
+    return "Connecting to X isn’t set up yet. You can continue without connecting an account.";
   }
   if (reason === "secure_storage_unavailable") {
-    return "Encrypted token storage is unavailable, so the connection fails closed.";
+    return "We can’t securely save this connection right now. Please try again later.";
   }
   if (reason === "supabase_unavailable") {
-    return "Account storage is unavailable on this deployment.";
+    return "We can’t save account connections right now. Please try again later.";
   }
   if (reason === "invalid_redirect_uri") {
-    return "The X callback URL does not match the supported Moral Trade route.";
+    return "There’s a setup issue with the X connection. Please contact us for help.";
   }
 
-  return "The production X connection has not been enabled.";
+  return "We can’t connect to X right now. You can continue without it.";
 }
 
 function SourceMark({ children, tone }: { children: string; tone: string }) {
@@ -108,7 +108,10 @@ export function CompleteProfileConnections({
   const descriptionId = useId();
 
   useEffect(() => {
-    if (initialOpen) setOpen(true);
+    if (!initialOpen) return;
+
+    const frame = window.requestAnimationFrame(() => setOpen(true));
+    return () => window.cancelAnimationFrame(frame);
   }, [initialOpen]);
 
   useEffect(() => {

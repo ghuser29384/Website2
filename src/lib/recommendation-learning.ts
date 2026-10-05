@@ -182,14 +182,13 @@ export function opportunityKey(type: RecommendationOpportunityType, id: string) 
 
 function eventWillingnessDelta(signal: RecommendationInteractionSignal) {
   switch (signal.eventType) {
+    // Passive attention and bookmarks are not evidence that the participant is
+    // willing to perform the requested action.
     case "open":
-      return 2;
     case "dwell":
-      return Math.min(8, Math.log2(1 + clamp(signal.dwellMs, 0, MAX_DWELL_MS) / 5_000));
     case "save":
-      return 12;
     case "unsave":
-      return -5;
+      return 0;
     case "hide":
       return -18;
     case "not_for_me":
@@ -246,7 +245,20 @@ export function buildLearnedActionPreferences(
     };
     const factor = recencyFactor(signal.occurredAt, now);
 
-    if (signal.inferredDifficulty !== null && Number.isFinite(signal.inferredDifficulty)) {
+    const explicitActionSignal = [
+      "easy",
+      "hard",
+      "hide",
+      "not_for_me",
+      "propose",
+      "accept",
+      "complete",
+    ].includes(signal.eventType);
+    if (
+      explicitActionSignal &&
+      signal.inferredDifficulty !== null &&
+      Number.isFinite(signal.inferredDifficulty)
+    ) {
       current.defaultDifficultySum += clamp(signal.inferredDifficulty, 1, 5);
       current.defaultDifficultyCount += 1;
     }
@@ -299,7 +311,7 @@ export function buildOpportunityFeedbackState(signals: RecommendationInteraction
 
   signals.forEach((signal, order) => {
     if (!signal.opportunityId || signal.opportunityType === "cause_topic") return;
-    if (!["save", "unsave", "hide", "not_for_me"].includes(signal.eventType)) return;
+    if (!["hide", "not_for_me"].includes(signal.eventType)) return;
     const key = opportunityKey(signal.opportunityType, signal.opportunityId);
     const timestamp = Date.parse(signal.occurredAt);
     const prior = latest.get(key);
@@ -310,9 +322,10 @@ export function buildOpportunityFeedbackState(signals: RecommendationInteraction
   });
 
   const hiddenOpportunityKeys = new Set<string>();
+  // Saved offers live in offer_carts. Recommendation interactions must not
+  // become a second bookmark store. Keep the empty set for API compatibility.
   const savedOpportunityKeys = new Set<string>();
   for (const [key, value] of latest) {
-    if (value.eventType === "save") savedOpportunityKeys.add(key);
     if (value.eventType === "hide" || value.eventType === "not_for_me") {
       hiddenOpportunityKeys.add(key);
     }
@@ -329,20 +342,10 @@ function browseEventStrength(signal: RecommendationInteractionSignal) {
       return 1.5;
     case "dwell":
       return Math.min(4, Math.log2(1 + clamp(signal.dwellMs, 0, MAX_DWELL_MS) / 8_000));
-    case "save":
-      return 5;
-    case "unsave":
-      return -3;
-    case "hide":
-      return -4;
-    case "not_for_me":
-      return -6;
-    case "propose":
-      return 7;
-    case "accept":
-      return 9;
-    case "complete":
-      return 12;
+    // Browsing weights are deliberately limited to passive viewing activity.
+    // Bookmarks, exclusions, difficulty feedback, and transaction outcomes are
+    // explicit choices with their own semantics and must not become inferred
+    // moral-priority weights.
     default:
       return 0;
   }
@@ -366,8 +369,10 @@ export function buildBrowsingCauseWeights(
   for (const signal of signals) {
     const strength = browseEventStrength(signal) * recencyFactor(signal.occurredAt, now);
     if (strength === 0) continue;
+    // Viewing a trade can tentatively inform relevance to its benefit, when
+    // browsing learning is enabled. It does not declare support for the cause
+    // attached to the action the participant is being asked to take.
     signal.benefitCauses.forEach((cause) => add(cause, strength));
-    signal.actionCauses.forEach((cause) => add(cause, strength * 0.45));
   }
 
   return [...scores.values()]

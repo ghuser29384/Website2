@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import {
   acceptGuestInterestAction,
   acceptInterestAction,
-  addOfferCommentAction,
   addOfferRecommendationAction,
   expressInterestAction,
   removeOfferRecommendationAction,
@@ -18,13 +17,14 @@ import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-butto
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
+import { OfferQuestionForm } from "@/components/marketplace/offer-question-form";
+
 import {
-  CommitmentSheet,
   CommitmentTermsPanel,
   CompatibleAdditions,
   DealDetailObject,
+  getDealReceiptAtom,
   MarketplaceBottomNav,
-  ReviewPlanPanel,
 } from "@/components/marketplace/marketplace-components";
 import {
   getInterestForOffer,
@@ -68,7 +68,6 @@ import {
   getBaselineConfidence,
   getBaselineEvidenceSummary,
   getExternalityReviewSummary,
-  getOfferReviewWorkflowContract,
   getOfferReviewWorkflowCards,
   getScoreConfidence,
 } from "@/lib/proposal-review";
@@ -76,8 +75,9 @@ import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
-import { hasStripeEnv } from "@/lib/stripe";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
+
+import styles from "./offer-detail.module.css";
 
 interface OfferPageProps {
   params: Promise<{ offerId: string }>;
@@ -249,6 +249,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const viewer = await getViewer();
   const isOwner = viewer?.authUser.id === offer.owner_id;
   const formMessage = getFormMessage(resolvedSearchParams);
+  const questionResetToken = Array.isArray(resolvedSearchParams.question_posted)
+    ? resolvedSearchParams.question_posted[0] ?? ""
+    : resolvedSearchParams.question_posted ?? "";
   const [
     myInterest,
     incomingResponses,
@@ -387,8 +390,6 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const baselineEvidence = getBaselineEvidenceSummary(reviewInput);
   const externalityReview = getExternalityReviewSummary(reviewInput);
   const scoreConfidence = getScoreConfidence(reviewInput);
-  const reviewWorkflowContract = getOfferReviewWorkflowContract();
-  const participantReviewCopy = reviewWorkflowContract.participantCopyTemplates;
   const reviewWorkflowCards = getOfferReviewWorkflowCards({
     ...reviewInput,
     currentStatus: offer.status,
@@ -396,6 +397,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     minCounterpartyImpact: offer.min_counterparty_impact,
   });
   const marketplaceDeal = marketplaceDealFromOfferRecord(offer);
+  const receipt = getDealReceiptAtom(marketplaceDeal);
   const recommendedMarketplaceDeals = recommendations
     .map((recommendation) => recommendation.recommendedOffer)
     .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
@@ -406,6 +408,29 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     : offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool"
       ? poolJoinHref ?? respondReturnTo
       : respondReturnTo;
+  const recordActions = (
+    <>
+      {!isOwner ? (
+        <Link className="button button-primary" href={commitmentHref}>
+          {viewer ? "Review response options" : "Sign in to respond"}
+        </Link>
+      ) : (
+        <Link className="button button-primary" href={respondReturnTo}>View responses</Link>
+      )}
+      {viewer && !isOwner ? (
+        <form action={toggleCartAction}>
+          <input name="offer_id" type="hidden" value={offer.id} />
+          <input name="return_to" type="hidden" value={offerReturnTo} />
+          <button className="button button-secondary" type="submit">
+            {cartState.isInCart ? "Remove saved offer" : "Save offer"}
+          </button>
+        </form>
+      ) : !viewer ? (
+        <Link className="button button-secondary" href={signInToOfferHref}>Sign in to save</Link>
+      ) : null}
+      <Link className="button button-secondary" href="/saved-offers">View saved offers</Link>
+    </>
+  );
   const offerStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -423,14 +448,14 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   };
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className={styles.page}>
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(offerStructuredData),
         }}
         type="application/ld+json"
       />
-      <header className="hero">
+      <header className={styles.header}>
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
@@ -438,126 +463,31 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           showSearch={false}
           showLogout={Boolean(viewer)}
         />
-
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">{formatMode(offer.mode)}</p>
-            <h1>
-              {offer.offered_cause} for {offer.requested_cause}.
-            </h1>
-            <p className="hero-text">
-              Posted by{" "}
-              {offer.ownerProfile ? (
-                <Link className="inline-link" href={`/people/${offer.ownerProfile.id}`}>
-                  {offer.ownerProfile.resolvedName}
-                </Link>
-              ) : (
-                <strong>{offer.owner_alias}</strong>
-              )}
-              . This dossier combines public terms, discussion, recommendations, interest,
-              and transaction tracking in one record.
-            </p>
-            <div className="hero-actions">
-              <Link className="button button-secondary" href="/offers">
-                Back to offer marketplace
-              </Link>
-              {viewer && !isOwner ? (
-                <form action={toggleCartAction}>
-                  <input name="offer_id" type="hidden" value={offer.id} />
-                  <input name="return_to" type="hidden" value={offerReturnTo} />
-                  <button className="button button-primary" type="submit">
-                    {cartState.isInCart ? "Remove saved offer" : "Save offer"}
-                  </button>
-                </form>
-              ) : null}
-              {!isOwner ? (
-                <Link className="button button-secondary" href={authCreateSimilarHref}>
-                  Create similar
-                </Link>
-              ) : null}
-              {!viewer ? (
-                <>
-                  {offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
-                    <>
-                      <Link
-                        className="button button-primary"
-                        href={`/signup?returnTo=${encodeURIComponent(poolJoinHref ?? offerReturnTo)}`}
-                      >
-                        Create account to join pool
-                      </Link>
-                      <Link
-                        className="button button-secondary"
-                        href={`/login?returnTo=${encodeURIComponent(poolJoinHref ?? offerReturnTo)}`}
-                      >
-                        Log in
-                      </Link>
-                    </>
-                  ) : (
-                    <>
-                      <Link className="button button-primary" href={signInToRespondHref}>
-                        Contact after sign-in
-                      </Link>
-                      <Link className="button button-secondary" href={signInToOfferHref}>
-                        Sign in
-                      </Link>
-                    </>
-                  )}
-                </>
-              ) : null}
-            </div>
-          </section>
-
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Public record</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Owner profile</strong>
-                  <p>
-                    {offer.ownerProfile ? (
-                      <>
-                        {offer.ownerProfile.resolvedName} | rating{" "}
-                        {offer.ownerProfile.rating
-                          ? `${offer.ownerProfile.rating.toFixed(1)}/10`
-                          : "not yet rated"}
-                      </>
-                    ) : (
-                      <>Public profile pending</>
-                    )}
-                  </p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Interest and saved-offer activity</strong>
-                  <p>
-                    {isOwner
-                      ? `${incomingResponses.length} response(s) | ${cartState.cartCount ?? 0} saved offer(s)`
-                      : myInterest
-                        ? `Your interest status: ${myInterest.status}`
-                        : cartState.isInCart
-                          ? "Saved for your review"
-                          : "Not saved yet"}
-                  </p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>Commentary and recommendations</strong>
-                  <p>
-                    {comments.length} comment(s) | {recommendations.length} recommendation(s)
-                  </p>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
       </header>
 
-      <main id="main-content" tabIndex={-1}>
+      <main className={styles.main} id="main-content" tabIndex={-1}>
+        <div className={styles.breadcrumb}>
+          <Link href="/offers">All offers</Link>
+          <span aria-hidden="true">/</span>
+          <span>{formatMode(offer.mode)}</span>
+        </div>
+        <div className={styles.intro}>
+          <h1>{offer.offered_cause} for {offer.requested_cause}</h1>
+          <div className={styles.byline}>
+            <span>
+              Posted by {offer.ownerProfile ? (
+                <Link href={`/people/${offer.ownerProfile.id}`}>{offer.ownerProfile.resolvedName}</Link>
+              ) : <strong>{offer.owner_alias}</strong>}
+            </span>
+            <span className={styles.status}>{offer.status}</span>
+            {offer.ownerProfile?.rating ? <span>Rating {offer.ownerProfile.rating.toFixed(1)}/10</span> : null}
+          </div>
+          <div className={styles.contextLinks}>
+            <Link href={`/offers/${offer.id}/credibility`}>Reliability evidence and safeguards</Link>
+            <a href="#discussion">Questions &amp; discussion ({comments.length})</a>
+            {!isOwner ? <Link href={authCreateSimilarHref}>Create similar</Link> : null}
+          </div>
+        </div>
         {formMessage ? (
           <div
             className={`status-banner ${
@@ -568,32 +498,39 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </div>
         ) : null}
 
-        <section className="section section-white marketplace-detail-section" id="marketplace-commitment" aria-labelledby="marketplace-detail-section-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Marketplace terms</p>
-            <h2 id="marketplace-detail-section-heading">Commitment preview</h2>
-            <p>
-              The marketplace view puts exposure, timing, verification, and failure rules before
-              the full review dossier. It does not bypass the existing response, payment, or review
-              gates.
-            </p>
-          </div>
-          <div className="marketplace-detail-grid">
-            <DealDetailObject deal={marketplaceDeal} headingId="marketplace-detail-heading" />
-            <div className="marketplace-detail-side">
-              <ReviewPlanPanel deal={marketplaceDeal} />
-              <CommitmentSheet
-                commitHref={commitmentHref}
-                deal={marketplaceDeal}
-                paymentSupportAvailable={hasStripeEnv()}
-              />
+        <section className={styles.exchange} id="marketplace-commitment" aria-label="Offer terms">
+          <div className={styles.exchangeSides}>
+            <div>
+              <h2>Proposed action</h2>
+              <p>{offer.offer_action}</p>
+            </div>
+            <div>
+              <h2>Requested in return</h2>
+              <p>{offer.request_action}</p>
             </div>
           </div>
-          <div className="marketplace-detail-grid marketplace-detail-grid-secondary">
+          <div className={styles.actions}>{recordActions}</div>
+          <dl className={styles.terms}>
+            <div><dt>Timing</dt><dd>{offer.duration}</dd></div>
+            <div><dt>Verification</dt><dd>{offer.verification}</dd></div>
+          </dl>
+          <dl className={styles.receipt} aria-label="Detail receipt facts">
+            <div><dt>State</dt><dd>{receipt.source}</dd></div>
+            <div><dt>Exposure</dt><dd>{receipt.exposure}</dd></div>
+            <div><dt>Condition</dt><dd>{receipt.conditionOrProtection}</dd></div>
+            <div><dt>Protection</dt><dd>{receipt.protection}</dd></div>
+          </dl>
+          {myInterest ? <p className={styles.activity}>Your interest status: {myInterest.status}</p> : null}
+        </section>
+
+        <details className={styles.disclosure}>
+          <summary>Funding, guarantees and verification</summary>
+          <div className={styles.fundingDetails}>
+            <DealDetailObject deal={marketplaceDeal} headingId="marketplace-detail-heading" compact />
             <CommitmentTermsPanel deal={marketplaceDeal} />
             <CompatibleAdditions additions={compatibleAdditions} />
           </div>
-        </section>
+        </details>
 
         {offer.mode === "offset" && offer.donationOffset?.moderation_status === "flagged" ? (
           <div className="status-banner status-banner-error">
@@ -645,6 +582,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </section>
         ) : null}
 
+        <details className={`v72-explain-row review-assessment-disclosure ${styles.disclosure}`}>
+          <summary>Screening and review context</summary>
         <section className="section section-white" aria-labelledby="review-workflow-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Review workflow</p>
@@ -657,17 +596,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           <div className="review-workflow-grid">
             {reviewWorkflowCards.map((card) => (
               <article
-                className={`panel review-workflow-card review-workflow-card-${card.status}`}
+                className={`panel review-workflow-card review-workflow-card-${card.status === "pass" ? "screening" : card.status}`}
                 key={card.key}
               >
                 <div className="review-workflow-card-head">
                   <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
-                  <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+                  <span className="review-workflow-status">{card.assessmentLabel}</span>
                 </div>
                 <h3>{card.label}</h3>
                 <p className="route-text">{card.summary}</p>
                 <p className="review-status-reason">
-                  <strong>Why this status:</strong> {card.statusReason}
+                  <strong>Why this status:</strong> {card.assessmentReason}
                 </p>
                 <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                   {card.factorCodes.map((factorCode) => (
@@ -680,41 +619,21 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               </article>
             ))}
           </div>
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Participant action guide</p>
-            <h3>What the review system will ask for next</h3>
+          <details className="v72-explain-row">
+            <summary>How to read these screening results</summary>
             <p>
-              These prompts are pulled from the public review-workflow contract, so the page shows
-              the same baseline, evidence, safety, score, and appeal instructions that validators
-              check.
+              These cards identify missing inputs and automatic screening results. They do not
+              certify completion, additionality, or safety. A completed review must be supported
+              by a scoped review record, not inferred from a URL, a score, or the absence of a flag.
             </p>
-          </div>
-          <div className="protocol-contract-grid" aria-label="Participant review action copy">
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Baseline helper</p>
-              <p>{participantReviewCopy.baselineHelperText}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Needs evidence status</p>
-              <p>{participantReviewCopy.needsEvidenceStatusCopy}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Safety boundary</p>
-              <p>{participantReviewCopy.safetyWarningCopy}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Participant importance</p>
-              <p>{participantReviewCopy.importanceScoreNote}</p>
-            </article>
-            <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Appeal scope</p>
-              <p>{participantReviewCopy.appealCopy}</p>
-            </article>
-          </div>
+            <Link href="/reasoning-standards">Review standards and examples of review messages</Link>
+          </details>
         </section>
+        </details>
 
-        <section className="section section-white">
-          <div className="detail-grid detail-grid-wide">
+        <details className={styles.disclosure}>
+          <summary>Full offer terms and review</summary>
+          <div className={styles.dossier}>
             <article className="panel detail-block">
               <p className="detail-kicker">Offer dossier</p>
               <h3>
@@ -945,6 +864,11 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               </div>
             </article>
 
+          </div>
+        </details>
+
+        <section className={styles.responseSection}>
+          <div>
             <article className="panel detail-block" id="respond">
               <p className="detail-kicker">
                 {isOwner ? "Owner controls" : "Respond to this offer"}
@@ -957,6 +881,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     <span className="impact-pill">{cartState.cartCount ?? 0} saved</span>
                   </div>
 
+                  <details className={styles.disclosure}>
+                    <summary>Discount or reduced burden</summary>
+                    <div className={styles.ownerSettings}>
                   <form action={updateOfferDiscountAction} className="stack-form">
                     <input name="offer_id" type="hidden" value={offer.id} />
                     <input name="return_to" type="hidden" value={offerReturnTo} />
@@ -975,11 +902,13 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                       </button>
                     </div>
                   </form>
+                    </div>
+                  </details>
 
                   {offer.mode === "pledge" ? (
-                    <section className="panel subtle-panel">
-                      <p className="eyebrow">Optional baseline witness</p>
-                      <h3>Invite a private witness</h3>
+                    <details className={styles.disclosure}>
+                      <summary>Invite a private baseline witness</summary>
+                      <div className={styles.ownerSettings}>
                       <p className="route-text">
                         A guest witness can privately tell reviewers what they directly know about
                         your ordinary baseline before the pledge window. You will only see invite
@@ -1045,7 +974,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                       ) : (
                         <p className="panel-note">No baseline witness invites for this offer yet.</p>
                       )}
-                    </section>
+                    </div>
+                    </details>
                   ) : null}
                 </div>
               ) : viewer && offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
@@ -1325,9 +1255,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               ) : (
                 <div className="clean-stack">
                   <p className="route-text">
-                    Contact and response paths stay sign-in and consent gated. Create an account
-                    or sign in before sending a message so private wishes, contact details, and
-                    agreement history remain tied to a member-controlled record.
+                    Sign in or create an account to discuss this offer and agree on terms.
                   </p>
                   <div className="form-actions">
                     <Link className="button button-primary" href={signInToRespondHref}>
@@ -1489,7 +1417,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </section>
         ) : null}
 
-        <section className="section section-white">
+        <details className={styles.disclosure} id="recommendations">
+          <summary>Related offers ({recommendations.length})</summary>
+          <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Recommendations</p>
             <h2>Related offers endorsed from this page</h2>
@@ -1578,38 +1508,37 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        </details>
+
+        <section
+          aria-labelledby="discussion-heading"
+          className={`section section-subtle ${styles.discussion}`}
+          id="discussion"
+        >
           <div className="section-head">
-            <p className="eyebrow">Public comments</p>
-            <h2>Structured discussion</h2>
+            <h2 id="discussion-heading">Questions &amp; discussion</h2>
             <p>
-              Each offer has a public comment thread. Comments can be nested, voted on once per
-              user, and linked back to public member profiles.
+              Ask about evidence, the no-trade baseline, timing, limits, or externalities. Questions
+              and replies remain public and linked to member profiles.
             </p>
           </div>
 
-          {viewer ? (
-            <form action={addOfferCommentAction} className="stack-form comment-compose-form">
-              <input name="offer_id" type="hidden" value={offer.id} />
-              <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
-              <label className="field">
-                <span>Add a public comment</span>
-                <textarea
-                  name="body"
-                  placeholder="State a clarifying question, objection, or supporting premise."
-                  rows={4}
-                />
-              </label>
-              <div className="form-actions">
-                <button className="button button-primary" type="submit">
-                  Post comment
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="status-banner status-banner-success">
-              Log in to comment, reply, or vote on comments.
+          {questionResetToken ? (
+            <div className="status-banner status-banner-success" role="status">
+              Question posted.
             </div>
+          ) : null}
+
+          {viewer ? (
+            <OfferQuestionForm
+              offerId={offer.id}
+              resetToken={questionResetToken}
+              returnTo={`/offers/${offer.id}`}
+            />
+          ) : (
+            <p className={styles.discussionSignIn}>
+              <Link href={signInToOfferHref}>Sign in</Link> to ask, reply, or vote on public questions.
+            </p>
           )}
 
           <CommentThread

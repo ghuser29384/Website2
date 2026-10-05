@@ -1,35 +1,19 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-import {
-  buildCompleteProfilePublicPreview,
-  getCompleteProfileOfferOpenness,
-  getCompleteProfilePrivacyStage,
-  normalizeCompleteProfileSubmission,
-} from "@/lib/complete-profile";
-import { prepareCompleteProfilePrivatePreferences } from "@/lib/complete-profile-private-preferences";
 import { ensureAccountRowsForUser, requireViewer } from "@/lib/app-data";
+import { BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER, BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE, decryptBackgroundSensitiveText, hasBackgroundFieldEncryptionKey, isEncryptedBackgroundText, prepareRecordSensitiveTextFields } from "@/lib/background-field-encryption";
+import { isProfileSetupOwner } from "@/lib/profile-setup-draft";
+import { normalizeProfileSetupSubmission, privateProfileSetupDefaults, profileSetupPrivateFields } from "@/lib/profile-setup";
 import { getSafeInternalPath } from "@/lib/paths";
-import {
-  buildPersistedProfilePriorities,
-  getRankedProfileCauseAreas,
-  getRankedProfilePriorityLabels,
-} from "@/lib/profile-priorities";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import {
-  createWalkthroughProfileDraft,
-  WALKTHROUGH_PROFILE_COOKIE_NAME,
-} from "@/lib/walkthrough-profile";
 
 function read(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
 }
-
 function redirectWithMessage(path: string, key: "error" | "message", text: string): never {
   const url = new URL(path, "https://moraltrade.org");
   url.searchParams.set(key, text);
@@ -38,233 +22,84 @@ function redirectWithMessage(path: string, key: "error" | "message", text: strin
 
 export async function completeWalkthroughProfileAction(formData: FormData) {
   const returnTo = getSafeInternalPath(read(formData, "return_to"), "/complete-profile");
-  const successTo = getSafeInternalPath(
-    read(formData, "success_to"),
-    "/discover?source=profile-complete&domain=offers&view=constellation",
-  );
-
-  if (!hasSupabaseEnv()) {
-    redirectWithMessage(returnTo, "error", "Account storage is unavailable. Contact support before continuing.");
-  }
-
-  const walkthroughDraft = createWalkthroughProfileDraft({
-    originalCause: read(formData, "walkthrough_cause"),
-    causeArea: read(formData, "cause_area"),
-    offerType: read(formData, "offer_type"),
-    matchName: read(formData, "match_name"),
-    matchGet: read(formData, "match_get"),
-    matchGive: read(formData, "match_give"),
-    participantKind: read(formData, "participant_kind"),
-    primaryGoal: read(formData, "primary_goal"),
-    firstAction: read(formData, "first_action"),
-  });
-
-  if (!walkthroughDraft) {
-    redirectWithMessage(returnTo, "error", "The walkthrough profile could not be verified. Return to the walkthrough and try again.");
-  }
-
-  const submission = normalizeCompleteProfileSubmission({
-    displayName: read(formData, "display_name"),
-    role: read(formData, "role"),
-    affiliation: read(formData, "affiliation"),
-    bio: read(formData, "bio"),
-    maxCommitment: read(formData, "max_commitment"),
-    monthlyTime: read(formData, "monthly_time"),
-    contactRule: read(formData, "contact_rule"),
-    privateProfile: read(formData, "private_profile"),
-    offerType: walkthroughDraft.offerType,
-    causeArea: walkthroughDraft.causeArea,
-    matchGet: walkthroughDraft.matchGet,
-    priorityAllocation: read(formData, "priority_allocation"),
-  });
-
-  if (!submission) {
-    redirectWithMessage(
-      returnTo,
-      "error",
-      "Review your priorities, add a display name and role, then check the participation limits before saving.",
-    );
-  }
-
-  const persistedPriorities = buildPersistedProfilePriorities(
-    submission.priorityAllocation,
-  );
-  const rankedCauseAreas = getRankedProfileCauseAreas(submission.priorityAllocation);
-  const savedCauseAreas = rankedCauseAreas.includes(walkthroughDraft.causeArea)
-    ? rankedCauseAreas
-    : [...rankedCauseAreas, walkthroughDraft.causeArea];
-
+  const successTo = getSafeInternalPath(read(formData, "success_to"), "/discover");
+  if (!hasSupabaseEnv()) redirectWithMessage(returnTo, "error", "Account storage is unavailable. Contact support before continuing.");
   const viewer = await requireViewer(returnTo);
+  if (read(formData, "profile_setup_version") !== "2" || !isProfileSetupOwner(read(formData, "profile_owner_id"), viewer.authUser.id)) {
+    redirectWithMessage(returnTo, "error", "Your account or this form changed. Reload profile setup before saving.");
+  }
+  if (viewer.profileStatus === "fallback") redirectWithMessage(returnTo, "error", "Your existing profile could not be loaded. Reload before changing it.");
+  const submission = normalizeProfileSetupSubmission({
+    displayName: read(formData, "display_name"), username: read(formData, "username"),
+    affiliation: read(formData, "affiliation"), bio: read(formData, "bio"),
+    outcomes: read(formData, "outcomes"), capabilities: read(formData, "capabilities"), limits: read(formData, "limits"),
+  });
+  if (!submission) redirectWithMessage(returnTo, "error", "Enter a display name and a valid username, and check the field lengths.");
+
+  const fields = profileSetupPrivateFields(submission, read(formData, "save_preferences") === "on");
+  const hasPrivateNotes = Object.keys(fields).length > 0;
+  if (hasPrivateNotes && !hasBackgroundFieldEncryptionKey()) {
+    redirectWithMessage(returnTo, "error", "Encrypted private-note storage is unavailable. Uncheck private matching notes to save only account details, or try later.");
+  }
   const supabase = await createClient();
   await ensureAccountRowsForUser(viewer.authUser, supabase);
-
-  let privatePreferences: ReturnType<typeof prepareCompleteProfilePrivatePreferences>;
+  const typed = supabase as any;
+  const existing = hasPrivateNotes ? await typed.from("wish_profiles")
+    .select("profile_id,sensitive_ciphertexts,sensitive_encryption_version,updated_at,capabilities,constraints,uncertainty_notes")
+    .eq("profile_id", viewer.authUser.id).maybeSingle() : null;
+  if (existing?.error) redirectWithMessage(returnTo, "error", "Existing private preferences could not be read. Nothing has been overwritten.");
+  const oldCiphertexts = existing?.data?.sensitive_ciphertexts;
+  if (oldCiphertexts && (typeof oldCiphertexts !== "object" || Array.isArray(oldCiphertexts))) {
+    redirectWithMessage(returnTo, "error", "Existing private notes need repair before updating. Nothing has been overwritten.");
+  }
+  // Add notes instead of replacing unseen constraints or contextual history.
+  // Decrypt and re-encrypt only the explicitly submitted fields, before profile writes.
+  let prepared: ReturnType<typeof prepareRecordSensitiveTextFields> | null = null;
   try {
-    privatePreferences = prepareCompleteProfilePrivatePreferences(submission);
-  } catch (error) {
-    console.error("Failed to encrypt complete-profile preferences", error);
-    redirectWithMessage(
-      returnTo,
-      "error",
-      "Secure private matching storage failed. Try again or contact support.",
-    );
-  }
-
-  const privateMatchingAvailable = privatePreferences.available;
-  const encryptedPreferences = privatePreferences.prepared;
-
-  if (!privateMatchingAvailable) {
-    console.warn(
-      "Complete Profile private-field encryption is unavailable; saving non-sensitive profile data with private matching paused.",
-    );
-  }
-
-  const { error: profileError } = await (supabase as any)
-    .from("profiles")
-    .update({
-      display_name: submission.displayName,
-      affiliation: submission.affiliation,
-      bio: submission.bio,
-    })
-    .eq("id", viewer.authUser.id);
-
-  if (profileError) {
-    console.error("Failed to update complete profile identity", profileError);
-    redirectWithMessage(returnTo, "error", "Your identity details could not be saved. Try again.");
-  }
-
-  const { error: onboardingError } = await (supabase as any)
-    .from("cohort_onboarding_profiles")
-    .upsert(
-      {
-        cause_areas: savedCauseAreas,
-        completed_at: new Date().toISOString(),
-        first_action: walkthroughDraft.firstAction,
-        invite_target: walkthroughDraft.matchName,
-        participant_kind: walkthroughDraft.participantKind,
-        primary_goal: walkthroughDraft.primaryGoal,
-        priority_allocations: persistedPriorities,
-        profile_id: viewer.authUser.id,
-        referral_source: "Moral Trade walkthrough",
-        status: "completed",
-      },
-      { onConflict: "profile_id" },
-    );
-
-  if (onboardingError) {
-    console.error("Failed to save complete profile onboarding", onboardingError);
-    redirectWithMessage(returnTo, "error", "The walkthrough selections could not be attached to your profile.");
-  }
-
-  const { openToPayment, openToPledges } = getCompleteProfileOfferOpenness(
-    walkthroughDraft.offerType,
-  );
-  const privacyStage = getCompleteProfilePrivacyStage(
-    submission.privateProfile,
-    submission.contactRule,
-  );
-  const publicPreview = buildCompleteProfilePublicPreview(submission);
-  const wishProfileBasePayload = {
-    profile_id: viewer.authUser.id,
-    participant_kind: walkthroughDraft.participantKind,
-    collective_name: "",
-    causes: savedCauseAreas,
-    location_city: null,
-    location_region: null,
-    openness_to_payment: openToPayment,
-    openness_to_pledges: openToPledges,
-    background_search_enabled: privateMatchingAvailable,
-    manual_source_review_enabled: privateMatchingAvailable,
-    notification_email_enabled: privateMatchingAvailable,
-    notification_dashboard_enabled: privateMatchingAvailable,
-    privacy_stage: privacyStage,
-    match_frequency: "manual",
-    is_discoverable: !submission.privateProfile,
-    share_public_preview: !submission.privateProfile,
-    share_location: false,
-    public_preview: submission.privateProfile ? "" : publicPreview,
-    safety_status: "clear",
-    safety_notes: "",
-  };
-
-  let wishProfileError: unknown = null;
-
-  if (privateMatchingAvailable) {
-    const { error } = await (supabase as any).from("wish_profiles").upsert(
-      {
-        ...wishProfileBasePayload,
-        capabilities: encryptedPreferences.plaintextFields.capabilities,
-        constraints: encryptedPreferences.plaintextFields.constraints,
-        verification_preferences:
-          encryptedPreferences.plaintextFields.verification_preferences,
-        uncertainty_notes: encryptedPreferences.plaintextFields.uncertainty_notes,
-        brokerage_preference: encryptedPreferences.plaintextFields.brokerage_preference,
-        sensitive_ciphertexts: encryptedPreferences.ciphertexts,
-        sensitive_encryption_version: encryptedPreferences.version,
-      },
-      { onConflict: "profile_id" },
-    );
-    wishProfileError = error;
-  } else {
-    const { data: existingWishProfile, error: updateError } = await (supabase as any)
-      .from("wish_profiles")
-      .update(wishProfileBasePayload)
-      .eq("profile_id", viewer.authUser.id)
-      .select("profile_id")
-      .maybeSingle();
-
-    if (updateError) {
-      wishProfileError = updateError;
-    } else if (!existingWishProfile) {
-      const { error: insertError } = await (supabase as any).from("wish_profiles").insert({
-        ...wishProfileBasePayload,
-        capabilities: "",
-        constraints: "",
-        verification_preferences: "",
-        uncertainty_notes: "",
-        brokerage_preference: "",
-        sensitive_ciphertexts: {},
-        sensitive_encryption_version: "",
-      });
-      wishProfileError = insertError;
+    if (hasPrivateNotes) {
+      const appended: Record<string, string> = {};
+      for (const [field, addition] of Object.entries(fields)) {
+        const ciphertext = oldCiphertexts?.[field];
+        if (ciphertext && (typeof ciphertext !== "string" || !isEncryptedBackgroundText(ciphertext))) throw new Error("Invalid private field");
+        const current = ciphertext ? decryptBackgroundSensitiveText(ciphertext, field)
+          : typeof existing?.data?.[field] === "string" ? existing.data[field] : "";
+        if (current === BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE || current === BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER) throw new Error("Unreadable private field");
+        appended[field] = current.trim() === addition || current.split("\n\n").includes(addition)
+          ? current : [current.trim(), addition].filter(Boolean).join("\n\n");
+        if (appended[field].length > 6000) throw new Error("Private note limit");
+      }
+      prepared = prepareRecordSensitiveTextFields(appended);
     }
+  } catch { redirectWithMessage(returnTo, "error", "Existing private notes could not be safely extended or encrypted. No profile details or notes were overwritten."); }
+  if (existing?.data && (!existing.data.updated_at || (existing.data.sensitive_encryption_version
+    && existing.data.sensitive_encryption_version !== prepared?.version))) {
+    redirectWithMessage(returnTo, "error", "Existing private preferences need a compatible secure update. Contact support; nothing has been overwritten.");
   }
+  const { error: profileError } = await typed.from("profiles").update({
+    display_name: submission.displayName, username: submission.username,
+    affiliation: submission.affiliation, bio: submission.bio,
+    public_invitation_mentions_enabled: read(formData, "public_invitation_mentions_enabled") === "true",
+  }).eq("id", viewer.authUser.id);
+  if (profileError) redirectWithMessage(returnTo, "error", profileError.code === "23505"
+    ? "That username is already claimed or reserved. Choose another username."
+    : "Account details could not be saved. Try again.");
 
-  if (wishProfileError) {
-    console.error("Failed to save complete profile matching preferences", wishProfileError);
-    redirectWithMessage(returnTo, "error", "Your profile preferences could not be saved.");
+  if (prepared) {
+    const payload = { ...prepared.plaintextFields,
+      sensitive_ciphertexts: { ...(oldCiphertexts ?? {}), ...prepared.ciphertexts },
+      sensitive_encryption_version: prepared.version };
+    // Compare-and-set prevents a stale form from replacing a newer encrypted map.
+    const result = existing?.data
+      ? await typed.from("wish_profiles").update(payload).eq("profile_id", viewer.authUser.id)
+          .eq("updated_at", existing.data.updated_at).select("profile_id")
+      : await typed.from("wish_profiles").insert({ ...privateProfileSetupDefaults(), ...payload, profile_id: viewer.authUser.id })
+          .select("profile_id");
+    if (result.error || result.data?.length !== 1) redirectWithMessage(returnTo, "error",
+      "Account details were saved, but private notes changed elsewhere or could not be saved. Reload before retrying; existing preferences were preserved.");
   }
-
-  const { error: synthesisError } = await (supabase as any)
-    .from("profile_syntheses")
-    .upsert(
-      {
-        profile_id: viewer.authUser.id,
-        cause_priorities: getRankedProfilePriorityLabels(submission.priorityAllocation),
-      },
-      { onConflict: "profile_id" },
-    );
-
-  if (synthesisError) {
-    console.error("Failed to attach ranked priorities to profile synthesis", synthesisError);
-  }
-
-  const cookieStore = await cookies();
-  cookieStore.delete(WALKTHROUGH_PROFILE_COOKIE_NAME);
-
-  revalidatePath("/complete-profile");
-  revalidatePath("/dashboard");
-  revalidatePath("/profile");
-  revalidatePath("/people");
-  revalidatePath(`/people/${viewer.authUser.id}`);
-
-  const successMessage = privateMatchingAvailable
-    ? submission.privateProfile
-      ? "Private profile saved. Explore matches when you are ready."
-      : "Profile saved and made discoverable."
-    : submission.privateProfile
-      ? "Private profile saved. Private matching is paused until secure storage is restored."
-      : "Profile saved and made discoverable. Private matching is paused until secure storage is restored.";
-
-  redirectWithMessage(successTo, "message", successMessage);
+  // Skipping personalization never rewrites onboarding allocations, causes, consent, or history.
+  for (const path of ["/complete-profile", "/dashboard", "/profile", "/people", `/people/${viewer.authUser.id}`]) revalidatePath(path);
+  redirectWithMessage(successTo, "message", hasPrivateNotes
+    ? "Profile details and the private notes you selected were saved. Existing visibility and outreach permissions were not broadened."
+    : "Profile details saved. Existing matching preferences, priority allocations, and visibility are unchanged.");
 }
