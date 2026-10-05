@@ -1,0 +1,219 @@
+.page.page {
+  width: min(calc(100% - 2 * var(--mt-page-gutter)), 1240px);
+  max-width: 1240px;
+}
+
+.page main {
+  width: min(100%, 1200px);
+  margin-inline: auto;
+}
+
+.page > main:global(#main-content) > :global(.section) {
+  display: block;
+  padding: clamp(1rem, 2.5vw, 2rem);
+}
+
+.page .thread {
+  padding-block: clamp(1.25rem, 3vw, 2rem);
+}
+
+.page :global(.section-head) {
+  margin-bottom: 1.25rem;
+}
+
+.page :global(.section-head) h1 {
+  max-width: 34ch;
+  font-size: clamp(1.65rem, 3vw, 2.25rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.page :global(.section-head) h2 {
+  font-size: clamp(1.25rem, 2vw, 1.6rem);
+  line-height: 1.3;
+}
+
+.page :global(.section-head) p:not(:global(.eyebrow)) {
+  max-width: 76ch;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.page .agreement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.page .agreement p {
+  margin: 0.25rem 0 0;
+}
+
+.page .agreement > a {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.page .conversation,
+.page .terms {
+  min-width: 0;
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.panelHeading {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+}
+
+.page .panelHeading :global(.detail-kicker) {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.page .panelHeading h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.messages {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.message {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.messageMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.messageMeta strong {
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+
+.messageMeta > span {
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.page .message p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.page .composer {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.page .composer > button {
+  justify-self: start;
+}
+
+.page .termList {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+}
+
+.termList > div {
+  min-width: 0;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.termList > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.page .termList dt {
+  margin: 0 0 0.35rem;
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.page .termList dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.page .terms :global(.clean-stack) {
+  margin-top: 1.5rem;
+}
+
+.page .terms h3 {
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+
+.page :global(.data-grid) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+.page :global(.data-grid) > form {
+  min-width: 0;
+  padding: 1rem;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .page .agreement {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 1rem;
+  }
+
+  .message {
+    padding: 0.875rem;
+  }
+
+  .messageMeta {
+    flex-direction: column;
+  }
+}
