@@ -1,6 +1,6 @@
 name: Messages thread layout production 2026-10-04
 
-# Resume the approved Messages release after repairing UI-only analytics fixtures.
+# Resume the approved Messages release after bounding the stalled model read.
 
 on:
   push:
@@ -38,6 +38,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git hash-object 'src/app/messages/[threadId]/page.tsx')" = '1d2f11c8060b01fb787e77f765bf97152e5755c9'
           test "$(git hash-object 'src/app/messages/[threadId]/thread.module.css')" = '9f380f53632468fb44257f04ced218b2ccb8795f'
+          test "$(git hash-object 'src/lib/credibility-data.ts')" = 'cfcb9774c88a50815c66de96c9a6820eb386b3cd'
           git diff --check HEAD^
           remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_sha" = "$GITHUB_SHA"
