@@ -118,7 +118,9 @@ function NavMenu({
         {items.map((item, index) => {
           const showSection = item.section && item.section !== items[index - 1]?.section;
 
-          const nativeSection = item.href.startsWith("/dashboard?view=controls#");
+          // Enter the account page through a document request. Its signed-out
+          // redirect must not depend on a second client-router transition.
+          const nativeSection = item.href === "/dashboard" || item.href.startsWith("/dashboard?view=controls#");
           const MenuLink = nativeSection ? "a" : Link;
           const content = item.href ? (
             <Fragment key={`${item.href}-${item.label}`}>

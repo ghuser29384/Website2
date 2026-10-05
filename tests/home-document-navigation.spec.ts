@@ -77,7 +77,10 @@ for (const width of [1440, 390, 320]) {
     const profile = header.getByRole("link", { name: "Profile", exact: true });
     await expect(profile).toHaveCount(1);
     await expect(profile).toHaveAttribute("href", "/dashboard");
+    const profileNavigation = page.waitForRequest(request => request.isNavigationRequest()
+      && request.frame() === page.mainFrame() && new URL(request.url()).pathname === "/dashboard");
     await profile.click();
+    expect((await profileNavigation).resourceType()).toBe("document");
     await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("returnTo") === "/dashboard");
     await expect(page).toHaveTitle(/Log in/);
     await page.waitForTimeout(2000);
