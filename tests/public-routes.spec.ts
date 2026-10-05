@@ -1,4 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { optOutOfOptionalAnalytics } from "./helpers/analytics-opt-out";
+
+// Exercise UI behavior without sending optional analytics during repeated navigation.
+test.beforeEach(async ({ context, baseURL }) => {
+  await optOutOfOptionalAnalytics(context, baseURL);
+});
 
 const standardPublicRoutes = [
   "/funding-rounds/vegetarian-week-micro-assurance-preview",

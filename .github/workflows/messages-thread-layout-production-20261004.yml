@@ -1,5 +1,7 @@
 name: Messages thread layout production 2026-10-04
 
+# Resume the approved Messages release after repairing UI-only analytics fixtures.
+
 on:
   push:
     branches:
