@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { optOutOfOptionalAnalytics } from "./helpers/analytics-opt-out";
+
+// Exercise UI behavior without sending optional analytics during repeated navigation.
+test.beforeEach(async ({ context, baseURL }) => {
+  await optOutOfOptionalAnalytics(context, baseURL);
+});
 
 const sourceFiles = [
   "src/app/pools/page.tsx",

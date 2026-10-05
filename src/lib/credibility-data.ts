@@ -73,7 +73,11 @@ function isEligibility(value: string): value is CredibilityEligibility {
   return value === "eligible" || value === "review_required" || value === "restricted";
 }
 
-async function publicRest<T>(path: string, searchParams: Record<string, string>) {
+async function publicRest<T>(
+  path: string,
+  searchParams: Record<string, string>,
+  signal?: AbortSignal,
+) {
   const { url, publishableKey } = getSupabaseEnv();
   const endpoint = new URL(`/rest/v1/${path}`, url);
   Object.entries(searchParams).forEach(([key, value]) => endpoint.searchParams.set(key, value));
@@ -85,6 +89,7 @@ async function publicRest<T>(path: string, searchParams: Record<string, string>)
       Authorization: `Bearer ${publishableKey}`,
     },
     cache: "no-store",
+    signal,
   });
 
   if (!response.ok) {
@@ -173,18 +178,27 @@ function aggregateFromRecord(record: CredibilityAggregateRecord): CredibilityAgg
 }
 
 export async function getActiveCredibilityModel() {
+  // Use the existing failure fallback if this optional public lookup stalls.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4_000);
   try {
-    const records = await publicRest<CredibilityModelRecord[]>("credibility_model_versions", {
-      status: "eq.active",
-      select:
-        "version,prior_success,prior_failure,lower_quantile,minimum_effective_observations,recency_half_life_days,dimension_weights,context_weights",
-      order: "activated_at.desc.nullslast,created_at.desc",
-      limit: "1",
-    });
+    const records = await publicRest<CredibilityModelRecord[]>(
+      "credibility_model_versions",
+      {
+        status: "eq.active",
+        select:
+          "version,prior_success,prior_failure,lower_quantile,minimum_effective_observations,recency_half_life_days,dimension_weights,context_weights",
+        order: "activated_at.desc.nullslast,created_at.desc",
+        limit: "1",
+      },
+      controller.signal,
+    );
 
     return records[0] ? modelFromRecord(records[0]) : DEFAULT_CREDIBILITY_MODEL;
   } catch {
     return DEFAULT_CREDIBILITY_MODEL;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
