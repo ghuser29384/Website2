@@ -3,11 +3,9 @@ import Link from "next/link";
 import { toggleCartAction } from "@/app/actions";
 import { groupOffersByUnderlyingAction } from "@/lib/marketplace-participant-groups";
 import { formatMode } from "@/lib/offers";
-import type { Database } from "@/lib/supabase/database.types";
+import type { DirectoryOffer as OfferRow } from "@/lib/offers-directory-data";
 
 import styles from "./participant-offer-group.module.css";
-
-type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 
 interface ParticipantOfferGroupProps {
   currentReturnTo: string;

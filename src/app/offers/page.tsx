@@ -11,6 +11,7 @@ import { getViewer, OFFERS_PAGE_SIZE } from "@/lib/app-data";
 import { recordedRespondentContribution, matchesRecordedContribution, OFFER_CONTRIBUTION_BOUNDARY, OUTCOME_VERIFICATION_BOUNDARY, type OffsetContributionRecord } from "@/lib/offer-discovery-facts";
 import { getFormMessage } from "@/lib/form-state";
 import { groupOffersByParticipant } from "@/lib/marketplace-participant-groups";
+import { SMART_OFFER_COLUMNS, type DirectoryOffer as OfferRow } from "@/lib/offers-directory-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import {
@@ -44,7 +45,6 @@ import {
   smartPersonalPriorityScore,
 } from "@/lib/smart-query-scoring";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 import densityStyles from "./offers-density.module.css";
@@ -91,7 +91,6 @@ export async function generateMetadata({ searchParams }: OffersPageProps): Promi
   return LIVE_METADATA;
 }
 
-type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type OfferMode = OfferRow["mode"];
 type ModeFilter = "all" | OfferMode;
 type OfferSort = Extract<
@@ -398,7 +397,10 @@ async function listLiveOffers({
 
   const supabase = await createClient();
   const offset = (page - 1) * OFFERS_PAGE_SIZE;
-  let query = supabase.from("offers").select("*", { count: smartSearch ? undefined : "exact" }).eq("status", "open");
+  let query = smartSearch
+    ? supabase.from("offers").select(SMART_OFFER_COLUMNS)
+    : supabase.from("offers").select("*", { count: "exact" });
+  query = query.eq("status", "open");
   if (mode !== "all") query = query.eq("mode", mode);
 
   if (smartSearch) {
@@ -444,7 +446,7 @@ async function listLiveOffers({
       }
     }
     const ranked = (data ?? [])
-      .map((offer) => rankOffer(offer as OfferRow, { ...interpretation, facets }, personalPriorities, new Date(), recordedRespondentContribution(offer.mode, contributions.get(offer.id))))
+      .map((offer) => rankOffer(offer, { ...interpretation, facets }, personalPriorities, new Date(), recordedRespondentContribution(offer.mode, contributions.get(offer.id))))
       .filter((entry): entry is RankedOffer => Boolean(entry));
     const sorted = sortRankedOffers(ranked, sort);
     return {
@@ -485,7 +487,7 @@ async function listLiveOffers({
 
   const total = count ?? (data ?? []).length;
   return {
-    items: (data ?? []) as OfferRow[],
+    items: data ?? [],
     total,
     page,
     pageSize: OFFERS_PAGE_SIZE,
