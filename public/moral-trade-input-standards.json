@@ -145,6 +145,221 @@
       "aliases": ["habit", "behavior", "weekly", "daily", "pledge"]
     }
   ],
+  "commitmentIntents": [
+    {
+      "key": "research",
+      "aliases": [
+        "research",
+        "researching",
+        "study",
+        "investigate",
+        "analyze",
+        "analysis",
+        "literature review",
+        "review the literature"
+      ],
+      "templates": [
+        {
+          "label": "Research {topic} for fixed hours",
+          "value": "Research {topic} for the agreed fixed number of hours, keep a dated work log, and stop when the agreed time limit is reached.",
+          "description": "A time-bounded research commitment with the topic and hours recorded.",
+          "aliases": ["hours", "time bounded", "research time"]
+        },
+        {
+          "label": "Complete a defined {topic} research deliverable",
+          "value": "Complete the agreed {topic} research deliverable by the agreed deadline, with its scope and acceptance criteria recorded in advance.",
+          "description": "A scoped research project with a concrete deliverable.",
+          "aliases": ["deliverable", "research project", "defined project"]
+        },
+        {
+          "label": "Complete a {topic} literature review",
+          "value": "Review the agreed body of literature on {topic} and deliver a cited summary by the agreed deadline.",
+          "description": "A bounded literature review with a cited output.",
+          "aliases": ["literature review", "review papers", "research summary"]
+        },
+        {
+          "label": "Publish a {topic} research output",
+          "value": "Publish the agreed research output on {topic} by the agreed deadline and provide a stable link or file.",
+          "description": "A public or shareable research output with a durable record.",
+          "aliases": ["publish", "paper", "report", "research output"]
+        }
+      ]
+    },
+    {
+      "key": "write",
+      "aliases": ["write", "writing", "draft", "author", "article", "essay", "brief", "report"],
+      "templates": [
+        {
+          "label": "Write a defined {topic} document",
+          "value": "Write the agreed {topic} document within the recorded length, scope, and deadline.",
+          "description": "A bounded writing task with a defined format and scope.",
+          "aliases": ["document", "draft", "write"]
+        },
+        {
+          "label": "Publish a {topic} article or brief",
+          "value": "Publish the agreed article or brief about {topic} by the agreed deadline and provide a stable link or file.",
+          "description": "A publication commitment with a durable output.",
+          "aliases": ["article", "brief", "publish"]
+        },
+        {
+          "label": "Edit a {topic} draft to agreed criteria",
+          "value": "Edit the agreed {topic} draft to the recorded acceptance criteria by the agreed deadline.",
+          "description": "A defined editing task with reviewable completion criteria.",
+          "aliases": ["edit", "revise", "proofread"]
+        }
+      ]
+    },
+    {
+      "key": "build",
+      "aliases": [
+        "build",
+        "building",
+        "create",
+        "develop",
+        "code",
+        "implement",
+        "prototype",
+        "design"
+      ],
+      "templates": [
+        {
+          "label": "Build a defined {topic} prototype",
+          "value": "Build the agreed {topic} prototype to the recorded scope and acceptance criteria by the agreed deadline.",
+          "description": "A bounded prototype with an observable finish.",
+          "aliases": ["prototype", "build", "create"]
+        },
+        {
+          "label": "Ship an agreed {topic} feature",
+          "value": "Implement and deliver the agreed {topic} feature by the agreed deadline, subject to the recorded tests and acceptance criteria.",
+          "description": "A scoped implementation commitment with explicit tests.",
+          "aliases": ["feature", "ship", "implement", "code"]
+        },
+        {
+          "label": "Complete a bounded {topic} technical task",
+          "value": "Complete the agreed bounded technical task for {topic} and provide the agreed completion evidence.",
+          "description": "A technical task limited by the recorded scope.",
+          "aliases": ["technical task", "engineering", "development"]
+        }
+      ]
+    },
+    {
+      "key": "volunteer",
+      "aliases": ["volunteer", "volunteering", "help", "service", "serve", "shift"],
+      "templates": [
+        {
+          "label": "Volunteer fixed hours for {topic}",
+          "value": "Volunteer the agreed fixed number of hours for {topic} by the agreed date and provide the agreed activity record.",
+          "description": "A time-capped volunteer commitment.",
+          "aliases": ["hours", "volunteer", "service"]
+        },
+        {
+          "label": "Complete a defined {topic} volunteer shift",
+          "value": "Complete the agreed volunteer shift for {topic}, limited to the recorded role, location, and duration.",
+          "description": "A specific volunteer shift with a bounded role.",
+          "aliases": ["shift", "event", "volunteer task"]
+        }
+      ]
+    },
+    {
+      "key": "teach",
+      "aliases": ["teach", "teaching", "tutor", "tutoring", "coach", "training", "lesson"],
+      "templates": [
+        {
+          "label": "Teach a fixed {topic} session",
+          "value": "Teach the agreed {topic} session for the recorded duration and audience by the agreed date.",
+          "description": "A single, time-bounded teaching commitment.",
+          "aliases": ["session", "teach", "tutor"]
+        },
+        {
+          "label": "Prepare and deliver a {topic} lesson",
+          "value": "Prepare and deliver the agreed lesson on {topic}, including the recorded materials and completion criteria.",
+          "description": "A lesson with defined preparation and delivery.",
+          "aliases": ["lesson", "class", "workshop"]
+        }
+      ]
+    },
+    {
+      "key": "outreach",
+      "aliases": [
+        "outreach",
+        "contact",
+        "email",
+        "call",
+        "recruit",
+        "advocate",
+        "campaign",
+        "raise awareness"
+      ],
+      "templates": [
+        {
+          "label": "Contact an agreed number of people about {topic}",
+          "value": "Contact the agreed number and type of recipients about {topic} using the recorded lawful, non-harassing message and deadline.",
+          "description": "Bounded outreach with a recipient count and safety constraints.",
+          "aliases": ["contact", "email", "call", "recruit"]
+        },
+        {
+          "label": "Run a bounded {topic} outreach project",
+          "value": "Run the agreed outreach project about {topic}, limited by the recorded audience, channels, duration, and no-harassment terms.",
+          "description": "A scoped outreach project with explicit boundaries.",
+          "aliases": ["outreach", "campaign", "awareness"]
+        }
+      ]
+    },
+    {
+      "key": "translate",
+      "aliases": ["translate", "translation", "localize", "localise", "interpreting"],
+      "templates": [
+        {
+          "label": "Translate a defined {topic} document",
+          "value": "Translate the agreed {topic} document between the recorded languages by the agreed deadline.",
+          "description": "A bounded translation with named source and target languages.",
+          "aliases": ["translate", "document", "localize"]
+        },
+        {
+          "label": "Review a {topic} translation",
+          "value": "Review the agreed {topic} translation against the recorded accuracy and style criteria by the agreed deadline.",
+          "description": "A translation review with explicit acceptance criteria.",
+          "aliases": ["review translation", "proofread", "quality check"]
+        }
+      ]
+    },
+    {
+      "key": "donate",
+      "aliases": ["donate", "donation", "give", "fund", "contribute", "redirect"],
+      "templates": [
+        {
+          "label": "Donate a fixed amount to {topic}",
+          "value": "Donate the agreed fixed amount to the recorded {topic} recipient by the agreed deadline.",
+          "description": "A fixed donation with recipient, amount, and deadline recorded.",
+          "aliases": ["donate", "give", "fund"]
+        },
+        {
+          "label": "Redirect a planned donation to {topic}",
+          "value": "Redirect the recorded planned donation to the agreed {topic} recipient if the trade is confirmed.",
+          "description": "Changes the destination of an already-planned donation.",
+          "aliases": ["redirect", "planned donation", "offset"]
+        }
+      ]
+    },
+    {
+      "key": "learn",
+      "aliases": ["learn", "learning", "read", "reading", "course", "study course", "training course"],
+      "templates": [
+        {
+          "label": "Complete a defined learning module about {topic}",
+          "value": "Complete the agreed learning module about {topic} by the agreed deadline and provide the recorded completion evidence.",
+          "description": "A bounded learning commitment with an identifiable endpoint.",
+          "aliases": ["course", "module", "learn"]
+        },
+        {
+          "label": "Read and summarize an agreed work about {topic}",
+          "value": "Read the agreed work about {topic} and deliver the recorded summary by the agreed deadline.",
+          "description": "A reading commitment paired with a concrete summary.",
+          "aliases": ["read", "book", "paper", "summary"]
+        }
+      ]
+    }
+  ],
   "evidence": [
     {
       "label": "Redacted donation receipt",

@@ -1,0 +1,121 @@
+{
+  "schema_version": "moral-trade-free-rider-portfolio-v1.1",
+  "status": "research_only_not_authorized",
+  "objective": "maximize net safe legitimate public-good provision rather than defend one mechanism",
+  "global_decisions": {
+    "dac_is_default": false,
+    "peer_punishment_enabled": false,
+    "public_free_rider_reputation_enabled": false,
+    "gross_campaign_funding_equals_impact": false,
+    "quadratic_funding_requires_prefunded_pool": true,
+    "lottery_live_enabled": false,
+    "platform_may_invent_compulsory_authority": false,
+    "base_experimental_contract": "provision_point_full_refund"
+  },
+  "mechanisms": [
+    {
+      "id": "M0",
+      "name": "unconditional_voluntary_contribution",
+      "disposition": "plain_donation_comparator_not_primary_solution"
+    },
+    {
+      "id": "M1",
+      "name": "provision_point_full_refund",
+      "disposition": "experimental_base"
+    },
+    {
+      "id": "M2",
+      "name": "real_locked_seed",
+      "disposition": "early_experimental_arm"
+    },
+    {
+      "id": "M3",
+      "name": "capped_fixed_1_to_1_match",
+      "disposition": "early_experimental_arm_when_prefunded"
+    },
+    {
+      "id": "M4",
+      "name": "general_refund_bonus_DAC",
+      "disposition": "research_only_not_default"
+    },
+    {
+      "id": "M5",
+      "name": "early_contributor_refund_bonus",
+      "disposition": "preferred_DAC_family_experiment"
+    },
+    {
+      "id": "M6",
+      "name": "repeated_coalition_without_peer_punishment",
+      "disposition": "bounded_community_experiment"
+    },
+    {
+      "id": "M7",
+      "name": "truthful_privacy_safe_social_information",
+      "disposition": "cautious_opt_in_experiment"
+    },
+    {
+      "id": "M8",
+      "name": "peer_punishment_or_negative_reputation",
+      "disposition": "rejected"
+    },
+    {
+      "id": "M9",
+      "name": "narrow_legitimate_club_benefits",
+      "disposition": "conditional_later"
+    },
+    {
+      "id": "M10",
+      "name": "quadratic_funding",
+      "disposition": "later_allocation_experiment_only"
+    },
+    {
+      "id": "M11",
+      "name": "prize_linked_lottery",
+      "disposition": "research_and_legal_deferred"
+    },
+    {
+      "id": "M12",
+      "name": "legitimate_institution_collective_budget",
+      "disposition": "high_value_integration_path"
+    }
+  ],
+  "resource_classes": [
+    "participant_contribution",
+    "sponsor_seed",
+    "sponsor_match",
+    "sponsor_bonus_reserve",
+    "platform_funded_reserve",
+    "bonus_paid",
+    "refund",
+    "provider_fee",
+    "platform_cost",
+    "baseline_redirected",
+    "delivered_public_good"
+  ],
+  "primary_metrics": [
+    "threshold_provision_probability",
+    "net_delivered_public_good_after_all_subsidy_bonus_provider_and_platform_cost",
+    "cost_per_additional_funded_project",
+    "native_delivered_public_good_quantity",
+    "comprehension",
+    "pressure_and_safety"
+  ],
+  "experimental_sequence": [
+    "unconditional_contribution_comparator_where_relevant",
+    "comprehension_and_simulated_endowment",
+    "separate_seed_match_and_early_bonus_arms",
+    "repeated_coalition",
+    "legitimate_institution",
+    "prefunded_matching_pool_allocation",
+    "temporal_or_external_replication"
+  ],
+  "authorization": {
+    "runtime": false,
+    "provider": false,
+    "money": false,
+    "real_user_experiment": false,
+    "public_effectiveness_claim": false,
+    "merge": false,
+    "deployment": false
+  }
+}

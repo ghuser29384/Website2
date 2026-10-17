@@ -1,30 +1,7 @@
-import type { Metadata } from "next";
+import { permanentRedirect } from "next/navigation";
 
-import { ThresholdRadar } from "@/components/pools/threshold-radar";
-import { getAbsoluteUrl } from "@/lib/seo";
-
-export const metadata: Metadata = {
-  title: "Threshold radar",
-  description: "Explore conditional-funding campaigns by distance from activation.",
-  robots: {
-    index: false,
-    follow: false,
-    googleBot: {
-      index: false,
-      follow: false,
-    },
-  },
-  alternates: {
-    canonical: "/pools/radar",
-  },
-  openGraph: {
-    title: "Threshold radar | Moral Trade",
-    description: "Explore conditional-funding campaigns by distance from activation.",
-    url: getAbsoluteUrl("/pools/radar"),
-    type: "website",
-  },
-};
-
+// The former radar used demonstration campaigns, not live funding records.
+// Do not carry fictitious campaign IDs or pledge amounts into a real workflow.
 export default function ThresholdRadarPage() {
-  return <ThresholdRadar />;
+  permanentRedirect("/pools");
 }

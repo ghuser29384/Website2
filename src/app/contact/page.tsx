@@ -7,6 +7,8 @@ import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
+import styles from "./contact.module.css";
+
 export const metadata: Metadata = {
   title: "Contact",
   description:
@@ -51,85 +53,74 @@ export default async function ContactPage() {
   const viewer = await getViewer();
 
   return (
-    <div className="page-shell">
-      <header className="hero">
+    <div className={styles.page} data-mt-surface="contact">
+      <header className={styles.masthead}>
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
+      </header>
 
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Contact</p>
-            <h1>Reach the Moral Trade team.</h1>
-            <p className="hero-text">
-              Use the route below that best matches what you need, especially if a proposal feels
-              unsafe, a baseline looks coercive, or a review state appears incorrect.
-            </p>
-            <div className="hero-actions">
-              <a className="button button-primary" href="mailto:support@moraltrade.org">
-                Email support@moraltrade.org
-              </a>
-              <Link className="button button-secondary" href="/status">
-                Check service status
-              </Link>
+      <main className={styles.main} id="main-content" tabIndex={-1}>
+        <section className={styles.intro} aria-labelledby="contact-heading">
+          <p className={styles.kicker}>Contact</p>
+          <h1 id="contact-heading">Reach the Moral Trade team.</h1>
+          <p className={styles.description}>
+            Use the route below that best matches what you need, especially if a proposal feels
+            unsafe, a baseline looks coercive, or a review state appears incorrect.
+          </p>
+          <div className={styles.actions}>
+            <a className={styles.primaryAction} href="mailto:support@moraltrade.org">
+              Email support@moraltrade.org
+            </a>
+            <Link className={styles.secondaryAction} href="/status">
+              Check service status
+            </Link>
+          </div>
+        </section>
+
+        <div className={styles.content}>
+          <section className={styles.routes} aria-labelledby="contact-routes-heading">
+            <div className={styles.sectionHeading}>
+              <h2 id="contact-routes-heading">Choose a specific contact path</h2>
+              <p>
+                Specific subjects help keep safety, review, partnership, and support requests from
+                being treated like generic mail.
+              </p>
+            </div>
+            <div className={styles.routeList}>
+              {contactRoutes.map((route) => (
+                <article className={styles.route} key={route.title}>
+                  <h3>{route.title}</h3>
+                  <p>{route.detail}</p>
+                  <a className={styles.routeLink} href={route.href}>
+                    {route.label}
+                  </a>
+                </article>
+              ))}
             </div>
           </section>
 
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Recourse</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Describe the proposal or page</strong>
-                  <p>Include links, screenshots, or public IDs when you can share them safely.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Name the risk</strong>
-                  <p>Threat, baseline, evidence, privacy, externality, or payment-route concern.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>Ask for the next step</strong>
-                  <p>Request operator review, reviewer challenge, correction, or onboarding guidance.</p>
-                </div>
-              </div>
-            </div>
+          <aside className={styles.guidance} aria-labelledby="contact-recourse-heading">
+            <h2 id="contact-recourse-heading">Recourse</h2>
+            <ol className={styles.steps}>
+              <li>
+                <h3>Describe the proposal or page</h3>
+                <p>Include links, screenshots, or public IDs when you can share them safely.</p>
+              </li>
+              <li>
+                <h3>Name the risk</h3>
+                <p>Threat, baseline, evidence, privacy, externality, or payment-route concern.</p>
+              </li>
+              <li>
+                <h3>Ask for the next step</h3>
+                <p>Request operator review, reviewer challenge, correction, or onboarding guidance.</p>
+              </li>
+            </ol>
           </aside>
         </div>
-      </header>
-
-      <main id="main-content" tabIndex={-1}>
-        <section className="section section-white">
-          <div className="section-head">
-            <p className="eyebrow">Routes</p>
-            <h2>Choose a specific contact path</h2>
-            <p>
-              Specific subjects help keep safety, review, partnership, and support requests from
-              being treated like generic mail.
-            </p>
-          </div>
-
-          <div className="data-grid">
-            {contactRoutes.map((route) => (
-              <article className="panel data-card" key={route.title}>
-                <h3>{route.title}</h3>
-                <p className="route-text">{route.detail}</p>
-                <a className="text-button" href={route.href}>
-                  {route.label}
-                </a>
-              </article>
-            ))}
-          </div>
-        </section>
       </main>
 
       <SiteFooter />

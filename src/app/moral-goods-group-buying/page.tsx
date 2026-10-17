@@ -266,6 +266,44 @@ export default async function MoralGoodsGroupBuyingPage() {
   const financial = snapshot.financial;
   const readiness = snapshot.paymentReadiness;
   const liveDataAvailable = snapshot.sourceStatus === "live";
+  const hasActivity = snapshot.routes.length > 0 || snapshot.openCycleCount > 0 ||
+    financial.liveMandateCount > 0 || financial.openMandateCount > 0 ||
+    financial.openConditionalExposureCents > 0 || financial.netChargedCents > 0 ||
+    financial.transferredCents > 0 || financial.refundedCents > 0 ||
+    financial.activeRecurringCommitmentCount > 0 || Boolean(financial.latestFinancialActivityAt);
+
+  if (liveDataAvailable && !hasActivity) {
+    return (
+      <div className="page-shell">
+        <header><SiteTopbar brandHref="/" links={getPrimaryNavLinks(isAuthenticated)} {...getTopbarActions(isAuthenticated)} showLogout={isAuthenticated} /></header>
+        <main id="main-content" className="section section-white" tabIndex={-1}>
+          <Breadcrumbs items={[{ href: "/discover", label: "Discover" }, { href: "/moral-goods-group-buying", label: "Group buying" }]} />
+          <section className="panel data-card data-card-wide">
+            <h1>Group buying</h1>
+            <h2>No open routes yet.</h2>
+            <p>Propose a shared funding pool with a recipient, condition, deadline, and evidence requirements.</p>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/mpgf/pools/new">Propose a pool</Link>
+              <Link className="button button-secondary" href="/discover">Browse trades</Link>
+            </div>
+            <details className="details-panel">
+              <summary>Participation and payment readiness</summary>
+              <div className="details-content">
+                <p>Payment acceptance: {readinessLabel(readiness.status)}. A proposal does not authorize or collect a payment.</p>
+                <p>Review the action window, evidence requirements, withdrawal rights, and failure consequences before accepting any terms.</p>
+                <div className="hero-actions">
+                  <Link href={participantHref}>Apply to participate</Link>
+                  <Link href="/contact">Contact the operator</Link>
+                  <Link href="/safety">Review safeguards</Link>
+                </div>
+              </div>
+            </details>
+          </section>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
 
   return (
     <div className="page-shell marketplace-product-shell">

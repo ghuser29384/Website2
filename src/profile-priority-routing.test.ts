@@ -38,7 +38,7 @@ test("the no-match priority actions open the profile spark editor and preserve t
 test("the profile priorities route edits and persists the canonical 100-spark allocation", () => {
   assert.match(priorityPage, /ProfilePriorityEditor/);
   assert.match(priorityPage, /priority_allocations,cause_areas/);
-  assert.match(priorityEditor, /Adjust your 100 sparks/);
+  assert.match(priorityEditor, /<h1 id="profile-priorities-heading">Priorities<\/h1>/);
   assert.match(priorityEditor, /name="priority_allocation"/);
   assert.match(priorityEditor, /COMPLETE_PROFILE_SPARK_VALUE/);
   assert.match(priorityAction, /normalizeProfilePriorityAllocation/);

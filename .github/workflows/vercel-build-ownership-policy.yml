@@ -1,0 +1,101 @@
+name: Vercel build ownership policy
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/vercel-build-ownership-policy.yml"
+      - "scripts/vercel-ignore-build.mjs"
+      - "scripts/vercel-ignore-build.test.mjs"
+      - "scripts/vercel-project-config.mjs"
+      - "scripts/vercel-project-config.test.mjs"
+      - "src/lib/vercel-build-ownership.test.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-build-ownership-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy-contract:
+    name: Policy contract and repository gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused ownership policy tests
+        run: >-
+          node --import tsx --test
+          src/lib/vercel-build-ownership.test.ts
+          scripts/vercel-ignore-build.test.mjs
+          scripts/vercel-project-config.test.mjs
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run ESLint
+        run: npx eslint src/lib/vercel-build-ownership.test.ts
+
+      - name: Run TypeScript
+        run: npx tsc --noEmit
+
+      - name: Verify diff hygiene and ownership-change scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base origin/main HEAD)"
+          git diff --check "$base"...HEAD
+
+          mapfile -t changed < <(git diff --name-only "$base"...HEAD | sort)
+          if [[ "${#changed[@]}" -eq 0 ]]; then
+            echo "The ownership-policy workflow was triggered without a candidate diff." >&2
+            exit 1
+          fi
+
+          printf 'Changed paths:\n'
+          printf ' - %s\n' "${changed[@]}"
+
+          relevant_change=false
+          repository_only_change=true
+          for path in "${changed[@]}"; do
+            case "$path" in
+              .github/workflows/vercel-build-ownership-policy.yml|scripts/vercel-ignore-build.mjs|scripts/vercel-ignore-build.test.mjs|scripts/vercel-project-config.mjs|scripts/vercel-project-config.test.mjs|src/lib/vercel-build-ownership.test.ts)
+                relevant_change=true
+                ;;
+            esac
+
+            case "$path" in
+              .github/workflows/vercel-build-ownership-policy.yml|scripts/vercel-ignore-build.test.mjs|scripts/vercel-project-config.test.mjs|src/lib/vercel-build-ownership.test.ts)
+                ;;
+              *)
+                repository_only_change=false
+                ;;
+            esac
+          done
+
+          if [[ "$relevant_change" != "true" ]]; then
+            echo "No Vercel ownership policy, configuration, or test path changed." >&2
+            exit 1
+          fi
+
+          if [[ "$repository_only_change" == "true" ]]; then
+            echo "Repository-only Vercel ownership maintenance change verified."
+          else
+            echo "Runtime-affecting or mixed ownership/configuration change detected; the repository-only path restriction is not applicable."
+          fi

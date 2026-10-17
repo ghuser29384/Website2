@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Moral Trade — discover reciprocal commitments and shared gains through an interactive walkthrough.">
+  <meta name="description" content="Moral Trade — redirect opposed donations, form coalitions, and discover reciprocal commitments through an interactive walkthrough.">
+  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
   <title>Moral Trade</title>
   <style>
     html, body { margin: 0; min-height: 100%; background: #11120f; color: #f2eee6; font-family: system-ui, sans-serif; }
@@ -16,9 +19,6 @@
   <script>
     (async function loadMoralTrade() {
       try {
-        const firstVisit =
-          window.location.pathname === "/walkthrough" &&
-          new URLSearchParams(window.location.search).get("first_visit") === "1";
         const accountPromise = fetch("/api/live-account", {
           credentials: "same-origin",
           headers: { Accept: "application/json" },
@@ -58,29 +58,24 @@
           .replace(/&/g, "\\u0026")
           .replace(/\u2028/g, "\\u2028")
           .replace(/\u2029/g, "\\u2029");
-        const firstVisitStyles = firstVisit
-          ? `<style>
-              .mtw-first-visit-skip-form{position:fixed;top:19px;right:72px;z-index:200;margin:0}
-              .mtw-first-visit-skip-button{min-width:64px;min-height:42px;padding:0 16px;border:1px solid rgba(244,240,232,.34);border-radius:999px;background:rgba(17,18,15,.88);color:#f4f0e8;box-shadow:0 10px 28px rgba(0,0,0,.18);backdrop-filter:blur(14px);font:650 14px/1 system-ui,sans-serif;cursor:pointer}
-              .mtw-first-visit-skip-button:hover{border-color:rgba(244,240,232,.72);background:rgba(39,40,35,.96)}
-              .mtw-first-visit-skip-button:focus-visible{outline:3px solid #9db0ff;outline-offset:4px}
-              @media(max-width:740px){.mtw-first-visit-skip-form{top:13px;right:61px}.mtw-first-visit-skip-button{min-width:58px;padding:0 12px;font-size:13px}}
-            </style>`
-          : "";
-        const firstVisitControl = firstVisit
-          ? '<form action="/" class="mtw-first-visit-skip-form" method="get"><button aria-label="Skip walkthrough" class="mtw-first-visit-skip-button" type="submit">Skip</button></form>'
-          : "";
+        const faviconLinks = [
+          '<link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+        ].join("");
         const accountScripts = [
           `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
           '<script src="/moral-trade-account-identity.js"><\/script>',
           '<script src="/moral-trade-live-account.js"><\/script>',
         ].join("");
+        const headEnhancements = [
+          faviconLinks,
+          '<link rel="stylesheet" href="/walkthrough-profile-enhancement.css">',
+          '<link rel="stylesheet" href="/moral-trade-input-assist.css">',
+          accountScripts,
+        ].join("");
 
-        html = html.replace(
-          "</head>",
-          `${firstVisitStyles}<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"><link rel="stylesheet" href="/moral-trade-input-assist.css">${accountScripts}</head>`
-        );
-        html = html.replace("<body>", `<body>${firstVisitControl}`);
+        html = html.replace("</head>", `${headEnhancements}</head>`);
         html = html.replace(
           "</body>",
           '<script src="/walkthrough-profile-enhancement.js"><\/script><script src="/moral-trade-brand.js"><\/script><script src="/moral-trade-input-assist.js"><\/script></body>'

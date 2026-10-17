@@ -657,16 +657,16 @@ function MarketplaceSideNav({
   createHref?: string;
 }) {
   const items = [
-    { key: "browse", href: "/offers", label: "Browse", icon: "browse" },
-    { key: "plan", href: "/saved-offers", label: "Planner", icon: "planner" },
-    { key: "track", href: "/commitments", label: "Track", icon: "track" },
+    { key: "browse", href: "/discover", label: "Discover", icon: "browse" },
+    { key: "plan", href: "/saved-offers", label: "Saved offers", icon: "planner" },
+    { key: "track", href: "/commitments", label: "Commitments", icon: "track" },
     { key: "messages", href: "/messages", label: "Messages", icon: "messages" },
-    { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
+    { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },
   ] as const;
 
   return (
     <aside className="mt-v75-side-nav" data-marketplace-left-nav aria-label="Marketplace sections">
-      <Link className="mt-v75-side-brand" href="/offers">
+      <Link className="mt-v75-side-brand" href="/offers" prefetch={false}>
         <span className="mt-v77-brand-wordmark">
           <MoralTradeWordmark />
           <small>Coordination network</small>
@@ -678,6 +678,7 @@ function MarketplaceSideNav({
             aria-current={active === item.key ? "page" : undefined}
             className={joinClassName(["mt-v75-side-link", active === item.key && "is-active"])}
             href={item.href}
+            prefetch={item.href === "/discover" ? false : undefined}
             key={item.key}
           >
             <MarketplaceNavIcon name={item.icon} />
@@ -691,20 +692,7 @@ function MarketplaceSideNav({
           Create offer
         </Link>
       ) : null}
-      <div className="mt-v75-side-plan">
-        <strong>0 in planner</strong>
-        <span>
-          <em>Exposure</em>
-          <b>$0.00</b>
-        </span>
-        <span>
-          <em>Charged now</em>
-          <b>$0.00</b>
-        </span>
-        <Link className="button button-primary button-mini" href="/saved-offers">
-          Review & plan
-        </Link>
-      </div>
+
     </aside>
   );
 }
@@ -712,13 +700,15 @@ function MarketplaceSideNav({
 export function MarketplaceRouteShell({
   active,
   children,
+  hideSidebar = false,
 }: {
   active: "browse" | "plan" | "track" | "messages" | "profile";
   children: ReactNode;
+  hideSidebar?: boolean;
 }) {
   return (
-    <div className="mt-v75-route-board">
-      <MarketplaceSideNav active={active} />
+    <div className="mt-v75-route-board" style={hideSidebar ? { gridTemplateColumns: "minmax(0, 1fr)" } : undefined}>
+      {!hideSidebar ? <MarketplaceSideNav active={active} /> : null}
       <div className="mt-v75-route-workspace">{children}</div>
     </div>
   );
@@ -1139,9 +1129,13 @@ function TemplateMiniTile({ template }: { template: PublicReviewedSeedTemplateSu
 export function DealDetailObject({
   deal,
   headingId = "marketplace-detail-object-heading",
+  actions,
+  compact = false,
 }: {
   deal: MarketplaceDeal;
   headingId?: string;
+  actions?: ReactNode;
+  compact?: boolean;
 }) {
   const receipt = getDealReceiptAtom(deal);
   const recipientDisplay = getMarketplaceRecipientDisplay(deal);
@@ -1152,6 +1146,7 @@ export function DealDetailObject({
 
   return (
     <article className="mt-v75-detail-object" aria-labelledby={headingId}>
+      {!compact ? <>
       <div className="mt-v75-detail-breadcrumb">
         <Link href="/offers">Browse</Link>
         <span aria-hidden="true">/</span>
@@ -1171,6 +1166,7 @@ export function DealDetailObject({
           <IconMark name={deal.mechanismType === "public_goods_round" ? "fund" : "evidence"} />
         </span>
       </div>
+      </> : null}
       <div className="mt-v75-detail-copy">
         <div className="moral-deal-chip-row">
           <FallbackLivestreamEvidencePill deal={deal} />
@@ -1180,8 +1176,8 @@ export function DealDetailObject({
             </span>
           ))}
         </div>
-        <h1 id={headingId}>{deal.title}</h1>
-        <p>{deal.subtitle ?? "Review exposure, terms, and evidence before any commitment."}</p>
+        {compact ? <h2 id={headingId}>Funding and verification details</h2> : <h1 id={headingId}>{deal.title}</h1>}
+        {!compact ? <p>{deal.subtitle ?? "Review exposure, terms, and evidence before any commitment."}</p> : null}
         <div className="mt-v75-status-row">
           {statusChips.map((chip) => (
             <StatusChip label={chip} key={chip} />
@@ -1205,17 +1201,7 @@ export function DealDetailObject({
             <dd>{receipt.protection}</dd>
           </div>
         </dl>
-        <div className="mt-v75-detail-actions">
-          <Link className="button button-primary" href={`${deal.href}#commitment-sheet`}>
-            Add to planner
-          </Link>
-          <Link className="button button-secondary" href={`${deal.href}#commitment-sheet`}>
-            Compare
-          </Link>
-          <Link className="button button-secondary" href="/saved-offers">
-            Save
-          </Link>
-        </div>
+        {actions ? <div className="mt-v75-detail-actions">{actions}</div> : null}
       </div>
       <div className="mt-v75-detail-info">
         <section>
@@ -1406,154 +1392,6 @@ function MacAskillQuote({ mobile = false }: { mobile?: boolean }) {
         <strong>William MacAskill</strong>
       </figcaption>
     </figure>
-  );
-}
-
-function PlannerTray({ deals }: { deals: readonly MarketplaceDeal[] }) {
-  const selectedDeals = deals.slice(0, 3);
-  const exposureTotal = selectedDeals.reduce((sum, deal) => sum + (deal.userMaxExposureCents ?? 0), 0);
-
-  return (
-    <section className="mt-v75-planner-tray" aria-labelledby="mt-v75-planner-heading">
-      <div className="mt-v75-tray-head">
-        <div>
-          <h2 id="mt-v75-planner-heading">
-            {selectedDeals.length ? `${selectedDeals.length} in planner preview` : "Planner preview"}
-          </h2>
-          <p>Compare exposure, timing, and terms before confirming.</p>
-        </div>
-        <Link href="/saved-offers">View planner</Link>
-      </div>
-      <div className="mt-v75-planner-list">
-        {selectedDeals.length ? (
-          selectedDeals.map((deal) => {
-            const receipt = getDealReceiptAtom(deal);
-
-            return (
-              <div className="mt-v75-planner-row" key={deal.id}>
-                <DealSemanticVisual deal={deal} />
-                <div>
-                  <strong>{deal.title}</strong>
-                  <span>{receipt.state} · {receipt.conditionOrProtection}</span>
-                </div>
-                <em>{getDealAmountLabel(deal)}</em>
-              </div>
-            );
-          })
-        ) : (
-          <p>No planner rows. Browse offers to select reviewable items.</p>
-        )}
-      </div>
-      <dl className="mt-v75-planner-summary">
-        <div>
-          <dt>Total exposure</dt>
-          <dd>{exposureTotal ? centsToV72Exposure(exposureTotal).replace("Max ", "") : "$0.00"}</dd>
-        </div>
-        <div>
-          <dt>Charged now</dt>
-          <dd>$0.00</dd>
-        </div>
-        <div>
-          <dt>Next step</dt>
-          <dd>Review details, add evidence preferences, then confirm.</dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
-export function ReviewPlanPanel({ deal }: { deal: MarketplaceDeal }) {
-  const receipt = getDealReceiptAtom(deal);
-  const amountLabel = getDealAmountLabel(deal);
-
-  return (
-    <aside className="mt-v75-review-panel" aria-labelledby="mt-v75-review-heading">
-      <div className="mt-v75-review-head">
-        <h2 id="mt-v75-review-heading">Review your plan</h2>
-        <Link aria-label="Back to offers" href="/offers">x</Link>
-      </div>
-      <div className="mt-v75-review-summary">
-        <DealSemanticVisual deal={deal} />
-        <div>
-          <strong>{deal.title}</strong>
-          <span>{receipt.exposure} · No charge now</span>
-        </div>
-      </div>
-      <section className="mt-v75-amount-stepper" aria-label="Amount preview">
-        <span>Amount (preview)</span>
-        <div>
-          <button aria-label="Decrease preview amount" type="button">-</button>
-          <strong>{amountLabel}</strong>
-          <button aria-label="Increase preview amount" type="button">+</button>
-        </div>
-      </section>
-      <section className="mt-v75-review-card">
-        <h3>What happens</h3>
-        <ul>
-          <li>Review current terms</li>
-          <li>Upload evidence only if required</li>
-          <li>Human review runs where backed</li>
-          <li>No commitment was created in this preview</li>
-        </ul>
-      </section>
-      {deal.fallbackLivestreamEvidence ? (
-        <section className="mt-v75-review-card">
-          <h3>{deal.fallbackLivestreamEvidence.title}</h3>
-          <dl>
-            <div>
-              <dt>Branch</dt>
-              <dd>{deal.fallbackLivestreamEvidence.branchLabel}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{deal.fallbackLivestreamEvidence.statusLabel}</dd>
-            </div>
-            <div>
-              <dt>Window</dt>
-              <dd>{deal.fallbackLivestreamEvidence.scheduleLabel}</dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
-      <section className="mt-v75-review-card">
-        <h3>Price & exposure</h3>
-        <dl>
-          <div>
-            <dt>You commit</dt>
-            <dd>{amountLabel}</dd>
-          </div>
-          <div>
-            <dt>Potential max exposure</dt>
-            <dd>{receipt.exposure}</dd>
-          </div>
-          <div>
-            <dt>Charged now</dt>
-            <dd>$0.00</dd>
-          </div>
-          <div>
-            <dt>Moves if cleared</dt>
-            <dd>{receipt.state === "Live" ? "Review required" : "No"}</dd>
-          </div>
-        </dl>
-      </section>
-      <section className="mt-v75-review-card">
-        <h3>Your methods</h3>
-        <dl>
-          <div>
-            <dt>Pay-in authorization</dt>
-            <dd>Not connected</dd>
-          </div>
-          <div>
-            <dt>Payout (if any)</dt>
-            <dd>Not needed for this preview</dd>
-          </div>
-        </dl>
-      </section>
-      <Link className="button button-primary" href={deal.href}>
-        {receipt.primaryCta}
-        <span>No commitment created yet</span>
-      </Link>
-    </aside>
   );
 }
 
@@ -1753,8 +1591,8 @@ export function PledgeFundingPanel({ round }: { round: PledgeFundingRound }) {
         <p>
           <strong>If the round clears:</strong>{" "}
           {round.mode === "capped_pivotal_cohort"
-            ? "The capped cohort would fund the pledge after backend gates pass."
-            : "The target would fund the pledge after backend gates pass."}
+            ? "The capped cohort would fund the pledge. Preview only; funding is unavailable."
+            : "The target would fund the pledge. Preview only; funding is unavailable."}
         </p>
         <p>
           <strong>If it does not clear:</strong> {round.refundPolicy}
@@ -2078,61 +1916,6 @@ export function MoralDealCard({
         {receipt.primaryCta}
       </Link>
     </article>
-  );
-}
-
-export function CommitmentSheet({
-  commitHref,
-  deal,
-  paymentSupportAvailable,
-}: {
-  commitHref: string;
-  deal: MarketplaceDeal;
-  paymentSupportAvailable: boolean;
-}) {
-  void commitHref;
-  void paymentSupportAvailable;
-  const receipt = getDealReceiptAtom(deal);
-  const sheetCta = receipt.primaryCta === "View details" ? "Preview budget" : receipt.primaryCta;
-
-  return (
-    <details className="commitment-sheet" id="commitment-sheet">
-      <summary>{sheetCta}</summary>
-      <div className="commitment-sheet-body" role="group" aria-label="Conditional commitment preview">
-        <div className="commitment-sheet-handle" aria-hidden="true" />
-        <div className="commitment-sheet-header">
-          <p className="detail-kicker">
-            {receipt.source} · {receipt.state}
-          </p>
-          <p>{deal.title}</p>
-        </div>
-        <dl className="v72-receipt-facts">
-          <div>
-            <dt>Exposure</dt>
-            <dd>{receipt.exposure}</dd>
-          </div>
-          <div>
-            <dt>Condition</dt>
-            <dd>{receipt.conditionOrProtection}</dd>
-          </div>
-          <div>
-            <dt>Release</dt>
-            <dd>{receipt.protection}</dd>
-          </div>
-        </dl>
-        <p className="v72-sheet-result" role="status">
-          No commitment was created.
-        </p>
-        <div className="v72-sheet-footer">
-          <span>
-            {receipt.state} · {receipt.exposure} · {receipt.conditionOrProtection}
-          </span>
-          <Link className="button button-primary" href={deal.href}>
-            {sheetCta}
-          </Link>
-        </div>
-      </div>
-    </details>
   );
 }
 
@@ -2636,11 +2419,11 @@ export function MarketplaceBottomNav({
 }) {
   const normalizedActive = active === "account" ? "profile" : active;
   const items = [
-    { key: "browse", href: "/offers", label: "Browse", icon: "marketplace" },
-    { key: "plan", href: "/saved-offers", label: "Plan", icon: "example" },
-    { key: "track", href: "/commitments", label: "Track", icon: "evidence" },
+    { key: "browse", href: "/discover", label: "Discover", icon: "marketplace" },
+    { key: "plan", href: "/saved-offers", label: "Saved offers", icon: "example" },
+    { key: "track", href: "/commitments", label: "Commitments", icon: "evidence" },
     { key: "messages", href: "/messages", label: "Messages", icon: "review" },
-    { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
+    { key: "profile", href: "/dashboard", label: "Profile", icon: "profile" },
   ] as const;
 
   return (
@@ -2653,6 +2436,7 @@ export function MarketplaceBottomNav({
             normalizedActive === item.key && "is-active",
           ])}
           href={item.href}
+          prefetch={item.href === "/discover" ? false : undefined}
           key={item.key}
         >
           <IconMark name={item.icon} />

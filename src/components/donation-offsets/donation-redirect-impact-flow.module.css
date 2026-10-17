@@ -26,7 +26,7 @@
 }
 
 .flow :is(a, button, input, summary):focus-visible {
-  outline: 3px solid var(--signal, #e1f65b);
+  outline: 3px solid var(--accent, #5748ff);
   outline-offset: 3px;
 }
 
@@ -367,7 +367,7 @@
 }
 
 .destinationRow:has(input:focus-visible) {
-  outline: 3px solid var(--signal, #e1f65b);
+  outline: 3px solid var(--accent, #5748ff);
   outline-offset: -3px;
 }
 

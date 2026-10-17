@@ -597,26 +597,137 @@ function isPublicGoodsCollectionIntent(params: {
   return PUBLIC_GOODS_INTENT_TOKENS.some((token) => normalizedQuery.includes(token));
 }
 
-function parseDuration(label: string): PublicOfferDuration {
-  if (/open/i.test(label)) {
+const DURATION_WORD_VALUES: Record<string, number> = {
+  a: 1,
+  an: 1,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+};
+
+interface ParsedDurationCandidate {
+  value: number;
+  unit: "days" | "months" | "years";
+  approximateDays: number;
+}
+
+function durationNumber(value: string) {
+  const normalized = value.toLowerCase();
+  return DURATION_WORD_VALUES[normalized] ?? Number.parseFloat(normalized);
+}
+
+function durationCandidates(value: string): ParsedDurationCandidate[] {
+  const matches = value.matchAll(
+    /\b(\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(day|days|week|weeks|month|months|year|years)\b/gi,
+  );
+  const candidates: ParsedDurationCandidate[] = [];
+
+  for (const match of matches) {
+    const numeric = durationNumber(match[1]);
+    if (!Number.isFinite(numeric) || numeric <= 0) continue;
+    const rawUnit = match[2].toLowerCase();
+    if (rawUnit.startsWith("week")) {
+      candidates.push({
+        value: numeric * 7,
+        unit: "days",
+        approximateDays: numeric * 7,
+      });
+    } else if (rawUnit.startsWith("month")) {
+      candidates.push({
+        value: numeric,
+        unit: "months",
+        approximateDays: numeric * 30.4375,
+      });
+    } else if (rawUnit.startsWith("year")) {
+      candidates.push({
+        value: numeric,
+        unit: "years",
+        approximateDays: numeric * 365.25,
+      });
+    } else {
+      candidates.push({
+        value: numeric,
+        unit: "days",
+        approximateDays: numeric,
+      });
+    }
+  }
+
+  return candidates;
+}
+
+function longestDuration(candidates: readonly ParsedDurationCandidate[]) {
+  return candidates.reduce<ParsedDurationCandidate | null>(
+    (longest, candidate) =>
+      !longest || candidate.approximateDays > longest.approximateDays
+        ? candidate
+        : longest,
+    null,
+  );
+}
+
+export function parsePublicOfferDuration(
+  label: string,
+  ...actionTerms: Array<string | null | undefined>
+): PublicOfferDuration {
+  if (/open[- ]ended|no fixed end|indefinite/i.test(label)) {
     return { value: null, unit: "open-ended", label };
   }
 
-  const match = label.match(/(\d+(?:\.\d+)?)\s*(day|days|month|months|year|years)/i);
-  const value = match ? Number.parseFloat(match[1]) : null;
-  const unitText = match?.[2]?.toLowerCase() ?? "";
-  const unit = unitText.startsWith("day")
-    ? "days"
-    : unitText.startsWith("month")
-      ? "months"
-      : unitText.startsWith("year")
-        ? "years"
-        : "open-ended";
+  const labelDuration = longestDuration(durationCandidates(label));
+  const actionDuration = longestDuration(
+    actionTerms.flatMap((term) => durationCandidates(term ?? "")),
+  );
+  const longerExplicitTermGoverns =
+    /explicit[^.]{0,80}longer[^.]{0,80}(govern|control)|longer[^.]{0,80}(govern|control)/i.test(
+      label,
+    );
+
+  if (
+    labelDuration &&
+    actionDuration &&
+    Math.abs(actionDuration.approximateDays - labelDuration.approximateDays) > 0.5
+  ) {
+    if (
+      longerExplicitTermGoverns &&
+      actionDuration.approximateDays > labelDuration.approximateDays
+    ) {
+      return {
+        value: actionDuration.value,
+        unit: actionDuration.unit,
+        label: `Explicit action term: ${actionDuration.value} ${actionDuration.unit}; review both sides' exact terms before relying on this summary.`,
+      };
+    }
+
+    return {
+      value: null,
+      unit: "open-ended",
+      label: "Not established — the stated action terms and general completion window differ. Review the exact terms.",
+    };
+  }
+
+  const resolved = actionDuration ?? labelDuration;
+  if (resolved) {
+    return {
+      value: resolved.value,
+      unit: resolved.unit,
+      label,
+    };
+  }
 
   return {
-    value,
-    unit,
-    label,
+    value: null,
+    unit: "open-ended",
+    label: label || "Not established — review the exact terms.",
   };
 }
 
@@ -1062,7 +1173,7 @@ function workedExampleToPublicListing(
     baselineBondBadge: null,
     verificationMethod: offer.verification,
     verificationSummary: getActionEvidenceSummary(offer),
-    duration: parseDuration(offer.duration),
+    duration: parsePublicOfferDuration(offer.duration, offer.offerAction, offer.requestAction),
     offeredImpactScore: offer.offerImpact,
     requestedImpactThreshold: offer.minCounterpartyImpact,
     displayName: safeDisplayName(offer.alias, "Worked example participant"),
@@ -1138,7 +1249,7 @@ function liveOfferToPublicListing(offer: OfferRecord): PublicOfferListing {
         verification: offer.verification,
       }),
     ].join(" | "),
-    duration: parseDuration(offer.duration),
+    duration: parsePublicOfferDuration(offer.duration, offer.offer_action, offer.request_action),
     offeredImpactScore: offer.offer_impact,
     requestedImpactThreshold: offer.min_counterparty_impact,
     displayName: safeDisplayName(

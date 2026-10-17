@@ -1,0 +1,68 @@
+name: Release classification repair PR 346
+
+on:
+  push:
+    branches:
+      - feature/feed-create-phase1-20260730
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Guard exact repository, branch, and pull request head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'feature/feed-create-phase1-20260730'
+          pr_head="$(gh api repos/$GITHUB_REPOSITORY/pulls/346 --jq .head.sha)"
+          test "$pr_head" = "$GITHUB_SHA"
+
+      - name: Check out trusted base policy
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate the live pull request body
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PR_BODY="$(gh api repos/$GITHUB_REPOSITORY/pulls/346 --jq .body)"
+          node scripts/validate-release-pr-body.mjs
+
+      - name: Publish authoritative success status with retry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(jq -n \
+            --arg state success \
+            --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg description "Release classification policy passed" \
+            --arg context release-classification \
+            '{state:$state,target_url:$target_url,description:$description,context:$context}')"
+          for attempt in 1 2 3 4 5; do
+            if gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" --input - <<<"$payload" >/dev/null; then
+              exit 0
+            fi
+            sleep $((attempt * 3))
+          done
+          exit 1

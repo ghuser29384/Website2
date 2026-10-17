@@ -37,10 +37,10 @@ test.describe("canonical Moral Trade brand", () => {
   test("adapts the compact mark and sans wordmark to dark and light headers", async ({ page }) => {
     await page.setContent(`
       <header style="background:#050505;color:#1f3ee7;padding:20px">
-        <a class="brand" href="/"><span aria-hidden="true">old mark</span><span>Moral Trade</span></a>
+        <a class="brand" href="/"><span aria-hidden="true"></span><span>Moral Trade</span></a>
       </header>
       <header style="background:#ffffff;color:#1f3ee7;padding:20px">
-        <a class="brand" href="/"><span aria-hidden="true">old mark</span><span>Moral Trade</span></a>
+        <a class="brand" href="/"><span aria-hidden="true"></span><span>Moral Trade</span></a>
       </header>
     `);
     await page.addScriptTag({ url: "http://127.0.0.1:3210/moral-trade-brand.js" });

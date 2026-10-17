@@ -942,23 +942,23 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                   </div>
                   <div>
                     <dt>Values</dt>
-                    <dd>{summarizeList(answers.causes, "No cause areas selected yet.")}</dd>
+                    <dd>{summarizeList(answers.causes, "You haven’t chosen any causes yet.")}</dd>
                   </div>
                   <div>
                     <dt>Wish</dt>
-                    <dd>{answers.wish.trim() || "No concrete wish entered yet."}</dd>
+                    <dd>{answers.wish.trim() || "You haven’t added a wish yet."}</dd>
                   </div>
                   <div>
                     <dt>Could offer</dt>
                     <dd>
                       {[summarizeList(answers.offers, ""), answers.capabilities.trim()]
                         .filter(Boolean)
-                        .join(" / ") || "No offers selected yet."}
+                        .join(" / ") || "You haven’t chosen what to offer yet."}
                     </dd>
                   </div>
                   <div>
                     <dt>Ask</dt>
-                    <dd>{answers.ask.trim() || "No ask entered yet."}</dd>
+                    <dd>{answers.ask.trim() || "You haven’t added what you’re looking for yet."}</dd>
                   </div>
                   <div>
                     <dt>Likely form</dt>
@@ -966,18 +966,18 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                   </div>
                   <div>
                     <dt>Constraints</dt>
-                    <dd>{answers.constraints.trim() || "No constraints entered yet."}</dd>
+                    <dd>{answers.constraints.trim() || "You haven’t added any limits yet."}</dd>
                   </div>
                   <div>
                     <dt>Verification</dt>
                     <dd>
                       {answers.verificationPreferences.trim() ||
-                        "No verification preferences entered yet."}
+                        "You haven’t added verification preferences yet."}
                     </dd>
                   </div>
                   <div>
                     <dt>Uncertainty</dt>
-                    <dd>{answers.uncertaintyNotes.trim() || "No uncertainty notes entered yet."}</dd>
+                    <dd>{answers.uncertaintyNotes.trim() || "You haven’t added any uncertainty notes yet."}</dd>
                   </div>
                   <div>
                     <dt>Privacy</dt>

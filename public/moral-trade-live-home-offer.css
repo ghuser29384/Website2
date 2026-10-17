@@ -38,6 +38,31 @@
   display: none;
 }
 
+/* The optional tour is a real link, with the same navigation treatment as buttons. */
+header.topbar nav > a[data-mt-optional-tour] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: #aaa;
+  padding: 11px 19px;
+  font-size: 15px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+header.topbar nav > a[data-mt-optional-tour]:hover,
+header.topbar nav > a[data-mt-optional-tour]:focus-visible {
+  color: #fff;
+}
+
+header.topbar nav > a[data-mt-optional-tour]:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -3px;
+}
+
 @media (max-width: 820px) {
   .top-actions {
     gap: 8px;
@@ -49,6 +74,40 @@
     font-size: 13px;
   }
 
+  header.topbar nav {
+    gap: 0;
+    justify-content: space-between;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  header.topbar nav > button,
+  header.topbar nav > a[data-mt-optional-tour] {
+    display: inline-flex;
+    flex: 1 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+}
+
+/* Keep both controls readable instead of clipping the long local date or CTA. */
+@media (max-width: 480px) {
+  .page > .head > .h {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+
+  .page > .head > .h > .date {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page > .head > .h > .btn {
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 360px) {

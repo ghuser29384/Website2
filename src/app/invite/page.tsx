@@ -62,7 +62,7 @@ export default async function InviteIndexPage() {
               ))
             ) : (
               <article className="panel data-card">
-                <h2>No published proposal is ready to invite.</h2>
+                <h2>Create a proposal to invite someone.</h2>
                 <p className="route-text">
                   Create and submit a bounded proposal. Invitations become available after operator
                   review publishes it.

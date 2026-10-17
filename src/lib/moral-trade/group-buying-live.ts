@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { readPublicData } from "@/lib/public-read-deadline";
 
 type SourceStatus = "live" | "unavailable";
 type PaymentAcceptanceStatus = "ready" | "pending" | "blocked" | "unavailable";
@@ -319,7 +320,7 @@ export async function loadLiveGroupBuyingSnapshot(): Promise<LiveGroupBuyingSnap
 
   try {
     const supabase = (await createClient()) as PublicSnapshotRpcClient;
-    const { data, error } = await supabase.rpc("get_public_group_buying_snapshot");
+    const { data, error } = await readPublicData(supabase.rpc("get_public_group_buying_snapshot"));
 
     if (error) {
       throw new Error(error.message || "Public group-buying snapshot RPC failed.");

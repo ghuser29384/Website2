@@ -37,7 +37,7 @@ export default async function ConnectorsPage() {
           showLogout={isAuthenticated}
         />
       </header>
-      <main className={styles.page} id="main-content" tabIndex={-1}>
+      <main className={styles.page} data-mt-surface="connectors" id="main-content" tabIndex={-1}>
         <section className={styles.hero}>
           <div>
             <p className={styles.kicker}>Connector registry</p>

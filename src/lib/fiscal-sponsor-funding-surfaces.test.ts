@@ -35,7 +35,7 @@ test("public pages separate direct charity gifts from Moral Trade project suppor
 
   assert.match(supportPage, /Fund public goods now/);
   assert.match(supportPage, /approved sponsor/);
-  assert.match(supportPage, /No fiscal sponsor relationship is currently represented as active/);
+  assert.match(supportPage, /No fiscal sponsor is active/);
   assert.match(supportPage, /Do not send money/);
   assert.match(supportPage, /personal payment account/);
   assert.match(supportPage, /Contribute through the fiscal sponsor/);
@@ -47,7 +47,7 @@ test("public pages separate direct charity gifts from Moral Trade project suppor
   assert.match(donatePage, /href="\/support"/);
   assert.match(statusPage, /Project funding remains sponsor-gated/);
   assert.match(statusPage, /fundingReadiness\.projectFundingAvailable/);
-  assert.match(siteSource, /href: "\/support", label: "Support"/);
+  assert.match(siteSource, /href: "\/support", label: "Support the project"/);
   assert.match(sitemapSource, /getAbsoluteUrl\("\/support"\)/);
 });
 
@@ -59,7 +59,7 @@ test("MPGF production surfaces stay non-custodial and pledge-first", () => {
   const everyOrgSource = readRepoFile("src/lib/mpgf/public-goods-every-org.ts");
 
   assert.match(consoleSource, /storedPaymentCommitmentsEnabled = Boolean\(realMoneyReadiness\?\.ready\)/);
-  assert.match(consoleSource, /Production participation is pledge-only and uses external handoff/);
+  assert.match(consoleSource, /Pledge-only\. Payments use an external provider/);
   assert.match(consoleSource, /Native checkout is disabled/);
   assert.match(consoleSource, /Save pledge intent/);
   assert.equal(consoleSource.includes("Save Stripe commitment"), false);

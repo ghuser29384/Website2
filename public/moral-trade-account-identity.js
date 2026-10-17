@@ -6,6 +6,7 @@
 
   const ENDPOINT = "/api/live-account";
   const ROOT_SELECTOR = '.topbar,[role="banner"],header';
+  const GUEST_ONLY_SELECTOR = '[data-mt-guest-only="true"]';
   const LEGACY_INITIALS = "AJ";
   const LEGACY_DISPLAY_NAME = "Alex Johnson";
   const hasBootstrap = Object.prototype.hasOwnProperty.call(
@@ -16,6 +17,8 @@
   let identity = normalizeIdentity(
     hasBootstrap ? window.__MT_LIVE_ACCOUNT_BOOTSTRAP__ : { authenticated: false },
   );
+  let identityResolved = hasBootstrap &&
+    typeof window.__MT_LIVE_ACCOUNT_BOOTSTRAP__?.authenticated === "boolean";
   let scheduled = false;
 
   function stringOrNull(value) {
@@ -133,9 +136,18 @@
     });
   }
 
+  function patchGuestOnlyActions() {
+    const shouldShow = identityResolved && !identity.authenticated;
+
+    document.querySelectorAll(GUEST_ONLY_SELECTOR).forEach((element) => {
+      element.hidden = !shouldShow;
+      element.toggleAttribute("aria-hidden", !shouldShow);
+    });
+  }
+
   function patchLegacyGreetings() {
     const greetingPattern = /^Good (morning|afternoon|evening), Alex\.$/;
-    document.querySelectorAll("header p,header span,.head .date span.muted").forEach((element) => {
+    document.querySelectorAll("header p,header span,.head .date span.muted,.mt-feed-actions .date span.muted").forEach((element) => {
       const current = String(element.textContent || "").trim();
       const match = current.match(greetingPattern);
       if (!match) return;
@@ -147,6 +159,7 @@
   }
 
   function patchAll() {
+    patchGuestOnlyActions();
     patchAvatarCandidates();
     patchLegacyDisplayNames();
     patchLegacyGreetings();
@@ -169,6 +182,11 @@
     if (document.visibilityState === "visible") schedulePatch();
   });
 
+  window.addEventListener("mt:live-account-ready", (event) => {
+    identity = normalizeIdentity(event.detail);
+    identityResolved = typeof event.detail?.authenticated === "boolean";
+    schedulePatch();
+  });
   schedulePatch();
 
   if (!hasBootstrap) {
@@ -176,10 +194,11 @@
       credentials: "same-origin",
       headers: { Accept: "application/json" },
     })
-      .then((response) => (response.ok ? response.json() : { authenticated: false }))
-      .catch(() => ({ authenticated: false }))
+      .then((response) => (response.ok ? response.json() : { status: "unavailable" }))
+      .catch(() => ({ status: "unavailable" }))
       .then((payload) => {
         identity = normalizeIdentity(payload);
+        identityResolved = typeof payload?.authenticated === "boolean";
         schedulePatch();
       });
   }

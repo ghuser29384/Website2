@@ -6,7 +6,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
-  CommitmentSheet,
   DealDetailObject,
   MarketplaceHome,
   MoralDealCard,
@@ -501,7 +500,7 @@ test("compact browse cause filters use honest query state", () => {
   assert.doesNotMatch(markup, /Health<\/a><a[^>]+requires_evidence/);
 });
 
-test("browse cards avoid default charge-state copy while preserving safety and sheet copy", () => {
+test("browse cards avoid default charge-state copy while retaining the example safety summary", () => {
   const query = parseMarketplaceQuery({});
   const deals = buildMarketplaceDeals({
     liveOffers: [],
@@ -522,11 +521,7 @@ test("browse cards avoid default charge-state copy while preserving safety and s
   const seedPaulDeal = surface.deals.find((deal) => deal.id === "seed-paul");
   assert.ok(seedPaulDeal);
   const sheetMarkup = renderToStaticMarkup(
-    createElement(CommitmentSheet, {
-      commitHref: "/offers/examples/seed-paul",
-      deal: seedPaulDeal,
-      paymentSupportAvailable: false,
-    }),
+    createElement(DealDetailObject, { deal: seedPaulDeal }),
   );
 
   assert.match(markup, /data-marketplace-featured/);
@@ -543,9 +538,9 @@ test("browse cards avoid default charge-state copy while preserving safety and s
   assert.doesNotMatch(markup, /No commitment will be created/);
   assert.doesNotMatch(markup, /No commitment · No charge · You review every detail/);
   assert.doesNotMatch(markup, /Against Malaria Foundation|Every\.org/);
-  assert.match(sheetMarkup, /No commitment was created\./);
   assert.match(sheetMarkup, /No commitment will be created/);
   assert.match(sheetMarkup, /Preview only/);
+  assert.doesNotMatch(sheetMarkup, /Add to planner|Review your plan|commitment-sheet/);
 });
 
 test("non-MVP labs inventory is omitted from Region A marketplace browse", () => {
@@ -724,35 +719,22 @@ test("DealScout recommendations are deterministic and bounded to explicit prefer
   ]);
 });
 
-test("deal card and commitment sheet render missing optional fields as unavailable and conditional", () => {
-  const incompleteDeal = requiredDealFields({
-    ctaLabel: "View details",
-    mechanismType: "unknown",
-    title: "Incomplete public preview",
-  });
-  const publicGoodsDeal = requiredDealFields({
-    ctaLabel: "Preview budget",
-    mechanismType: "public_goods_round",
-    thresholdTargetCents: 50_000,
-    title: "Threshold public-good round",
-  });
-
-  const cardMarkup = renderToStaticMarkup(createElement(MoralDealCard, { deal: incompleteDeal }));
-  const sheetMarkup = renderToStaticMarkup(
-    createElement(CommitmentSheet, {
-      commitHref: "/mpgf/rounds/demo",
-      deal: publicGoodsDeal,
-      paymentSupportAvailable: false,
-    }),
-  );
-
+test("deal summaries preserve unavailable fields without a simulated checkout", () => {
+  const deal = requiredDealFields({ ctaLabel: "View details", mechanismType: "unknown", title: "Incomplete public preview" });
+  const cardMarkup = renderToStaticMarkup(createElement(MoralDealCard, { deal }));
+  const detail = renderToStaticMarkup(createElement(DealDetailObject, { deal }));
   assert.match(cardMarkup, /Incomplete public preview/);
   assert.match(cardMarkup, /Review required/);
   assert.match(cardMarkup, /Exposure unknown/);
-  assert.match(cardMarkup, /View details/);
-  assert.match(sheetMarkup, /<details/);
-  assert.match(sheetMarkup, /Preview budget/);
-  assert.match(sheetMarkup, /No charge now/);
-  assert.match(sheetMarkup, /No commitment was created\./);
-  assert.match(sheetMarkup, /No commitment will be created/);
+  assert.match(detail, /Exposure unknown/);
+  assert.doesNotMatch(detail, /Add to planner|Review your plan|Decrease preview|Increase preview|commitment-sheet/);
+  assert.doesNotMatch(detail, />Save<|>Compare</);
+});
+
+test("a detail summary renders only the actions supplied by its owning route", () => {
+  const deal = requiredDealFields();
+  const actions = createElement("a", { href: "/offers/actual-record#respond" }, "Review response options");
+  const html = renderToStaticMarkup(createElement(DealDetailObject, { deal, actions }));
+  assert.match(html, /href="\/offers\/actual-record#respond">Review response options/);
+  assert.doesNotMatch(html, /Add to planner|Review your plan|>Compare</);
 });

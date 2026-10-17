@@ -42,7 +42,7 @@ export const PROFILE_PRIORITY_OPTIONS = [
     name: "Future flourishing",
     shortName: "Future flourishing",
     outcome: "Help future lives go extraordinarily well.",
-    color: "#a9c400",
+    color: "#78947c",
     causeArea: "Future flourishing",
   },
   {
@@ -50,7 +50,7 @@ export const PROFILE_PRIORITY_OPTIONS = [
     name: "Biosecurity",
     shortName: "Biosecurity",
     outcome: "Prevent catastrophic biological events.",
-    color: "#8da600",
+    color: "#526b58",
     causeArea: "Existential risk",
   },
   {

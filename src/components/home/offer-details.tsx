@@ -167,7 +167,7 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
             ) : (
               <div className="empty-state">
               <div>
-                <strong>No candidates yet.</strong>
+                <strong>No matches just yet.</strong>
                   <p>Add another offer or relax the filters and thresholds.</p>
               </div>
             </div>

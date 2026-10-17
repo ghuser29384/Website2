@@ -14,10 +14,8 @@
   --accent-soft: #eceaff;
   --danger-soft: #f7e8e5;
   --danger-ink: #b9433b;
-  --success-soft: #f1f7cc;
+  --success-soft: #e7efe5;
   --success-ink: #303b00;
-  --signal: #e1f65b;
-  --signal-ink: #202700;
   --shadow-soft: none;
   --shadow-card: none;
   --radius-xl: 4px;
@@ -37,7 +35,7 @@ body {
 }
 
 ::selection {
-  background: var(--signal);
+  background: var(--accent-soft);
   color: var(--ink);
 }
 
@@ -204,7 +202,7 @@ textarea {
 }
 
 .mt-site-footer .footer-links a:hover {
-  color: var(--signal);
+  color: var(--accent-soft);
 }
 
 .marketplace-product-shell {
@@ -227,8 +225,8 @@ textarea {
   justify-content: center;
   gap: 0.65rem;
   border-bottom: 1px solid var(--ink);
-  background: var(--signal);
-  color: var(--signal-ink);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
   padding: 0.35rem 1rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -405,7 +403,7 @@ textarea {
 }
 
 .mt-gain-agreement-point circle:first-child {
-  fill: var(--signal);
+  fill: var(--accent-soft);
   stroke: var(--ink);
   stroke-width: 2;
 }
@@ -609,9 +607,9 @@ textarea {
 .mt-market-state.is-live,
 .mt-market-state.is-authorized,
 .mt-market-state.is-completed {
-  border-color: var(--signal-ink);
-  background: var(--signal);
-  color: var(--signal-ink);
+  border-color: var(--accent-deep);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .mt-market-card h3 {
@@ -794,11 +792,11 @@ textarea {
 }
 
 .mt-offset-shared {
-  stroke: var(--signal-ink);
+  stroke: var(--accent-deep);
 }
 
 .mt-offset-junction {
-  fill: var(--signal);
+  fill: var(--accent-soft);
   stroke: var(--ink);
   stroke-width: 2;
 }
@@ -817,7 +815,7 @@ textarea {
 }
 
 .mt-offset-label-shared {
-  fill: var(--signal-ink);
+  fill: var(--accent-deep);
   font-weight: 700;
 }
 
@@ -962,8 +960,8 @@ textarea {
 .mt-deal-receipt.is-completed .mt-deal-receipt-state,
 .mt-deal-receipt.is-authorized .mt-deal-receipt-state,
 .mt-deal-receipt.is-active .mt-deal-receipt-state {
-  background: var(--signal);
-  color: var(--signal-ink);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .mt-deal-receipt.is-challenged .mt-deal-receipt-state,
@@ -1027,7 +1025,7 @@ textarea {
 
 .mt-deal-receipt-footer > span + span::before {
   margin-right: 0.55rem;
-  color: var(--signal);
+  color: var(--accent);
   content: "·";
 }
 
@@ -1086,7 +1084,7 @@ textarea {
 }
 
 .mt-trust-card span {
-  color: var(--signal);
+  color: var(--accent-deep);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 700;

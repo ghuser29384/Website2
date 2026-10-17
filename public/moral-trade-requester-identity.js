@@ -47,6 +47,14 @@
     return nodes;
   }
 
+  function isBackedFeedIdentityNode(node) {
+    return Boolean(
+      node.parentElement?.closest(
+        "[data-mt-live-trade-feed], [data-feed-item-id], .mt-feed-card[data-opportunity-id]",
+      ),
+    );
+  }
+
   function containsRequesterLabel(element) {
     return /\bREQUESTED\s+BY\b/i.test(normalize(element?.textContent));
   }
@@ -126,8 +134,9 @@
   }
 
   function apply() {
-    const syntheticNameNodes = textNodes(document.body).filter((node) =>
-      syntheticNames.has(normalize(node.nodeValue)),
+    const syntheticNameNodes = textNodes(document.body).filter(
+      (node) =>
+        !isBackedFeedIdentityNode(node) && syntheticNames.has(normalize(node.nodeValue)),
     );
 
     syntheticNameNodes.forEach((node) => {

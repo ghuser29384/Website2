@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
+import { MpgfDacCampaignView } from "@/components/mpgf/mpgf-dac-campaign-view";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
@@ -9,6 +10,7 @@ import {
   demoAlternatives,
   demoMpgfMatchPool,
 } from "@/lib/mpgf/data";
+import { loadMpgfDacPublicCampaign } from "@/lib/mpgf/dac-lifecycle";
 import {
   allocateMpgfAssuranceRound,
   formatUsd,
@@ -37,6 +39,25 @@ function getGoodTypeLabel(alternative: (typeof demoAlternatives)[number]) {
 
 export async function generateMetadata({ params }: MpgfPoolPageProps): Promise<Metadata> {
   const { poolId } = await params;
+  try {
+    const liveCampaign = await loadMpgfDacPublicCampaign({ campaignIdOrSlug: poolId });
+    if (liveCampaign) {
+      const canonical = `/mpgf/pools/${liveCampaign.slug || liveCampaign.id}`;
+      return {
+        title: `${liveCampaign.title} | Dominant Assurance Contract`,
+        description: liveCampaign.publicSummary,
+        alternates: { canonical },
+        openGraph: {
+          title: `${liveCampaign.title} | Dominant Assurance Contract`,
+          description: liveCampaign.publicSummary,
+          url: getAbsoluteUrl(canonical),
+          type: "website",
+        },
+      };
+    }
+  } catch {
+    // Keep the established fixture-backed metadata path available during schema rollout.
+  }
   const { alternative, campaign, canonicalPoolId } = resolveMpgfPublicGoodsRoute(poolId);
 
   if (!alternative && !campaign) {
@@ -71,6 +92,21 @@ export async function generateMetadata({ params }: MpgfPoolPageProps): Promise<M
 export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
   const { poolId } = await params;
   const viewer = await getViewer();
+  let liveCampaign: Awaited<ReturnType<typeof loadMpgfDacPublicCampaign>> = null;
+  let liveCampaignUnavailable = false;
+  try {
+    liveCampaign = await loadMpgfDacPublicCampaign({
+      campaignIdOrSlug: poolId,
+      viewerId: viewer?.authUser.id,
+    });
+  } catch {
+    liveCampaignUnavailable = true;
+  }
+
+  if (liveCampaign) {
+    return <MpgfDacCampaignView campaign={liveCampaign} viewerPresent={Boolean(viewer)} />;
+  }
+
   const { alternative, campaign } = resolveMpgfPublicGoodsRoute(poolId);
   const assuranceAllocation = allocateMpgfAssuranceRound();
   const assuranceLine = campaign
@@ -84,6 +120,20 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
     : null;
 
   if (!alternative) {
+    if (liveCampaignUnavailable) {
+      return (
+        <MpgfPageFrame
+          description="The exact-version pool audit view failed closed instead of showing stale or partial pledge data."
+          eyebrow="Temporary data boundary"
+          title="DAC pool unavailable."
+          viewerPresent={Boolean(viewer)}
+        >
+          <section className="mpgf-panel">
+            <p>Refresh after the isolated campaign data service is available. No pledge or payment state changed.</p>
+          </section>
+        </MpgfPageFrame>
+      );
+    }
     notFound();
   }
 

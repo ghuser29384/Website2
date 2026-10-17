@@ -80,6 +80,7 @@ export type MoralTradeApiRateLimitSurface =
   | "background_intro_packet_write"
   | "background_private_overlap_check"
   | "wish_registry_search"
+  | "participant_directory_search"
   | "analytics_ingest";
 
 export type MoralTradeApiCacheControl =
@@ -161,6 +162,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   background_intro_packet_write: { limit: 12, windowMs: 60_000 },
   background_private_overlap_check: { limit: 12, windowMs: 60_000 },
   wish_registry_search: { limit: 60, windowMs: 60_000 },
+  participant_directory_search: { limit: 30, windowMs: 60_000 },
   analytics_ingest: { limit: 120, windowMs: 60_000 },
 } as const satisfies Record<MoralTradeApiRateLimitSurface, { limit: number; windowMs: number }>;
 

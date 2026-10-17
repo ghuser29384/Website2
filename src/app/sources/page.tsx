@@ -110,11 +110,6 @@ export default async function SourcesPage() {
       <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Sources</p>
         <h1>Reference points for the pilot.</h1>
-        <p>
-          This page gives “Sources” a direct destination instead of sending visitors to a
-          methodology anchor. It separates conceptual references from product claims, legal
-          posture, reviewer operations, and product-boundary notes.
-        </p>
 
         <section className="panel data-card data-card-wide">
           <h2>Primary references</h2>

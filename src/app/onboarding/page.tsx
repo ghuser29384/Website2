@@ -84,7 +84,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
 
         {!supabaseReady ? (
           <div className="status-banner status-banner-error">
-            Account storage is unavailable. Contact support before continuing.
+            We can’t save your profile right now. Please contact us for help before continuing.
           </div>
         ) : null}
 

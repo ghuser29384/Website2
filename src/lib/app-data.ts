@@ -1,5 +1,8 @@
 import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { cache } from "react";
+
+import { runDashboardLoaders } from "@/lib/dashboard-loading";
 
 import {
   calculateDonationOffsetPoolProgress,
@@ -19,6 +22,12 @@ import {
   serializeOpportunityBriefCard,
   type BackgroundRequesterOpportunityBriefCard,
 } from "@/lib/background-opportunity-briefs";
+import { resolveAuthenticatedUser } from "@/lib/auth-resolution";
+import { isMissingOptionalLegacyAgreementRelation } from "@/lib/optional-legacy-agreement-relations";
+import {
+  chunkForPostgrestIn,
+  PUBLIC_PROFILE_OFFERS_PAGE_SIZE,
+} from "@/lib/public-profile-offers";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
@@ -118,7 +127,6 @@ export type PublicLocationGranularity = "hidden" | "country" | "region" | "city"
 export const OFFERS_PAGE_SIZE = 24;
 export const PEOPLE_PAGE_SIZE = 24;
 export const DASHBOARD_PAGE_SIZE = 50;
-const AUTH_RESOLUTION_TIMEOUT_MS = 1_500;
 
 interface LoggedErrorLike {
   code?: string | null;
@@ -216,6 +224,7 @@ export interface AgreementRecord extends AgreementRow {
   payments: AgreementPaymentRow[];
   paymentSchedules: AgreementPaymentScheduleRow[];
   events: AgreementEventRow[];
+  legacyEvidenceReviewAvailable: boolean;
   evidenceItems: AgreementEvidenceItemRow[];
   reviewCases: AgreementReviewCaseRow[];
   performanceBonds: PerformanceBondRow[];
@@ -388,6 +397,7 @@ export interface DashboardDataResult {
 export interface PublicProfilePageData {
   profile: PublicProfileSummary | null;
   offers: OfferRecord[];
+  offersPage: PaginatedResult<OfferRecord>;
   profileRecommendations: OfferRecommendationRecord[];
   authoredCommentCount: number;
 }
@@ -446,6 +456,14 @@ function buildFallbackProfile(user: User, profile?: Partial<ProfileRow> | null) 
         user,
         profile ? { display_name: profile.display_name ?? null } : null,
     ),
+    username: profile?.username ?? null,
+    public_invitation_mentions_enabled:
+      profile?.public_invitation_mentions_enabled ?? true,
+    avatar_url: profile?.avatar_url ?? null,
+    account_kind: profile?.account_kind ?? "individual",
+    accepts_group_invitations: profile?.accepts_group_invitations ?? true,
+    organization_approval_count: profile?.organization_approval_count ?? 1,
+    affiliation: profile?.affiliation ?? "",
     city: profile?.city ?? null,
     region: profile?.region ?? null,
     country: profile?.country ?? null,
@@ -633,9 +651,7 @@ async function ensureUserProfile(
     .maybeSingle();
 
   if (profileError) {
-    logSupabaseError("Failed to read public.profiles row", profileError, {
-      userId: user.id,
-    });
+    logSupabaseError("Failed to read public.profiles row", profileError);
   }
 
   if (profile) {
@@ -667,9 +683,7 @@ async function ensureUserProfile(
     .maybeSingle();
 
   if (insertError) {
-    logSupabaseError("Failed to create missing public.profiles row", insertError, {
-      userId: user.id,
-    });
+    logSupabaseError("Failed to create missing public.profiles row", insertError);
 
     return {
       profile: seedProfile,
@@ -682,9 +696,7 @@ async function ensureUserProfile(
   }
 
   if (!insertedProfile) {
-    console.error("[supabase] public.profiles upsert returned no profile row", {
-      userId: user.id,
-    });
+    console.error("[supabase] public.profiles upsert returned no profile row");
 
     return {
       profile: seedProfile,
@@ -715,8 +727,20 @@ async function getProfileSummaryMap(
   }
 
   const supabase = await createClient();
-  const [{ data: profiles, error: profilesError }, followsResult, previewResult, badgesResult] = await Promise.all([
-    supabase.from("profiles").select("*").in("id", uniqueProfileIds),
+  const [
+    { data: publicProfiles, error: profilesError },
+    selfProfileResult,
+    followsResult,
+    previewResult,
+    badgesResult,
+  ] = await Promise.all([
+    (supabase as any)
+      .from("public_profile_cards_v1")
+      .select("*")
+      .in("id", uniqueProfileIds),
+    viewerId && uniqueProfileIds.includes(viewerId)
+      ? supabase.from("profiles").select("*").eq("id", viewerId).maybeSingle()
+      : Promise.resolve({ data: null as ProfileRow | null, error: null }),
     viewerId
       ? supabase
           .from("user_follows")
@@ -734,6 +758,9 @@ async function getProfileSummaryMap(
 
   if (profilesError) {
     throw new Error(profilesError.message);
+  }
+  if (selfProfileResult.error) {
+    throw new Error(selfProfileResult.error.message);
   }
   if (followsResult.error) {
     throw new Error(followsResult.error.message);
@@ -761,8 +788,16 @@ async function getProfileSummaryMap(
     }
   }
 
+  const selfProfile = selfProfileResult.data as ProfileRow | null;
+  const profiles = ((publicProfiles ?? []) as Array<Omit<ProfileRow, "email">>).map(
+    (profile) =>
+      selfProfile?.id === profile.id
+        ? selfProfile
+        : ({ ...profile, email: "" } satisfies ProfileRow),
+  );
+
   return new Map(
-    ((profiles ?? []) as ProfileRow[]).map((profile) => {
+    profiles.map((profile) => {
       const preview = previewMap.get(profile.id);
 
       return [
@@ -798,7 +833,26 @@ async function getProfileSummaryMap(
   );
 }
 
+export async function getPublicProfileSummary(
+  profileId: string,
+  viewerId?: string | null,
+) {
+  const profileMap = await getProfileSummaryMap(viewerId, [profileId]);
+  return profileMap.get(profileId) ?? null;
+}
+
 async function hydrateOffers(
+  offers: OfferRow[],
+  viewerId?: string | null,
+): Promise<OfferRecord[]> {
+  const hydrated: OfferRecord[] = [];
+  for (const offerChunk of chunkForPostgrestIn(offers)) {
+    hydrated.push(...(await hydrateOffersChunk(offerChunk, viewerId)));
+  }
+  return hydrated;
+}
+
+async function hydrateOffersChunk(
   offers: OfferRow[],
   viewerId?: string | null,
 ): Promise<OfferRecord[]> {
@@ -925,10 +979,7 @@ async function claimGuestInterestsForUser(user: User, supabase: SupabaseServerCl
     .ilike("contact_email", email);
 
   if (error) {
-    logSupabaseError("Failed to claim guest interests for authenticated user", error, {
-      userId: user.id,
-      email,
-    });
+    logSupabaseError("Failed to claim guest interests for authenticated user", error);
   }
 }
 
@@ -968,50 +1019,25 @@ export function deriveDisplayName(
   );
 }
 
-export async function getViewer() {
+async function resolveViewer() {
   if (!hasSupabaseEnv()) {
     return null;
   }
 
   const supabase = await createClient();
-  const authResult = await Promise.race([
-    supabase.auth.getUser().then((result) => ({
-      ...result,
-      timedOut: false,
-    })),
-    new Promise<{
-      data: { user: null };
-      error: { message: string };
-      timedOut: true;
-    }>((resolve) => {
-      setTimeout(
-        () =>
-          resolve({
-            data: { user: null },
-            error: { message: "Timed out resolving authenticated user." },
-            timedOut: true,
-          }),
-        AUTH_RESOLUTION_TIMEOUT_MS,
-      );
-    }),
-  ]);
-  const {
-    data: { user },
-    error: authError,
-    timedOut,
-  } = authResult;
+  const authResult = await resolveAuthenticatedUser(
+    { getUser: () => supabase.auth.getUser() },
+    {
+      // getViewer needs an authentic full User and immediate session-revocation checks.
+      claimsPolicy: { mode: "disabled", reason: "active_session_required" },
+    },
+  );
 
-  if (authError) {
-    if (timedOut) {
-      console.warn("[supabase] Auth resolution timed out; rendering signed-out state.", {
-        timeoutMs: AUTH_RESOLUTION_TIMEOUT_MS,
-      });
-    } else {
-      logSupabaseError("Failed to resolve authenticated user", authError);
-    }
+  if (!authResult.ok) {
     return null;
   }
 
+  const user = authResult.user;
   if (!user) {
     return null;
   }
@@ -1026,6 +1052,10 @@ export async function getViewer() {
     profileSyncError: profileResult.profileSyncError,
   } satisfies Viewer;
 }
+
+// React cache is scoped to one server render. It prevents parallel layouts and
+// pages from repeating the same private bootstrap without caching across users.
+export const getViewer = cache(resolveViewer);
 
 function applyPublicProfileSort(query: any, sort: PeopleSort) {
   if (sort === "offers") {
@@ -1059,6 +1089,52 @@ export async function requireViewer(nextPath?: string) {
   return viewer;
 }
 
+const OPEN_OFFER_DIRECTORY_BATCH_SIZE = 500;
+const OPEN_OFFER_DIRECTORY_MAX_PAGES = 200;
+
+async function listAllOpenOfferRows(mode: OfferRow["mode"] | "all" = "all") {
+  if (!hasSupabaseEnv()) return [] as OfferRow[];
+
+  const supabase = await createClient();
+  const rows: OfferRow[] = [];
+
+  for (let page = 0; page < OPEN_OFFER_DIRECTORY_MAX_PAGES; page += 1) {
+    const offset = page * OPEN_OFFER_DIRECTORY_BATCH_SIZE;
+    let query = supabase
+      .from("offers")
+      .select("*")
+      .eq("status", "open");
+
+    if (mode !== "all") {
+      query = query.eq("mode", mode);
+    }
+
+    const { data, error } = await query
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(offset, offset + OPEN_OFFER_DIRECTORY_BATCH_SIZE - 1);
+
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as OfferRow[];
+    rows.push(...batch);
+    if (batch.length < OPEN_OFFER_DIRECTORY_BATCH_SIZE) return rows;
+  }
+
+  throw new Error(
+    "Open-offer directory exceeded the supported exhaustive-read safety bound; refusing to return a truncated inventory.",
+  );
+}
+
+export async function listOpenOffersDirectory(
+  mode: OfferRow["mode"] | "all" = "all",
+): Promise<OfferRecord[]> {
+  const rows = await listAllOpenOfferRows(mode);
+  if (!rows.length) return [];
+  const viewer = await getViewer();
+  return hydrateOffers(rows, viewer?.authUser.id);
+}
+
 export async function listOpenOffersPage(
   page = 1,
   pageSize = OFFERS_PAGE_SIZE,
@@ -1072,6 +1148,19 @@ export async function listOpenOffersPage(
   const normalizedPage = normalizePage(page);
   const offset = (normalizedPage - 1) * pageSize;
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
+  if (normalizedSearchQuery) {
+    const completeInventory = await listOpenOffersDirectory(mode);
+    const searched = completeInventory.filter((offer) =>
+      offerMatchesSearchQuery(offer, normalizedSearchQuery),
+    );
+    return buildPaginatedResult(
+      searched.slice(offset, offset + pageSize + 1),
+      normalizedPage,
+      pageSize,
+    );
+  }
+
   const supabase = await createClient();
   let query = supabase
     .from("offers")
@@ -1082,25 +1171,16 @@ export async function listOpenOffersPage(
     query = query.eq("mode", mode);
   }
 
-  const orderedQuery = query
+  const { data, error } = await query
     .order("created_at", { ascending: false })
-    .order("id", { ascending: true });
-  const { data, error } = normalizedSearchQuery
-    ? await orderedQuery.limit(240)
-    : await orderedQuery.range(offset, offset + pageSize);
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   const viewer = await getViewer();
   const hydrated = await hydrateOffers((data ?? []) as OfferRow[], viewer?.authUser.id);
-  const searched = normalizedSearchQuery
-    ? hydrated.filter((offer) => offerMatchesSearchQuery(offer, normalizedSearchQuery))
-    : hydrated;
-  const pagedItems = normalizedSearchQuery ? searched.slice(offset) : searched;
-
-  return buildPaginatedResult(pagedItems, normalizedPage, pageSize);
+  return buildPaginatedResult(hydrated, normalizedPage, pageSize);
 }
 
 export async function listOpenOffersPreview(limit = 120, mode: OfferRow["mode"] | "all" = "all") {
@@ -1346,7 +1426,9 @@ export async function getMarketplaceOverview(): Promise<MarketplaceOverview> {
   const [openOffersResult, profilesResult, completedAgreementsResult, donationOffsetOverview] =
     await Promise.all([
       supabase.from("offers").select("id", { count: "exact", head: true }).eq("status", "open"),
-      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      (supabase as any)
+        .from("public_profile_cards_v1")
+        .select("id", { count: "exact", head: true }),
       supabase
         .from("agreements")
         .select("id", { count: "exact", head: true })
@@ -1900,17 +1982,19 @@ export async function listPublicProfilesPage(
   const normalizedPage = normalizePage(page);
   const offset = (normalizedPage - 1) * pageSize;
   const supabase = await createClient();
-  const query = applyPublicProfileSort(supabase.from("profiles").select("*"), sort).range(
-    offset,
-    offset + pageSize,
-  );
+  const query = applyPublicProfileSort(
+    (supabase as any).from("public_profile_cards_v1").select("*"),
+    sort,
+  ).range(offset, offset + pageSize - 1);
   const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const profiles = (data ?? []) as ProfileRow[];
+  const profiles = ((data ?? []) as Array<Omit<ProfileRow, "email">>).map(
+    (profile) => ({ ...profile, email: "" }) satisfies ProfileRow,
+  );
   const profileMap = await getProfileSummaryMap(
     viewerId,
     profiles.map((profile) => profile.id),
@@ -1945,34 +2029,88 @@ export async function listProfileOffers(profileId: string, viewerId?: string | n
   return hydrateOffers((data ?? []) as OfferRow[], viewerId);
 }
 
-export async function getPublicProfilePageData(profileId: string, viewerId?: string | null) {
+export async function listPublicProfileOffersPage(
+  profileId: string,
+  viewerId?: string | null,
+  page = 1,
+  pageSize = PUBLIC_PROFILE_OFFERS_PAGE_SIZE,
+): Promise<PaginatedResult<OfferRecord>> {
+  const normalizedPage = normalizePage(page);
+  if (!hasSupabaseEnv()) {
+    return buildPaginatedResult([], normalizedPage, pageSize);
+  }
+
+  const offset = (normalizedPage - 1) * pageSize;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("offers")
+    .select("*")
+    .eq("owner_id", profileId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const hydrated = await hydrateOffers((data ?? []) as OfferRow[], viewerId);
+  return buildPaginatedResult(hydrated, normalizedPage, pageSize);
+}
+
+export async function getPublicProfilePageData(
+  profileId: string,
+  viewerId?: string | null,
+  requestedOfferPage = 1,
+) {
+  const requestedPage = normalizePage(requestedOfferPage);
   if (!hasSupabaseEnv()) {
     return {
       profile: null,
       offers: [],
+      offersPage: buildPaginatedResult([], requestedPage, PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
       profileRecommendations: [],
       authoredCommentCount: 0,
     } satisfies PublicProfilePageData;
   }
 
-  const supabase = await createClient();
-  const [profileMap, offers, recommendations, { data: comments, error: commentsError }] =
-    await Promise.all([
-      getProfileSummaryMap(viewerId, [profileId]),
-      listProfileOffers(profileId, viewerId),
-      listProfileRecommendations(profileId),
-      supabase.from("offer_comments").select("*").eq("author_id", profileId),
-    ]);
+  const profile = await getPublicProfileSummary(profileId, viewerId);
+  if (!profile) {
+    return {
+      profile: null,
+      offers: [],
+      offersPage: buildPaginatedResult([], requestedPage, PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
+      profileRecommendations: [],
+      authoredCommentCount: 0,
+    } satisfies PublicProfilePageData;
+  }
 
-  if (commentsError) {
-    throw new Error(commentsError.message);
+  const maximumPage = Math.max(
+    1,
+    Math.ceil(profile.offerCount / PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
+  );
+  const offerPage = Math.min(requestedPage, maximumPage);
+  const supabase = await createClient();
+  const [offersPage, recommendations, commentsResult] = await Promise.all([
+    listPublicProfileOffersPage(profileId, viewerId, offerPage),
+    listProfileRecommendations(profileId),
+    supabase
+      .from("offer_comments")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", profileId),
+  ]);
+
+  if (commentsResult.error) {
+    throw new Error(commentsResult.error.message);
   }
 
   return {
-    profile: profileMap.get(profileId) ?? null,
-    offers,
+    profile,
+    offers: offersPage.items,
+    offersPage,
     profileRecommendations: recommendations,
-    authoredCommentCount: (comments ?? []).length,
+    authoredCommentCount: commentsResult.count ?? 0,
   } satisfies PublicProfilePageData;
 }
 
@@ -2103,10 +2241,19 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
   if (eventsError) {
     throw new Error(eventsError.message);
   }
-  if (evidenceItemsError) {
+  const evidenceItemsUnavailable = isMissingOptionalLegacyAgreementRelation(
+    evidenceItemsError,
+    "agreement_evidence_items",
+  );
+  const reviewCasesUnavailable = isMissingOptionalLegacyAgreementRelation(
+    reviewCasesError,
+    "agreement_review_cases",
+  );
+
+  if (evidenceItemsError && !evidenceItemsUnavailable) {
     throw new Error(evidenceItemsError.message);
   }
-  if (reviewCasesError) {
+  if (reviewCasesError && !reviewCasesUnavailable) {
     throw new Error(reviewCasesError.message);
   }
   if (performanceBondsError) {
@@ -2285,6 +2432,8 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
       payments: paymentsByAgreement.get(agreement.id) ?? [],
       paymentSchedules: paymentSchedulesByAgreement.get(agreement.id) ?? [],
       events: eventsByAgreement.get(agreement.id) ?? [],
+      legacyEvidenceReviewAvailable:
+        !evidenceItemsUnavailable && !reviewCasesUnavailable,
       evidenceItems: evidenceItemsByAgreement.get(agreement.id) ?? [],
       reviewCases: reviewCasesByAgreement.get(agreement.id) ?? [],
       performanceBonds: agreementPerformanceBonds,
@@ -3595,403 +3744,455 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
   }
 
   let agreements: AgreementRecord[] = [];
-  try {
-    agreements = await listAgreementsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load agreements.";
-    errors.agreements = message;
-    console.error("[supabase] Failed to load dashboard agreements", { message, userId });
-  }
-
   let cartItems: CartItemRecord[] = [];
-  try {
-    cartItems = await listCartItems(userId, DASHBOARD_PAGE_SIZE);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load saved offers.";
-    errors.cartItems = message;
-    console.error("[supabase] Failed to load dashboard saved offers", { message, userId });
-  }
-
   let wishProfile: WishProfileRecord | null = null;
-  try {
-    wishProfile = await getWishProfileForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load wish profile.";
-    errors.wishProfile = message;
-    console.error("[supabase] Failed to load dashboard wish profile", { message, userId });
-  }
-
   let profileSources: ProfileSourceRow[] = [];
-  try {
-    profileSources = await listProfileSourcesForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load profile sources.";
-    errors.profileSources = message;
-    console.error("[supabase] Failed to load profile sources", { message, userId });
-  }
-
   let clarificationQuestions: ClarificationQuestionRow[] = [];
-  try {
-    clarificationQuestions = await listClarificationQuestionsForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load clarification questions.";
-    errors.clarificationQuestions = message;
-    console.error("[supabase] Failed to load clarification questions", { message, userId });
-  }
-
   let matchSuggestions: MatchSuggestionRecord[] = [];
-  try {
-    matchSuggestions = await listMatchSuggestionsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load match suggestions.";
-    errors.matchSuggestions = message;
-    console.error("[supabase] Failed to load dashboard match suggestions", { message, userId });
-  }
-
   let wishNotifications: WishNotificationRecord[] = [];
-  try {
-    wishNotifications = await listWishNotificationsForUser(userId, matchSuggestions);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load wish notifications.";
-    errors.wishNotifications = message;
-    console.error("[supabase] Failed to load dashboard wish notifications", { message, userId });
-  }
-
   let backgroundRuns: BackgroundMatchRunRow[] = [];
-  try {
-    backgroundRuns = await listBackgroundMatchRunsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load background runs.";
-    errors.backgroundRuns = message;
-    console.error("[supabase] Failed to load background match runs", { message, userId });
-  }
-
   let matchExplanationSnapshots: MatchExplanationSnapshotRow[] = [];
-  try {
-    matchExplanationSnapshots = await listMatchExplanationSnapshotsForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load match explanation snapshots.";
-    errors.matchExplanationSnapshots = message;
-    console.error("[supabase] Failed to load match explanation snapshots", { message, userId });
-  }
-
   let opportunityBriefs: BackgroundRequesterOpportunityBriefCard[] = [];
-  try {
-    opportunityBriefs = await listOpportunityBriefsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load opportunity briefs.";
-    errors.opportunityBriefs = message;
-    console.error("[supabase] Failed to load opportunity briefs", { message, userId });
-  }
-
   let introPackets: BackgroundIntroPacketRow[] = [];
-  try {
-    introPackets = await listIntroPacketsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load intro packets.";
-    errors.introPackets = message;
-    console.error("[supabase] Failed to load intro packets", { message, userId });
-  }
-
   let sourceSummaries: BackgroundSourceSummaryRow[] = [];
-  try {
-    sourceSummaries = await listBackgroundSourceSummariesForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load source summaries.";
-    errors.sourceSummaries = message;
-    console.error("[supabase] Failed to load source summaries", { message, userId });
-  }
-
   let profileSignals: BackgroundProfileSignalRow[] = [];
-  try {
-    profileSignals = await listBackgroundProfileSignalsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load profile signals.";
-    errors.profileSignals = message;
-    console.error("[supabase] Failed to load profile signals", { message, userId });
-  }
-
   let shadowRuns: BackgroundShadowRunRow[] = [];
-  try {
-    shadowRuns = await listBackgroundShadowRunsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load shadow source runs.";
-    errors.shadowRuns = message;
-    console.error("[supabase] Failed to load shadow source runs", { message, userId });
-  }
-
   let grantReceipts: BackgroundGrantReceiptRow[] = [];
-  try {
-    grantReceipts = await listBackgroundGrantReceiptsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load grant receipts.";
-    errors.grantReceipts = message;
-    console.error("[supabase] Failed to load grant receipts", { message, userId });
-  }
-
   let profileInterviewAnswers: BackgroundProfileInterviewAnswerRow[] = [];
-  try {
-    profileInterviewAnswers = await listProfileInterviewAnswersForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load profile interview answers.";
-    errors.profileInterviewAnswers = message;
-    console.error("[supabase] Failed to load profile interview answers", { message, userId });
-  }
-
   let muteRules: BackgroundMuteRuleRow[] = [];
-  try {
-    muteRules = await listBackgroundMuteRulesForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load mute rules.";
-    errors.muteRules = message;
-    console.error("[supabase] Failed to load mute rules", { message, userId });
-  }
-
   let backgroundQueryEvents: BackgroundQueryEventRow[] = [];
-  try {
-    backgroundQueryEvents = await listBackgroundQueryEventsForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load background query events.";
-    errors.backgroundQueryEvents = message;
-    console.error("[supabase] Failed to load background query events", { message, userId });
-  }
-
   let backgroundNotificationPreferences: BackgroundNotificationPreferenceRow[] = [];
-  try {
-    backgroundNotificationPreferences = await listBackgroundNotificationPreferencesForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load background notification preferences.";
-    errors.backgroundNotificationPreferences = message;
-    console.error("[supabase] Failed to load background notification preferences", {
-      message,
-      userId,
-    });
-  }
-
   let profileDataRightRequests: ProfileDataRightRequestRow[] = [];
-  try {
-    profileDataRightRequests = await listProfileDataRightRequestsForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load data-right requests.";
-    errors.profileDataRightRequests = message;
-    console.error("[supabase] Failed to load profile data-right requests", { message, userId });
-  }
-
   let matchReports: MatchReportRow[] = [];
-  try {
-    matchReports = await listMatchReportsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load match reports.";
-    errors.matchReports = message;
-    console.error("[supabase] Failed to load match reports", { message, userId });
-  }
-
   let matchConciergeRequests: MatchConciergeRequestRow[] = [];
-  try {
-    matchConciergeRequests = await listMatchConciergeRequestsForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load match concierge requests.";
-    errors.matchConciergeRequests = message;
-    console.error("[supabase] Failed to load match concierge requests", { message, userId });
-  }
-
   let networkInvites: NetworkInviteRow[] = [];
-  try {
-    networkInvites = await listNetworkInvitesForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load network invites.";
-    errors.networkInvites = message;
-    console.error("[supabase] Failed to load network invites", { message, userId });
-  }
-
   let personalDelegate: PersonalDelegateRow | null = null;
-  try {
-    personalDelegate = await getPersonalDelegateForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load personal delegate.";
-    errors.personalDelegate = message;
-    console.error("[supabase] Failed to load personal delegate", { message, userId });
-  }
-
   let sourceConnections: SourceConnectionRow[] = [];
-  try {
-    sourceConnections = await listSourceConnectionsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load source connections.";
-    errors.sourceConnections = message;
-    console.error("[supabase] Failed to load source connections", { message, userId });
-  }
-
   let profileSynthesis: ProfileSynthesisRow | null = null;
-  try {
-    profileSynthesis = await getProfileSynthesisForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load profile synthesis.";
-    errors.profileSynthesis = message;
-    console.error("[supabase] Failed to load profile synthesis", { message, userId });
-  }
-
   let intentClaims: BackgroundIntentClaimRow[] = [];
-  try {
-    intentClaims = await listBackgroundIntentClaimsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load intent claims.";
-    errors.intentClaims = message;
-    console.error("[supabase] Failed to load background intent claims", { message, userId });
-  }
-
   let helperStrategies: HelperStrategyRow[] = [];
-  try {
-    helperStrategies = await listHelperStrategiesForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load helper strategies.";
-    errors.helperStrategies = message;
-    console.error("[supabase] Failed to load helper strategies", { message, userId });
-  }
-
   let helperRuns: HelperRunRow[] = [];
-  try {
-    helperRuns = await listHelperRunsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load helper runs.";
-    errors.helperRuns = message;
-    console.error("[supabase] Failed to load helper runs", { message, userId });
-  }
-
   let introductionPlans: MatchIntroductionPlanRow[] = [];
-  try {
-    introductionPlans = await listIntroductionPlansForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load introduction plans.";
-    errors.introductionPlans = message;
-    console.error("[supabase] Failed to load introduction plans", { message, userId });
-  }
-
   let introductionTasks: MatchIntroductionTaskRow[] = [];
-  try {
-    introductionTasks = await listIntroductionTasksForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load introduction tasks.";
-    errors.introductionTasks = message;
-    console.error("[supabase] Failed to load introduction tasks", { message, userId });
-  }
-
   let privacyGrants: PrivacyGrantRow[] = [];
-  try {
-    privacyGrants = await listPrivacyGrantsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load privacy grants.";
-    errors.privacyGrants = message;
-    console.error("[supabase] Failed to load privacy grants", { message, userId });
-  }
-
   let privacyAccessRequests: PrivacyAccessRequestRow[] = [];
-  try {
-    privacyAccessRequests = await listPrivacyAccessRequestsForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load privacy access requests.";
-    errors.privacyAccessRequests = message;
-    console.error("[supabase] Failed to load privacy access requests", { message, userId });
-  }
-
   let riskSignals: RiskSignalRow[] = [];
-  try {
-    riskSignals = await listRiskSignalsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load risk signals.";
-    errors.riskSignals = message;
-    console.error("[supabase] Failed to load risk signals", { message, userId });
-  }
-
   let brokerageBounties: BrokerageBountyRow[] = [];
-  try {
-    brokerageBounties = await listBrokerageBountiesForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load brokerage bounties.";
-    errors.brokerageBounties = message;
-    console.error("[supabase] Failed to load brokerage bounties", { message, userId });
-  }
-
   let collectives: CollectiveRow[] = [];
-  try {
-    collectives = await listCollectivesForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load collectives.";
-    errors.collectives = message;
-    console.error("[supabase] Failed to load collectives", { message, userId });
-  }
-
   let collectiveMemberships: CollectiveMemberRow[] = [];
-  try {
-    collectiveMemberships = await listCollectiveMembershipsForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load collective memberships.";
-    errors.collectiveMemberships = message;
-    console.error("[supabase] Failed to load collective memberships", { message, userId });
-  }
-
   let collectiveDecisions: CollectiveDecisionRow[] = [];
-  try {
-    collectiveDecisions = await listCollectiveDecisionsForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load collective decisions.";
-    errors.collectiveDecisions = message;
-    console.error("[supabase] Failed to load collective decisions", { message, userId });
-  }
-
   let collectiveDecisionResponses: CollectiveDecisionResponseRow[] = [];
-  try {
-    collectiveDecisionResponses = await listCollectiveDecisionResponsesForUser(userId);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to load collective decision responses.";
-    errors.collectiveDecisionResponses = message;
-    console.error("[supabase] Failed to load collective decision responses", { message, userId });
-  }
+  let collectivePolicies: BackgroundCollectivePolicyRow[] = [];
+  let paymentAccount: ProfilePaymentAccountRow | null = null;
+  let savedSearches: SavedSearchRow[] = [];
 
+  // Load independent sections concurrently without flooding the database.
+  // Each loader retains its own fallback, error key, and authorization checks.
+  await runDashboardLoaders([
+    async () => {
+      try {
+        agreements = await listAgreementsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load agreements.";
+        errors.agreements = message;
+        console.error("[supabase] Failed to load dashboard agreements", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        cartItems = await listCartItems(userId, DASHBOARD_PAGE_SIZE);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load saved offers.";
+        errors.cartItems = message;
+        console.error("[supabase] Failed to load dashboard saved offers", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        wishProfile = await getWishProfileForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load wish profile.";
+        errors.wishProfile = message;
+        console.error("[supabase] Failed to load dashboard wish profile", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        profileSources = await listProfileSourcesForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load profile sources.";
+        errors.profileSources = message;
+        console.error("[supabase] Failed to load profile sources", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        clarificationQuestions = await listClarificationQuestionsForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load clarification questions.";
+        errors.clarificationQuestions = message;
+        console.error("[supabase] Failed to load clarification questions", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        matchSuggestions = await listMatchSuggestionsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load match suggestions.";
+        errors.matchSuggestions = message;
+        console.error("[supabase] Failed to load dashboard match suggestions", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        backgroundRuns = await listBackgroundMatchRunsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load background runs.";
+        errors.backgroundRuns = message;
+        console.error("[supabase] Failed to load background match runs", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        matchExplanationSnapshots = await listMatchExplanationSnapshotsForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load match explanation snapshots.";
+        errors.matchExplanationSnapshots = message;
+        console.error("[supabase] Failed to load match explanation snapshots", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        opportunityBriefs = await listOpportunityBriefsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load opportunity briefs.";
+        errors.opportunityBriefs = message;
+        console.error("[supabase] Failed to load opportunity briefs", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        introPackets = await listIntroPacketsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load intro packets.";
+        errors.introPackets = message;
+        console.error("[supabase] Failed to load intro packets", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        sourceSummaries = await listBackgroundSourceSummariesForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load source summaries.";
+        errors.sourceSummaries = message;
+        console.error("[supabase] Failed to load source summaries", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        profileSignals = await listBackgroundProfileSignalsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load profile signals.";
+        errors.profileSignals = message;
+        console.error("[supabase] Failed to load profile signals", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        shadowRuns = await listBackgroundShadowRunsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load shadow source runs.";
+        errors.shadowRuns = message;
+        console.error("[supabase] Failed to load shadow source runs", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        grantReceipts = await listBackgroundGrantReceiptsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load grant receipts.";
+        errors.grantReceipts = message;
+        console.error("[supabase] Failed to load grant receipts", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        profileInterviewAnswers = await listProfileInterviewAnswersForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load profile interview answers.";
+        errors.profileInterviewAnswers = message;
+        console.error("[supabase] Failed to load profile interview answers", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        muteRules = await listBackgroundMuteRulesForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load mute rules.";
+        errors.muteRules = message;
+        console.error("[supabase] Failed to load mute rules", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        backgroundQueryEvents = await listBackgroundQueryEventsForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load background query events.";
+        errors.backgroundQueryEvents = message;
+        console.error("[supabase] Failed to load background query events", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        backgroundNotificationPreferences = await listBackgroundNotificationPreferencesForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load background notification preferences.";
+        errors.backgroundNotificationPreferences = message;
+        console.error("[supabase] Failed to load background notification preferences", {
+          message,
+          userId,
+        });
+      }
+    },
+    async () => {
+      try {
+        profileDataRightRequests = await listProfileDataRightRequestsForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load data-right requests.";
+        errors.profileDataRightRequests = message;
+        console.error("[supabase] Failed to load profile data-right requests", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        matchReports = await listMatchReportsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load match reports.";
+        errors.matchReports = message;
+        console.error("[supabase] Failed to load match reports", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        matchConciergeRequests = await listMatchConciergeRequestsForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load match concierge requests.";
+        errors.matchConciergeRequests = message;
+        console.error("[supabase] Failed to load match concierge requests", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        networkInvites = await listNetworkInvitesForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load network invites.";
+        errors.networkInvites = message;
+        console.error("[supabase] Failed to load network invites", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        personalDelegate = await getPersonalDelegateForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load personal delegate.";
+        errors.personalDelegate = message;
+        console.error("[supabase] Failed to load personal delegate", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        sourceConnections = await listSourceConnectionsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load source connections.";
+        errors.sourceConnections = message;
+        console.error("[supabase] Failed to load source connections", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        profileSynthesis = await getProfileSynthesisForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load profile synthesis.";
+        errors.profileSynthesis = message;
+        console.error("[supabase] Failed to load profile synthesis", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        intentClaims = await listBackgroundIntentClaimsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load intent claims.";
+        errors.intentClaims = message;
+        console.error("[supabase] Failed to load background intent claims", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        helperStrategies = await listHelperStrategiesForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load helper strategies.";
+        errors.helperStrategies = message;
+        console.error("[supabase] Failed to load helper strategies", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        helperRuns = await listHelperRunsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load helper runs.";
+        errors.helperRuns = message;
+        console.error("[supabase] Failed to load helper runs", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        introductionPlans = await listIntroductionPlansForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load introduction plans.";
+        errors.introductionPlans = message;
+        console.error("[supabase] Failed to load introduction plans", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        introductionTasks = await listIntroductionTasksForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load introduction tasks.";
+        errors.introductionTasks = message;
+        console.error("[supabase] Failed to load introduction tasks", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        privacyGrants = await listPrivacyGrantsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load privacy grants.";
+        errors.privacyGrants = message;
+        console.error("[supabase] Failed to load privacy grants", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        privacyAccessRequests = await listPrivacyAccessRequestsForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load privacy access requests.";
+        errors.privacyAccessRequests = message;
+        console.error("[supabase] Failed to load privacy access requests", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        riskSignals = await listRiskSignalsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load risk signals.";
+        errors.riskSignals = message;
+        console.error("[supabase] Failed to load risk signals", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        brokerageBounties = await listBrokerageBountiesForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load brokerage bounties.";
+        errors.brokerageBounties = message;
+        console.error("[supabase] Failed to load brokerage bounties", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        collectives = await listCollectivesForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load collectives.";
+        errors.collectives = message;
+        console.error("[supabase] Failed to load collectives", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        collectiveMemberships = await listCollectiveMembershipsForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load collective memberships.";
+        errors.collectiveMemberships = message;
+        console.error("[supabase] Failed to load collective memberships", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        collectiveDecisions = await listCollectiveDecisionsForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load collective decisions.";
+        errors.collectiveDecisions = message;
+        console.error("[supabase] Failed to load collective decisions", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        collectiveDecisionResponses = await listCollectiveDecisionResponsesForUser(userId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to load collective decision responses.";
+        errors.collectiveDecisionResponses = message;
+        console.error("[supabase] Failed to load collective decision responses", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        paymentAccount = await getPaymentAccountForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load payment account.";
+        errors.paymentAccount = message;
+        console.error("[supabase] Failed to load payment account", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        savedSearches = await listSavedSearchesForUser(userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load saved searches.";
+        errors.savedSearches = message;
+        console.error("[supabase] Failed to load saved searches", { message, userId });
+      }
+    },
+  ]);
+
+  // These reads need the matches or collective memberships loaded above.
   const collectivePolicyIds = [
     ...new Set([
       ...collectives.map((collective) => collective.id),
       ...collectiveMemberships.map((membership) => membership.collective_id),
     ]),
   ];
-  let collectivePolicies: BackgroundCollectivePolicyRow[] = [];
-  try {
-    collectivePolicies = await listBackgroundCollectivePoliciesForUser(collectivePolicyIds);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load collective policies.";
-    errors.collectivePolicies = message;
-    console.error("[supabase] Failed to load collective policies", { message, userId });
-  }
-
-  let paymentAccount: ProfilePaymentAccountRow | null = null;
-  try {
-    paymentAccount = await getPaymentAccountForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load payment account.";
-    errors.paymentAccount = message;
-    console.error("[supabase] Failed to load payment account", { message, userId });
-  }
-
-  let savedSearches: SavedSearchRow[] = [];
-  try {
-    savedSearches = await listSavedSearchesForUser(userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load saved searches.";
-    errors.savedSearches = message;
-    console.error("[supabase] Failed to load saved searches", { message, userId });
-  }
+  await runDashboardLoaders([
+    async () => {
+      try {
+        wishNotifications = await listWishNotificationsForUser(userId, matchSuggestions);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load wish notifications.";
+        errors.wishNotifications = message;
+        console.error("[supabase] Failed to load dashboard wish notifications", { message, userId });
+      }
+    },
+    async () => {
+      try {
+        collectivePolicies = await listBackgroundCollectivePoliciesForUser(collectivePolicyIds);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load collective policies.";
+        errors.collectivePolicies = message;
+        console.error("[supabase] Failed to load collective policies", { message, userId });
+      }
+    },
+  ]);
 
   return {
     offers: hydratedOwnOffers,

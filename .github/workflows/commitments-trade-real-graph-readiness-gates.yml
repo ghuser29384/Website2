@@ -1,0 +1,114 @@
+name: Commitments Reciprocal Trade real-graph readiness gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/commitments-trade-real-graph-readiness-gates.yml"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/**"
+      - "scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs"
+      - "scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/commitments-trade-real-graph-readiness-gates.yml"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/**"
+      - "scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs"
+      - "scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitments-trade-real-graph-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate aggregate readiness and protected-data no-launch boundary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate aggregate readiness package and adversarial controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs \
+            2>&1 | tee trade-real-graph-readiness-validation.log
+
+      - name: Verify exact hashes, bindings, and synthetic dyad controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs \
+            2>&1 | tee trade-real-graph-readiness-integrity.log
+
+      - name: Revalidate bound planning, graph-feasibility, and master protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/commitments-trade-study/validate-planning-package.mjs \
+            2>&1 | tee trade-real-graph-readiness-planning.log
+          node scripts/commitments-trade-study/validate-graph-feasibility-package.mjs \
+            2>&1 | tee trade-real-graph-readiness-graph.log
+          node scripts/validate-commitments-impact-identification.mjs \
+            2>&1 | tee trade-real-graph-readiness-protocol.log
+
+      - name: Enforce repository-only exact file scope
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          git diff --check "$base" "$GITHUB_SHA" | tee trade-real-graph-readiness-diff-check.log
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
+          cat > expected-files.txt <<'FILES'
+          .github/workflows/commitments-trade-real-graph-readiness-gates.yml
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/README.md
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/aggregate-readiness-report.schema.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/current-readiness-evidence.2026-08-13.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/protected-data-run-contract.schema.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/real-graph-readiness-contract.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/real-graph-readiness-manifest.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/synthetic-readiness-fixtures.v1.json
+          scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs
+          scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs
+          FILES
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
+
+          if grep -Eq '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel\.json$)' actual-files.txt; then
+            echo "Runtime, public, dependency, database, or deployment file entered a repository-only tranche." >&2
+            exit 1
+          fi
+
+      - name: Upload exact readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-trade-real-graph-readiness-${{ github.run_id }}
+          path: |
+            trade-real-graph-readiness-validation.log
+            trade-real-graph-readiness-integrity.log
+            trade-real-graph-readiness-planning.log
+            trade-real-graph-readiness-graph.log
+            trade-real-graph-readiness-protocol.log
+            trade-real-graph-readiness-diff-check.log
+            expected-files.txt
+            actual-files.txt
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/**
+            scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs
+            scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs
+          if-no-files-found: warn

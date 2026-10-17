@@ -48,8 +48,7 @@ export default async function PasswordUpdatePage({ searchParams }: PasswordUpdat
         <p className="eyebrow">Account access</p>
         <h1>Choose a new password.</h1>
         <p>
-          This page is for users arriving from a password reset email. Use at least 12 characters,
-          then sign in again with the updated credential.
+          Use at least 12 characters, then sign in with your new password.
         </p>
 
         <section className="panel data-card data-card-wide">

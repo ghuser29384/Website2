@@ -29,7 +29,7 @@ export function getPublicProfileTrustSignals(
   }
 
   if (profile.offerCount > 0) {
-    signals.push(formatCount(profile.offerCount, "open offer"));
+    signals.push("current public offers available");
   }
 
   if (profile.verificationBadges.length > 0) {

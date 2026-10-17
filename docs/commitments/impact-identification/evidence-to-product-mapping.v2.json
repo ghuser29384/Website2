@@ -1,0 +1,212 @@
+{
+  "artifactSchemaVersion": "moral-trade-impact-identification-artifact-v2",
+  "artifactKind": "evidence_to_product_mapping",
+  "mappingKey": "commitments-impact-evidence-to-product-v2",
+  "version": 2,
+  "status": "under_review",
+  "payloadSha256": "sha256:eb4aadae8491c1a6924fca03acdeb9157b07a1439098e736c88e549db16b59b8",
+  "payload": {
+    "mappingKey": "commitments-impact-evidence-to-product-v2",
+    "mappingStatus": "under_review",
+    "governingRule": "Policy-level assignment effects, outcome evidence, causal identification, predictive calibration, and transportability are separate evidence streams. No stream silently substitutes for another.",
+    "pr534Components": [
+      {
+        "component": "deterministic_terms",
+        "minimumEvidence": [
+          "immutable product state",
+          "valid state hash"
+        ],
+        "causalStudyRequired": false,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "may be shown when current and valid"
+      },
+      {
+        "component": "verified_outcome",
+        "minimumEvidence": [
+          "reviewed occurrence evidence",
+          "reviewed native-unit quantity"
+        ],
+        "causalStudyRequired": false,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "may be shown as reviewed outcome evidence; never described as verified additionality or verified impact"
+      },
+      {
+        "component": "baseline_redirected",
+        "minimumEvidence": [
+          "frozen pre-exposure baseline",
+          "reviewed cancellation or nonpayment evidence",
+          "reviewed destination outcome"
+        ],
+        "causalStudyRequired": false,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "may be shown as redirected baseline quantity, not new resources"
+      },
+      {
+        "component": "platform_funded_bonus",
+        "minimumEvidence": [
+          "platform or sponsor ledger",
+          "payment or settlement evidence"
+        ],
+        "causalStudyRequired": false,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "shown separately and excluded from participant-caused totals"
+      },
+      {
+        "component": "assignment_policy_itt",
+        "minimumEvidence": [
+          "approved exact study instance",
+          "assignment integrity",
+          "supported exposure cells",
+          "reviewed primary outcome",
+          "prespecified estimator",
+          "sensitivity and safety gates"
+        ],
+        "causalStudyRequired": true,
+        "policyStudyCanSupport": true,
+        "participantCreditAuthorized": false,
+        "displayRule": "may support mechanism- or policy-level claims only"
+      },
+      {
+        "component": "success_case_additional",
+        "minimumEvidence": [
+          "frozen success-case definition",
+          "native-unit outcome quantity",
+          "baseline evidence",
+          "deduplication"
+        ],
+        "causalStudyRequired": false,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "descriptive counterfactual quantity; not automatically a participant effect"
+      },
+      {
+        "component": "expected_additional",
+        "minimumEvidence": [
+          "exact product estimand",
+          "validated participant-action causal design",
+          "eligible empirical calibration",
+          "transportability validation",
+          "current passing model health",
+          "exact methodology approval"
+        ],
+        "causalStudyRequired": true,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "withheld; invitation or offer ITT does not identify the effect of an actual participant action"
+      },
+      {
+        "component": "direct_causal_attribution",
+        "minimumEvidence": [
+          "validated exact participant-action causal design",
+          "interference-aware assumptions",
+          "overlap and positivity",
+          "sensitivity analysis",
+          "nonoverlapping resource claims",
+          "current passing model health",
+          "exact methodology approval"
+        ],
+        "causalStudyRequired": true,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "withheld; local complier or peer effects remain population-specific and non-additive"
+      },
+      {
+        "component": "cooperative_allocation",
+        "minimumEvidence": [
+          "frozen characteristic function",
+          "auditable coalition outcome",
+          "approved approximation and error rule"
+        ],
+        "causalStudyRequired": false,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "allocation lens only; never summed with direct causal attribution"
+      },
+      {
+        "component": "confidence_label",
+        "minimumEvidence": [
+          "outcome-prediction validation",
+          "causal-design validation",
+          "transportability or external-validity evidence",
+          "untouched holdout",
+          "later replication",
+          "uncertainty-aware pass criteria"
+        ],
+        "causalStudyRequired": true,
+        "policyStudyCanSupport": false,
+        "participantCreditAuthorized": false,
+        "displayRule": "high confidence remains disabled"
+      }
+    ],
+    "evidenceStreams": [
+      {
+        "stream": "outcome_prediction",
+        "canSupport": [
+          "predicted outcome risk or quantity",
+          "predictive intervals",
+          "predictive confidence after validation"
+        ],
+        "cannotSupport": [
+          "causal additionality",
+          "participant direct attribution",
+          "transportability by itself"
+        ]
+      },
+      {
+        "stream": "causal_identification",
+        "canSupport": [
+          "assignment-policy ITT",
+          "approved local effects within the exact study population and policy"
+        ],
+        "cannotSupport": [
+          "outcome-model calibration",
+          "future-population transportability",
+          "universal participant credit"
+        ]
+      },
+      {
+        "stream": "transportability",
+        "canSupport": [
+          "bounded generalization from the study population and policy to a specified target population and period"
+        ],
+        "cannotSupport": [
+          "repair of invalid randomization",
+          "repair of invalid outcome evidence",
+          "individual impact without an identified individual estimand"
+        ]
+      },
+      {
+        "stream": "reviewed_outcome_evidence",
+        "canSupport": [
+          "occurrence",
+          "native-unit quantity",
+          "settlement or completion state"
+        ],
+        "cannotSupport": [
+          "the no-offer counterfactual",
+          "causal additionality",
+          "participant credit"
+        ]
+      }
+    ],
+    "mechanismNotes": {
+      "trade": "A bilateral encouragement study can support role-specific policy effects. It does not identify the effect of an actual accepted trade without a separate exact participant-action design.",
+      "co_fund": "A saturation study can support project-level policy effects. It cannot assign the indivisible project outcome wholesale to each participant.",
+      "threshold_funding": "Invitation and bonus-policy studies are separate. Neither identifies focal-pledge pivotality.",
+      "donation_upgrade": "Offer-policy ITT can support the offer policy. Acceptance and payment are post-assignment and do not become the randomized treatment.",
+      "threshold_sign_on": "Public-signal and completed-action studies are separate; signatures cannot proxy for completed acts.",
+      "donation_redirect": "Pair-level offer-policy effects remain joint; they do not authorize individual participant credit."
+    },
+    "globalFailClosedRules": [
+      "participant expected additional and direct causal attribution remain withheld",
+      "local effects are study-population-specific and non-additive",
+      "verified outcome is never relabeled verified additionality",
+      "high confidence is disabled until causal, predictive, and transportability evidence are separately validated",
+      "no policy-level study clears an exact participant-action product claim without a separate approved mapping"
+    ]
+  }
+}

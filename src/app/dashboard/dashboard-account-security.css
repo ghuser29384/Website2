@@ -1,0 +1,27 @@
+/*
+ * DashboardPage renders .dashboard-page only for ?view=controls. The default
+ * 100-spark editor uses its own surface and does not render these sections.
+ * Keep the existing authenticated controls reachable after a toolbar click;
+ * the old Account-security-only hiding rules made their anchors unusable.
+ */
+.dashboard-page.marketplace-app-shell #main-content > .section {
+  display: block;
+  width: min(100%, var(--content-width));
+  margin: 0 auto 1.5rem;
+  padding: 1.5rem 1rem;
+}
+
+.dashboard-page.marketplace-app-shell #background-networking #account-security {
+  display: grid;
+  width: 100%;
+}
+
+.dashboard-page.marketplace-app-shell #main-content [id] {
+  scroll-margin-top: 6rem;
+}
+
+@media (max-width: 760px) {
+  .dashboard-page.marketplace-app-shell #main-content > .section {
+    padding: 1.25rem 0.75rem;
+  }
+}

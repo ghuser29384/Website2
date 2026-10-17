@@ -1,0 +1,228 @@
+/*
+ * Targeted close-out for defects exposed by rendered sitewide audits.
+ *
+ * This layer is intentionally narrow and imported after the canonical system.
+ * It removes remaining capsule/card geometry and makes credential-free route
+ * audits deterministic without altering information architecture or behavior.
+ */
+
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) {
+  background-color: var(--mt-paper) !important;
+  background-image:
+    linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.035) 1px, transparent 1px) !important;
+  background-size: 24px 24px !important;
+}
+
+body:has([data-mt-canonical-home="true"]),
+body:has(.mtw-shell),
+body:has([data-mt-surface="auth"]) {
+  background-image: none !important;
+}
+
+html:has([data-mt-surface="auth"]) {
+  background: #f3f5f8 !important;
+}
+
+body:has([data-mt-surface="auth"]) {
+  background-color: #f3f5f8 !important;
+}
+
+/* The shipped static Walkthrough is a deliberately full-black reference surface. */
+body:has([role="tablist"][aria-label="Interactive walkthrough concepts"]) {
+  background-color: var(--mt-black) !important;
+  background-image: none !important;
+}
+
+/*
+ * The Home and Walkthrough references use hard editorial geometry. Apply that
+ * same geometry to ordinary controls and semantic content panels everywhere
+ * else, while preserving circular radios, checkboxes, diagrams, and avatars.
+ */
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) :where(
+  button,
+  input:not([type="radio"]):not([type="checkbox"]),
+  select,
+  textarea,
+  article,
+  dialog,
+  [role="dialog"],
+  [class*="button" i],
+  [class*="pill" i],
+  [class*="chip" i],
+  [class*="badge" i]
+) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Marketplace route shells must read as ruled editorial workspaces, not SaaS cards. */
+.mt-v75-route-board,
+.mt-v75-side-nav,
+.mt-v75-route-workspace,
+.mt-v75-side-brand,
+.mt-v75-side-link,
+.mt-v75-side-plan,
+.mt-v77-create-offer {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.mt-v75-route-board {
+  border: 1px solid var(--mt-black) !important;
+  background: rgba(255, 253, 248, 0.92) !important;
+}
+
+.mt-v75-side-nav {
+  border-right: 1px solid var(--mt-black) !important;
+  background: var(--mt-paper-strong) !important;
+}
+
+.mt-v75-side-brand {
+  border-bottom: 1px solid var(--mt-line) !important;
+}
+
+.mt-v75-side-link {
+  border: 0 !important;
+  border-left: 4px solid transparent !important;
+  background: transparent !important;
+  color: var(--mt-ink) !important;
+}
+
+.mt-v75-side-link:hover,
+.mt-v75-side-link:focus-visible {
+  border-left-color: var(--mt-line-dark) !important;
+  background: var(--surface-muted) !important;
+  color: var(--mt-ink) !important;
+}
+
+.mt-v75-side-link.is-active,
+.mt-v75-side-link[aria-current="page"] {
+  border-left-color: var(--mt-blue) !important;
+  background: var(--mt-black) !important;
+  color: #ffffff !important;
+}
+
+.mt-v75-side-link.is-active :where(svg, span),
+.mt-v75-side-link[aria-current="page"] :where(svg, span) {
+  color: inherit !important;
+}
+
+.mt-v75-side-plan {
+  border: 1px solid var(--mt-line) !important;
+  background: transparent !important;
+}
+
+.mt-v77-create-offer {
+  border: 1px solid var(--mt-blue) !important;
+  background: var(--mt-blue) !important;
+  color: #ffffff !important;
+}
+
+.mt-v77-create-offer:hover,
+.mt-v77-create-offer:focus-visible {
+  border-color: var(--mt-blue-deep) !important;
+  background: var(--mt-blue-deep) !important;
+}
+
+/*
+ * The compact route-board shell previously allocated only 132px to the full
+ * Moral Trade wordmark. Its no-wrap brand overflowed into Commitments' hero.
+ * Reuse the product's established desktop navigation width so every route-board
+ * surface contains its brand before the workspace begins.
+ */
+@media (min-width: 980px) {
+  .marketplace-app-shell .mt-v75-route-board {
+    grid-template-columns: clamp(218px, 14.3vw, 240px) minmax(0, 1fr) !important;
+  }
+}
+
+/*
+ * Discover uses a blue rail to identify transaction rows. Express the rail as
+ * a real editorial rule rather than an inset shadow, so it remains visible
+ * without reintroducing elevated-card styling.
+ */
+.transaction-row.offer-transaction-row {
+  border-left: 3px solid var(--mt-blue) !important;
+  box-shadow: none !important;
+}
+
+/* Public Goods Fund navigation and mode labels use rules, not capsules. */
+.mpgf-shell :where(.mpgf-mode-strip span, .hub-tabs a) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* The gated and interactive Labs variants share the same hard geometry. */
+[data-mt-surface="mpgf-labs"] :where(
+  [class*="unavailableCard"],
+  [class*="card"],
+  [class*="sidebarCard"],
+  [class*="mechanismTile"],
+  [class*="inputShell"],
+  [class*="drawer"],
+  [class*="reviewModal"],
+  [class*="recommendationBlock"],
+  [class*="simulationMessage"],
+  [class*="progressSteps"] li,
+  [class*="chipRow"] span,
+  input:not([type="radio"]):not([type="checkbox"]),
+  select,
+  textarea,
+  button
+) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-mt-surface="mpgf-labs"] [class*="unavailableCard"] {
+  border-color: var(--mt-black) !important;
+  background: var(--mt-paper-strong) !important;
+}
+
+/* Explicitly preserve hard geometry on the two surfaces flagged by the first audit. */
+.commitments-center,
+.dashboard-page .v72-private-surface,
+.dashboard-page .dashboard-overview,
+.dashboard-page .dashboard-task-card,
+.dashboard-page .dashboard-snapshot-card {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.commitments-center {
+  border: 1px solid var(--mt-black) !important;
+  background: rgba(255, 253, 248, 0.9) !important;
+}
+
+.dashboard-page .dashboard-task-card:hover,
+.dashboard-page .dashboard-task-card:focus-visible {
+  transform: none !important;
+}
+
+@media (max-width: 900px) {
+  .mt-v75-route-board {
+    border-right: 0 !important;
+    border-left: 0 !important;
+  }
+
+  .mt-v75-side-nav {
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--mt-black) !important;
+  }
+
+  .mt-v75-side-link {
+    border-left: 0 !important;
+    border-bottom: 3px solid transparent !important;
+  }
+
+  .mt-v75-side-link:hover,
+  .mt-v75-side-link:focus-visible {
+    border-bottom-color: var(--mt-line-dark) !important;
+  }
+
+  .mt-v75-side-link.is-active,
+  .mt-v75-side-link[aria-current="page"] {
+    border-bottom-color: var(--mt-blue) !important;
+  }
+}

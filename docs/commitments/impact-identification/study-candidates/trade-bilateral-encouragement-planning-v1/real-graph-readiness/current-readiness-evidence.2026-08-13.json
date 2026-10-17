@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "commitments-trade-aggregate-readiness-report-v1",
+  "observedAtUtc": "2026-08-13T15:46:35Z",
+  "repository": {
+    "fullName": "ghuser29384/Website2",
+    "mainCommit": "ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b"
+  },
+  "evidenceMethod": {
+    "kind": "supabase_table_metadata_only",
+    "rowLevelQueryPerformed": false,
+    "rowLevelExportPerformed": false,
+    "offerContentsInspected": false,
+    "participantIdentifiersInspected": false
+  },
+  "environments": [
+    {
+      "environmentKey": "production",
+      "projectRef": "jnpoxvalyjtdghnperyu",
+      "profileCount": 5,
+      "offerCount": 0,
+      "tradeInvitationCount": 0,
+      "tradeThreadCount": 0,
+      "agreementCount": 0,
+      "privacyGrantCount": 0,
+      "recommendationGraphEdgeCount": 1,
+      "eligibleDirectedDyadCount": 0,
+      "eligibilityDerivation": "zero_offer_rows"
+    },
+    {
+      "environmentKey": "qa",
+      "projectRef": "hvmxfjjbdcgjjudmthdz",
+      "profileCount": 14,
+      "offerCount": 1,
+      "tradeInvitationCount": 0,
+      "tradeThreadCount": 0,
+      "agreementCount": 0,
+      "privacyGrantCount": 0,
+      "recommendationGraphEdgeCount": 0,
+      "eligibleDirectedDyadCount": 0,
+      "eligibilityDerivation": "fewer_than_two_offer_rows"
+    }
+  ],
+  "sourceBoundary": {
+    "runtimeMatcherPath": "src/lib/core-trade-base.ts",
+    "runtimeMatcherBlobSha": "4d7bcd9c9e89d06c9d478be1c10874861662727e",
+    "runtimeMatcherFunction": "listReciprocalMatches",
+    "canonicalEligibilitySourceStatus": "required_not_completed",
+    "recommendationGraphEdgesCanonical": false,
+    "protectedDataExportAuthorized": false
+  },
+  "authoritativeResult": {
+    "dataReadiness": "insufficient_real_eligible_graph",
+    "eligibleDirectedDyadCount": 0,
+    "realGraphDiagnosticsStatus": "blocked_not_run",
+    "privacyReviewStatus": "required_not_completed",
+    "ethicsDeterminationStatus": "required_not_completed",
+    "assignmentGenerated": false,
+    "assignmentSeedGenerated": false,
+    "executionDecision": "no_launch"
+  },
+  "evidenceLimitations": [
+    "metadata_counts_are_not_row_level_graph_evidence",
+    "current_user_count_is_not_study_sample_size",
+    "canonical_research_eligibility_source_is_not_complete",
+    "recommendation_graph_edges_are_excluded",
+    "no_inference_about_real_user_preferences_or_consent"
+  ],
+  "evidencePayloadHash": "sha256:400d40a4ca1592d601ed9f3fdc5b228cc6e6d13f64b126d98eecc81d3a2a1197"
+}

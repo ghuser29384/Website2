@@ -14,7 +14,7 @@ export function InvitationShareControls({
       await navigator.clipboard.writeText(invitationUrl);
       setMessage("Private link copied.");
     } catch {
-      setMessage("Copy was unavailable. Open Preview and copy the address from your browser.");
+      setMessage("We couldn’t copy the link. You can open Preview and copy the address from your browser.");
     }
   }
 
@@ -27,7 +27,7 @@ export function InvitationShareControls({
     try {
       await navigator.share({
         title: "Private Moral Trade invitation",
-        text: "Inspect the complete terms before deciding whether to join.",
+        text: "Take a look at the terms and decide whether you’d like to join.",
         url: invitationUrl,
       });
       setMessage("Share sheet opened.");
@@ -39,7 +39,7 @@ export function InvitationShareControls({
   const emailHref = `mailto:?subject=${encodeURIComponent(
     "Private Moral Trade invitation",
   )}&body=${encodeURIComponent(
-    `I invited you to inspect a bounded Moral Trade proposal. You can read every term before joining and the invitation creates no obligation.\n\n${invitationUrl}`,
+    `I’d like to invite you to a proposal on Moral Trade. Take a look at the terms and see what you think. There’s no obligation to join.\n\n${invitationUrl}`,
   )}`;
 
   return (

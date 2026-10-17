@@ -16,6 +16,7 @@ import {
   getCoreOfferForOwner,
   listReciprocalMatches,
 } from "@/lib/core-trade";
+import { getFeedCreateLinkForDerivedOffer } from "@/lib/feed-create/phase1";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -56,6 +57,10 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
   ]);
   const offer = await getCoreOfferForOwner(offerId, viewer.authUser.id);
   if (!offer) notFound();
+  const sourceLink = await getFeedCreateLinkForDerivedOffer(
+    offerId,
+    viewer.authUser.id,
+  );
 
   const matches =
     offer.workflow_status === "published" ? await listReciprocalMatches(offer) : [];
@@ -65,7 +70,7 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
   );
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className="page-shell marketplace-app-shell trade-workflow-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
@@ -189,6 +194,66 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
           </div>
         </section>
 
+        {sourceLink ? (
+          <section className="section section-subtle" aria-labelledby="source-bound-heading">
+            <div className="section-head section-head-compact">
+              <p className="eyebrow">Source-bound counteroffer</p>
+              <h2 id="source-bound-heading">
+                Based on {sourceLink.sourceOwnerAlias}&apos;s original offer
+              </h2>
+              <p>
+                This draft keeps its exact source relationship. Phase 1 permits private saving and
+                operator review only; it cannot be published, invited, messaged, or converted into
+                an agreement.
+              </p>
+            </div>
+            <div className="data-grid">
+              <article className="panel data-card">
+                <p className="detail-kicker">Original source</p>
+                <h3>Offer revision {sourceLink.source_terms_version}</h3>
+                <dl className="detail-grid">
+                  <div>
+                    <dt>Counterparty</dt>
+                    <dd>{sourceLink.sourceOwnerAlias}</dd>
+                  </div>
+                  <div>
+                    <dt>Derivation</dt>
+                    <dd>Counteroffer</dd>
+                  </div>
+                  <div>
+                    <dt>Current source</dt>
+                    <dd>{sourceLink.sourceCurrent ? "Open at the linked revision" : "Changed or closed"}</dd>
+                  </div>
+                  <div>
+                    <dt>Delivered</dt>
+                    <dd>No</dd>
+                  </div>
+                </dl>
+                <div className="form-actions">
+                  <Link className="button button-secondary" href={sourceLink.sourceUrl}>
+                    View original offer
+                  </Link>
+                </div>
+              </article>
+              <article className="panel data-card">
+                <p className="detail-kicker">Phase-1 boundary</p>
+                <h3>No reliance or contact</h3>
+                <p className="route-text">
+                  The original participant has not received this draft. No invitation, thread,
+                  agreement, payment authorization, or obligation exists. The source relationship
+                  cannot be removed from a true counteroffer.
+                </p>
+                {!sourceLink.sourceCurrent ? (
+                  <div className="status-banner status-banner-error">
+                    The source changed or closed. You may keep this private draft for reference, but
+                    it cannot be resubmitted from the stale source revision.
+                  </div>
+                ) : null}
+              </article>
+            </div>
+          </section>
+        ) : null}
+
         {editable ? (
           <section className="section section-subtle" aria-labelledby="edit-terms-heading">
             <div className="section-head section-head-compact">
@@ -292,6 +357,7 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
                   Save revision privately
                 </PendingSubmitButton>
                 <PendingSubmitButton
+                  disabled={Boolean(sourceLink && !sourceLink.sourceCurrent)}
                   name="intent"
                   pendingLabel="Resubmitting..."
                   value="submit"

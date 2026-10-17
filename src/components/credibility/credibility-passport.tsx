@@ -60,7 +60,9 @@ export function CredibilityPassport({
         ) : null}
       </div>
 
-      <p className="route-text">{summary.explanation}</p>
+      {summary.eligibility !== "eligible" ? (
+        <p className="route-text">{summary.explanation}</p>
+      ) : null}
 
       {!compact ? (
         <>
@@ -68,19 +70,14 @@ export function CredibilityPassport({
             <div className="panel data-card">
               <p className="detail-kicker">Estimated completion</p>
               <h3>{percentage(summary.estimatedProbability)}</h3>
-              <p className="route-text">
-                Posterior mean. This is not displayed as a moral-value or social-status ranking.
-              </p>
             </div>
             <div className="panel data-card">
               <p className="detail-kicker">Conservative estimate</p>
               <h3>{percentage(summary.conservativeProbability)}</h3>
-              <p className="route-text">The model&apos;s lower tenth-percentile estimate.</p>
             </div>
             <div className="panel data-card">
               <p className="detail-kicker">Relevant activity</p>
               <h3>{formatDate(summary.lastEventAt)}</h3>
-              <p className="route-text">Evidence decays with a 365-day half-life in model v1.</p>
             </div>
           </div>
 

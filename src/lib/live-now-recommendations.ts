@@ -59,6 +59,7 @@ export interface LiveNowOfferCandidate {
   trustLevel: number;
   createdAt: string;
   updatedAt: string;
+  sourceRevision?: number;
   opportunityType?: RecommendationOpportunityType;
   href?: string;
   ctaLabel?: string;

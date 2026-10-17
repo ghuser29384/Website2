@@ -37,7 +37,7 @@ Current status:
 - Public pages for AI and search systems:
   - https://www.moraltrade.org/what-is-moral-trade
   - https://www.moraltrade.org/how-it-works
-  - https://www.moraltrade.org/offers
+  - https://www.moraltrade.org/discover
   - https://www.moraltrade.org/paid-action-offers
   - https://www.moraltrade.org/sources
   - https://www.moraltrade.org/faq

@@ -58,11 +58,6 @@ export default async function ResearchPage() {
       <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Research and governance</p>
         <h1>An operating institution, not just a matching interface.</h1>
-        <p>
-          Moral trade depends unusually heavily on trust, review quality, and operator integrity.
-          This page keeps the research agenda, safety blockers, governance rules, and unresolved
-          design questions visible as the service grows.
-        </p>
 
         <section className="panel data-card data-card-wide">
           <h2>What we are testing</h2>

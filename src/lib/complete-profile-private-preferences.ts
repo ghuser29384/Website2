@@ -18,12 +18,17 @@ const COMPLETE_PROFILE_PRIVATE_PREFERENCE_KEYS = [
   "verification_preferences",
 ] as const;
 
+export interface CompleteProfilePrivatePreferenceOptions {
+  includeOfferType?: boolean;
+}
+
 function buildCompleteProfilePrivatePreferenceFields(
   submission: CompleteProfileSubmission,
+  options: CompleteProfilePrivatePreferenceOptions,
 ): SensitiveTextFieldMap {
   return {
     brokerage_preference: submission.contactRule,
-    capabilities: buildCompleteProfileCapabilityText(submission),
+    capabilities: buildCompleteProfileCapabilityText(submission, options),
     constraints: buildCompleteProfileConstraintText(submission),
     uncertainty_notes: "",
     verification_preferences:
@@ -48,6 +53,7 @@ export interface CompleteProfilePrivatePreferences {
 
 export function prepareCompleteProfilePrivatePreferences(
   submission: CompleteProfileSubmission,
+  options: CompleteProfilePrivatePreferenceOptions = {},
 ): CompleteProfilePrivatePreferences {
   if (!hasBackgroundFieldEncryptionKey()) {
     return {
@@ -59,7 +65,7 @@ export function prepareCompleteProfilePrivatePreferences(
   return {
     available: true,
     prepared: prepareRecordSensitiveTextFields(
-      buildCompleteProfilePrivatePreferenceFields(submission),
+      buildCompleteProfilePrivatePreferenceFields(submission, options),
     ),
   };
 }

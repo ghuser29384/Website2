@@ -1,0 +1,120 @@
+name: PR 212 push QA monitor 20260804
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr212-push-qa-monitor-20260804.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr212-push-qa-monitor-20260804
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feat/institutional-trade-system
+      EXPECTED_HEAD: dbbb0afbb42ef9a1636be073bb1d47343badd98b
+      QA_WORKFLOW_NAME: Institutional trade QA
+    steps:
+      - name: Verify the exact PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/${GITHUB_REPOSITORY}/branches/${TARGET_BRANCH}" --jq '.commit.sha')"
+          if [[ "$actual" != "$EXPECTED_HEAD" ]]; then
+            echo "PR #212 moved: expected $EXPECTED_HEAD, found $actual" >&2
+            exit 1
+          fi
+
+      - name: Locate the exact-head push QA run
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=""
+          for attempt in $(seq 1 240); do
+            runs="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --branch "$TARGET_BRANCH" \
+              --event push \
+              --limit 100 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,name,workflowName)"
+            run_id="$(jq -r \
+              --arg head "$EXPECTED_HEAD" \
+              --arg workflow "$QA_WORKFLOW_NAME" \
+              '[.[] | select(.headSha == $head and ((.workflowName // .name) == $workflow))] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' \
+              <<<"$runs")"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          if [[ -z "$run_id" ]]; then
+            echo "Could not locate a push-triggered Institutional trade QA run for $EXPECTED_HEAD" >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "QA run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${run_id}"
+
+      - name: Wait for the QA run to terminate
+        id: wait
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="${{ steps.locate.outputs.run_id }}"
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --interval 15 || true
+          gh run view "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,headSha,status,conclusion,url,jobs \
+            > /tmp/pr212-qa-result.json
+          conclusion="$(jq -r '.conclusion // ""' /tmp/pr212-qa-result.json)"
+          status="$(jq -r '.status // ""' /tmp/pr212-qa-result.json)"
+          observed_head="$(jq -r '.headSha // ""' /tmp/pr212-qa-result.json)"
+          [[ "$observed_head" == "$EXPECTED_HEAD" ]] || {
+            echo "Observed QA head $observed_head does not match $EXPECTED_HEAD" >&2
+            exit 1
+          }
+          [[ "$status" == "completed" ]] || {
+            echo "QA run did not reach a completed state: $status" >&2
+            exit 1
+          }
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+      - name: Record exact-head QA status on PR 212
+        if: always() && steps.locate.outputs.run_id != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="${{ steps.locate.outputs.run_id }}"
+          conclusion="${{ steps.wait.outputs.conclusion }}"
+          failed="$(jq -r '[.jobs[]? | .steps[]? | select(.conclusion == "failure") | .name] | unique | join(", ")' /tmp/pr212-qa-result.json 2>/dev/null || true)"
+          if [[ -z "$failed" ]]; then failed="none reported"; fi
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-push-exact-head-qa-20260804 -->
+          ## PR #212 push-triggered exact-head institutional QA
+
+          - Exact feature head: \`$EXPECTED_HEAD\`
+          - QA run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/$run_id
+          - Conclusion: **${conclusion:-unknown}**
+          - Failed steps: ${failed}
+
+          PR #212 remains draft and unmerged. No production database, payment, custody, payout, deployment, or institutional feature-flag state was changed by this monitor."
+
+      - name: Enforce the QA result
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.wait.outputs.conclusion }}" != "success" ]]; then
+            echo "Exact-head institutional QA did not pass." >&2
+            exit 1
+          fi

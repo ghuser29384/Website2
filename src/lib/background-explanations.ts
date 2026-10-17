@@ -467,5 +467,5 @@ export function formatGrantExpiry(expiresAt: string | null) {
     return "expiry unavailable";
   }
 
-  return `expires ${new Date(timestamp).toLocaleDateString()}`;
+  return `expires ${new Date(timestamp).toLocaleDateString("en-US")}`;
 }

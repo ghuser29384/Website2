@@ -20,7 +20,7 @@ interface CreateRouteChooserProps {
 const ROUTE_HOVER_COLORS: Record<CreateMode, string> = {
   trade: "#dceffd",
   offset: "#eceaff",
-  pool: "#f1f7cc",
+  pool: "#e7efe5",
   back: "#e7efe5",
 };
 
@@ -134,7 +134,7 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
     <section className={styles.workbench} aria-labelledby="create-heading">
       <header className={styles.intro}>
         <h1 id="create-heading">Create.</h1>
-        <p>Choose a route. Nothing happens until you confirm.</p>
+        <p>Choose how you’d like to get started. You’ll review the details before confirming.</p>
       </header>
 
       <div className={styles.routeGrid} role="group" aria-label="Creation routes">

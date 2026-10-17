@@ -6,7 +6,6 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import {
-  MarketplaceBottomNav,
   MarketplaceRouteShell,
 } from "@/components/marketplace/marketplace-components";
 import { getFormMessage } from "@/lib/form-state";
@@ -56,11 +55,15 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
           </div>
         ) : null}
 
-        <MarketplaceRouteShell active="plan">
+        <MarketplaceRouteShell active="plan" hideSidebar>
+          <nav className="hero-actions" aria-label="Discover views">
+            <Link className="button button-secondary" href="/discover">Browse trades</Link>
+            <Link className="button button-secondary" href="/saved-offers" aria-current="page">Saved offers</Link>
+          </nav>
           <section className="v72-private-surface mt-v75-route-card" aria-labelledby="plan-heading">
             <div className="v72-owner-strip">
-              <h1 id="plan-heading">Planner</h1>
-              <p>Plan — private selected items. No commitment created.</p>
+              <h1 id="plan-heading">Saved offers</h1>
+              <p>Your private shortlist. Saving an offer does not create a commitment.</p>
             </div>
 
             <div className="cart-grid">
@@ -70,15 +73,12 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
                     <article key={item.offer.id} className="panel cart-card">
                     <div className="profile-card-head">
                       <div>
-                        <p className="detail-kicker">Planner · {formatMode(item.offer.mode)}</p>
+                        <p className="detail-kicker">Saved offer · {formatMode(item.offer.mode)}</p>
                         <h3>{item.offer.offered_cause} for {item.offer.requested_cause}</h3>
                       </div>
-                      <span className="badge">Preview</span>
+                      <span className="badge">Saved</span>
                     </div>
 
-                    <p className="route-text">
-                      Preview only · Private planning only · No commitment created.
-                    </p>
 
                     <div className="offer-footer">
                       <div className="tag-row">
@@ -110,13 +110,13 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
               ) : (
                 <div className="empty-state">
                   <div>
-                    <strong>{viewer ? "You have no saved offers yet." : "Sign in to view your planner."}</strong>
+                    <strong>{viewer ? "You have no saved offers yet." : "Sign in to view your saved offers."}</strong>
                     <p>
                       {viewer
-                        ? "Browse examples, templates, and pledge-funding previews. Nothing here creates a commitment. Pledge-funding contribution rows are not connected yet."
-                        : "Saved offers are private. This preview shell does not create demo planner rows, commitments, or pledge-funding contribution state."}
+                        ? "Save trades from Discover to return to them here."
+                        : "Your saved offers are private to your account."}
                     </p>
-                    <Link className="button button-primary" href={viewer ? "/offers" : "/login?returnTo=/saved-offers"}>
+                    <Link className="button button-primary" href={viewer ? "/discover" : "/login?returnTo=/saved-offers"}>
                       {viewer ? "Browse offers" : "Sign in to continue"}
                     </Link>
                   </div>
@@ -127,7 +127,6 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
         </MarketplaceRouteShell>
       </main>
 
-      <MarketplaceBottomNav active="plan" />
       <SiteFooter />
     </div>
   );

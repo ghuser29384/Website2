@@ -187,6 +187,8 @@ test("bg84 visible dashboard and explainer use the plain-language entry points",
   assert.match(dashboard, /What happens/);
   assert.match(dashboard, /What stays hidden/);
   assert.match(dashboard, /How to stop or undo future access/);
-  assert.match(explainer, /validateBackgroundUiLanguageContract/);
-  assert.match(explainer, /plain-language-setup-heading/);
+  assert.match(explainer, /Five controlled steps from preview to disclosure/);
+  assert.match(explainer, /Create a broad preview/);
+  assert.match(explainer, /Compatibility is not consent/);
+  assert.match(explainer, /No autonomous outreach/);
 });

@@ -18,7 +18,7 @@ export default function NotFound() {
       <main id="main-content" tabIndex={-1}>
         <section className="v72-safe-state panel" aria-labelledby="safe-state-heading">
           <h1 id="safe-state-heading">Unavailable</h1>
-          <p>The route is not available as a backed Moral Trade record.</p>
+          <p>We couldn’t find an available record for this page. You can explore current proposals below.</p>
           <p className="v72-receipt-fragment">Unavailable · Terms changed</p>
           <div className="hero-actions">
             <Link className="button button-primary" href="/offers?view=live">

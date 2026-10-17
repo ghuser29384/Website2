@@ -99,7 +99,7 @@ max-width: 11ch;
 margin: 0;
 color: #ffffff;
 font-family: var(--font-heading);
-font-size: clamp(48px, 5.5vw, 78px);
+font-size: clamp(40px, 4.5vw, 62px);
 font-weight: 500;
 letter-spacing: -0.045em;
 line-height: 0.98;

@@ -219,7 +219,6 @@ export default async function PartnerCohortPage({
                 <IconMark name="safety" />
                 <span>
                   <strong>No public liquidity claim</strong>
-                  <small>This page is a focused cohort funnel.</small>
                 </span>
               </div>
               <div>

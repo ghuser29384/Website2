@@ -11,16 +11,16 @@
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.42fr);
   gap: 2rem;
   align-items: end;
-  padding: clamp(2rem, 4.5vw, 4.5rem);
+  padding: clamp(1.25rem, 3vw, 2.5rem);
 }
 
 .intro h1 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(4.2rem, 7.4vw, 7.6rem);
+  font-size: clamp(2rem, 3.5vw, 3rem);
   font-weight: 500;
   letter-spacing: -0.065em;
-  line-height: 0.84;
+  line-height: 1.1;
 }
 
 .intro p {
@@ -107,12 +107,12 @@
 
 .routeGlyph rect.glyphSignal,
 .routeGlyph circle.glyphSignal {
-  fill: var(--signal);
+  fill: var(--accent-soft);
   stroke: var(--ink);
 }
 
 .routeGlyph path.glyphSignal {
-  stroke: var(--signal-ink);
+  stroke: var(--accent-deep);
   stroke-width: 4;
 }
 
@@ -204,7 +204,7 @@
   max-width: 16ch;
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(2.8rem, 5vw, 5.2rem);
+  font-size: clamp(1.75rem, 2.8vw, 2.25rem);
   font-weight: 500;
   letter-spacing: -0.057em;
   line-height: 0.9;
@@ -296,7 +296,7 @@
 }
 
 .successOutcome {
-  background: color-mix(in srgb, var(--signal) 32%, var(--surface));
+  background: var(--accent-soft);
 }
 
 .fallbackOutcome {
@@ -312,7 +312,7 @@
 }
 
 .successOutcome .outcomeGlyph {
-  color: var(--signal-ink);
+  color: var(--accent-deep);
 }
 
 .outcomeGlyph circle,
@@ -421,17 +421,17 @@
 }
 
 .actionPanel .routeGlyph .glyphAccent {
-  stroke: var(--signal);
+  stroke: var(--accent-soft);
 }
 
 .actionPanel .routeGlyph rect.glyphSignal,
 .actionPanel .routeGlyph circle.glyphSignal {
-  fill: var(--signal);
+  fill: var(--accent-soft);
   stroke: #ffffff;
 }
 
 .actionPanel .routeGlyph path.glyphSignal {
-  stroke: var(--signal);
+  stroke: var(--accent-soft);
 }
 
 .actionPanel :global(.button) {
@@ -506,7 +506,7 @@
   }
 
   .intro h1 {
-    font-size: clamp(3.8rem, 20vw, 5.4rem);
+    font-size: clamp(2rem, 6vw, 2.5rem);
   }
 
   .intro p {
@@ -555,7 +555,7 @@
 
   .detailHeader h2 {
     max-width: 12ch;
-    font-size: clamp(2.8rem, 13vw, 4rem);
+    font-size: clamp(1.75rem, 5vw, 2.25rem);
   }
 
   .flowList {

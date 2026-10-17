@@ -1,5 +1,6 @@
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 
+import { EvidenceNavGate } from "@/components/layout/evidence-nav-gate";
 import { MoralTradeWordmark, MutualStepMark } from "@/components/brand/moral-trade-wordmark";
 import { FOOTER_LINK_GROUPS } from "@/lib/site";
 
@@ -7,7 +8,7 @@ export function SiteFooter() {
   return (
     <footer className="footer mt-site-footer">
       <div className="mt-footer-lead">
-        <Link aria-label="Moral Trade, home" className="mt-footer-brand" href="/">
+        <Link prefetch={false} aria-label="Moral Trade, home" className="mt-footer-brand" href="/">
           <MoralTradeWordmark />
         </Link>
         <MutualStepMark className="mt-footer-mark" />
@@ -15,16 +16,8 @@ export function SiteFooter() {
 
       <div className="footer-grid mt-footer-grid">
         <div className="footer-intro mt-footer-intro">
-          <h2>A marketplace for productive difference.</h2>
-          <p>
-            Trade commitments, redirect offsetting donations, and join conditional funding pools.
-            Moral Trade keeps the no-deal default, maximum exposure, evidence, settlement, and exit
-            terms visible before reliance.
-          </p>
-          <p>
-            Research supports the mechanism. The public product is the marketplace and coordination
-            infrastructure.
-          </p>
+          <h2>Do more good together.</h2>
+          <p>Offer an action in exchange for an action you value.</p>
         </div>
 
         <nav aria-label="Footer" className="mt-footer-links">
@@ -32,11 +25,16 @@ export function SiteFooter() {
             <div className="footer-column" key={group.title}>
               <h3>{group.title}</h3>
               <ul className="footer-links">
-                {group.links.map((link) => (
-                  <li key={link.href}>
-                    <Link href={link.href}>{link.label}</Link>
-                  </li>
-                ))}
+                {group.links.map((link) => {
+                  const entry = (
+                    <li key={link.href}>
+                      <Link prefetch={false} href={link.href}>{link.label}</Link>
+                    </li>
+                  );
+                  return link.href === "/evidence"
+                    ? <EvidenceNavGate key={link.href}>{entry}</EvidenceNavGate>
+                    : entry;
+                })}
               </ul>
             </div>
           ))}
@@ -51,10 +49,10 @@ export function SiteFooter() {
         </p>
         <p>© 2026 Moral Trade</p>
         <div className="mt-footer-legal">
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
-          <Link href="/accessibility">Accessibility</Link>
-          <Link href="/contact">Contact</Link>
+          <Link prefetch={false} href="/privacy">Privacy</Link>
+          <Link prefetch={false} href="/terms">Terms</Link>
+          <Link prefetch={false} href="/accessibility">Accessibility</Link>
+          <Link prefetch={false} href="/contact">Contact</Link>
         </div>
       </div>
     </footer>

@@ -42,8 +42,9 @@ function credibility(
 }
 
 function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike, "id">): OfferDiscoveryLike {
+  const { id, ...optionalOverrides } = overrides;
   return {
-    id: overrides.id,
+    id,
     mode: "pledge",
     offered_cause: "Animal welfare",
     requested_cause: "Global poverty",
@@ -57,17 +58,18 @@ function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike,
     payment_interval_value: null,
     created_at: "2026-07-01T00:00:00.000Z",
     donationOffset: null,
-    ...overrides,
+    ...optionalOverrides,
   };
 }
 
 function profile(
   overrides: Partial<ProfileDiscoveryLike> & Pick<ProfileDiscoveryLike, "id" | "resolvedName">,
 ): ProfileDiscoveryLike {
+  const { id, resolvedName, ...optionalOverrides } = overrides;
   return {
-    id: overrides.id,
-    resolvedName: overrides.resolvedName,
-    display_name: overrides.resolvedName,
+    id,
+    resolvedName,
+    display_name: resolvedName,
     bio: "Public member",
     publicLocation: "London, United Kingdom",
     wishPreview: "Open to evidence-backed cooperation",
@@ -80,7 +82,7 @@ function profile(
     ratingCount: 0,
     verificationBadges: [],
     created_at: "2026-07-01T00:00:00.000Z",
-    ...overrides,
+    ...optionalOverrides,
   };
 }
 
@@ -154,16 +156,28 @@ test("offer filters combine cause, payment, action, and minimum credit", () => {
   );
 });
 
-test("credit modestly changes otherwise comparable people results", () => {
-  const lower = profile({ id: "lower", resolvedName: "Alex Green" });
-  const higher = profile({ id: "higher", resolvedName: "Alex Grey" });
+test("general people ranking does not let context-free credit override task relevance", () => {
+  const exact = profile({ id: "exact", resolvedName: "Alex Research" });
+  const highCreditButUnrelated = profile({
+    id: "unrelated",
+    resolvedName: "Jordan Smith",
+    bio: "Public member",
+    wishPreview: "Open to unrelated cooperation",
+    wishCauses: ["Climate"],
+  });
   const scores = new Map([
-    [lower.id, credibility(64, 12)],
-    [higher.id, credibility(90, 35)],
+    [exact.id, credibility(60, 12)],
+    [highCreditButUnrelated.id, credibility(96, 40)],
   ]);
 
-  const ranked = rankProfiles([lower, higher], scores, "Alex", "match", new Date("2026-07-15"));
-  assert.equal(ranked[0]?.id, "higher");
+  const ranked = rankProfiles(
+    [highCreditButUnrelated, exact],
+    scores,
+    "Alex",
+    "match",
+    new Date("2026-07-15"),
+  );
+  assert.equal(ranked[0]?.id, "exact");
 });
 
 test("newest sort remains primarily chronological rather than credit-dominated", () => {

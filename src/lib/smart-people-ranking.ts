@@ -1,13 +1,11 @@
 import type { CredibilitySummary } from "@/lib/credibility";
 import {
-  creditRankingSignal,
   profileMatchesFilters,
   rankProfiles,
   type PeopleDiscoveryFilters,
   type PeopleDiscoverySort,
   type ProfileDiscoveryLike,
 } from "@/lib/discovery-ranking";
-import { smartDiscoveryScore } from "@/lib/smart-discovery-ranking";
 import {
   normalizeSmartQueryText,
   parseSmartQuery,
@@ -20,7 +18,6 @@ import {
 } from "@/lib/smart-query-scoring";
 
 interface SmartProfileSignals {
-  credit: number;
   profile: ProfileDiscoveryLike;
   score: number;
   semanticRelevance: number;
@@ -117,12 +114,9 @@ function matchesSmartProfileConstraints(
   }
   const reviewed = profileHasReviewedEvidence(profile, credibility);
   if (facets.verified !== null && reviewed !== facets.verified) return false;
-  if (
-    facets.minCredit !== null &&
-    (!credibility || credibility.score === null || credibility.score < facets.minCredit)
-  ) {
-    return false;
-  }
+  // Context-free credibility thresholds are not valid hard constraints for the
+  // general people directory. Credibility is assessed later in a concrete
+  // transaction role/category, not used to exclude people here.
   if (facets.location && !matchesLocation(profile, facets.location)) return false;
 
   // A people record cannot truthfully satisfy offer-specific hard constraints. Fail closed instead
@@ -159,36 +153,25 @@ function rankSmartProfiles<T extends ProfileDiscoveryLike>(
   personalPriorities: readonly string[],
   sort: PeopleDiscoverySort,
 ) {
-  const maximumOffers = Math.max(1, ...profiles.map((profile) => profile.offerCount));
   const signals = profiles.map((profile): SmartProfileSignals => {
     const credibility = credibilityByProfile.get(profile.id);
     const fields = profileTextFields(profile);
     const causeIds = profileCauseIds(profile);
     const semanticRelevance = smartInterpretationScore(interpretation, fields);
-    const credit = creditRankingSignal(credibility);
     const evidenceQuality = profileEvidenceQuality(profile, credibility);
-    const score = smartDiscoveryScore({
-      semanticRelevance,
-      evidenceQuality,
-      personalMoralFit: smartPersonalPriorityScore(causeIds, personalPriorities),
-      deadlineUrgency: 0,
-      credit,
-    });
-    return { credit, profile, score, semanticRelevance };
+    const personalPriorityFit = smartPersonalPriorityScore(causeIds, personalPriorities);
+    const offerAvailability = profile.offerCount > 0 ? 1 : 0;
+    const score = clamp(
+      0.56 * semanticRelevance +
+        0.22 * evidenceQuality +
+        0.12 * personalPriorityFit +
+        0.1 * offerAvailability,
+    );
+    return { profile, score, semanticRelevance };
   });
 
   return signals
     .sort((left, right) => {
-      if (sort === "credit") {
-        return right.credit - left.credit || right.score - left.score ||
-          left.profile.id.localeCompare(right.profile.id);
-      }
-      if (sort === "offers") {
-        const leftOffers = Math.log1p(left.profile.offerCount) / Math.log1p(maximumOffers);
-        const rightOffers = Math.log1p(right.profile.offerCount) / Math.log1p(maximumOffers);
-        return rightOffers - leftOffers || right.score - left.score ||
-          left.profile.id.localeCompare(right.profile.id);
-      }
       if (sort === "newest") {
         return Date.parse(right.profile.created_at) - Date.parse(left.profile.created_at) ||
           right.score - left.score || left.profile.id.localeCompare(right.profile.id);

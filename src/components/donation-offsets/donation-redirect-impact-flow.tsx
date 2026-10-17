@@ -266,7 +266,7 @@ function LocalDateTime({ iso }: { iso: string }) {
   const validDate = Number.isFinite(date.getTime());
   let label = validDate ? iso : "Completion time unavailable";
   if (hydrated && validDate) {
-    label = new Intl.DateTimeFormat(undefined, {
+    label = new Intl.DateTimeFormat("en-US", {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",

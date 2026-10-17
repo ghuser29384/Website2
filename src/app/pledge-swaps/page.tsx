@@ -196,7 +196,7 @@ export default async function PledgeSwapsPage() {
         <Breadcrumbs items={[{ href: "/pledge-swaps", label: "Pledge swaps" }]} />
       </header>
 
-      <main className={`mt-product-main ${styles.main}`} id="main-content" tabIndex={-1}>
+      <main className={`mt-product-main ${styles.main}`} data-mt-surface="pledge-swaps" id="main-content" tabIndex={-1}>
         <section className={styles.hero} aria-labelledby="pledge-swaps-heading">
           <div className={styles.heroCopy}>
             <h1 id="pledge-swaps-heading">Make a promise. Get a promise you value.</h1>

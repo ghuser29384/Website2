@@ -5,6 +5,7 @@ import { createMatchConciergeRequestAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
+import { readPublicData } from "@/lib/public-read-deadline";
 import { formatLocation, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { loadSmartQueryCausePriorities } from "@/lib/smart-query-personalization";
@@ -175,14 +176,14 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
       }
 
       if (!budgetReservation?.limited) {
-        results = await searchWishRegistryPreviews({
+        results = await readPublicData(searchWishRegistryPreviews({
           cause,
           limit: 24,
           opennessToPayment,
           opennessToPledges,
           personalPriorities,
           query,
-        });
+        }));
       }
       sparsePrivacyFloorApplied = shouldApplySparseResultPrivacyFloor({
         resultCount: results.length,
@@ -320,8 +321,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
 
           {!hasSupabaseEnv() ? (
             <div className="status-banner status-banner-error">
-              Supabase is not configured yet. Add environment variables and apply the SQL schema
-              before using the live registry.
+              The live registry is temporarily unavailable. Please try again later.
             </div>
           ) : null}
 
@@ -483,8 +483,26 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                   </div>
                 </article>
               ))
-            ) : examplePreviews.length ? (
-              examplePreviews.map((preview) => (
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No broad previews are available for that view.</strong>
+                  <p>
+                    Try a wider cause term, clear a trade-mode filter, or add your own broad
+                    profile from the dashboard.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+        <section className="section section-white" id="registry-examples">
+          <details className="details-panel">
+            <summary>Learning examples of broad wish profiles</summary>
+            <div className="details-content">
+              <p>Illustrations only. These are not available participants or search results.</p>
+              <div className="data-grid">
+                {examplePreviews.map((preview) => (
                 <article className="panel data-card" key={preview.id}>
                   <div className="profile-card-head">
                     <div>
@@ -512,19 +530,10 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                     both sides explicitly approve the next stage.
                   </p>
                 </article>
-              ))
-            ) : (
-              <div className="empty-state">
-                <div>
-                  <strong>No broad previews are available for that view.</strong>
-                  <p>
-                    Try a wider cause term, clear a trade-mode filter, or add your own broad
-                    profile from the dashboard.
-                  </p>
-                </div>
+              ))}
               </div>
-            )}
-          </div>
+            </div>
+          </details>
         </section>
         <section className="section section-white" id="registry-technical-details">
           <details className="details-panel">

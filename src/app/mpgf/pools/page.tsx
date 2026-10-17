@@ -301,7 +301,7 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
       ? `${facets.deadlineBeforeInclusive ? "By" : "Before"} ${facets.deadlineBefore}`
       : null,
     facets.maxAmountCents !== null
-      ? `Cycle budget ${facets.maxAmountInclusive ? "≤" : "<"} $${(facets.maxAmountCents / 100).toLocaleString()}`
+      ? `Cycle budget ${facets.maxAmountInclusive ? "≤" : "<"} $${(facets.maxAmountCents / 100).toLocaleString("en-US")}`
       : null,
   ].filter((label): label is string => Boolean(label));
 

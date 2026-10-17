@@ -1,4 +1,4 @@
-import { getPublicProfilePageData } from "@/lib/app-data";
+import { getPublicProfileSummary } from "@/lib/app-data";
 import {
   CREDIBILITY_CATEGORIES,
   CREDIBILITY_ROLES,
@@ -55,8 +55,8 @@ export async function GET(request: Request, { params }: ProfileCredibilityRouteP
     );
   }
 
-  const profileData = await getPublicProfilePageData(profileId);
-  if (!profileData.profile) {
+  const profile = await getPublicProfileSummary(profileId);
+  if (!profile) {
     return buildMoralTradeApiJsonResponse(
       { ok: false, error: "Public profile not found." },
       "no_store_dynamic",
@@ -73,8 +73,8 @@ export async function GET(request: Request, { params }: ProfileCredibilityRouteP
     ok: true,
     checkedAt: new Date().toISOString(),
     profile: {
-      id: profileData.profile.id,
-      displayName: profileData.profile.resolvedName,
+      id: profile.id,
+      displayName: profile.resolvedName,
     },
     context: { role: role ?? null, category: category ?? null },
     credibility: summary,

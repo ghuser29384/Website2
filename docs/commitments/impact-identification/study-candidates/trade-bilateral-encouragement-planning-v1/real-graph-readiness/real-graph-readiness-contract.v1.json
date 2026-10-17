@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "commitments-trade-real-graph-readiness-contract-v1",
+  "status": "aggregate_readiness_gate_only",
+  "boundStudyKey": "synthetic:trade-bilateral-encouragement-planning-v1",
+  "boundStudyInstancePayloadHash": "sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2",
+  "boundPrecisionReportPayloadHash": "sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f",
+  "boundProtocolPayloadHash": "sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a",
+  "boundTemplatePayloadHash": "sha256:cf0a7a96294b431dcd79879fa01b7d1031ea50a842cebca6986e13351bcbb1e1",
+  "boundGraphFeasibilityContractPayloadHash": "sha256:6c6879a80062a6e923714bdf3e7e79105de8049a3347088a6f4b77507b8e6c95",
+  "boundEvidenceToProductMappingHash": "sha256:eb4aadae8491c1a6924fca03acdeb9157b07a1439098e736c88e549db16b59b8",
+  "aggregateReportSchemaRawSha256": "sha256:5c4fb53abd901d6b71e62438147ee3f50cd5706ac461f58b5169753d23865366",
+  "protectedRunSchemaRawSha256": "sha256:bc65c24e32a615519d2eb2edb4638a40defe344db938548c29314b288354c29b",
+  "currentEvidencePayloadHash": "sha256:400d40a4ca1592d601ed9f3fdc5b228cc6e6d13f64b126d98eecc81d3a2a1197",
+  "syntheticFixturesPayloadHash": "sha256:5e4f5e7e866acad263204c32314f47e481a85d758617cb4eef17002e38c617c1",
+  "observedRuntimeMatcher": {
+    "repositoryCommit": "ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b",
+    "path": "src/lib/core-trade-base.ts",
+    "gitBlobSha": "4d7bcd9c9e89d06c9d478be1c10874861662727e",
+    "exportedFunction": "listReciprocalMatches",
+    "observedCriteria": [
+      "candidate_workflow_status_published",
+      "candidate_status_open",
+      "same_mode",
+      "different_owner",
+      "different_offer",
+      "reciprocal_offered_and_requested_causes"
+    ],
+    "researchCanonicalityStatus": "required_not_completed",
+    "reasonCode": "runtime_query_does_not_bind_all_research_moderation_safety_legality_consent_block_and_restriction_gates"
+  },
+  "canonicalEligibilitySourceStatus": "required_not_completed",
+  "prohibitedGraphSources": [
+    "recommendation_graph_edges",
+    "recommendation_exposures",
+    "recommendation_interactions",
+    "trade_threads_without_frozen_eligibility",
+    "raw_profile_relationships"
+  ],
+  "aggregateOnlyEvidencePolicy": {
+    "rowLevelQueriesPermitted": false,
+    "rowLevelExportsPermitted": false,
+    "nodeListsPermitted": false,
+    "edgeListsPermitted": false,
+    "participantIdentifiersPermitted": false,
+    "offerContentsPermitted": false,
+    "currentUserCountIsStudySampleSize": false
+  },
+  "currentReadinessState": {
+    "dataReadiness": "insufficient_real_eligible_graph",
+    "eligibleDirectedDyadCount": 0,
+    "realGraphDiagnosticsStatus": "blocked_not_run",
+    "protectedDataExportAuthorized": false,
+    "privacyReviewStatus": "required_not_completed",
+    "ethicsDeterminationStatus": "required_not_completed",
+    "assignmentGenerated": false,
+    "assignmentSeedGenerated": false,
+    "executionDecision": "no_launch"
+  },
+  "futureProtectedRunPolicy": {
+    "separateExactAuthorizationRequired": true,
+    "canonicalEligibilitySourceMustPass": true,
+    "privacyReviewMustPass": true,
+    "ethicsDeterminationMustPass": true,
+    "consentOrWaiverMustBeIndependentlyApproved": true,
+    "purposeLimitedServiceIdentityRequired": true,
+    "appendOnlyAccessLogRequired": true,
+    "studySpecificHmacSha256Required": true,
+    "unkeyedIdentifierHashPermitted": false,
+    "reversibleMappingPermitted": false,
+    "rawIdentifiersRemainInSource": true,
+    "freeTextRemainsInSource": true,
+    "encryptedEphemeralProcessingRequired": true,
+    "maximumWorkingRetentionHours": 24,
+    "verifiedDeletionRequired": true,
+    "aggregateOnlyOutputRequired": true,
+    "smallCellPolicyMustBeIndependentlyApproved": true,
+    "assignmentEntropyGenerationPermitted": false
+  },
+  "evidenceToProductBoundary": {
+    "supports": [
+      "current_aggregate_data_readiness_is_insufficient",
+      "protected_row_level_export_is_not_currently_justified",
+      "future_protected_run_requirements_are_frozen"
+    ],
+    "doesNotSupport": [
+      "real_graph_feasibility",
+      "causal_identification",
+      "empirical_calibration",
+      "participant_expected_additional",
+      "participant_direct_causal_attribution",
+      "pr534_methodology_approval_or_activation"
+    ]
+  },
+  "executionAuthorized": false,
+  "realUserAssignmentAllowed": false,
+  "studyRegistrationAuthorized": false,
+  "deploymentAuthorized": false,
+  "contractPayloadHash": "sha256:fc1274b0ecb26de8f93a06e4f12e22ff6f1d440c2dd53dbbd69f4a597a0ab14a"
+}

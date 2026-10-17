@@ -1,0 +1,64 @@
+name: Contact page layout QA
+
+on:
+  pull_request:
+    paths:
+      - "src/app/contact/**"
+      - "src/app/*.css"
+      - "src/app/layout.tsx"
+      - "src/components/layout/site-topbar.tsx"
+      - "src/components/layout/site-footer.tsx"
+      - "src/lib/site.ts"
+      - "src/lib/contact-page-layout.test.ts"
+      - "tests/contact-page-layout.spec.ts"
+      - ".github/workflows/contact-page-layout-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contact-layout-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  contact-layout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        id: install
+        run: npm ci
+      - name: Check contact contracts
+        run: node --import tsx --test src/lib/contact-page-layout.test.ts
+      - name: Lint changed TypeScript
+        run: npx eslint src/app/contact/page.tsx src/lib/contact-page-layout.test.ts tests/contact-page-layout.spec.ts
+      - name: Build production application without production credentials
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Check rendered contact route and preserve screenshots
+        run: npm run test:e2e -- tests/contact-page-layout.spec.ts --workers=1 --reporter=line
+      - name: Run repository tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm test
+      - name: Type-check repository
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx tsc --noEmit
+      - name: Save browser evidence
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: contact-page-layout-${{ github.event.pull_request.head.sha }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn

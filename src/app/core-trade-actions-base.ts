@@ -271,7 +271,7 @@ async function queuePrivateNotification({
 }
 
 async function getThreadParticipant(threadId: string, userId: string) {
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const { data: thread } = await supabase
     .from("trade_threads")
     .select("*")
@@ -377,12 +377,6 @@ export async function saveCoreOfferAction(formData: FormData) {
     if (intent === "submit" && !readCheckbox(formData, "voluntary_certification")) {
       throw new Error("Confirm that the proposal is voluntary and contains no threat or retaliation.");
     }
-    if (intent === "submit" && !readCheckbox(formData, "public_evidence_certification")) {
-      throw new Error(
-        "Confirm that agreement evidence will be public by default and that only public-safe copies will be submitted.",
-      );
-    }
-
     const fingerprint = buildFingerprint([
       offeredCause,
       requestedCause,
@@ -607,7 +601,7 @@ export async function changeCoreOfferStateAction(formData: FormData) {
   const requestedAction = read(formData, "lifecycle_action");
   const returnTo = safeInternalPath(read(formData, "return_to"), `/trades/${offerId}/manage`);
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
 
   try {
     const { data: offer } = await supabase
@@ -638,21 +632,21 @@ export async function changeCoreOfferStateAction(formData: FormData) {
     }
 
     if (requestedAction === "delete") {
-      const { count: agreementCount } = await supabase
-        .from("agreements")
-        .select("id", { count: "exact", head: true })
-        .eq("offer_id", offerId);
-      if ((agreementCount ?? 0) > 0) {
-        await supabase
-          .from("offers")
-          .update({ workflow_status: "deleted", status: "closed", deleted_at: now, updated_at: now })
-          .eq("id", offerId);
-      } else {
-        const { error } = await supabase.from("offers").delete().eq("id", offerId);
-        if (error) throw new Error(error.message);
-      }
+      // Keep a recoverable tombstone. Hard deletion can race with a newly
+      // created agreement and cascade-delete participant history.
+      const { error } = await supabase
+        .from("offers")
+        .update({
+          workflow_status: "deleted",
+          status: "closed",
+          deleted_at: now,
+          updated_at: now,
+        })
+        .eq("id", offerId)
+        .eq("owner_id", viewer.authUser.id);
+      if (error) throw new Error(error.message);
       revalidatePath("/offers");
-      redirectWithMessage("/trades/new", "message", "Draft deleted.");
+      redirectWithMessage("/trades/new", "message", "Draft removed from your active workspace.");
     }
 
     throw new Error("Unknown lifecycle action.");
@@ -665,7 +659,7 @@ export async function createTradeInvitationAction(formData: FormData) {
   const offerId = read(formData, "offer_id");
   const returnTo = `/trades/${offerId}/invite`;
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
 
   try {
     const recipientEmail = read(formData, "recipient_email").toLowerCase();
@@ -708,7 +702,7 @@ export async function revokeTradeInvitationAction(formData: FormData) {
   const offerId = read(formData, "offer_id");
   const returnTo = `/trades/${offerId}/invite`;
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   try {
     const { error } = await supabase.rpc("revoke_trade_invitation_v2", {
       p_actor_id: viewer.authUser.id,
@@ -731,7 +725,7 @@ export async function respondToTradeInvitationAction(formData: FormData) {
   const token = read(formData, "token");
   const returnTo = `/invitations/${token}`;
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const decision = read(formData, "decision");
 
   try {
@@ -911,7 +905,7 @@ export async function blockTradeThreadAction(formData: FormData) {
   const threadId = read(formData, "thread_id");
   const returnTo = `/messages/${threadId}`;
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   try {
     const { error } = await supabase.rpc("block_trade_pair_v2", {
       p_actor_id: viewer.authUser.id,
@@ -1024,7 +1018,7 @@ export async function decideCounterproposalAction(formData: FormData) {
   const proposalId = read(formData, "proposal_id");
   const returnTo = `/messages/${threadId}`;
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const decision = read(formData, "decision");
 
   try {
@@ -1099,7 +1093,7 @@ export async function confirmAgreementVersionAction(formData: FormData) {
   const agreementVersionId = read(formData, "agreement_version_id");
   const returnTo = `/trade-agreements/${agreementId}`;
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
 
   try {
     if (!agreementVersionId) {
@@ -1781,8 +1775,13 @@ export async function reviewCoreOfferAction(formData: FormData) {
     if (decision === "approve") update.published_at = now;
     if (decision === "close") update.closed_at = now;
 
+    const { error: updateError } = await supabase
+      .from("offers")
+      .update(update)
+      .eq("id", offerId);
+    if (updateError) throw new Error(updateError.message);
+
     await Promise.all([
-      supabase.from("offers").update(update).eq("id", offerId),
       supabase.from("trade_review_events").insert({
         offer_id: offerId,
         reviewer_id: viewer.authUser.id,

@@ -1,0 +1,192 @@
+name: Repair one-person browser redirect and residue QA v2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/one-person-browser-redirect-repair-controller-v2.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: one-person-browser-redirect-repair-controller-v2
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/one-person-browser-redirect-repair-controller-v2.yml
+  TARGET_BRANCH: feature/one-person-one-account-20260731
+  EXPECTED_HEAD: 3ade190729af5b652622c03d198bb2f796559294
+  ACTIONS_PATH: src/app/identity/actions.ts
+  BROWSER_TEST_PATH: tests/one-person-account-authenticated.spec.ts
+  QA_WORKFLOW_PATH: .github/workflows/one-person-account-qa.yml
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Verify scope and remove controller from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n --arg message 'Remove one-person browser redirect repair controller v2' --arg sha "$sha" --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Check out exact feature head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+          test "$(git rev-parse "refs/remotes/origin/$TARGET_BRANCH")" = "$EXPECTED_HEAD"
+          git switch --detach "$EXPECTED_HEAD"
+
+      - name: Repair redirect control flow and cleanup assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def unique_index(lines: list[str], exact: str, label: str) -> int:
+              matches = [index for index, line in enumerate(lines) if line == exact]
+              if len(matches) != 1:
+                  raise SystemExit(f'unexpected {label} inventory: {matches}')
+              return matches[0]
+
+          actions_path = Path('src/app/identity/actions.ts')
+          lines = actions_path.read_text(encoding='utf-8').splitlines()
+
+          start_call = unique_index(
+              lines,
+              '    const result = await startOnePersonVerification({',
+              'start-verification call',
+          )
+          if lines[start_call - 1] != '  try {':
+              raise SystemExit('start verification is not inside the expected try block')
+          lines.insert(start_call - 1, '  let redirectTarget: string;')
+
+          redirect_line = unique_index(
+              lines,
+              '    redirect(result.externalUrl || result.statusPath);',
+              'start redirect',
+          )
+          lines[redirect_line] = '    redirectTarget = result.externalUrl || result.statusPath;'
+
+          start_error = unique_index(
+              lines,
+              '      error instanceof Error ? error.message : "Unable to start identity verification.",',
+              'start error handler',
+          )
+          if lines[start_error + 1] != '    );' or lines[start_error + 2] != '  }':
+              raise SystemExit('unexpected start error-handler ending')
+          lines.insert(start_error + 3, '  redirect(redirectTarget);')
+
+          review_success = unique_index(
+              lines,
+              '    redirectWith("/admin/identity", "message", `Review recorded by ${reviewer.displayName}.`);',
+              'manual-review success redirect',
+          )
+          lines.pop(review_success)
+          review_error = unique_index(
+              lines,
+              '      error instanceof Error ? error.message : "Unable to record review.",',
+              'manual-review error handler',
+          )
+          if lines[review_error + 1] != '    );' or lines[review_error + 2] != '  }':
+              raise SystemExit('unexpected manual-review error-handler ending')
+          lines.insert(
+              review_error + 3,
+              '  redirectWith("/admin/identity", "message", `Review recorded by ${reviewer.displayName}.`);',
+          )
+
+          if '    redirect(result.externalUrl || result.statusPath);' in lines:
+              raise SystemExit('swallowed redirect remains')
+          actions_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+          test_path = Path('tests/one-person-account-authenticated.spec.ts')
+          test_lines = test_path.read_text(encoding='utf-8').splitlines()
+          url_assertion = unique_index(
+              test_lines,
+              '    await expect(page).toHaveURL(/\\/identity\\/status/);',
+              'identity status URL assertion',
+          )
+          if test_lines[url_assertion + 1] != '    session = await readIdentitySession(context);':
+              raise SystemExit('identity session is not captured immediately after the URL assertion')
+          test_lines[url_assertion], test_lines[url_assertion + 1] = (
+              test_lines[url_assertion + 1],
+              test_lines[url_assertion],
+          )
+          test_path.write_text('\n'.join(test_lines) + '\n', encoding='utf-8')
+
+          workflow_path = Path('.github/workflows/one-person-account-qa.yml')
+          workflow_lines = workflow_path.read_text(encoding='utf-8').splitlines()
+          fixture_filter = unique_index(
+              workflow_lines,
+              "              where lower(coalesce(raw_user_meta_data ->> 'qa_fixture', 'false')) = 'true'",
+              'one-person residue auth-user filter',
+          )
+          workflow_lines.insert(
+              fixture_filter + 1,
+              "                and nullif(btrim(coalesce(raw_user_meta_data ->> 'one_person_qa_run_id', '')), '') is not null",
+          )
+          workflow_path.write_text('\n'.join(workflow_lines) + '\n', encoding='utf-8')
+          PY
+
+          ruby -e 'require "yaml"; YAML.parse_file(ARGV[0]) or abort("invalid workflow YAML")' "$QA_WORKFLOW_PATH"
+          git diff --check
+          actual="$(git diff --name-only | sort | tr '\n' ' ')"
+          test "$actual" = ".github/workflows/one-person-account-qa.yml src/app/identity/actions.ts tests/one-person-account-authenticated.spec.ts "
+          grep -Fq 'redirect(redirectTarget);' "$ACTIONS_PATH"
+          grep -Fq 'one_person_qa_run_id' "$QA_WORKFLOW_PATH"
+
+      - name: Commit and upload exact candidate
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$ACTIONS_PATH" "$BROWSER_TEST_PATH" "$QA_WORKFLOW_PATH"
+          git diff --cached --check
+          git commit -m 'Preserve one-person server-action redirects in browser QA'
+          candidate_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_HEAD"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Prepared exact browser repair candidate \`$candidate_sha\` from \`$EXPECTED_HEAD\`. The branch remains draft and production is unchanged."
+          set +e
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_HEAD" origin "HEAD:refs/heads/$TARGET_BRANCH"
+          push_status=$?
+          set -e
+          if [[ "$push_status" -ne 0 ]]; then
+            echo "The workflow-path ref update was rejected after candidate-object upload, as expected."
+          fi
+
+      - name: Report completion
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+        shell: bash
+        run: gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Browser redirect repair v2 finished. Candidate: \`${CANDIDATE_SHA:-unavailable}\`. No production action was attempted."
+
+# The workflow was first registered in an earlier commit; this edit intentionally triggers it.

@@ -1,0 +1,80 @@
+name: Friendly site copy production 2026-10-04
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/friendly-site-copy-production-20261004.yml]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: friendly-site-copy-production-20261004
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify the reviewed copy and exact main candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object public/moral-trade-create/index.html)" = '0932412eb272ff9b389ec3b408dfe201541ff367'
+          test "$(git hash-object public/moral-trade-discover-search.js)" = '518becbea73a60abcc209d99995dbe455fa4c866'
+          test "$(git hash-object public/moral-trade-input-assist.js)" = 'c9944fe713efea34a2b6c1cf95ed9f19eedfd2dd'
+          test "$(git hash-object public/moral-trade-live-now.js)" = '52d03851162c4b2301f44c91d15368e4805f20d1'
+          test "$(git hash-object public/moral-trade-live-route-recommendations.js)" = '05410d6cdac3d3bb2eb9f09d5bd9c61c0c90ce22'
+          test "$(git hash-object public/moral-trade-smart-query.js)" = '5ffbee1f2f2f8a49cb6730bd98e1913d923a9d0c'
+          test "$(git hash-object scripts/discover-live-only-contract.test.mjs)" = '816388df22b962a71f909426d1dbd7664cdecae7'
+          test "$(git hash-object src/app/complete-profile/page.tsx)" = '5c66a1017a55241b04c28803b66855239e3d8fff'
+          test "$(git hash-object src/app/invite/page.tsx)" = 'd80d4478830c7d5dd352dfabd99dcf30b2d6c1f8'
+          test "$(git hash-object src/app/messages/page.tsx)" = '1f248ad6c5e40887b9347493357d3ccd72433f0b'
+          test "$(git hash-object src/app/not-found.tsx)" = 'b8789bceef54b3167e05fc288f0112e30aa54329'
+          test "$(git hash-object src/app/onboarding/page.tsx)" = '53e89d9b86e39c8749eb61563f0295637bc1782e'
+          test "$(git hash-object src/components/auth/auth-card.tsx)" = '1326493d09afc91d5a618c4a410b3b15655d2f4b'
+          test "$(git hash-object src/components/community/comment-thread.tsx)" = 'df04edd30e38ee6ccb53093e0e26f2f3769fcb04'
+          test "$(git hash-object src/components/core-trade/invitation-share-controls.tsx)" = '81feaa9aa14c8d16f8b3d8ab4284c60dbd2a0c94'
+          test "$(git hash-object src/components/create/create-route-chooser.tsx)" = '0b19cab9f29be81694ef150ccf28c13bdbaada93'
+          test "$(git hash-object src/components/dashboard/background-local-drafts-panel.tsx)" = '45bed6401c63b72d78f95c5e92c1526615c5f19a'
+          test "$(git hash-object src/components/dashboard/profile-portability-panel.tsx)" = '00b0feb79ee945e89b6f363852f8c3a4a5e1dccf'
+          test "$(git hash-object src/components/home/offer-details.tsx)" = '50a6d4cd6eb6140f8572e20dd83da09058801f88'
+          test "$(git hash-object src/components/home/values-interview.tsx)" = 'd671bb98852c9e1d5a89dd88237a2080026d6dbd'
+          test "$(git hash-object src/components/layout/public-route-error.tsx)" = 'bef6ff753767313c5fbe4a8a613a6538d4b69505'
+          test "$(git hash-object src/components/offers/offer-create-form.tsx)" = 'de5af8c116fcf3a1dbc055c6ad7b631edbcbebcf'
+          test "$(git hash-object src/components/profile/complete-profile-connections.tsx)" = '369bccc1aba702ddcd6129d88d78531c9bed86da'
+          test "$(git hash-object src/components/profile/complete-profile-review.tsx)" = '069b22a1f4154bd3a76f7f3c98d9f46235c1cdf2'
+          test "$(git hash-object src/lib/profile-priorities-access.test.ts)" = 'f9b9c8034febf0daab3e1699c07c68a11cc1f238'
+          test "$(git hash-object src/lib/profile-username.ts)" = 'e14ba31ca316fad7abaedf79d0d996d2057118a1'
+          test "$(git hash-object src/live-now-data.test.ts)" = '436464c1aaaaac623b95fe53a702ebbcbcd82499'
+          test "$(git hash-object tests/bottleneck-atlas.spec.ts)" = '144f45fb95dbccdcb4747dfee810f30b139b7a8b'
+          test "$(git hash-object tests/discover-live-search.spec.ts)" = '0d05e5404b2abd6fcd654ee06934191fc9e67492'
+          test "$(git hash-object tests/exact-live-now-recommendations.spec.ts)" = 'f97e2e10f6585e0ed27e1a29f55523a78b4f401f'
+          test "$(git hash-object tests/feed-create-phase1-authenticated.spec.ts)" = 'bb576ccf56dc7b2eb329dd3176a6fc54c7db9707'
+          git diff --check HEAD^
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+      - name: Dispatch the existing gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml" --jq .state)" = 'active'
+          jq -n --arg sha "$GITHUB_SHA" \
+            '{ref:"main",inputs:{ref:"main",target:"production",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+                --input - >/dev/null

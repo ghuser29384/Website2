@@ -1,0 +1,303 @@
+name: MPGF DAC pledge intent and canonical-ledger gates
+# Exact-head retrigger after the rollback-only DAC fixture was aligned with the approved quote contract.
+
+on:
+  push:
+    branches:
+      - fix/mpgf-dac-pledge-intent-ledger-20260806
+    paths:
+      - ".github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml"
+      - "src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts"
+      - "supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql"
+      - "supabase/tests/mpgf_dac_pledge_intent_ledger.sql"
+  pull_request:
+    branches:
+      - fix/mpgf-pool-publication-materialization-20260806
+    paths:
+      - ".github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml"
+      - "src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts"
+      - "supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql"
+      - "supabase/tests/mpgf_dac_pledge_intent_ledger.sql"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mpgf-dac-pledge-intent-ledger-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  MIGRATION_PATH: supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql
+  REGRESSION_PATH: supabase/tests/mpgf_dac_pledge_intent_ledger.sql
+  SOURCE_TEST_PATH: src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts
+
+jobs:
+  source-gates:
+    name: Exact-head source, tests, lint, typecheck, and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || 'db6140716e2a9f5b8b2564f2ee03ace44023784f' }}
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
+          {
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            sha256sum "$MIGRATION_PATH" "$REGRESSION_PATH" "$SOURCE_TEST_PATH"
+          } | tee mpgf-dac-pledge-exact-head.txt
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused architecture contracts
+        run: |
+          set -euo pipefail
+          node --import tsx --test "$SOURCE_TEST_PATH" \
+            | tee mpgf-dac-pledge-focused.log
+
+      - name: Run complete repository tests
+        run: |
+          set -euo pipefail
+          npm test | tee mpgf-dac-pledge-repository-tests.log
+
+      - name: Run repository lint
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet | tee mpgf-dac-pledge-lint.log
+
+      - name: Run strict TypeScript
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit | tee mpgf-dac-pledge-typecheck.log
+
+      - name: Build the production application
+        run: |
+          set -euo pipefail
+          npm run build | tee mpgf-dac-pledge-build.log
+
+      - name: Verify exact diff hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check "$EXPECTED_BASE_SHA" "$EXPECTED_HEAD_SHA"
+          git diff --name-only "$EXPECTED_BASE_SHA" "$EXPECTED_HEAD_SHA" \
+            | sort | tee mpgf-dac-pledge-diff-files.txt
+
+      - name: Upload source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-pledge-source-${{ github.run_id }}
+          path: |
+            mpgf-dac-pledge-*.txt
+            mpgf-dac-pledge-*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  isolated-qa:
+    name: Atomic two-pledger, RLS, idempotency, and no-payment proof
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: source-gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact isolated-QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only Moral Trade QA target.")
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Compile the additive migration in a rollback-only transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql").read_text()
+          if not source.lstrip().startswith("begin;"):
+              raise SystemExit("Migration does not begin with begin;")
+          if not source.rstrip().endswith("commit;"):
+              raise SystemExit("Migration does not end with commit;")
+          compiled = source.rstrip()[:-len("commit;")] + "rollback;\n"
+          Path("mpgf-dac-pledge-migration-rollback.sql").write_text(compiled)
+          PY
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file mpgf-dac-pledge-migration-rollback.sql \
+            2>&1 | tee mpgf-dac-pledge-compile.log
+
+      - name: Apply the additive DAC pledge foundation to isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum "$MIGRATION_PATH" | tee mpgf-dac-pledge-migration.sha256
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file "$MIGRATION_PATH" \
+            2>&1 | tee mpgf-dac-pledge-apply.log
+
+      - name: Run rollback-only multi-role DAC pledge regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file "$REGRESSION_PATH" \
+            2>&1 | tee mpgf-dac-pledge-regression.log
+
+      - name: Prove zero fixture residue and the one-ledger architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align <<'SQL' | tee mpgf-dac-pledge-zero-residue.txt
+          select 'fixture_residue=' || (
+            (select count(*) from auth.users where id in (
+              '9a111111-1111-4111-8111-111111111111',
+              '9b222222-2222-4222-8222-222222222222',
+              '9c333333-3333-4333-8333-333333333333',
+              '9d444444-4444-4444-8444-444444444444',
+              '9e555555-5555-4555-8555-555555555555'
+            ))
+            + (select count(*) from public.profiles where id in (
+              '9a111111-1111-4111-8111-111111111111',
+              '9b222222-2222-4222-8222-222222222222',
+              '9c333333-3333-4333-8333-333333333333',
+              '9d444444-4444-4444-8444-444444444444',
+              '9e555555-5555-4555-8555-555555555555'
+            ))
+            + (select count(*) from public.mpgf_pool_reviewers where reviewer_id = '9b222222-2222-4222-8222-222222222222')
+            + (select count(*) from public.mpgf_pool_proposals where id = '9f666666-6666-4666-8666-666666666666')
+            + (select count(*) from public.mpgf_pool_proposal_versions where proposal_id = '9f666666-6666-4666-8666-666666666666')
+            + (select count(*) from public.mpgf_pool_lifecycle_events where proposal_id = '9f666666-6666-4666-8666-666666666666')
+            + (select count(*) from public.mpgf_public_goods_campaigns where id = 'campaign-9f666666666646668666666666666666')
+            + (select count(*) from public.mpgf_public_goods_pledges where campaign_id = 'campaign-9f666666666646668666666666666666')
+            + (select count(*) from public.mpgf_dac_pledge_intents where campaign_id = 'campaign-9f666666666646668666666666666666')
+            + (select count(*) from public.mpgf_dac_pledge_events where campaign_id = 'campaign-9f666666666646668666666666666666')
+            + (select count(*) from public.mpgf_failure_bonus_premium_quotes where pool_proposal_id = '9f666666-6666-4666-8666-666666666666')
+            + (select count(*) from public.mpgf_public_goods_rounds where id = 'qa-dac-pledge-round-20260806')
+            + (select count(*) from public.mpgf_public_goods_match_pools where id = 'qa-dac-pledge-match-20260806')
+          );
+          select 'conditional_ledger_absent=' ||
+            (to_regclass('public.mpgf_conditional_pledges') is null);
+          select 'intent_rows=' || count(*) from public.mpgf_dac_pledge_intents;
+          select 'dac_event_rows=' || count(*) from public.mpgf_dac_pledge_events;
+          SQL
+          grep -Fxq 'fixture_residue=0' mpgf-dac-pledge-zero-residue.txt
+          grep -Fxq 'conditional_ledger_absent=true' mpgf-dac-pledge-zero-residue.txt
+
+      - name: Record installed schema, policies, RPC, and zero payment mutation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --pset pager=off <<'SQL' | tee mpgf-dac-pledge-schema-proof.txt
+          select to_regclass('public.mpgf_dac_pledge_intents') as pledge_intents;
+          select to_regclass('public.mpgf_dac_pledge_events') as pledge_events;
+          select to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') as pledge_rpc;
+          select column_name
+          from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'mpgf_public_goods_pledges'
+            and column_name in (
+              'pledge_intent_id','pool_proposal_id','terms_version',
+              'terms_sha256','accepted_at','expires_at'
+            )
+          order by column_name;
+          select policyname, tablename, cmd
+          from pg_policies
+          where schemaname = 'public'
+            and tablename in ('mpgf_dac_pledge_intents','mpgf_dac_pledge_events')
+          order by tablename, policyname;
+          select count(*) as payment_refs
+          from public.mpgf_public_goods_pledges
+          where pledge_intent_id is not null and payment_intent_ref is not null;
+          SQL
+
+      - name: Upload isolated-QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-pledge-qa-${{ github.run_id }}
+          path: |
+            mpgf-dac-pledge-*.log
+            mpgf-dac-pledge-*.txt
+            mpgf-dac-pledge-*.sha256
+            mpgf-dac-pledge-migration-rollback.sql
+          if-no-files-found: warn
+          retention-days: 14

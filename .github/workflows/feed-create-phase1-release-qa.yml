@@ -1,0 +1,395 @@
+name: Feed to Create Phase 1 release QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/feed-create-phase1-release-qa.yml"
+      - "public/moral-trade-live-feed-create.css"
+      - "public/moral-trade-live-feed-create.js"
+      - "public/moral-trade-live.html"
+      - "src/app/api/feed-create/**"
+      - "src/app/api/live-now/route.ts"
+      - "src/app/core-trade-actions-base.ts"
+      - "src/app/feed-create-actions.ts"
+      - "src/app/trades/[offerId]/manage/page.tsx"
+      - "src/app/trades/new/page.tsx"
+      - "src/components/core-trade/trade-draft-workbench.module.css"
+      - "src/components/core-trade/trade-draft-workbench.tsx"
+      - "src/feed-create-phase1-wiring.test.ts"
+      - "src/lib/feed-create/**"
+      - "src/lib/live-now-recommendations.ts"
+      - "supabase/migrations/20260730150000_feed_create_phase1.sql"
+      - "supabase/migrations/20260801062000_feed_create_phase1_authenticated_runtime.sql"
+      - "supabase/tests/feed_create_phase1*.sql"
+      - "tests/feed-create-phase1-authenticated.spec.ts"
+  workflow_dispatch:
+
+concurrency:
+  group: feed-create-phase1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-release-gate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      FEED_CREATE_BASE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify isolated-QA database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Record exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(git merge-base "$EXPECTED_BASE_SHA" HEAD)" = "$EXPECTED_BASE_SHA"
+          {
+            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
+            printf 'head=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } | tee feed-create-exact-head.txt
+
+      - name: Run exact-main baseline tests and lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_dir="$(mktemp -d)"
+          git worktree add --detach "$base_dir" "$EXPECTED_BASE_SHA"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$base_dir/node_modules"
+          (
+            cd "$base_dir"
+            npm test | tee "$GITHUB_WORKSPACE/feed-create-baseline-tests.log"
+            npm run lint | tee "$GITHUB_WORKSPACE/feed-create-baseline-lint.log"
+          )
+          git worktree remove --force "$base_dir"
+
+      - name: Run focused source, server-resolution, and JavaScript gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check public/moral-trade-live-feed-create.js
+          node --import tsx --test \
+            src/lib/feed-create/phase1.test.ts \
+            src/feed-create-phase1-wiring.test.ts \
+            | tee feed-create-focused.log
+          npx eslint \
+            public/moral-trade-live-feed-create.js \
+            src/app/api/feed-create/events/route.ts \
+            src/app/api/live-now/route.ts \
+            src/app/core-trade-actions-base.ts \
+            src/app/feed-create-actions.ts \
+            'src/app/trades/[offerId]/manage/page.tsx' \
+            src/app/trades/new/page.tsx \
+            src/components/core-trade/trade-draft-workbench.tsx \
+            src/feed-create-phase1-wiring.test.ts \
+            src/lib/feed-create/phase1.test.ts \
+            src/lib/feed-create/phase1.ts \
+            src/lib/live-now-recommendations.ts \
+            tests/feed-create-phase1-authenticated.spec.ts \
+            | tee feed-create-focused-lint.log
+
+      - name: Run complete candidate tests and lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test | tee feed-create-candidate-tests.log
+          npm run lint | tee feed-create-candidate-lint.log
+          git diff --check
+          git diff --check "$EXPECTED_BASE_SHA"...HEAD
+
+      - name: Apply the exact migration to isolated QA once
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="20260730150000"
+          name="feed_create_phase1"
+          conflict="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and coalesce(name, '') <> '$name';" \
+            | tr -d '[:space:]')"
+          test "$conflict" = "0"
+          recorded="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and name = '$name';" \
+            | tr -d '[:space:]')"
+          if [ "$recorded" = "0" ]; then
+            {
+              printf '%s\n' 'begin;'
+              sed '1,4{/^begin;$/d}; ${/^commit;$/d}' supabase/migrations/20260730150000_feed_create_phase1.sql
+              cat <<SQL
+          insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+          values (
+            '$version',
+            array['Applied from exact repository migration supabase/migrations/20260730150000_feed_create_phase1.sql'],
+            '$name',
+            'github-actions:feed-create-phase1'
+          );
+          commit;
+          SQL
+            } | psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1
+          fi
+
+      - name: Apply the authenticated runtime migration to isolated QA once
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="20260801062000"
+          name="feed_create_phase1_authenticated_runtime"
+          conflict="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and coalesce(name, '') <> '$name';" \
+            | tr -d '[:space:]')"
+          test "$conflict" = "0"
+          recorded="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and name = '$name';" \
+            | tr -d '[:space:]')"
+          if [ "$recorded" = "0" ]; then
+            {
+              printf '%s\n' 'begin;'
+              sed '1,5{/^begin;$/d}; ${/^commit;$/d}' supabase/migrations/20260801062000_feed_create_phase1_authenticated_runtime.sql
+              cat <<SQL
+          insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+          values (
+            '$version',
+            array['Applied from exact repository migration supabase/migrations/20260801062000_feed_create_phase1_authenticated_runtime.sql'],
+            '$name',
+            'github-actions:feed-create-phase1'
+          );
+          commit;
+          SQL
+            } | psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1
+          fi
+
+      - name: Verify the isolated-QA migration is recorded
+        shell: bash
+        run: |
+          set -euo pipefail
+          recorded="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where (version = '20260730150000' and name = 'feed_create_phase1') or (version = '20260801062000' and name = 'feed_create_phase1_authenticated_runtime');" \
+            | tr -d '[:space:]')"
+          test "$recorded" = "2"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select to_regclass('public.moral_trade_feed_create_links') is not null and to_regclass('public.moral_trade_feed_create_events') is not null and (select count(*) = 2 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('moral_trade_feed_create_record_event_authenticated','moral_trade_feed_create_save_authenticated') and has_function_privilege('authenticated', p.oid, 'EXECUTE')) and not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('moral_trade_feed_create_record_event_service','moral_trade_feed_create_save_service') and has_function_privilege('authenticated', p.oid, 'EXECUTE'));" \
+            | grep -qx 't'
+
+      - name: Run transactional migration and denial regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/feed_create_phase1.sql \
+            | tee feed-create-database.log
+
+      - name: Create ephemeral authenticated browser fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export FEED_CREATE_QA_PASSWORD="$qa_password"
+          printf 'FEED_CREATE_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/feed_create_phase1_browser_fixture.sql \
+            | tee feed-create-fixture.log
+
+      - name: Verify synthetic Auth identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee feed-create-auth-contract.log
+          import { createClient } from "@supabase/supabase-js";
+
+          for (const email of [
+            "feed-create-viewer-a@qa.invalid",
+            "feed-create-viewer-b@qa.invalid",
+            "feed-create-zero@qa.invalid",
+          ]) {
+            const client = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL,
+              process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+              { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } },
+            );
+            const { error } = await client.auth.signInWithPassword({
+              email,
+              password: process.env.FEED_CREATE_QA_PASSWORD,
+            });
+            if (error) throw new Error(`${email}: ${error.message}`);
+            await client.auth.signOut({ scope: "local" });
+          }
+          console.log("Verified the three isolated-QA Feed-to-Create browser identities.");
+          NODE
+
+      - name: Run exact-base differential TypeScript gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_dir="$(mktemp -d)"
+          git worktree add --detach "$base_dir" "$EXPECTED_BASE_SHA"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$base_dir/node_modules"
+          set +e
+          (
+            cd "$base_dir"
+            "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --pretty false
+          ) > feed-create-base-typescript.log 2>&1
+          base_status=$?
+          "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --pretty false \
+            > feed-create-typescript.log 2>&1
+          candidate_status=$?
+          set -e
+          export FEED_CREATE_BASE_TSC_STATUS="$base_status"
+          export FEED_CREATE_CANDIDATE_TSC_STATUS="$candidate_status"
+          python3 - <<'TYPECHECK'
+          from pathlib import Path
+          import os
+          import re
+
+          pattern = re.compile(r"^(.+?)\(\d+,\d+\): error (TS\d+): (.*)$")
+
+          def diagnostics(path):
+              result = set()
+              for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+                  match = pattern.match(line.strip())
+                  if match:
+                      result.add((match.group(1), match.group(2), match.group(3)))
+              return result
+
+          base = diagnostics("feed-create-base-typescript.log")
+          candidate = diagnostics("feed-create-typescript.log")
+          base_status = int(os.environ["FEED_CREATE_BASE_TSC_STATUS"])
+          candidate_status = int(os.environ["FEED_CREATE_CANDIDATE_TSC_STATUS"])
+          if base_status and not base:
+              raise SystemExit("Exact-main TypeScript failed without parseable diagnostics.")
+          if candidate_status and not candidate:
+              raise SystemExit("Candidate TypeScript failed without parseable diagnostics.")
+          unexpected = sorted(candidate - base)
+          if unexpected:
+              print("Unexpected candidate TypeScript diagnostics:")
+              for file_name, code, message in unexpected:
+                  print(f"{file_name}: {code}: {message}")
+              raise SystemExit(1)
+          print(f"TypeScript differential passed: base={len(base)} candidate={len(candidate)} unexpected=0")
+          TYPECHECK
+          git worktree remove --force "$base_dir"
+
+      - name: Build the exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build | tee feed-create-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the exact production build
+        shell: bash
+        run: |
+          npm run start -- -H 127.0.0.1 -p 3210 > feed-create-server.log 2>&1 &
+          echo "$!" > feed-create-server.pid
+          for attempt in $(seq 1 75); do
+            if curl --fail --silent --show-error http://127.0.0.1:3210/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 240 feed-create-server.log
+          exit 1
+
+      - name: Run authenticated desktop, mobile, negative, duplicate, and no-flash QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/feed-create-phase1-authenticated.spec.ts \
+            --reporter=line \
+            | tee feed-create-browser.log
+
+      - name: Remove all browser fixtures and verify zero residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/feed_create_phase1_browser_cleanup.sql \
+            | tee feed-create-cleanup.log
+          residue="$(sed '/^[[:space:]]*$/d' feed-create-cleanup.log | tail -n 1 | tr -d '[:space:]')"
+          test "$residue" = '{"offers":0,"exposures":0,"profiles":0,"authUsers":0}'
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-create-phase1-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            feed-create-*.log
+            feed-create-exact-head.txt
+            playwright-report
+            test-results

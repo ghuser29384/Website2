@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+process.env.MORAL_TRADE_DISABLE_SUPABASE = "true";
+
 import { GET as publicOfferDetailRoute } from "../app/api/offers/[...slug]/route";
 import { GET as publicOffersFacetsRoute } from "../app/api/offers/facets/route";
 import { GET as publicOffersRoute } from "../app/api/offers/route";
@@ -12,6 +14,7 @@ import {
   buildPublicOffersFacetsPayload,
   getPublicOffersLiveModeFromSearchParams,
   getPublicOfferSlugFromSegments,
+  parsePublicOfferDuration,
   validatePublicOfferDetailPayload,
   validatePublicOffersCollectionPayload,
   validatePublicOffersFacetsPayload,
@@ -155,6 +158,29 @@ test("public offers collection validation fails when listings drift from the pub
         check.evidence.includes("debugOnlyField: additional property"),
     ),
   );
+});
+
+test("public duration summary honors an explicit longer action term", () => {
+  const duration = parsePublicOfferDuration(
+    "Normally complete within 30 days of acceptance; any explicit longer period in either action governs.",
+    "Complete a bounded 20-hour pro bono project over three months.",
+    "Volunteer for ten hours.",
+  );
+
+  assert.equal(duration.value, 3);
+  assert.equal(duration.unit, "months");
+  assert.match(duration.label, /Explicit action term: 3 months/);
+});
+
+test("public duration summary fails closed when conflicting terms lack a governing rule", () => {
+  const duration = parsePublicOfferDuration(
+    "Complete within 30 days.",
+    "Participate for three months.",
+  );
+
+  assert.equal(duration.value, null);
+  assert.equal(duration.unit, "open-ended");
+  assert.match(duration.label, /Not established/);
 });
 
 test("public offers live-mode parser maps public formats to internal offer modes", () => {

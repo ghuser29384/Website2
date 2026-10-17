@@ -1,0 +1,281 @@
+name: PR 212 current-main QA controller
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-current-main-qa-controller
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feat/institutional-trade-system
+  EXPECTED_FEATURE_HEAD: 6bc7a39b90fb56161aac6458ad677b2ead5bc935
+  QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+  QA_WORKFLOW_PATH: .github/workflows/institutional-trade-qa.yml
+  CONTROLLER_PATH: .github/workflows/pr212-current-main-qa-controller.yml
+  TRIGGER_PATH: .github/pr212-current-main-qa-trigger.txt
+
+jobs:
+  integrate-patch-dispatch-verify:
+    if: contains(github.event.head_commit.message, 'Trigger PR 212 current-main QA controller')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out the exact institutional feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Integrate live main and harden additive migration replay
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          observed_head="$(git rev-parse HEAD)"
+          if [[ "$observed_head" != "$EXPECTED_FEATURE_HEAD" ]]; then
+            echo "Feature head moved: expected $EXPECTED_FEATURE_HEAD, found $observed_head" >&2
+            exit 1
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch --no-tags origin main "$TARGET_BRANCH"
+          integrated_main="$(git rev-parse origin/main)"
+          if ! git merge-base --is-ancestor origin/main HEAD; then
+            git merge --no-edit origin/main
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/institutional-trade-qa.yml')
+          text = path.read_text()
+
+          test_line = "            src/institutional-pool-record-trigger.test.ts \\\n"
+          if test_line not in text:
+              anchor = "            src/institutional-trade-migration.test.ts \\\n"
+              if text.count(anchor) != 1:
+                  raise SystemExit('Could not locate the unique source-contract test insertion point.')
+              text = text.replace(anchor, anchor + test_line)
+
+          setup_old = '''          migration=supabase/migrations/20260726123000_institutional_trade_system.sql
+          sha256sum "$migration" | tee institutional-qa-artifacts/institutional-migration.sha256
+'''
+          setup_new = '''          migration=supabase/migrations/20260726123000_institutional_trade_system.sql
+          pool_patch=supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql
+          sha256sum "$migration" | tee institutional-qa-artifacts/institutional-migration.sha256
+          sha256sum "$pool_patch" | tee institutional-qa-artifacts/institutional-pool-trigger-patch.sha256
+'''
+          if 'pool_patch=supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql' not in text:
+              if text.count(setup_old) != 1:
+                  raise SystemExit('Could not locate the unique institutional migration setup block.')
+              text = text.replace(setup_old, setup_new)
+
+          apply_old = '''          fi
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' | tee institutional-qa-artifacts/institutional-schema-inventory.txt
+'''
+          apply_new = '''          fi
+          echo "Compiling the additive pool-trigger migration inside a rollback-only transaction."
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+          begin;
+          \\i $pool_patch
+          rollback;
+          SQL
+          echo "Applying the additive pool-trigger migration atomically to isolated QA."
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction --file "$pool_patch"
+          psql "$QA_SUPABASE_DB_URL" -Atqc "select pg_get_functiondef('public.institutional_validate_pool_record()'::regprocedure)" \
+            | tee institutional-qa-artifacts/institutional-pool-trigger-definition.sql \
+            | grep -F "to_jsonb(new)->>'status'" >/dev/null
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' | tee institutional-qa-artifacts/institutional-schema-inventory.txt
+'''
+          if 'Applying the additive pool-trigger migration atomically to isolated QA.' not in text:
+              if text.count(apply_old) != 1:
+                  raise SystemExit('Could not locate the unique migration-to-inventory boundary.')
+              text = text.replace(apply_old, apply_new)
+
+          path.write_text(text)
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/institutional-trade-qa.yml').read_text()
+          required = [
+              'src/institutional-pool-record-trigger.test.ts',
+              'pool_patch=supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql',
+              'institutional-pool-trigger-patch.sha256',
+              'Compiling the additive pool-trigger migration inside a rollback-only transaction.',
+              'Applying the additive pool-trigger migration atomically to isolated QA.',
+              "to_jsonb(new)->>'status'",
+          ]
+          missing = [marker for marker in required if marker not in text]
+          if missing:
+              raise SystemExit(f'Missing durable QA migration-replay markers: {missing}')
+          PY
+
+          git diff --check
+          if ! git diff --quiet -- "$QA_WORKFLOW_PATH"; then
+            git add "$QA_WORKFLOW_PATH"
+            git commit -m 'Replay institutional pool trigger migration in QA'
+          fi
+          final_head="$(git rev-parse HEAD)"
+          git push origin "HEAD:${TARGET_BRANCH}"
+          echo "integrated_main=$integrated_main" >> "$GITHUB_OUTPUT"
+          echo "final_head=$final_head" >> "$GITHUB_OUTPUT"
+
+      - name: Register the exact QA workflow temporarily on main
+        id: register
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${QA_WORKFLOW_PATH}?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$existing_sha" ]]; then
+            echo "A workflow already exists at $QA_WORKFLOW_PATH on main; refusing to overwrite it." >&2
+            exit 1
+          fi
+          encoded="$(base64 -w0 "$QA_WORKFLOW_PATH")"
+          jq -n \
+            --arg message 'Temporarily register exact PR 212 institutional QA workflow' \
+            --arg content "$encoded" \
+            --arg branch main \
+            '{message:$message,content:$content,branch:$branch}' \
+            | gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${QA_WORKFLOW_PATH}" --input - >/dev/null
+
+          for attempt in $(seq 1 60); do
+            if gh workflow view "$QA_WORKFLOW_PATH" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The temporarily registered QA workflow did not become dispatchable." >&2
+          exit 1
+
+      - name: Dispatch exact-head institutional QA
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          final_head='${{ steps.candidate.outputs.final_head }}'
+          dispatched_after="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          gh workflow run "$QA_WORKFLOW_PATH" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$TARGET_BRANCH" \
+            -f confirm_target="$QA_PROJECT_REF"
+
+          run_json=''
+          for attempt in $(seq 1 120); do
+            run_json="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$QA_WORKFLOW_PATH" \
+              --branch "$TARGET_BRANCH" \
+              --event workflow_dispatch \
+              --limit 30 \
+              --json databaseId,headSha,status,conclusion,url,createdAt \
+              | jq -c --arg sha "$final_head" --arg after "$dispatched_after" \
+                'map(select(.headSha == $sha and .createdAt >= $after)) | sort_by(.createdAt) | reverse | .[0] // empty')"
+            if [[ -n "$run_json" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          if [[ -z "$run_json" ]]; then
+            echo "Could not locate the exact-head QA workflow run for $final_head." >&2
+            exit 1
+          fi
+
+          run_id="$(jq -r .databaseId <<<"$run_json")"
+          run_url="$(jq -r .url <<<"$run_json")"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-current-main-qa-running -->
+          ## PR #212 current-main exact-head QA
+
+          - Integrated main: \`${{ steps.candidate.outputs.integrated_main }}\`
+          - Feature head: \`$final_head\`
+          - QA run: [$run_id]($run_url)
+          - Status: **running**
+          - Target: isolated MoralTrade QA \`$QA_PROJECT_REF\`
+          - Production database migrations and institutional feature activation remain blocked."
+
+      - name: Wait for complete QA and publish result
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set +e
+          run_id='${{ steps.dispatch.outputs.run_id }}'
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
+          watch_status=$?
+          set -e
+
+          run_json="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha,url,jobs)"
+          conclusion="$(jq -r .conclusion <<<"$run_json")"
+          observed_head="$(jq -r .headSha <<<"$run_json")"
+          expected_head='${{ steps.candidate.outputs.final_head }}'
+          if [[ "$observed_head" != "$expected_head" ]]; then
+            echo "QA ran at $observed_head instead of expected $expected_head." >&2
+            exit 1
+          fi
+          jobs="$(jq -c '[.jobs[] | {name,conclusion}]' <<<"$run_json")"
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-current-main-qa-result -->
+          ## PR #212 current-main exact-head QA result
+
+          - Integrated main: \`${{ steps.candidate.outputs.integrated_main }}\`
+          - Feature head: \`$expected_head\`
+          - QA run: [$run_id](${{ steps.dispatch.outputs.run_url }})
+          - Conclusion: **$conclusion**
+          - Job conclusions: \`$jobs\`
+          - PR #212 remains draft and unmerged.
+          - Production database migrations and institutional feature activation remain blocked unless all release gates pass."
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          echo "watch_status=$watch_status" >> "$GITHUB_OUTPUT"
+          if [[ "$conclusion" != 'success' || "$watch_status" != '0' ]]; then
+            exit 1
+          fi
+
+      - name: Report controller failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-current-main-qa-controller-failure -->
+          PR #212 current-main QA controller failed in run $GITHUB_RUN_ID. No production database migration or institutional feature activation was attempted. Inspect any exact-head QA run linked above before proceeding."
+
+      - name: Remove temporary main-branch QA and controller files
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          delete_path() {
+            local path="$1"
+            local message="$2"
+            local sha
+            sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=main" --jq .sha 2>/dev/null || true)"
+            if [[ -n "$sha" ]]; then
+              jq -n --arg message "$message" --arg sha "$sha" --arg branch main \
+                '{message:$message,sha:$sha,branch:$branch}' \
+                | gh api --method DELETE "repos/${GITHUB_REPOSITORY}/contents/${path}" --input - >/dev/null
+            fi
+          }
+          delete_path "$QA_WORKFLOW_PATH" 'Remove temporary PR 212 QA workflow registration'
+          delete_path "$TRIGGER_PATH" 'Remove temporary PR 212 QA trigger marker'
+          delete_path "$CONTROLLER_PATH" 'Remove temporary PR 212 current-main QA controller'

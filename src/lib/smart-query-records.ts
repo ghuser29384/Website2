@@ -76,22 +76,19 @@ export function extractSmartRecordDeadline(
   return result;
 }
 
-export function isVerifiedEvidenceText(value: string | null | undefined) {
-  const normalized = normalizeSmartQueryText(value);
-  if (!normalized) return false;
-  if (/\b(unverified|none|no evidence|self report only|self-report only|not required)\b/.test(normalized)) {
-    return false;
-  }
-  return /\b(verified|reviewed|receipt|receipts|proof|attestation|audit|third party|third-party|evidence|validation|accepted)\b/.test(
-    normalized,
-  );
+/** @deprecated A prose description cannot establish a reviewed outcome.
+ * The existing offers/pool records expose requirements, not an outcome record.
+ * Unknown deliberately matches neither "verified" nor "unverified".
+ */
+export function isVerifiedEvidenceText(_value: string | null | undefined): null {
+  return null;
 }
 
+/** Specificity of proposed evidence TERMS only, never a verification/trust score. */
 export function evidenceTextQuality(value: string | null | undefined) {
   const normalized = normalizeSmartQueryText(value);
-  if (!normalized) return 0;
-  if (!isVerifiedEvidenceText(normalized)) return 0.15;
-  if (/\b(third party|third-party|independent|audit|accepted|reviewed)\b/.test(normalized)) return 1;
+  if (!normalized || /\b(unverified|none|no evidence|not verified|not reviewed|not required|without evidence)\b/.test(normalized)) return 0;
+  if (/\b(third party|third-party|independent|audit)\b/.test(normalized)) return 1;
   if (/\b(receipt|receipts|proof|attestation|validation)\b/.test(normalized)) return 0.84;
-  return 0.68;
+  return /\b(evidence|verification)\b/.test(normalized) ? 0.68 : 0.15;
 }

@@ -69,12 +69,12 @@ function paymentModeEyebrow(mode: string) {
 
 function paymentPostureMessage(mode: string) {
   if (mode === "live") {
-    return "Live mode moves real money and uses compensating refunds rather than claiming impossible payment-level atomicity.";
+    return "Live payments move real money. Failed settlements may require refunds.";
   }
   if (mode === "test") {
     return "TEST MODE — Stripe test objects only. No real charge, donation, tax receipt, or charitable transfer occurs.";
   }
-  return "Stripe payments are disabled on the production site until a verified live account, live keys, signed webhook, recipient destination, and settlement gates are ready.";
+  return "Conditional payments are unavailable.";
 }
 
 function selectedStage(value: string): DonationRedirectStage | null {

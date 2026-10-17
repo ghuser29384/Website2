@@ -2,7 +2,31 @@ const DEFAULT_PUBLIC_SUPABASE_URL = "https://jnpoxvalyjtdghnperyu.supabase.co";
 const DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY =
   "sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT";
 
-function resolvePublicSupabaseEnv() {
+const QA_PUBLIC_SUPABASE_URL = "https://hvmxfjjbdcgjjudmthdz.supabase.co";
+const QA_PUBLIC_SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8";
+
+const QA_PREVIEW_HOSTNAMES = new Set([
+  "moraltrade-site-git-agent-evidence-weighted-payo-402d27-ellen-s.vercel.app",
+  "website2-git-agent-evidence-weighted-payouts-20260723-ellen-s.vercel.app",
+]);
+
+function normalizeHostname(hostname: string | null | undefined) {
+  return hostname?.trim().toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "") ?? "";
+}
+
+export function isEvidencePaymentQaPreviewHost(hostname: string | null | undefined) {
+  return QA_PREVIEW_HOSTNAMES.has(normalizeHostname(hostname));
+}
+
+function resolvePublicSupabaseEnv(hostname?: string | null) {
+  if (isEvidencePaymentQaPreviewHost(hostname)) {
+    return {
+      url: QA_PUBLIC_SUPABASE_URL,
+      publishableKey: QA_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    };
+  }
+
   return {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? DEFAULT_PUBLIC_SUPABASE_URL,
     publishableKey:
@@ -11,8 +35,12 @@ function resolvePublicSupabaseEnv() {
   };
 }
 
-export function hasSupabaseEnv() {
-  const { url, publishableKey } = resolvePublicSupabaseEnv();
+export function hasSupabaseEnv(hostname?: string | null) {
+  if (process.env.MORAL_TRADE_DISABLE_SUPABASE === "true") {
+    return false;
+  }
+
+  const { url, publishableKey } = resolvePublicSupabaseEnv(hostname);
   return Boolean(url && publishableKey);
 }
 
@@ -42,8 +70,12 @@ export function getSiteUrl() {
   return isProduction ? "https://www.moraltrade.org" : "http://localhost:3000";
 }
 
-export function getSupabaseEnv() {
-  const { url, publishableKey } = resolvePublicSupabaseEnv();
+export function getSupabaseEnv(hostname?: string | null) {
+  if (process.env.MORAL_TRADE_DISABLE_SUPABASE === "true") {
+    throw new Error("Supabase is explicitly disabled for this process.");
+  }
+
+  const { url, publishableKey } = resolvePublicSupabaseEnv(hostname);
 
   if (!url || !publishableKey) {
     throw new Error(

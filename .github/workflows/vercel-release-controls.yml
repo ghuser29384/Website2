@@ -1,0 +1,48 @@
+name: Vercel release controls
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/vercel-release-controls.yml"
+      - ".github/workflows/vercel-release.yml"
+      - "scripts/vercel-release-workflow.test.mjs"
+      - "scripts/vercel-static-artifact-integrity.mjs"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/vercel-release-controls.yml"
+      - ".github/workflows/vercel-release.yml"
+      - "scripts/vercel-release-workflow.test.mjs"
+      - "scripts/vercel-static-artifact-integrity.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-release-controls-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Parse and test the permanent release controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/vercel-static-artifact-integrity.mjs
+          node --check scripts/vercel-release-workflow.test.mjs
+          node --test scripts/vercel-release-workflow.test.mjs
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) or abort("invalid YAML: #{path}") }' \
+            .github/workflows/vercel-release-controls.yml \
+            .github/workflows/vercel-release.yml

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SiteLink as Link } from "@/components/layout/site-link";
 
 import { oauthSignInAction, signInAction, signUpAction } from "@/app/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
@@ -367,7 +367,7 @@ export async function AuthPage({
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-mt-surface="auth">
       <aside className={styles.storyPanel} aria-label="About Moral Trade">
         <Link className={styles.brand} href="/" aria-label="Moral Trade, home">
           <BrandMark />
@@ -424,8 +424,7 @@ export async function AuthPage({
 
             {!supabaseReady ? (
               <div className={`${styles.statusBanner} ${styles.statusError}`} role="alert">
-                Supabase is not configured yet. Add the environment variables before using live
-                authentication.
+                We can’t sign you in right now. Please try again later.
               </div>
             ) : null}
 

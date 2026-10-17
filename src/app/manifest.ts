@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+const CANONICAL_ICON_PATH = "/brand/moral-trade-mark.png?v=20260730";
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Moral Trade",
@@ -12,9 +14,10 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#ffffff",
     icons: [
       {
-        src: "/O%20(8).png",
+        src: CANONICAL_ICON_PATH,
         sizes: "512x512",
         type: "image/png",
+        purpose: "any",
       },
     ],
   };

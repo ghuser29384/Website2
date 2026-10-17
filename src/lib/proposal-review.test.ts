@@ -362,12 +362,12 @@ test("offer review workflow cards expose status reasons, factor codes, next step
       ),
     ),
   );
-  assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "pass");
+  assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "human_review");
   assert.match(
     cards.find((card) => card.key === "action_evidence")?.statusReason ?? "",
     /named proof method and clear evidence locator/i,
   );
-  assert.equal(cards.find((card) => card.key === "baseline_confidence")?.status, "pass");
+  assert.equal(cards.find((card) => card.key === "baseline_confidence")?.status, "human_review");
   assert.equal(cards.find((card) => card.key === "externality_review")?.status, "human_review");
   assert.match(
     cards.find((card) => card.key === "baseline_confidence")?.nextStep ?? "",
@@ -418,7 +418,7 @@ test("offer review workflow cards use approved needs-evidence and safety copy", 
   );
   assert.match(
     cards.find((card) => card.key === "action_evidence")?.summary ?? "",
-    /Status: Needs evidence/i,
+    /No reviewable proof method/i,
   );
   assert.match(
     cards.find((card) => card.key === "action_evidence")?.summary ?? "",
@@ -522,7 +522,7 @@ test("offer review workflow contract validates public card and marketplace instr
   assert.ok(contract.reviewStateOutcomes.includes("completion_reviewed"));
   assert.ok(contract.marketplaceFactorPriority.includes("no_global_moral_ranking"));
   assert.match(contract.participantCopyTemplates.baselineHelperText, /current intention/i);
-  assert.match(contract.participantCopyTemplates.needsEvidenceStatusCopy, /Status: Needs evidence/i);
+  assert.match(contract.participantCopyTemplates.needsEvidenceStatusCopy, /No reviewable proof method/i);
   assert.match(contract.participantCopyTemplates.safetyWarningCopy, /newly escalated harmful behavior/i);
   assert.match(contract.participantCopyTemplates.importanceScoreNote, /not a platform judgment/i);
   assert.match(contract.participantCopyTemplates.appealCopy, /specific claim/i);
@@ -638,7 +638,7 @@ test("review workflow routes publish participant copy templates", async () => {
   assert.match(
     evaluateBody.workflowCards.find((card: { key: string }) => card.key === "action_evidence")
       ?.summary ?? "",
-    /Status: Needs evidence/i,
+    /No reviewable proof method/i,
   );
 });
 

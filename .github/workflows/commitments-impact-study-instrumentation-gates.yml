@@ -1,0 +1,289 @@
+name: Commitments impact-study instrumentation gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+    paths:
+      - ".github/workflows/commitments-impact-identification-gates.yml"
+      - ".github/workflows/commitments-impact-study-instrumentation-gates.yml"
+      - "docs/commitments/impact-identification/qa-study-instrumentation-v1.md"
+      - "docs/commitments/impact-identification/study-instance.schema.v2.json"
+      - "docs/commitments/impact-identification/study-instance-validator-binding.v2.json"
+      - "docs/commitments/impact-identification/canonical-json-parity-fixtures.v2.json"
+      - "docs/commitments/impact-identification/synthetic-study-fixtures/trade-validation-fixture.v2.json"
+      - "scripts/validate-commitments-impact-study-instance.mjs"
+      - "supabase/migrations/20260811152545_commitments_impact_study_instrumentation_qa_only.sql"
+      - "supabase/migrations/20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql"
+      - "supabase/migrations/20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql"
+      - "supabase/migrations/20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql"
+      - "supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql"
+      - "supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql"
+      - "supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql"
+      - "supabase/migrations/20260811171544_commitments_impact_study_blocked_probe_service_role.sql"
+      - "supabase/tests/commitments_impact_study_instrumentation_qa_only.sql"
+  push:
+    branches: [feature/commitments-impact-study-instrumentation-20260811]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitments-impact-study-instrumentation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-contract-and-qa:
+    name: Verify validator, exact QA source, lifecycle, adversarial cases, and owner-UAT baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate exact study-instance schema, bindings, hashes, and negative cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/validate-commitments-impact-study-instance.mjs --self-test \
+            | tee study-instance-validator.log
+          python3 - <<'PY' | tee repository-binding-hashes.log
+          from pathlib import Path
+          import hashlib
+          import json
+
+          root = Path('.')
+          binding_path = root / 'docs/commitments/impact-identification/study-instance-validator-binding.v2.json'
+          schema_path = root / 'docs/commitments/impact-identification/study-instance.schema.v2.json'
+          validator_path = root / 'scripts/validate-commitments-impact-study-instance.mjs'
+          fixture_path = root / 'docs/commitments/impact-identification/synthetic-study-fixtures/trade-validation-fixture.v2.json'
+          binding = json.loads(binding_path.read_text())
+          fixture = json.loads(fixture_path.read_text())
+
+          def digest(path):
+              return 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest()
+
+          actual = {
+              'schema': digest(schema_path),
+              'validator': digest(validator_path),
+              'binding': digest(binding_path),
+          }
+          assert actual['schema'] == binding['schemaRawSha256']
+          assert actual['validator'] == binding['validatorRawSha256']
+          assert actual['binding'] == 'sha256:2ef406b8db8d4fe43750d2abce23cca627b571b8f2164e448776a1cc853241d8'
+          assert fixture['studyInstancePayloadHash'] == 'sha256:ee908f56d3ad6ccf3a6b6e034bef856e96e2bfb833a6d379b6bcbd30cd730212'
+          print(json.dumps(actual, sort_keys=True))
+          PY
+
+      - name: Validate exact MoralTrade QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          if os.environ['EXPECTED_QA_REF'] not in (parsed.username or ''):
+              raise SystemExit('Refusing a database URL outside exact MoralTrade QA.')
+          if (
+              parsed.hostname != 'aws-0-us-west-1.pooler.supabase.com'
+              or parsed.port != 5432
+              or parsed.path != '/postgres'
+          ):
+              raise SystemExit('Refusing unexpected database connection parameters.')
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Prove independently provisioned QA sentinel
+        shell: bash
+        run: |
+          set -euo pipefail
+          sentinel="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+            select environment || '|' || project_ref || '|' || sentinel_id::text || '|' || sentinel_sha256 || '|' || provisioned_out_of_band::text
+            from moraltrade_qa.environment_identity
+            where singleton;")"
+          printf 'sentinel=%s\n' "$sentinel" | tee qa-sentinel.log
+          test "$sentinel" = "qa|hvmxfjjbdcgjjudmthdz|a0244e19-9744-4a82-83e4-57776804cc06|f7801a29e33764650322ad39e66a2062d9e2f750a9438e74d9fff0c9eeeb8d30|true"
+
+      - name: Verify exact registered migration names and byte-for-byte sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p registered-migrations
+          cat > migration-files.txt <<'FILES'
+          supabase/migrations/20260811152545_commitments_impact_study_instrumentation_qa_only.sql
+          supabase/migrations/20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql
+          supabase/migrations/20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql
+          supabase/migrations/20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql
+          supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql
+          supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql
+          supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql
+          supabase/migrations/20260811171544_commitments_impact_study_blocked_probe_service_role.sql
+          FILES
+          : > migration-source-verification.log
+          while IFS= read -r source_file; do
+            filename="$(basename "$source_file")"
+            version="${filename%%_*}"
+            expected_name="${filename#*_}"
+            expected_name="${expected_name%.sql}"
+            actual_name="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+              "select name from supabase_migrations.schema_migrations where version = '$version';")"
+            test "$actual_name" = "$expected_name" || {
+              echo "Migration $version name mismatch: expected=$expected_name actual=$actual_name" >&2
+              exit 1
+            }
+            registered_file="registered-migrations/${version}.sql"
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+              "select statements[1] from supabase_migrations.schema_migrations where version = '$version';" \
+              > "$registered_file"
+            python3 - "$source_file" "$registered_file" <<'PY' \
+              | tee -a migration-source-verification.log
+          from pathlib import Path
+          import hashlib
+          import sys
+
+          source = Path(sys.argv[1]).read_text(encoding='utf-8').rstrip('\n')
+          registered = Path(sys.argv[2]).read_text(encoding='utf-8').rstrip('\n')
+          if source != registered:
+              print('source_sha256=' + hashlib.sha256(source.encode()).hexdigest(), file=sys.stderr)
+              print('registered_sha256=' + hashlib.sha256(registered.encode()).hexdigest(), file=sys.stderr)
+              raise SystemExit(1)
+          print(f"{sys.argv[1]}: sha256={hashlib.sha256(source.encode()).hexdigest()}")
+          PY
+          done < migration-files.txt
+
+      - name: Prove lifecycle probe and public privilege boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          privileges="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+            select
+              has_function_privilege('service_role','public.impact_study_is_blocked(uuid)','execute')::text || '|' ||
+              has_function_privilege('authenticated','public.impact_study_is_blocked(uuid)','execute')::text || '|' ||
+              has_function_privilege('anon','public.impact_study_is_blocked(uuid)','execute')::text;")"
+          printf 'lifecycle_probe_privileges=%s\n' "$privileges" | tee qa-lifecycle-probe.log
+          test "$privileges" = "true|false|false"
+
+      - name: Run transactional adversarial instrumentation regression
+        shell: bash
+        run: |
+          set -o pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/commitments_impact_study_instrumentation_qa_only.sql \
+            2>&1 | tee qa-study-instrumentation.log
+
+      - name: Prove exact persistent synthetic owner-UAT baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner_uat="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+            with target as (
+              select id
+              from public.impact_study_instances
+              where id = 'ce4ed005-45b9-446f-a60b-7eed66df2fbb'::uuid
+                and study_key = 'synthetic:trade-owner-uat-v1'
+                and study_instance_payload_hash = 'sha256:bd6ae33b90951253db32ad1c9366a5f1edb80b99f665af69b90e946f066628de'
+                and evidence_mapping_payload_hash = 'sha256:eb4aadae8491c1a6924fca03acdeb9157b07a1439098e736c88e549db16b59b8'
+                and environment = 'qa'
+                and subject_mode = 'synthetic_only'
+                and not execution_authorized
+                and not real_user_assignment_allowed
+                and registry_status = 'registered_nonexecuting'
+            )
+            select
+              (select count(*) from public.impact_study_instances)::text || '|' ||
+              (select count(*) from target)::text || '|' ||
+              (select count(*) from public.impact_study_validator_attestations)::text || '|' ||
+              coalesce((select attestation_payload_sha256 from public.impact_study_validator_attestations where study_instance_id = (select id from target)), '') || '|' ||
+              (select count(*) from public.impact_study_allowed_arms)::text || '|' ||
+              (select count(*) from public.impact_study_allowed_exposure_cells)::text || '|' ||
+              (select count(*) from public.impact_study_allowed_outcomes)::text || '|' ||
+              (select count(*) from public.impact_study_allowed_evidence_schemes)::text || '|' ||
+              (select count(*) from public.impact_study_registry_events)::text || '|' ||
+              (select count(*) from public.impact_study_synthetic_assignments)::text || '|' ||
+              (select count(*) from public.impact_study_synthetic_exposures)::text || '|' ||
+              (select count(*) from public.impact_study_synthetic_outcomes)::text || '|' ||
+              (select count(*) from public.impact_study_safety_events)::text || '|' ||
+              (select count(*) from public.impact_study_calibration_manifests)::text || '|' ||
+              coalesce(public.impact_study_is_blocked((select id from target))::text, '') || '|' ||
+              coalesce((select string_agg(event_type, ',' order by event_sequence) from public.impact_study_registry_events where study_instance_id = (select id from target)), '') || '|' ||
+              coalesce((select safety_outcome_key || ':' || safety_status from public.impact_study_safety_events where study_instance_id = (select id from target)), '') || '|' ||
+              coalesce((select source_scope || ':' || holdout_status from public.impact_study_calibration_manifests where study_instance_id = (select id from target)), '') || '|' ||
+              (select count(*) from public.impact_study_synthetic_assignments where is_real_user)::text || '|' ||
+              (select count(*) from public.impact_study_instances where execution_authorized or real_user_assignment_allowed)::text || '|' ||
+              (select count(*) from public.impact_study_synthetic_outcomes where causal_claim_authorized or additionality_claim_authorized or participant_credit_authorized)::text || '|' ||
+              (select count(*) from public.impact_study_calibration_manifests where eligible_for_empirical_calibration or eligible_for_model_activation)::text;")"
+          printf 'owner_uat_baseline=%s\n' "$owner_uat" | tee qa-owner-uat-baseline.log
+          expected="1|1|1|sha256:9aa8f47483f01e0809e0977e6fd5b857ab412e22ff048726e74a2942104870f6|4|4|2|1|7|1|1|1|1|1|true|study_registered,synthetic_assignment_recorded,synthetic_exposure_recorded,synthetic_outcome_recorded,calibration_manifest_recorded,safety_veto_recorded,study_cancelled|duplicate_or_overlapping_resource_claim:observed|synthetic_qa_only:not_applicable_synthetic|0|0|0|0"
+          test "$owner_uat" = "$expected"
+
+      - name: Check exact current-main diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          git diff --check "$base" "$GITHUB_SHA" -- \
+            .github/workflows \
+            docs/commitments/impact-identification \
+            scripts/validate-commitments-impact-study-instance.mjs \
+            supabase/tests/commitments_impact_study_instrumentation_qa_only.sql \
+            | tee diff-check.log
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
+          cat > expected-files.txt <<'FILES'
+          .github/workflows/commitments-impact-identification-gates.yml
+          .github/workflows/commitments-impact-study-instrumentation-gates.yml
+          docs/commitments/impact-identification/canonical-json-parity-fixtures.v2.json
+          docs/commitments/impact-identification/qa-study-instrumentation-v1.md
+          docs/commitments/impact-identification/study-instance-validator-binding.v2.json
+          docs/commitments/impact-identification/study-instance.schema.v2.json
+          docs/commitments/impact-identification/synthetic-study-fixtures/trade-validation-fixture.v2.json
+          scripts/validate-commitments-impact-study-instance.mjs
+          supabase/migrations/20260811152545_commitments_impact_study_instrumentation_qa_only.sql
+          supabase/migrations/20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql
+          supabase/migrations/20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql
+          supabase/migrations/20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql
+          supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql
+          supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql
+          supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql
+          supabase/migrations/20260811171544_commitments_impact_study_blocked_probe_service_role.sql
+          supabase/tests/commitments_impact_study_instrumentation_qa_only.sql
+          FILES
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
+
+      - name: Upload QA instrumentation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-impact-study-instrumentation-${{ github.run_id }}
+          path: |
+            study-instance-validator.log
+            repository-binding-hashes.log
+            qa-sentinel.log
+            migration-files.txt
+            migration-source-verification.log
+            registered-migrations/
+            qa-lifecycle-probe.log
+            qa-study-instrumentation.log
+            qa-owner-uat-baseline.log
+            diff-check.log
+            expected-files.txt
+            actual-files.txt
+          if-no-files-found: warn
+          retention-days: 30

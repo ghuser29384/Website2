@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { IconMark } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
+import { resolvePublicMarketplaceOverview } from "@/lib/public-marketplace-overview";
 import { getFormMessage } from "@/lib/form-state";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -86,7 +87,10 @@ const activationTargets = [
 export default async function NetworkPage({ searchParams }: NetworkPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
-  const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
+  const [viewer, overview] = await Promise.all([
+    getViewer(),
+    resolvePublicMarketplaceOverview(getMarketplaceOverview()),
+  ]);
   const signupHref = viewer ? "/onboarding" : "/signup?returnTo=/onboarding";
   const createHref = viewer ? "/create" : "/signup?returnTo=/create";
 

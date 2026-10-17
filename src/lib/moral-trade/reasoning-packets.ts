@@ -281,7 +281,7 @@ export function getMoralTradeReasoningPacketFilterCounts(
 
 export function getWorkedCaseBaselineStatement(offer: Offer) {
   if (offer.mode === "offset" && offer.baselineAmountUsd) {
-    return `Without this trade, ${offer.alias} reports a baseline intention to direct $${offer.baselineAmountUsd.toLocaleString()} toward ${offer.baselineOpposedCause}.`;
+    return `Without this trade, ${offer.alias} reports a baseline intention to direct $${offer.baselineAmountUsd.toLocaleString("en-US")} toward ${offer.baselineOpposedCause}.`;
   }
 
   return `Without this trade, ${offer.alias} would not expect this reciprocal ${offer.mode} to happen during ${offer.duration}.`;

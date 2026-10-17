@@ -45,7 +45,7 @@ export function DeadlineField({
 export function LocalDateTime({ value }: { value: string }) {
   return (
     <time dateTime={value} suppressHydrationWarning>
-      {new Date(value).toLocaleString()}
+      {new Date(value).toLocaleString("en-US")}
     </time>
   );
 }
