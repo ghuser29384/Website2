@@ -27,11 +27,15 @@ async function markPaymentFromSession(
   const paymentIntent =
     typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
 
-  const { data: currentPayment } = await supabase
+  const { data: currentPayment, error: currentPaymentError } = await supabase
     .from("agreement_payments")
     .select("*")
     .eq("id", paymentId)
     .maybeSingle();
+
+  if (currentPaymentError) {
+    throw new Error("Unable to read the agreement payment; retry the webhook.");
+  }
 
   if (!currentPayment) {
     return;
@@ -45,7 +49,7 @@ async function markPaymentFromSession(
       capturePolicy: currentPayment.capture_policy,
     })
   ) {
-    await supabase
+    const { error: blockedPaymentError } = await supabase
       .from("agreement_payments")
       .update({
         authorization_status: "capture_blocked",
@@ -57,6 +61,9 @@ async function markPaymentFromSession(
           .join(";"),
       })
       .eq("id", paymentId);
+    if (blockedPaymentError) {
+      throw new Error("Unable to record the blocked agreement payment; retry the webhook.");
+    }
     await supabase.from("agreement_events").insert({
       agreement_id: currentPayment.agreement_id,
       actor_id: currentPayment.payer_id,
@@ -67,7 +74,7 @@ async function markPaymentFromSession(
     return;
   }
 
-  const { data: payment } = await supabase
+  const { data: payment, error: paymentError } = await supabase
     .from("agreement_payments")
     .update({
       status,
@@ -77,6 +84,10 @@ async function markPaymentFromSession(
     .eq("id", paymentId)
     .select("*")
     .maybeSingle();
+
+  if (paymentError) {
+    throw new Error("Unable to update the agreement payment; retry the webhook.");
+  }
 
   if (!payment) {
     return;
