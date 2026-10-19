@@ -19,6 +19,7 @@ jobs:
     env:
       BASE_SHA: fbfaba0bad94e8c989e385187c95242d7d4c8b1c
       APPROVED_SOURCE_SHA: 463d1d09608c7dc46779238dd543d330654d59c6
+      APPROVED_WORKFLOW_SHA: acfe043dea9164eafcaf93134b8c14702c7fefff
       NEXT_TELEMETRY_DISABLED: "1"
       MORAL_TRADE_DISABLE_DEP_REPAIR: "1"
       MORAL_TRADE_DISABLE_SUPABASE: "true"
@@ -29,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 3
+          fetch-depth: 4
           persist-credentials: false
 
       - name: Verify exact patch and isolated branch
@@ -37,7 +38,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$APPROVED_SOURCE_SHA"
+          test "$(git rev-parse HEAD^)" = "$APPROVED_WORKFLOW_SHA"
+          test "$(git rev-parse "$APPROVED_WORKFLOW_SHA^")" = "$APPROVED_SOURCE_SHA"
           test "$(git rev-parse "$APPROVED_SOURCE_SHA^")" = "$BASE_SHA"
           test "$(git diff --name-only "$APPROVED_SOURCE_SHA" HEAD)" = '.github/workflows/website2-legacy-query-build.yml'
           git diff --check "$BASE_SHA" HEAD
@@ -119,6 +121,8 @@ jobs:
         id: tests
         env:
           NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
+          # These unit tests mock fetch; the network guard remains enabled.
+          MORAL_TRADE_DISABLE_SUPABASE: "false"
         run: npm test
 
       - name: Run ESLint
