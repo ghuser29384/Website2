@@ -44,7 +44,7 @@ import {
   smartPersonalPriorityScore,
 } from "@/lib/smart-query-scoring";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import type { Database } from "@/lib/supabase/database.types";
+import { SMART_OFFER_COLUMNS, type DirectoryOffer as OfferRow } from "@/lib/offers-directory-data";
 import { createClient } from "@/lib/supabase/server";
 
 const LIVE_METADATA: Metadata = {
@@ -89,7 +89,6 @@ export async function generateMetadata({ searchParams }: OffersPageProps): Promi
   return LIVE_METADATA;
 }
 
-type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type OfferMode = OfferRow["mode"];
 type ModeFilter = "all" | OfferMode;
 type OfferSort = Extract<
@@ -388,7 +387,10 @@ async function listLiveOffers({
 
   const supabase = await createClient();
   const offset = (page - 1) * OFFERS_PAGE_SIZE;
-  let query = supabase.from("offers").select("*", { count: smartSearch ? undefined : "exact" }).eq("status", "open");
+  let query = smartSearch
+    ? supabase.from("offers").select(SMART_OFFER_COLUMNS)
+    : supabase.from("offers").select("*", { count: "exact" });
+  query = query.eq("status", "open");
   if (mode !== "all") query = query.eq("mode", mode);
 
   if (smartSearch) {
@@ -415,7 +417,7 @@ async function listLiveOffers({
     }
 
     const ranked = (data ?? [])
-      .map((offer) => rankOffer(offer as OfferRow, { ...interpretation, facets }, personalPriorities, new Date()))
+      .map((offer) => rankOffer(offer, { ...interpretation, facets }, personalPriorities, new Date()))
       .filter((entry): entry is RankedOffer => Boolean(entry));
     const sorted = sortRankedOffers(ranked, sort);
     return {
@@ -456,7 +458,7 @@ async function listLiveOffers({
 
   const total = count ?? (data ?? []).length;
   return {
-    items: (data ?? []) as OfferRow[],
+    items: data ?? [],
     total,
     page,
     pageSize: OFFERS_PAGE_SIZE,

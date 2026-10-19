@@ -13,6 +13,8 @@ const checkOnly = process.argv.includes("--check");
 
 const source = await readFile(sourcePath);
 const compressed = gzipSync(source, { level: 9, mtime: 0 });
+// Preserve the committed Unix gzip header across macOS and Linux builds.
+compressed[9] = 3;
 const encoded = compressed.toString("base64");
 const partSize = Math.ceil(encoded.length / partCount);
 const parts = Array.from({ length: partCount }, (_, index) =>

@@ -1,0 +1,138 @@
+name: Website2 legacy query build only
+
+on:
+  push:
+    branches: [build/website2-legacy-query-20261019]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website2-legacy-query-build-only
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/website2-legacy-query-20261019'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_SHA: fbfaba0bad94e8c989e385187c95242d7d4c8b1c
+      NEXT_TELEMETRY_DISABLED: "1"
+      MORAL_TRADE_DISABLE_DEP_REPAIR: "1"
+      MORAL_TRADE_DISABLE_SUPABASE: "true"
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      VERCEL_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify exact patch and isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          git diff --check "$BASE_SHA" HEAD
+          python3 - <<'PY'
+          import hashlib, pathlib, subprocess
+          expected = {
+              'scripts/pack-discover-payload.mjs': '4f43bf09bb64938ceb10868057140e8793cea63e15b0298cd61b55b622e81339',
+              'src/app/offers/page.tsx': '3a862171d24913cbae6aab0c8a5c654d0ab27078fa613069f18ca0b5689027ec',
+              'src/lib/background-candidate-exposure.test.ts': '308f51736287210cec6690d938565b6f9c86ea5e9c25759cd253feb6eaf4f5c8',
+              'src/lib/offers-directory-data.test.ts': 'f66c62f2a3417dd1c8f67bd212eee8d1063dfe9ae52f77a5fbb06a63eaba3c9e',
+              'src/lib/offers-directory-data.ts': '529a4d269da6224fd56af38bf62d5a95e1cefa9ea58b0d4f305f709fa7d0aea2',
+          }
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
+          assert changed == set(expected) | {'vercel.ts', '.github/workflows/website2-legacy-query-build.yml'}, 'Unexpected changed paths'
+          for name, digest in expected.items():
+              assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() == digest, name
+          print('Exact five-file application patch verified.')
+          PY
+          git show "$BASE_SHA:src/app/offers/page.tsx" > "$RUNNER_TEMP/legacy-offers-page.tsx"
+          printf 'LEGACY_BASELINE_PAGE=%s\n' "$RUNNER_TEMP/legacy-offers-page.tsx" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+
+      - name: Install locked dependencies on the disposable runner
+        run: npm ci --no-audit --no-fund
+
+      - name: Block external connections during tests and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/no-network.mjs" <<'JS'
+          import net from 'node:net';
+          import http from 'node:http';
+          import https from 'node:https';
+          import { syncBuiltinESMExports } from 'node:module';
+          const blocked = () => { throw new Error('Network disabled for build-only validation'); };
+          globalThis.fetch = blocked;
+          http.request = http.get = https.request = https.get = blocked;
+          const connect = net.Socket.prototype.connect;
+          net.Socket.prototype.connect = function (...args) {
+            const first = args[0];
+            if ((typeof first === 'string' && first.startsWith('/')) ||
+                (first && typeof first === 'object' && typeof first.path === 'string')) {
+              return connect.apply(this, args);
+            }
+            return blocked();
+          };
+          syncBuiltinESMExports();
+          JS
+          printf 'NODE_OPTIONS=--max-old-space-size=6144 --import=%s\n' "$RUNNER_TEMP/no-network.mjs" >> "$GITHUB_ENV"
+
+      - name: Verify connection block and deployment block
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import http from 'node:http';
+          import https from 'node:https';
+          import net from 'node:net';
+          for (const attempt of [() => fetch('https://blocked.invalid'), () => http.get('http://blocked.invalid'), () => https.get('https://blocked.invalid'), () => net.connect(443, 'blocked.invalid')]) {
+            assert.throws(attempt, /Network disabled/);
+          }
+          console.log('External Node connections are blocked.');
+          JS
+          node --import tsx --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { buildVercelProjectConfig } from './scripts/vercel-project-config.mjs';
+          const loaded = await import('./vercel.ts');
+          const config = loaded.config ?? loaded.default?.config;
+          assert.deepEqual(config.git, { deploymentEnabled: { 'build/website2-legacy-query-20261019': false } });
+          const { git, ...unchanged } = config;
+          assert.deepEqual(unchanged, buildVercelProjectConfig());
+          console.log('Validation-branch deployments disabled; other configuration unchanged.');
+          JS
+
+      - name: Run repository tests including baseline comparison
+        id: tests
+        run: npm test
+
+      - name: Run ESLint
+        id: lint
+        run: npm run lint
+
+      - name: Finish production-mode application build without deployment
+        id: build
+        run: npm run build
+
+      - name: Record build result
+        if: always()
+        env:
+          TEST_RESULT: ${{ steps.tests.outcome }}
+          LINT_RESULT: ${{ steps.lint.outcome }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+        run: |
+          {
+            echo '### Website2 legacy query build only'
+            printf 'Source: `%s`\n\n' "$GITHUB_SHA"
+            printf 'Tests: %s; lint: %s; full build: %s.\n\n' "$TEST_RESULT" "$LINT_RESULT" "$BUILD_RESULT"
+            echo 'No deployment, plan change, application secrets, database tests, or published build artifacts.'
+          } >> "$GITHUB_STEP_SUMMARY"
