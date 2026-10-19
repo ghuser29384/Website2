@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 60
     env:
       BASE_SHA: fbfaba0bad94e8c989e385187c95242d7d4c8b1c
+      APPROVED_SOURCE_SHA: 463d1d09608c7dc46779238dd543d330654d59c6
       NEXT_TELEMETRY_DISABLED: "1"
       MORAL_TRADE_DISABLE_DEP_REPAIR: "1"
       MORAL_TRADE_DISABLE_SUPABASE: "true"
@@ -28,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          fetch-depth: 3
           persist-credentials: false
 
       - name: Verify exact patch and isolated branch
@@ -36,10 +37,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test "$(git rev-parse HEAD^)" = "$APPROVED_SOURCE_SHA"
+          test "$(git rev-parse "$APPROVED_SOURCE_SHA^")" = "$BASE_SHA"
+          test "$(git diff --name-only "$APPROVED_SOURCE_SHA" HEAD)" = '.github/workflows/website2-legacy-query-build.yml'
           git diff --check "$BASE_SHA" HEAD
           python3 - <<'PY'
-          import hashlib, pathlib, subprocess
+          import hashlib, os, pathlib, subprocess
           expected = {
               'scripts/pack-discover-payload.mjs': '4f43bf09bb64938ceb10868057140e8793cea63e15b0298cd61b55b622e81339',
               'src/app/offers/page.tsx': '3a862171d24913cbae6aab0c8a5c654d0ab27078fa613069f18ca0b5689027ec',
@@ -47,7 +50,7 @@ jobs:
               'src/lib/offers-directory-data.test.ts': 'f66c62f2a3417dd1c8f67bd212eee8d1063dfe9ae52f77a5fbb06a63eaba3c9e',
               'src/lib/offers-directory-data.ts': '529a4d269da6224fd56af38bf62d5a95e1cefa9ea58b0d4f305f709fa7d0aea2',
           }
-          changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only', os.environ['BASE_SHA'], 'HEAD'], text=True).splitlines())
           assert changed == set(expected) | {'vercel.ts', '.github/workflows/website2-legacy-query-build.yml'}, 'Unexpected changed paths'
           for name, digest in expected.items():
               assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() == digest, name
@@ -86,9 +89,10 @@ jobs:
           };
           syncBuiltinESMExports();
           JS
-          printf 'NODE_OPTIONS=--max-old-space-size=6144 --import=%s\n' "$RUNNER_TEMP/no-network.mjs" >> "$GITHUB_ENV"
 
       - name: Verify connection block and deployment block
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
@@ -113,14 +117,20 @@ jobs:
 
       - name: Run repository tests including baseline comparison
         id: tests
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
         run: npm test
 
       - name: Run ESLint
         id: lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
         run: npm run lint
 
       - name: Finish production-mode application build without deployment
         id: build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
         run: npm run build
 
       - name: Record build result
