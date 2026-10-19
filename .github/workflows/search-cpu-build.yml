@@ -1,0 +1,81 @@
+name: Search CPU isolated build only
+
+on:
+  push:
+    branches: [build/search-cpu-20261019]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: search-cpu-build-only
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/search-cpu-20261019'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
+      MORAL_TRADE_DISABLE_SUPABASE: 'true'
+      VERCEL: '1'
+      VERCEL_ENV: preview
+      VERCEL_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Verify exact base and narrow change
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = bf0cb94a418c82ae0894c8b7a54ade36c385a2ef
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --check HEAD^ HEAD
+          python3 - <<'PY'
+          import subprocess
+          expected = {'.github/workflows/search-cpu-build.yml', 'scripts/search-cpu-no-network.mjs', 'src/lib/offers-directory-data.test.ts', 'src/lib/smart-query-scoring.test.ts', 'src/lib/smart-query-scoring.ts', 'vercel.ts'}
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
+          assert changed == expected, 'Unexpected change scope'
+          PY
+          git show 467ba624338b781797024b57ef4f579a688a4250:src/lib/smart-query-scoring.ts > "$RUNNER_TEMP/baseline-scoring.ts"
+          printf 'SEARCH_SCORER_BASELINE=%s/baseline-scoring.ts\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - name: Install existing locked dependencies on disposable runner
+        run: npm ci --no-audit --no-fund
+      - name: Verify deployment and outbound-connection blocks
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ github.workspace }}/scripts/search-cpu-no-network.mjs
+        run: |
+          node --import tsx --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import http from 'node:http';
+          import https from 'node:https';
+          import net from 'node:net';
+          import { buildVercelProjectConfig } from './scripts/vercel-project-config.mjs';
+          const loaded = await import('./vercel.ts');
+          const config = loaded.config ?? loaded.default?.config;
+          assert.deepEqual(config.git, { deploymentEnabled: { 'build/website2-legacy-query-20261019': false, 'build/search-cpu-20261019': false } });
+          const { git, ...unchanged } = config;
+          assert.deepEqual(unchanged, buildVercelProjectConfig());
+          for (const attempt of [() => fetch('https://blocked.invalid'), () => http.get('http://blocked.invalid'), () => https.get('https://blocked.invalid'), () => net.connect(443, 'blocked.invalid')]) assert.throws(attempt, /Network disabled/);
+          console.log('Validation branch deployments and external Node connections blocked.');
+          JS
+      - name: Unit tests and 96 exact-base rendered comparisons
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ github.workspace }}/scripts/search-cpu-no-network.mjs
+          MORAL_TRADE_DISABLE_SUPABASE: 'false'
+        run: npm test
+      - name: Lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ github.workspace }}/scripts/search-cpu-no-network.mjs
+        run: npm run lint
+      - name: Production-mode build without application credentials or deployment
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ github.workspace }}/scripts/search-cpu-no-network.mjs
+        run: npm run build

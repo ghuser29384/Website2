@@ -32,7 +32,11 @@ function tokenSimilarity(left: string, right: string) {
   if (left === right) return 1;
   if (left.includes(right) || right.includes(left)) return 0.86;
   const maximumDistance = Math.max(left.length, right.length) >= 8 ? 2 : 1;
-  if (Math.min(left.length, right.length) >= 4 && editDistance(left, right) <= maximumDistance) {
+  if (
+    Math.min(left.length, right.length) >= 4 &&
+    Math.abs(left.length - right.length) <= maximumDistance &&
+    editDistance(left, right) <= maximumDistance
+  ) {
     return 0.72;
   }
   return 0;

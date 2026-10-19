@@ -79,7 +79,7 @@ function fixture(index: number): Offer {
 }
 const offers = [...Array.from({ length: 72 }, (_, i) => fixture(i)), { ...fixture(72), status: "closed" as const }];
 
-function harness(options: { fullRows?: boolean; rows?: Offer[]; fail?: string; configured?: boolean; viewerId?: string } = {}) {
+function harness(options: { fullRows?: boolean; rows?: Offer[]; fail?: string; configured?: boolean; viewerId?: string; scorer?: typeof scoring } = {}) {
   const requests: Array<{ table: string; params: URLSearchParams; prefer: string }> = [];
   let responseBytes = 0;
   // Exercise the installed Supabase query builder, with all HTTP handled in memory.
@@ -144,7 +144,7 @@ function harness(options: { fullRows?: boolean; rows?: Offer[]; fail?: string; c
     "@/lib/seo": { getAbsoluteUrl: (path: string) => `https://offline-fixture.invalid${path}` },
     "@/lib/site": { getPrimaryNavLinks: () => [], getTopbarActions: () => [] },
     "@/lib/smart-discovery-ranking": ranking, "@/lib/smart-query": smartQuery,
-    "@/lib/smart-query-facets": facets, "@/lib/smart-query-records": records, "@/lib/smart-query-scoring": scoring,
+    "@/lib/smart-query-facets": facets, "@/lib/smart-query-records": records, "@/lib/smart-query-scoring": options.scorer ?? scoring,
     "@/lib/supabase/config": { hasSupabaseEnv: () => options.configured !== false },
     "@/lib/supabase/server": { createClient: async () => client }, "@/components/discovery/discovery-filters.module.css": css,
   }, "\nexport { listLiveOffers };\n") as {
@@ -253,4 +253,28 @@ test("smart search still matches notes and exact action terms that cards do not 
   const original = await harness({ fullRows: true }).listLiveOffers(params);
   assert.deepEqual(comparable(projected), comparable(original));
   assert.ok(projected.total > 0);
+});
+
+test("search scoring preserves exact-base results and rendered HTML for every sort and mode", {
+  skip: process.env.SEARCH_SCORER_BASELINE ? false : "Set SEARCH_SCORER_BASELINE to the unmodified deployed scorer for differential validation",
+}, async () => {
+  const baseline = compile(process.env.SEARCH_SCORER_BASELINE!, { "./smart-query": smartQuery }) as typeof scoring;
+  const sorts: Sort[] = ["best_match", "newest", "lowest_cost", "most_verified", "soonest_deadline", "highest_credit"];
+  const queries = ["volunter", "volunteering", "verified animal welfare under $50", "unmatchedxyz"];
+  let cases = 0;
+  for (const viewerId of [undefined, "owner-3"]) {
+    const before = harness({ scorer: baseline, viewerId });
+    const after = harness({ viewerId });
+    for (const sort of sorts) for (const mode of ["all", "pledge", "offset", "payment"] as const) for (const page of [1, 2]) {
+      const search = queries[cases % queries.length];
+      const interpretation = smartQuery.parseSmartQuery(search, { surface: "offers", now: NOW });
+      const params = input({ interpretation, facets: interpretation.facets, sort, mode, page, personalPriorities: viewerId ? ["animal_welfare"] : [] });
+      assert.deepEqual(await after.listLiveOffers(params), await before.listLiveOffers(params));
+      const searchParams = Promise.resolve({ search, sort, mode, page: String(page) });
+      assert.equal(renderToStaticMarkup(await after.default({ searchParams })), renderToStaticMarkup(await before.default({ searchParams })));
+      cases++;
+    }
+    assert.deepEqual(after.requests.map((r) => ({ table: r.table, params: r.params.toString(), prefer: r.prefer })), before.requests.map((r) => ({ table: r.table, params: r.params.toString(), prefer: r.prefer })));
+  }
+  assert.equal(cases, 96);
 });
