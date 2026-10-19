@@ -1,4 +1,4 @@
-name: Website2 legacy query build only
+name: Website2 exact legacy query staging
 
 on:
   push:
@@ -8,145 +8,197 @@ permissions:
   contents: read
 
 concurrency:
-  group: website2-legacy-query-build-only
+  group: website2-legacy-query-release
   cancel-in-progress: false
 
 jobs:
-  build:
+  stage-and-check:
     if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/website2-legacy-query-20261019'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 35
     env:
-      BASE_SHA: fbfaba0bad94e8c989e385187c95242d7d4c8b1c
-      APPROVED_SOURCE_SHA: 463d1d09608c7dc46779238dd543d330654d59c6
-      APPROVED_WORKFLOW_SHA: acfe043dea9164eafcaf93134b8c14702c7fefff
-      NEXT_TELEMETRY_DISABLED: "1"
-      MORAL_TRADE_DISABLE_DEP_REPAIR: "1"
-      MORAL_TRADE_DISABLE_SUPABASE: "true"
-      VERCEL: "1"
-      VERCEL_ENV: preview
+      APPROVED_SHA: 467ba624338b781797024b57ef4f579a688a4250
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       VERCEL_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+      NEXT_TELEMETRY_DISABLED: '1'
+      MORAL_TRADE_DISABLE_DEP_REPAIR: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 4
+          fetch-depth: 2
           persist-credentials: false
-
-      - name: Verify exact patch and isolated branch
-        shell: bash
+      - name: Verify workflow-only controller and check out approved application
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$APPROVED_WORKFLOW_SHA"
-          test "$(git rev-parse "$APPROVED_WORKFLOW_SHA^")" = "$APPROVED_SOURCE_SHA"
-          test "$(git rev-parse "$APPROVED_SOURCE_SHA^")" = "$BASE_SHA"
-          test "$(git diff --name-only "$APPROVED_SOURCE_SHA" HEAD)" = '.github/workflows/website2-legacy-query-build.yml'
-          git diff --check "$BASE_SHA" HEAD
-          python3 - <<'PY'
-          import hashlib, os, pathlib, subprocess
-          expected = {
-              'scripts/pack-discover-payload.mjs': '4f43bf09bb64938ceb10868057140e8793cea63e15b0298cd61b55b622e81339',
-              'src/app/offers/page.tsx': '3a862171d24913cbae6aab0c8a5c654d0ab27078fa613069f18ca0b5689027ec',
-              'src/lib/background-candidate-exposure.test.ts': '308f51736287210cec6690d938565b6f9c86ea5e9c25759cd253feb6eaf4f5c8',
-              'src/lib/offers-directory-data.test.ts': 'f66c62f2a3417dd1c8f67bd212eee8d1063dfe9ae52f77a5fbb06a63eaba3c9e',
-              'src/lib/offers-directory-data.ts': '529a4d269da6224fd56af38bf62d5a95e1cefa9ea58b0d4f305f709fa7d0aea2',
-          }
-          changed = set(subprocess.check_output(['git', 'diff', '--name-only', os.environ['BASE_SHA'], 'HEAD'], text=True).splitlines())
-          assert changed == set(expected) | {'vercel.ts', '.github/workflows/website2-legacy-query-build.yml'}, 'Unexpected changed paths'
-          for name, digest in expected.items():
-              assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() == digest, name
-          print('Exact five-file application patch verified.')
-          PY
-          git show "$BASE_SHA:src/app/offers/page.tsx" > "$RUNNER_TEMP/legacy-offers-page.tsx"
-          printf 'LEGACY_BASELINE_PAGE=%s\n' "$RUNNER_TEMP/legacy-offers-page.tsx" >> "$GITHUB_ENV"
-
+          test "$(git rev-parse HEAD^)" = "$APPROVED_SHA"
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/website2-legacy-query-build.yml'
+          git diff --check HEAD^ HEAD
+          git checkout --detach "$APPROVED_SHA"
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          test -z "$(git status --porcelain)"
       - uses: actions/setup-node@v4
         with:
           node-version: 24.14.0
-
-      - name: Install locked dependencies on the disposable runner
-        run: npm ci --no-audit --no-fund
-
-      - name: Block external connections during tests and build
-        shell: bash
+      - name: Check current deployments and stage exact production candidate without aliases
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          cat > "$RUNNER_TEMP/no-network.mjs" <<'JS'
-          import net from 'node:net';
-          import http from 'node:http';
-          import https from 'node:https';
-          import { syncBuiltinESMExports } from 'node:module';
-          const blocked = () => { throw new Error('Network disabled for build-only validation'); };
-          globalThis.fetch = blocked;
-          http.request = http.get = https.request = https.get = blocked;
-          const connect = net.Socket.prototype.connect;
-          net.Socket.prototype.connect = function (...args) {
-            const first = args[0];
-            if ((typeof first === 'string' && first.startsWith('/')) ||
-                (first && typeof first === 'object' && typeof first.path === 'string')) {
-              return connect.apply(this, args);
-            }
-            return blocked();
-          };
-          syncBuiltinESMExports();
-          JS
-
-      - name: Verify connection block and deployment block
+          python3 - <<'PYCODE'
+          import json, os, pathlib, subprocess, urllib.request
+          team=os.environ['VERCEL_ORG_ID']; project=os.environ['VERCEL_PROJECT_ID']; sha=os.environ['APPROVED_SHA']
+          token=os.environ['VERCEL_TOKEN']
+          def deployment(identity):
+              req=urllib.request.Request('https://api.vercel.com/v13/deployments/'+identity+'?teamId='+team,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=30) as response: return json.load(response)
+          def current_unchanged():
+              for hostname,expected,project_id in [('www.openpublicgoods.org','dpl_DT4r4sKZYcon3pVavUbz6qRkdu6p',project),('www.moraltrade.org','dpl_39zgS6AQvZ44ameU1S3dxE8cULTx','prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7')]:
+                  d=deployment(hostname)
+                  assert d['id']==expected and d['projectId']==project_id and d['readyState']=='READY', 'Live deployment drifted'
+          current_unchanged()
+          pathlib.Path('.vercel').mkdir(exist_ok=True)
+          pathlib.Path('.vercel/project.json').write_text(json.dumps({'orgId':team,'projectId':project}))
+          args=['npx','--yes','vercel@50.38.1','deploy','--yes','--prod','--skip-domain','--scope',team,'--token',token,'--meta','githubCommitSha='+sha,'--meta','githubCommitRef=build/website2-legacy-query-20261019','--meta','githubOrg=ghuser29384','--meta','githubRepo=Website2']
+          result=subprocess.run(args,text=True,capture_output=True)
+          if result.returncode:
+              # Keep raw CLI/build output private on the ephemeral runner; never publish env or error payloads.
+              pathlib.Path(os.environ['RUNNER_TEMP']+'/private-vercel-error.log').write_text(result.stderr)
+              raise SystemExit('Staging failed; inspect the scoped Vercel build. Live promotion was not requested.')
+          urls=[line.strip() for line in result.stdout.splitlines() if line.strip().startswith('https://website2-') and line.strip().endswith('.vercel.app')]
+          assert len(urls)==1, 'Unexpected staging URL output'
+          url=urls[0]; d=deployment(url.removeprefix('https://'))
+          assert d['projectId']==project and d['target']=='production' and d['readyState']=='READY', 'Candidate identity/state mismatch'
+          assert d['meta']['githubCommitSha']==sha, 'Candidate SHA mismatch'
+          assert not set(d.get('alias',[])) & {'www.openpublicgoods.org','openpublicgoods.org','www.mplr.org','www.copromise.org','www.openly.social','www.moraltrade.org'}, 'Unexpected live alias assignment'
+          current_unchanged()
+          safe={k:d.get(k) for k in ['id','url','projectId','target','readyState','createdAt','ready','alias']}
+          safe['sourceSha']=sha; safe['previousDeployment']='dpl_DT4r4sKZYcon3pVavUbz6qRkdu6p'
+          pathlib.Path(os.environ['RUNNER_TEMP']+'/stage-result.json').write_text(json.dumps(safe,indent=2))
+          with open(os.environ['GITHUB_ENV'],'a') as f: f.write('CANDIDATE_URL='+url+'\n')
+          print(json.dumps(safe))
+          PYCODE
+      - name: Install locked browser test dependencies on disposable runner
+        run: npm ci --no-audit --no-fund
+      - name: Prepare Chromium on disposable runner
+        run: npx playwright install --with-deps chromium
+      - name: Compare hosted candidate with old deployment using anonymous reads
         env:
-          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          CHECK_RESULT: ${{ runner.temp }}/hosted-check-result.json
         run: |
-          node --input-type=module <<'JS'
-          import assert from 'node:assert/strict';
-          import http from 'node:http';
-          import https from 'node:https';
-          import net from 'node:net';
-          for (const attempt of [() => fetch('https://blocked.invalid'), () => http.get('http://blocked.invalid'), () => https.get('https://blocked.invalid'), () => net.connect(443, 'blocked.invalid')]) {
-            assert.throws(attempt, /Network disabled/);
+          cat > hosted-check.mjs <<'JS'
+          import { chromium } from '@playwright/test';
+          import { createHash } from 'node:crypto';
+          import { readFile, writeFile } from 'node:fs/promises';
+          const candidate = process.env.CANDIDATE_URL;
+          const baseline = 'https://www.openpublicgoods.org';
+          const check = (ok, label) => { if (!ok) throw new Error(label); };
+          check(/^https:\/\/website2-[a-z0-9-]+\.vercel\.app$/.test(candidate), 'Unexpected candidate origin');
+          const browser = await chromium.launch();
+          const started = new Date().toISOString();
+          const cases = [
+            ['browse', '/offers?view=live'],
+            ['search', '/offers?view=live&search=animal'],
+            ['sort', '/offers?view=live&search=animal&sort=most_verified'],
+            ['constraints', '/offers?view=live&search=verified%20animal%20welfare%20under%20%2450'],
+            ['pagination', '/offers?view=live&search=animal&page=2'],
+            ['empty', '/offers?view=live&search=zzqaunmatched473891'],
+          ];
+          const results = [];
+          let pageErrors = 0;
+          let failedAssets = 0;
+          async function session(origin, width = 1440) {
+            const context = await browser.newContext({ viewport: { width, height: 1000 }, serviceWorkers: 'block' });
+            await context.addCookies([{ name: 'mt_walkthrough_seen', value: '1', url: origin }]);
+            await context.route('**/*', async route => {
+              const req = route.request(), url = new URL(req.url());
+              const headers = req.headers();
+              // Anonymous GET-only verification. Block jobs, writes, external services and speculative prefetch.
+              if (url.origin !== origin || !['GET', 'HEAD'].includes(req.method()) ||
+                  url.pathname.startsWith('/api/') || headers['next-router-prefetch'] || headers.purpose === 'prefetch') {
+                return route.abort();
+              }
+              if (origin === candidate && process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {
+                return route.continue({ headers: { ...headers, 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } });
+              }
+              return route.continue();
+            });
+            const page = await context.newPage();
+            page.on('pageerror', () => pageErrors++);
+            page.on('response', r => { if (r.status() >= 400 && /\.(js|css)(\?|$)/.test(r.url())) failedAssets++; });
+            return { context, page };
           }
-          console.log('External Node connections are blocked.');
+          async function inspect(page, origin, path) {
+            const response = await page.goto(origin + path, { waitUntil: 'networkidle', timeout: 60000 });
+            check(response?.status() === 200, 'Offers HTTP status failed');
+            check(new URL(page.url()).origin === origin && new URL(page.url()).pathname === '/offers', 'Unexpected offers redirect');
+            check(await page.locator('#explore-heading').isVisible(), 'Offers heading missing');
+            check(await page.locator('.status-banner-error').count() === 0, 'Directory reported an error');
+            check(await page.locator('select[name=sort] option').count() === 6, 'Sort choices changed');
+            check(await page.locator('select[name=mode] option').count() === 4, 'Mode choices changed');
+            const data = await page.evaluate(() => ({
+              total: Array.from(document.querySelectorAll('strong')).map(x => x.textContent).find(t => /matching offer\(s\)/.test(t)),
+              cards: Array.from(document.querySelectorAll('.mt-market-card')).map(x => ({
+                text: x.textContent.replace(/\s+/g, ' ').trim(),
+                href: x.querySelector('a')?.getAttribute('href'),
+              })),
+              pagination: document.querySelector('.pagination')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+              empty: Boolean(document.querySelector('.empty-state')),
+            }));
+            check(typeof data.total === 'string', 'Missing result count');
+            return data;
+          }
+          try {
+            const old = await session(baseline), next = await session(candidate);
+            for (const [name, path] of cases) {
+              const before = await inspect(old.page, baseline, path);
+              const after = await inspect(next.page, candidate, path);
+              // Compare actual record text/order/links in memory only; never log or save them.
+              check(JSON.stringify(before) === JSON.stringify(after), `Result equivalence failed: ${name}`);
+              if (name === 'browse') check(after.cards.length > 0, 'Live baseline is unexpectedly empty');
+              results.push({ case: name, identical: true, visibleCards: after.cards.length, empty: after.empty });
+            }
+            const mobile = await session(candidate, 390);
+            await inspect(mobile.page, candidate, '/offers?view=live&search=animal');
+            check(await mobile.page.locator('input[name=search]').isVisible(), 'Mobile search unavailable');
+            check(await mobile.page.getByRole('button', { name: 'Apply smart search', exact: true }).isVisible(), 'Mobile submit unavailable');
+            check(await mobile.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Document overflow');
+            // Exercise form submission through its existing GET fallback without calling the interpreter or any write endpoint.
+            await mobile.page.locator('input[name=search]').fill('animal');
+            await Promise.all([
+              mobile.page.waitForURL(url => url.pathname === '/offers' && url.searchParams.get('search') === 'animal' && url.searchParams.has('sort')),
+              mobile.page.getByRole('button', { name: 'Apply smart search', exact: true }).click(),
+            ]);
+            await mobile.page.waitForLoadState('networkidle');
+            check(await mobile.page.locator('.status-banner-error').count() === 0, 'Search submission failed');
+            const assets = ['moral-trade-smart-query.js', 'moral-trade-discover-search.js', 'moral-trade-discover-search-preflight.js'];
+            for (const name of assets) {
+              const response = await fetch(candidate + '/' + name, { redirect: 'error', headers: process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {} });
+              check(response.status === 200, 'Static asset unavailable');
+              const hash = data => createHash('sha256').update(data).digest('hex');
+              check(hash(Buffer.from(await response.arrayBuffer())) === hash(await readFile('public/' + name)), 'Static asset mismatch');
+            }
+            check(pageErrors === 0 && failedAssets === 0, 'Browser runtime or asset errors');
+            const result = { status: 'passed', started, finished: new Date().toISOString(), cases: results, desktop: true, mobile: true, getFallbackSubmission: true, staticAssets: assets.length, pageErrors, failedAssets, note: 'Anonymous read-only comparisons. No live interpreter, login, payment or job execution; no screenshots, trace or user records retained.' };
+            await writeFile(process.env.CHECK_RESULT, JSON.stringify(result, null, 2));
+            console.log(JSON.stringify(result));
+          } finally {
+            await browser.close();
+          }
           JS
-          node --import tsx --input-type=module <<'JS'
-          import assert from 'node:assert/strict';
-          import { buildVercelProjectConfig } from './scripts/vercel-project-config.mjs';
-          const loaded = await import('./vercel.ts');
-          const config = loaded.config ?? loaded.default?.config;
-          assert.deepEqual(config.git, { deploymentEnabled: { 'build/website2-legacy-query-20261019': false } });
-          const { git, ...unchanged } = config;
-          assert.deepEqual(unchanged, buildVercelProjectConfig());
-          console.log('Validation-branch deployments disabled; other configuration unchanged.');
-          JS
-
-      - name: Run repository tests including baseline comparison
-        id: tests
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
-          # These unit tests mock fetch; the network guard remains enabled.
-          MORAL_TRADE_DISABLE_SUPABASE: "false"
-        run: npm test
-
-      - name: Run ESLint
-        id: lint
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
-        run: npm run lint
-
-      - name: Finish production-mode application build without deployment
-        id: build
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ runner.temp }}/no-network.mjs
-        run: npm run build
-
-      - name: Record build result
+          node hosted-check.mjs
+      - name: Publish non-sensitive stage evidence only
         if: always()
-        env:
-          TEST_RESULT: ${{ steps.tests.outcome }}
-          LINT_RESULT: ${{ steps.lint.outcome }}
-          BUILD_RESULT: ${{ steps.build.outcome }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: website2-staged-query-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/stage-result.json
+            ${{ runner.temp }}/hosted-check-result.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: State release boundary
+        if: always()
         run: |
-          {
-            echo '### Website2 legacy query build only'
-            printf 'Source: `%s`\n\n' "$GITHUB_SHA"
-            printf 'Tests: %s; lint: %s; full build: %s.\n\n' "$TEST_RESULT" "$LINT_RESULT" "$BUILD_RESULT"
-            echo 'No deployment, plan change, application secrets, database tests, or published build artifacts.'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo 'Exact tested source staged only. This workflow never promotes or changes aliases, settings, credentials, plans, databases, payments or jobs.' >> "$GITHUB_STEP_SUMMARY"
