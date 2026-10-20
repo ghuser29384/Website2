@@ -1,0 +1,463 @@
+diff --git a/cloudflare/.gitignore b/cloudflare/.gitignore
+new file mode 100644
+index 0000000..4aa37da
+--- /dev/null
++++ b/cloudflare/.gitignore
+@@ -0,0 +1,6 @@
++node_modules/
++generated/
++dist/
++schema.prisma
++.wrangler/
++.dev.vars*
+diff --git a/cloudflare/README.md b/cloudflare/README.md
+new file mode 100644
+index 0000000..e714c29
+--- /dev/null
++++ b/cloudflare/README.md
+@@ -0,0 +1,48 @@
++# Normativity Workers candidate — not deployment-ready
++
++Prepared against WebsiteBuilding2 `4ee214324976cf579a77bde4788551cfe32f94fb`.
++Everything in this directory is a compatibility-test candidate. Existing
++application files, Prisma models, Vercel configuration and lockfile are unchanged.
++Do not deploy this harness or use production credentials with it.
++
++## Smallest currently identified runtime adaptations
++
++- Prebundle as Node with esbuild, then tell Wrangler not to rebundle. This keeps
++  `iconv-lite`'s real stream implementation that browser mappings removed in the
++  first probe. An assertion stops the build if that implementation is missing.
++- Generate Prisma's JavaScript engine for `workerd`, using the matching 6.19.0
++  PostgreSQL driver adapter. A request-scoped facade preserves existing service
++  calls, creates connections lazily, and disconnects after the response.
++  Database models and migrations are not changed.
++- Replace two dynamic `new Function(... import ...)` JOSE loaders with normal
++  dynamic imports **in the bundle only**. Verification/signing logic is retained.
++- Exclude only the standalone Node listener/interval bootstrap from the bundle.
++  The Workers HTTP entry calls the existing Express app and existing public-config
++  and audit endpoint handlers. Production auth is enforced during the probe.
++
++## Verification boundary
++
++`node --test request-database.test.mjs transforms.test.mjs auth-negative.test.mjs`
++uses only Node built-ins. It verifies isolation, cleanup, exact source-preserving
++transformations and rejection of forged development headers. It does not prove
++database compatibility, valid JWT handling or Workers runtime success.
++
++The new dependencies have not been installed and no new lockfile has been
++resolved. Before installation/push, obtain the user's approval for the separately
++prepared free, isolated cloud test. Use only loopback synthetic database addresses.
++Never run the repository root postinstall, database migrations or remote tests.
++
++## Blockers to preserving every feature
++
++`server/src/services/tsa.ts` runs the OpenSSL executable to create RFC 3161
++timestamp requests and, when configured, verify timestamp responses against a CA.
++Workers cannot run that executable. This candidate deliberately leaves the
++feature unchanged and marks it **unresolved**, rather than skipping verification.
++
++This backend harness does not yet implement the frontend asset deployment or
++scheduled audit trigger. Scheduled execution must preserve the existing audit
++and timestamp behavior before a migration is approved. Full database operations,
++valid JWTs, signed proofs, Storage uploads, AI-provider behavior, frontend
++interactions and request/CPU limits also need isolated tests. Keep Vercel serving
++the complete application until those gates pass; a successful startup is
++insufficient.
+diff --git a/cloudflare/auth-negative.test.mjs b/cloudflare/auth-negative.test.mjs
+new file mode 100644
+index 0000000..e727eb7
+--- /dev/null
++++ b/cloudflare/auth-negative.test.mjs
+@@ -0,0 +1,44 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { readFile } from 'node:fs/promises';
++import { stripTypeScriptTypes } from 'node:module';
++import { bundleJoseImport } from './transforms.mjs';
++
++// Execute the actual prepared auth middleware without installing Express/JOSE.
++// These negative cases never load JOSE; signed-token checks need the cloud run.
++const source = await readFile(new URL('../server/src/middleware/auth.ts', import.meta.url), 'utf8');
++const javascript = stripTypeScriptTypes(bundleJoseImport(source));
++const { requireAuth } = await import('data:text/javascript;base64,' + Buffer.from(javascript).toString('base64'));
++
++for (const [name, headers] of [
++  ['missing credentials', {}],
++  ['forged development administrator headers', { 'x-user-id': 'synthetic-admin', 'x-user-role': 'admin' }],
++  ['non-Bearer authorization', { authorization: 'Basic synthetic', 'x-user-id': 'synthetic-admin' }],
++]) {
++  test('production auth rejects ' + name, async () => {
++    const keys = ['NODE_ENV', 'ALLOW_DEVELOPMENT_AUTH_HEADERS'];
++    const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
++    process.env.NODE_ENV = 'production';
++    process.env.ALLOW_DEVELOPMENT_AUTH_HEADERS = 'false';
++    try {
++      const result = await new Promise((resolve, reject) => {
++        const timeout = setTimeout(() => reject(new Error('Auth did not respond')), 1000);
++        const response = {
++          status(value) { this.code = value; return this; },
++          json(body) { clearTimeout(timeout); resolve({ code: this.code, body }); },
++        };
++        requireAuth({ header: key => headers[key] }, response, () => {
++          clearTimeout(timeout);
++          reject(new Error('Unauthorized request reached the route'));
++        });
++      });
++      assert.equal(result.code, 401);
++      assert.match(result.body.error, /Authentication required/);
++    } finally {
++      for (const key of keys) {
++        if (previous[key] === undefined) delete process.env[key];
++        else process.env[key] = previous[key];
++      }
++    }
++  });
++}
+diff --git a/cloudflare/build.mjs b/cloudflare/build.mjs
+new file mode 100644
+index 0000000..6d6408e
+--- /dev/null
++++ b/cloudflare/build.mjs
+@@ -0,0 +1,78 @@
++import assert from 'node:assert/strict';
++import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
++import { resolve, dirname, basename } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { builtinModules, createRequire } from 'node:module';
++import { createHash } from 'node:crypto';
++import { execFileSync } from 'node:child_process';
++import { derivePrismaSchema, bundleJoseImport, bundleAppEntrypoint } from './transforms.mjs';
++
++const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '..');
++assert.equal(process.env.CF_COMPAT_TEST, '1', 'Compatibility test context required');
++assert.ok(process.argv.slice(2).every(x => x === '--generate-only' || x === '--bundle-only'));
++for (const key of ['DATABASE_URL', 'DIRECT_URL']) {
++  const url = new URL(process.env[key] || '');
++  assert.equal(url.protocol, 'postgresql:');
++  assert.equal(url.hostname, '127.0.0.1');
++  assert.equal(url.port, '15432');
++  assert.equal(url.pathname, '/synthetic');
++}
++if (!process.argv.includes('--bundle-only')) {
++  const schema = await readFile(resolve(root, 'server/prisma/schema.prisma'), 'utf8');
++  await writeFile(resolve(here, 'schema.prisma'), derivePrismaSchema(schema));
++  execFileSync(process.execPath, [resolve(root, 'server/node_modules/prisma/build/index.js'),
++    'generate', '--schema', resolve(here, 'schema.prisma')], { cwd: root, stdio: 'inherit' });
++}
++if (process.argv.includes('--generate-only')) process.exit(0);
++
++const { build } = await import('esbuild');
++const builtins = new Set(builtinModules.map(x => x.replace(/^node:/, '')));
++const wasm = new Map(), transformed = new Set();
++const overrides = new Map([
++  [resolve(root, 'server/src/middleware/auth.ts'), bundleJoseImport],
++  [resolve(root, 'server/src/services/cryptoSigning.ts'), bundleJoseImport],
++  [resolve(root, 'server/src/app.ts'), bundleAppEntrypoint],
++]);
++await mkdir(resolve(here, 'dist'), { recursive: true });
++const result = await build({
++  absWorkingDir: root,
++  entryPoints: [resolve(here, 'worker.ts')],
++  outfile: resolve(here, 'dist/worker.mjs'),
++  bundle: true, format: 'esm', platform: 'node', target: 'es2022',
++  mainFields: ['module', 'main'], conditions: ['workerd', 'worker', 'node'],
++  external: ['cloudflare:*', 'pg-native'], metafile: true,
++  banner: { js: 'import { createRequire as __nodeCreateRequire } from "node:module"; const require = __nodeCreateRequire(import.meta.url);' },
++  plugins: [{ name: 'preserve-server-behavior-on-workers', setup(builder) {
++    builder.onResolve({ filter: /^(node:)?[a-z_]+(?:\/[a-z_]+)?$/ }, args => {
++      const name = args.path.replace(/^node:/, '');
++      if (builtins.has(name)) return { path: 'node:' + name, external: true };
++    });
++    builder.onResolve({ filter: /(^|\/)db\/prisma(?:\.ts)?$/ }, args => {
++      const path = resolve(args.resolveDir, args.path).replace(/\.ts$/, '');
++      if (path === resolve(root, 'server/src/db/prisma')) return { path: resolve(here, 'prisma.ts') };
++    });
++    builder.onLoad({ filter: /\.ts$/ }, async args => {
++      const transform = overrides.get(args.path);
++      if (transform) {
++        transformed.add(args.path);
++        return { contents: transform(await readFile(args.path, 'utf8')), loader: 'ts', resolveDir: dirname(args.path) };
++      }
++    });
++    builder.onResolve({ filter: /\.wasm(?:\?module)?$/ }, args => {
++      const specifier = args.path.replace(/\?module$/, '');
++      const path = createRequire(resolve(args.resolveDir, '__resolve.cjs')).resolve(specifier);
++      const name = createHash('sha256').update(path).digest('hex').slice(0, 12) + '-' + basename(path);
++      wasm.set(path, name);
++      return { path: './' + name, external: true };
++    });
++  } }],
++});
++assert.equal(transformed.size, overrides.size, 'Every known runtime adaptation must be included');
++const inputs = Object.keys(result.metafile.inputs);
++assert.ok(inputs.some(x => /iconv-lite\/lib\/streams\.js$/.test(x)), 'Real encoding streams must be retained');
++assert.ok(!inputs.some(x => /server\/src\/db\/prisma\.ts$/.test(x)), 'Native Prisma singleton leaked into Workers');
++assert.ok(!inputs.some(x => /\.node$/.test(x)), 'Native addon in Workers bundle');
++for (const [path, name] of wasm) await copyFile(path, resolve(here, 'dist', name));
++await writeFile(resolve(here, 'dist/build-meta.json'), JSON.stringify(result.metafile, null, 2) + '\n');
++console.log(JSON.stringify({ status: 'BUNDLED_NOT_FEATURE_ACCEPTANCE', wasmModules: wasm.size,
++  originalApplicationFilesModified: 0, timestampProofCompatibility: 'UNRESOLVED_OPENSSL_SUBPROCESS' }));
+diff --git a/cloudflare/package.json b/cloudflare/package.json
+new file mode 100644
+index 0000000..c78056d
+--- /dev/null
++++ b/cloudflare/package.json
+@@ -0,0 +1,19 @@
++{
++  "name": "normativity-cloudflare-compat-only",
++  "private": true,
++  "type": "module",
++  "scripts": {
++    "test": "node --test request-database.test.mjs transforms.test.mjs auth-negative.test.mjs",
++    "build": "node build.mjs",
++    "preview": "wrangler dev --local --config wrangler.compat.json"
++  },
++  "dependencies": {
++    "@prisma/client": "6.19.0",
++    "@prisma/adapter-pg": "6.19.0",
++    "pg": "8.16.3"
++  },
++  "devDependencies": {
++    "esbuild": "0.28.2",
++    "wrangler": "4.151.2"
++  }
++}
+diff --git a/cloudflare/prisma.ts b/cloudflare/prisma.ts
+new file mode 100644
+index 0000000..a538e01
+--- /dev/null
++++ b/cloudflare/prisma.ts
+@@ -0,0 +1,14 @@
++import { PrismaClient } from "./generated/client";
++import { PrismaPg } from "@prisma/adapter-pg";
++import { createRequestDatabase } from "./request-database.mjs";
++
++// Selected only by the Workers build alias. The Vercel singleton is untouched.
++const database = createRequestDatabase((connectionString: string) =>
++  new PrismaClient({ adapter: new PrismaPg({ connectionString }) }),
++);
++
++export const prisma = database.prisma as PrismaClient;
++export const isDatabaseConfigured = database.isDatabaseConfigured;
++export function withDatabase<T>(operation: () => Promise<T>): Promise<T> {
++  return database.run(process.env.DATABASE_URL, operation);
++}
+diff --git a/cloudflare/request-database.mjs b/cloudflare/request-database.mjs
+new file mode 100644
+index 0000000..0677c13
+--- /dev/null
++++ b/cloudflare/request-database.mjs
+@@ -0,0 +1,33 @@
++import { AsyncLocalStorage } from 'node:async_hooks';
++
++// A Workers request must not reuse another request's sockets/client. Keep the
++// existing route/service API while binding its client to the current response.
++export function createRequestDatabase(createClient) {
++  const contexts = new AsyncLocalStorage();
++  const current = () => {
++    const context = contexts.getStore();
++    if (!context) throw new Error('Database access outside a request');
++    if (!context.connectionString) throw new Error('DATABASE_URL is not configured');
++    context.client ??= createClient(context.connectionString);
++    return context.client;
++  };
++  const prisma = new Proxy({}, {
++    get(_target, key) {
++      const client = current();
++      const value = Reflect.get(client, key, client);
++      return typeof value === 'function' ? value.bind(client) : value;
++    },
++  });
++  return {
++    prisma,
++    isDatabaseConfigured: () => Boolean(contexts.getStore()?.connectionString),
++    async run(connectionString, operation) {
++      if (contexts.getStore()) throw new Error('Nested database scope is unsupported');
++      const context = { connectionString, client: undefined };
++      return contexts.run(context, async () => {
++        try { return await operation(); }
++        finally { if (context.client) await context.client.$disconnect(); }
++      });
++    },
++  };
++}
+diff --git a/cloudflare/request-database.test.mjs b/cloudflare/request-database.test.mjs
+new file mode 100644
+index 0000000..0154d4a
+--- /dev/null
++++ b/cloudflare/request-database.test.mjs
+@@ -0,0 +1,51 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { createRequestDatabase } from './request-database.mjs';
++
++function harness() {
++  const created = [], closed = [];
++  const scope = createRequestDatabase(url => {
++    const client = { url, read() { return this.url; }, async $disconnect() { closed.push(this.url); } };
++    created.push(client);
++    return client;
++  });
++  return { scope, created, closed };
++}
++
++test('does not create connections for requests that never use the database', async () => {
++  const h = harness();
++  await h.scope.run('', async () => assert.equal(h.scope.isDatabaseConfigured(), false));
++  assert.equal(h.created.length, 0);
++});
++test('database use outside a request fails closed', () => {
++  const h = harness();
++  assert.throws(() => h.scope.prisma.read(), /outside a request/);
++  assert.equal(h.created.length, 0);
++});
++test('missing configuration fails on use without constructing a client', async () => {
++  const h = harness();
++  await assert.rejects(h.scope.run('', async () => h.scope.prisma.read()), /not configured/);
++  assert.equal(h.created.length, 0);
++});
++test('overlapping requests retain separate clients and method receivers', async () => {
++  const h = harness();
++  let release; const gate = new Promise(resolve => { release = resolve; });
++  const a = h.scope.run('first', async () => {
++    assert.equal(h.scope.prisma.read(), 'first'); await gate;
++    assert.equal(h.scope.prisma.read(), 'first');
++  });
++  await h.scope.run('second', async () => assert.equal(h.scope.prisma.read(), 'second'));
++  release(); await a;
++  assert.deepEqual(h.closed, ['second', 'first']);
++  assert.equal(h.created.length, 2);
++});
++test('an operation failure still disconnects its client', async () => {
++  const h = harness();
++  await assert.rejects(h.scope.run('failure', async () => { h.scope.prisma.read(); throw new Error('synthetic'); }), /synthetic/);
++  assert.deepEqual(h.closed, ['failure']);
++});
++test('nested scopes fail rather than silently sharing the wrong connection', async () => {
++  const h = harness();
++  await assert.rejects(h.scope.run('outer', () => h.scope.run('inner', async () => {})), /Nested/);
++  assert.equal(h.created.length, 0);
++});
+diff --git a/cloudflare/transforms.mjs b/cloudflare/transforms.mjs
+new file mode 100644
+index 0000000..d88e6e1
+--- /dev/null
++++ b/cloudflare/transforms.mjs
+@@ -0,0 +1,24 @@
++// Build-only adaptations. Original Vercel source and database models stay intact.
++export function derivePrismaSchema(source) {
++  const original = 'generator client {\n  provider = "prisma-client-js"\n}';
++  if (source.split(original).length !== 2) throw new Error('Prisma generator changed; review required');
++  return source.replace(original, `generator client {
++  provider     = "prisma-client"
++  output       = "./generated"
++  engineType   = "client"
++  runtime      = "workerd"
++  moduleFormat = "esm"
++}`);
++}
++
++export function bundleJoseImport(source) {
++  const original = 'new Function("specifier", "return import(specifier)")("jose")';
++  if (source.split(original).length !== 2) throw new Error('JOSE import changed; review required');
++  return source.replace(original, 'import("jose")');
++}
++
++export function bundleAppEntrypoint(source) {
++  const original = 'if (require.main === module) {';
++  if (source.split(original).length !== 2) throw new Error('Server entrypoint changed; review required');
++  return source.replace(original, 'if (false) { // Not the standalone Node entrypoint.');
++}
+diff --git a/cloudflare/transforms.test.mjs b/cloudflare/transforms.test.mjs
+new file mode 100644
+index 0000000..4c75337
+--- /dev/null
++++ b/cloudflare/transforms.test.mjs
+@@ -0,0 +1,28 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { readFile } from 'node:fs/promises';
++import { derivePrismaSchema, bundleJoseImport, bundleAppEntrypoint } from './transforms.mjs';
++
++test('Workers generator preserves every database model and datasource byte', async () => {
++  const original = await readFile(new URL('../server/prisma/schema.prisma', import.meta.url), 'utf8');
++  const candidate = derivePrismaSchema(original);
++  const removeGenerator = s => s.replace(/generator client \{[^}]+\}/, '');
++  assert.equal(removeGenerator(candidate), removeGenerator(original));
++  assert.match(candidate, /engineType\s*= "client"/);
++  assert.match(candidate, /runtime\s*= "workerd"/);
++});
++for (const path of ['middleware/auth.ts', 'services/cryptoSigning.ts']) {
++  test('JOSE becomes statically bundleable without changing verification/signing: ' + path, async () => {
++    const source = await readFile(new URL('../server/src/' + path, import.meta.url), 'utf8');
++    const candidate = bundleJoseImport(source);
++    assert.equal(candidate.replace('return import("jose");', 'return new Function("specifier", "return import(specifier)")("jose");'), source);
++  });
++}
++test('the Workers bundle does not launch the standalone listener or interval', async () => {
++  const source = await readFile(new URL('../server/src/app.ts', import.meta.url), 'utf8');
++  const candidate = bundleAppEntrypoint(source);
++  assert.equal(candidate.replace('if (false) { // Not the standalone Node entrypoint.', 'if (require.main === module) {'), source);
++});
++test('source drift stops all build transformations', () => {
++  for (const transform of [derivePrismaSchema, bundleJoseImport, bundleAppEntrypoint]) assert.throws(() => transform(''), /review required/);
++});
+diff --git a/cloudflare/worker.ts b/cloudflare/worker.ts
+new file mode 100644
+index 0000000..fb6b9c8
+--- /dev/null
++++ b/cloudflare/worker.ts
+@@ -0,0 +1,26 @@
++import { createServer } from "node:http";
++import { httpServerHandler } from "cloudflare:node";
++import { createApp } from "../server/src/app";
++import publicConfig from "../api/public-config";
++import commitmentAudit from "../api/cron/commitment-audit";
++import { withDatabase } from "./prisma";
++
++// Backend compatibility harness only, not a deployable frontend migration.
++const app = createApp();
++app.all("/api/public-config", publicConfig);
++app.all("/api/cron/commitment-audit", commitmentAudit);
++
++const server = createServer((request, response) => {
++  void withDatabase(() => new Promise<void>((resolve, reject) => {
++    response.once("finish", resolve);
++    response.once("close", resolve);
++    response.once("error", reject);
++    app(request, response);
++  })).catch(() => {
++    // Do not expose connection strings, underlying errors or signing material.
++    if (!response.headersSent) response.writeHead(500, { "Content-Type": "application/json" });
++    if (!response.writableEnded) response.end('{"error":"Request failed."}');
++  });
++});
++server.listen(8080);
++export default httpServerHandler({ port: 8080 });
+diff --git a/cloudflare/wrangler.compat.json b/cloudflare/wrangler.compat.json
+new file mode 100644
+index 0000000..9c26f35
+--- /dev/null
++++ b/cloudflare/wrangler.compat.json
+@@ -0,0 +1,20 @@
++{
++  "$schema": "node_modules/wrangler/config-schema.json",
++  "name": "normativity-compat-only",
++  "main": "dist/worker.mjs",
++  "no_bundle": true,
++  "compatibility_date": "2026-10-19",
++  "compatibility_flags": ["nodejs_compat", "new_module_registry"],
++  "workers_dev": false,
++  "preview_urls": false,
++  "rules": [{ "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }],
++  "vars": {
++    "NODE_ENV": "production",
++    "ALLOW_DEVELOPMENT_AUTH_HEADERS": "false",
++    "AUTH_JWT_SECRET": "synthetic-offline-jwt-test-key-not-a-real-secret",
++    "COMMITMENT_JOBS": "false",
++    "CRON_SECRET": "synthetic-offline-only",
++    "DATABASE_URL": "postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic",
++    "DIRECT_URL": "postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic"
++  }
++}

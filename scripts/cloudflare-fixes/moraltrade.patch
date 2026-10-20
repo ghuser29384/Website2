@@ -1,0 +1,131 @@
+diff --git a/.gitignore b/.gitignore
+index 06740c7..fa0aaf5 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -28,3 +28,5 @@ Larken Serif/Larken-Regular.otf
+ Larken Serif/Larken-Thin.otf
+ Larken Serif/Larken-ThinItalic.otf
+ .vercel
++.open-next/
++.wrangler/
+diff --git a/CLOUDFLARE-COMPATIBILITY.md b/CLOUDFLARE-COMPATIBILITY.md
+new file mode 100644
+index 0000000..7cc2dac
+--- /dev/null
++++ b/CLOUDFLARE-COMPATIBILITY.md
+@@ -0,0 +1,40 @@
++# Moral Trade Workers candidate — not deployment-ready
++
++Prepared against Website2 `a4adf0cbb7029a6316a34478bd27dffad22cbca4`.
++Existing application source, `proxy.ts`, public assets, Vercel configuration and
++release controls are unchanged.
++
++## Candidate changes
++
++- Pin Next.js and eslint-config-next to 16.4.1. The tested-base Next.js 16.2.4
++  does not satisfy OpenNext Cloudflare 1.20.12's current peer range.
++- Pin OpenNext Cloudflare 1.20.12, Wrangler 4.151.2 and adapter peer rclone.js
++  0.6.6 for the separately approved compatibility run.
++- Add an isolated Wrangler configuration and OpenNext adapter configuration,
++  preserving incremental caching through a local R2 emulator, image binding and
++  self-reference binding. No Cloudflare resource has been created.
++- Retain `proxy.ts` unchanged: OpenNext added experimental Node middleware
++  support in 1.20.3. It still needs runtime parity checks for this application.
++
++`package-lock.json` is deliberately not presented as updated. No installation is
++authorized yet. An approved disposable runner must resolve and inspect the new
++lock, reject unintended direct-dependency changes, run the existing tests and
++build, and exercise the local Workers runtime with outbound networking disabled.
++Do not push these application dependency changes to main without a validated lock.
++
++Use `MORAL_TRADE_DISABLE_DEP_REPAIR=1` during tests/builds. The existing prebuild
++repair helper must not silently install or remove packages. Test credentials are
++synthetic; production/provider credentials must not be copied into the test.
++
++This configuration is for local emulation only. The bucket/service names are
++placeholders, no domain or account is selected, and no scheduled triggers are
++created. Never run the adapter's migrate/deploy/upload commands for this probe.
++
++## Remaining feature gates
++
++A successful build is insufficient. Before migration, verify routing/cookies,
++search results, auth/session refresh, payment safeguards and signed webhooks,
++document/filesystem reads, assets/images, cache invalidation, and all seven
++existing scheduled jobs with isolated fixtures. The `IMAGES` binding is not proof
++of production image parity or free image delivery. Local runtime success does
++not measure billed CPU or establish a $0 total hosting bill.
+diff --git a/open-next.config.ts b/open-next.config.ts
+new file mode 100644
+index 0000000..6c41c68
+--- /dev/null
++++ b/open-next.config.ts
+@@ -0,0 +1,6 @@
++import { defineCloudflareConfig } from "@opennextjs/cloudflare";
++import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache";
++
++// Test candidate only. Cache persistence is exercised with local emulated R2.
++// Do not replace cache behavior with a no-op to make compatibility tests pass.
++export default defineCloudflareConfig({ incrementalCache: r2IncrementalCache });
+diff --git a/package.json b/package.json
+index a0384b3..310b525 100644
+--- a/package.json
++++ b/package.json
+@@ -10,6 +10,8 @@
+     "dev": "bash scripts/dev.sh",
+     "prebuild": "npm run verify:pareto && npm run verify:discover && node scripts/ensure-next-swc.mjs",
+     "build": "next build --webpack",
++    "build:cloudflare:compat": "opennextjs-cloudflare build --config wrangler.compat.json",
++    "preview:cloudflare:compat": "opennextjs-cloudflare preview --config wrangler.compat.json --local",
+     "prestart": "node scripts/ensure-next-swc.mjs",
+     "start": "next start",
+     "lint": "eslint .",
+@@ -30,19 +32,22 @@
+     "@phosphor-icons/react": "^2.1.10",
+     "@supabase/ssr": "latest",
+     "@supabase/supabase-js": "latest",
+-    "next": "^16.2.4",
++    "next": "16.4.1",
+     "react": "latest",
+     "react-dom": "latest",
+     "stripe": "^22.0.2"
+   },
+   "devDependencies": {
++    "@opennextjs/cloudflare": "1.20.12",
+     "@playwright/test": "^1.60.0",
+     "@types/node": "latest",
+     "@types/react": "latest",
+     "@types/react-dom": "latest",
+     "eslint": "latest",
+-    "eslint-config-next": "latest",
++    "eslint-config-next": "16.4.1",
++    "rclone.js": "0.6.6",
+     "tsx": "^4.21.0",
+-    "typescript": "^6.0.3"
++    "typescript": "^6.0.3",
++    "wrangler": "4.151.2"
+   }
+ }
+diff --git a/wrangler.compat.json b/wrangler.compat.json
+new file mode 100644
+index 0000000..87a8a93
+--- /dev/null
++++ b/wrangler.compat.json
+@@ -0,0 +1,18 @@
++{
++  "$schema": "node_modules/wrangler/config-schema.json",
++  "name": "moraltrade-compat-only",
++  "main": ".open-next/worker.js",
++  "compatibility_date": "2026-10-19",
++  "compatibility_flags": ["nodejs_compat"],
++  "workers_dev": false,
++  "preview_urls": false,
++  "assets": {
++    "directory": ".open-next/assets",
++    "binding": "ASSETS",
++    "run_worker_first": true
++  },
++  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "moraltrade-compat-only" }],
++  "r2_buckets": [{ "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "moraltrade-compat-local" }],
++  "images": { "binding": "IMAGES" },
++  "vars": { "NEXTJS_ENV": "production" }
++}
