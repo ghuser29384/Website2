@@ -1,0 +1,87 @@
+name: Cloudflare compatibility probe only
+on:
+  push:
+    branches: [build/cloudflare-compat-20261019]
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-compat-20261019
+  cancel-in-progress: false
+jobs:
+  probe:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/cloudflare-compat-20261019'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify test branch and unchanged application
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = a4adf0cbb7029a6316a34478bd27dffad22cbca4
+          git diff --exit-code HEAD^ HEAD -- src public package.json package-lock.json next.config.ts vercel.ts scripts/vercel-project-config.mjs
+          git diff --check HEAD^ HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node --input-type=module -e 'import assert from "node:assert/strict"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false);'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - uses: actions/checkout@v4
+        with:
+          repository: ghuser29384/WebsiteBuilding2
+          ref: 4ee214324976cf579a77bde4788551cfe32f94fb
+          path: compatibility-inputs/normativity
+          persist-credentials: false
+      - name: Prepare exact public sources and pinned tools
+        shell: bash
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          export CF_PROBE_ROOT="$RUNNER_TEMP/cloudflare-compat"
+          test "$(git -C compatibility-inputs/normativity rev-parse HEAD)" = 4ee214324976cf579a77bde4788551cfe32f94fb
+          mkdir -p "$CF_PROBE_ROOT/tools" "$CF_PROBE_ROOT/home" "$CF_PROBE_ROOT/source/rlhf"
+          cp scripts/cloudflare-compat/{rlhf-baseline.mjs,prepare-probes.mjs,worker-probe.mjs} "$CF_PROBE_ROOT/"
+          cp scripts/cloudflare-compat/source/rlhf/index.mjs "$CF_PROBE_ROOT/source/rlhf/index.mjs"
+          cp -R compatibility-inputs/normativity "$CF_PROBE_ROOT/normativity"
+          curl --fail --silent --show-error --max-time 30 'https://raw.githubusercontent.com/ghuser29384/RL-for-Conceptual-Reasoning/2176df9ae5264b3e38ad8f8d049caf53d8a4a38f/ops/release-bundles/metaphilosophy-public-editorial-a0273b4.tgz.b64' -o "$CF_PROBE_ROOT/source/rlhf/bundle.b64"
+          printf '{"private":true,"dependencies":{"wrangler":"4.151.2"}}\n' > "$CF_PROBE_ROOT/tools/package.json"
+          npm install --prefix "$CF_PROBE_ROOT/tools" --ignore-scripts --no-audit --no-fund
+          node -e 'if(require(process.env.CF_PROBE_ROOT+"/tools/node_modules/wrangler/package.json").version!=="4.151.2")process.exit(1)'
+          npm ci --prefix "$CF_PROBE_ROOT/normativity/server" --ignore-scripts --no-audit --no-fund
+          env -i PATH="$PATH" HOME="$CF_PROBE_ROOT/home" DATABASE_URL='postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic' DIRECT_URL='postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic' "$CF_PROBE_ROOT/normativity/server/node_modules/.bin/prisma" generate --schema "$CF_PROBE_ROOT/normativity/server/prisma/schema.prisma"
+          node "$CF_PROBE_ROOT/prepare-probes.mjs"
+          printf 'CF_PROBE_ROOT=%s\n' "$CF_PROBE_ROOT" >> "$GITHUB_ENV"
+      - name: Offline runtime comparisons with no application credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_EXE="$(command -v node)"
+          sudo unshare --net -- bash -c 'ip link set lo up; exec env -i PATH="$1" HOME="$2/home" CF_PROBE_ROOT="$2" CF_OFFLINE_NAMESPACE=1 WRANGLER_SEND_METRICS=false NO_COLOR=1 "$3" "$2/rlhf-baseline.mjs"' _ "$PATH" "$CF_PROBE_ROOT" "$NODE_EXE"
+          for target in rlhf normativity; do
+            sudo unshare --net -- bash -c 'ip link set lo up; exec env -i PATH="$1" HOME="$2/home" CF_PROBE_ROOT="$2" CF_OFFLINE_NAMESPACE=1 WRANGLER_SEND_METRICS=false NO_COLOR=1 "$3" "$2/worker-probe.mjs" "$4"' _ "$PATH" "$CF_PROBE_ROOT" "$NODE_EXE" "$target"
+          done
+      - name: Report limited findings without claiming migration readiness
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Cloudflare first-pass compatibility'
+            echo 'Moral Trade: BLOCKED before runtime test. Next 16.2.4 is excluded by current OpenNext 1.20.12. No upgrade or obsolete adapter installed.'
+            echo 'Normativity: native Prisma database compatibility remains unproven even if startup succeeds.'
+            echo 'RLHF: compare exact deployed public responses in the local Workers runtime.'
+            echo 'No deployment, plan change, remote database access, or full-feature acceptance is included.'
+            for target in rlhf normativity; do
+              result="$RUNNER_TEMP/cloudflare-compat/$target-runtime-result.json"
+              if test -f "$result"; then
+                echo '```json'
+                cat "$result"
+                echo '```'
+              else
+                echo "$target: NOT TESTED because setup or isolation failed."
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
