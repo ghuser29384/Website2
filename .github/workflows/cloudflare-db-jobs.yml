@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = a4adf0cbb7029a6316a34478bd27dffad22cbca4
+          test "$(git rev-parse HEAD^)" = d8c359d4d92bd8f8bcc03897be222bd9ab0a0b0d
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --exit-code HEAD^ HEAD -- src public package.json package-lock.json next.config.ts vercel.ts scripts/vercel-project-config.mjs
           git diff --check HEAD^ HEAD

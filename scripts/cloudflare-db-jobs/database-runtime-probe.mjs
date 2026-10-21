@@ -116,7 +116,7 @@ try {
     assert.deepEqual(await counts(), { users: 3, pledges: 3, events: 3 });
     preview = await start(configFile, 8787);
     const response = await request('/api/commitments/admin/health', { headers: auth('synthetic_admin', 'admin') });
-    assert.equal(response.status, 200); assert.equal((await response.json()).latestCheckpoint.treeSize, 3);
+    assert.equal(response.status, 200); assert.equal((await response.json()).health.latestCheckpoint.treeSize, 3);
   });
   await check('an additional write creates a linked checkpoint and retains the pledge upsert contract', async () => {
     const response = await pledge('synthetic_a'); assert.equal(response.status, 201); await response.arrayBuffer();
