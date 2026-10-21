@@ -1,0 +1,383 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -35,7 +35,8 @@
+     "next": "16.4.1",
+     "react": "latest",
+     "react-dom": "latest",
+-    "stripe": "^22.0.2"
++    "stripe": "^22.0.2",
++    "pg": "8.23.1"
+   },
+   "devDependencies": {
+     "@opennextjs/cloudflare": "1.20.12",
+@@ -48,6 +49,7 @@
+     "rclone.js": "0.6.6",
+     "tsx": "^4.21.0",
+     "typescript": "^6.0.3",
+-    "wrangler": "4.151.2"
++    "wrangler": "4.151.2",
++    "@types/pg": "8.23.1"
+   }
+ }
+diff --git a/src/app/api/jobs/email/route.ts b/src/app/api/jobs/email/route.ts
+--- a/src/app/api/jobs/email/route.ts
++++ b/src/app/api/jobs/email/route.ts
+@@ -4,7 +4,7 @@
+ import { isCronRequestAuthorized } from "@/lib/cron";
+ import { hasEmailEnv, sendEmail } from "@/lib/email";
+ import { evaluateMoralTradeEmailOutboxSafety } from "@/lib/moral-trade/email-copy";
+-import { createServiceClient } from "@/lib/supabase/server";
++import { createEmailOutboxClient } from "@/lib/email-outbox-client";
+
+ export const runtime = "nodejs";
+
+@@ -30,86 +30,90 @@
+     );
+   }
+
+-  const supabase = createServiceClient() as any;
+-  const workerToken = randomUUID();
+-  const { data, error } = await supabase.rpc("claim_email_outbox_v2", {
+-    p_limit: 25,
+-    p_worker_token: workerToken,
+-  });
+-
+-  if (error) {
+-    return NextResponse.json({ error: error.message }, { status: 500 });
+-  }
+-
+-  let sent = 0;
+-  let failed = 0;
+-  let retrying = 0;
+-  let suppressed = 0;
+-
+-  for (const email of (data ?? []) as ClaimedEmail[]) {
+-    const safety = evaluateMoralTradeEmailOutboxSafety({
+-      body: email.body,
+-      provider: email.provider,
+-      subject: email.subject,
++  const supabase = await createEmailOutboxClient();
++  try {
++    const workerToken = randomUUID();
++    const { data, error } = await supabase.rpc("claim_email_outbox_v2", {
++      p_limit: 25,
++      p_worker_token: workerToken,
+     });
+
+-    if (safety.status === "suppress") {
+-      const { data: didSuppress, error: suppressError } = await supabase.rpc(
+-        "suppress_email_outbox_v2",
+-        {
+-          p_email_id: email.id,
+-          p_reason: safety.blockers.join("; "),
+-          p_worker_token: workerToken,
+-        },
+-      );
+-      if (suppressError || !didSuppress) failed += 1;
+-      else suppressed += 1;
+-      continue;
++    if (error) {
++      return NextResponse.json({ error: error.message }, { status: 500 });
+     }
+
+-    try {
+-      const providerResult = await sendEmail({
+-        idempotencyKey: email.idempotency_key ?? `email-outbox:${email.id}`,
+-        to: email.recipient_email,
++    let sent = 0;
++    let failed = 0;
++    let retrying = 0;
++    let suppressed = 0;
++
++    for (const email of (data ?? []) as ClaimedEmail[]) {
++      const safety = evaluateMoralTradeEmailOutboxSafety({
++        body: email.body,
++        provider: email.provider,
+         subject: email.subject,
+-        text: email.body,
+       });
+
+-      const { data: didComplete, error: completeError } = await supabase.rpc(
+-        "complete_email_outbox_v2",
+-        {
+-          p_email_id: email.id,
+-          p_provider_message_id: providerResult.id ?? "",
+-          p_worker_token: workerToken,
+-        },
+-      );
+-      if (completeError || !didComplete) {
+-        throw new Error(completeError?.message ?? "Email lease was no longer current.");
++      if (safety.status === "suppress") {
++        const { data: didSuppress, error: suppressError } = await supabase.rpc(
++          "suppress_email_outbox_v2",
++          {
++            p_email_id: email.id,
++            p_reason: safety.blockers.join("; "),
++            p_worker_token: workerToken,
++          },
++        );
++        if (suppressError || !didSuppress) failed += 1;
++        else suppressed += 1;
++        continue;
+       }
+-      sent += 1;
+-    } catch (deliveryError) {
+-      const message =
+-        deliveryError instanceof Error ? deliveryError.message : "Unknown email error.";
+-      const { data: nextStatus, error: retryError } = await supabase.rpc(
+-        "retry_email_outbox_v2",
+-        {
+-          p_email_id: email.id,
+-          p_error: message,
+-          p_worker_token: workerToken,
+-        },
+-      );
+-      if (retryError || !nextStatus || nextStatus === "failed") failed += 1;
+-      else retrying += 1;
++
++      try {
++        const providerResult = await sendEmail({
++          idempotencyKey: email.idempotency_key ?? `email-outbox:${email.id}`,
++          to: email.recipient_email,
++          subject: email.subject,
++          text: email.body,
++        });
++
++        const { data: didComplete, error: completeError } = await supabase.rpc(
++          "complete_email_outbox_v2",
++          {
++            p_email_id: email.id,
++            p_provider_message_id: providerResult.id ?? "",
++            p_worker_token: workerToken,
++          },
++        );
++        if (completeError || !didComplete) {
++          throw new Error(completeError?.message ?? "Email lease was no longer current.");
++        }
++        sent += 1;
++      } catch (deliveryError) {
++        const message =
++          deliveryError instanceof Error ? deliveryError.message : "Unknown email error.";
++        const { data: nextStatus, error: retryError } = await supabase.rpc(
++          "retry_email_outbox_v2",
++          {
++            p_email_id: email.id,
++            p_error: message,
++            p_worker_token: workerToken,
++          },
++        );
++        if (retryError || !nextStatus || nextStatus === "failed") failed += 1;
++        else retrying += 1;
++      }
+     }
++
++    return NextResponse.json({
++      claimed: (data ?? []).length,
++      failed,
++      retrying,
++      sent,
++      suppressed,
++    });
++  } finally {
++    await supabase.close();
+   }
+-
+-  return NextResponse.json({
+-    claimed: (data ?? []).length,
+-    failed,
+-    retrying,
+-    sent,
+-    suppressed,
+-  });
+ }
+
+ export async function GET(request: Request) {
+diff --git a/src/lib/email-outbox-client.ts b/src/lib/email-outbox-client.ts
+new file mode 100644
+--- /dev/null
++++ b/src/lib/email-outbox-client.ts
+@@ -0,0 +1,19 @@
++import { createServiceClient } from "@/lib/supabase/server";
++import { createNativeEmailOutbox, type EmailOutboxClient } from "./email-outbox-native";
++
++export async function createEmailOutboxClient(): Promise<EmailOutboxClient> {
++  const transport = process.env.EMAIL_OUTBOX_TRANSPORT;
++  if (!transport || transport === "rest") {
++    const client = createServiceClient() as any;
++    return { rpc: (name, args) => client.rpc(name, args), close: async () => {} };
++  }
++  if (transport !== "hyperdrive") throw new Error("Unknown email outbox transport.");
++
++  // Opt-in only. A missing binding must not silently replay work over another transport.
++  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
++  const { env } = getCloudflareContext();
++  const binding = (env as unknown as { EMAIL_OUTBOX_DB?: { connectionString?: string } }).EMAIL_OUTBOX_DB;
++  if (!binding?.connectionString) throw new Error("Email database binding is missing.");
++  const { Client } = await import("pg");
++  return createNativeEmailOutbox(() => new Client({ connectionString: binding.connectionString }));
++}
+diff --git a/src/lib/email-outbox-native.ts b/src/lib/email-outbox-native.ts
+new file mode 100644
+--- /dev/null
++++ b/src/lib/email-outbox-native.ts
+@@ -0,0 +1,80 @@
++// Email-only adapter: keep each existing RPC in its own autocommit transaction.
++// Never wrap the batch in BEGIN/COMMIT, cache receipts, or replay a failed query.
++export interface EmailQueryClient {
++  connect(): Promise<unknown>;
++  query(text: string, values: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
++  end(): Promise<unknown>;
++  on?(event: "error", listener: (error: unknown) => void): unknown;
++}
++
++export interface EmailOutboxClient {
++  rpc(name: string, args: Record<string, unknown>): PromiseLike<{
++    data: any;
++    error: { message: string } | null;
++  }>;
++  close(): Promise<void>;
++}
++
++const calls = {
++  claim_email_outbox_v2: {
++    text: "SELECT * FROM public.claim_email_outbox_v2($1::uuid, $2::integer)",
++    keys: ["p_worker_token", "p_limit"],
++    set: true,
++  },
++  complete_email_outbox_v2: {
++    text: "SELECT public.complete_email_outbox_v2($1::uuid, $2::uuid, $3::text) AS value",
++    keys: ["p_email_id", "p_worker_token", "p_provider_message_id"],
++    set: false,
++  },
++  retry_email_outbox_v2: {
++    text: "SELECT public.retry_email_outbox_v2($1::uuid, $2::uuid, $3::text) AS value",
++    keys: ["p_email_id", "p_worker_token", "p_error"],
++    set: false,
++  },
++  suppress_email_outbox_v2: {
++    text: "SELECT public.suppress_email_outbox_v2($1::uuid, $2::uuid, $3::text) AS value",
++    keys: ["p_email_id", "p_worker_token", "p_reason"],
++    set: false,
++  },
++} as const;
++
++export function createNativeEmailOutbox(factory: () => EmailQueryClient): EmailOutboxClient {
++  let current: EmailQueryClient | undefined;
++  let closed = false;
++  async function release(client: EmailQueryClient) {
++    if (current === client) current = undefined;
++    try { await client.end(); } catch { /* Do not replay acknowledged deliveries on cleanup failure. */ }
++  }
++  return {
++    async rpc(name, args) {
++      if (!Object.hasOwn(calls, name)) throw new Error("Unsupported email outbox operation.");
++      const call = calls[name as keyof typeof calls];
++      if (Object.keys(args).length !== call.keys.length || call.keys.some(key => !Object.hasOwn(args, key))) {
++        throw new Error("Invalid email outbox parameters.");
++      }
++      if (name === "claim_email_outbox_v2" && args.p_limit !== 25) {
++        throw new Error("The email batch must remain 25.");
++      }
++      if (closed) throw new Error("Email outbox client is closed.");
++      let client = current;
++      try {
++        if (!client) {
++          client = factory(); current = client;
++          const owned = client;
++          client.on?.("error", () => { void release(owned); });
++          await client.connect();
++        }
++        const result = await client.query(call.text, call.keys.map(key => args[key]));
++        return { data: call.set ? result.rows : result.rows[0]?.value ?? null, error: null };
++      } catch (error) {
++        if (client) await release(client);
++        // A subsequent retry RPC may reconnect, but this query is never replayed.
++        const serverError = error as { code?: string; message?: string };
++        const message = /^[0-9A-Z]{5}$/.test(serverError?.code ?? "") && serverError.message
++          ? serverError.message : "Email database connection failed.";
++        return { data: null, error: { message } };
++      }
++    },
++    async close() { closed = true; if (current) await release(current); },
++  };
++}
+diff --git a/src/lib/email-outbox-native.test.ts b/src/lib/email-outbox-native.test.ts
+new file mode 100644
+--- /dev/null
++++ b/src/lib/email-outbox-native.test.ts
+@@ -0,0 +1,74 @@
++import assert from "node:assert/strict";
++import test from "node:test";
++import { createNativeEmailOutbox } from "./email-outbox-native";
++
++const token = "20000000-0000-4000-8000-000000000001";
++const claim = { p_worker_token: token, p_limit: 25 };
++const complete = { p_email_id: token, p_worker_token: token, p_provider_message_id: "synthetic-message" };
++function fixture(options: { failQuery?: number; failConnect?: boolean; failClose?: boolean } = {}) {
++  const seen: { text: string; values: unknown[] }[] = [];
++  const clients: any[] = []; let queries = 0;
++  const outbox = createNativeEmailOutbox(() => {
++    const client = {
++      connected: 0, ended: 0, idleError: (_error: unknown) => {},
++      async connect() { client.connected++; if (options.failConnect) throw new Error("private connection string"); },
++      async query(text: string, values: unknown[]) {
++        seen.push({ text, values }); queries++;
++        if (queries === options.failQuery) throw Object.assign(new Error("Synthetic SQL failure"), { code: "23514" });
++        return { rows: text.includes("claim_") ? [{ id: token }] : [{ value: text.includes("retry_") ? "retry" : true }] };
++      },
++      async end() { client.ended++; if (options.failClose) throw new Error("private close error"); },
++      on(_event: "error", callback: (error: unknown) => void) { client.idleError = callback; },
++    };
++    clients.push(client); return client;
++  });
++  return { outbox, seen, clients };
++}
++test("full 25-email batch retains 26 independent queries on one request-owned client", async () => {
++  const f = fixture(); await f.outbox.rpc("claim_email_outbox_v2", claim);
++  for (let i = 0; i < 25; i++) await f.outbox.rpc("complete_email_outbox_v2", complete);
++  await f.outbox.close(); assert.equal(f.seen.length, 26); assert.equal(f.clients.length, 1);
++  assert.equal(f.clients[0].connected, 1); assert.equal(f.clients[0].ended, 1);
++  for (const { text } of f.seen) assert.doesNotMatch(text, /\b(begin|commit|rollback|set|insert|update)\b/i);
++});
++test("all four operations preserve parameter order and scalar/set results", async () => {
++  const f = fixture();
++  assert.deepEqual((await f.outbox.rpc("claim_email_outbox_v2", claim)).data, [{ id: token }]);
++  assert.equal((await f.outbox.rpc("complete_email_outbox_v2", complete)).data, true);
++  assert.equal((await f.outbox.rpc("retry_email_outbox_v2", { p_error: "failure", p_worker_token: token, p_email_id: token })).data, "retry");
++  assert.equal((await f.outbox.rpc("suppress_email_outbox_v2", { p_reason: "unsafe", p_worker_token: token, p_email_id: token })).data, true);
++  assert.deepEqual(f.seen.map(x => x.values), [[token,25],[token,token,"synthetic-message"],[token,token,"failure"],[token,token,"unsafe"]]);
++  await f.outbox.close();
++});
++test("message content is bound as data, never interpolated into SQL", async () => {
++  const f = fixture(), message = "'); DELETE FROM email_outbox; --";
++  await f.outbox.rpc("retry_email_outbox_v2", { p_email_id:token,p_worker_token:token,p_error:message });
++  assert.equal(f.seen[0].values[2], message); assert.ok(!f.seen[0].text.includes(message)); await f.outbox.close();
++});
++test("failed completion is not replayed; the existing retry RPC reconnects independently", async () => {
++  const f = fixture({ failQuery:2 }); await f.outbox.rpc("claim_email_outbox_v2", claim);
++  assert.equal((await f.outbox.rpc("complete_email_outbox_v2", complete)).error?.message, "Synthetic SQL failure");
++  assert.equal(f.seen.length, 2); assert.equal(f.clients[0].ended, 1);
++  assert.equal((await f.outbox.rpc("retry_email_outbox_v2", { p_email_id:token,p_worker_token:token,p_error:"Synthetic SQL failure" })).data, "retry");
++  assert.equal(f.clients.length, 2); assert.equal(f.seen.length, 3); await f.outbox.close();
++});
++test("connection errors expose no connection string and cause no SQL replay", async () => {
++  const f = fixture({ failConnect:true }); const r = await f.outbox.rpc("claim_email_outbox_v2", claim);
++  assert.equal(r.error?.message, "Email database connection failed."); assert.equal(f.seen.length, 0); await f.outbox.close();
++});
++test("unknown operations, missing/extra arguments and changed batch sizes fail before connection", async () => {
++  const f = fixture();
++  for (const [name,args] of [["constructor",claim],["other",claim],["claim_email_outbox_v2",{...claim,p_limit:24}],["claim_email_outbox_v2",{...claim,extra:1}],["complete_email_outbox_v2",{p_email_id:token}]] as const) await assert.rejects(async () => f.outbox.rpc(name,args));
++  assert.equal(f.clients.length, 0); await f.outbox.close();
++});
++test("idle failure discards only its client; later operations reconnect without replay", async () => {
++  const f = fixture(); await f.outbox.rpc("claim_email_outbox_v2",claim);
++  f.clients[0].idleError(new Error("synthetic idle failure"));
++  await f.outbox.rpc("complete_email_outbox_v2",complete);
++  assert.equal(f.clients.length, 2); assert.equal(f.seen.length, 2); await f.outbox.close();
++});
++test("cleanup failure does not turn a committed delivery into a retry", async () => {
++  const f = fixture({failClose:true}); assert.equal((await f.outbox.rpc("complete_email_outbox_v2",complete)).data,true);
++  await f.outbox.close(); assert.equal(f.seen.length,1);
++  await assert.rejects(async () => f.outbox.rpc("claim_email_outbox_v2",claim));
++});

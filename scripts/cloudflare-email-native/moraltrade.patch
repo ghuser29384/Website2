@@ -1,0 +1,509 @@
+diff --git a/.gitignore b/.gitignore
+index 06740c7..fa0aaf5 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -28,3 +28,5 @@ Larken Serif/Larken-Regular.otf
+ Larken Serif/Larken-Thin.otf
+ Larken Serif/Larken-ThinItalic.otf
+ .vercel
++.open-next/
++.wrangler/
+diff --git a/CLOUDFLARE-COMPATIBILITY.md b/CLOUDFLARE-COMPATIBILITY.md
+new file mode 100644
+index 0000000..25e7a9b
+--- /dev/null
++++ b/CLOUDFLARE-COMPATIBILITY.md
+@@ -0,0 +1,66 @@
++# Moral Trade Workers candidate — not deployment-ready
++
++Prepared against Website2 `a4adf0cbb7029a6316a34478bd27dffad22cbca4`.
++Existing application source, `proxy.ts`, public assets, Vercel configuration and
++release controls are unchanged.
++
++## Candidate changes
++
++- Pin Next.js and eslint-config-next to 16.4.1. The tested-base Next.js 16.2.4
++  does not satisfy OpenNext Cloudflare 1.20.12's current peer range.
++- Pin OpenNext Cloudflare 1.20.12, Wrangler 4.151.2 and adapter peer rclone.js
++  0.6.6 for the separately approved compatibility run.
++- Add an isolated Wrangler configuration and OpenNext adapter configuration,
++  preserving incremental caching through a local R2 emulator, image binding and
++  self-reference binding. No Cloudflare resource has been created.
++- Retain `proxy.ts` unchanged: OpenNext added experimental Node middleware
++  support in 1.20.3. It still needs runtime parity checks for this application.
++
++`package-lock.json` is deliberately not presented as updated. No installation is
++authorized yet. An approved disposable runner must resolve and inspect the new
++lock, reject unintended direct-dependency changes, run the existing tests and
++build, and exercise the local Workers runtime with outbound networking disabled.
++Do not push these application dependency changes to main without a validated lock.
++
++Use `MORAL_TRADE_DISABLE_DEP_REPAIR=1` during tests/builds. The existing prebuild
++repair helper must not silently install or remove packages. Test credentials are
++synthetic; production/provider credentials must not be copied into the test.
++
++This configuration is for local emulation only. The bucket/service names are
++placeholders, no domain or account is selected, and no hosted scheduled triggers
++have been created. Never run the adapter's migrate/deploy/upload commands for this probe.
++
++## Scheduler integration candidate
++
++The custom `cloudflare/worker.mjs` entry preserves the generated fetch handler
++and named exports and adds `scheduled()`. `cloudflare/scheduler.mjs` selects
++jobs from the original `scripts/vercel-project-config.mjs` schedules using the
++event's UTC scheduled time. One `0,15,30 * * * *` trigger covers all seven jobs.
++An empty slot calls no application or database handler; this is not a keep-alive.
++
++Requests invoke the generated application handler in-process. The existing GET
++routes, CRON_SECRET authorization, individual cron-schedule headers, and database
++leases/idempotency remain in use. `VERCEL_PROJECT_ID` remains the existing
++non-secret application identity used by the database training-slot guard; it
++must match the intended canonical or older project. No new identity is invented.
++The older Website2 identity still excludes recommendation training. Requests
++have no secret query parameter, automatic retry or public-origin network hop.
++All jobs due at one time are awaited, even if one fails. Non-2xx/transport/body
++failures reject the scheduled invocation without logging response bodies.
++
++The original training context still uses execution-day UTC for its daily slot;
++cross-midnight delivery behavior is unchanged. Actual delivery and concurrent
++invocations remain acceptance gates. Unit tests execute the wrapper with a
++substituted generated module and the existing auth/training context. The pending
++cloud test must exercise the actual OpenNext bundle against a loopback synthetic
++API. Empty queue and duplicate-claim results do not prove nonempty job, RLS,
++payment, email or hosted database behavior. No application route was replaced.
++
++## Remaining feature gates
++
++A successful build is insufficient. Before migration, verify routing/cookies,
++search results, auth/session refresh, payment safeguards and signed webhooks,
++document/filesystem reads, assets/images, cache invalidation, and all seven
++existing scheduled jobs with isolated fixtures. The `IMAGES` binding is not proof
++of production image parity or free image delivery. Local runtime success does
++not measure billed CPU or establish a $0 total hosting bill.
+diff --git a/cloudflare/scheduler.mjs b/cloudflare/scheduler.mjs
+new file mode 100644
+index 0000000..de4bb0a
+--- /dev/null
++++ b/cloudflare/scheduler.mjs
+@@ -0,0 +1,52 @@
++import {
++  buildVercelProjectConfig,
++  CANONICAL_MORAL_TRADE_PROJECT_ID,
++  DUPLICATE_WEBSITE2_PROJECT_ID,
++} from '../scripts/vercel-project-config.mjs';
++
++// Reuse the existing schedules; never maintain a second job list.
++export const DISPATCH_CRON = '0,15,30 * * * *';
++export function dueJobs(scheduledTime, projectId) {
++  if (![CANONICAL_MORAL_TRADE_PROJECT_ID, DUPLICATE_WEBSITE2_PROJECT_ID].includes(projectId)) {
++    throw new Error('A known VERCEL_PROJECT_ID is required for scheduled work');
++  }
++  if (!Number.isSafeInteger(scheduledTime) || scheduledTime < 0) throw new Error('Invalid scheduled time');
++  const date = new Date(scheduledTime);
++  if (!Number.isFinite(date.getTime())) throw new Error('Invalid scheduled time');
++  return buildVercelProjectConfig({ projectId }).crons.filter(({ schedule }) => {
++    const match = /^(\d+) (\d+|\*) \* \* \*$/.exec(schedule);
++    if (!match || ![0, 15, 30].includes(Number(match[1])) ||
++        (match[2] !== '*' && Number(match[2]) > 23)) {
++      throw new Error('Source schedule changed; dispatcher review required');
++    }
++    return date.getUTCMinutes() === Number(match[1]) &&
++      (match[2] === '*' || date.getUTCHours() === Number(match[2]));
++  });
++}
++
++export async function dispatchScheduled(controller, env, invoke) {
++  if (controller.cron !== DISPATCH_CRON) throw new Error('Unknown dispatcher schedule');
++  const jobs = dueJobs(controller.scheduledTime, env.VERCEL_PROJECT_ID);
++  if (!jobs.length) return;
++  if (typeof env.CRON_SECRET !== 'string' || !env.CRON_SECRET.trim()) {
++    throw new Error('CRON_SECRET is required');
++  }
++  // Calls go through the generated in-process app handler, not a public URL.
++  // Preserve each handler's authorization, leases and idempotency. No retries.
++  const outcomes = await Promise.allSettled(jobs.map(async ({ path, schedule }) => {
++    const response = await invoke(new Request(`https://scheduler.invalid${path}`, {
++      method: 'GET',
++      headers: {
++        authorization: `Bearer ${env.CRON_SECRET}`,
++        // Existing recommendation training consumes this compatibility header.
++        'x-vercel-cron-schedule': schedule,
++      },
++      redirect: 'manual',
++    }));
++    await response.arrayBuffer();
++    if (!response.ok) throw new Error(`Scheduled handler returned ${response.status}`);
++  }));
++  if (outcomes.some(outcome => outcome.status === 'rejected')) {
++    throw new Error('One or more scheduled jobs failed');
++  }
++}
+diff --git a/cloudflare/scheduler.test.mjs b/cloudflare/scheduler.test.mjs
+new file mode 100644
+index 0000000..43561b0
+--- /dev/null
++++ b/cloudflare/scheduler.test.mjs
+@@ -0,0 +1,153 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { readFileSync } from 'node:fs';
++import { registerHooks, stripTypeScriptTypes } from 'node:module';
++import { dueJobs, dispatchScheduled, DISPATCH_CRON } from './scheduler.mjs';
++import { CANONICAL_MORAL_TRADE_PROJECT_ID as canonical, DUPLICATE_WEBSITE2_PROJECT_ID as legacy } from '../scripts/vercel-project-config.mjs';
++
++const env = { VERCEL_PROJECT_ID: canonical, CRON_SECRET: 'synthetic-only' };
++const event = (hour, minute) => ({ cron: DISPATCH_CRON, scheduledTime: Date.UTC(2026, 9, 20, hour, minute) });
++const names = ['saved-searches', 'delegates', 'email', 'trade-reminders', 'background-networking', 'conditional-redirects', 'recommendation-training'];
++const forbidden = () => assert.fail('Unexpected handler or network operation');
++globalThis.fetch = forbidden;
++
++test('all seven existing UTC schedules match every minute of a week, including a DST transition week', () => {
++  for (const start of [Date.UTC(2026, 9, 19), Date.UTC(2026, 9, 26)]) {
++    let total = 0;
++    for (let minute = 0; minute < 7 * 1440; minute++) {
++      const h = Math.floor(minute / 60) % 24, m = minute % 60, expected = [];
++      if (h === 9 && m === 0) expected.push(names[0]);
++      if (h === 9 && m === 30) expected.push(names[1]);
++      if (h === 10 && m === 0) expected.push(names[2]);
++      if (h === 11 && m === 0) expected.push(names[3]);
++      if (m === 0) expected.push(names[4]);
++      if (m === 15) expected.push(names[5]);
++      if (h === 12 && m === 30) expected.push(names[6]);
++      const jobs = dueJobs(start + minute * 60000, canonical);
++      assert.deepEqual(jobs.map(job => job.path), expected.map(name => `/api/jobs/${name}`));
++      total += jobs.length;
++    }
++    assert.equal(total, 371);
++  }
++});
++test('older Website2 never acquires recommendation training', () => {
++  assert.deepEqual(dueJobs(event(12, 30).scheduledTime, legacy), []);
++});
++test('unknown identity, invalid timestamp, unsupported trigger and missing secret fail before invocation', async () => {
++  for (const id of [undefined, '', 'unknown']) assert.throws(() => dueJobs(0, id));
++  for (const value of [NaN, Infinity, -1, 1.2, '2026-01-01', 8640000000000001]) assert.throws(() => dueJobs(value, canonical));
++  await assert.rejects(dispatchScheduled({ ...event(9, 0), cron: '* * * * *' }, env, forbidden));
++  for (const secret of [undefined, '', '   ']) await assert.rejects(dispatchScheduled(event(9, 0), { ...env, CRON_SECRET: secret }, forbidden));
++});
++test('empty slot does not invoke an app, require a secret, or contact a database', async () => {
++  await dispatchScheduled(event(4, 30), { VERCEL_PROJECT_ID: canonical }, forbidden);
++});
++test('delayed delivery uses scheduled UTC time, preserves GET, auth and each original schedule header', async () => {
++  const seen = new Set();
++  for (const [h, m] of [[9, 0], [9, 30], [10, 0], [11, 0], [12, 30], [1, 15]]) {
++    const expected = dueJobs(event(h, m).scheduledTime, canonical);
++    await dispatchScheduled(event(h, m), env, async request => {
++      assert.equal(request.method, 'GET'); assert.equal(request.redirect, 'manual');
++      const url = new URL(request.url); assert.equal(url.origin, 'https://scheduler.invalid'); assert.equal(url.search, '');
++      assert.equal(request.headers.get('authorization'), 'Bearer synthetic-only');
++      assert.equal(request.headers.get('x-vercel-cron-schedule'), expected.find(job => job.path === url.pathname).schedule);
++      seen.add(url.pathname); return new Response('{}');
++    });
++  }
++  assert.equal(seen.size, 7);
++});
++test('failure does not suppress another due job, retry a job, or expose response contents', async () => {
++  for (const failure of ['throw', 302, 401, 500]) {
++    let calls = 0, finished = false;
++    await assert.rejects(dispatchScheduled(event(9, 0), env, async () => {
++      calls++;
++      if (calls === 1) { if (failure === 'throw') throw new Error('private-body'); return new Response('private-body', { status: failure }); }
++      await new Promise(resolve => setTimeout(resolve, 5)); finished = true; return new Response('{}');
++    }), error => error.message === 'One or more scheduled jobs failed');
++    assert.equal(calls, 2); assert.equal(finished, true);
++  }
++});
++test('scheduled completion waits for response-body completion', async () => {
++  let closed = false;
++  await dispatchScheduled(event(9, 30), env, async () => new Response(new ReadableStream({
++    start(controller) { setTimeout(() => { closed = true; controller.close(); }, 5); },
++  })));
++  assert.equal(closed, true);
++});
++
++// Substitute only the unavailable generated Worker and external dependencies.
++// The wrapper and existing cron/training context code themselves execute intact.
++registerHooks({
++  resolve(specifier, context, next) {
++    if (specifier.endsWith('/.open-next/worker.js')) return { url: 'synthetic:generated-worker', shortCircuit: true };
++    if (context.parentURL?.endsWith('/recommendation-training-execution.ts')) {
++      if (specifier === './pareto-recommendation-model') return { url: 'synthetic:model', shortCircuit: true };
++      if (specifier === './recommendation-training') return { url: 'synthetic:training', shortCircuit: true };
++      if (specifier === './supabase/server') return { url: 'synthetic:database', shortCircuit: true };
++    }
++    return next(specifier, context);
++  },
++  load(url, context, next) {
++    const replacements = {
++      'synthetic:generated-worker': 'export const DOQueueHandler = class {}; export const marker = 17; export default { fetch: (...args) => globalThis.__generatedFetch(...args) };',
++      'synthetic:model': 'export const PARETO_MODEL_VERSION = "synthetic-model";',
++      'synthetic:training': 'export const runParetoRecommendationTrainingJob = () => { throw new Error("Unexpected model execution"); };',
++      'synthetic:database': 'export const createServiceClient = () => globalThis.__syntheticService;',
++    };
++    if (url in replacements) return { format: 'module', source: replacements[url], shortCircuit: true };
++    if (/\/(cron|recommendation-training-runtime|recommendation-training-execution)\.ts$/.test(url)) {
++      return { format: 'module', source: stripTypeScriptTypes(readFileSync(new URL(url), 'utf8')), shortCircuit: true };
++    }
++    return next(url, context);
++  },
++});
++const wrapped = await import('./worker.mjs');
++const generated = await import('synthetic:generated-worker');
++const { isCronRequestAuthorized } = await import('../src/lib/cron.ts');
++const { evaluateRecommendationTrainingRuntime } = await import('../src/lib/recommendation-training-runtime.ts');
++const { buildRecommendationTrainingExecutionContext, runParetoRecommendationTrainingExecution } = await import('../src/lib/recommendation-training-execution.ts');
++
++test('wrapper retains exact generated HTTP function, named exports, env and context', async () => {
++  assert.equal(wrapped.default.fetch, generated.default.fetch);
++  assert.equal(wrapped.DOQueueHandler, generated.DOQueueHandler); assert.equal(wrapped.marker, 17);
++  const request = new Request('https://synthetic.invalid/path'), context = { waitUntil: forbidden };
++  const response = new Response('unchanged');
++  globalThis.__generatedFetch = (r, e, c) => { assert.equal(r, request); assert.equal(e, env); assert.equal(c, context); return response; };
++  assert.equal(await wrapped.default.fetch(request, env, context), response);
++  let count = 0;
++  globalThis.__generatedFetch = (r, e, c) => { count++; assert.equal(e, env); assert.equal(c, context); return new Response('{}'); };
++  await wrapped.default.scheduled(event(9, 0), env, context); assert.equal(count, 2);
++});
++test('actual cron authorization and training context preserve natural-cron duplicate-slot claim', async () => {
++  const previous = process.env.CRON_SECRET; process.env.CRON_SECRET = env.CRON_SECRET;
++  const claims = [];
++  globalThis.__syntheticService = { rpc: async (name, args) => {
++    assert.equal(name, 'claim_recommendation_training_slot'); claims.push(args);
++    return { data: { claimed: false, status: 'succeeded', slotKey: args.p_slot_key, attemptCount: 1 }, error: null };
++  }};
++  try {
++    assert.equal(isCronRequestAuthorized(new Request('https://synthetic.invalid/api/jobs/email')), false);
++    assert.equal(isCronRequestAuthorized(new Request('https://synthetic.invalid/api/jobs/email', { headers: { authorization: 'Bearer wrong' } })), false);
++    globalThis.__generatedFetch = async (request, bindings) => {
++      assert.equal(isCronRequestAuthorized(request), true);
++      const decision = evaluateRecommendationTrainingRuntime(bindings);
++      const context = buildRecommendationTrainingExecutionContext(request, decision, {}, new Date('2026-10-20T12:31:00Z'));
++      assert.equal(context.sourceInvocation, 'natural_cron'); assert.equal(context.sourceProjectId, canonical);
++      assert.equal(context.scheduledFor, '2026-10-20T12:30:00.000Z');
++      const result = await runParetoRecommendationTrainingExecution(context);
++      assert.equal(result.reason, 'duplicate_scheduled_slot'); return Response.json(result);
++    };
++    await wrapped.default.scheduled(event(12, 30), env, {});
++    await wrapped.default.scheduled(event(12, 30), env, {});
++    assert.equal(claims.length, 2); assert.equal(claims[0].p_slot_key, claims[1].p_slot_key);
++    assert.equal(claims[0].p_project_id, canonical);
++  } finally { if (previous === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = previous; }
++});
++test('local configuration declares one trigger and the wrapper while retaining cache, assets and images', () => {
++  const config = JSON.parse(readFileSync(new URL('../wrangler.compat.json', import.meta.url)));
++  assert.equal(config.main, 'cloudflare/worker.mjs'); assert.deepEqual(config.triggers.crons, [DISPATCH_CRON]);
++  assert.equal(config.vars.VERCEL_PROJECT_ID, canonical);
++  assert.equal(config.assets.binding, 'ASSETS'); assert.equal(config.assets.run_worker_first, true);
++  assert.equal(config.r2_buckets[0].binding, 'NEXT_INC_CACHE_R2_BUCKET'); assert.equal(config.images.binding, 'IMAGES');
++  assert.equal(config.services[0].binding, 'WORKER_SELF_REFERENCE');
++});
+diff --git a/cloudflare/worker.mjs b/cloudflare/worker.mjs
+new file mode 100644
+index 0000000..19faa4a
+--- /dev/null
++++ b/cloudflare/worker.mjs
+@@ -0,0 +1,11 @@
++import handler from '../.open-next/worker.js';
++import { dispatchScheduled } from './scheduler.mjs';
++
++// Preserve any generated Durable Object exports as well as the HTTP handler.
++export * from '../.open-next/worker.js';
++export default {
++  fetch: handler.fetch,
++  async scheduled(controller, env, ctx) {
++    await dispatchScheduled(controller, env, request => handler.fetch(request, env, ctx));
++  },
++};
+diff --git a/open-next.config.ts b/open-next.config.ts
+new file mode 100644
+index 0000000..6c41c68
+--- /dev/null
++++ b/open-next.config.ts
+@@ -0,0 +1,6 @@
++import { defineCloudflareConfig } from "@opennextjs/cloudflare";
++import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache";
++
++// Test candidate only. Cache persistence is exercised with local emulated R2.
++// Do not replace cache behavior with a no-op to make compatibility tests pass.
++export default defineCloudflareConfig({ incrementalCache: r2IncrementalCache });
+diff --git a/package.json b/package.json
+index a0384b3..310b525 100644
+--- a/package.json
++++ b/package.json
+@@ -10,6 +10,8 @@
+     "dev": "bash scripts/dev.sh",
+     "prebuild": "npm run verify:pareto && npm run verify:discover && node scripts/ensure-next-swc.mjs",
+     "build": "next build --webpack",
++    "build:cloudflare:compat": "opennextjs-cloudflare build --config wrangler.compat.json",
++    "preview:cloudflare:compat": "opennextjs-cloudflare preview --config wrangler.compat.json --local",
+     "prestart": "node scripts/ensure-next-swc.mjs",
+     "start": "next start",
+     "lint": "eslint .",
+@@ -30,19 +32,22 @@
+     "@phosphor-icons/react": "^2.1.10",
+     "@supabase/ssr": "latest",
+     "@supabase/supabase-js": "latest",
+-    "next": "^16.2.4",
++    "next": "16.4.1",
+     "react": "latest",
+     "react-dom": "latest",
+     "stripe": "^22.0.2"
+   },
+   "devDependencies": {
++    "@opennextjs/cloudflare": "1.20.12",
+     "@playwright/test": "^1.60.0",
+     "@types/node": "latest",
+     "@types/react": "latest",
+     "@types/react-dom": "latest",
+     "eslint": "latest",
+-    "eslint-config-next": "latest",
++    "eslint-config-next": "16.4.1",
++    "rclone.js": "0.6.6",
+     "tsx": "^4.21.0",
+-    "typescript": "^6.0.3"
++    "typescript": "^6.0.3",
++    "wrangler": "4.151.2"
+   }
+ }
+diff --git a/src/app/api/jobs/trade-reminders/route.ts b/src/app/api/jobs/trade-reminders/route.ts
+index a1b99a5..8608f9b 100644
+--- a/src/app/api/jobs/trade-reminders/route.ts
++++ b/src/app/api/jobs/trade-reminders/route.ts
+@@ -53,68 +53,60 @@ async function processTradeReminders(request: Request) {
+     ]),
+   );
+
+-  let notificationsCreated = 0;
+-  let emailsQueued = 0;
+-  let agreementsMarkedDue = 0;
+-
+-  for (const agreement of agreements ?? []) {
++  // Keep the same reads, 200-row selection, copy, ordering and per-recipient data.
++  // The database function executes the existing writes with per-operation error isolation.
++  const reminders = (agreements ?? []).map((agreement: any) => {
+     const dueDate = String(agreement.evidence_due_at);
+     const isOverdue = dueDate < today;
+     const href = `/trade-agreements/${agreement.id}`;
+     const absoluteUrl = new URL(href, getSiteUrl()).toString();
++    return {
++      agreement_id: agreement.id,
++      mark_due: isOverdue && agreement.lifecycle_status === "active",
++      recipients: [String(agreement.proposer_id), String(agreement.responder_id)].map((userId) => {
++        const recipientEmail = emailById.get(userId)?.trim() ?? "";
++        return {
++          notification: {
++            user_id: userId,
++            notification_type: isOverdue ? "evidence_overdue" : "evidence_due_soon",
++            title: isOverdue ? "Evidence is overdue" : "Evidence is due soon",
++            body: isOverdue
++              ? "The agreement evidence due date has passed. Submit evidence, amend the terms, or use the published exit rule."
++              : `Evidence is due on ${dueDate}. Review the evidence requirements and submit a file, link, or attestation.`,
++            href,
++            dedupe_key: `evidence_due:${agreement.id}:${userId}:${dueDate}`,
++          },
++          email: recipientEmail ? {
++            profile_id: userId,
++            recipient_email: recipientEmail,
++            subject: isOverdue
++              ? "Moral Trade: evidence is overdue"
++              : "Moral Trade: evidence is due soon",
++            body: `A private agreement action needs review. Sign in at ${absoluteUrl}. This email does not include participant names, private terms, payment information, or evidence.`,
++          } : null,
++        };
++      }),
++    };
++  });
+
+-    if (isOverdue && agreement.lifecycle_status === "active") {
+-      const update = await supabase
+-        .from("agreements")
+-        .update({ lifecycle_status: "evidence_due", updated_at: now.toISOString() })
+-        .eq("id", agreement.id)
+-        .eq("lifecycle_status", "active");
+-      if (!update.error) agreementsMarkedDue += 1;
+-    }
+-
+-    for (const userId of [String(agreement.proposer_id), String(agreement.responder_id)]) {
+-      const dedupeKey = `evidence_due:${agreement.id}:${userId}:${dueDate}`;
+-      const notification = await supabase
+-        .from("trade_notifications")
+-        .insert({
+-          user_id: userId,
+-          notification_type: isOverdue ? "evidence_overdue" : "evidence_due_soon",
+-          title: isOverdue ? "Evidence is overdue" : "Evidence is due soon",
+-          body: isOverdue
+-            ? "The agreement evidence due date has passed. Submit evidence, amend the terms, or use the published exit rule."
+-            : `Evidence is due on ${dueDate}. Review the evidence requirements and submit a file, link, or attestation.`,
+-          href,
+-          dedupe_key: dedupeKey,
+-        })
+-        .select("id")
+-        .maybeSingle();
+-
+-      if (notification.error || !notification.data?.id) {
+-        continue;
+-      }
+-      notificationsCreated += 1;
+-
+-      const recipientEmail = emailById.get(userId)?.trim() ?? "";
+-      if (!recipientEmail) continue;
+-      const queued = await supabase.from("email_outbox").insert({
+-        profile_id: userId,
+-        recipient_email: recipientEmail,
+-        subject: isOverdue
+-          ? "Moral Trade: evidence is overdue"
+-          : "Moral Trade: evidence is due soon",
+-        body: `A private agreement action needs review. Sign in at ${absoluteUrl}. This email does not include participant names, private terms, payment information, or evidence.`,
+-        status: "queued",
+-        provider: "core_trade_reminder",
+-      });
+-      if (!queued.error) emailsQueued += 1;
++  let counts = { notificationsCreated: 0, emailsQueued: 0, agreementsMarkedDue: 0 };
++  if (reminders.length) {
++    const batch = await supabase.rpc("apply_trade_reminder_batch_v1", {
++      p_reminders: reminders,
++      p_updated_at: now.toISOString(),
++    });
++    // Never replay the old writes after an ambiguous RPC result: it may have committed.
++    if (batch.error || !batch.data) {
++      return NextResponse.json({ error: batch.error?.message ?? "Reminder batch returned no result." }, { status: 500 });
+     }
++    counts = batch.data;
+   }
+
+   return NextResponse.json({
+     scanned: agreements?.length ?? 0,
+-    notificationsCreated,
+-    emailsQueued,
+-    agreementsMarkedDue,
++    notificationsCreated: counts.notificationsCreated,
++    emailsQueued: counts.emailsQueued,
++    agreementsMarkedDue: counts.agreementsMarkedDue,
+     window: { today, dueThrough },
+   });
+ }
+diff --git a/wrangler.compat.json b/wrangler.compat.json
+new file mode 100644
+index 0000000..b7a0da8
+--- /dev/null
++++ b/wrangler.compat.json
+@@ -0,0 +1,19 @@
++{
++  "$schema": "node_modules/wrangler/config-schema.json",
++  "name": "moraltrade-compat-only",
++  "main": "cloudflare/worker.mjs",
++  "compatibility_date": "2026-10-19",
++  "compatibility_flags": ["nodejs_compat"],
++  "workers_dev": false,
++  "preview_urls": false,
++  "assets": {
++    "directory": ".open-next/assets",
++    "binding": "ASSETS",
++    "run_worker_first": true
++  },
++  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "moraltrade-compat-only" }],
++  "r2_buckets": [{ "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "moraltrade-compat-local" }],
++  "images": { "binding": "IMAGES" },
++  "vars": { "NEXTJS_ENV": "production", "VERCEL_PROJECT_ID": "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7" },
++  "triggers": { "crons": ["0,15,30 * * * *"] }
++}
