@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import http from 'node:http';
 import { connectProfiler, selectInspectorTarget } from './cpu-profile.mjs';
 
 const identity = '10000000-0000-4000-8000-000000000001';
@@ -8,7 +9,7 @@ const profile = { nodes: [{ id: 1, callFrame: { functionName: 'syntheticWork' } 
 function mock({ correctIdentity = true, malformed = false, commandError = false, noResponse = false } = {}) {
   const sent = []; let closed = false;
   class Socket extends EventTarget {
-    constructor(url) { super(); assert.equal(url, target.webSocketDebuggerUrl); queueMicrotask(() => this.dispatchEvent(new Event('open'))); }
+    constructor(url, options) { super(); assert.equal(url, target.webSocketDebuggerUrl); assert.deepEqual(options, { headers: { Origin: 'http://127.0.0.1:9229' } }); queueMicrotask(() => this.dispatchEvent(new Event('open'))); }
     send(raw) {
       const command = JSON.parse(raw); sent.push(command);
       if (noResponse) return;
@@ -45,4 +46,28 @@ test('malformed, unsupported and timed-out CDP replies fail and close the socket
   for (const options of [{ malformed: true }, { commandError: true }, { noResponse: true }]) {
     const m = mock(options); await assert.rejects(connectProfiler(identity, m.options)); assert.equal(m.closed, true);
   }
+});
+test('native Node WebSocket sends the loopback Origin required by Wrangler', async () => {
+  const seen = [], server = http.createServer();
+  server.on('upgrade', (request, socket) => {
+    seen.push({ origin: request.headers.origin, userAgent: request.headers['user-agent'] });
+    // End at the handshake: existing unit tests cover CDP; this checks actual wire headers.
+    socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+  });
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  try {
+    class LocalSocket extends WebSocket {
+      constructor(url, options) {
+        assert.equal(url, target.webSocketDebuggerUrl);
+        super(`ws://127.0.0.1:${server.address().port}/ws`, options);
+      }
+    }
+    await assert.rejects(connectProfiler(identity, {
+      timeoutMs: 3000, WebSocketImpl: LocalSocket,
+      fetchImpl: async () => Response.json([target]),
+    }), /Inspector connection failed/);
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].origin, 'http://127.0.0.1:9229');
+    assert.equal(seen[0].userAgent, 'node');
+  } finally { await new Promise(resolve => server.close(resolve)); }
 });

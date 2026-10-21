@@ -49,7 +49,7 @@ export async function connectProfiler(expectedIdentity, { fetchImpl = fetch, Web
   const response = await fetchImpl("http://127.0.0.1:9229/json/list", { redirect: "error", signal: AbortSignal.timeout(timeoutMs) });
   assert.equal(response.ok, true);
   const url = selectInspectorTarget(await response.json());
-  const ws = new WebSocketImpl(url); let seq = 0; const pending = new Map();
+  const ws = new WebSocketImpl(url, { headers: { Origin: "http://127.0.0.1:9229" } }); let seq = 0; const pending = new Map();
   const rejectPending = () => { for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error("Inspector connection closed")); } pending.clear(); };
   const close = () => { rejectPending(); ws.close(); };
   ws.addEventListener("close", rejectPending); ws.addEventListener("error", rejectPending);
