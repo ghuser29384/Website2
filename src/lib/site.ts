@@ -19,10 +19,10 @@ export interface SiteFooterLinkGroup {
 
 export function getPrimaryNavLinks(_isAuthenticated = false): SiteNavLinkItem[] {
   return [
-    { href: "/feed", label: "Feed" },
-    { href: "/discover", label: "Discover" },
-    { href: "/messages", label: "Messages" },
+    { href: "/feed", label: "Home" },
+    { href: "/discover", label: "Trades" },
     { href: "/commitments", label: "Commitments" },
+    { href: "/dashboard", label: "Profile" },
   ];
 }
 
@@ -47,8 +47,8 @@ export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
   {
     title: "Explore",
     links: [
-      { href: "/feed", label: "Feed" },
-      { href: "/discover", label: "Discover" },
+      { href: "/feed", label: "Home" },
+      { href: "/discover", label: "Trades" },
       { href: "/trades/new", label: "Create a trade" },
       { href: "/messages", label: "Messages" },
       { href: "/commitments", label: "Commitments" },

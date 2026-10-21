@@ -57,13 +57,13 @@ function render(authenticated: boolean, overrides = {}) {
 }
 
 test("the selected four links are shared without losing secondary account access", () => {
-  const expected = ["Feed", "Discover", "Messages", "Commitments"];
+  const expected = ["Home", "Trades", "Commitments", "Profile"];
   for (const auth of [false, true]) {
     assert.deepEqual(getPrimaryNavLinks(auth).map((link) => link.label), expected);
     assert.ok(usesDefaultHeader(getPrimaryNavLinks(auth)));
   }
   assert.deepEqual(REFINED_HEADER_LINKS.map((link) => link.label), expected);
-  for (const href of ["/dashboard", "/trades/new", "/saved-offers", "/invite", "/evidence", "/what-is-moral-trade", "/safety"]) {
+  for (const href of ["/messages", "/trades/new", "/saved-offers", "/invite", "/evidence", "/what-is-moral-trade", "/safety"]) {
     assert.ok(HEADER_UTILITY_LINKS.some((link) => link.href === href));
   }
 });
@@ -74,6 +74,7 @@ for (const authenticated of [false, true]) {
     assert.equal(all.filter((node) => node.type === "a" && node.props.href === "/saved-offers").length, 1);
     assert.doesNotMatch(text(render(authenticated).root), /Favourites/);
     assert.equal(all.filter((node) => node.type === "a" && node.props.href === "/trades/new").length, 1);
+    assert.equal(all.filter((node) => node.type === "summary").length, 1);
     assert.equal(all.filter((node) => node.type === "summary" && text(node).includes("More")).length, 1);
     const more = all.find((node) => node.type === "details" && text(node).includes("More"))!;
     assert.ok(nodes(more).some((node) => node.type === "a" && node.props.href === "/evidence"));
@@ -83,7 +84,8 @@ for (const authenticated of [false, true]) {
 }
 
 test("the actual header submits a labelled native offer search", () => {
-  const all = nodes(render(false).root);
+  const all = nodes(render(false, { showSearch: true, links: [{ href: "/example", label: "Example" }] }).root);
+  assert.equal(nodes(render(false).root).filter((node) => node.type === "form").length, 0);
   const form = all.find((node) => node.type === "form")!;
   assert.equal(form.props.action, "/discover");
   assert.equal(form.props.method, "get");

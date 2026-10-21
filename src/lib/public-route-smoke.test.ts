@@ -57,12 +57,12 @@ test("public navigation exposes professional marketplace routes", () => {
   const globalCss = readRepoFile("src/app/globals.css");
 
   assert.deepEqual(labels, [
-    "Feed",
-    "Discover",
-    "Messages",
+    "Home",
+    "Trades",
     "Commitments",
+    "Profile",
   ]);
-  assert.deepEqual(hrefs, ["/feed", "/discover", "/messages", "/commitments"]);
+  assert.deepEqual(hrefs, ["/feed", "/discover", "/commitments", "/dashboard"]);
   assert.deepEqual(getTopbarActions(false).authLink, { href: "/login", label: "Sign in" });
   assert.deepEqual(getTopbarActions(false).primaryAction, { href: "/start", label: "Get started" });
   assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });
@@ -91,12 +91,12 @@ test("public navigation exposes professional marketplace routes", () => {
   }
   assert.equal(hrefs.includes("/cart"), false);
   assert.equal(siteSource.includes("social credit"), false);
-  assert.match(siteSource, /href: "\/feed", label: "Feed"/);
+  assert.match(siteSource, /href: "\/feed", label: "Home"/);
   assert.match(siteSource, /href: "\/trades\/new",\s*label: "Create"/);
   assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
   assert.match(topbarSource, /placeholder="Search offers"/);
   assert.match(topbarSource, /<form action="\/discover" className="topbar-search" method="get" role="search"/);
-  assert.match(topbarSource, /showSearch = true/);
+  assert.match(topbarSource, /showSearch = false/);
   assert.match(globalCss, /\.button-secondary\.button-nav\.is-active/);
 });
 

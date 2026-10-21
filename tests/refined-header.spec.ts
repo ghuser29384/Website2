@@ -4,7 +4,7 @@ import { mockAccount, mockInventory, responseFor } from "./helpers/discover";
 // Profile is now a redirect. Safety retains the standard native header; Contact
 // has its own compact layout, and Complete Profile intentionally has no masthead.
 for (const width of [1728, 1440, 1024, 390, 320]) {
-  for (const route of ["/feed", "/discover", "/safety"]) {
+  for (const route of ["/feed", "/discover", "/safety", "/password-reset"]) {
     test(`approved masthead at ${route} ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 950 });
       const errors: string[] = [];
@@ -14,15 +14,19 @@ for (const width of [1728, 1440, 1024, 390, 320]) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
       const header = page.locator(".mt-refined-header").first();
       const nav = header.locator("[data-mt-primary-links]");
-      await expect(nav.locator(":scope > a")).toHaveText(["Feed", "Discover", "Messages", "Commitments"]);
+      await expect(nav.locator(":scope > a")).toHaveText(["Home", "Trades", "Commitments", "Profile"]);
       await expect(header).toHaveCSS("background-color", "rgb(17, 18, 20)");
       await expect(nav.getByText("100 Sparks")).toHaveCount(0);
-      await expect(nav.locator('[aria-current="page"]')).toHaveCount(route === "/safety" ? 0 : 1);
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(["/safety", "/password-reset"].includes(route) ? 0 : 1);
       const hrefs = await nav.locator(":scope > a").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
-      expect(hrefs).toEqual(["/feed", "/discover", "/messages", "/commitments"]);
+      expect(hrefs).toEqual(["/feed", "/discover", "/commitments", "/dashboard"]);
       const brand = header.locator(".brand");
       await expect(brand).toBeVisible();
       await expect(brand).toHaveCSS("color", "rgb(255, 255, 255)");
+      const brandBounds = await brand.boundingBox();
+      const actionsBounds = await header.locator(".topbar-actions, .top-actions, .header-actions").boundingBox();
+      expect(brandBounds!.x + brandBounds!.width + 8).toBeLessThanOrEqual(actionsBounds!.x);
+      if (width <= 900) expect((await header.boundingBox())!.height).toBeLessThanOrEqual(120);
       await expect(brand.locator('path[fill="#3158ff"]')).toHaveCount(1);
       const start = header.locator(".header-start, .button-nav:not(.button-secondary)");
       await expect(start).toBeVisible();
@@ -58,7 +62,7 @@ for (const route of ["/feed", "/discover"] as const) {
     await page.goto(route, { waitUntil: "domcontentloaded" });
     const header = page.locator(".mt-refined-header").first();
     await expect(header.locator('[data-mt-account-avatar="true"]').first()).toHaveText("AT");
-    await expect(header.locator('[data-mt-guest-only="true"]')).toHaveCount(1);
+    await expect(header.locator('[data-mt-guest-only="true"]')).toHaveCount(2);
     await expect(header.locator(".header-start")).toBeHidden();
   });
 }
@@ -74,7 +78,7 @@ test("Profile owns priorities and a legacy Sparks URL preserves the authenticate
 for (const width of [1280, 390, 320]) {
   test(`secondary utilities support keyboard disclosure at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });
-    for (const route of ["/feed", "/safety", "/contact"]) {
+    for (const route of ["/feed", "/discover", "/safety", "/password-reset", "/contact"]) {
       await page.goto(route);
       const header = page.locator(".mt-refined-header").first();
       const summary = header.locator("summary").filter({ hasText: "More" });
@@ -104,7 +108,7 @@ test("the directory masthead keeps native page links usable without JavaScript",
   await page.goto("/discover");
   const profile = page.locator('[data-mt-primary-links] a[href="/feed"]');
   await expect(profile).toBeVisible();
-  await expect(profile).toHaveAccessibleName("Feed");
+  await expect(profile).toHaveAccessibleName("Home");
   await expect(page.locator("[data-mt-primary-links] > a")).toHaveCount(4);
   await profile.click();
   await expect(page).toHaveURL(/\/feed$/);

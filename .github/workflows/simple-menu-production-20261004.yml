@@ -1,0 +1,64 @@
+name: Simple site menu production 2026-10-04
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/simple-menu-production-20261004.yml
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: simple-menu-production-20261004
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact release candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify approved shared menu source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object 'src/lib/site.ts')" = 'f22e3ddf4bf53d7f3d111ff652acb27c70b96cd0'
+          test "$(git hash-object 'src/lib/refined-header.ts')" = '7de49249c478951903b387106bbb5a7ebd4bfbdb'
+          test "$(git hash-object 'src/components/layout/site-topbar.tsx')" = '7fc9dd2205856388a7d6baef80e02ca9cc72f6b8'
+          test "$(git hash-object 'src/components/trade-controls/trade-controls-workspace.tsx')" = '4d7a74609474595ce61457a5bc1a91639528f6d8'
+          test "$(git hash-object 'public/moral-trade-live-navigation.js')" = '9f5d38bc7af98935edf6b9ab51934fdbb9ee9130'
+          test "$(git hash-object 'public/moral-trade-live.html')" = '2b5731808a5498d512803a04df17c9c044af76c5'
+          test "$(git hash-object 'public/moral-trade-discover.html')" = 'c1952c5de0104c91bd8110bcf34e51262cb2c97a'
+          test "$(git hash-object 'public/moral-trade-menu.js')" = 'f6b80f3851fa9a29dd123582c08fe711eef52966'
+          test "$(git hash-object 'public/moral-trade-refined-header.css')" = 'bc97b46aa46109da2975cd0cadd15b7276d65143'
+          test "$(git hash-object 'src/components/marketplace/marketplace-components.tsx')" = '94adae556f89d06ff186c3d7e30a64ff6598df3d'
+          git diff --check HEAD^
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+
+      - name: Dispatch the existing gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml" --jq .state)" = 'active'
+          jq -n --arg sha "$GITHUB_SHA" \
+            '{ref:"main",inputs:{ref:"main",target:"production",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+                --input - >/dev/null

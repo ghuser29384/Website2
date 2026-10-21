@@ -164,7 +164,7 @@ test.describe("Dashboard Priorities with a loopback-only account fixture", () =>
     await expect(header.locator('a[href="/cart"]')).toHaveCount(1);
     await expect(header.getByText("Favourites", { exact: true })).toHaveCount(0);
     for (const [name, id] of [["Profile data", "data-portability"], ["My trades", "my-trades"]]) {
-      await header.locator("summary").filter({ hasText: /^Account/ }).click();
+      await header.locator("summary").filter({ hasText: /^More/ }).click();
       const link = header.getByRole("link", { name, exact: true });
       await expect(link).toHaveAttribute("href", `/dashboard?view=controls#${id}`);
       await link.click();

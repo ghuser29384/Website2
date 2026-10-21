@@ -35,9 +35,9 @@ test("redirect-like inputs cannot change the canonical origin or pathname", () =
 });
 
 test("rendered account entry points use Dashboard without duplicate Profile destinations", () => {
+  assert.match(readFileSync("src/components/trade-controls/trade-controls-workspace.tsx", "utf8"), /links=\{getPrimaryNavLinks\(\)\}/);
   for (const path of [
-    "src/lib/refined-header.ts", "src/components/marketplace/marketplace-components.tsx",
-    "src/components/trade-controls/trade-controls-workspace.tsx",
+    "src/lib/site.ts", "src/components/marketplace/marketplace-components.tsx",
     "public/moral-trade-live-navigation.js", "public/moral-trade-discover.html",
   ]) {
     const source = readFileSync(path, "utf8");
