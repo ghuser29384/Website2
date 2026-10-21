@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 3
+          fetch-depth: 4
       - uses: actions/setup-node@v4
         with:
           node-version: 24.14.0
@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 605a62b50b897c265c174536190294309bd35ae5
+          test "$(git rev-parse HEAD^)" = 95e8648b9a148d4190236b48b282ed6e0ef3cdca
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --exit-code HEAD^ HEAD -- src public package.json package-lock.json next.config.ts vercel.ts scripts/vercel-project-config.mjs
           git diff --check HEAD^ HEAD

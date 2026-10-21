@@ -50,15 +50,30 @@ export async function connectProfiler(expectedIdentity, { fetchImpl = fetch, Web
   assert.equal(response.ok, true);
   const url = selectInspectorTarget(await response.json());
   const ws = new WebSocketImpl(url, { headers: { Origin: "http://127.0.0.1:9229" } }); let seq = 0; const pending = new Map();
+  const contexts = new Map();
   const rejectPending = () => { for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error("Inspector connection closed")); } pending.clear(); };
   const close = () => { rejectPending(); ws.close(); };
   ws.addEventListener("close", rejectPending); ws.addEventListener("error", rejectPending);
   ws.addEventListener("message", event => {
     let message;
     try { message = JSON.parse(event.data); } catch { close(); return; }
+    if (message.method === "Runtime.executionContextCreated") {
+      const context = message.params?.context;
+      if (Number.isSafeInteger(context?.id) && context.id > 0) contexts.set(context.id, context.name);
+    } else if (message.method === "Runtime.executionContextDestroyed") {
+      contexts.delete(message.params?.executionContextId);
+    } else if (message.method === "Runtime.executionContextsCleared") {
+      contexts.clear();
+    }
     const p = pending.get(message.id); if (!p) return;
     clearTimeout(p.timer); pending.delete(message.id);
-    if (message.error) p.reject(new Error("Inspector command unavailable")); else p.resolve(message.result);
+    if (message.error) {
+      // Do not echo arbitrary protocol text, evaluated expressions, URLs or error.data.
+      const code = Number.isSafeInteger(message.error.code) ? message.error.code : "unknown";
+      const reason = ["Cannot find default execution context", "Cannot find context with specified id", "Method not found", "Invalid parameters"].includes(message.error.message)
+        ? message.error.message : "protocol details redacted";
+      p.reject(new Error(`Inspector command ${p.method} rejected (code ${code}; ${reason})`));
+    } else p.resolve(message.result);
   });
   try {
     await new Promise((resolve, reject) => {
@@ -68,13 +83,20 @@ export async function connectProfiler(expectedIdentity, { fetchImpl = fetch, Web
       ws.addEventListener("close", () => { clearTimeout(timer); reject(new Error("Inspector closed before connection")); }, { once: true });
     });
     const call = (method, params = {}) => new Promise((resolve, reject) => {
-      const id = ++seq, timer = setTimeout(() => { pending.delete(id); reject(new Error("Inspector command timed out")); }, timeoutMs);
-      pending.set(id, { resolve, reject, timer });
+      const id = ++seq, timer = setTimeout(() => { pending.delete(id); reject(new Error(`Inspector command ${method} timed out`)); }, timeoutMs);
+      pending.set(id, { method, resolve, reject, timer });
       try { ws.send(JSON.stringify({ id, method, params })); }
       catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
     });
+    // workerd has no default execution context. Use its reported Worker context,
+    // never a guessed ID; Wrangler may have buffered these events before we connect.
+    await call("Runtime.enable");
+    const workerContexts = [...contexts].filter(([, name]) => name === "Worker");
+    assert.equal(workerContexts.length, 1, "Expected one reported Worker execution context");
+    const [contextId] = workerContexts[0];
     const identity = await call("Runtime.evaluate", {
       expression: `globalThis.__moralTradeCpuProfileIdentity === ${JSON.stringify(expectedIdentity)}`,
+      contextId,
       returnByValue: true,
     });
     assert.equal(identity.exceptionDetails, undefined, "Worker identity evaluation failed");
