@@ -1,61 +1,36 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
-import { getMoralTradeFundingReadiness } from "@/lib/funding";
-import {
-  EVERY_ORG_CURATED_TARGETS,
-  EVERY_ORG_UNCURATED_CAUSES,
-  getEveryOrgLearnMoreHref,
-} from "@/lib/every-org";
+import { CHARITY_LINK_MODE, getEligibleCharityLinks } from "@/lib/charity-links";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
+const description =
+  "Find registered charities with reviewed links to their own donation pages. These donations do not fund Moral Trade itself.";
+
 export const metadata: Metadata = {
-  title: "Donate",
-  description:
-    "Donate directly to established charities through vetted Every.org routes. These donations do not fund Moral Trade itself.",
-  alternates: {
-    canonical: "/donate",
-  },
+  title: "Donate to a charity",
+  description,
+  alternates: { canonical: "/donate" },
   openGraph: {
-    title: "Donate directly through Every.org",
-    description:
-      "Choose a vetted external recipient and complete the donation on Every.org. Moral Trade does not receive the gift.",
+    title: "Donate on a charity’s own website",
+    description,
     url: getAbsoluteUrl("/donate"),
     type: "website",
   },
 };
 
+// Re-evaluate the manual-review expiry on every request. No URL parameter,
+// return from another website, or claimed payment can change donation state.
 export const dynamic = "force-dynamic";
 
-interface DonatePageProps {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function getDonationConfirmHref(targetId: string, causeAreas: readonly string[]) {
-  const params = new URLSearchParams({
-    target: targetId,
-    cause: causeAreas[0] ?? "Donation",
-  });
-
-  return `/donate/confirm?${params.toString()}`;
-}
-
-function readParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-export default async function DonatePage({ searchParams }: DonatePageProps) {
-  const resolvedSearchParams = await searchParams;
+export default async function DonatePage() {
   const viewer = hasSupabaseEnv() ? await getViewer() : null;
-  const returnedTarget = readParam(resolvedSearchParams.target);
-  const fundingReadiness = getMoralTradeFundingReadiness();
+  const charities = getEligibleCharityLinks();
 
   return (
     <div className="page-shell">
@@ -66,203 +41,124 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
-
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Donate</p>
-            <h1>Donate directly to an existing charity through Every.org.</h1>
+            <p className="eyebrow">Charity links · independent gifts</p>
+            <h1>Donate on a charity’s own website.</h1>
             <p className="hero-text">
-              Choose a reviewed external recipient, complete payment on Every.org, and use optional
-              evidence reconciliation only when a Moral Trade workflow needs it.
+              Choose a registered charity and open its official donation page. No Moral Trade
+              account, saved card, or receiving-account setup is needed for this path.
             </p>
             <p className="hero-followup">
-              The recipient shown by Every.org receives the donation. These gifts do not fund Moral
-              Trade itself, and Moral Trade does not hold funds or decide tax treatment.
+              Moral Trade does not collect your donation or add a platform fee. The charity&apos;s
+              own page explains its payment options, any processing fees, receipts, and terms.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="#direct-routes">
-                Choose a donation route
-              </Link>
-              <Link className="button button-secondary" href="/support">
-                Support Moral Trade
-              </Link>
+              <a className="button button-primary" href="#direct-routes">Choose a charity</a>
+              <a className="button button-secondary" href="#review-policy">What we check</a>
             </div>
             <ul className="hero-signals" aria-label="Donation trust notes">
-              <li>Payment on Every.org</li>
-              <li>Existing charity is the recipient</li>
+              <li>Official charity pages</li>
               <li>No Moral Trade custody</li>
-              <li>Not project-support funding</li>
+              <li>No Moral Trade platform fee</li>
+              <li>No donation confirmation here</li>
             </ul>
           </section>
-
-          <aside className="hero-panel panel">
-            <p className="eyebrow">How this works</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Choose a route</strong>
-                  <p>Pick a verified Every.org destination that roughly matches your cause area.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Donate securely</strong>
-                  <p>Every.org handles the donation flow and the supported payment options for that recipient.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>Import or fallback</strong>
-                  <p>Webhook import handles MPGF-linked gifts; use reviewed fallback only when provider metadata cannot match the gift.</p>
-                </div>
-              </div>
-            </div>
+          <aside className="hero-panel panel" aria-labelledby="independent-gift-heading">
+            <p className="eyebrow">Before you donate</p>
+            <h2 id="independent-gift-heading">An independent gift</h2>
+            <p>
+              This directory does not enforce a conditional donation, escrow, refund, matching
+              payment, or failure bonus. A gift made through these links cannot automatically
+              complete a trade, satisfy a DAC or funding threshold, or earn a reward.
+            </p>
+            <p>
+              Opening a link or returning here is not proof of payment. Moral Trade does not
+              verify donations made through this directory or issue tax receipts.
+            </p>
           </aside>
         </div>
       </header>
-
-      <main id="main-content" tabIndex={-1}>
-        {returnedTarget ? (
-          <div className="status-banner status-banner-success">
-            Ready to reconcile a donation route for {returnedTarget}. Use reviewed fallback only
-            if webhook import cannot match this gift to a Moral Trade workflow.
-          </div>
-        ) : null}
-
-        <section className="section section-subtle" aria-labelledby="funding-paths-heading">
+      <main id="main-content" tabIndex={-1} data-donation-mode={CHARITY_LINK_MODE}>
+        <section className="section section-white" id="direct-routes" aria-labelledby="charities-heading">
           <div className="section-head">
-            <p className="eyebrow">Separate funding paths</p>
-            <h2 id="funding-paths-heading">Charity gifts and project support are not the same transaction</h2>
+            <p className="eyebrow">Registered charities</p>
+            <h2 id="charities-heading">Choose an official donation page</h2>
             <p>
-              Direct gifts can proceed now. Moral Trade project support appears only after a fiscal
-              sponsor is active and its legal and financial disclosures are configured.
+              Each listing includes the legal entity, registration source, and date its official
+              link was checked. Registration review is not a rating of impact, an endorsement,
+              or a guarantee of tax deductibility in your country.
             </p>
           </div>
-          <div className="data-grid">
-            <article className="panel data-card">
-              <div className="protocol-workflow-card-head">
-                <h3>Donate to an existing charity</h3>
-                <StatusBadge>available</StatusBadge>
-              </div>
-              <p className="route-text">
-                Every.org receives and processes the gift for the named external recipient.
-              </p>
-              <a className="text-button" href="#direct-routes">
-                Choose a direct route
-              </a>
-            </article>
-            <article className="panel data-card">
-              <div className="protocol-workflow-card-head">
-                <h3>Support Moral Trade operations</h3>
-                <StatusBadge tone={fundingReadiness.projectFundingAvailable ? "default" : "warning"}>
-                  {fundingReadiness.projectFundingAvailable ? "sponsor-backed" : "not accepting funds"}
-                </StatusBadge>
-              </div>
-              <p className="route-text">
-                Project support is available only through the legal fiscal sponsor disclosed on the
-                support page. No personal or native checkout route is used.
-              </p>
-              <Link className="text-button" href="/support">
-                Review project funding
-              </Link>
-            </article>
-          </div>
-        </section>
-
-        <section className="section section-white" id="direct-routes">
-          <div className="section-head">
-            <p className="eyebrow">Direct routes</p>
-            <h2>Choose a vetted Every.org route</h2>
-            <p>
-              These are starting points, not exhaustive endorsements. We configured only routes we
-              could verify directly on Every.org.
-            </p>
-          </div>
-
-          <div className="data-grid donate-card-grid">
-            {EVERY_ORG_CURATED_TARGETS.map((target) => (
-              <article key={target.id} className="panel data-card donate-card">
-                <div className="clean-stack">
-                  <p className="detail-kicker">{target.causeAreas.join(" | ")}</p>
-                  <h3>{target.title}</h3>
-                  <p className="route-text">{target.summary}</p>
-                  {target.note ? <p className="donate-card-note">{target.note}</p> : null}
-                  <div className="tag-row donate-card-tags">
-                    {target.causeAreas.map((causeArea) => (
-                      <span key={causeArea} className="badge">
-                        {causeArea}
-                      </span>
-                    ))}
+          {charities.length ? (
+            <div className="data-grid donate-card-grid">
+              {charities.map((charity) => (
+                <article key={charity.id} className="panel data-card donate-card" data-charity-id={charity.id}>
+                  <div className="clean-stack">
+                    <p className="detail-kicker">{charity.causeArea}</p>
+                    <h3>{charity.legalName}</h3>
+                    <p className="route-text">{charity.summary}</p>
+                    <p>
+                      {charity.registration.authority} · Charity {charity.registration.number}
+                      <br />Registered in {charity.registration.jurisdiction}
+                    </p>
+                    <p className="donate-card-note">
+                      Registration and official link checked <time dateTime={charity.review.checkedOn}>{charity.review.checkedOn}</time>.
+                      {" "}Review expires <time dateTime={charity.review.expiresOn}>{charity.review.expiresOn}</time> (UTC).
+                    </p>
+                    <p className="route-text">{charity.review.recipientNote}</p>
+                    <p className="route-text">Destination: {new URL(charity.donationUrl).hostname}</p>
+                    <div className="offer-actions">
+                      <a
+                        className="button button-primary"
+                        href={charity.donationUrl}
+                        data-donation-mode={CHARITY_LINK_MODE}
+                        rel="noopener noreferrer"
+                        referrerPolicy="no-referrer"
+                        target="_blank"
+                        aria-label={`Open ${charity.legalName} donation page (new tab)`}
+                      >
+                        Open charity donation page ↗
+                      </a>
+                      <a className="text-button" href={charity.registration.sourceUrl} rel="noopener noreferrer" target="_blank">
+                        View registration record ↗
+                      </a>
+                      <a className="text-button" href={charity.review.ownershipSourceUrl} rel="noopener noreferrer" target="_blank">
+                        View official source ↗
+                      </a>
+                    </div>
                   </div>
-                  <div className="offer-actions">
-                    <EveryOrgDonateButton
-                      className="button button-primary"
-                      label="Donate on Every.org"
-                      target={target}
-                    />
-                    <Link
-                      className="button button-secondary"
-                      href={getDonationConfirmHref(target.id, target.causeAreas)}
-                    >
-                      I donated: record optional gift
-                    </Link>
-                    <a
-                      className="text-button"
-                      href={getEveryOrgLearnMoreHref(target)}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      Read the Every.org recipient page
-                    </a>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-white">
-          <div className="section-head">
-            <p className="eyebrow">Still missing</p>
-            <h2>Cause areas without a configured direct route yet</h2>
-            <p>
-              For these site cause areas, we have not yet configured a sufficiently clear Every.org
-              route. We prefer an explicit gap to a misleading pseudo-recommendation.
-            </p>
-          </div>
-
-          <div className="panel data-card data-card-wide">
-            <div className="tag-row donate-card-tags">
-              {EVERY_ORG_UNCURATED_CAUSES.map((causeArea) => (
-                <span key={causeArea} className="badge badge-secondary">
-                  {causeArea}
-                </span>
+                </article>
               ))}
             </div>
-            <p className="route-text">
-              You can still browse the broader Every.org directory while we decide whether these
-              should map to a direct giving route, a research fund, or no default route at all.
-            </p>
-            <div className="offer-actions">
-              <a
-                className="button button-secondary"
-                href="https://www.every.org/"
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                Browse Every.org
-              </a>
-              <Link className="button button-primary" href="/contact">
-                Suggest a direct route
-              </Link>
+          ) : (
+            <div className="panel data-card data-card-wide" role="status">
+              <h3>No reviewed charity links are available right now</h3>
+              <p>Listings are hidden when their review expires or is incomplete. No payment has been requested or recorded.</p>
             </div>
+          )}
+        </section>
+        <section className="section section-subtle" id="review-policy" aria-labelledby="review-policy-heading">
+          <div className="section-head">
+            <p className="eyebrow">Review boundaries</p>
+            <h2 id="review-policy-heading">What we check, and what stays with the charity</h2>
+          </div>
+          <div className="panel data-card data-card-wide">
+            <ul className="compact-list">
+              <li>We manually match the charity&apos;s legal identity to a public registration record and check that its official website links to the donation page.</li>
+              <li>Only reviewed links are listed. Suggestions, personal payees, and unverified projects are not automatically approved.</li>
+              <li>Links expire from this directory after their review date unless reviewed again. A charity may change its website between checks.</li>
+              <li>Check the recipient, currency, fees, recurring-payment choice, receipt rules, and refund policy on the charity&apos;s site before paying.</li>
+              <li>Page views, performance, and link-click activity may be measured here, subject to your analytics preference. No donation amount or completion is recorded by this path.</li>
+            </ul>
+            <p>
+              These donations do not fund Moral Trade itself. Existing conditional-payment and
+              public-goods workflows are separate; they do not receive payment evidence from this directory.
+            </p>
+            <Link className="text-button" href="/contact">Report an incorrect or changed charity link</Link>
           </div>
         </section>
       </main>
-
       <SiteFooter />
     </div>
   );

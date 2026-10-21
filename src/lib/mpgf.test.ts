@@ -2403,13 +2403,14 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(schemaSql, /comment on table public\.mpgf_every_org_partner_events/);
   assert.match(proofSource, /every_org_partner_webhook/);
   assert.match(kpiSource, /every_org_partner_webhook/);
-  assert.match(donatePageSource, /Webhook import handles MPGF-linked gifts/);
-  assert.match(donatePageSource, /if webhook import cannot match this gift/);
+  assert.match(donatePageSource, /getEligibleCharityLinks/);
+  assert.match(donatePageSource, /they do not receive payment evidence from this directory/);
+  assert.doesNotMatch(donatePageSource, /EveryOrgDonateButton|donate\/confirm/);
   assert.match(donateConfirmPageSource, /webhook-first MPGF reconciliation state/);
   assert.match(donateConfirmPageSource, /Manual recording is not the default path/);
   assert.match(howItWorksSource, /permanentRedirect\("\/#process-heading"\)/);
   assert.match(siteSearchSource, /Donation offsets/);
-  assert.match(visitorPathsSource, /complete a real donation through Every\.org/);
+  assert.match(visitorPathsSource, /open its own donation page for an independent gift/);
   assert.doesNotMatch(
     `${donatePageSource}\n${donateConfirmPageSource}\n${howItWorksSource}\n${siteSearchSource}\n${visitorPathsSource}`,
     /optionally record|Optional record/,

@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useReportWebVitals } from "next/web-vitals";
 import { usePathname, useSearchParams } from "next/navigation";
 
+import { CHARITY_LINK_MODE, getCharityLinkClickMetadata } from "@/lib/charity-links";
+
 import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
   buildPrivacySafeSearchMetadata,
@@ -13,6 +15,8 @@ import {
 
 function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   const href = target.href;
+
+  if (target.dataset.donationMode === CHARITY_LINK_MODE) return "donation_route_clicked";
 
   if (target.closest(".growth-hero") && target.classList.contains("button-primary")) {
     return "hero_primary_cta_clicked";
@@ -256,6 +260,9 @@ export function FunnelTracker() {
       }
 
       postFunnelEvent(inferredEvent, {
+        ...(target.dataset.donationMode === CHARITY_LINK_MODE
+          ? getCharityLinkClickMetadata()
+          : {}),
         href: sanitizeFunnelEventPath(target.href),
         label: target.textContent?.replace(/\s+/g, " ").trim() ?? "",
         ...(inferredEvent === "marketplace_seed_template_selected"

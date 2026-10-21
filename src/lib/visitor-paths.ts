@@ -17,11 +17,11 @@ export const VISITOR_PATHS = [
     title: "Make a payment",
     homeTitle: "Fund a public good",
     description:
-      "Choose a reviewed destination and complete a real donation through Every.org. The payment stays with the external provider.",
+      "Choose a reviewed registered charity and open its own donation page for an independent gift. Moral Trade does not collect the donation.",
     href: "/donate",
     icon: "payment",
     actionLabel: "Choose a funding route",
-    fit: "The fastest available financial action on Moral Trade.",
+    fit: "An external gift, with no Moral Trade payment or trade completion.",
   },
   {
     key: "create",

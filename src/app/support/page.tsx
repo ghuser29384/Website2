@@ -98,19 +98,19 @@ export default async function SupportPage() {
             <p className="eyebrow">Available now</p>
             <h2>Donate directly to an established recipient</h2>
             <p>
-              Every.org handles payment, receipt, refund, and recipient disbursement. Moral Trade
-              provides reviewed links and optional evidence reconciliation, but does not receive the
-              donation.
+              Each charity explains its own payment options, receipt terms, and refund policy. Moral Trade
+              provides reviewed links to official charity pages and does not receive or verify these
+              independent donations.
             </p>
           </div>
           <div className="panel data-card data-card-wide">
             <div className="protocol-workflow-card-head">
-              <h3>Direct-to-charity Every.org routes</h3>
-              <StatusBadge>available</StatusBadge>
+              <h3>Official charity donation pages</h3>
+              <StatusBadge>reviewed directory</StatusBadge>
             </div>
             <p className="route-text">
-              Choose among the configured animal-welfare, global-poverty, climate, and long-term-future
-              routes. The recipient shown by Every.org is the beneficiary; Moral Trade is not.
+              Choose a registered charity from the reviewed directory and open its own donation page.
+              These independent gifts do not fund Moral Trade or complete a trade.
             </p>
             <div className="offer-actions">
               <Link className="button button-primary" href="/donate">

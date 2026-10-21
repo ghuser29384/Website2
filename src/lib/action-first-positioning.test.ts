@@ -60,9 +60,10 @@ test("the start route sends guests to review or login and redirects existing use
 });
 
 test("the financial action has a real external payment handoff and explicit boundaries", () => {
-  assert.match(donate, /EveryOrgDonateButton/);
-  assert.match(donate, /complete payment on Every\.org/);
-  assert.match(donate, /Moral Trade does not hold funds or decide tax treatment/);
+  assert.match(donate, /getEligibleCharityLinks/);
+  assert.match(donate, /href=\{charity\.donationUrl\}/);
+  assert.match(donate, /Moral Trade does not collect your donation or add a platform fee/);
+  assert.doesNotMatch(donate, /EveryOrgDonateButton|donate\/confirm/);
   assert.match(donate, /No Moral Trade custody/);
   assert.match(donateButton, /getEveryOrgDonationHref\(target\)/);
   assert.match(donateButton, /everyDotOrgDonateButton/);

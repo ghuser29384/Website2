@@ -38,8 +38,8 @@
     },
     {
       "path": "/donate",
-      "family": "provider_payment",
-      "stage": "payment"
+      "family": "charity_directory",
+      "stage": "discovery"
     },
     {
       "path": "/offers?view=live",

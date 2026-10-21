@@ -516,8 +516,8 @@ export const MEASUREMENT_EVENT_SPECS: MeasurementEventSpec[] = [
     eventType: "donation_route_clicked",
     stage: "public_goods",
     question: "Do visitors reach external donation routes from clear non-custodial pages?",
-    allowedMetadata: ["targetKind", "hasTargetUrl", "causeAreas"],
-    decisionUse: "Improve route clarity without claiming escrow, custody, or tax handling.",
+    allowedMetadata: ["targetKind", "hasTargetUrl", "causeAreas", "mode", "routeFamily", "resultStatus", "liveMetricEligible"],
+    decisionUse: "Improve route clarity. A route click is not a verified donation, completed trade, or eligible funding contribution.",
   },
   {
     eventType: "donation_logged",
