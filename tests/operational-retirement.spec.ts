@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390]) {
-  test(`only live Feed and Plan are reachable at ${width}px`, async ({ page }, testInfo) => {
+  test(`the homepage opens directly into live posts at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
@@ -10,12 +10,8 @@ for (const width of [1440, 390]) {
     await expect(page.getByRole("heading", { name: "What needs you now." })).toHaveCount(0);
     await expect(page.locator('[data-now="rules"]')).toHaveCount(0);
     await expect(page.getByText("Recent commands", { exact: true })).toHaveCount(0);
-    await page.locator('[data-now="plan"]').click();
-    await expect(page.locator('[data-mt-live-route-planner="true"]')).toBeVisible();
-    await expect(page.getByText("Sign in to see your routes.", { exact: true })).toBeVisible();
-    await expect(page.locator("[data-mt-custom-route]")).toHaveCount(0);
-    await page.locator('[data-now="focus"]').click();
-    await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+    await expect(page.locator('[data-now="plan"], [data-now="focus"]')).toHaveCount(0);
+    await expect(page.locator('[data-mt-live-route-planner]')).toHaveCount(0);
     const dimensions = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth }));
     expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width + 1);
     expect(errors).toEqual([]);

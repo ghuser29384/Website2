@@ -24,7 +24,7 @@ test("Discover keeps the canonical masthead and accessible two-sided list", () =
 
 test("search and real destinations remain usable without a prototype overlay", () => {
   assert.match(shell, /id="command-input"/);
-  assert.match(shell, /href="\/trades\/new">Post a trade/);
+  assert.match(shell, /href="\/trades\/new">Create a trade/);
   assert.match(shell, /href="\/invite"/);
   assert.match(shell, /<noscript>[\s\S]*href="\/offers\?view=live&amp;render=server"/);
   assert.doesNotMatch(shell, /overlay-root|inspector|lasso|data-action="pledge"/);

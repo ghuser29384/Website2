@@ -596,7 +596,7 @@
     if (!publicListings.items.length && publicListings.status === "partial") {
       return '<p role="status">We haven’t found trades in the listings we could load. Please try again to check the rest.</p><a class="btn" href="/discover">Retry in Discover →</a>';
     }
-    if (!publicListings.items.length) return '<p>No current trades to show.</p><a class="btn" href="/trades/new">Post a trade →</a>';
+    if (!publicListings.items.length) return '<p>No current trades to show.</p><a class="btn" href="/trades/new">Create a trade →</a>';
     return `${publicListings.status === "partial" ? '<p role="status">We couldn’t load all the listings. Some trades may be missing.</p>' : ""}<div class="mt-public-trades">${publicListings.items.map((item) =>
       `<article class="panel mt-public-trade"><p class="eyebrow">${escapeHtml(item.cause)}</p><h2><a href="${escapeHtml(item.href)}">${escapeHtml(item.title)}</a></h2><div class="mt-public-exchange"><section><h3>You provide</h3><p>${escapeHtml(item.youOffer.join("; "))}</p></section><section><h3>Counterparty provides</h3><p>${escapeHtml(item.youGet.join("; "))}</p></section></div><a class="btn" href="${escapeHtml(item.href)}">Review trade →</a></article>`
     ).join("")}</div><a class="btn" href="/discover">Browse all trades →</a>`;

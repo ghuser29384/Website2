@@ -47,10 +47,10 @@ test.describe("Adaptive homepage", () => {
 
     await expect(page.locator('button[data-action="command"]')).toHaveCount(0);
     await expect(page.locator('button[data-action="profile"]')).toHaveAccessibleName("Account");
-    await expect(page.locator('button[data-action="create"]')).toContainText("Create offer");
+    await expect(page.locator('button[data-action="create"]')).toContainText("Create a trade");
 
-    await expect(page.locator('button[data-now="focus"]')).toHaveClass(/active/);
-    await expect(page.locator('button[data-now="plan"]')).toHaveText("Plan resources");
+    await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+    await expect(page.locator('button[data-now="plan"]')).toHaveCount(0);
     await expect(page.locator('button[data-now="rules"]')).toHaveCount(0);
 
     const date = page.locator(".page .date");

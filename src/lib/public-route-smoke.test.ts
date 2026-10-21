@@ -65,7 +65,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.deepEqual(hrefs, ["/feed", "/discover", "/messages", "/commitments"]);
   assert.deepEqual(getTopbarActions(false).authLink, { href: "/login", label: "Sign in" });
   assert.deepEqual(getTopbarActions(false).primaryAction, { href: "/start", label: "Get started" });
-  assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create" });
+  assert.deepEqual(getTopbarActions(true).primaryAction, { href: "/trades/new", label: "Create a trade" });
   assert.equal(getTopbarActions(true).authLink, undefined);
 
   for (const href of [
@@ -92,7 +92,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.equal(hrefs.includes("/cart"), false);
   assert.equal(siteSource.includes("social credit"), false);
   assert.match(siteSource, /href: "\/feed", label: "Feed"/);
-  assert.match(siteSource, /href: "\/trades\/new",\s*label: "Create"/);
+  assert.match(siteSource, /href: "\/trades\/new",\s*label: "Create a trade"/);
   assert.doesNotMatch(topbarSource, /filterSmartSiteSearchItems/);
   assert.match(topbarSource, /placeholder="Search offers"/);
   assert.match(topbarSource, /<form action="\/discover" className="topbar-search" method="get" role="search"/);
@@ -4659,7 +4659,7 @@ test("marketplace separates live inventory, reviewed templates, worked examples,
   assert.match(offersPage, /Other live routes/);
   assert.match(offersPage, /Donation offsets/);
   assert.match(offersPage, /Funding pools/);
-  assert.match(offersPage, /Consent-gated introductions/);
+  assert.doesNotMatch(offersPage, /Consent-gated introductions/);
   assert.equal(offersPage.includes("CANONICAL_WORKED_CASE_OFFERS"), false);
 
   assert.match(workedExamplesPage, /They are\s+not live marketplace demand/i);

@@ -32,7 +32,7 @@ export function getTopbarActions(isAuthenticated = false) {
     primaryAction: isAuthenticated
       ? {
           href: "/trades/new",
-          label: "Create",
+          label: "Create a trade",
         }
       : {
           href: "/start",

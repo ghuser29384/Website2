@@ -93,6 +93,15 @@ export function proxy(request: NextRequest) {
   const shouldRecordVisit =
     isHumanNavigation(request) && !request.cookies.has(WALKTHROUGH_SEEN_COOKIE);
 
+  // Retired entry points lead into the single public trade flow. Detail links
+  // carrying an existing pool selection retain their original destination.
+  if (["/background-networking", "/wish-registry"].includes(pathname)) {
+    return NextResponse.redirect(new URL("/discover", request.url));
+  }
+  if (pathname === "/moral-goods-group-buying" && !request.nextUrl.search) {
+    return NextResponse.redirect(new URL("/discover?offerKind=co-fund", request.url));
+  }
+
   if (pathname === "/") {
     // The walkthrough is voluntary; a homepage visit must not pretend it was completed.
     return rewriteToLiveHome(request);
@@ -132,5 +141,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/walkthrough", "/create", "/offers", "/offers/:path*"],
+  matcher: ["/", "/walkthrough", "/create", "/offers", "/offers/:path*", "/background-networking", "/wish-registry", "/moral-goods-group-buying"],
 };

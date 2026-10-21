@@ -15,13 +15,13 @@ for (const width of [1440, 390, 320]) {
     await expect(page.getByLabel(/Remember this draft/)).not.toBeChecked();
     expect((await context.cookies()).find((cookie) => cookie.name === "mt_walkthrough_seen")).toBeUndefined();
     await expect(page.getByTestId("profile-priorities-card").getByRole("link", { name: "Adjust priorities", exact: true })).toBeVisible();
-    await page.getByText("Optional private matching preferences", { exact: true }).click();
+    await page.getByText("Optional trade preferences", { exact: true }).click();
     for (const label of ["Outcomes I care about", "What I can offer", "Limits or exclusions"]) {
       const group = page.getByRole("group", { name: label, exact: true });
       await expect(group.locator('input[type="checkbox"]:checked')).toHaveCount(0);
       await expect(group.locator("textarea")).not.toBeVisible();
     }
-    await expect(page.getByLabel("Save these private matching preferences")).not.toBeChecked();
+    await expect(page.getByLabel("Save my trade preferences")).not.toBeChecked();
     await page.getByLabel("Global health", { exact: true }).check();
     await page.getByLabel("Animal welfare", { exact: true }).check();
     await page.getByLabel("Time & volunteering", { exact: true }).check();
@@ -43,7 +43,7 @@ test("draft recovery is opt-in, explicit, and clearable without account writes",
   await page.goto("/complete-profile");
   await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
   await page.getByLabel("Display name", { exact: true }).fill("Guest example");
-  await page.getByText("Optional private matching preferences", { exact: true }).click();
+  await page.getByText("Optional trade preferences", { exact: true }).click();
   await page.getByLabel("Animal welfare", { exact: true }).check();
   await page.getByRole("group", { name: "Outcomes I care about", exact: true }).getByText("Other / add details", { exact: true }).click();
   await page.getByLabel("Outcomes I care about — other details", { exact: true }).fill("A restored personal priority");
@@ -57,11 +57,11 @@ test("draft recovery is opt-in, explicit, and clearable without account writes",
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
   await page.getByRole("button", { name: "Restore this draft" }).click();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Guest example");
-  await page.getByText("Optional private matching preferences", { exact: true }).click();
+  await page.getByText("Optional trade preferences", { exact: true }).click();
   await expect(page.getByLabel("Animal welfare", { exact: true })).toBeChecked();
   await expect(page.getByLabel("Outcomes I care about — other details", { exact: true })).toHaveValue("A restored personal priority");
   await expect(page.getByLabel("Research & writing", { exact: true })).toBeChecked();
-  await expect(page.getByLabel("Save these private matching preferences")).not.toBeChecked();
+  await expect(page.getByLabel("Save my trade preferences")).not.toBeChecked();
   await page.getByRole("button", { name: "Clear device draft and reset edits" }).click();
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("");
   await expect(page.getByLabel(/Remember this draft/)).not.toBeChecked();
@@ -96,7 +96,7 @@ test("walkthrough query parameters no longer preassign personal priorities", asy
   await page.goto("/complete-profile?source=walkthrough&cause_area=Animal%20welfare&offer_type=Money&match_name=Example");
   await expect(page.getByLabel(/Remember this draft/)).toBeEnabled();
   await expect(page.getByRole("heading", { name: "Set up your profile." })).toBeVisible();
-  await page.getByText("Optional private matching preferences", { exact: true }).click();
+  await page.getByText("Optional trade preferences", { exact: true }).click();
   await expect(page.locator('input[name="outcomes"]')).toHaveValue("");
   await expect(page.locator('input[name="limits"]')).toHaveValue("");
   await page.getByRole("link", { name: "Create account & continue" }).click();

@@ -1,0 +1,104 @@
+name: Trade experience simplification 2026-10-04
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/trade-experience-simplification-20261004.yml
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/trade-experience-simplification-20261004.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trade-experience-simplification-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request' && github.head_ref == 'fix/simplify-trade-experience-20261004'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run repository and production build gates
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          npm test
+          node --import tsx --test src/proxy.test.ts src/live-now-data.test.ts src/live-operational-retirement.test.ts src/discover-home-visual-contract.test.ts
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+      - name: Run complete rendered release gate
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e:release -- --reporter=line
+      - name: Retain rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trade-experience-simplification-${{ github.sha }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  dispatch:
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      actions: write
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact approved candidate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node --import tsx --test src/proxy.test.ts src/live-now-data.test.ts src/live-operational-retirement.test.ts src/discover-home-visual-contract.test.ts
+          git diff --check HEAD^
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+      - name: Dispatch existing gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          jq -n --arg sha "$GITHUB_SHA" \
+            '{ref:"main",inputs:{ref:"main",target:"production",expected_sha:$sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+                --input - >/dev/null

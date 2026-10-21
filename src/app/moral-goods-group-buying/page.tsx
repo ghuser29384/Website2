@@ -283,7 +283,7 @@ export default async function MoralGoodsGroupBuyingPage() {
             <h2>No open routes yet.</h2>
             <p>Propose a shared funding pool with a recipient, condition, deadline, and evidence requirements.</p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/mpgf/pools/new">Propose a pool</Link>
+              <Link className="button button-primary" href="/trades/new">Create a trade</Link>
               <Link className="button button-secondary" href="/discover">Browse trades</Link>
             </div>
             <details className="details-panel">
@@ -424,8 +424,8 @@ export default async function MoralGoodsGroupBuyingPage() {
                   <span className={liveStyles.liveBadge}>0</span>
                 </div>
                 <div className={styles.cardActions}>
-                  <Link className="button button-primary" href="/mpgf/pools/new">
-                    Propose a pool
+                  <Link className="button button-primary" href="/trades/new">
+                    Create a trade
                   </Link>
                   <Link className="button button-secondary" href="/contact">
                     Contact the operator
@@ -583,13 +583,13 @@ export default async function MoralGoodsGroupBuyingPage() {
 
           <div className={styles.participantPanel}>
             <article className={styles.participantNotice}>
-              <p className={styles.cardKicker}>Propose a pool</p>
+              <p className={styles.cardKicker}>Create a trade</p>
               <h3>Submit terms for review.</h3>
               <p>
                 Specify the funding condition, deadline, recipient, evidence, and failure behavior.
               </p>
               <div className={styles.sectionActions}>
-                <Link className="button button-primary" href="/mpgf/pools/new">
+                <Link className="button button-primary" href="/trades/new">
                   Draft a pool proposal
                 </Link>
                 <Link className="button button-secondary" href="/trust">
@@ -659,8 +659,8 @@ export default async function MoralGoodsGroupBuyingPage() {
             <Link className="button button-primary" href="/trust">
               Review safeguards
             </Link>
-            <Link className="button button-secondary" href="/mpgf/pools/new">
-              Propose a pool
+            <Link className="button button-secondary" href="/trades/new">
+              Create a trade
             </Link>
             <Link className="button button-secondary" href="/status">
               Service status

@@ -350,7 +350,8 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await expect(page.getByRole("banner")).toHaveCSS("background-color", "rgb(17, 18, 20)");
   await expect(page.getByRole("link", { exact: true, name: "Moral Trade, home" })).toBeVisible();
   await expect(page.getByRole("heading", { exact: true, level: 1, name: "What needs you now." })).toHaveCount(0);
-  await expect(page.getByRole("button", { exact: true, name: "Focus" })).toBeVisible();
+  await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible();
+  await expect(page.getByRole("button", { exact: true, name: "Focus" })).toHaveCount(0);
   await waitForTextLength(page, 160);
   await expectNoFrameworkOverlay(page, "/");
   await page.screenshot({ path: testInfo.outputPath("reference-home.png"), fullPage: false });

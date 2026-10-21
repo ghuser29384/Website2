@@ -38,8 +38,8 @@ test("a response arriving after eight seconds still renders without reloading", 
   release();
   await expect(feed).toHaveAttribute("data-mt-live-now-state", "ready");
   await expect(feed.getByRole("heading", { name: "Animal welfare", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Plan resources", exact: true }).click();
-  await page.getByRole("button", { name: "Focus", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Plan resources", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Focus", exact: true })).toHaveCount(0);
   await expect(feed).toHaveAttribute("data-mt-live-now-state", "ready");
   expect(errors).toEqual([]);
 });

@@ -143,8 +143,6 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(page.getByText("Counteroffer from Mina.", { exact: true })).toHaveCount(0);
     await expect(page.getByText("AI-safety research under $100.", { exact: true })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Plan resources" }).click();
-    await page.getByRole("button", { name: "Focus" }).click();
     await expect(personalized.getByRole("heading", { name: "Animal welfare" })).toBeVisible();
 
     fixture = recommendationFixture({
@@ -731,8 +729,6 @@ for (const route of ["/", "/feed"]) {
       await expect(feed.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
       await expect(hero).not.toContainText("Profile needs priorities");
 
-      await page.getByRole("button", { name: "Plan resources", exact: true }).click();
-      await page.getByRole("button", { name: "Focus", exact: true }).click();
       await expect(hero.getByRole("heading", { name: "What matters to you?" })).toBeVisible();
       await expect(hero.getByRole("link", { name: "Choose priorities →" })).toBeVisible();
       await expect(hero.getByRole("link", { name: "Explore opportunities →" })).toBeVisible();

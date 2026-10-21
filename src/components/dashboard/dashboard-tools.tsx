@@ -28,7 +28,6 @@ export function DashboardTools({ active }: { active: DashboardView | "payments" 
       </Link>
       <Link href="/complete-profile" prefetch={false}>Profile details</Link>
       <a href="/dashboard?view=controls#privacy-controls">Privacy</a>
-      <a href="/dashboard?view=controls#notifications">Notifications</a>
       <Link href="/dashboard?view=controls" prefetch={false} aria-current={active === "controls" ? "page" : undefined}>
         More controls
       </Link>

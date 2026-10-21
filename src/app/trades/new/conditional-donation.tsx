@@ -101,7 +101,7 @@ export async function ConditionalDonationCreate({
         />
         <Breadcrumbs
           items={[
-            { href: "/trades/new", label: "Create" },
+            { href: "/trades/new", label: "Create a trade" },
             {
               href: "/trades/new?structure=conditional-donation",
               label: "Donation Upgrade",

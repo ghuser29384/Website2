@@ -314,8 +314,8 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
               <Link className="button button-primary" href="#live-pools">
                 Explore live pools
               </Link>
-              <Link className="button button-secondary" href="/mpgf/pools/new">
-                Propose a pool
+              <Link className="button button-secondary" href="/trades/new">
+                Create a trade
               </Link>
             </div>
           </div>
@@ -411,11 +411,11 @@ export default async function PoolsPage({ searchParams }: PoolsPageProps) {
                 <p>
                   {hasSmartSearch
                     ? "Remove one budget, deadline, cause, or verification constraint. Unknown fields are not treated as matches."
-                    : "Propose a pool with explicit exposure, threshold, deadline, and evidence terms."}
+                    : "Create a trade with explicit exposure, threshold, deadline, and evidence terms."}
                 </p>
                 <div className="mt-product-actions">
                   {hasSmartSearch ? <Link className="button button-primary" href="/pools">Clear search</Link> : null}
-                  <Link className="button button-secondary" href="/mpgf/pools/new">Propose a pool</Link>
+                  <Link className="button button-secondary" href="/trades/new">Create a trade</Link>
                   <Link className="button button-secondary" href="/contact">Contact the operator</Link>
                 </div>
               </article>

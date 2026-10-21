@@ -12,6 +12,7 @@ import {
   profileDraftKey, readProfileDraft,
   type ProfileDraftEnvelope, type ProfileSetupValues,
 } from "@/lib/profile-setup-draft";
+import { ResourceLimits } from "./resource-limits";
 import { ProfilePrioritiesCard } from "./profile-priorities-card";
 import { MATCHING_PREFERENCE_GROUPS } from "@/lib/profile-matching-choices";
 import { MatchingPreferenceChoices } from "./matching-preference-choices";
@@ -175,19 +176,19 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
         <label>Company, organization, or university (optional)<input name="affiliation" autoComplete="organization" maxLength={160}
           value={values.affiliation} onChange={(e) => update("affiliation", e.target.value)} /></label>
         <label>Profile introduction (optional)<textarea aria-label="Profile introduction (optional)" aria-describedby="profile-bio-help" name="bio" maxLength={500} value={values.bio}
-          onChange={(e) => update("bio", e.target.value)} /><small id="profile-bio-help">Tell people a little about yourself. This introduction is public, so keep sensitive details in your private matching notes.</small></label>
+          onChange={(e) => update("bio", e.target.value)} /><small id="profile-bio-help">Tell people a little about yourself. This introduction is public, so please leave out sensitive information.</small></label>
       </div>
       {accountId ? <p className={styles.account}>Signed in as {accountEmail}. Account email is not stored in device drafts.</p> :
         <p className={styles.notice}>You can browse without an account. Sign in to save these details; any guest draft stays separate until you explicitly import its matching notes.</p>}
       <details className={styles.personalization}>
-        <summary>Optional private matching preferences</summary>
+        <summary>Optional trade preferences</summary>
         <p className={styles.preferenceHint}>Select all that apply, or skip. Add details only if you want to.</p>
         <div className={styles.preferenceGroups}>
           {MATCHING_PREFERENCE_GROUPS.map((group) => <MatchingPreferenceChoices key={group.name}
             group={group} value={values[group.name]} disabled={!ready} onChange={(value) => update(group.name, value)} />)}
         </div>
         <label className={styles.check}><input type="checkbox" name="save_preferences" checked={savePreferences}
-          onChange={(e) => setSavePreferences(e.target.checked)} />Save these private matching preferences</label>
+          onChange={(e) => setSavePreferences(e.target.checked)} />Save my trade preferences</label>
         <p className={styles.preferenceHint}>Saved choices add to your existing notes. They do not change your priorities, publish an offer, or contact anyone.</p>
       </details>
       <details className={styles.personalization}>
@@ -210,5 +211,6 @@ export function CompleteProfileReview({ accountId, accountEmail, initialAffiliat
         <span>Saving does not create a commitment, reserve money, or contact anyone.</span>
       </footer>
     </form>
+    {!accountChanged ? <ResourceLimits key={accountId ?? "guest"} /> : null}
   </section>;
 }
