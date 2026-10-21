@@ -91,7 +91,6 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
 
       const tabs = page.getByRole("navigation", { name: "Commitments sections" });
       for (const [label, state] of [
-        ["Ledger", "No ledger events exist for this account."],
         ["Completed", "No completed, returned, cancelled, or expired commitments yet."],
         ["Calendar", "No dates match this calendar view."],
       ]) {

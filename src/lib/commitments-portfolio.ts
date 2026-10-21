@@ -49,7 +49,7 @@ export type CommitmentLifecycle =
   | "disputed";
 
 export type PortfolioGroupMode = "cause" | "mechanism" | "resource";
-export type CommitmentsTab = "portfolio" | "ledger" | "completed" | "calendar";
+export type CommitmentsTab = "portfolio" | "completed" | "calendar";
 
 export interface ResourceQuantity {
   kind: "money" | "count";

@@ -40,7 +40,6 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 const TAB_LABELS: Record<CommitmentsTab, string> = {
   portfolio: "Portfolio",
-  ledger: "Ledger",
   completed: "Completed",
   calendar: "Calendar",
 };
@@ -56,7 +55,7 @@ function firstValue(value: string | string[] | undefined) {
 }
 
 function resolveTab(value: string | undefined): CommitmentsTab {
-  return value === "ledger" || value === "completed" || value === "calendar" ? value : "portfolio";
+  return value === "completed" || value === "calendar" ? value : "portfolio";
 }
 
 function resolveGroup(value: string | undefined): PortfolioGroupMode {
@@ -245,27 +244,6 @@ function PortfolioView({
         </section>
       ) : null}
     </>
-  );
-}
-
-function LedgerView({ data }: { data: Awaited<ReturnType<typeof loadCommitmentsPortfolioData>> }) {
-  return (
-    <section>
-      <div className={styles.sectionHeader}>
-        <div><span>Double-entry record</span><h2>Every material commitment event.</h2></div>
-      </div>
-      {data.events.length ? (
-        <ol className={styles.timeline}>
-          {data.events.map((event) => (
-            <li key={event.id} data-kind={event.kind}>
-              <LocalDateTime value={event.at} fallback="Date unavailable" options={{ dateStyle: "medium", timeStyle: "short" }} />
-              <div><strong>{event.title}</strong><p>{event.detail}</p></div>
-              <Link href={event.href}>View →</Link>
-            </li>
-          ))}
-        </ol>
-      ) : <div className={styles.inlineEmpty}>{data.availability.recordsComplete ? "No ledger events exist for this account." : "No ledger events could be loaded."}</div>}
-    </section>
   );
 }
 
@@ -460,12 +438,11 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
                 <div className={styles.contentGrid}>
                   <div className={styles.primaryContent}>
                     {tab === "portfolio" ? <PortfolioView data={data} group={group} /> : null}
-                    {tab === "ledger" ? <LedgerView data={data} /> : null}
                     {tab === "completed" ? <CompletedView data={data} /> : null}
                     {tab === "calendar" ? <CalendarView data={data} showAll={showAllCalendar} /> : null}
                   </div>
                   <aside className={styles.activityRail}>
-                    <header><div><span>Recent activity</span><h2>Recent updates</h2></div><CommitmentsDocumentLink href="/commitments?tab=ledger">View all →</CommitmentsDocumentLink></header>
+                    <header><div><span>Recent activity</span><h2>Recent updates</h2></div></header>
                     {data.recentActivity.length ? (
                       <ol>
                         {data.recentActivity.map((event) => (
