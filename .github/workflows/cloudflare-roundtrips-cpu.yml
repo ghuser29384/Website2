@@ -1,0 +1,64 @@
+name: Moral Trade reminder batching and CPU profiling only
+on:
+  push:
+    branches: [build/cloudflare-roundtrips-cpu-20261021]
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-roundtrips-cpu-20261021
+  cancel-in-progress: false
+jobs:
+  scheduler:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/cloudflare-roundtrips-cpu-20261021'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CF_CANDIDATE: moraltrade
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - name: Verify exact base and automatic deployment block
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = a4adf0cbb7029a6316a34478bd27dffad22cbca4
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code HEAD^ HEAD -- src public package.json package-lock.json next.config.ts vercel.ts scripts/vercel-project-config.mjs
+          git diff --check HEAD^ HEAD
+          node --input-type=module -e 'import assert from "node:assert/strict"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false);'
+      - name: Prepare approved dependencies on disposable runner
+        run: bash scripts/cloudflare-roundtrips-cpu/run.sh prepare
+      - name: Test and build with only loopback networking and synthetic settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            exec runuser -u runner -- env -i PATH="$1" HOME="$2/home" CF_CANDIDATE=moraltrade \
+              CF_RUN_ROOT="$2" CF_OFFLINE_NAMESPACE=1 \
+              bash "$2/harness/run.sh" offline
+          ' _ "$PATH" "$RUNNER_TEMP/cloudflare-roundtrips-cpu"
+      - name: Report bounded results
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Moral Trade nonempty jobs and CPU profiling'
+            echo 'Synthetic SQL parity, nonempty cases and required local CPU profiles only; no hosted database, live providers, deployment or full-feature acceptance.'
+            for name in runtime-result.json scheduler-runtime-result.json nonempty-runtime-result.json; do
+              result="$RUNNER_TEMP/cloudflare-roundtrips-cpu/$name"
+              if test -f "$result"; then
+                echo '```json'
+                cat "$result"
+                echo '```'
+              else
+                echo "$name: NOT TESTED; an earlier prerequisite failed."
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
