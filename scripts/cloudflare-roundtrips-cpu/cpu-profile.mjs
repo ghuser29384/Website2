@@ -1,16 +1,35 @@
 import assert from 'node:assert/strict';
 
+// Only locally assigned, bounded fields may enter the aggregate diagnostic report.
+// Never serialize a caught error, its stack/cause, or an arbitrary CDP response.
+const failureDetails = new WeakMap();
+function diagnosedError(message, details) {
+  const error = new Error(message); failureDetails.set(error, details); return error;
+}
+export function describeProfilerFailure(error) {
+  return { ...(failureDetails.get(error) ?? { stage: 'unknown', kind: 'unexpected-error' }) };
+}
+function requireProfile(condition, check, sampleIndex) {
+  try { assert.ok(condition, `Invalid CPU profile: ${check}`); }
+  catch (error) {
+    failureDetails.set(error, { stage: 'profile-validation', kind: 'invalid-profile', check, ...(sampleIndex === undefined ? {} : { sampleIndex }) });
+    throw error;
+  }
+}
+
 // CDP sampling finds local hotspots. This is neither billed CPU nor a Free-plan acceptance gate.
 export function summarizeProfile(profile) {
-  assert.ok(profile && Array.isArray(profile.nodes));
-  assert.ok(Array.isArray(profile.samples) && Array.isArray(profile.timeDeltas));
-  assert.equal(profile.samples.length, profile.timeDeltas.length);
-  assert.ok(profile.endTime >= profile.startTime);
+  requireProfile(profile && Array.isArray(profile.nodes), 'nodes-array');
+  requireProfile(Array.isArray(profile.samples) && Array.isArray(profile.timeDeltas), 'sample-arrays');
+  requireProfile(profile.samples.length === profile.timeDeltas.length, 'sample-delta-length');
+  requireProfile(profile.endTime >= profile.startTime, 'time-order');
   const nodes = new Map(profile.nodes.map(n => [n.id, n]));
   const counts = new Map(); let idle = 0, program = 0, active = 0;
   for (let i = 0; i < profile.samples.length; i++) {
-    const node = nodes.get(profile.samples[i]); assert.ok(node);
-    const delta = profile.timeDeltas[i]; assert.ok(Number.isFinite(delta) && delta >= 0);
+    const node = nodes.get(profile.samples[i]); requireProfile(node, 'sample-node-present', i);
+    const delta = profile.timeDeltas[i];
+    requireProfile(Number.isFinite(delta), 'finite-time-delta', i);
+    requireProfile(delta >= 0, 'nonnegative-time-delta', i);
     const name = node.callFrame.functionName || '(anonymous)';
     if (name === '(idle)') idle += delta;
     else if (['(program)', '(root)'].includes(name)) program += delta;
@@ -51,12 +70,19 @@ export async function connectProfiler(expectedIdentity, { fetchImpl = fetch, Web
   const url = selectInspectorTarget(await response.json());
   const ws = new WebSocketImpl(url, { headers: { Origin: "http://127.0.0.1:9229" } }); let seq = 0; const pending = new Map();
   const contexts = new Map();
-  const rejectPending = () => { for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error("Inspector connection closed")); } pending.clear(); };
-  const close = () => { rejectPending(); ws.close(); };
-  ws.addEventListener("close", rejectPending); ws.addEventListener("error", rejectPending);
+  const rejectPending = (kind = 'connection-closed') => {
+    for (const p of pending.values()) {
+      clearTimeout(p.timer);
+      p.reject(diagnosedError(`Inspector command ${p.method} failed (${kind})`, { stage: 'command', method: p.method, kind }));
+    }
+    pending.clear();
+  };
+  const close = (kind = 'connection-closed') => { rejectPending(kind); ws.close(); };
+  ws.addEventListener("close", () => rejectPending()); ws.addEventListener("error", () => rejectPending('connection-error'));
   ws.addEventListener("message", event => {
     let message;
-    try { message = JSON.parse(event.data); } catch { close(); return; }
+    try { message = JSON.parse(event.data); } catch { close('malformed-reply'); return; }
+    if (!message || typeof message !== 'object' || Array.isArray(message)) { close('malformed-reply'); return; }
     if (message.method === "Runtime.executionContextCreated") {
       const context = message.params?.context;
       if (Number.isSafeInteger(context?.id) && context.id > 0) contexts.set(context.id, context.name);
@@ -72,7 +98,7 @@ export async function connectProfiler(expectedIdentity, { fetchImpl = fetch, Web
       const code = Number.isSafeInteger(message.error.code) ? message.error.code : "unknown";
       const reason = ["Cannot find default execution context", "Cannot find context with specified id", "Method not found", "Invalid parameters"].includes(message.error.message)
         ? message.error.message : "protocol details redacted";
-      p.reject(new Error(`Inspector command ${p.method} rejected (code ${code}; ${reason})`));
+      p.reject(diagnosedError(`Inspector command ${p.method} rejected (code ${code}; ${reason})`, { stage: 'command', method: p.method, kind: 'rejected', protocolCode: code, reason }));
     } else p.resolve(message.result);
   });
   try {
@@ -83,10 +109,10 @@ export async function connectProfiler(expectedIdentity, { fetchImpl = fetch, Web
       ws.addEventListener("close", () => { clearTimeout(timer); reject(new Error("Inspector closed before connection")); }, { once: true });
     });
     const call = (method, params = {}) => new Promise((resolve, reject) => {
-      const id = ++seq, timer = setTimeout(() => { pending.delete(id); reject(new Error(`Inspector command ${method} timed out`)); }, timeoutMs);
+      const id = ++seq, timer = setTimeout(() => { pending.delete(id); reject(diagnosedError(`Inspector command ${method} timed out`, { stage: 'command', method, kind: 'timeout' })); }, timeoutMs);
       pending.set(id, { method, resolve, reject, timer });
       try { ws.send(JSON.stringify({ id, method, params })); }
-      catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
+      catch { clearTimeout(timer); pending.delete(id); reject(diagnosedError(`Inspector command ${method} could not be sent`, { stage: 'command', method, kind: 'send-failed' })); }
     });
     // workerd has no default execution context. Use its reported Worker context,
     // never a guessed ID; Wrangler may have buffered these events before we connect.
@@ -106,8 +132,15 @@ export async function connectProfiler(expectedIdentity, { fetchImpl = fetch, Web
     await call("Profiler.setSamplingInterval", { interval: 1000 });
     return {
       start: () => call("Profiler.start"),
-      async stop() { return summarizeProfile((await call("Profiler.stop")).profile); },
-      close,
+      async stop() {
+        const reply = await call("Profiler.stop");
+        try { return summarizeProfile(reply?.profile); }
+        catch (error) {
+          if (!failureDetails.has(error)) failureDetails.set(error, { stage: 'profile-validation', kind: 'invalid-profile', check: 'unexpected-shape' });
+          throw error;
+        }
+      },
+      close: () => close(),
     };
   } catch (error) { close(); throw error; }
 }

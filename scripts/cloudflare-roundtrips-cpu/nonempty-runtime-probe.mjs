@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { startPreview } from './preview-process.mjs';
 import { startFixture, SERVICE_KEY, PROVIDER_KEY } from './nonempty-fixture.mjs';
-import { connectProfiler } from './cpu-profile.mjs';
+import { connectProfiler, describeProfilerFailure } from './cpu-profile.mjs';
 
 assert.equal(process.env.CF_OFFLINE_NAMESPACE, '1');
 const root = process.env.CF_RUN_ROOT, cwd = resolve(root, 'app');
@@ -36,13 +36,25 @@ async function scheduled(hour, minute) {
 async function check(name, options, fn) {
   fixture.reset(options);
   let recording = false;
-  if (profiler) { try { await profiler.start(); recording = true; } catch { result.profilerStatus = 'UNAVAILABLE'; profiler.close(); profiler = null; } }
+  if (profiler) {
+    try { await profiler.start(); recording = true; }
+    catch (error) {
+      result.profilerFailure = { phase: 'start', caseNumber: result.measurements.length + 1, ...describeProfilerFailure(error) };
+      result.profilerStatus = 'UNAVAILABLE'; profiler.close(); profiler = null;
+    }
+  }
   const start = performance.now();
   await fn();
   const wall = performance.now() - start;
   assert.deepEqual(fixture.violations, []);
   const measurement = { name, wallTimeMs: wall, externalOperations: fixture.events.length, fixtureScenario: options.scenario, count: options.count ?? 1 };
-  if (recording) { try { measurement.cpuProfile = await profiler.stop(); } catch { result.profilerStatus = 'PARTIAL_OR_UNAVAILABLE'; profiler.close(); profiler = null; } }
+  if (recording) {
+    try { measurement.cpuProfile = await profiler.stop(); }
+    catch (error) {
+      result.profilerFailure = { phase: 'stop', caseNumber: result.measurements.length + 1, ...describeProfilerFailure(error) };
+      result.profilerStatus = 'PARTIAL_OR_UNAVAILABLE'; profiler.close(); profiler = null;
+    }
+  }
   result.measurements.push(measurement); result.passedCases.push(name);
 }
 try {
@@ -57,7 +69,8 @@ try {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   assert.ok(ready, 'Workers preview did not become ready');
-  try { profiler = await connectProfiler(profileIdentity); result.profilerStatus = 'CONNECTED'; } catch (error) { result.profilerStatus = 'UNAVAILABLE'; result.profilerReason = error.message; }
+  try { profiler = await connectProfiler(profileIdentity); result.profilerStatus = 'CONNECTED'; }
+  catch (error) { result.profilerStatus = 'UNAVAILABLE'; result.profilerFailure = { phase: 'connect', ...describeProfilerFailure(error) }; }
   await check('one safe email completes its lease', { scenario: 'email' }, async () => { assert.equal((await job('email')).sent, 1); assert.deepEqual([...fixture.state.emails.values()], ['sent']); });
   await check('full 25-email batch needs 51 outbound requests', { scenario: 'email', count: 25 }, async () => { assert.equal((await job('email')).sent, 25); assert.equal(fixture.events.length, 51); assert.equal(fixture.state.provider.size, 25); });
   await check('sensitive email is suppressed without provider access', { scenario: 'email', unsafe: true }, async () => { assert.equal((await job('email')).suppressed, 1); assert.equal(fixture.state.provider.size, 0); });
