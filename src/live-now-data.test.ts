@@ -90,8 +90,7 @@ test("the Plan surface uses private inputs and live-source-only route cards", ()
   assert.match(routeBridge, /data-mt-live-route-composer/);
   assert.match(routeBridge, /document\.querySelector\("\[data-mt-live-route-planner\]"\)/);
   assert.match(routeBridge, /mount\.querySelector\("\.plan-grid"\)/);
-  assert.match(routeBridge, /data-mt-lrp-comparison-choice="unsure"/);
-  assert.match(routeBridge, /GUIDED GOAL INTERVIEW/);
+  assert.doesNotMatch(routeBridge, /Refine preferences|Help with my goal|Compare two options|Reset comparisons|GUIDED GOAL INTERVIEW/);
   assert.match(routeBridge, /data-source-live="\$\{step\.live\}"/);
   assert.match(routeBridge, /These are next actions, not recommendations/);
   assert.match(routeBridge, /No personalized or demo route is shown while signed out/);
