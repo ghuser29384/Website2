@@ -1,0 +1,186 @@
+/* Shared by the standalone walkthrough and the React fallback. Keep scenes in
+   normal flow so larger text and longer examples can never be clipped. */
+:is(.lab, .mtw-shell) {
+  --walkthrough-height: clamp(30rem, calc(100svh - 10rem), 52rem);
+  width: min(1440px, 100%);
+  min-height: 100svh;
+  margin-inline: auto;
+  padding: 12px;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+}
+.mtw-shell { grid-template-rows: auto auto 1fr auto; }
+
+:is(.lab, .mtw-shell) :is(.experience, .mtw-experience) {
+  min-height: 0;
+  overflow: clip;
+  border-radius: 24px;
+}
+.lab .experience .stage { min-height: 0; height: auto; }
+
+:is(.lab, .mtw-shell) :is(.experience, .mtw-experience) :is(.scene, .mtw-scene) {
+  position: relative;
+  inset: auto;
+  min-height: var(--walkthrough-height);
+  height: auto;
+  padding: clamp(44px, 5vw, 64px);
+  align-content: center;
+}
+:is(.lab, .mtw-shell) :is(.scene, .mtw-scene) > * { min-width: 0; }
+
+:is(.lab, .mtw-shell) :is(.experience, .mtw-experience) :is(.scene-title, .mtw-scene-title) {
+  max-width: 22ch;
+  font-size: clamp(36px, 4.4vw, 64px);
+  line-height: 1.06;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+:is(.lab, .mtw-shell) :is(.scene-head, .mtw-scene-head, .success-copy, .mtw-success-copy) {
+  width: min(980px, 100%);
+}
+:is(.lab, .mtw-shell) [data-concept="two-moves"] :is(.success-copy, .mtw-success-copy) {
+  margin-inline: auto;
+  text-align: center;
+}
+:is(.lab, .mtw-shell) [data-concept="two-moves"] :is(.success-copy, .mtw-success-copy) :is(.scene-title, .mtw-scene-title, .scene-line, .mtw-scene-line) {
+  margin-inline: auto;
+}
+:is(.lab, .mtw-shell) :is(.scene-line, .mtw-scene-line) {
+  max-width: 60ch;
+  margin-top: 20px;
+  font-size: clamp(17px, 1.5vw, 20px);
+  line-height: 1.5;
+  letter-spacing: -.015em;
+}
+:is(.lab, .mtw-shell) :is(.scene-prompt, .mtw-scene-prompt) {
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+:is(.lab, .mtw-shell) :is(.step-mark, .mtw-step-mark) { top: 22px; right: 24px; }
+:is(.lab, .mtw-shell) :is(.primary-action, .mtw-primary-action) {
+  max-width: 100%;
+  min-height: 48px;
+  margin-top: 24px;
+  padding: 12px 20px;
+  gap: 20px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+:is(.lab, .mtw-shell) :is(.cause-picker-scene, .mtw-cause-picker-scene) {
+  grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr);
+  gap: 40px;
+}
+:is(.lab, .mtw-shell) :is(.cause-intro, .mtw-cause-intro) :is(.scene-title, .mtw-scene-title) { max-width: 10ch; }
+:is(.lab, .mtw-shell) :is(.cause-choice, .mtw-cause-choice) { min-height: 90px; }
+:is(.lab, .mtw-shell) :is(.cause-choice, .mtw-cause-choice) strong { font-size: 16px; line-height: 1.2; }
+:is(.lab, .mtw-shell) :is(.move-board, .mtw-move-board) { margin-top: 28px; }
+:is(.lab, .mtw-shell) :is(.move-card, .mtw-move-card) { min-height: 200px; }
+:is(.lab, .mtw-shell) :is(.move-card, .mtw-move-card) strong {
+  max-width: 20ch;
+  margin-top: 24px;
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.1;
+}
+:is(.lab, .mtw-shell) :is(.choice-row, .mtw-choice-row, .conversion-deck, .mtw-conversion-deck) { margin-top: 28px; }
+:is(.lab, .mtw-shell) :is(.conversion-link, .mtw-conversion-link) { min-height: 84px; gap: 14px; padding: 18px; }
+:is(.lab, .mtw-shell) :is(.conversion-link, .mtw-conversion-link) strong { font-size: 20px; line-height: 1.25; }
+:is(.lab, .mtw-shell) :is(.mix-layout, .mtw-mix-layout) {
+  grid-template-columns: minmax(240px, .7fr) minmax(0, 1.3fr);
+  gap: 32px;
+}
+:is(.lab, .mtw-shell) :is(.mix-card, .mtw-mix-card) { min-height: 320px; padding: 18px; }
+:is(.lab, .mtw-shell) :is(.mix-side, .mtw-mix-side) { margin-top: 30px; }
+:is(.lab, .mtw-shell) :is(.mix-side, .mtw-mix-side) strong { font-size: clamp(25px, 2.4vw, 32px); line-height: 1.12; }
+:is(.lab, .mtw-shell) :is(.mix-actions, .mtw-mix-actions) { flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+:is(.lab, .mtw-shell) :is(.mix-actions, .mtw-mix-actions) :is(.primary-action, .mtw-primary-action) { margin-top: 0; }
+:is(.lab, .mtw-shell) :is(.mix-alternative, .mtw-mix-alternative) { white-space: normal; font-size: 14px; }
+:is(.lab, .mtw-shell) :is(.match-stack, .mtw-match-stack) { margin-top: 28px; gap: 16px; }
+:is(.lab, .mtw-shell) :is(.experience, .mtw-experience) :is(.match-card, .mtw-match-card) {
+  display: flex;
+  flex-direction: column;
+  min-height: 340px;
+  padding: 20px;
+  transform: none;
+  animation: none;
+}
+:is(.lab, .mtw-shell) :is(.match-exchange, .mtw-match-exchange) { margin-top: 24px; }
+:is(.lab, .mtw-shell) :is(.match-exchange, .mtw-match-exchange) strong { font-size: 28px; line-height: 1.12; }
+:is(.lab, .mtw-shell) :is(.match-card, .mtw-match-card) small { position: static; margin-top: auto; padding-top: 20px; }
+:is(.lab, .mtw-shell) :is(.redirect-comparison-scene, .mtw-redirect-comparison-scene) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 32px;
+}
+
+/* The redirect illustration has its own column instead of crossing the copy. */
+:is(.lab, .mtw-shell) :is(.stream-copy, .mtw-stream-copy) {
+  position: relative;
+  inset: auto;
+  width: 48%;
+  max-width: none;
+  padding: 0;
+  margin-left: 0;
+  background: transparent;
+}
+:is(.lab, .mtw-shell) :is(.stream, .mtw-stream) { left: 55%; width: 45%; height: 72px; }
+:is(.lab, .mtw-shell) :is(.stream-a, .mtw-stream-a) { --stream-top: 30%; }
+:is(.lab, .mtw-shell) :is(.stream-b, .mtw-stream-b) { --stream-top: 65%; }
+.mtw-shell .mtw-stream-a { top: 30%; }
+.mtw-shell .mtw-stream-b { top: 65%; bottom: auto; }
+:is(.lab, .mtw-shell) :is(.stream-label, .mtw-stream-label) {
+  left: 8%; right: auto; max-width: 85%; gap: 12px; font-size: 16px;
+}
+:is(.lab, .mtw-shell) :is(.stream-label, .mtw-stream-label) strong { font-size: 36px; }
+:is(.lab, .mtw-shell) :is(.collision, .mtw-collision) { left: 76%; width: 120px; font-size: 24px; }
+:is(.lab, .mtw-shell) :is(.redirect-target, .mtw-redirect-target) { left: auto; right: 8%; width: min(24vw, 280px); }
+
+@media (max-width: 1100px) {
+  :is(.lab, .mtw-shell) :is(.cause-picker-scene, .mtw-cause-picker-scene, .mix-layout, .mtw-mix-layout) { grid-template-columns: 1fr; gap: 28px; }
+  :is(.lab, .mtw-shell) :is(.cause-intro, .mtw-cause-intro) :is(.scene-title, .mtw-scene-title) { max-width: 22ch; }
+  :is(.lab, .mtw-shell) :is(.cause-grid, .mtw-cause-grid, .meters, .mtw-meters) { margin-top: 0; }
+  :is(.lab, .mtw-shell) :is(.redirect-comparison-scene, .mtw-redirect-comparison-scene) { grid-template-columns: 1fr; }
+  :is(.lab, .mtw-shell) :is(.redirect-comparison-scene, .mtw-redirect-comparison-scene) :is(.scene-head, .mtw-scene-head) { max-width: none; }
+  :is(.lab, .mtw-shell) :is(.mixes, .mtw-mixes, .match-stack, .mtw-match-stack) { grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; }
+}
+
+@media (max-width: 700px) {
+  :is(.lab, .mtw-shell) { --walkthrough-height: 28rem; padding: 8px; gap: 8px; }
+  :is(.lab, .mtw-shell) :is(.experience, .mtw-experience) { border-radius: 18px; }
+  :is(.lab, .mtw-shell) :is(.experience, .mtw-experience) :is(.scene, .mtw-scene) {
+    padding: 52px 22px 30px;
+    align-content: start;
+  }
+  :is(.lab, .mtw-shell) :is(.experience, .mtw-experience) :is(.scene-title, .mtw-scene-title) {
+    font-size: clamp(32px, 8vw, 42px);
+    max-width: 22ch;
+    line-height: 1.1;
+  }
+  :is(.lab, .mtw-shell) :is(.scene-line, .mtw-scene-line) { margin-top: 16px; font-size: 17px; }
+  :is(.lab, .mtw-shell) :is(.labbar, .mtw-labbar) { padding: 8px 4px; gap: 12px; min-height: 100px; }
+  :is(.lab, .mtw-shell) :is(.icon-button, .mtw-icon-button) { margin-left: auto; }
+  :is(.lab, .mtw-shell) :is(.concept-tab, .mtw-concept-tab) { font-size: 14px; padding: 9px 11px; }
+  :is(.lab, .mtw-shell) :is(.cause-grid, .mtw-cause-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  :is(.lab, .mtw-shell) :is(.cause-choice, .mtw-cause-choice) { min-height: 80px; }
+  :is(.lab, .mtw-shell) :is(.portrait-wrap, .mtw-portrait-wrap) { position: relative; inset: auto; width: min(230px, 75%); justify-self: center; }
+  :is(.lab, .mtw-shell) :is(.choice-row, .mtw-choice-row) { margin-top: 24px; }
+  :is(.lab, .mtw-shell) :is(.move-card, .mtw-move-card) { min-height: 160px; }
+  :is(.lab, .mtw-shell) :is(.mixes, .mtw-mixes, .match-stack, .mtw-match-stack) { grid-template-columns: 1fr; gap: 12px; }
+  :is(.lab, .mtw-shell) :is(.mix-card, .mtw-mix-card) { min-height: 0; }
+  :is(.lab, .mtw-shell) :is(.mix-side, .mtw-mix-side) { margin-top: 18px; }
+  :is(.lab, .mtw-shell) :is(.experience, .mtw-experience) :is(.match-card, .mtw-match-card) { min-height: 0; }
+  :is(.lab, .mtw-shell) :is(.match-success-visual, .mtw-match-success-visual) { opacity: .15; }
+  :is(.lab, .mtw-shell) :is(.conversion-deck, .mtw-conversion-deck) { grid-template-columns: 1fr; }
+  :is(.lab, .mtw-shell) :is(.primary-action, .mtw-primary-action) { width: 100%; text-align: left; }
+  :is(.lab, .mtw-shell) :is(.labfooter, .mtw-labfooter) { padding: 8px 0; gap: 8px; }
+  :is(.lab, .mtw-shell) :is(.concept-caption, .mtw-concept-caption) { text-align: center; }
+  :is(.lab, .mtw-shell) :is(.concept-caption, .mtw-concept-caption) span { display: none; }
+  :is(.lab, .mtw-shell) :is(.footer-button, .mtw-footer-button) { min-width: 0; padding-inline: 12px; font-size: 14px; }
+  :is(.lab, .mtw-shell) :is(.experience, .mtw-experience) :is(.stream-stage, .mtw-stream-stage) { padding-top: 310px; }
+  :is(.lab, .mtw-shell) :is(.stream-copy, .mtw-stream-copy) { width: 100%; }
+  :is(.lab, .mtw-shell) :is(.stream, .mtw-stream) { left: -5%; width: 110%; height: 62px; }
+  :is(.lab, .mtw-shell) :is(.stream-a, .mtw-stream-a) { top: 64px; }
+  :is(.lab, .mtw-shell) :is(.stream-b, .mtw-stream-b) { top: 224px; }
+  :is(.lab, .mtw-shell) :is(.collision, .mtw-collision) { left: 50%; top: 180px; width: 86px; font-size: 20px; }
+  :is(.lab, .mtw-shell) :is(.redirect-target, .mtw-redirect-target) { top: 190px; right: 12%; width: 156px; }
+}

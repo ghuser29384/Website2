@@ -4,6 +4,7 @@ import { ImmersiveWalkthrough } from "@/components/walkthrough/immersive-walkthr
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
 import "./walkthrough.css";
+import "../../../public/walkthrough-layout.css";
 
 const description = truncateDescription(
   "Try Moral Trade: redirect opposed donations, group-buy verified action, coordinate conditional funding, and close a higher-impact job's salary gap.",
