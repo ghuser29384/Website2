@@ -1,0 +1,76 @@
+name: Normativity database and scheduled compatibility only
+on:
+  push:
+    branches: [build/cloudflare-db-jobs-20261020]
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-db-jobs-20261020
+  cancel-in-progress: false
+jobs:
+  persistence-and-jobs:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/cloudflare-db-jobs-20261020'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CF_CANDIDATE: normativity
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - name: Verify exact source and automatic deployment block
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = a4adf0cbb7029a6316a34478bd27dffad22cbca4
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code HEAD^ HEAD -- src public package.json package-lock.json next.config.ts vercel.ts scripts/vercel-project-config.mjs
+          git diff --check HEAD^ HEAD
+          node --input-type=module -e 'import assert from "node:assert/strict"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false);'
+      - uses: actions/checkout@v4
+        with:
+          repository: ghuser29384/WebsiteBuilding2
+          ref: 4ee214324976cf579a77bde4788551cfe32f94fb
+          path: compatibility-inputs/normativity
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/node_modules/
+            !/server/node_modules/
+            !/client/node_modules/
+          sparse-checkout-cone-mode: false
+      - name: Prepare pinned dependencies on disposable runner
+        run: bash scripts/cloudflare-db-jobs/run.sh prepare
+      - name: Isolated PostgreSQL, existing checks and scheduled persistence test
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            exec runuser -u runner -- env -i PATH="$1" HOME="$2/home" CF_CANDIDATE=normativity \
+              CF_RUN_ROOT="$2" CF_OFFLINE_NAMESPACE=1 \
+              bash "$2/harness/run.sh" offline
+          ' _ "$PATH" "$RUNNER_TEMP/cloudflare-db-jobs"
+      - name: Report bounded results
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Synthetic database and scheduled compatibility checks'
+            echo 'No deployments, live database/provider calls, credentials or full-feature acceptance.'
+            for name in runtime-result.json tsa-runtime-result.json database-runtime-result.json; do
+              result="$RUNNER_TEMP/cloudflare-db-jobs/$name"
+              if test -f "$result"; then
+                echo '```json'
+                cat "$result"
+                echo '```'
+              else
+                echo "$name: NOT TESTED; an earlier prerequisite failed."
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

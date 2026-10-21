@@ -1,0 +1,1238 @@
+diff --git a/cloudflare/.gitignore b/cloudflare/.gitignore
+new file mode 100644
+index 0000000..4aa37da
+--- /dev/null
++++ b/cloudflare/.gitignore
+@@ -0,0 +1,6 @@
++node_modules/
++generated/
++dist/
++schema.prisma
++.wrangler/
++.dev.vars*
+diff --git a/cloudflare/README.md b/cloudflare/README.md
+new file mode 100644
+index 0000000..ef95f07
+--- /dev/null
++++ b/cloudflare/README.md
+@@ -0,0 +1,54 @@
++# Normativity Workers candidate — not deployment-ready
++
++Based on WebsiteBuilding2 `4ee214324976cf579a77bde4788551cfe32f94fb`.
++All changes are confined to `cloudflare/`; original routes, models, SQL migrations,
++Vercel configuration and dependency lockfiles remain unchanged.
++
++The preceding candidate passed the 20 October timestamp test: 14 cryptographic
++cases in Node and Workers, 27 adapter/contract checks and 8 HTTP checks. Those
++results do not prove the additions in this candidate.
++
++## Current additions
++
++- `scheduled.mjs` invokes the existing audit handler at its existing 08:00 UTC
++  schedule, inside a fresh database scope. Handler errors reject the scheduled
++  event. No new retry, retention, batch-size or timestamp policy is added.
++- The Workers Express app serializes BigInt as decimal strings. This avoids the
++  existing cron handler failing JSON serialization after writing a checkpoint.
++  Ordinary JSON values and application route logic are preserved.
++- `withDatabase` accepts an explicit connection string for scheduled events;
++  HTTP request behavior and the request-scoped PostgreSQL adapter are retained.
++- A separate synthetic database test Worker exercises the same Prisma adapter;
++  it is never included in the application Worker and requires a fixed local
++  synthetic connection. Its output is not evidence until the approved cloud
++  test actually runs.
++
++The standalone Node-only COMMITMENT_JOBS interval was not active through the
++Vercel entrypoint. If explicitly enabled in a future Workers configuration, the
++scheduled adapter refuses to silently discard it; its interval needs mapping.
++
++## Validation and proposed next test
++
++37 local built-in Node tests pass. No new dependencies are installed locally.
++The prepared GitHub job would use PostgreSQL 16 already on the disposable runner,
++apply the original migrations only to an empty synthetic database, and exercise
++real transactions, rollback, JSON/BigInt/bytea, signed audit rows, private reads,
++process restarts, scheduled checkpoints, connection cleanup and database outage.
++Tests and previews run in a network namespace containing only loopback. The
++application scheduling test leaves TSA_URL unset and verifies the existing skip
++policy; the previous separate cryptographic tests are retained. This does not
++prove live TSA plus database operation end to end.
++
++Keep the new dependency versions identical to the previous test. Runner installs
++and the isolated push require approval. Do not execute the repository root
++postinstall, use any real credentials, deploy a Worker or mutate hosted data.
++
++## Remaining acceptance boundaries
++
++Hosted PostgreSQL TLS/pooler/version/permissions and quotas are not represented by
++local PostgreSQL alone. The deployed Supabase connection method must be verified
++without exposing credentials before any migration. Do not switch to D1 or change
++the existing database. Production proof/storage/provider and frontend flows,
++real signing-key algorithms, scheduler delivery/overlap/retries and billed CPU
++still need verification. Synthetic local success cannot establish Free hosting
++fit. Keep current hosting and plans.
+diff --git a/cloudflare/auth-negative.test.mjs b/cloudflare/auth-negative.test.mjs
+new file mode 100644
+index 0000000..e727eb7
+--- /dev/null
++++ b/cloudflare/auth-negative.test.mjs
+@@ -0,0 +1,44 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { readFile } from 'node:fs/promises';
++import { stripTypeScriptTypes } from 'node:module';
++import { bundleJoseImport } from './transforms.mjs';
++
++// Execute the actual prepared auth middleware without installing Express/JOSE.
++// These negative cases never load JOSE; signed-token checks need the cloud run.
++const source = await readFile(new URL('../server/src/middleware/auth.ts', import.meta.url), 'utf8');
++const javascript = stripTypeScriptTypes(bundleJoseImport(source));
++const { requireAuth } = await import('data:text/javascript;base64,' + Buffer.from(javascript).toString('base64'));
++
++for (const [name, headers] of [
++  ['missing credentials', {}],
++  ['forged development administrator headers', { 'x-user-id': 'synthetic-admin', 'x-user-role': 'admin' }],
++  ['non-Bearer authorization', { authorization: 'Basic synthetic', 'x-user-id': 'synthetic-admin' }],
++]) {
++  test('production auth rejects ' + name, async () => {
++    const keys = ['NODE_ENV', 'ALLOW_DEVELOPMENT_AUTH_HEADERS'];
++    const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
++    process.env.NODE_ENV = 'production';
++    process.env.ALLOW_DEVELOPMENT_AUTH_HEADERS = 'false';
++    try {
++      const result = await new Promise((resolve, reject) => {
++        const timeout = setTimeout(() => reject(new Error('Auth did not respond')), 1000);
++        const response = {
++          status(value) { this.code = value; return this; },
++          json(body) { clearTimeout(timeout); resolve({ code: this.code, body }); },
++        };
++        requireAuth({ header: key => headers[key] }, response, () => {
++          clearTimeout(timeout);
++          reject(new Error('Unauthorized request reached the route'));
++        });
++      });
++      assert.equal(result.code, 401);
++      assert.match(result.body.error, /Authentication required/);
++    } finally {
++      for (const key of keys) {
++        if (previous[key] === undefined) delete process.env[key];
++        else process.env[key] = previous[key];
++      }
++    }
++  });
++}
+diff --git a/cloudflare/build.mjs b/cloudflare/build.mjs
+new file mode 100644
+index 0000000..00eb8e6
+--- /dev/null
++++ b/cloudflare/build.mjs
+@@ -0,0 +1,79 @@
++import assert from 'node:assert/strict';
++import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
++import { resolve, dirname, basename } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { builtinModules, createRequire } from 'node:module';
++import { createHash } from 'node:crypto';
++import { execFileSync } from 'node:child_process';
++import { derivePrismaSchema, bundleJoseImport, bundleAppEntrypoint, bundleTimestampService } from './transforms.mjs';
++
++const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '..');
++assert.equal(process.env.CF_COMPAT_TEST, '1', 'Compatibility test context required');
++assert.ok(process.argv.slice(2).every(x => x === '--generate-only' || x === '--bundle-only'));
++for (const key of ['DATABASE_URL', 'DIRECT_URL']) {
++  const url = new URL(process.env[key] || '');
++  assert.equal(url.protocol, 'postgresql:');
++  assert.equal(url.hostname, '127.0.0.1');
++  assert.equal(url.port, '15432');
++  assert.equal(url.pathname, '/synthetic');
++}
++if (!process.argv.includes('--bundle-only')) {
++  const schema = await readFile(resolve(root, 'server/prisma/schema.prisma'), 'utf8');
++  await writeFile(resolve(here, 'schema.prisma'), derivePrismaSchema(schema));
++  execFileSync(process.execPath, [resolve(root, 'server/node_modules/prisma/build/index.js'),
++    'generate', '--schema', resolve(here, 'schema.prisma')], { cwd: root, stdio: 'inherit' });
++}
++if (process.argv.includes('--generate-only')) process.exit(0);
++
++const { build } = await import('esbuild');
++const builtins = new Set(builtinModules.map(x => x.replace(/^node:/, '')));
++const wasm = new Map(), transformed = new Set();
++const overrides = new Map([
++  [resolve(root, 'server/src/middleware/auth.ts'), bundleJoseImport],
++  [resolve(root, 'server/src/services/cryptoSigning.ts'), bundleJoseImport],
++  [resolve(root, 'server/src/app.ts'), bundleAppEntrypoint],
++  [resolve(root, 'server/src/services/tsa.ts'), bundleTimestampService],
++]);
++await mkdir(resolve(here, 'dist'), { recursive: true });
++const result = await build({
++  absWorkingDir: root,
++  entryPoints: { worker: resolve(here, 'worker.ts'), 'db-test-worker': resolve(here, 'db-test-worker.ts') },
++  outdir: resolve(here, 'dist'), outExtension: { '.js': '.mjs' },
++  bundle: true, format: 'esm', platform: 'node', target: 'es2022',
++  mainFields: ['module', 'main'], conditions: ['workerd', 'worker', 'node'],
++  external: ['cloudflare:*', 'pg-native'], metafile: true,
++  banner: { js: 'import { createRequire as __nodeCreateRequire } from "node:module"; const require = __nodeCreateRequire(import.meta.url);' },
++  plugins: [{ name: 'preserve-server-behavior-on-workers', setup(builder) {
++    builder.onResolve({ filter: /^(node:)?[a-z_]+(?:\/[a-z_]+)?$/ }, args => {
++      const name = args.path.replace(/^node:/, '');
++      if (builtins.has(name)) return { path: 'node:' + name, external: true };
++    });
++    builder.onResolve({ filter: /(^|\/)db\/prisma(?:\.ts)?$/ }, args => {
++      const path = resolve(args.resolveDir, args.path).replace(/\.ts$/, '');
++      if (path === resolve(root, 'server/src/db/prisma')) return { path: resolve(here, 'prisma.ts') };
++    });
++    builder.onLoad({ filter: /\.ts$/ }, async args => {
++      const transform = overrides.get(args.path);
++      if (transform) {
++        transformed.add(args.path);
++        return { contents: transform(await readFile(args.path, 'utf8')), loader: 'ts', resolveDir: dirname(args.path) };
++      }
++    });
++    builder.onResolve({ filter: /\.wasm(?:\?module)?$/ }, args => {
++      const specifier = args.path.replace(/\?module$/, '');
++      const path = createRequire(resolve(args.resolveDir, '__resolve.cjs')).resolve(specifier);
++      const name = createHash('sha256').update(path).digest('hex').slice(0, 12) + '-' + basename(path);
++      wasm.set(path, name);
++      return { path: './' + name, external: true };
++    });
++  } }],
++});
++assert.equal(transformed.size, overrides.size, 'Every known runtime adaptation must be included');
++const inputs = Object.keys(result.metafile.inputs);
++assert.ok(inputs.some(x => /iconv-lite\/lib\/streams\.js$/.test(x)), 'Real encoding streams must be retained');
++assert.ok(!inputs.some(x => /server\/src\/db\/prisma\.ts$/.test(x)), 'Native Prisma singleton leaked into Workers');
++assert.ok(!inputs.some(x => /\.node$/.test(x)), 'Native addon in Workers bundle');
++for (const [path, name] of wasm) await copyFile(path, resolve(here, 'dist', name));
++await writeFile(resolve(here, 'dist/build-meta.json'), JSON.stringify(result.metafile, null, 2) + '\n');
++console.log(JSON.stringify({ status: 'BUNDLED_NOT_FEATURE_ACCEPTANCE', wasmModules: wasm.size,
++  originalApplicationFilesModified: 0, timestampProofCompatibility: 'CANDIDATE_REQUIRES_CRYPTO_AND_WORKERS_PROOF' }));
+diff --git a/cloudflare/db-test-worker.ts b/cloudflare/db-test-worker.ts
+new file mode 100644
+index 0000000..7d64c80
+--- /dev/null
++++ b/cloudflare/db-test-worker.ts
+@@ -0,0 +1,36 @@
++// Separate synthetic test entry. Never included in the application Worker.
++import { prisma, withDatabase } from "./prisma";
++export default {
++  async fetch(request: Request) {
++    const url = new URL(request.url);
++    if (!['127.0.0.1', 'localhost'].includes(url.hostname) || url.pathname !== '/synthetic-database') return new Response(null, { status: 404 });
++    if (process.env.CF_COMPAT_TEST !== '1' || process.env.DATABASE_URL !== 'postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic') return new Response(null, { status: 403 });
++    try {
++      return await withDatabase(async () => {
++        const rollbackId = crypto.randomUUID();
++        try {
++          await prisma.$transaction(async tx => {
++            await tx.user.create({ data: { id: rollbackId, handle: `rollback_${rollbackId}` } });
++            throw new Error('intentional synthetic rollback');
++          });
++        } catch (error) {
++          if (!(error instanceof Error) || error.message !== 'intentional synthetic rollback') throw error;
++        }
++        if (await prisma.user.findUnique({ where: { id: rollbackId } })) throw new Error('rollback persisted');
++        const sequence = 9007199254740993n, bytes = new Uint8Array([0, 1, 127, 128, 255, 0]);
++        const created = await prisma.$transaction(async tx => {
++          const checkpoint = await tx.auditCheckpoint.create({ data: { fromSequence: sequence, toSequence: sequence, treeSize: 1, rootHash: 'synthetic-binary-roundtrip' } });
++          await tx.auditTimestamp.create({ data: {
++            checkpointId: checkpoint.id, rootHash: checkpoint.rootHash, tsaUrl: 'https://synthetic.invalid',
++            timestampTokenDer: bytes, verifiedAt: null,
++          } });
++          return checkpoint.id;
++        });
++        const row = await prisma.auditCheckpoint.findUniqueOrThrow({ where: { id: created }, include: { timestamp: true } });
++        if (row.fromSequence !== sequence || row.toSequence !== sequence) throw new Error('BigInt changed');
++        if (!row.timestamp || row.timestamp.verifiedAt !== null || String(row.timestamp.timestampTokenDer) !== String(bytes)) throw new Error('binary metadata changed');
++        return Response.json({ status: 'PASS', rollback: true, bigint: true, binary: true, unverifiedRemainsNull: true });
++      });
++    } catch { return Response.json({ status: 'FAIL' }, { status: 500 }); }
++  },
++};
+diff --git a/cloudflare/package.json b/cloudflare/package.json
+new file mode 100644
+index 0000000..426929a
+--- /dev/null
++++ b/cloudflare/package.json
+@@ -0,0 +1,22 @@
++{
++  "name": "normativity-cloudflare-compat-only",
++  "private": true,
++  "type": "module",
++  "scripts": {
++    "test": "node --test request-database.test.mjs transforms.test.mjs auth-negative.test.mjs tsa-client.test.mjs tsa-batch.test.mjs scheduled.test.mjs",
++    "build": "node build.mjs",
++    "preview": "wrangler dev --local --config wrangler.compat.json",
++    "test:tsa:crypto": "node --test tsa-verify.test.mjs"
++  },
++  "dependencies": {
++    "@prisma/client": "6.19.0",
++    "@prisma/adapter-pg": "6.19.0",
++    "pg": "8.16.3",
++    "pkijs": "3.4.2",
++    "asn1js": "3.0.6"
++  },
++  "devDependencies": {
++    "esbuild": "0.28.2",
++    "wrangler": "4.151.2"
++  }
++}
+diff --git a/cloudflare/prisma.ts b/cloudflare/prisma.ts
+new file mode 100644
+index 0000000..fa04505
+--- /dev/null
++++ b/cloudflare/prisma.ts
+@@ -0,0 +1,14 @@
++import { PrismaClient } from "./generated/client";
++import { PrismaPg } from "@prisma/adapter-pg";
++import { createRequestDatabase } from "./request-database.mjs";
++
++// Selected only by the Workers build alias. The Vercel singleton is untouched.
++const database = createRequestDatabase((connectionString: string) =>
++  new PrismaClient({ adapter: new PrismaPg({ connectionString }) }),
++);
++
++export const prisma = database.prisma as PrismaClient;
++export const isDatabaseConfigured = database.isDatabaseConfigured;
++export function withDatabase<T>(operation: () => Promise<T>, connectionString = process.env.DATABASE_URL): Promise<T> {
++  return database.run(connectionString, operation);
++}
+diff --git a/cloudflare/request-database.mjs b/cloudflare/request-database.mjs
+new file mode 100644
+index 0000000..0677c13
+--- /dev/null
++++ b/cloudflare/request-database.mjs
+@@ -0,0 +1,33 @@
++import { AsyncLocalStorage } from 'node:async_hooks';
++
++// A Workers request must not reuse another request's sockets/client. Keep the
++// existing route/service API while binding its client to the current response.
++export function createRequestDatabase(createClient) {
++  const contexts = new AsyncLocalStorage();
++  const current = () => {
++    const context = contexts.getStore();
++    if (!context) throw new Error('Database access outside a request');
++    if (!context.connectionString) throw new Error('DATABASE_URL is not configured');
++    context.client ??= createClient(context.connectionString);
++    return context.client;
++  };
++  const prisma = new Proxy({}, {
++    get(_target, key) {
++      const client = current();
++      const value = Reflect.get(client, key, client);
++      return typeof value === 'function' ? value.bind(client) : value;
++    },
++  });
++  return {
++    prisma,
++    isDatabaseConfigured: () => Boolean(contexts.getStore()?.connectionString),
++    async run(connectionString, operation) {
++      if (contexts.getStore()) throw new Error('Nested database scope is unsupported');
++      const context = { connectionString, client: undefined };
++      return contexts.run(context, async () => {
++        try { return await operation(); }
++        finally { if (context.client) await context.client.$disconnect(); }
++      });
++    },
++  };
++}
+diff --git a/cloudflare/request-database.test.mjs b/cloudflare/request-database.test.mjs
+new file mode 100644
+index 0000000..0154d4a
+--- /dev/null
++++ b/cloudflare/request-database.test.mjs
+@@ -0,0 +1,51 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { createRequestDatabase } from './request-database.mjs';
++
++function harness() {
++  const created = [], closed = [];
++  const scope = createRequestDatabase(url => {
++    const client = { url, read() { return this.url; }, async $disconnect() { closed.push(this.url); } };
++    created.push(client);
++    return client;
++  });
++  return { scope, created, closed };
++}
++
++test('does not create connections for requests that never use the database', async () => {
++  const h = harness();
++  await h.scope.run('', async () => assert.equal(h.scope.isDatabaseConfigured(), false));
++  assert.equal(h.created.length, 0);
++});
++test('database use outside a request fails closed', () => {
++  const h = harness();
++  assert.throws(() => h.scope.prisma.read(), /outside a request/);
++  assert.equal(h.created.length, 0);
++});
++test('missing configuration fails on use without constructing a client', async () => {
++  const h = harness();
++  await assert.rejects(h.scope.run('', async () => h.scope.prisma.read()), /not configured/);
++  assert.equal(h.created.length, 0);
++});
++test('overlapping requests retain separate clients and method receivers', async () => {
++  const h = harness();
++  let release; const gate = new Promise(resolve => { release = resolve; });
++  const a = h.scope.run('first', async () => {
++    assert.equal(h.scope.prisma.read(), 'first'); await gate;
++    assert.equal(h.scope.prisma.read(), 'first');
++  });
++  await h.scope.run('second', async () => assert.equal(h.scope.prisma.read(), 'second'));
++  release(); await a;
++  assert.deepEqual(h.closed, ['second', 'first']);
++  assert.equal(h.created.length, 2);
++});
++test('an operation failure still disconnects its client', async () => {
++  const h = harness();
++  await assert.rejects(h.scope.run('failure', async () => { h.scope.prisma.read(); throw new Error('synthetic'); }), /synthetic/);
++  assert.deepEqual(h.closed, ['failure']);
++});
++test('nested scopes fail rather than silently sharing the wrong connection', async () => {
++  const h = harness();
++  await assert.rejects(h.scope.run('outer', () => h.scope.run('inner', async () => {})), /Nested/);
++  assert.equal(h.created.length, 0);
++});
+diff --git a/cloudflare/scheduled.mjs b/cloudflare/scheduled.mjs
+new file mode 100644
+index 0000000..387c000
+--- /dev/null
++++ b/cloudflare/scheduled.mjs
+@@ -0,0 +1,24 @@
++// Reuse the existing audit handler, including its metrics and timestamp policy.
++// This adapter makes a failed job reject the Workers scheduled invocation.
++export const AUDIT_CRON = '0 8 * * *';
++export const jsonReplacer = (_key, value) => typeof value === 'bigint' ? value.toString() : value;
++
++export function createScheduledAudit({ handler, withDatabase }) {
++  return async function scheduled(controller, env) {
++    if (controller.cron !== AUDIT_CRON) throw new Error('Unknown audit schedule');
++    if (!env.CRON_SECRET) throw new Error('CRON_SECRET is required');
++    if (!env.DATABASE_URL) throw new Error('DATABASE_URL is required');
++    // The standalone Node interval is not a Vercel cron. Do not silently drop
++    // an explicitly enabled additional schedule in a future migration.
++    if (env.COMMITMENT_JOBS === 'true') throw new Error('Standalone interval requires a separate schedule mapping');
++    return withDatabase(async () => {
++      let status = 200, sent = false;
++      const response = {
++        status(code) { status = code; return this; },
++        json(body) { JSON.stringify(body, jsonReplacer); sent = true; return this; },
++      };
++      await handler({ method: 'GET', headers: { authorization: `Bearer ${env.CRON_SECRET}` } }, response);
++      if (!sent || status < 200 || status >= 300) throw new Error(`Audit job failed (${status})`);
++    }, env.DATABASE_URL);
++  };
++}
+diff --git a/cloudflare/scheduled.test.mjs b/cloudflare/scheduled.test.mjs
+new file mode 100644
+index 0000000..fda1023
+--- /dev/null
++++ b/cloudflare/scheduled.test.mjs
+@@ -0,0 +1,54 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { readFile } from 'node:fs/promises';
++import { createScheduledAudit, AUDIT_CRON, jsonReplacer } from './scheduled.mjs';
++import { createRequestDatabase } from './request-database.mjs';
++const env = { CRON_SECRET: 'synthetic-only', DATABASE_URL: 'synthetic-db', COMMITMENT_JOBS: 'false' };
++const event = { cron: AUDIT_CRON };
++
++test('audit trigger matches the existing Vercel schedule and test configuration', async () => {
++  const vercel = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url)));
++  const wrangler = JSON.parse(await readFile(new URL('./wrangler.compat.json', import.meta.url)));
++  assert.deepEqual(vercel.crons, [{ path: '/api/cron/commitment-audit', schedule: AUDIT_CRON }]);
++  assert.deepEqual(wrangler.triggers.crons, [AUDIT_CRON]);
++});
++test('serialization retains exact large integers and other JSON behavior', () => {
++  const big = 9007199254740993n;
++  assert.throws(() => JSON.stringify({ sequence: big }), /BigInt/);
++  assert.deepEqual(JSON.parse(JSON.stringify({ sequence: big, nested: [1n], date: new Date('2026-01-01Z'), ok: true }, jsonReplacer)),
++    { sequence: '9007199254740993', nested: ['1'], date: '2026-01-01T00:00:00.000Z', ok: true });
++});
++test('scheduled execution uses the unchanged handler inside a fresh database scope', async () => {
++  const events = [];
++  const scope = createRequestDatabase(url => ({ url, touch() { events.push(this.url); }, async $disconnect() { events.push('closed'); } }));
++  const job = createScheduledAudit({
++    withDatabase: (fn, url) => scope.run(url, fn),
++    handler: async (req, res) => {
++      assert.deepEqual(req, { method: 'GET', headers: { authorization: 'Bearer synthetic-only' } });
++      scope.prisma.touch();
++      res.status(200).json({ checkpoint: { sequence: 2n } });
++    },
++  });
++  await job(event, env); await job(event, env);
++  assert.deepEqual(events, ['synthetic-db', 'closed', 'synthetic-db', 'closed']);
++});
++for (const [label, controller, bindings] of [
++  ['unknown schedule', { cron: '* * * * *' }, env],
++  ['missing secret', event, { ...env, CRON_SECRET: '' }],
++  ['missing database', event, { ...env, DATABASE_URL: '' }],
++  ['unmapped standalone interval', event, { ...env, COMMITMENT_JOBS: 'true' }],
++]) test(label + ' fails before any database work', async () => {
++  let opened = false;
++  const job = createScheduledAudit({ withDatabase: () => { opened = true; }, handler: () => {} });
++  await assert.rejects(job(controller, bindings)); assert.equal(opened, false);
++});
++for (const mode of ['http-error', 'throw', 'missing-response']) test(mode + ' rejects the job and releases the client', async () => {
++  let closed = false;
++  const scope = createRequestDatabase(() => ({ touch() {}, async $disconnect() { closed = true; } }));
++  const job = createScheduledAudit({ withDatabase: (fn, url) => scope.run(url, fn), handler: async (_req, res) => {
++    scope.prisma.touch();
++    if (mode === 'throw') throw new Error('synthetic');
++    if (mode === 'http-error') res.status(500).json({ error: 'synthetic' });
++  } });
++  await assert.rejects(job(event, env)); assert.equal(closed, true);
++});
+diff --git a/cloudflare/transforms.mjs b/cloudflare/transforms.mjs
+new file mode 100644
+index 0000000..9159e36
+--- /dev/null
++++ b/cloudflare/transforms.mjs
+@@ -0,0 +1,37 @@
++import { createHash } from 'node:crypto';
++// Build-only adaptations. Original Vercel source and database models stay intact.
++export function derivePrismaSchema(source) {
++  const original = 'generator client {\n  provider = "prisma-client-js"\n}';
++  if (source.split(original).length !== 2) throw new Error('Prisma generator changed; review required');
++  return source.replace(original, `generator client {
++  provider     = "prisma-client"
++  output       = "./generated"
++  engineType   = "client"
++  runtime      = "workerd"
++  moduleFormat = "esm"
++}`);
++}
++
++export function bundleJoseImport(source) {
++  const original = 'new Function("specifier", "return import(specifier)")("jose")';
++  if (source.split(original).length !== 2) throw new Error('JOSE import changed; review required');
++  return source.replace(original, 'import("jose")');
++}
++
++export function bundleAppEntrypoint(source) {
++  const original = 'if (require.main === module) {';
++  if (source.split(original).length !== 2) throw new Error('Server entrypoint changed; review required');
++  return source.replace(original, 'if (false) { // Not the standalone Node entrypoint.');
++}
++
++// Fail on source drift before replacing the platform-specific request function.
++export function bundleTimestampService(source) {
++  if (createHash('sha256').update(source).digest('hex') !== '9c4ed3296dd0331870b6108e2a055d46ffcfea9e60862c64fcab558f3607bbe9') {
++    throw new Error('Timestamp service changed; review required');
++  }
++  const start = source.indexOf('export const timestampPendingCheckpoints');
++  return 'import type { PrismaClient } from "@prisma/client";\n' +
++    'import { recordCommitmentMetric } from "./monitoring";\n' +
++    'import { requestRfc3161Timestamp } from "../../../cloudflare/tsa";\n' +
++    'export { requestRfc3161Timestamp };\n\n' + source.slice(start);
++}
+diff --git a/cloudflare/transforms.test.mjs b/cloudflare/transforms.test.mjs
+new file mode 100644
+index 0000000..4c75337
+--- /dev/null
++++ b/cloudflare/transforms.test.mjs
+@@ -0,0 +1,28 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { readFile } from 'node:fs/promises';
++import { derivePrismaSchema, bundleJoseImport, bundleAppEntrypoint } from './transforms.mjs';
++
++test('Workers generator preserves every database model and datasource byte', async () => {
++  const original = await readFile(new URL('../server/prisma/schema.prisma', import.meta.url), 'utf8');
++  const candidate = derivePrismaSchema(original);
++  const removeGenerator = s => s.replace(/generator client \{[^}]+\}/, '');
++  assert.equal(removeGenerator(candidate), removeGenerator(original));
++  assert.match(candidate, /engineType\s*= "client"/);
++  assert.match(candidate, /runtime\s*= "workerd"/);
++});
++for (const path of ['middleware/auth.ts', 'services/cryptoSigning.ts']) {
++  test('JOSE becomes statically bundleable without changing verification/signing: ' + path, async () => {
++    const source = await readFile(new URL('../server/src/' + path, import.meta.url), 'utf8');
++    const candidate = bundleJoseImport(source);
++    assert.equal(candidate.replace('return import("jose");', 'return new Function("specifier", "return import(specifier)")("jose");'), source);
++  });
++}
++test('the Workers bundle does not launch the standalone listener or interval', async () => {
++  const source = await readFile(new URL('../server/src/app.ts', import.meta.url), 'utf8');
++  const candidate = bundleAppEntrypoint(source);
++  assert.equal(candidate.replace('if (false) { // Not the standalone Node entrypoint.', 'if (require.main === module) {'), source);
++});
++test('source drift stops all build transformations', () => {
++  for (const transform of [derivePrismaSchema, bundleJoseImport, bundleAppEntrypoint]) assert.throws(() => transform(''), /review required/);
++});
+diff --git a/cloudflare/tsa-batch.test.mjs b/cloudflare/tsa-batch.test.mjs
+new file mode 100644
+index 0000000..5409458
+--- /dev/null
++++ b/cloudflare/tsa-batch.test.mjs
+@@ -0,0 +1,57 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { readFile } from 'node:fs/promises';
++import { stripTypeScriptTypes } from 'node:module';
++import { bundleTimestampService } from './transforms.mjs';
++
++const source = await readFile(new URL('../server/src/services/tsa.ts', import.meta.url), 'utf8');
++const transformed = bundleTimestampService(source);
++const batch = transformed.slice(transformed.indexOf('export const timestampPendingCheckpoints'));
++function loadBatch(request, metric) {
++  const js = stripTypeScriptTypes(batch).replace('export const ', 'const ');
++  return new Function('requestRfc3161Timestamp', 'recordCommitmentMetric', js + '\nreturn timestampPendingCheckpoints;')(request, metric);
++}
++async function withEnv(values, operation) {
++  const names = ['TSA_URL', 'TSA_CA_FILE', 'TSA_CA_PEM', 'TSA_BATCH_SIZE', 'TSA_CERT_FINGERPRINT'];
++  const previous = Object.fromEntries(names.map(n => [n, process.env[n]]));
++  try {
++    for (const n of names) { if (values[n] === undefined) delete process.env[n]; else process.env[n] = values[n]; }
++    await operation();
++  } finally { for (const n of names) { if (previous[n] === undefined) delete process.env[n]; else process.env[n] = previous[n]; } }
++}
++
++test('Workers transform preserves entire checkpoint loop byte for byte and rejects drift', () => {
++  assert.equal(batch, source.slice(source.indexOf('export const timestampPendingCheckpoints')));
++  assert.doesNotMatch(transformed, /child_process|mkdtemp|openssl/);
++  assert.throws(() => bundleTimestampService(source + '\n'), /review required/);
++});
++test('unconfigured timestamp job remains skipped without database access', async () => {
++  await withEnv({}, async () => {
++    const result = await loadBatch(() => assert.fail('no request'), () => {})({});
++    assert.equal(result.timestamped, 0); assert.match(result.skipped, /not configured/);
++  });
++});
++for (const verified of [false, true]) test('batch preserves binary records, metadata and verified flag: ' + verified, async () => {
++  await withEnv({ TSA_URL: 'https://tsa.invalid', TSA_BATCH_SIZE: '2', TSA_CERT_FINGERPRINT: 'synthetic-metadata',
++    ...(verified ? { TSA_CA_PEM: 'synthetic-ca' } : {}) }, async () => {
++    const records = [], metrics = []; const binary = Buffer.from([0, 255, 17, 128]);
++    const result = await loadBatch(async root => { assert.equal(root, 'ab'.repeat(32)); return binary; }, (...m) => metrics.push(m))({
++      auditCheckpoint: { findMany: async query => {
++        assert.deepEqual(query, { where: { timestamp: null }, orderBy: { createdAt: 'asc' }, take: 2 });
++        return [{ id: 'synthetic-checkpoint', rootHash: 'ab'.repeat(32) }];
++      } }, auditTimestamp: { create: async value => records.push(value.data) },
++    });
++    assert.deepEqual(result, { timestamped: 1 }); assert.equal(records.length, 1);
++    assert.deepEqual(Buffer.from(records[0].timestampTokenDer), binary);
++    assert.equal(Boolean(records[0].verifiedAt), verified);
++    assert.equal(records[0].certificateFingerprint, 'synthetic-metadata');
++    assert.equal(metrics[0][1].verified, verified);
++  });
++});
++test('failed proof prevents persistence and success metrics', async () => {
++  await withEnv({ TSA_URL: 'https://tsa.invalid', TSA_CA_PEM: 'synthetic-ca' }, async () => {
++    const job = loadBatch(async () => { throw new Error('invalid signature'); }, () => assert.fail('no success metric'));
++    await assert.rejects(job({ auditCheckpoint: { findMany: async () => [{ id: 'synthetic', rootHash: 'ab'.repeat(32) }] },
++      auditTimestamp: { create: async () => assert.fail('no persistence') } }), /invalid signature/);
++  });
++});
+diff --git a/cloudflare/tsa-client.mjs b/cloudflare/tsa-client.mjs
+new file mode 100644
+index 0000000..f20b000
+--- /dev/null
++++ b/cloudflare/tsa-client.mjs
+@@ -0,0 +1,50 @@
++import { Buffer } from 'node:buffer';
++
++const sha256Identifier = Buffer.from('300d06096086480165030402010500', 'hex');
++const der = (tag, value) => {
++  if (value.length >= 128) throw new Error('Unexpected timestamp request length');
++  return Buffer.concat([Buffer.from([tag, value.length]), value]);
++};
++
++// rootHash is already SHA-256. Hashing it again would timestamp different data.
++export function createTimestampQuery(rootHash, nonceBytes = crypto.getRandomValues(new Uint8Array(8))) {
++  if (typeof rootHash !== 'string' || !/^[\da-f]{64}$/i.test(rootHash)) {
++    throw new Error('Timestamp requires a 32-byte SHA-256 hex digest.');
++  }
++  if (!(nonceBytes instanceof Uint8Array) || nonceBytes.length !== 8) throw new Error('Invalid timestamp nonce.');
++  let nonce = Buffer.from(nonceBytes);
++  while (nonce.length > 1 && nonce[0] === 0) nonce = nonce.subarray(1);
++  if (nonce[0] & 128) nonce = Buffer.concat([Buffer.from([0]), nonce]);
++  return der(0x30, Buffer.concat([
++    Buffer.from([2, 1, 1]),
++    der(0x30, Buffer.concat([sha256Identifier, der(4, Buffer.from(rootHash, 'hex'))])),
++    der(2, nonce),
++    Buffer.from([1, 1, 255]),
++  ]));
++}
++
++export async function requestTimestamp(rootHash, {
++  env = process.env, fetchImpl = globalThis.fetch,
++  readCaFile, verifyResponse, createQuery = createTimestampQuery,
++} = {}) {
++  if (!env.TSA_URL) throw new Error('TSA_URL is not configured.');
++  const query = createQuery(rootHash);
++  if (!fetchImpl) throw new Error('Global fetch is not available for TSA requests.');
++  // Preserve FILE precedence, PEM escaped-newline support and unverified mode.
++  // Read a configured trust source before contacting the TSA; never fall back
++  // silently when that source is missing. Proof parsing validates its contents.
++  const verify = Boolean(env.TSA_CA_FILE || env.TSA_CA_PEM);
++  const pem = env.TSA_CA_FILE
++    ? await readCaFile(env.TSA_CA_FILE)
++    : env.TSA_CA_PEM?.replace(/\\n/g, '\n');
++  if (verify && (!pem?.trim() || typeof verifyResponse !== 'function')) {
++    throw new Error('Timestamp trust configuration is unavailable.');
++  }
++  const response = await fetchImpl(env.TSA_URL, {
++    method: 'POST', headers: { 'Content-Type': 'application/timestamp-query' }, body: query,
++  });
++  if (!response.ok) throw new Error(`TSA request failed with HTTP ${response.status}`);
++  const token = Buffer.from(await response.arrayBuffer());
++  if (verify) await verifyResponse({ token, query, pem });
++  return token;
++}
+diff --git a/cloudflare/tsa-client.test.mjs b/cloudflare/tsa-client.test.mjs
+new file mode 100644
+index 0000000..ef27a76
+--- /dev/null
++++ b/cloudflare/tsa-client.test.mjs
+@@ -0,0 +1,65 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { createTimestampQuery, requestTimestamp } from './tsa-client.mjs';
++
++const rootHash = '01'.repeat(32);
++const token = Buffer.from('synthetic-timestamp-response');
++const response = { ok: true, arrayBuffer: async () => token };
++
++test('request carries the existing digest, a positive nonce and certReq', () => {
++  const query = createTimestampQuery(rootHash, Uint8Array.from([128, 1, 2, 3, 4, 5, 6, 7]));
++  assert.ok(query.includes(Buffer.from(rootHash, 'hex')));
++  assert.ok(query.includes(Buffer.from('0209008001020304050607', 'hex')));
++  assert.equal(query.subarray(-3).toString('hex'), '0101ff');
++});
++test('request rejects malformed digests before fetching', async () => {
++  for (const root of ['', 'gg'.repeat(32), 'ab'.repeat(31), null]) {
++    await assert.rejects(requestTimestamp(root, { env: { TSA_URL: 'https://tsa.invalid' },
++      fetchImpl: () => assert.fail('fetch must not run') }), /SHA-256/);
++  }
++});
++test('nonces are fresh and zero bytes are valid positive integers', () => {
++  assert.notDeepEqual(createTimestampQuery(rootHash), createTimestampQuery(rootHash));
++  assert.ok(createTimestampQuery(rootHash, new Uint8Array(8)).includes(Buffer.from('020100', 'hex')));
++  assert.throws(() => createTimestampQuery(rootHash, new Uint8Array(7)), /nonce/);
++});
++test('unverified mode preserves raw bytes and original HTTP contract', async () => {
++  const actual = await requestTimestamp(rootHash, { env: { TSA_URL: 'https://tsa.invalid' },
++    fetchImpl: async (url, options) => {
++      assert.equal(url, 'https://tsa.invalid'); assert.equal(options.method, 'POST');
++      assert.deepEqual(options.headers, { 'Content-Type': 'application/timestamp-query' });
++      assert.ok(options.body.includes(Buffer.from(rootHash, 'hex'))); return response;
++    }, verifyResponse: () => assert.fail('unverified mode must not claim verification') });
++  assert.deepEqual(actual, token);
++});
++test('escaped PEM reaches verifier and bytes are returned only after verification', async () => {
++  let verified = false;
++  const actual = await requestTimestamp(rootHash, { env: { TSA_URL: 'https://tsa.invalid', TSA_CA_PEM: 'CA\\nPEM' },
++    fetchImpl: async () => response, verifyResponse: async input => {
++      assert.equal(input.pem, 'CA\nPEM'); assert.deepEqual(input.token, token); verified = true;
++    } });
++  assert.ok(verified); assert.deepEqual(actual, token);
++});
++test('CA file takes precedence over PEM and read failure never falls back', async () => {
++  const env = { TSA_URL: 'https://tsa.invalid', TSA_CA_FILE: '/bundle/ca.pem', TSA_CA_PEM: 'ignored' };
++  await requestTimestamp(rootHash, { env, fetchImpl: async () => response,
++    readCaFile: async file => { assert.equal(file, '/bundle/ca.pem'); return 'FILE-CA'; },
++    verifyResponse: async ({ pem }) => assert.equal(pem, 'FILE-CA') });
++  await assert.rejects(requestTimestamp(rootHash, { env,
++    readCaFile: async () => { throw new Error('CA missing'); }, fetchImpl: () => assert.fail('must not fetch') }), /CA missing/);
++});
++test('missing verifier, empty trust and bad proof all fail closed', async () => {
++  const env = { TSA_URL: 'https://tsa.invalid', TSA_CA_PEM: 'CA' };
++  await assert.rejects(requestTimestamp(rootHash, { env, fetchImpl: () => assert.fail('must not fetch') }), /unavailable/);
++  await assert.rejects(requestTimestamp(rootHash, { env: { ...env, TSA_CA_PEM: ' ' },
++    verifyResponse: async () => {}, fetchImpl: () => assert.fail('must not fetch') }), /unavailable/);
++  await assert.rejects(requestTimestamp(rootHash, { env, fetchImpl: async () => response,
++    verifyResponse: async () => { throw new Error('untrusted proof'); } }), /untrusted proof/);
++});
++test('missing URL, fetch, network errors and HTTP failures remain errors', async () => {
++  await assert.rejects(requestTimestamp(rootHash, { env: {} }), /TSA_URL/);
++  const env = { TSA_URL: 'https://tsa.invalid' };
++  await assert.rejects(requestTimestamp(rootHash, { env, fetchImpl: null }), /fetch/);
++  await assert.rejects(requestTimestamp(rootHash, { env, fetchImpl: async () => { throw new Error('offline'); } }), /offline/);
++  await assert.rejects(requestTimestamp(rootHash, { env, fetchImpl: async () => ({ ok: false, status: 503 }) }), /503/);
++});
+diff --git a/cloudflare/tsa-conformance.mjs b/cloudflare/tsa-conformance.mjs
+new file mode 100644
+index 0000000..e39a235
+--- /dev/null
++++ b/cloudflare/tsa-conformance.mjs
+@@ -0,0 +1,43 @@
++import { Buffer } from 'node:buffer';
++import * as asn1 from 'asn1js';
++import { TimeStampResp, SignedData } from 'pkijs';
++import { createTimestampQuery } from './tsa-client.mjs';
++import { verifyTimestampResponse } from './tsa-verify.mjs';
++
++export function timestampCases(fixtures) {
++  if (!fixtures.syntheticOnly) throw new Error('Synthetic fixtures required');
++  const query = Buffer.from(fixtures.queryBase64, 'base64');
++  const token = Buffer.from(fixtures.cases[0].responseBase64, 'base64');
++  const base = { query, token, pem: fixtures.trustedCaPem, now: new Date(fixtures.generatedAt) };
++  const cases = fixtures.cases.map(f => ({ name: 'accept OpenSSL ' + f.name,
++    run: () => verifyTimestampResponse({ ...base, token: Buffer.from(f.responseBase64, 'base64') }) }));
++  const reject = (name, change) => cases.push({ name, rejects: true, run: () => verifyTimestampResponse({ ...base, ...change }) });
++  reject('reject a different trusted CA', { pem: fixtures.untrustedCaPem });
++  reject('reject missing trust', { pem: '' });
++  reject('reject malformed trust', { pem: '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----' });
++  reject('reject expired certificate path', { now: new Date('2099-01-01T00:00:00Z') });
++  const nonce = Uint8Array.from([128, 1, 2, 3, 4, 5, 6, 7]);
++  reject('reject different checkpoint digest', { query: createTimestampQuery('ff'.repeat(32), nonce) });
++  reject('reject replay against different nonce', { query: createTimestampQuery(fixtures.rootHash, new Uint8Array(8)) });
++  reject('reject TSA rejection status', { token: Buffer.from('30053003020102', 'hex') });
++  reject('reject truncated response', { token: token.subarray(0, token.length - 1) });
++  reject('reject trailing response bytes', { token: Buffer.concat([token, Buffer.from([0])]) });
++  const response = new TimeStampResp({ schema: asn1.fromBER(token).result });
++  const signed = new SignedData({ schema: response.timeStampToken.content });
++  signed.signerInfos[0].signature.valueBlock.valueHexView[0] ^= 1;
++  response.timeStampToken.content = signed.toSchema(true);
++  reject('reject modified signature', { token: Buffer.from(response.toSchema().toBER()) });
++  for (const fixture of fixtures.rejectedCases || []) reject(fixture.name, { token: Buffer.from(fixture.responseBase64, 'base64') });
++  return cases;
++}
++
++export async function runTimestampConformance(fixtures) {
++  const passed = [];
++  for (const scenario of timestampCases(fixtures)) {
++    let failed = false;
++    try { await scenario.run(); } catch (error) { if (!scenario.rejects) throw error; failed = true; }
++    if (Boolean(scenario.rejects) !== failed) throw new Error('Timestamp conformance failed: ' + scenario.name);
++    passed.push(scenario.name);
++  }
++  return { status: 'PASS_SYNTHETIC_CRYPTO_ONLY', passedCases: passed, liveTsaRequests: 0, productionRequests: 0 };
++}
+diff --git a/cloudflare/tsa-fixtures.json b/cloudflare/tsa-fixtures.json
+new file mode 100644
+index 0000000..325644b
+--- /dev/null
++++ b/cloudflare/tsa-fixtures.json
+@@ -0,0 +1,33 @@
++{
++  "syntheticOnly": true,
++  "rootHash": "b8044f28d5091257f625a0fa4bcbb88b31de96c6773760cfa9ffb54101004b79",
++  "queryBase64": "MEQCAQEwMTANBglghkgBZQMEAgEFAAQguARPKNUJElf2JaD6S8u4izHelsZ3N2DPqf+1QQEAS3kCCQCAAQIDBAUGBwEB/w==",
++  "trustedCaPem": "-----BEGIN CERTIFICATE-----\nMIIDSzCCAjOgAwIBAgIUbWGl0RwhJZe63n/ka1Fm+Pq1vU8wDQYJKoZIhvcNAQEL\nBQAwLTErMCkGA1UEAwwiU3ludGhldGljIHRpbWVzdGFtcCB0ZXN0IHJvb3QgT05M\nWTAeFw0yNjEwMjAyMzM2MDZaFw0yNjExMTkyMzM2MDZaMC0xKzApBgNVBAMMIlN5\nbnRoZXRpYyB0aW1lc3RhbXAgdGVzdCByb290IE9OTFkwggEiMA0GCSqGSIb3DQEB\nAQUAA4IBDwAwggEKAoIBAQDlxU8QV67elYs419nYehCLK3dY6/NV3dlduPfZ1P1t\nDBBURSaQewK3J2UsO/JlQdi2it8zPHwm5HF4icodpaXM1WiedEP0NTISCt/f+cJ/\nnB1dNlm3GVj1FqmjFJjLPeCJRhE5qh5vWzw4G2lf6rWhiSDuP9Y5KqgCvoV8oQVT\nkZ/doByl05P553TFHloUSVP3/Sxfs5NAuTmekPfIhbYep4XOD/vnXR5MgoSlqZC+\nq3cfgS9PANMMsoJSHmidRHchYNmtDW0dAEtwoLhHU8lIZrVTTjbizRwgITFk+Z3H\nAOQoGKOw6trsqslGPgYhtdgIpT3PdG3CyJuaLgu0MU0hAgMBAAGjYzBhMA8GA1Ud\nEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMB0GA1UdDgQWBBRFG5COtZs7EPeh\n+gYgpCT8O44Y9jAfBgNVHSMEGDAWgBRFG5COtZs7EPeh+gYgpCT8O44Y9jANBgkq\nhkiG9w0BAQsFAAOCAQEA3dfvnTwMROs5zWBSyzAggj61jf1jI+NKulxoWbxPl1CH\nX7uyhkYCPNKkM7hMGFUkrlvNdKuFUCEmMxrdanllI/Hxpi8OKXlhiHSiyQB+QuK4\nTiCMLXUmtkBpXGJ2Ph79a/WlsfNnkLcRq8OJBnmHjrcxlvms1J8tt/tbeGI8a37O\nHKwvQh2pwpds3LcRIiATUsU4dmEpswlJio2ksmay8biHAu7MJ0DWrDLfzxd3fI9C\nO8cPLM9C+inEkShrJKsmtWfa7akubYLBVmyU7JIxOUNMM0l/ND5rbZwnUVcQBo9y\n9bdO9JjkLVWo97wJMwQhwVN04IWsf+AWokTiZBduxA==\n-----END CERTIFICATE-----\n",
++  "untrustedCaPem": "-----BEGIN CERTIFICATE-----\nMIIDSzCCAjOgAwIBAgIUAwBC1sTP+PzGh4aEqSSQIeZdzGQwDQYJKoZIhvcNAQEL\nBQAwLTErMCkGA1UEAwwiU3ludGhldGljIHRpbWVzdGFtcCB0ZXN0IHJvb3QgT05M\nWTAeFw0yNjEwMjAyMzM2MDZaFw0yNjExMTkyMzM2MDZaMC0xKzApBgNVBAMMIlN5\nbnRoZXRpYyB0aW1lc3RhbXAgdGVzdCByb290IE9OTFkwggEiMA0GCSqGSIb3DQEB\nAQUAA4IBDwAwggEKAoIBAQCuG6qrI7ex77l1skRAgaiFxsgJwFf1OHa0nJceqJkk\nvK1UlQmyV0N55lIPjhGnYG+E8T5IxkAQRuHAibUI3nYlp8Gl3JW2rqbl/poNFZSu\nL5KaxfAmN51+bs3kNqIrB2PwycV0ccVULwWIQolwNUbA9NSG9w0zY1hkQIZwhzTE\nxvOPwkCNLgASddtL4ey/poXbdT+irUBcA6M8hr3vLbYjB4s8XDBhngiuvmc+aISn\nm8P1qT+5cQ5kWWnWdu/3aADrhl4wyPMSNDg/4PBex8lrK3sIuIIZ6GzdFYxrSM+P\ng/jtDesOUUiG55fcve1Dnfj9J7jnv4ZTCCP/syRyADJxAgMBAAGjYzBhMA8GA1Ud\nEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMB0GA1UdDgQWBBRgulLBZzGAL2mz\nERZtDWAQ3/1IfzAfBgNVHSMEGDAWgBRgulLBZzGAL2mzERZtDWAQ3/1IfzANBgkq\nhkiG9w0BAQsFAAOCAQEALOy6v5QlbbzmnB/E5vNXzh0kOiE+pmdnFuVHe3rHpffb\n/cvs4lYtrqajbeu+GJEayq09ooLIt967jUhVpAoV8gT/Lu/hDxesXkanvKdIjosL\nhmE5CDT91t2W96p3lGlrCUF/OKu3YD9dYwyBalXXlZIRfOVmvfjiPkrQgAxhI3x2\nJMh0Wm8g0J4ecj+f58ppmELkBKumT7xL8K4jd8AetJffzYhbtH2O7rtWAA3uBuUr\ngXig1adFyoi1Zky9Nakr6+5YSeh/WHSsEscl4QkjeyAI9gvJ5svZm/raVp9Tt8M3\njE4OjCRsNQMhHAbYoL9u8JleaaO8LT0ZXAu8L7MIjw==\n-----END CERTIFICATE-----\n",
++  "cases": [
++    {
++      "name": "rsa-sha256",
++      "responseBase64": "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",
++      "opensslVerified": true
++    },
++    {
++      "name": "rsa-ess-sha1",
++      "responseBase64": "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",
++      "opensslVerified": true
++    },
++    {
++      "name": "ecdsa-sha256",
++      "responseBase64": "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",
++      "opensslVerified": true
++    }
++  ],
++  "generatedAt": "2026-10-20T23:36:06.897Z",
++  "opensslVersion": "OpenSSL 3.6.2 7 Apr 2026 (Library: OpenSSL 3.6.2 7 Apr 2026)",
++  "rejectedCases": [
++    {
++      "name": "reject valid CMS signature without ESS certificate binding",
++      "responseBase64": "MIIJpjADAgEAMIIJnQYJKoZIhvcNAQcCoIIJjjCCCYoCAQMxDTALBglghkgBZQMEAgEwgZkGCyqGSIb3DQEJEAEEoIGJBIGGMIGDAgEBBgQqAwQBMDEwDQYJYIZIAWUDBAIBBQAEILgETyjVCRJX9iWg+kvLuIsx3pbGdzdgz6n/tUEBAEt5AgECGA8yMDI2MTAyMDIzMzYwNlowAwIBAQIJAIABAgMEBQYHoCGkHzAdMRswGQYDVQQDDBJTeW50aGV0aWMgVFNBIE9OTFmgggaQMIIDPTCCAiWgAwIBAgIBAjANBgkqhkiG9w0BAQsFADAtMSswKQYDVQQDDCJTeW50aGV0aWMgdGltZXN0YW1wIHRlc3Qgcm9vdCBPTkxZMB4XDTI2MTAyMDIzMzYwNloXDTI2MTExOTIzMzYwNlowHTEbMBkGA1UEAwwSU3ludGhldGljIFRTQSBPTkxZMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1W4OxW1UglTLApnO3vPUjSWXnl8MKNGvephCspoAfkYLxYvWu4ZSkby4DNFv8Ib9m33MtG9f73ioRStKTDw8BEhB5j9/e2LbdNjwye3xDTfZELlVQg3Yy9Y2sQnuz9XYCz2424L8DZH5ZVE2e4DnzOtU1RkovRL6BesrqwPn+33c/UQ7AtBe4PFCbXhm2B9NrinyU5IEiDFozuKmyEcRNjfT9ejfzVq3vFeENCDjWOEHPBEKa6oj+vtm3OTOcNRShx9ZzFxYxj8Ab9MEpXoEBX/yKX6WhHy0Z9BOaQkjfQh3X1V16HW0vzt98ijEZnrUaKL3++CstPi199soRzvIgQIDAQABo3gwdjAMBgNVHRMBAf8EAjAAMA4GA1UdDwEB/wQEAwIHgDAWBgNVHSUBAf8EDDAKBggrBgEFBQcDCDAdBgNVHQ4EFgQU527Al4YBn65CUV8MQ0MjEEMHTl0wHwYDVR0jBBgwFoAURRuQjrWbOxD3ofoGIKQk/DuOGPYwDQYJKoZIhvcNAQELBQADggEBAGtttV/rVhWRdlHHd6rVQP/Wb4KJe6Z4JCbjNyBUv0gRPeyA9mQRH6SIJiiNvSzpSOeEstkJQNRveukJOfjtTVGdEIWLx4HZXee0MmFN8JICZONDVleUpPEiLJp+NFQtJOGpenHjYD6rU0Gm/cVs2Pf5k3GffLhwvEBMqkNGp9ewgLrIGr8DSrdYqrDQ4yhWT5pvpJX5CRYo0egZKpcFRi4UbCMAxkx7NF3QpcCh8aK1qPGZhj/tIlCe+KLDobqqY1Uc4KlxumIZ06e1SXAGEiuS0efMiSrI6qVXoOkcjyfh+Ca5bVLxGIeQEe6mowtDmYjVMubn0NUolOjERz4PbcMwggNLMIICM6ADAgECAhRtYaXRHCEll7ref+RrUWb4+rW9TzANBgkqhkiG9w0BAQsFADAtMSswKQYDVQQDDCJTeW50aGV0aWMgdGltZXN0YW1wIHRlc3Qgcm9vdCBPTkxZMB4XDTI2MTAyMDIzMzYwNloXDTI2MTExOTIzMzYwNlowLTErMCkGA1UEAwwiU3ludGhldGljIHRpbWVzdGFtcCB0ZXN0IHJvb3QgT05MWTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOXFTxBXrt6VizjX2dh6EIsrd1jr81Xd2V2499nU/W0MEFRFJpB7ArcnZSw78mVB2LaK3zM8fCbkcXiJyh2lpczVaJ50Q/Q1MhIK39/5wn+cHV02WbcZWPUWqaMUmMs94IlGETmqHm9bPDgbaV/qtaGJIO4/1jkqqAK+hXyhBVORn92gHKXTk/nndMUeWhRJU/f9LF+zk0C5OZ6Q98iFth6nhc4P++ddHkyChKWpkL6rdx+BL08A0wyyglIeaJ1EdyFg2a0NbR0AS3CguEdTyUhmtVNONuLNHCAhMWT5nccA5CgYo7Dq2uyqyUY+BiG12AilPc90bcLIm5ouC7QxTSECAwEAAaNjMGEwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFEUbkI61mzsQ96H6BiCkJPw7jhj2MB8GA1UdIwQYMBaAFEUbkI61mzsQ96H6BiCkJPw7jhj2MA0GCSqGSIb3DQEBCwUAA4IBAQDd1++dPAxE6znNYFLLMCCCPrWN/WMj40q6XGhZvE+XUIdfu7KGRgI80qQzuEwYVSSuW810q4VQISYzGt1qeWUj8fGmLw4peWGIdKLJAH5C4rhOIIwtdSa2QGlcYnY+Hv1r9aWx82eQtxGrw4kGeYeOtzGW+azUny23+1t4Yjxrfs4crC9CHanCl2zctxEiIBNSxTh2YSmzCUmKjaSyZrLxuIcC7swnQNasMt/PF3d8j0I7xw8sz0L6KcSRKGskqya1Z9rtqS5tgsFWbJTskjE5Q0wzSX80PmttnCdRVxAGj3L1t070mOQtVaj3vAkzBCHBU3Tghax/4BaiROJkF27EMYICRDCCAkACAQEwMjAtMSswKQYDVQQDDCJTeW50aGV0aWMgdGltZXN0YW1wIHRlc3Qgcm9vdCBPTkxZAgECMAsGCWCGSAFlAwQCAaCB5jAaBgkqhkiG9w0BCQMxDQYLKoZIhvcNAQkQAQQwHAYJKoZIhvcNAQkFMQ8XDTI2MTAyMDIzMzY1OVowLwYJKoZIhvcNAQkEMSIEIHk+aYbyku1RruwHuCAjL5hiXTrreRPwhdWhjVKogdH1MHkGCSqGSIb3DQEJDzFsMGowCwYJYIZIAWUDBAEqMAsGCWCGSAFlAwQBFjALBglghkgBZQMEAQIwCgYIKoZIhvcNAwcwDgYIKoZIhvcNAwICAgCAMA0GCCqGSIb3DQMCAgFAMAcGBSsOAwIHMA0GCCqGSIb3DQMCAgEoMA0GCSqGSIb3DQEBAQUABIIBAAZ420DuSOw6cxsyuzDRrNSvFAdOYj4hvHkd6Y3XNgHPQXFAm6+A/43Iwx79CTbgC/ZHd52m+UCWhBWydF1VjyYlrrqojqRkIVnV6Yobat1a3rfJOxH//8jXPnBKu6u97uBtGY/TjizN+8HD+I4YDA0tuz8/9/FEOdeK8td7Jr59Z4utiXjnG0ZGkzUXwdpnFPvCTPH/XfSfY8XzzVgNcVh7RkZUPLSU9UCaCDIZz0YZHE/H0phHjElYWS9lCpREBeRaGhAh3xJ9ZQ8Yb8MVTV2rqaRZlqHvq3aMwgj7Jlbm28NOwkXqtS6mbCTGPISm1lNbBxDO9+lSu7oSUGTu3x4=",
++      "opensslRejected": true
++    }
++  ]
++}
+diff --git a/cloudflare/tsa-fixtures.mjs b/cloudflare/tsa-fixtures.mjs
+new file mode 100644
+index 0000000..17d3ab4
+--- /dev/null
++++ b/cloudflare/tsa-fixtures.mjs
+@@ -0,0 +1,52 @@
++// Synthetic certificates only. No network, app credentials, production data or
++// installations. Keep the generated private key directory out of every patch.
++import { spawnSync } from 'node:child_process';
++import { mkdir, readFile, writeFile } from 'node:fs/promises';
++import { resolve } from 'node:path';
++import { createHash } from 'node:crypto';
++import { createTimestampQuery } from './tsa-client.mjs';
++
++const directory = resolve(process.argv[2] || '');
++if (!process.argv[2]) throw new Error('A new synthetic fixture directory is required');
++await mkdir(directory, { recursive: false, mode: 0o700 });
++const file = name => resolve(directory, name);
++const write = (name, text) => writeFile(file(name), text, { mode: 0o600, flag: 'wx' });
++function openssl(args, input) {
++  const result = spawnSync(process.env.OPENSSL_BIN || 'openssl', args, {
++    cwd: directory, input, encoding: 'utf8', maxBuffer: 1024 * 1024,
++  });
++  if (result.status !== 0) throw new Error('Synthetic OpenSSL operation failed: ' + args[0] + ': ' + result.stderr);
++  return result.stdout;
++}
++await write('root.cnf', '[req]\ndistinguished_name=dn\nx509_extensions=ca\nprompt=no\n[dn]\nCN=Synthetic timestamp test root ONLY\n[ca]\nbasicConstraints=critical,CA:true\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n');
++openssl(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', file('root.key'), '-out', file('root.pem'), '-days', '30', '-config', file('root.cnf')]);
++openssl(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', file('other.key'), '-out', file('other.pem'), '-days', '30', '-config', file('root.cnf')]);
++await write('tsa.ext', 'basicConstraints=critical,CA:false\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=critical,timeStamping\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n');
++const rootHash = createHash('sha256').update('synthetic Normativity checkpoint only').digest('hex');
++const query = createTimestampQuery(rootHash, Uint8Array.from([128, 1, 2, 3, 4, 5, 6, 7]));
++await write('request.tsq', query);
++const description = openssl(['ts', '-query', '-in', file('request.tsq'), '-text']);
++if (!description.includes('Hash Algorithm: sha256') || !description.includes('Certificate required: yes')) throw new Error('Query interoperability failed');
++const cases = [];
++for (const [name, keyArgs, ess] of [
++  ['rsa-sha256', ['rsa:2048'], 'sha256'],
++  ['rsa-ess-sha1', ['rsa:2048'], 'sha1'],
++  ['ecdsa-sha256', ['ec', '-pkeyopt', 'ec_paramgen_curve:P-256'], 'sha256'],
++]) {
++  openssl(['req', '-new', '-newkey', ...keyArgs, '-nodes', '-subj', '/CN=Synthetic TSA ONLY', '-keyout', file(name + '.key'), '-out', file(name + '.csr')]);
++  openssl(['x509', '-req', '-in', file(name + '.csr'), '-CA', file('root.pem'), '-CAkey', file('root.key'), '-set_serial', String(cases.length + 2), '-days', '30', '-extfile', file('tsa.ext'), '-out', file(name + '.pem')]);
++  await write(name + '.serial', '01\n');
++  await write(name + '.cnf', `[tsa]\ndefault_tsa=tsa_config\n[tsa_config]\nserial=${file(name + '.serial')}\ncrypto_device=builtin\nsigner_cert=${file(name + '.pem')}\ncerts=${file('root.pem')}\nsigner_key=${file(name + '.key')}\nsigner_digest=sha256\ndefault_policy=1.2.3.4.1\nother_policies=1.2.3.4.2\ndigests=sha256\naccuracy=secs:1\nordering=no\ntsa_name=yes\ness_cert_id_chain=yes\ness_cert_id_alg=${ess}\n`);
++  openssl(['ts', '-reply', '-config', file(name + '.cnf'), '-queryfile', file('request.tsq'), '-out', file(name + '.tsr')]);
++  const check = openssl(['ts', '-verify', '-queryfile', file('request.tsq'), '-in', file(name + '.tsr'), '-CAfile', file('root.pem')]);
++  if (!check.includes('Verification: OK')) throw new Error('OpenSSL golden verification failed');
++  cases.push({ name, responseBase64: (await readFile(file(name + '.tsr'))).toString('base64'), opensslVerified: true });
++}
++const fixtures = {
++  syntheticOnly: true, rootHash, queryBase64: query.toString('base64'),
++  trustedCaPem: await readFile(file('root.pem'), 'utf8'), untrustedCaPem: await readFile(file('other.pem'), 'utf8'),
++  cases, generatedAt: new Date().toISOString(), opensslVersion: openssl(['version']).trim(),
++};
++await write('fixtures.json', JSON.stringify(fixtures, null, 2) + '\n');
++console.log(JSON.stringify({ syntheticOnly: true, signedCases: cases.length, opensslVerified: cases.length,
++  queryInteroperability: 'PASS', publishedFixtureContainsPrivateKeys: false }));
+diff --git a/cloudflare/tsa-test-worker.mjs b/cloudflare/tsa-test-worker.mjs
+new file mode 100644
+index 0000000..0e63e8e
+--- /dev/null
++++ b/cloudflare/tsa-test-worker.mjs
+@@ -0,0 +1,12 @@
++import fixtures from './tsa-fixtures.json';
++import { runTimestampConformance } from './tsa-conformance.mjs';
++
++// Separate local-only test entry. It exposes no production application route.
++export default { async fetch(request) {
++  const url = new URL(request.url);
++  if (!['127.0.0.1', 'localhost'].includes(url.hostname) || url.pathname !== '/synthetic-conformance') {
++    return new Response('Not found', { status: 404 });
++  }
++  try { return Response.json(await runTimestampConformance(fixtures)); }
++  catch { return Response.json({ status: 'FAIL_SYNTHETIC_CRYPTO' }, { status: 500 }); }
++} };
+diff --git a/cloudflare/tsa-verify.mjs b/cloudflare/tsa-verify.mjs
+new file mode 100644
+index 0000000..3a51a12
+--- /dev/null
++++ b/cloudflare/tsa-verify.mjs
+@@ -0,0 +1,151 @@
++import { Buffer } from 'node:buffer';
++import * as asn1 from 'asn1js';
++import {
++  TimeStampReq, TimeStampResp, SignedData, TSTInfo, Certificate,
++  IssuerAndSerialNumber, GeneralNames,
++  CertificateChainValidationEngine, CryptoEngine,
++} from 'pkijs';
++
++const OID = {
++  sha256: '2.16.840.1.101.3.4.2.1', signedData: '1.2.840.113549.1.7.2',
++  tstInfo: '1.2.840.113549.1.9.16.1.4', contentType: '1.2.840.113549.1.9.3',
++  messageDigest: '1.2.840.113549.1.9.4', ess1: '1.2.840.113549.1.9.16.2.12',
++  ess2: '1.2.840.113549.1.9.16.2.47', timestamp: '1.3.6.1.5.5.7.3.8',
++};
++const need = (ok, message) => { if (!ok) throw new Error('Invalid timestamp proof: ' + message); };
++const bytes = value => Buffer.from(value);
++const same = (a, b) => bytes(a).equals(bytes(b));
++function decode(input) {
++  const data = bytes(input);
++  const result = asn1.fromBER(data);
++  need(result.offset === data.length && !result.result.error, 'malformed or trailing ASN.1');
++  return result.result;
++}
++function sequence(value) {
++  need(value instanceof asn1.Sequence, 'expected sequence');
++  return value.valueBlock.value;
++}
++function attribute(signer, oid, required = true) {
++  const found = signer.signedAttrs?.attributes.filter(a => a.type === oid) || [];
++  if (!required && found.length === 0) return null;
++  need(found.length === 1 && found[0].values.length === 1, 'missing or duplicate signed attribute');
++  return found[0].values[0];
++}
++function pemCertificates(pem) {
++  const blocks = [...pem.matchAll(/-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g)];
++  need(blocks.length > 0, 'no configured trust certificates');
++  return blocks.map(([, body]) => {
++    const b64 = body.replace(/\s/g, '');
++    need(/^[A-Za-z0-9+/]+={0,2}$/.test(b64), 'invalid certificate encoding');
++    return new Certificate({ schema: decode(Buffer.from(b64, 'base64')) });
++  });
++}
++function nameMatches(name, cert, issuer = false) {
++  if (name.type === 4) return name.value.isEqual(issuer ? cert.issuer : cert.subject);
++  const extension = cert.extensions?.find(e => e.extnID === (issuer ? '2.5.29.18' : '2.5.29.17'));
++  return Boolean(extension?.parsedValue?.altNames?.some(n => same(n.toSchema().toBER(), name.toSchema().toBER())));
++}
++
++// ESS binds the signer certificate to the signed attributes. A signature and
++// trusted chain alone do not prevent substitution of a same-key certificate.
++async function checkEss(value, version, signerCert, path, engine) {
++  const certIds = sequence(sequence(value)[0]);
++  need(certIds.length > 0, 'empty ESS certificate list');
++  for (let index = 0; index < certIds.length; index++) {
++    const fields = [...sequence(certIds[index])];
++    let hash = version === 1 ? 'SHA-1' : 'SHA-256';
++    if (version === 2 && fields[0] instanceof asn1.Sequence) {
++      const algorithm = sequence(fields.shift())[0];
++      need(algorithm instanceof asn1.ObjectIdentifier, 'invalid ESS hash algorithm');
++      hash = engine.getAlgorithmByOID(algorithm.valueBlock.toString(), true).name;
++    }
++    const digest = fields.shift();
++    need(digest instanceof asn1.OctetString, 'invalid ESS certificate digest');
++    const candidates = index === 0 ? [signerCert] : path;
++    let matched;
++    for (const cert of candidates) {
++      if (same(await engine.digest(hash, cert.toSchema().toBER()), digest.getValue())) { matched = cert; break; }
++    }
++    need(matched, 'ESS certificate binding mismatch');
++    if (fields.length) {
++      const issuerSerial = sequence(fields.shift());
++      need(issuerSerial.length === 2 && issuerSerial[1] instanceof asn1.Integer, 'invalid ESS issuer/serial');
++      const names = new GeneralNames({ schema: issuerSerial[0] }).names;
++      need(names.some(name => nameMatches(name, matched, true)) && matched.serialNumber.isEqual(issuerSerial[1]), 'ESS issuer/serial mismatch');
++    }
++    need(fields.length === 0, 'unexpected ESS fields');
++  }
++}
++
++export async function verifyTimestampResponse({ token, query, pem, now = new Date() }) {
++  const engine = new CryptoEngine({ name: 'workers-webcrypto', crypto: globalThis.crypto });
++  const request = new TimeStampReq({ schema: decode(query) });
++  const response = new TimeStampResp({ schema: decode(token) });
++  need(request.version === 1 && request.nonce && request.certReq, 'unexpected request');
++  need([0, 1].includes(response.status.status) && !response.status.failInfo, 'TSA rejected request');
++  need(response.timeStampToken?.contentType === OID.signedData, 'not CMS signed data');
++  const signed = new SignedData({ schema: response.timeStampToken.content });
++  need(signed.signerInfos.length === 1, 'expected one TSA signer');
++  need(signed.encapContentInfo.eContentType === OID.tstInfo && signed.encapContentInfo.eContent, 'missing TSTInfo');
++  const content = signed.encapContentInfo.eContent.getValue();
++  const info = new TSTInfo({ schema: decode(content) });
++  need(info.version === 1 && Number.isFinite(info.genTime.getTime()), 'invalid TSTInfo');
++  need(!info.extensions?.some(e => e.critical), 'unrecognized critical TSTInfo extension');
++  need(request.messageImprint.hashAlgorithm.algorithmId === OID.sha256 &&
++    info.messageImprint.hashAlgorithm.algorithmId === OID.sha256 &&
++    request.messageImprint.hashedMessage.getValue().byteLength === 32 &&
++    same(info.messageImprint.hashedMessage.getValue(), request.messageImprint.hashedMessage.getValue()), 'message imprint mismatch');
++  need(info.nonce?.isEqual(request.nonce), 'nonce mismatch');
++  need(!request.reqPolicy || info.policy === request.reqPolicy, 'policy mismatch');
++
++  const signer = signed.signerInfos[0];
++  const certificates = (signed.certificates || []).filter(c => c instanceof Certificate);
++  let signerCert;
++  if (signer.sid instanceof IssuerAndSerialNumber) {
++    signerCert = certificates.find(c => c.issuer.isEqual(signer.sid.issuer) && c.serialNumber.isEqual(signer.sid.serialNumber));
++  } else {
++    const sid = signer.sid.idBlock.isConstructed
++      ? signer.sid.valueBlock.value[0].valueBlock.valueHexView : signer.sid.valueBlock.valueHexView;
++    for (const cert of certificates) {
++      const keyId = await engine.digest('SHA-1', cert.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHexView);
++      if (same(keyId, sid)) { signerCert = cert; break; }
++    }
++  }
++  need(signerCert, 'signer certificate missing');
++  const eku = signerCert.extensions?.filter(e => e.extnID === '2.5.29.37') || [];
++  need(eku.length === 1 && eku[0].critical && eku[0].parsedValue?.keyPurposes?.length === 1 &&
++    eku[0].parsedValue.keyPurposes[0] === OID.timestamp, 'signer is not exclusively a timestamp authority');
++  const usage = signerCert.extensions?.find(e => e.extnID === '2.5.29.15');
++  if (usage) {
++    const bits = usage.parsedValue?.valueBlock.valueHexView;
++    need(bits?.length === 1 && (bits[0] & 0xc0) !== 0 && (bits[0] & 0x3f) === 0, 'invalid timestamp signing key usage');
++  }
++  need(!info.tsa || nameMatches(info.tsa, signerCert), 'TSA name mismatch');
++
++  const contentType = attribute(signer, OID.contentType);
++  need(contentType instanceof asn1.ObjectIdentifier && contentType.valueBlock.toString() === OID.tstInfo, 'signed content type mismatch');
++  const digest = attribute(signer, OID.messageDigest);
++  const hash = engine.getAlgorithmByOID(signer.digestAlgorithm.algorithmId, true).name;
++  need(signed.digestAlgorithms.some(a => a.algorithmId === signer.digestAlgorithm.algorithmId), 'missing signer digest algorithm');
++  need(digest instanceof asn1.OctetString && same(await engine.digest(hash, content), digest.getValue()), 'signed content digest mismatch');
++  need(signer.signedAttrs.encodedValue.byteLength > 0, 'missing encoded signed attributes');
++  // Use PKI.js's public signature primitive. Its high-level TST verifier hashes
++  // the original data, which is unavailable here: the app stores a digest.
++  // We compare that imprint above, and independently verify CMS bytes below.
++  const valid = await engine.verifyWithPublicKey(signer.signedAttrs.encodedValue, signer.signature,
++    signerCert.subjectPublicKeyInfo, signer.signatureAlgorithm,
++    signer.signatureAlgorithm.algorithmId === '1.2.840.113549.1.1.1' ? hash : undefined);
++  need(valid, 'signature mismatch');
++  const chain = await new CertificateChainValidationEngine({
++    certs: [...certificates.filter(c => c !== signerCert), signerCert],
++    trustedCerts: pemCertificates(pem), checkDate: now,
++    crls: (signed.crls || []).filter(c => 'thisUpdate' in c),
++  }).verify({ passedWhenNotRevValues: true }, engine);
++  // Original openssl ts -verify uses configured CA certificates and current
++  // certificate validity, without enabling CRL downloads or revocation flags.
++  need(chain.result && chain.certificatePath?.length, 'untrusted or invalid certificate chain');
++  const ess1 = attribute(signer, OID.ess1, false), ess2 = attribute(signer, OID.ess2, false);
++  need(ess1 || ess2, 'missing ESS certificate binding');
++  if (ess1) await checkEss(ess1, 1, signerCert, chain.certificatePath, engine);
++  if (ess2) await checkEss(ess2, 2, signerCert, chain.certificatePath, engine);
++}
+diff --git a/cloudflare/tsa-verify.test.mjs b/cloudflare/tsa-verify.test.mjs
+new file mode 100644
+index 0000000..2759f52
+--- /dev/null
++++ b/cloudflare/tsa-verify.test.mjs
+@@ -0,0 +1,10 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { readFile } from 'node:fs/promises';
++import { timestampCases } from './tsa-conformance.mjs';
++
++const fixtures = JSON.parse(await readFile(new URL('./tsa-fixtures.json', import.meta.url), 'utf8'));
++for (const scenario of timestampCases(fixtures)) test(scenario.name, async () => {
++  if (scenario.rejects) await assert.rejects(scenario.run);
++  else await scenario.run();
++});
+diff --git a/cloudflare/tsa.ts b/cloudflare/tsa.ts
+new file mode 100644
+index 0000000..02aa895
+--- /dev/null
++++ b/cloudflare/tsa.ts
+@@ -0,0 +1,11 @@
++import { readFile } from 'node:fs/promises';
++import { requestTimestamp } from './tsa-client.mjs';
++import { verifyTimestampResponse } from './tsa-verify.mjs';
++
++// The bundler replaces only requestRfc3161Timestamp. The existing checkpoint
++// loop, binary response storage, metrics and verifiedAt semantics are retained.
++export const requestRfc3161Timestamp = (rootHash: string): Promise<Buffer> =>
++  requestTimestamp(rootHash, {
++    readCaFile: (file: string) => readFile(file, 'utf8'),
++    verifyResponse: verifyTimestampResponse,
++  });
+diff --git a/cloudflare/worker.ts b/cloudflare/worker.ts
+new file mode 100644
+index 0000000..7a001c6
+--- /dev/null
++++ b/cloudflare/worker.ts
+@@ -0,0 +1,32 @@
++import { createServer } from "node:http";
++import { httpServerHandler } from "cloudflare:node";
++import { createApp } from "../server/src/app";
++import publicConfig from "../api/public-config";
++import commitmentAudit from "../api/cron/commitment-audit";
++import { withDatabase } from "./prisma";
++import { createScheduledAudit, jsonReplacer } from "./scheduled.mjs";
++
++// Backend compatibility harness only, not a deployable frontend migration.
++const app = createApp();
++app.set("json replacer", jsonReplacer);
++app.all("/api/public-config", publicConfig);
++app.all("/api/cron/commitment-audit", commitmentAudit);
++
++const server = createServer((request, response) => {
++  void withDatabase(() => new Promise<void>((resolve, reject) => {
++    response.once("finish", resolve);
++    response.once("close", resolve);
++    response.once("error", reject);
++    app(request, response);
++  })).catch(() => {
++    // Do not expose connection strings, underlying errors or signing material.
++    if (!response.headersSent) response.writeHead(500, { "Content-Type": "application/json" });
++    if (!response.writableEnded) response.end('{"error":"Request failed."}');
++  });
++});
++server.listen(8080);
++const httpHandler = httpServerHandler({ port: 8080 });
++export default {
++  ...httpHandler,
++  scheduled: createScheduledAudit({ handler: commitmentAudit, withDatabase }),
++};
+diff --git a/cloudflare/wrangler.compat.json b/cloudflare/wrangler.compat.json
+new file mode 100644
+index 0000000..e44f9f3
+--- /dev/null
++++ b/cloudflare/wrangler.compat.json
+@@ -0,0 +1,36 @@
++{
++  "$schema": "node_modules/wrangler/config-schema.json",
++  "name": "normativity-compat-only",
++  "main": "dist/worker.mjs",
++  "no_bundle": true,
++  "compatibility_date": "2026-10-19",
++  "compatibility_flags": [
++    "nodejs_compat",
++    "new_module_registry"
++  ],
++  "workers_dev": false,
++  "preview_urls": false,
++  "rules": [
++    {
++      "type": "CompiledWasm",
++      "globs": [
++        "**/*.wasm"
++      ],
++      "fallthrough": true
++    }
++  ],
++  "vars": {
++    "NODE_ENV": "production",
++    "ALLOW_DEVELOPMENT_AUTH_HEADERS": "false",
++    "AUTH_JWT_SECRET": "synthetic-offline-jwt-test-key-not-a-real-secret",
++    "COMMITMENT_JOBS": "false",
++    "CRON_SECRET": "synthetic-offline-only",
++    "DATABASE_URL": "postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic",
++    "DIRECT_URL": "postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic"
++  },
++  "triggers": {
++    "crons": [
++      "0 8 * * *"
++    ]
++  }
++}
+diff --git a/cloudflare/wrangler.db-test.json b/cloudflare/wrangler.db-test.json
+new file mode 100644
+index 0000000..19c0882
+--- /dev/null
++++ b/cloudflare/wrangler.db-test.json
+@@ -0,0 +1,32 @@
++{
++  "$schema": "node_modules/wrangler/config-schema.json",
++  "name": "normativity-db-test-only",
++  "main": "dist/db-test-worker.mjs",
++  "no_bundle": true,
++  "compatibility_date": "2026-10-19",
++  "compatibility_flags": [
++    "nodejs_compat",
++    "new_module_registry"
++  ],
++  "workers_dev": false,
++  "preview_urls": false,
++  "rules": [
++    {
++      "type": "CompiledWasm",
++      "globs": [
++        "**/*.wasm"
++      ],
++      "fallthrough": true
++    }
++  ],
++  "vars": {
++    "NODE_ENV": "production",
++    "ALLOW_DEVELOPMENT_AUTH_HEADERS": "false",
++    "AUTH_JWT_SECRET": "synthetic-offline-jwt-test-key-not-a-real-secret",
++    "COMMITMENT_JOBS": "false",
++    "CRON_SECRET": "synthetic-offline-only",
++    "DATABASE_URL": "postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic",
++    "DIRECT_URL": "postgresql://synthetic:synthetic@127.0.0.1:15432/synthetic",
++    "CF_COMPAT_TEST": "1"
++  }
++}
+diff --git a/cloudflare/wrangler.tsa-test.json b/cloudflare/wrangler.tsa-test.json
+new file mode 100644
+index 0000000..6198e0b
+--- /dev/null
++++ b/cloudflare/wrangler.tsa-test.json
+@@ -0,0 +1,10 @@
++{
++  "$schema": "node_modules/wrangler/config-schema.json",
++  "name": "normativity-tsa-local-test-only",
++  "main": "tsa-test-worker.mjs",
++  "compatibility_date": "2026-10-19",
++  "compatibility_flags": ["nodejs_compat", "new_module_registry"],
++  "workers_dev": false,
++  "preview_urls": false,
++  "routes": []
++}
