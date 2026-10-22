@@ -23,7 +23,7 @@ jobs:
       - name: Verify approved scope
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 142955b12a2596c062fd03ba2f08a5ed8a1ff3c7
+          test "$(git rev-parse HEAD^)" = a0bbbc519b9093ce1e2db840f2f9d1a8833880c2
           git diff --check HEAD^ HEAD
           node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); assert(execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n").every(f=>f===".github/workflows/netlify-hosted.yml"||f.startsWith("scripts/netlify-hosted/")));'
       - name: Install approved runner-only CLI without deployment credential
@@ -33,7 +33,7 @@ jobs:
         run: |
           mkdir -p public
           "$RUNNER_TEMP/netlify-tool/node_modules/.bin/netlify" functions:build --src netlify/functions --functions packaged-functions
-      - name: Create one empty test project and one draft deployment
+      - name: Verify existing empty test project and attempt one draft deployment
         id: deploy
         working-directory: scripts/netlify-hosted
         env:
