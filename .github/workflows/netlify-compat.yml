@@ -29,7 +29,7 @@ jobs:
       - name: Assert source and no deployment
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = d5df98f869d11a29fb4e9585dc79bb36dc5d0f67
+          test "$(git rev-parse HEAD^)" = d76b7ebd2986d64a0b80fd56f9856879d91dfb29
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-compat.yml"||f.startsWith("scripts/netlify-compat/")));'

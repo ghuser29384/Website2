@@ -29,6 +29,7 @@ prepare)
    DATABASE_URL=postgresql://postgres:synthetic@127.0.0.1:15439/synthetic "$ROOT/app/server/node_modules/.bin/prisma" generate --schema "$ROOT/app/server/prisma/schema.prisma"
  fi
  node "$ROOT/harness/setup-links.mjs" "$ROOT" "$CANDIDATE"
+ ROOT="$ROOT" bash "$ROOT/harness/prepare-edge-tools.sh"
  ;;
 offline)
  test "${OFFLINE_NAMESPACE:-}" = 1
@@ -36,6 +37,8 @@ offline)
  test "$(ip -o link show | wc -l | tr -d ' ')" = 1
  test -z "$(ip route show default)"
  test -z "$(ip -6 route show default)"
+ export PATH="$ROOT/edge-tools/bin:$PATH" DENO_DIR="$ROOT/home/deno-cache" DENO_NO_UPDATE_CHECK=1
+ test "$(deno --version | head -1)" = 'deno 2.4.2'
  export NEXT_TELEMETRY_DISABLED=1 NETLIFY_TELEMETRY_DISABLED=1 CI=true NO_COLOR=1
  export MORAL_TRADE_DISABLE_DEP_REPAIR=1
  node "$ROOT/harness/candidate/tests/local.mjs"
