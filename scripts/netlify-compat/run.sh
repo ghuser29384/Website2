@@ -38,7 +38,7 @@ offline)
  test -z "$(ip route show default)"
  test -z "$(ip -6 route show default)"
  export PATH="$ROOT/edge-tools/bin:$PATH" DENO_DIR="$ROOT/home/deno-cache" DENO_NO_UPDATE_CHECK=1
- test "$(deno --version | head -1)" = 'deno 2.4.2'
+ test "$(deno --version | awk 'NR == 1 { print $1 " " $2 }')" = 'deno 2.4.2'
  export NEXT_TELEMETRY_DISABLED=1 NETLIFY_TELEMETRY_DISABLED=1 CI=true NO_COLOR=1
  export MORAL_TRADE_DISABLE_DEP_REPAIR=1
  node "$ROOT/harness/candidate/tests/local.mjs"
