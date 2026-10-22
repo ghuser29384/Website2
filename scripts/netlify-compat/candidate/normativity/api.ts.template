@@ -1,4 +1,4 @@
-// Candidate netlify/functions/api.ts. serverless-http installation is NOT approved.
+// Candidate netlify/functions/api.ts. New runner execution requires approval.
 import express from 'express';
 import serverless from 'serverless-http';
 import { createApp } from '../../server/src/app';
@@ -9,7 +9,15 @@ const app = express();
 // Preserve standalone Vercel endpoints outside the existing Express app.
 app.all('/api/public-config', publicConfig);
 app.all('/api/cron/commitment-audit', audit);
-app.use(createApp());
+const commitmentsApp = createApp();
+app.use((req, res, next) => {
+  // Match the original Vercel filesystem entry points without mounting at a
+  // prefix, which would strip /api/commitments from the existing router URL.
+  if (req.path === "/api/commitments" || req.path.startsWith("/api/commitments/")) {
+    return commitmentsApp(req, res, next);
+  }
+  return next();
+});
 export const handler = serverless(app);
 // Route /api/* to this function without dropping /api or changing query/body.
 // No listener, interval, active schedule or background bridge is added here.

@@ -27,9 +27,10 @@ if(next){
   config+='external_node_modules = ["@prisma/client", "prisma"]\nincluded_files = ["server/node_modules/.prisma/**", "server/prisma/**", "server/src/**"]\n[[redirects]]\nfrom = "/api/*"\nto = "/.netlify/functions/api/:splat"\nstatus = 200\nforce = true\n';
  }else{
   await writeFile(join(app,'package.json'),'{"private":true,"type":"module"}');
-  await copyFile(join(h,'candidate/rlhf/adapter.mjs'),join(app,'netlify/functions/adapter.mjs'));
+  await mkdir(join(app,'netlify/lib'),{recursive:true});
+  await copyFile(join(h,'candidate/rlhf/adapter.mjs'),join(app,'netlify/lib/adapter.mjs'));
   await copyFile(join(h,'candidate/rlhf/public.mjs.template'),join(app,'netlify/functions/public.mjs'));
-  await copyFile(join(h,'cloudflare-compatibility-20261019/source/rlhf/index.mjs'),join(app,'netlify/functions/release-handler.mjs'));
+  await copyFile(join(h,'cloudflare-compatibility-20261019/source/rlhf/index.mjs'),join(app,'netlify/lib/release-handler.mjs'));
  }
 }
 await writeFile(join(app,'netlify.toml'),config);

@@ -5,5 +5,6 @@ const [root]=process.argv.slice(2);
 const pkg=JSON.parse(await readFile(root+'/tools/package.json'));
 const bytes=await readFile(root+'/tools/package-lock.json'),lock=JSON.parse(bytes);
 for(const [name,version] of Object.entries(pkg.dependencies))assert.equal(lock.packages['node_modules/'+name].version,version);
-const report={directPins:pkg.dependencies,lockSha256:createHash('sha256').update(bytes).digest('hex')};
+const runtimeDependencies=Object.fromEntries(Object.entries(lock.packages).filter(([p])=>/node_modules\/@netlify\/(edge-bundler|edge-functions-bootstrap|build|dev)$/.test(p)).map(([p,v])=>[p,{version:v.version,integrity:v.integrity}]));
+const report={runtimeDependencies,directPins:pkg.dependencies,lockSha256:createHash('sha256').update(bytes).digest('hex')};
 await writeFile(root+'/dependencies.json',JSON.stringify(report));console.log(report);

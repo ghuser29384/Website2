@@ -1,16 +1,17 @@
 import {spawnSync,spawn} from 'node:child_process';
 import {writeFile,readFile,open} from 'node:fs/promises';
 import {join} from 'node:path';
+import {emulatorDiagnostic,redactDiagnostic} from './diagnostics.mjs';
 const [root,kind]=process.argv.slice(2),app=join(root,'app');
 const next=['canonical','legacy'].includes(kind);
 const report={candidate:kind,stages:[],hostedAcceptance:false,fullFeatureParity:false,externalRuntimeRequests:0,unverified:['hosted quotas and credits','complete batch elapsed-time and retry acceptance','provider and authenticated end-to-end behavior','production domain cutover'],status:'INCOMPLETE'};
-const env={...process.env,NETLIFY:'true',CONTEXT:'deploy-preview',MORAL_TRADE_DISABLE_DEP_REPAIR:'1',NETLIFY_TELEMETRY_DISABLED:'1',NEXT_TELEMETRY_DISABLED:'1',CI:'true',NODE_OPTIONS:'--max-old-space-size=6144',MORAL_TRADE_DISABLE_SUPABASE:'false',CRON_SECRET:'synthetic-cron-secret',DATABASE_URL:'postgresql://postgres:synthetic@127.0.0.1:15439/synthetic'};
+const env={...process.env,NETLIFY:'true',CONTEXT:'deploy-preview',MORAL_TRADE_DISABLE_DEP_REPAIR:'1',NETLIFY_TELEMETRY_DISABLED:'1',NEXT_TELEMETRY_DISABLED:'1',CI:'true',NODE_OPTIONS:'--max-old-space-size=6144 --import='+join(root,'harness/fetch-diagnostic.mjs'),MORAL_TRADE_DISABLE_SUPABASE:'false',CRON_SECRET:'synthetic-cron-secret',DATABASE_URL:'postgresql://postgres:synthetic@127.0.0.1:15439/synthetic'};
 async function stage(name,cmd,args,extra={}){
  const r=spawnSync(cmd,args,{cwd:app,env:{...env,...extra},encoding:'utf8',timeout:30*60*1000,maxBuffer:24*1024*1024});
  await writeFile(join(root,name+'.log'),(r.stdout||'')+(r.stderr||''));
  report.stages.push({name,status:r.status===0?'PASS':'FAIL',exit:r.status,error:r.error?.code});
  console.log(name,r.status===0?'PASS':'FAIL');
- if(r.status!==0)console.log(((r.stdout||'')+(r.stderr||'')).slice(-5000));
+ if(r.status!==0)console.log(redactDiagnostic((r.stdout||'')+(r.stderr||'')).slice(-8000));
  return r.status===0;
 }
 try{
@@ -38,7 +39,11 @@ try{
    try{await fetch('http://127.0.0.1:8888/',{signal:AbortSignal.timeout(500)});ready=true;break;}catch{}
    await new Promise(r=>setTimeout(r,1000));
   }
-  if(!ready)throw Error('Offline Netlify emulator unavailable; runtime acceptance pending');
+  if(!ready){
+   report.emulator=await emulatorDiagnostic(join(root,'emulator.log'),child.exitCode,child.signalCode);
+   console.log(JSON.stringify(report.emulator));
+   throw Error('Offline Netlify emulator unavailable; runtime acceptance pending');
+  }
   if(!await stage('runtime',process.execPath,[join(root,'harness/runtime.mjs'),root,kind]))throw Error('Runtime comparison failed');
  }finally{try{process.kill(-child.pid,'SIGTERM');}catch{}await log.close();}
  report.status='PACKAGING_AND_BOUNDED_RUNTIME_PASS';

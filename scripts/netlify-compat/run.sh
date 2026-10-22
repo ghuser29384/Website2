@@ -39,6 +39,7 @@ offline)
  export NEXT_TELEMETRY_DISABLED=1 NETLIFY_TELEMETRY_DISABLED=1 CI=true NO_COLOR=1
  export MORAL_TRADE_DISABLE_DEP_REPAIR=1
  node "$ROOT/harness/candidate/tests/local.mjs"
+ node --test "$ROOT/harness/diagnostics.test.mjs" "$ROOT/harness/layout.test.mjs" "$ROOT/harness/normativity-boundary.test.mjs"
  node "$ROOT/harness/offline.mjs" "$ROOT" "$CANDIDATE"
  ;;
 *) exit 2;;

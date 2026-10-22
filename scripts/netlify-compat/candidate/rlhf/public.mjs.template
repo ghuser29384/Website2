@@ -1,6 +1,6 @@
-// Place beside adapter.mjs under netlify/functions after approval.
+// Public entry point under netlify/functions; helpers live in netlify/lib.
 // Move/copy the exact existing Vercel handler to release-handler.mjs unchanged.
-import handler from './release-handler.mjs';
-import { adaptPublicHandler } from './adapter.mjs';
+import handler from '../lib/release-handler.mjs';
+import { adaptPublicHandler } from '../lib/adapter.mjs';
 export default adaptPublicHandler(handler);
 export const config = { path: '/*', preferStatic: false };
