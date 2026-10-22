@@ -44,7 +44,11 @@ try{
    console.log(JSON.stringify(report.emulator));
    throw Error('Offline Netlify emulator unavailable; runtime acceptance pending');
   }
-  if(!await stage('runtime',process.execPath,[join(root,'harness/runtime.mjs'),root,kind]))throw Error('Runtime comparison failed');
+  if(!await stage('runtime',process.execPath,[join(root,'harness/runtime.mjs'),root,kind])){
+   report.emulator=await emulatorDiagnostic(join(root,'emulator.log'),child.exitCode,child.signalCode);
+   console.log(JSON.stringify(report.emulator));
+   throw Error('Runtime comparison failed');
+  }
  }finally{try{process.kill(-child.pid,'SIGTERM');}catch{}await log.close();}
  report.status='PACKAGING_AND_BOUNDED_RUNTIME_PASS';
 }catch(e){report.status='BLOCKED_OR_FAILED';report.reason=e.message;process.exitCode=1;}
