@@ -10,6 +10,7 @@ import {
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import styles from "@/components/core-trade/offer-workspace.module.css";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import { requireViewer } from "@/lib/app-data";
 import {
@@ -70,8 +71,8 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
   );
 
   return (
-    <div className="page-shell marketplace-app-shell trade-workflow-shell">
-      <header className="v72-route-header">
+    <div className={styles.page} data-offer-workspace>
+      <header className={styles.header}>
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(true)}
@@ -81,175 +82,82 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
         />
       </header>
 
-      <main id="main-content" tabIndex={-1}>
+      <main className={styles.main} id="main-content" tabIndex={-1}>
         {formMessage ? (
           <div
             className={`status-banner ${
               formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"
             }`}
+            role="status"
           >
             {formMessage.text}
           </div>
         ) : null}
 
-        <section className="section section-white" aria-labelledby="manage-offer-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Proposal lifecycle</p>
-            <h1 id="manage-offer-heading">
-              {offer.offered_cause} ↔ {offer.requested_cause}
-            </h1>
-            <p>{stateCopy(offer.workflow_status)}</p>
+        <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+          <Link href="/dashboard">Profile</Link><span aria-hidden="true">/</span><span>Manage proposal</span>
+        </nav>
+        <header className={styles.intro}>
+          <div className={styles.titleRow}>
+            <h1 id="manage-offer-heading">Manage proposal</h1>
+            <span className={styles.status}>{offer.workflow_status.replaceAll("_", " ")}</span>
           </div>
+          <p className={styles.proposalTitle}>{offer.offered_cause} ↔ {offer.requested_cause}</p>
+          <div className={styles.actions}>
+            {offer.workflow_status === "published" ? (
+              <>
+                <Link className="button button-primary" href={`/trades/${offer.id}/invite`}>Invite someone</Link>
+                <Link className="button button-secondary" href={`/offers/${offer.id}`}>View public offer</Link>
+              </>
+            ) : null}
+            <Link className={styles.textLink} href="/trades/new">Create another</Link>
+          </div>
+        </header>
 
-          <div className="data-grid">
-            <article className="panel data-card">
-              <p className="detail-kicker">Current state</p>
-              <h2>{offer.workflow_status.replaceAll("_", " ")}</h2>
-              <dl className="detail-grid">
-                <div>
-                  <dt>Term version</dt>
-                  <dd>{offer.terms_version}</dd>
-                </div>
-                <div>
-                  <dt>Submitted</dt>
-                  <dd>{formatDate(offer.submitted_at)}</dd>
-                </div>
-                <div>
-                  <dt>Published</dt>
-                  <dd>{formatDate(offer.published_at)}</dd>
-                </div>
-                <div>
-                  <dt>Updated</dt>
-                  <dd>{formatDate(offer.updated_at)}</dd>
-                </div>
+        <div className={styles.overview}>
+          <section className={styles.card} aria-labelledby="proposal-summary-heading">
+            <h2 id="proposal-summary-heading">Proposal summary</h2>
+            <dl className={styles.terms}>
+              <div><dt>Your commitment</dt><dd>{offer.offer_action}</dd></div>
+              <div><dt>Their commitment</dt><dd>{offer.request_action}</dd></div>
+            </dl>
+          </section>
+          <section className={styles.card} aria-labelledby="proposal-status-heading">
+            <h2 id="proposal-status-heading">Status</h2>
+            <p className={styles.muted}>{stateCopy(offer.workflow_status)}</p>
+            {offer.moderation_reason ? (
+              <div className="status-banner status-banner-error"><strong>Review feedback</strong><p>{offer.moderation_reason}</p></div>
+            ) : null}
+            {offer.workflow_status === "published" ? (
+              <form action={changeCoreOfferStateAction}>
+                <input name="offer_id" type="hidden" value={offer.id} />
+                <input name="return_to" type="hidden" value={`/trades/${offer.id}/manage`} />
+                <input name="lifecycle_action" type="hidden" value="pause" />
+                <PendingSubmitButton className="button button-secondary" pendingLabel="Pausing...">Pause offer</PendingSubmitButton>
+              </form>
+            ) : null}
+            <details className={styles.inlineDetails}>
+              <summary>Version and dates</summary>
+              <dl className={styles.metadata}>
+                <div><dt>Term version</dt><dd>{offer.terms_version}</dd></div>
+                <div><dt>Submitted</dt><dd>{formatDate(offer.submitted_at)}</dd></div>
+                <div><dt>Published</dt><dd>{formatDate(offer.published_at)}</dd></div>
+                <div><dt>Updated</dt><dd>{formatDate(offer.updated_at)}</dd></div>
               </dl>
-              {offer.moderation_reason ? (
-                <div className="status-banner status-banner-error">
-                  <strong>Operator reason</strong>
-                  <p>{offer.moderation_reason}</p>
-                </div>
-              ) : null}
-              <div className="form-actions">
-                {offer.workflow_status === "published" ? (
-                  <Link className="button button-primary" href={`/offers/${offer.id}`}>
-                    View public offer
-                  </Link>
-                ) : null}
-                <Link className="button button-secondary" href="/trades/new">
-                  Create another
-                </Link>
-              </div>
-            </article>
-
-            <article className="panel data-card">
-              <p className="detail-kicker">Lifecycle controls</p>
-              <h2>Pause, close, or delete deliberately</h2>
-              <p className="route-text">
-                Pausing removes a published offer from discovery. Closing is permanent. A draft can
-                be deleted if no agreement depends on it; otherwise it is retained as a deleted audit
-                record.
-              </p>
-              <div className="form-actions">
-                {offer.workflow_status === "published" ? (
-                  <form action={changeCoreOfferStateAction}>
-                    <input name="offer_id" type="hidden" value={offer.id} />
-                    <input name="return_to" type="hidden" value={`/trades/${offer.id}/manage`} />
-                    <input name="lifecycle_action" type="hidden" value="pause" />
-                    <PendingSubmitButton
-                      className="button button-secondary button-mini"
-                      pendingLabel="Pausing..."
-                    >
-                      Pause offer
-                    </PendingSubmitButton>
-                  </form>
-                ) : null}
-                {!['closed', 'deleted'].includes(offer.workflow_status) ? (
-                  <form action={changeCoreOfferStateAction}>
-                    <input name="offer_id" type="hidden" value={offer.id} />
-                    <input name="return_to" type="hidden" value={`/trades/${offer.id}/manage`} />
-                    <input name="lifecycle_action" type="hidden" value="close" />
-                    <PendingSubmitButton
-                      className="button button-secondary button-mini"
-                      pendingLabel="Closing..."
-                    >
-                      Permanently close
-                    </PendingSubmitButton>
-                  </form>
-                ) : null}
-                {editable ? (
-                  <form action={changeCoreOfferStateAction}>
-                    <input name="offer_id" type="hidden" value={offer.id} />
-                    <input name="return_to" type="hidden" value={`/trades/${offer.id}/manage`} />
-                    <input name="lifecycle_action" type="hidden" value="delete" />
-                    <PendingSubmitButton
-                      className="button button-secondary button-mini"
-                      pendingLabel="Deleting..."
-                    >
-                      Delete draft
-                    </PendingSubmitButton>
-                  </form>
-                ) : null}
-              </div>
-            </article>
-          </div>
-        </section>
+            </details>
+          </section>
+        </div>
 
         {sourceLink ? (
-          <section className="section section-subtle" aria-labelledby="source-bound-heading">
-            <div className="section-head section-head-compact">
-              <p className="eyebrow">Source-bound counteroffer</p>
-              <h2 id="source-bound-heading">
-                Based on {sourceLink.sourceOwnerAlias}&apos;s original offer
-              </h2>
-              <p>
-                This draft keeps its exact source relationship. Phase 1 permits private saving and
-                operator review only; it cannot be published, invited, messaged, or converted into
-                an agreement.
-              </p>
-            </div>
-            <div className="data-grid">
-              <article className="panel data-card">
-                <p className="detail-kicker">Original source</p>
-                <h3>Offer revision {sourceLink.source_terms_version}</h3>
-                <dl className="detail-grid">
-                  <div>
-                    <dt>Counterparty</dt>
-                    <dd>{sourceLink.sourceOwnerAlias}</dd>
-                  </div>
-                  <div>
-                    <dt>Derivation</dt>
-                    <dd>Counteroffer</dd>
-                  </div>
-                  <div>
-                    <dt>Current source</dt>
-                    <dd>{sourceLink.sourceCurrent ? "Open at the linked revision" : "Changed or closed"}</dd>
-                  </div>
-                  <div>
-                    <dt>Delivered</dt>
-                    <dd>No</dd>
-                  </div>
-                </dl>
-                <div className="form-actions">
-                  <Link className="button button-secondary" href={sourceLink.sourceUrl}>
-                    View original offer
-                  </Link>
-                </div>
-              </article>
-              <article className="panel data-card">
-                <p className="detail-kicker">Phase-1 boundary</p>
-                <h3>No reliance or contact</h3>
-                <p className="route-text">
-                  The original participant has not received this draft. No invitation, thread,
-                  agreement, payment authorization, or obligation exists. The source relationship
-                  cannot be removed from a true counteroffer.
-                </p>
-                {!sourceLink.sourceCurrent ? (
-                  <div className="status-banner status-banner-error">
-                    The source changed or closed. You may keep this private draft for reference, but
-                    it cannot be resubmitted from the stale source revision.
-                  </div>
-                ) : null}
-              </article>
+          <section className={styles.card} aria-labelledby="source-bound-heading">
+            <h2 id="source-bound-heading">Based on {sourceLink.sourceOwnerAlias}&apos;s offer</h2>
+            <p className={styles.muted}>This counteroffer can be saved privately or submitted for review. It cannot be published or sent, and creates no agreement or obligation.</p>
+            {!sourceLink.sourceCurrent ? (
+              <div className="status-banner status-banner-error">The original offer changed or closed. You can keep this draft, but cannot resubmit it.</div>
+            ) : null}
+            <div className={styles.actions}>
+              <Link className="button button-secondary" href={sourceLink.sourceUrl}>View original offer</Link>
+              <span className={styles.muted}>Revision {sourceLink.source_terms_version} · Not delivered</span>
             </div>
           </section>
         ) : null}
@@ -257,15 +165,11 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
         {editable ? (
           <section className="section section-subtle" aria-labelledby="edit-terms-heading">
             <div className="section-head section-head-compact">
-              <p className="eyebrow">Revise</p>
-              <h2 id="edit-terms-heading">Edit the bounded terms, then save or resubmit.</h2>
-              <p>
-                Resubmission uses the same offer record, increments the term version, and returns it
-                to pending review. It does not create a duplicate.
-              </p>
+              <h2 id="edit-terms-heading">Edit proposal</h2>
+
             </div>
 
-            <form action={updateCoreOfferAction} className="panel stack-form">
+            <form action={updateCoreOfferAction} className="stack-form">
               <input name="offer_id" type="hidden" value={offer.id} />
               <input name="return_to" type="hidden" value={`/trades/${offer.id}/manage`} />
               <div className="field-grid">
@@ -370,37 +274,17 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
         ) : null}
 
         {offer.workflow_status === "published" ? (
-          <>
-            <section className="section section-white" aria-labelledby="invite-heading">
-              <div className="section-head section-head-compact">
-                <p className="eyebrow">Invitation-first trade</p>
-                <h2 id="invite-heading">Bring a specific person into this proposal.</h2>
-                <p>
-                  They can inspect every term before joining, then accept, counter, or decline.
-                  Email invitations are account-bound; share links bind to their first claimant.
-                </p>
-                <Link className="button button-primary" href={`/trades/${offer.id}/invite`}>
-                  Invite someone
-                </Link>
-              </div>
-            </section>
-
             <section className="section section-subtle" aria-labelledby="matches-heading">
               <div className="section-head section-head-compact">
-                <p className="eyebrow">Deterministic matching</p>
-                <h2 id="matches-heading">Reciprocal published proposals.</h2>
-                <p>
-                  Matching is deliberately simple: same action category, with offered and requested
-                  priorities reversed. No AI inference or hidden profile scoring is used.
-                </p>
+                  <h2 id="matches-heading">Matching proposals</h2>
+
               </div>
 
               <div className="data-grid">
                 {matches.length ? (
                   matches.map((match) => (
                     <article className="panel data-card" key={match.id}>
-                      <p className="detail-kicker">Reciprocal match</p>
-                      <h3>
+                                            <h3>
                         {match.offered_cause} ↔ {match.requested_cause}
                       </h3>
                       <p className="route-text">{match.offer_action}</p>
@@ -425,13 +309,37 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
                   <div className="empty-state">
                     <div>
                       <strong>No exact reciprocal match yet.</strong>
-                      <p>Use a direct invitation while the marketplace is still small.</p>
+
                     </div>
                   </div>
                 )}
               </div>
             </section>
-          </>
+        ) : null}
+        {!["closed", "deleted"].includes(offer.workflow_status) ? (
+          <details className={styles.disclosure}>
+            <summary>Close or delete proposal</summary>
+            <div className={styles.disclosureBody}>
+              <p className={styles.muted}>Closing is permanent. To temporarily remove a published offer from discovery, use Pause offer.</p>
+              <div className={styles.actions}>
+                <form action={changeCoreOfferStateAction}>
+                  <input name="offer_id" type="hidden" value={offer.id} />
+                  <input name="return_to" type="hidden" value={`/trades/${offer.id}/manage`} />
+                  <input name="lifecycle_action" type="hidden" value="close" />
+                  <PendingSubmitButton className={`button button-secondary ${styles.danger}`} pendingLabel="Closing...">Permanently close</PendingSubmitButton>
+                </form>
+                {editable ? (
+                  <form action={changeCoreOfferStateAction}>
+                    <input name="offer_id" type="hidden" value={offer.id} />
+                    <input name="return_to" type="hidden" value={`/trades/${offer.id}/manage`} />
+                    <input name="lifecycle_action" type="hidden" value="delete" />
+                    <PendingSubmitButton className={`button button-secondary ${styles.danger}`} pendingLabel="Deleting...">Delete draft</PendingSubmitButton>
+                  </form>
+                ) : null}
+              </div>
+              {editable ? <p className={styles.small}>If an agreement depends on this draft, its audit record is retained.</p> : null}
+            </div>
+          </details>
         ) : null}
       </main>
 

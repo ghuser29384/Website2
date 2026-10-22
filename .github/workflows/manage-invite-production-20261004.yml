@@ -1,0 +1,74 @@
+name: Manage and Invite production 2026-10-04
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/manage-invite-production-20261004.yml
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: manage-invite-production-20261004
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/manage-invite-production-20261004.yml
+  RELEASE_WORKFLOW: vercel-release.yml
+  RELEASE_REF: main
+  RELEASE_TARGET: production
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify approved page source and exact release candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          git diff --check HEAD^
+          printf '%s\n' \
+            '8f4893ed48c74f349e57684a5e1674469e015bdb9fd42708c96214adbd45cfdb  src/app/trades/[offerId]/manage/page.tsx' \
+            '7e0054add3750ee72a104f50f0015e87f727a3b0aa48d2c557dc957cc8afb9be  src/app/trades/[offerId]/invite/page.tsx' \
+            '13cfabd72f8061858dc78d6604974f204806fdefd68ccba9b95600188f7b6244  src/components/core-trade/offer-workspace.module.css' \
+            | sha256sum --check --strict
+          test "$RELEASE_TARGET" = 'production'
+          test "$RELEASE_REF" = 'main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$RELEASE_REF" | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+          workflow_state="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW" --jq .state)"
+          test "$workflow_state" = 'active'
+
+      - name: Dispatch exact gated production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg workflow_ref main \
+            --arg release_ref "$RELEASE_REF" \
+            --arg target "$RELEASE_TARGET" \
+            --arg expected_sha "$GITHUB_SHA" \
+            '{ref:$workflow_ref,inputs:{ref:$release_ref,target:$target,expected_sha:$expected_sha,synthetic_auth_fixture_url:""}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches" \
+                --input - >/dev/null

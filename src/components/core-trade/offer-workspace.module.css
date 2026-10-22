@@ -1,0 +1,111 @@
+.page { min-height: 100vh; background: #f6f7f9; color: #202630; }
+.header { background: #111214; }
+.page .header :global(.topbar) { width: 100%; max-width: none; margin: 0; }
+.page .header :global(.topbar-links) { display: flex !important; align-items: center; gap: 24px !important; }
+.page[data-offer-workspace] .main { width: min(1080px, calc(100% - 48px)); margin: 0 auto; padding: 28px 0 64px; display: grid; gap: 24px; }
+.page[data-offer-workspace] .main > *, .page[data-offer-workspace] .main section, .page[data-offer-workspace] .main article, .page[data-offer-workspace] .main form { min-width: 0; }
+.page[data-offer-workspace] .main h1, .page[data-offer-workspace] .main h2, .page[data-offer-workspace] .main h3 { font-family: var(--font-body, Arial, sans-serif) !important; color: #171c25; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.page[data-offer-workspace] .main h1 { margin: 0; max-width: none; font-size: clamp(26px, 3vw, 34px) !important; font-weight: 650; line-height: 1.2; }
+.page[data-offer-workspace] .main h2 { margin: 0 0 18px; font-size: 20px !important; font-weight: 650; line-height: 1.35; }
+.page[data-offer-workspace] .main h3 { margin: 0; font-size: 17px !important; font-weight: 600; line-height: 1.4; }
+.page[data-offer-workspace] .main p { line-height: 1.6; }
+.page[data-offer-workspace] .main a { color: #244bdd; }
+.page[data-offer-workspace] .main a:hover { text-decoration: underline; }
+.breadcrumb, .titleRow, .actions, .sectionHeading, .invitationHeading, .invitationActions { display: flex; align-items: center; flex-wrap: wrap; }
+.breadcrumb { gap: 10px; font-size: 14px; color: #667080; }
+.titleRow { gap: 12px; }
+.intro { padding: 0 0 2px; }
+.page[data-offer-workspace] .main .proposalTitle { margin: 12px 0 0; max-width: 76ch; color: #546174; font-size: 16px; overflow-wrap: anywhere; }
+.status { display: inline-flex; flex: 0 0 auto; width: fit-content; padding: 4px 10px; border-radius: 5px; background: #e9eef8; color: #354b74; font-size: 14px; font-weight: 500; line-height: 1.5; text-transform: capitalize; }
+.actions { gap: 10px 20px; margin-top: 20px; }
+.actions form { margin: 0; }
+.textLink { font-size: 14px; font-weight: 600; line-height: 1.5; }
+.overview, .inviteGrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.page[data-offer-workspace] .main .card, .page[data-offer-workspace] .main :global(.section) { padding: 24px; border: 1px solid #dce1e9 !important; border-radius: 10px !important; background: #fff !important; box-shadow: none; }
+.page[data-offer-workspace] .main .card { min-width: 0; }
+.page[data-offer-workspace] .main :global(.section-head) { display: block; max-width: none; margin: 0 0 20px; padding: 0; border: 0; }
+.page[data-offer-workspace] .main :global(.section-head) h2 { margin: 0; max-width: none; }
+.page[data-offer-workspace] .main :global(.panel) { padding: 20px; border: 1px solid #e3e7ed; border-radius: 8px !important; background: #fff !important; box-shadow: none; }
+.page[data-offer-workspace] .main :global(.data-grid) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.terms { display: grid; gap: 18px; margin: 0; }
+.terms > div + div { padding-top: 18px; border-top: 1px solid #edf0f4; }
+.terms dt { margin: 0 0 6px; color: #667080; font-size: 14px; font-weight: 500; }
+.terms dd { margin: 0; font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-line; }
+.muted { color: #5b6779; font-size: 15px; margin: 0 0 18px; }
+.page[data-offer-workspace] .main .small { color: #667080; font-size: 14px; margin: 16px 0; }
+.inlineDetails { margin-top: 20px; padding-top: 16px; border-top: 1px solid #e4e8ef; }
+.page[data-offer-workspace] .main summary { cursor: pointer; color: #35435d; font-size: 14px; font-weight: 600; line-height: 1.6; }
+.inlineDetails > summary { list-style: disclosure-closed inside; }
+.inlineDetails[open] > summary { list-style-type: disclosure-open; margin-bottom: 18px; }
+.metadata { margin: 0; display: grid; gap: 12px; }
+.metadata > div { display: grid; grid-template-columns: 95px minmax(0, 1fr); gap: 12px; }
+.metadata dt, .invitationDates dt { color: #667080; font-size: 14px; }
+.metadata dd, .invitationDates dd { margin: 0; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.page[data-offer-workspace] .main :global(.stack-form) { display: grid; gap: 20px; }
+.page[data-offer-workspace] .main :global(.stack-form) h2 { margin-bottom: 0; }
+.page[data-offer-workspace] .main :global(.field-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.page[data-offer-workspace] .main :global(.field) { min-width: 0; gap: 8px; font-size: 14px; color: #35435d; }
+.page[data-offer-workspace] .main :global(.field) > span { font-size: 14px; font-weight: 600; }
+.page[data-offer-workspace] .main :global(.field) input, .page[data-offer-workspace] .main :global(.field) textarea { width: 100%; min-width: 0; max-width: 100%; padding: 11px 12px; border: 1px solid #cbd3df !important; border-radius: 6px !important; background: #fff !important; font: 400 16px/1.5 var(--font-body, Arial, sans-serif); color: #202630; }
+.page[data-offer-workspace] .main :global(.field) textarea { resize: vertical; }
+.page[data-offer-workspace] .main :global(.radio-row) { font-size: 14px; line-height: 1.6; align-items: flex-start; }
+.page[data-offer-workspace] .main .fieldHelp { margin: -10px 0 0; color: #667080; font-size: 14px; }
+.page[data-offer-workspace] .main :global(.button) { min-height: 44px; padding: 11px 16px; border-radius: 7px !important; font: 600 14px/1.4 var(--font-body, Arial, sans-serif); text-transform: none; text-align: center; white-space: normal; }
+.page[data-offer-workspace] .main :global(.button-primary) { background: #244bdd !important; color: #fff !important; border: 1px solid #244bdd !important; }
+.page[data-offer-workspace] .main :global(.button-secondary) { background: #fff !important; color: #35435d !important; border: 1px solid #cfd6e2 !important; }
+.page[data-offer-workspace] .main :global(.button):hover { text-decoration: none; filter: brightness(.97); }
+.page[data-offer-workspace] .main :global(.button):disabled { opacity: .55; cursor: not-allowed; }
+.page[data-offer-workspace] .main .danger { color: #9c353a !important; border-color: #dfc6c8 !important; }
+.page[data-offer-workspace] .main :global(.form-actions) { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.page[data-offer-workspace] .main :global(.form-actions) form { margin: 0; }
+.page[data-offer-workspace] .main :global(.stack-form) > :global(.button) { justify-self: start; }
+.page[data-offer-workspace] .main :global(.status-banner) { padding: 14px 16px; margin: 0; border-radius: 7px !important; font-size: 15px; overflow-wrap: anywhere; }
+.page[data-offer-workspace] .main :global(.status-banner) p { margin: 6px 0; }
+.page[data-offer-workspace] .main :global(.empty-state) { grid-column: 1 / -1; padding: 20px; border-radius: 8px; font-size: 15px; }
+.page[data-offer-workspace] .main :global(.route-text) { color: #5b6779; font-size: 15px; }
+.disclosure { border: 1px solid #dce1e9; border-radius: 9px; background: #fff; }
+.disclosure > summary { padding: 17px 22px; }
+.disclosureBody { padding: 0 22px 22px; }
+.disclosureBody .actions { margin-top: 0; }
+.disclosureBody .small { margin-bottom: 0; }
+.sectionHeading { gap: 10px; margin-bottom: 16px; }
+.sectionHeading h2 { margin: 0; }
+.count { font-size: 14px; padding: 2px 8px; border-radius: 5px; background: #e9edf4; color: #536177; }
+.invitationList { display: grid; gap: 14px; }
+.invitationHeading { justify-content: space-between; gap: 12px; align-items: flex-start; }
+.invitationHeading > div { min-width: 0; }
+.invitationHeading .small { margin: 5px 0 0; }
+.invitationDates { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 18px 0 0; }
+.invitationDates > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.invitationActions { justify-content: space-between; align-items: flex-start; gap: 14px; margin-top: 18px; border-top: 1px solid #edf0f4; padding-top: 18px; }
+.invitationActions :global(.form-actions) { margin: 0; }
+.invitationActions > form { margin: 0; }
+.page[data-offer-workspace] .main :is(a, button, input, textarea, summary):focus-visible { outline: 3px solid #8098ff; outline-offset: 3px; }
+@media (max-width: 760px) {
+  .overview, .inviteGrid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .page[data-offer-workspace] .main { width: calc(100% - 32px); gap: 20px; padding-top: 20px; }
+  .page[data-offer-workspace] .main .card, .page[data-offer-workspace] .main :global(.section) { padding: 20px; }
+  .page[data-offer-workspace] .main :global(.data-grid), .page[data-offer-workspace] .main :global(.field-grid) { grid-template-columns: minmax(0, 1fr); }
+  .page .header :global(.topbar-links) { gap: 16px !important; }
+}
+@media (max-width: 420px) {
+  .page[data-offer-workspace] .main { width: calc(100% - 24px); }
+  .page[data-offer-workspace] .main .card, .page[data-offer-workspace] .main :global(.section) { padding: 18px; }
+  .actions { gap: 10px 14px; }
+  .page[data-offer-workspace] .main :global(.stack-form) > :global(.button) { width: 100%; }
+  .metadata > div { grid-template-columns: 80px minmax(0, 1fr); }
+}
+
+.page[data-offer-workspace] .main :global(.field) > span { font-family: var(--font-body, Arial, sans-serif) !important; text-transform: none !important; letter-spacing: 0 !important; }
+.page[data-offer-workspace] .main :global(.empty-state) { padding: 0; border: 0; background: transparent; min-height: 0; text-align: left; display: block; }
+.page[data-offer-workspace] .main :global(.empty-state) p { margin: 5px 0 0; }
+@media (max-width: 420px) {
+  .page .header :global(.topbar-links) { gap: 10px !important; flex-wrap: wrap; }
+}
+.page[data-offer-workspace] .main .invitationActions > div { min-width: 0; }
+.page[data-offer-workspace] .main .invitationActions :global(.form-actions) { display: grid; grid-template-columns: repeat(4, max-content); }
+@media (max-width: 760px) {
+  .page[data-offer-workspace] .main .invitationActions > div { width: 100%; }
+  .page[data-offer-workspace] .main .invitationActions :global(.form-actions) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page[data-offer-workspace] .main .invitationActions :global(.form-actions) > * { width: 100%; min-width: 0; }
+}

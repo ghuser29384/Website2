@@ -10,6 +10,7 @@ import { InvitationShareControls } from "@/components/core-trade/invitation-shar
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import styles from "@/components/core-trade/offer-workspace.module.css";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import { requireViewer } from "@/lib/app-data";
 import {
@@ -35,7 +36,7 @@ interface InvitePageProps {
 }
 
 function deliveryLabel(deliveryKind: string) {
-  return deliveryKind === "email" ? "Email-bound" : "First-claim share link";
+  return deliveryKind === "email" ? "Email invitation" : "Share link";
 }
 
 export default async function InvitePage({ params, searchParams }: InvitePageProps) {
@@ -50,8 +51,8 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
   const eligible = offer.workflow_status === "published" && offer.status === "open";
 
   return (
-    <div className="page-shell marketplace-app-shell">
-      <header className="v72-route-header">
+    <div className={styles.page} data-offer-workspace>
+      <header className={styles.header}>
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(true)}
@@ -61,7 +62,7 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
         />
       </header>
 
-      <main id="main-content" tabIndex={-1}>
+      <main className={styles.main} id="main-content" tabIndex={-1}>
         {formMessage ? (
           <div
             className={`status-banner ${
@@ -73,61 +74,47 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
           </div>
         ) : null}
 
-        <section className="section section-white" aria-labelledby="invite-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Invitation-first trade</p>
-            <h1 id="invite-heading">Invite someone outside Moral Trade.</h1>
-            <p>
-              You are inviting them to inspect “{offer.offered_cause} ↔ {offer.requested_cause}.”
-              They can read all terms before joining, then accept, counter, or decline.
-            </p>
-            <div className="form-actions">
-              <Link className="button button-secondary" href={`/trades/${offer.id}/manage`}>
-                Back to proposal
-              </Link>
-              <Link className="button button-secondary" href={`/offers/${offer.id}`}>
-                View public offer
-              </Link>
-            </div>
-          </div>
-
+        <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+          <Link href={`/trades/${offer.id}/manage`}>Manage proposal</Link><span aria-hidden="true">/</span><span>Invite</span>
+        </nav>
+        <header className={styles.intro}>
+          <h1 id="invite-heading">Invite someone</h1>
+          <p className={styles.proposalTitle}>{offer.offered_cause} ↔ {offer.requested_cause}</p>
+        </header>
+        <section aria-labelledby="invite-heading">
           {eligible ? (
-            <div className="detail-grid detail-grid-wide">
-              <form action={createTradeInvitationAction} className="panel stack-form">
+            <div className={styles.inviteGrid}>
+              <form action={createTradeInvitationAction} className={`${styles.card} stack-form`}>
                 <input name="offer_id" type="hidden" value={offer.id} />
-                <p className="detail-kicker">Create invitation</p>
-                <h2>Email one person or make a private link.</h2>
+                <h2>Create invitation</h2>
                 <label className="field">
                   <span>Recipient email (optional)</span>
                   <input
+                    aria-describedby="recipient-help"
                     autoComplete="email"
                     name="recipient_email"
                     placeholder="person@example.org"
                     type="email"
                   />
                 </label>
-                <p className="route-text">
-                  With an email, only the matching confirmed account can answer. Without one, the
-                  first signed-in person to answer permanently claims the link.
-                </p>
+                <p className={styles.fieldHelp} id="recipient-help">Add an email to limit responses to that person. Leave it blank for a link claimed by the first signed-in person who answers.</p>
                 <label className="field">
-                  <span>Private invitation note (optional)</span>
+                  <span>Personal note (optional)</span>
                   <textarea
                     maxLength={4000}
                     name="message"
-                    placeholder="Why this exact proposal may be worth their time"
-                    rows={5}
+                    placeholder="Add a short message"
+                    rows={4}
                   />
                 </label>
-                <PendingSubmitButton pendingLabel="Creating secure invitation...">
+                <PendingSubmitButton pendingLabel="Creating invitation...">
                   Create 14-day invitation
                 </PendingSubmitButton>
               </form>
 
-              <article className="panel detail-block">
-                <p className="detail-kicker">What the recipient sees</p>
-                <h2>Terms before account creation.</h2>
-                <dl className="detail-grid">
+              <article className={styles.card}>
+                <h2>Proposal preview</h2>
+                <dl className={styles.terms}>
                   <div>
                     <dt>Your commitment</dt>
                     <dd>{offer.offer_action}</dd>
@@ -136,22 +123,17 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
                     <dt>Their commitment</dt>
                     <dd>{offer.request_action}</dd>
                   </div>
-                  <div>
-                    <dt>No-trade baseline</dt>
-                    <dd>{offer.no_trade_baseline}</dd>
-                  </div>
-                  <div>
-                    <dt>Maximum burden</dt>
-                    <dd>{offer.maximum_burden}</dd>
-                  </div>
+
                 </dl>
-                <div className="status-banner">
-                  <strong>No immediate activation</strong>
-                  <p>
-                    Even an acceptance creates only a proposed frozen agreement. Both participants
-                    must separately confirm that exact version before it becomes active.
-                  </p>
-                </div>
+                <details className={styles.inlineDetails}>
+                  <summary>More terms</summary>
+                  <dl className={styles.terms}>
+                    <div><dt>No-trade baseline</dt><dd>{offer.no_trade_baseline}</dd></div>
+                    <div><dt>Maximum burden</dt><dd>{offer.maximum_burden}</dd></div>
+                  </dl>
+                </details>
+                <p className={styles.small}>Both participants must confirm the same agreement before it becomes active.</p>
+                <Link className={styles.textLink} href={`/offers/${offer.id}`}>View full proposal</Link>
               </article>
             </div>
           ) : (
@@ -167,19 +149,12 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
           )}
         </section>
 
-        <section className="section section-subtle" aria-labelledby="invitation-status-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Delivery and responses</p>
-            <h2 id="invitation-status-heading">
-              {invitations.length} invitation{invitations.length === 1 ? "" : "s"}
-            </h2>
-            <p>
-              Open links can be copied, shared, previewed, or revoked. Email links are also shown
-              here so you can use a trusted existing channel if delivery is delayed.
-            </p>
+        <section className={styles.history} aria-labelledby="invitation-status-heading">
+          <div className={styles.sectionHeading}>
+            <h2 id="invitation-status-heading">Invitations</h2>
+            <span className={styles.count}>{invitations.length}</span>
           </div>
-
-          <div className="data-grid">
+          <div className={styles.invitationList}>
             {invitations.length ? (
               invitations.map((invitation) => {
                 const usable = isTradeInvitationUsable(invitation.status);
@@ -187,14 +162,15 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
                   ? `${invitationBase}${invitation.token}`
                   : "";
                 return (
-                  <article className="panel data-card" key={invitation.id}>
-                    <p className="detail-kicker">{deliveryLabel(invitation.delivery_kind)}</p>
-                    <h3>{invitation.status.replaceAll("_", " ")}</h3>
-                    <dl className="detail-grid">
+                  <article className={styles.card} key={invitation.id}>
+                    <div className={styles.invitationHeading}>
                       <div>
-                        <dt>Recipient</dt>
-                        <dd>{invitation.recipient_email || "Anyone holding the unclaimed link"}</dd>
+                        <h3>{invitation.recipient_email || "Private share link"}</h3>
+                        <p className={styles.small}>{deliveryLabel(invitation.delivery_kind)}</p>
                       </div>
+                      <span className={styles.status}>{invitation.status.replaceAll("_", " ")}</span>
+                    </div>
+                    <dl className={styles.invitationDates}>
                       <div>
                         <dt>Created</dt>
                         <dd>
@@ -214,6 +190,7 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
                         </dd>
                       </div>
                     </dl>
+                    <div className={styles.invitationActions}>
                     {usable && invitationUrl ? (
                       <InvitationShareControls invitationUrl={invitationUrl} />
                     ) : invitation.revocation_reason ? (
@@ -231,14 +208,15 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
                         </PendingSubmitButton>
                       </form>
                     ) : null}
+                    </div>
                   </article>
                 );
               })
             ) : (
-              <article className="panel data-card">
+              <article className={styles.card}>
                 <h3>No invitations yet</h3>
                 <p className="route-text">
-                  Create one above. It will remain private and expire automatically after 14 days.
+                  {eligible ? "Your invitations will appear here." : "There are no invitations for this proposal."}
                 </p>
               </article>
             )}

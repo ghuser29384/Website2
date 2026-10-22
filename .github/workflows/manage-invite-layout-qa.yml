@@ -1,0 +1,38 @@
+name: Manage and Invite layout QA
+
+on:
+  pull_request:
+    paths:
+      - 'src/app/trades/**/manage/**'
+      - 'src/app/trades/**/invite/**'
+      - 'src/components/core-trade/offer-workspace.module.css'
+      - '.github/workflows/manage-invite-layout-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manage-invite-layout-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      VERCEL: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      NODE_OPTIONS: --max-old-space-size=3072
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint -- --quiet
+      - run: npx tsc --noEmit
+      - run: npm run build
