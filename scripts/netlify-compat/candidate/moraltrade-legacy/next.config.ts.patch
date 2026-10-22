@@ -1,0 +1,18 @@
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -85,6 +85,7 @@
+           source: "/api/live-now",
+           destination: "/api/live-now-a1",
+         },
++        ...(process.env.NETLIFY === "true" ? [] : [
+         {
+           source: "/feed",
+           destination: "/moral-trade-live.html",
+@@ -97,6 +98,7 @@
+           source: "/discover",
+           destination: "/moral-trade-discover.html",
+         },
++        ]),
+       ],
+       afterFiles: [],
+       fallback: [],

@@ -1,0 +1,10 @@
+{
+  "status": "PASS_LOCAL_ADAPTER_CONTRACTS_ONLY",
+  "rlhfBaselineCases": 94,
+  "rlhfFailureRecoveryCases": 2,
+  "routingChecks": 100,
+  "externalRequests": 0,
+  "netlifyBuild": false,
+  "normativityRuntime": false,
+  "hostedAcceptance": false
+}

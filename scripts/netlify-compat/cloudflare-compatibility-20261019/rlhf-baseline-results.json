@@ -1,0 +1,1584 @@
+{
+  "status": "PASS_NODE_BASELINE_ONLY",
+  "sourceSha1": "a9faf272965ec07e0d346789e39c2bcf4978d027",
+  "bundleSha256": "cb79993ba0cbe7c8d33efbe346789e63785f7f4d5854cb076f904190d504307a",
+  "paths": 45,
+  "cases": [
+    {
+      "path": "/",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2434,
+      "sha256": "e312f1b795db985d9f3363ff8d4d4cdb106119287b68c90375ca7013a337b5eb"
+    },
+    {
+      "path": "/",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/index.html",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2434,
+      "sha256": "e312f1b795db985d9f3363ff8d4d4cdb106119287b68c90375ca7013a337b5eb"
+    },
+    {
+      "path": "/index.html",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/research",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 15166,
+      "sha256": "c14a046a4bde5c2fe91a65f5d4e34fb3ef72b1c0a1486eabbf5a8a4d3722acf1"
+    },
+    {
+      "path": "/research",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/research/",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 15166,
+      "sha256": "c14a046a4bde5c2fe91a65f5d4e34fb3ef72b1c0a1486eabbf5a8a4d3722acf1"
+    },
+    {
+      "path": "/research/",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 5425,
+      "sha256": "13f008c9b239b9885b403f0d0581a49f7aa3a437de4c529620cbded3c9b0740c"
+    },
+    {
+      "path": "/arguments",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments/",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 5425,
+      "sha256": "13f008c9b239b9885b403f0d0581a49f7aa3a437de4c529620cbded3c9b0740c"
+    },
+    {
+      "path": "/arguments/",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/reviewers",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2114,
+      "sha256": "c4d586a7a3af36c536d8cd26e667097db0d8eecf233f89effb885473d3a94697"
+    },
+    {
+      "path": "/reviewers",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/reviewers/",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2114,
+      "sha256": "c4d586a7a3af36c536d8cd26e667097db0d8eecf233f89effb885473d3a94697"
+    },
+    {
+      "path": "/reviewers/",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/reviewers/index.html",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2114,
+      "sha256": "c4d586a7a3af36c536d8cd26e667097db0d8eecf233f89effb885473d3a94697"
+    },
+    {
+      "path": "/reviewers/index.html",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/contribute",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2114,
+      "sha256": "c4d586a7a3af36c536d8cd26e667097db0d8eecf233f89effb885473d3a94697"
+    },
+    {
+      "path": "/contribute",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/contribute/",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2114,
+      "sha256": "c4d586a7a3af36c536d8cd26e667097db0d8eecf233f89effb885473d3a94697"
+    },
+    {
+      "path": "/contribute/",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/workspace",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2434,
+      "sha256": "e312f1b795db985d9f3363ff8d4d4cdb106119287b68c90375ca7013a337b5eb"
+    },
+    {
+      "path": "/workspace",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/workspace/",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2434,
+      "sha256": "e312f1b795db985d9f3363ff8d4d4cdb106119287b68c90375ca7013a337b5eb"
+    },
+    {
+      "path": "/workspace/",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/reference",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2434,
+      "sha256": "e312f1b795db985d9f3363ff8d4d4cdb106119287b68c90375ca7013a337b5eb"
+    },
+    {
+      "path": "/reference",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/reference/",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2434,
+      "sha256": "e312f1b795db985d9f3363ff8d4d4cdb106119287b68c90375ca7013a337b5eb"
+    },
+    {
+      "path": "/reference/",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/SHA256SUMS.txt",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 2875,
+      "sha256": "45610a9c3b04bb428aacb961c1e1384f606af796596880fb8bb7d07a7c3189b0"
+    },
+    {
+      "path": "/SHA256SUMS.txt",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/SOURCE_COMMIT.txt",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 41,
+      "sha256": "0ac2d6abd59c098b281a6fcc907b1513675e3bc37df6867080ae974860edf992"
+    },
+    {
+      "path": "/SOURCE_COMMIT.txt",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments/README.md",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/markdown; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 756,
+      "sha256": "0c6aaa8bf270e50e87d8ab5b403ba3231ae45e8193c2b9e3cfe40744d3efb0b5"
+    },
+    {
+      "path": "/arguments/README.md",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/markdown; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments/app.mjs",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 13586,
+      "sha256": "2906f99fff96aacc0b08bedbc0181864c88d1c6cc0ff744e178ba776dec46c59"
+    },
+    {
+      "path": "/arguments/app.mjs",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments/data/critiques.json",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 359239,
+      "sha256": "0387d0c8ba94eae78d4fddaae9f8d337c090583d05d4d41a597b4a505b1991ea"
+    },
+    {
+      "path": "/arguments/data/critiques.json",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments/data/manifest.json",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 743,
+      "sha256": "a8584df9c8f8b72fe5f063c4c9f7dc5718c2ba22ecbbd304590850ec86ef85d4"
+    },
+    {
+      "path": "/arguments/data/manifest.json",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments/data/positions.json",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 112973,
+      "sha256": "35f68251b28aa7d3985453abec27ec8555ab944e709e9016768c266c68ed5d8e"
+    },
+    {
+      "path": "/arguments/data/positions.json",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments/index.html",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 5425,
+      "sha256": "13f008c9b239b9885b403f0d0581a49f7aa3a437de4c529620cbded3c9b0740c"
+    },
+    {
+      "path": "/arguments/index.html",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/arguments/styles.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 12213,
+      "sha256": "31ff29065d768453718f274f4279843663a24fa4e95ccd8f798748d53d70f8ec"
+    },
+    {
+      "path": "/arguments/styles.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/research/index.html",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 15166,
+      "sha256": "c14a046a4bde5c2fe91a65f5d4e34fb3ef72b1c0a1486eabbf5a8a4d3722acf1"
+    },
+    {
+      "path": "/research/index.html",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/research/styles.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 16130,
+      "sha256": "ae04049747b01c14443601c9823dadc58324229ec37767cecb6f45ed7cc0a549"
+    },
+    {
+      "path": "/research/styles.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/reviewers/app.mjs",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 9905,
+      "sha256": "c024d02b2c12ed466df06fd001fc77ef2aa116da1a31248ddd0f3a8bbd8c4bee"
+    },
+    {
+      "path": "/reviewers/app.mjs",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/reviewers/closed.html",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 2114,
+      "sha256": "c4d586a7a3af36c536d8cd26e667097db0d8eecf233f89effb885473d3a94697"
+    },
+    {
+      "path": "/reviewers/closed.html",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=0, must-revalidate"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/reviewers/styles.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 11127,
+      "sha256": "adf5da775daaee7851557ce04e49810d5960aad89f64146535eeb140cfe318ec"
+    },
+    {
+      "path": "/reviewers/styles.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/brand-system.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 28412,
+      "sha256": "9954db28d09f34d41df54ab1fd2b100e8f3717d2d6880e493c331bcc43506de6"
+    },
+    {
+      "path": "/src/brand-system.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/epoch-core.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 11239,
+      "sha256": "037f3e040a46be61318db249c1c97527b7d882c0459494432631eebb680031a5"
+    },
+    {
+      "path": "/src/epoch-core.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/epoch-impact.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 6222,
+      "sha256": "93d0f38f2f76f6db8958fb2c74cc52536d08b774d72e4d90f4267bb473c62a4e"
+    },
+    {
+      "path": "/src/epoch-impact.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/epoch-platform.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 5066,
+      "sha256": "1b55cafeb7780ce75213f078e0ba3f37879660fab4b1b8abf0b7998edafdb9cb"
+    },
+    {
+      "path": "/src/epoch-platform.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/epoch-responsive.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 6710,
+      "sha256": "cc3f5f66824bf58f07cdb5c7f5cef4226117614fdcfe95b1a546be2e3811c949"
+    },
+    {
+      "path": "/src/epoch-responsive.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/epoch-system.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 182,
+      "sha256": "c2db2da5b833c4f76a4046849822105b12bbb4f03b4d8e1c300b264410eb269e"
+    },
+    {
+      "path": "/src/epoch-system.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/epoch-workspace.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 2991,
+      "sha256": "cd19771373573cd194195ebd956323f91622991d919d59f00ff341380e95ed62"
+    },
+    {
+      "path": "/src/epoch-workspace.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/exact-reference-home.mjs",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 17146,
+      "sha256": "0151c7c46f46054de311a425167bb0871f67768abd75b6235781c5b6d67c6a58"
+    },
+    {
+      "path": "/src/exact-reference-home.mjs",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/exact-reference.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 16600,
+      "sha256": "1f4513f11f86650ddd48a0373ac0d8a94a29e8d52f489df7dd4fe8a8004e4007"
+    },
+    {
+      "path": "/src/exact-reference.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/mobile-navigation.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 474,
+      "sha256": "76e82c5a6f89b3f6f5d28b3b9e80acc69be2616214a63161ebc0114ca7df9061"
+    },
+    {
+      "path": "/src/mobile-navigation.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/site-entry.mjs",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 1891,
+      "sha256": "e8d96c5a5b08aa51adc4bdc4f08553d22845867765f6cad5c14b7f3efc86f4ba"
+    },
+    {
+      "path": "/src/site-entry.mjs",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/styles.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 41913,
+      "sha256": "e13d452a992fa73c27465a0ebe9841cf3830159cfe24b120ea07a0074225b078"
+    },
+    {
+      "path": "/src/styles.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/trust-home.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 14338,
+      "sha256": "932bc8e99cec5a6be5c09eba07f23594bf69ecb82011e88b0de1d12e7b15e8a6"
+    },
+    {
+      "path": "/src/trust-home.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/wordmark-system.css",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 3010,
+      "sha256": "9e534c5e7e2a14380bc27b38f17e0822196a605bd46ab8072492ec74b6cf00e4"
+    },
+    {
+      "path": "/src/wordmark-system.css",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/wordmark-system.mjs",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 1653,
+      "sha256": "87b69c697d63a3b850c24c3c72def355bc759a98357ad403fd0b03cc26705c8e"
+    },
+    {
+      "path": "/src/wordmark-system.mjs",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/src/workspace-gate.mjs",
+      "method": "GET",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 1272,
+      "sha256": "6da8b85f32c9b931d499b2f21d23465968902fe3c4f26cca0443fe7e2bf832fe"
+    },
+    {
+      "path": "/src/workspace-gate.mjs",
+      "method": "HEAD",
+      "status": 200,
+      "headers": {
+        "content-type": "text/javascript; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "x-metaphilosophy-release": "mp-public-voice-20260806-r1",
+        "x-metaphilosophy-bundle-sha256": "ea4d1d252c3a0cd18d305554c0b2b44fab59c3f19d48eea56b737e81931f0044",
+        "cache-control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/not-a-real-file",
+      "method": "GET",
+      "status": 404,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store"
+      },
+      "bytes": 9,
+      "sha256": "e3ebaa16dd9d9b9fc107c42183fb6cf9d22927e1af03dbbdfa0ccc38e4e4ac31"
+    },
+    {
+      "path": "/%zz",
+      "method": "GET",
+      "status": 400,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store"
+      },
+      "bytes": 11,
+      "sha256": "917ef22f94f460141928531e1945453e29d89dcd58e3383c2b3ba0e2e19eb0d7"
+    },
+    {
+      "path": "/src/assets/LMCA_dataset.pdf",
+      "method": "GET",
+      "status": 307,
+      "headers": {
+        "location": "https://arxiv.org/pdf/2607.27499",
+        "cache-control": "public, max-age=3600"
+      },
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/%2e%2e%2fprivate",
+      "method": "GET",
+      "status": 404,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store"
+      },
+      "bytes": 9,
+      "sha256": "e3ebaa16dd9d9b9fc107c42183fb6cf9d22927e1af03dbbdfa0ccc38e4e4ac31"
+    }
+  ],
+  "externalRequests": 0,
+  "workersTested": false
+}

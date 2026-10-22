@@ -1,0 +1,46 @@
+import {spawnSync,spawn} from 'node:child_process';
+import {writeFile,readFile,open} from 'node:fs/promises';
+import {join} from 'node:path';
+const [root,kind]=process.argv.slice(2),app=join(root,'app');
+const next=['canonical','legacy'].includes(kind);
+const report={candidate:kind,stages:[],hostedAcceptance:false,fullFeatureParity:false,externalRuntimeRequests:0,unverified:['hosted quotas and credits','complete batch elapsed-time and retry acceptance','provider and authenticated end-to-end behavior','production domain cutover'],status:'INCOMPLETE'};
+const env={...process.env,NETLIFY:'true',CONTEXT:'deploy-preview',MORAL_TRADE_DISABLE_DEP_REPAIR:'1',NETLIFY_TELEMETRY_DISABLED:'1',NEXT_TELEMETRY_DISABLED:'1',CI:'true',NODE_OPTIONS:'--max-old-space-size=6144',MORAL_TRADE_DISABLE_SUPABASE:'false',CRON_SECRET:'synthetic-cron-secret',DATABASE_URL:'postgresql://postgres:synthetic@127.0.0.1:15439/synthetic'};
+async function stage(name,cmd,args,extra={}){
+ const r=spawnSync(cmd,args,{cwd:app,env:{...env,...extra},encoding:'utf8',timeout:30*60*1000,maxBuffer:24*1024*1024});
+ await writeFile(join(root,name+'.log'),(r.stdout||'')+(r.stderr||''));
+ report.stages.push({name,status:r.status===0?'PASS':'FAIL',exit:r.status,error:r.error?.code});
+ console.log(name,r.status===0?'PASS':'FAIL');
+ if(r.status!==0)console.log(((r.stdout||'')+(r.stderr||'')).slice(-5000));
+ return r.status===0;
+}
+try{
+ if(next){
+  if(!await stage('unit-tests','npm',['test']))throw Error('unit-tests failed');
+  if(!await stage('typecheck',join(app,'node_modules/.bin/tsc'),['--noEmit']))throw Error('typecheck failed');
+ }
+ // No server, provider credential, or account is supplied. Builds may fail closed offline.
+ env.MORAL_TRADE_DISABLE_SUPABASE='true';
+ env.NEXT_PUBLIC_SUPABASE_URL='http://127.0.0.1:15433';
+ env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY='synthetic-public-only';
+ env.NEXT_PUBLIC_SITE_URL='https://synthetic.invalid';
+ if(!await stage('netlify-build',join(root,'tools/node_modules/.bin/netlify'),['build','--offline','--context','deploy-preview']))throw Error('Netlify build failed; no fallback labelled as Netlify success');
+ if(kind==='rlhf'){
+  // Load only the public pinned fixture in the emulated function process.
+  env.NODE_OPTIONS+=' --import='+join(root,'harness/fixture-hook.mjs');
+  env.NETLIFY_FIXTURE_ROOT=root;
+ }
+ const log=await open(join(root,'emulator.log'),'w');
+ const child=spawn(join(root,'tools/node_modules/.bin/netlify'),['dev','--offline','--port','8888','--no-open'],{cwd:app,env,stdio:['ignore',log.fd,log.fd],detached:true});
+ try{
+  let ready=false;
+  for(let i=0;i<30;i++){
+   if(child.exitCode!==null)break;
+   try{await fetch('http://127.0.0.1:8888/',{signal:AbortSignal.timeout(500)});ready=true;break;}catch{}
+   await new Promise(r=>setTimeout(r,1000));
+  }
+  if(!ready)throw Error('Offline Netlify emulator unavailable; runtime acceptance pending');
+  if(!await stage('runtime',process.execPath,[join(root,'harness/runtime.mjs'),root,kind]))throw Error('Runtime comparison failed');
+ }finally{try{process.kill(-child.pid,'SIGTERM');}catch{}await log.close();}
+ report.status='PACKAGING_AND_BOUNDED_RUNTIME_PASS';
+}catch(e){report.status='BLOCKED_OR_FAILED';report.reason=e.message;process.exitCode=1;}
+finally{await writeFile(join(root,'result.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));}

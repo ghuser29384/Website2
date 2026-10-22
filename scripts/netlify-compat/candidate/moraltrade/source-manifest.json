@@ -1,0 +1,10 @@
+{
+  "next.config.ts": {
+    "source_sha256": "71887cdcb21aaedeb9fe7270e77d6ee1514c84c921f0b562537e1aa756c1c686",
+    "candidate_sha256": "4a93cf895213f7fe2129871fc9de3a798bf5852e130ea486bdc1227d3abfeab9"
+  },
+  "src/proxy.ts": {
+    "source_sha256": "8b0009f8dc57ec48f846a44256640b7833547a731f6ec146b5eed1a69bd216aa",
+    "candidate_sha256": "465d62d016ab684bcc32b26e10a86d6a9b8365e84e838d77a0f95de7ed6eb15c"
+  }
+}

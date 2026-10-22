@@ -1,0 +1,39 @@
+--- a/src/proxy.ts
++++ b/src/proxy.ts
+@@ -38,6 +38,12 @@
+   return response;
+ }
+
++function rewriteToStaticPage(request: NextRequest, pathname: string) {
++  const url = request.nextUrl.clone();
++  url.pathname = pathname;
++  return NextResponse.rewrite(url);
++}
++
+ function rewriteToLiveHome(request: NextRequest) {
+   const liveUrl = request.nextUrl.clone();
+   liveUrl.pathname = "/moral-trade-live.html";
+@@ -69,8 +75,15 @@
+   }
+
+   if (pathname === "/walkthrough") {
+-    const response = NextResponse.next();
++    const response = process.env.NETLIFY === "true"
++      ? rewriteToStaticPage(request, "/moral-trade-production.html")
++      : NextResponse.next();
+     return shouldRecordVisit ? markWalkthroughSeen(response, request) : response;
++  }
++
++  if (process.env.NETLIFY === "true") {
++    if (pathname === "/feed") return rewriteToStaticPage(request, "/moral-trade-live.html");
++    if (pathname === "/discover") return rewriteToStaticPage(request, "/moral-trade-discover.html");
+   }
+
+   if (pathname === "/create") {
+@@ -112,5 +125,5 @@
+ }
+
+ export const config = {
+-  matcher: ["/", "/walkthrough", "/create", "/offers"],
++  matcher: ["/feed", "/discover", "/", "/walkthrough", "/create", "/offers"],
+ };

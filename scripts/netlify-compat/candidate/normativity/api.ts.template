@@ -1,0 +1,15 @@
+// Candidate netlify/functions/api.ts. serverless-http installation is NOT approved.
+import express from 'express';
+import serverless from 'serverless-http';
+import { createApp } from '../../server/src/app';
+import publicConfig from '../../api/public-config';
+import audit from '../../api/cron/commitment-audit';
+
+const app = express();
+// Preserve standalone Vercel endpoints outside the existing Express app.
+app.all('/api/public-config', publicConfig);
+app.all('/api/cron/commitment-audit', audit);
+app.use(createApp());
+export const handler = serverless(app);
+// Route /api/* to this function without dropping /api or changing query/body.
+// No listener, interval, active schedule or background bridge is added here.
