@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';import {FIXTURE_TOKEN} from './http-fixture.mjs';
+const hook=new URL('./runtime-hook.mjs',import.meta.url).href;
+function run(env,source=''){return spawnSync(process.execPath,['--input-type=module','-e',`await import(${JSON.stringify(hook)});${source}`],{env,encoding:'utf8',timeout:5000});}
+test('hook refuses absent opt-in and nonsynthetic credentials',()=>{assert.notEqual(run({}).status,0);assert.notEqual(run({NETLIFY_EMAIL_SYNTHETIC_TEST:'1',RESEND_API_KEY:'wrong',EMAIL_FROM:'test@synthetic.invalid'}).status,0);});
+test('approved synthetic hook loads but rejects remote fetch before transport',()=>{const r=run({NETLIFY_EMAIL_SYNTHETIC_TEST:'1',RESEND_API_KEY:FIXTURE_TOKEN,EMAIL_FROM:'test@synthetic.invalid',NETLIFY_EMAIL_FIXTURE_ORIGIN:'http://127.0.0.1:15433'},"let blocked=false;try{await fetch('https://example.com')}catch(e){blocked=e.message.includes('External network forbidden')}if(!blocked)process.exit(1);");assert.equal(r.status,0,r.stderr);});
