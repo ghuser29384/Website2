@@ -2,6 +2,7 @@ import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 import {join} from 'node:path';
 import assert from 'node:assert/strict';
+import {packagingSchema} from './prisma-schema.mjs';
 const [root,kind]=process.argv.slice(2),app=join(root,'app'),h=join(root,'harness');
 const dependencies={'netlify-cli':'27.14.1'};
 const next=['canonical','legacy'].includes(kind);
@@ -23,8 +24,10 @@ if(next){
  await mkdir(join(app,'synthetic-publish'),{recursive:true});
  config='[build]\npublish = "synthetic-publish"\n[functions]\ndirectory = "netlify/functions"\nnode_bundler = "esbuild"\n';
  if(kind==='normativity'){
+  await mkdir(join(app,'.netlify-schema'),{recursive:true});
+  await writeFile(join(app,'.netlify-schema/schema.prisma'),packagingSchema(await readFile(join(app,'server/prisma/schema.prisma'),'utf8')));
   await copyFile(join(h,'candidate/normativity/api.ts.template'),join(app,'netlify/functions/api.ts'));
-  config+='external_node_modules = ["@prisma/client", "prisma"]\nincluded_files = ["server/node_modules/.prisma/**", "server/prisma/**", "server/src/**"]\n[[redirects]]\nfrom = "/api/*"\nto = "/.netlify/functions/api/:splat"\nstatus = 200\nforce = true\n';
+  config+='external_node_modules = ["@prisma/client", "prisma"]\nincluded_files = ["node_modules/.prisma/**", "server/node_modules/.prisma/**", "server/prisma/**", "server/src/**"]\n[[redirects]]\nfrom = "/api/*"\nto = "/.netlify/functions/api/:splat"\nstatus = 200\nforce = true\n';
  }else{
   await writeFile(join(app,'package.json'),'{"private":true,"type":"module"}');
   await mkdir(join(app,'netlify/lib'),{recursive:true});

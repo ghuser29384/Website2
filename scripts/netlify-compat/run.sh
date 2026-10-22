@@ -27,6 +27,7 @@ prepare)
  if test "$CANDIDATE" = normativity; then
    npm ci --prefix "$ROOT/app/server" --ignore-scripts --no-audit --no-fund
    DATABASE_URL=postgresql://postgres:synthetic@127.0.0.1:15439/synthetic "$ROOT/app/server/node_modules/.bin/prisma" generate --schema "$ROOT/app/server/prisma/schema.prisma"
+   DATABASE_URL=postgresql://postgres:synthetic@127.0.0.1:15439/synthetic DIRECT_URL=postgresql://postgres:synthetic@127.0.0.1:15439/synthetic "$ROOT/app/node_modules/.bin/prisma" generate --schema "$ROOT/app/.netlify-schema/schema.prisma"
  fi
  node "$ROOT/harness/setup-links.mjs" "$ROOT" "$CANDIDATE"
  ROOT="$ROOT" bash "$ROOT/harness/prepare-edge-tools.sh"
