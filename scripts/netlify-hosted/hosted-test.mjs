@@ -11,12 +11,12 @@ export async function runHostedTest(origin,cases,fetchImpl=fetch){
  for(const [index,c] of cases.entries()){
   attempted++;let r,body;
   try{r=await request(c);body=Buffer.from(await r.arrayBuffer());}
-  catch{return {status:'STOP',attempted,passed,failures,reason:'request-or-budget-error'};}
+  catch(error){return {status:'STOP',attempted,passed,failures,reason:'request-or-budget-error',errorClass:['TimeoutError','AbortError','TypeError'].includes(error?.name)?error.name:'Error'};}
   const mismatches=[];
   if(r.status!==c.status)mismatches.push('status');
   for(const [k,v] of Object.entries(c.headers))if(r.headers.get(k)!==v)mismatches.push('header:'+k);
   if(createHash('sha256').update(body).digest('hex')!==c.sha256)mismatches.push('body-sha256');
-  if(mismatches.length)failures.push({index,method:c.method,path:c.path,mismatches});else passed++;
+  if(mismatches.length)failures.push({index,method:c.method,path:c.path,expectedStatus:c.status,actualStatus:r.status,mismatches});else passed++;
  }
  return {status:failures.length?'FAIL':'PASS',attempted,passed,failures};
 }

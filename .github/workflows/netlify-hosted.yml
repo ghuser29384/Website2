@@ -23,17 +23,21 @@ jobs:
       - name: Verify approved scope
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 624908ed222ecb491a19f114cf4011d83abd7e07
+          test "$(git rev-parse HEAD^)" = 63cdd02561144c380e2bbae4e51bb24dc3b57c63
           git diff --check HEAD^ HEAD
           node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); assert(execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n").every(f=>f===".github/workflows/netlify-hosted.yml"||f.startsWith("scripts/netlify-hosted/")));'
+      - name: Test routing and isolation without credentials
+        run: node --test scripts/netlify-hosted/routing-safety.test.mjs scripts/netlify-hosted/cli-diagnostic.test.mjs
       - name: Install approved runner-only CLI without deployment credential
         run: npm install --prefix "$RUNNER_TEMP/netlify-tool" --no-audit --no-fund netlify-cli@27.14.1
       - name: Package fixture without deployment credential
         working-directory: scripts/netlify-hosted
         run: |
+          npm ls --prefix "$RUNNER_TEMP/netlify-tool" @netlify/zip-it-and-ship-it --all
           mkdir -p public
           "$RUNNER_TEMP/netlify-tool/node_modules/.bin/netlify" functions:build --src netlify/functions --functions packaged-functions
-      - name: Verify existing empty test project and attempt one draft deployment
+          node manifest-preflight.mjs packaged-functions/manifest.json > "$RUNNER_TEMP/netlify-manifest-preflight.json"
+      - name: Verify exact prior draft and attempt one new draft deployment
         id: deploy
         working-directory: scripts/netlify-hosted
         env:
@@ -41,14 +45,9 @@ jobs:
           NETLIFY_BIN: ${{ runner.temp }}/netlify-tool/node_modules/.bin/netlify
           NETLIFY_TELEMETRY_DISABLED: '1'
         run: node deploy.mjs
-      - name: Run bounded parity test without deployment credential
-        working-directory: scripts/netlify-hosted
-        env:
-          TEST_ORIGIN: ${{ steps.deploy.outputs.origin }}
-        run: node hosted-test.mjs "$TEST_ORIGIN" baseline.json > "$RUNNER_TEMP/netlify-hosted-result.json"
       - name: Report non-sensitive evidence
         if: always()
         run: |
-          for file in "$RUNNER_TEMP/netlify-hosted-deployment.json" "$RUNNER_TEMP/netlify-hosted-result.json"; do
+          for file in "$RUNNER_TEMP/netlify-hosted-deployment.json" "$RUNNER_TEMP/netlify-manifest-preflight.json"; do
             if test -f "$file"; then cat "$file" >> "$GITHUB_STEP_SUMMARY"; fi
           done

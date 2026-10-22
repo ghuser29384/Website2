@@ -1,3 +1,4 @@
+import {verifyDisposableTarget,draftArgs} from './deployment-guard.mjs';
 import {classifyCliFailure} from './cli-diagnostic.mjs';
 import {execFileSync} from 'node:child_process';
 import {appendFileSync,writeFileSync} from 'node:fs';
@@ -18,9 +19,9 @@ if(!account)throw Error('Approved team not accessible');
 const id='af8b1cf6-a4dd-422b-89db-56948bc8d7e4';
 const site=await api('/sites/'+id);
 const existingDeploys=await api('/sites/'+id+'/deploys');
-if(site.id!==id||site.name!==name||site.account_slug!==team||site.published_deploy||site.repo||existingDeploys.length!==0)throw Error('Existing test project is not the verified empty isolated target');
-console.log(JSON.stringify({stage:'empty-project-verified',site_id:id,name}));
-const deployed=cli(['deploy','--site',id,'--no-build','--dir','public','--functions','packaged-functions','--json','--timeout','180']);
+verifyDisposableTarget(site,existingDeploys);
+console.log(JSON.stringify({stage:'known-draft-project-verified',site_id:id,name}));
+const deployed=cli(draftArgs());
 const deployId=deployed.deploy_id;
 if(!deployId)throw Error('Missing deployment ID');
 const detail=await api('/deploys/'+encodeURIComponent(deployId));
