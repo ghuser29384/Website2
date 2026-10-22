@@ -20,7 +20,7 @@ const site=await api('/sites/'+id);
 const existingDeploys=await api('/sites/'+id+'/deploys');
 if(site.id!==id||site.name!==name||site.account_slug!==team||site.published_deploy||site.repo||existingDeploys.length!==0)throw Error('Existing test project is not the verified empty isolated target');
 console.log(JSON.stringify({stage:'empty-project-verified',site_id:id,name}));
-const deployed=cli(['deploy','--site',id,'--no-build','--context','deploy-preview','--dir','public','--functions','packaged-functions','--json','--timeout','180']);
+const deployed=cli(['deploy','--site',id,'--no-build','--dir','public','--functions','packaged-functions','--json','--timeout','180']);
 const deployId=deployed.deploy_id;
 if(!deployId)throw Error('Missing deployment ID');
 const detail=await api('/deploys/'+encodeURIComponent(deployId));
