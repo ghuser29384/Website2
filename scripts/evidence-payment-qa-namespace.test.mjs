@@ -13,8 +13,8 @@ import {
 const BASE_INPUT = {
   repository: "ghuser29384/Website2",
   workflowRef:
-    "ghuser29384/Website2/.github/workflows/evidence-payment-release-qa.yml@refs/pull/721/merge",
-  runId: "31899900001",
+    "ghuser29384/Website2/.github/workflows/evidence-payment-release-qa.yml@refs/pull/809/merge",
+  runId: "32980000001",
   runAttempt: "1",
   qaRef: EVIDENCE_PAYMENT_QA_REF,
 };
@@ -30,7 +30,12 @@ test("derivation is deterministic, complete, valid, and collision-free", () => {
   assert.match(first.namespace.handle, /^epqa-[0-9a-f]{24}$/);
   assert.match(first.namespace.sha256, /^[0-9a-f]{64}$/);
   assert.equal(Object.keys(first.roles).length, 6);
-  assert.ok(Object.keys(first.objects).length >= 34);
+  assert.ok(Object.keys(first.objects).length >= 35);
+  assert.match(first.objects["milestone-appeal"], UUID_PATTERN);
+  assert.equal(
+    first.environment.EVIDENCE_PAYMENT_QA_MILESTONE_APPEAL_ID,
+    first.objects["milestone-appeal"],
+  );
 
   const ids = [
     ...Object.values(first.roles).map((role) => role.id),
@@ -44,6 +49,7 @@ test("derivation is deterministic, complete, valid, and collision-free", () => {
   for (const email of emails) {
     assert.match(email, /^epqa-[0-9a-f]{20}-[a-z-]+@qa\.invalid$/);
     assert.doesNotMatch(email, /^evidence-payment-/);
+    assert.doesNotMatch(email, /^evaluator-core-loop-/);
     assert.ok(email.length <= 254);
   }
 });
@@ -51,18 +57,22 @@ test("derivation is deterministic, complete, valid, and collision-free", () => {
 test("run, attempt, repository, and workflow identity independently change the namespace", () => {
   const baseline = buildEvidencePaymentQaNamespace(BASE_INPUT);
   for (const patch of [
-    { runId: "31899900002" },
+    { runId: "32980000002" },
     { runAttempt: "2" },
     { repository: "ghuser29384/Website3" },
     {
       workflowRef:
-        "ghuser29384/Website2/.github/workflows/other-writer.yml@refs/pull/721/merge",
+        "ghuser29384/Website2/.github/workflows/other-writer.yml@refs/pull/809/merge",
     },
   ]) {
     const candidate = buildEvidencePaymentQaNamespace({ ...BASE_INPUT, ...patch });
     assert.notEqual(candidate.namespace.sha256, baseline.namespace.sha256);
     assert.notEqual(candidate.roles.payer.id, baseline.roles.payer.id);
     assert.notEqual(candidate.roles.payer.email, baseline.roles.payer.email);
+    assert.notEqual(
+      candidate.objects["milestone-appeal"],
+      baseline.objects["milestone-appeal"],
+    );
   }
 });
 
@@ -104,6 +114,8 @@ test("CLI persists a reproducible non-secret manifest and GitHub environment", (
   const envText = readFileSync(githubEnvPath, "utf8");
   assert.match(envText, /EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE=epqa-/);
   assert.match(envText, /EVIDENCE_PAYMENT_QA_PAYER_EMAIL=epqa-/);
+  assert.match(envText, /EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_EMAIL=epqa-/);
+  assert.match(envText, /EVIDENCE_PAYMENT_QA_MILESTONE_APPEAL_ID=/);
   assert.match(envText, /EVIDENCE_PAYMENT_QA_ADMIN_FALLBACK_PAYOUT_ID=/);
   assert.doesNotMatch(envText, /password|token|cookie|secret/i);
 

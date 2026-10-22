@@ -10,18 +10,32 @@ on:
       - "scripts/evidence-payment-qa-namespace.test.mjs"
       - "scripts/evidence-payment-qa-run-ownership.test.mjs"
       - "scripts/evidence-payment-qa-two-writer.mjs"
+      - "scripts/evaluator-core-loop-qa-run-ownership.test.mjs"
+      - "docs/evaluator-core-loop-audit.md"
       - "src/app/admin/trade-review/**"
+      - "src/app/actions.ts"
+      - "src/app/api/live-now/feedback/**"
       - "src/app/trade-agreements/**"
       - "src/app/trade-review/**"
       - "src/app/trade-milestone-actions.ts"
+      - "src/components/core-trade/full-navigation-action-form.tsx"
+      - "src/components/core-trade/trade-agreement-stage-base.tsx"
       - "src/components/core-trade/trade-milestone-workflow.tsx"
+      - "src/components/marketplace/participant-offer-group.tsx"
       - "src/lib/core-trade-base.ts"
+      - "src/lib/evidence-weighted-payment-lifecycle.test.ts"
+      - "src/lib/marketplace-delta-contract.test.ts"
       - "src/lib/supabase/**"
+      - "src/lib/trade-evidence-reviewer-rls-contract.test.ts"
       - "src/lib/trade-milestone-view.ts"
       - "supabase/migrations/2026072916552*.sql"
       - "supabase/migrations/2026072916553*.sql"
+      - "supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql"
+      - "supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql"
       - "supabase/tests/evidence_weighted_payment*.sql"
+      - "supabase/tests/evaluator_core_loop_*.sql"
       - "tests/evidence-weighted-payment-authenticated.spec.ts"
+      - "tests/evaluator-core-loop-authenticated.spec.ts"
   workflow_dispatch:
 
 concurrency:
@@ -273,8 +287,10 @@ jobs:
                 `Synthetic Auth sign-in failed for ${role}: ${error?.message ?? "no session"}`,
               );
             }
-            if (data.user?.user_metadata?.qa_namespace !==
-                process.env.EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE) {
+            if (
+              data.user?.user_metadata?.qa_namespace !==
+              process.env.EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE
+            ) {
               throw new Error(`Synthetic Auth ownership marker mismatch for ${role}.`);
             }
             await client.auth.signOut({ scope: "local" });
@@ -360,5 +376,409 @@ jobs:
             evidence-payment-exact-head.txt
             evidence-payment-namespace.json
             evidence-payment-two-writer.json
+            playwright-report
+            test-results
+
+  evaluator-core-loop-gate:
+    needs: exact-head-release-gate
+    if: >-
+      always() &&
+      needs.exact-head-release-gate.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EVALUATOR_CORE_LOOP_BASE_URL: http://127.0.0.1:3211
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Check out the exact evaluator candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Record exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
+          git diff --check "$EXPECTED_BASE_SHA" HEAD
+          {
+            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } | tee evaluator-core-loop-exact-head.txt
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Derive immutable run-owned evaluator namespace
+        id: evaluator_namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/evidence-payment-qa-namespace.mjs \
+            --manifest evaluator-core-loop-namespace.json \
+            --github-env "$GITHUB_ENV" \
+            2>&1 | tee evaluator-core-loop-namespace.log
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import manifest from "./evaluator-core-loop-namespace.json" with { type: "json" };
+          console.log(`handle=${manifest.namespace.handle}`);
+          NODE
+
+      - name: Run permanent Q source and ownership gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e "require 'yaml'; abort('invalid workflow YAML') unless YAML.parse_file('.github/workflows/evidence-payment-release-qa.yml')"
+          node --check scripts/evidence-payment-qa-namespace.mjs
+          node --check scripts/evidence-payment-qa-namespace.test.mjs
+          node --check scripts/evaluator-core-loop-qa-run-ownership.test.mjs
+          node --test \
+            scripts/evidence-payment-qa-namespace.test.mjs \
+            scripts/evaluator-core-loop-qa-run-ownership.test.mjs \
+            2>&1 | tee evaluator-core-loop-run-ownership.log
+          npx eslint tests/evaluator-core-loop-authenticated.spec.ts \
+            2>&1 | tee evaluator-core-loop-eslint.log
+          npx tsc --noEmit --pretty false \
+            2>&1 | tee evaluator-core-loop-types.log
+
+      - name: Determine whether exact initial R is present
+        id: integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            'src/app/actions.ts'
+            'src/app/api/live-now/feedback/route.ts'
+            'src/app/api/live-now/feedback/route.test.ts'
+            'src/app/trade-review/[milestoneId]/page.tsx'
+            'src/components/core-trade/full-navigation-action-form.tsx'
+            'src/components/core-trade/trade-agreement-stage-base.tsx'
+            'src/components/core-trade/trade-milestone-workflow.tsx'
+            'src/components/marketplace/participant-offer-group.tsx'
+            'src/lib/evidence-weighted-payment-lifecycle.test.ts'
+            'src/lib/marketplace-delta-contract.test.ts'
+            'src/lib/trade-evidence-reviewer-rls-contract.test.ts'
+            'supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql'
+            'supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql'
+          )
+          git diff --name-only "$EXPECTED_BASE_SHA" HEAD | sort > /tmp/evaluator-changed-paths.txt
+          missing=0
+          for path in "${required[@]}"; do
+            if ! grep -Fxq "$path" /tmp/evaluator-changed-paths.txt; then
+              missing=$((missing + 1))
+            fi
+          done
+          if [[ "$missing" = 0 ]]; then
+            echo 'has_r=true' >> "$GITHUB_OUTPUT"
+            echo 'Exact initial-R path set detected; full isolated-QA proof will run.'
+          else
+            echo 'has_r=false' >> "$GITHUB_OUTPUT"
+            echo "Q-only candidate detected; $missing initial-R paths absent. Source gates only."
+          fi
+
+      - name: Verify exact isolated-QA target and secrets
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in QA_SUPABASE_DB_URL SUPABASE_SERVICE_ROLE_KEY; do
+            test -n "${!name:-}" || { echo "Missing isolated-QA secret $name" >&2; exit 1; }
+          done
+          node --input-type=module <<'NODE'
+          const url = new URL(process.env.QA_SUPABASE_DB_URL);
+          const valid =
+            ["postgres:", "postgresql:"].includes(url.protocol) &&
+            (url.username ?? "").includes(process.env.EXPECTED_QA_REF) &&
+            url.hostname === process.env.EXPECTED_QA_POOLER_HOST &&
+            url.port === "5432" &&
+            url.pathname === "/postgres" &&
+            (url.searchParams.get("sslmode") ?? "require") === "require" &&
+            Boolean(url.password) &&
+            process.env.NEXT_PUBLIC_SUPABASE_URL ===
+              "https://hvmxfjjbdcgjjudmthdz.supabase.co";
+          if (!valid) {
+            throw new Error(
+              "Refusing credentials outside the exact TLS-only Moral Trade isolated-QA target.",
+            );
+          }
+          NODE
+
+      - name: Install PostgreSQL client
+        if: steps.integration.outputs.has_r == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Apply exact additive RLS migrations to isolated QA once
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apply_once() {
+            local version="$1"
+            local name="$2"
+            local path="$3"
+            local conflict recorded
+            conflict="$(psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+              --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and coalesce(name, '') <> '$name';" \
+              | tr -d '[:space:]')"
+            test "$conflict" = 0
+            recorded="$(psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+              --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and name = '$name';" \
+              | tr -d '[:space:]')"
+            if [[ "$recorded" = 0 ]]; then
+              psql "$QA_SUPABASE_DB_URL" \
+                --no-psqlrc --set ON_ERROR_STOP=1 --single-transaction \
+                --file "$path" \
+                --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('$version', array['Applied from exact issue #809 repository migration $path'], '$name', 'github-actions:evaluator-core-loop');"
+            else
+              printf 'Migration %s (%s) already recorded.\n' "$version" "$name"
+            fi
+          }
+          apply_once 20260814050000 trade_evidence_assigned_reviewer_rls \
+            supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql
+          apply_once 20260815010000 trade_evidence_reviewer_role_aal2 \
+            supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql
+
+      - name: Read-only exact-namespace preflight
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_browser_preflight.sql \
+            | tee evaluator-core-loop-preflight.json
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const text = await readFile("evaluator-core-loop-preflight.json", "utf8");
+          const payloads = text.match(/\{[^\n]+\}/g) ?? [];
+          if (!payloads.length) throw new Error("Preflight returned no residue object.");
+          const residue = JSON.parse(payloads.at(-1));
+          const nonzero = Object.entries(residue)
+            .filter(([key]) => key !== "namespaceHandle")
+            .filter(([, value]) => Number(value) !== 0);
+          if (nonzero.length) {
+            throw new Error(`Run-owned preflight found residue: ${JSON.stringify(residue)}`);
+          }
+          console.log(JSON.stringify({ status: "preflight_zero", residue }));
+          NODE
+
+      - name: Create exact run-owned evaluator fixture
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          printf 'EVALUATOR_CORE_LOOP_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          export EVALUATOR_CORE_LOOP_QA_PASSWORD="$qa_password"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_browser_fixture.sql \
+            2>&1 | tee evaluator-core-loop-fixture.log
+
+      - name: Verify six run-owned Auth identities
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' 2>&1 | tee evaluator-core-loop-auth.log
+          import { createClient } from "@supabase/supabase-js";
+          const roles = [
+            ["owner", process.env.EVIDENCE_PAYMENT_QA_PAYER_EMAIL],
+            ["responder", process.env.EVIDENCE_PAYMENT_QA_PAYEE_EMAIL],
+            ["initial-reviewer", process.env.EVIDENCE_PAYMENT_QA_REVIEWER_EMAIL],
+            ["appeal-reviewer", process.env.EVIDENCE_PAYMENT_QA_APPEAL_REVIEWER_EMAIL],
+            ["outsider", process.env.EVIDENCE_PAYMENT_QA_OUTSIDER_EMAIL],
+            ["administrator", process.env.EVIDENCE_PAYMENT_QA_ADMIN_EMAIL],
+          ];
+          const emails = roles.map(([, email]) => email);
+          if (new Set(emails).size !== 6) {
+            throw new Error("Run-owned evaluator emails are not unique.");
+          }
+          for (const [role, email] of roles) {
+            const client = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL,
+              process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+              {
+                auth: {
+                  autoRefreshToken: false,
+                  detectSessionInUrl: false,
+                  persistSession: false,
+                },
+              },
+            );
+            const { data, error } = await client.auth.signInWithPassword({
+              email,
+              password: process.env.EVALUATOR_CORE_LOOP_QA_PASSWORD,
+            });
+            if (error || !data.session) {
+              throw new Error(
+                `Auth sign-in failed for ${role}: ${error?.message ?? "no session"}`,
+              );
+            }
+            if (
+              data.user?.user_metadata?.qa_namespace !==
+              process.env.EVIDENCE_PAYMENT_QA_NAMESPACE_HANDLE
+            ) {
+              throw new Error(`Namespace ownership mismatch for ${role}.`);
+            }
+            await client.auth.signOut({ scope: "local" });
+          }
+          console.log(JSON.stringify({ status: "ok", roleCount: roles.length }));
+          NODE
+
+      - name: Prove private-evidence AAL and reviewer-role matrix
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_evidence_authorization.sql \
+            2>&1 | tee evaluator-core-loop-evidence-authorization.log
+
+      - name: Build exact integration candidate
+        if: steps.integration.outputs.has_r == 'true'
+        run: npm run build 2>&1 | tee evaluator-core-loop-build.log
+
+      - name: Install Chromium
+        if: steps.integration.outputs.has_r == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact production build
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          npm run start -- -H 127.0.0.1 -p 3211 > evaluator-core-loop-server.log 2>&1 &
+          echo "$!" > evaluator-core-loop-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3211/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 evaluator-core-loop-server.log
+          exit 1
+
+      - name: Run evaluator desktop, mobile, and authorization loop
+        if: steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test tests/evaluator-core-loop-authenticated.spec.ts \
+            --reporter=line --trace=retain-on-failure --workers=1 \
+            2>&1 | tee evaluator-core-loop-browser.log
+
+      - name: Capture exact no-money database boundary
+        if: always() && steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          offer_id="$EVIDENCE_PAYMENT_QA_OFFER_ID"
+          bonds="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from public.performance_bonds where offer_id = '$offer_id'::uuid;" \
+            | tr -d '[:space:]')"
+          receipts="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from public.trade_external_payment_receipts receipt join public.trade_milestone_payouts payout on payout.id = receipt.payout_id join public.trade_agreement_milestones milestone on milestone.id = payout.milestone_id join public.agreements agreement on agreement.id = milestone.agreement_id where agreement.offer_id = '$offer_id'::uuid;" \
+            | tr -d '[:space:]')"
+          payouts="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from public.trade_milestone_payouts payout join public.trade_agreement_milestones milestone on milestone.id = payout.milestone_id join public.agreements agreement on agreement.id = milestone.agreement_id where agreement.offer_id = '$offer_id'::uuid;" \
+            | tr -d '[:space:]')"
+          jq -n \
+            --argjson bonds "$bonds" \
+            --argjson receipts "$receipts" \
+            --argjson payouts "$payouts" \
+            '{
+              maximumFinancialAmountMinor: 0,
+              performanceBonds: $bonds,
+              externalPaymentReceipts: $receipts,
+              providerRequests: 0,
+              custodyBalances: 0,
+              payouts: $payouts
+            }' | tee evaluator-core-loop-no-money.json
+          test "$bonds" = 0
+          test "$receipts" = 0
+          test "$payouts" = 0
+
+      - name: Stop evaluator server
+        if: always() && steps.integration.outputs.has_r == 'true'
+        run: |
+          if [[ -f evaluator-core-loop-server.pid ]]; then
+            kill "$(cat evaluator-core-loop-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Exact cleanup and repeated zero-residue proof
+        if: always() && steps.integration.outputs.has_r == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pass in 1 2; do
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+              --file supabase/tests/evaluator_core_loop_browser_cleanup.sql \
+              | tee "evaluator-core-loop-cleanup-${pass}.json"
+            CLEANUP_PASS="$pass" node --input-type=module <<'NODE'
+            import { readFile } from "node:fs/promises";
+            const pass = process.env.CLEANUP_PASS;
+            const text = await readFile(
+              `evaluator-core-loop-cleanup-${pass}.json`,
+              "utf8",
+            );
+            const payloads = text.match(/\{[^\n]+\}/g) ?? [];
+            if (!payloads.length) {
+              throw new Error(`Cleanup pass ${pass} returned no residue object.`);
+            }
+            const residue = JSON.parse(payloads.at(-1));
+            const nonzero = Object.entries(residue)
+              .filter(([key]) => key !== "namespaceHandle")
+              .filter(([, value]) => Number(value) !== 0);
+            if (nonzero.length) {
+              throw new Error(
+                `Cleanup pass ${pass} left residue: ${JSON.stringify(residue)}`,
+              );
+            }
+            console.log(JSON.stringify({ status: "cleanup_zero", pass, residue }));
+            NODE
+          done
+
+      - name: Upload evaluator Q/I evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluator-core-loop-qa-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.evaluator_namespace.outputs.handle }}-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            evaluator-core-loop-*.json
+            evaluator-core-loop-*.log
+            evaluator-core-loop-exact-head.txt
+            evaluator-core-loop-namespace.json
             playwright-report
             test-results
