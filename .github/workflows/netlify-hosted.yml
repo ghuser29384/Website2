@@ -23,11 +23,11 @@ jobs:
       - name: Verify approved scope
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 63cdd02561144c380e2bbae4e51bb24dc3b57c63
+          test "$(git rev-parse HEAD^)" = 893359134c83ec76b888e847231a7c03892736b5
           git diff --check HEAD^ HEAD
           node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); assert(execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n").every(f=>f===".github/workflows/netlify-hosted.yml"||f.startsWith("scripts/netlify-hosted/")));'
       - name: Test routing and isolation without credentials
-        run: node --test scripts/netlify-hosted/routing-safety.test.mjs scripts/netlify-hosted/cli-diagnostic.test.mjs
+        run: node --test scripts/netlify-hosted/runtime-isolation.test.mjs scripts/netlify-hosted/routing-safety.test.mjs scripts/netlify-hosted/cli-diagnostic.test.mjs
       - name: Install approved runner-only CLI without deployment credential
         run: npm install --prefix "$RUNNER_TEMP/netlify-tool" --no-audit --no-fund netlify-cli@27.14.1
       - name: Package fixture without deployment credential

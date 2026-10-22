@@ -1,3 +1,5 @@
+// Synthetic fixture transport is local to this copied handler; preserve platform globals.
+import { fixtureFetch as fetch } from './fixture.mjs';
 import { gunzipSync } from "node:zlib";
 
 const BUNDLE_URL = "https://raw.githubusercontent.com/ghuser29384/RL-for-Conceptual-Reasoning/2176df9ae5264b3e38ad8f8d049caf53d8a4a38f/ops/release-bundles/metaphilosophy-public-editorial-a0273b4.tgz.b64";
