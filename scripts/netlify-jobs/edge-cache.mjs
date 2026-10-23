@@ -19,7 +19,9 @@ export async function configure(root){
  await rename(bin,bin+'-real');await writeFile(bin,launcher(root),{mode:0o700,flag:'wx'});
 }
 export async function checkCache(root,offline){
- const args=['cache','--no-config','--no-lock','--allow-import=edge.netlify.com,v3-2-0--edge.netlify.com,v2-16-0--edge.netlify.com,deno.land',...(offline?['--cached-only']:[]),...await cacheInputs(root)];
+ // Deno 2.4.2 cache does not accept --cached-only. The workflow provides OS-level network isolation.
+ if(offline) assert.equal(process.env.OFFLINE_NAMESPACE,'1','Offline cache check requires the isolated workflow phase');
+ const args=['cache','--no-config','--no-lock','--allow-import=edge.netlify.com,v3-2-0--edge.netlify.com,v2-16-0--edge.netlify.com,deno.land',...await cacheInputs(root)];
  execFileSync(join(root,'edge-tools/bin/deno'),args,{env:{PATH:'/usr/bin:/bin',HOME:join(root,'home')},stdio:'inherit',timeout:180000});
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
