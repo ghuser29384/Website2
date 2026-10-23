@@ -1,5 +1,5 @@
 // Fixed synthetic loopback target; never log response bodies, headers or error messages.
-export async function probeReadiness(fetchImpl=fetch,timeoutMs=500){
+export async function probeReadiness(fetchImpl=fetch,timeoutMs=5000){
  let phase='headers',status;const start=performance.now();
  try{
   const response=await fetchImpl('http://127.0.0.1:8888/favicon.ico',{signal:AbortSignal.timeout(timeoutMs)});
