@@ -1,3 +1,4 @@
+import {diagnosePaths} from './path-diagnostic.mjs';
 import {probeReadiness} from './readiness.mjs';
 import {runStage,failureTail} from './process-stage.mjs';
 import {spawn} from 'node:child_process';import {open,writeFile,readFile} from 'node:fs/promises';import {join} from 'node:path';
@@ -26,12 +27,14 @@ try{
  child=spawn(join(root,'tools/node_modules/.bin/netlify'),['serve','--offline','--context','deploy-preview','--port','8888','--geo','mock'],{cwd:app,env,stdio:['ignore',log.fd,log.fd],detached:true});
  let ready=false;
  const startupDeadline=Date.now()+900000;
+ const diagnosticAt=Date.now()+300000;let diagnosed=false;
  for(let i=0;Date.now()<startupDeadline;i++){
   if(i%30===0)console.log(JSON.stringify({candidate:kind,stage:report.stage,waiting:true}));
   if(child.exitCode!==null)break;
   const probe=await probeReadiness();report.lastReadiness=probe;
   if(i%30===0)console.log(JSON.stringify({candidate:kind,readiness:probe}));
   if(probe.ready){ready=true;break;}
+  if(!diagnosed&&Date.now()>=diagnosticAt){diagnosed=true;report.pathDiagnostic=await diagnosePaths();console.log(JSON.stringify({candidate:kind,pathDiagnostic:report.pathDiagnostic}));}
   await new Promise(r=>setTimeout(r,1000));
  }
  if(!ready)console.log(await failureTail(join(root,'serve.log')));
