@@ -1,3 +1,5 @@
+import {runDiscoverSourceStates} from './discover/source-state-probe.mjs';
+import {runOffsetEvidenceSearch} from './discover/evidence-probe.mjs';
 import {runDiscoverBaseline} from './discover/probe.mjs';
 import {runSearchCases} from './search/probe.mjs';
 import {runBackgroundCase} from './background/probe.mjs';
@@ -7,7 +9,7 @@ import {runStage,failureTail} from './process-stage.mjs';
 import {spawn} from 'node:child_process';import {open,writeFile,readFile} from 'node:fs/promises';import {join} from 'node:path';
 import assert from 'node:assert/strict';import {startSyntheticPostgres} from './postgres.mjs';import {runJobCases} from './runtime-probe.mjs';import {FIXTURE_TOKEN} from './http-fixture.mjs';
 const root=process.env.ROOT,kind=process.env.CANDIDATE;assert.ok(['canonical','legacy'].includes(kind));assert.equal(process.env.OFFLINE_NAMESPACE,'1');
-const app=join(root,'app'),report={candidate:kind,hostedMeasurement:false,provesFreeFit:false,status:'INCOMPLETE'};
+const app=join(root,'app'),report={candidate:kind,variant:process.env.DISCOVER_LOADER_VARIANT,hostedMeasurement:false,provesFreeFit:false,status:'INCOMPLETE'};
 const base={...process.env,NETLIFY:'true',CONTEXT:'deploy-preview',CI:'true',BROWSER:'none',NETLIFY_TELEMETRY_DISABLED:'1',NEXT_TELEMETRY_DISABLED:'1',MORAL_TRADE_DISABLE_DEP_REPAIR:'1'};
 let pg,child,log;
 async function stage(name){report.stage=name;await writeFile(join(root,'jobs-result.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({candidate:kind,stage:name,status:report.status}));}
@@ -43,7 +45,7 @@ try{
  if(!ready)console.log(await failureTail(join(root,'serve.log')));
  assert.ok(ready,'Built Netlify serve unavailable; no source fallback permitted');
  await stage('email-scenarios');
- report.results=await runJobCases({origin:'http://127.0.0.1:8888',pg,onDiagnostic:event=>console.log(JSON.stringify({candidate:kind,emailDiagnostic:event}))});report.background=await runBackgroundCase({origin:'http://127.0.0.1:8888',pg,project:kind==='legacy'?'website2':'moraltrade-site'});await stage('search-scenarios');report.search=await runSearchCases({origin:'http://127.0.0.1:8888',candidate:kind});if(kind==='canonical'){await stage('discover-scenarios');report.discover=await runDiscoverBaseline({origin:'http://127.0.0.1:8888'});}report.status='SYNTHETIC_BUILT_RUNTIME_PASS';
+ report.results=await runJobCases({origin:'http://127.0.0.1:8888',pg,onDiagnostic:event=>console.log(JSON.stringify({candidate:kind,emailDiagnostic:event}))});report.background=await runBackgroundCase({origin:'http://127.0.0.1:8888',pg,project:kind==='legacy'?'website2':'moraltrade-site'});await stage('search-scenarios');report.search=await runSearchCases({origin:'http://127.0.0.1:8888',candidate:kind});if(kind==='canonical'){await stage('discover-scenarios');report.discover=await runDiscoverBaseline({origin:'http://127.0.0.1:8888'});await stage('discover-source-states');report.discoverSources=await runDiscoverSourceStates({origin:'http://127.0.0.1:8888'});await stage('discover-offset-evidence');report.discoverEvidence=await runOffsetEvidenceSearch({origin:'http://127.0.0.1:8888'});}report.status='SYNTHETIC_BUILT_RUNTIME_PASS';
 }catch(e){report.status='FAILED';report.reason=e.message;process.exitCode=1;if(['email-scenarios','search-scenarios'].includes(report.stage)&&log)try{console.log(await failureTail(join(root,'serve.log')));}catch{console.log('Synthetic server log unavailable');}}
 finally{
  if(child){

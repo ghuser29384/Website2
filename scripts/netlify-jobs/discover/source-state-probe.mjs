@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';import {createDiscoverFixture} from './fixture.mjs';import {handleCoFundRpc} from './cofund-fixture.mjs';import {startFixtureServer} from '../fixture-server.mjs';
+export async function runDiscoverSourceStates({origin}){
+ const target=new URL(origin);assert.equal(target.protocol,'http:');assert.equal(target.hostname,'127.0.0.1');const results=[];
+ const cases=[['all',true,true,101,'live'],['all',true,false,100,'partial'],['all',false,true,1,'partial'],['all',false,false,0,'unavailable'],['co-fund',true,true,1,'live'],['co-fund',true,false,0,'unavailable'],['individual',true,true,100,'live']];
+ for(const[kind,individual,cofund,total,availability]of cases){
+  const base=createDiscoverFixture({count:100,includeRelated:true});let rpcCalls=0;
+  const fixture={async handle(req){const u=new URL(req.url);if(u.pathname==='/rest/v1/rpc/get_public_group_buying_snapshot'){rpcCalls++;return handleCoFundRpc(req,{available:cofund});}if(u.pathname==='/rest/v1/offers'&&!individual){assert.equal(req.method,'GET');return Response.json({message:'Synthetic individual source unavailable'},{status:503});}return base.handle(req);}};
+  const server=await startFixtureServer(fixture,{port:15433});
+  try{const started=performance.now();const response=await fetch(new URL('/api/discover/search',target),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({query:'',domain:'offers',offerKind:kind,sort:'newest',page:1}),redirect:'manual',signal:AbortSignal.timeout(30000)});assert.equal(response.status,200);const text=await response.text();assert.ok(Buffer.byteLength(text)<2*1024*1024);const d=JSON.parse(text);assert.equal(d.ok,true);assert.equal(d.sourceStatus.offers,availability);assert.equal(d.total,total);assert.equal(d.items.length,Math.min(total,50));assert.equal(d.sources.individualOffers,kind==='co-fund'?'not_requested':individual?'live':'unavailable');assert.equal(d.sources.coFunds,kind==='individual'?'not_requested':cofund?'live':'unavailable');assert.equal(rpcCalls,kind==='individual'?0:1);if(kind==='co-fund')assert.equal(base.counts()['/rest/v1/offers']??0,0);results.push({kind,individual,cofund,total,availability,rpcCalls,elapsedMs:performance.now()-started});}finally{await server.close();}
+ }
+ return {results,hostedMeasurement:false,provesFreeFit:false,coverage:'synthetic source availability and source selection; not rendered/auth/payment acceptance'};
+}

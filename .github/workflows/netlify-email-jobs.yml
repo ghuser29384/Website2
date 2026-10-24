@@ -14,10 +14,12 @@ jobs:
       fail-fast: false
       matrix:
         candidate: [canonical]
+        variant: [baseline, narrow]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       CANDIDATE: ${{ matrix.candidate }}
+      DISCOVER_LOADER_VARIANT: ${{ matrix.variant }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,7 +31,7 @@ jobs:
       - name: Guard exact parent and no deployment
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 32ed954700ade6b8e512ac99e8b1c6e41c5ab089
+          test "$(git rev-parse HEAD^)" = 1896e473c69e0101061e77f5b46dd10839d18d12
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-email-jobs.yml"||f.startsWith("scripts/netlify-jobs/")||f==="scripts/netlify-compat/run.sh"||["src/lib/public-route-smoke.test.ts","src/lib/trade-invitations.test.ts","src/app/api/jobs/email/route.ts","src/lib/email.ts","src/lib/supabase/server.ts","src/lib/email-outbox-core.ts","src/lib/email-outbox-job.ts","src/lib/email-execution-deadline.ts"].includes(f)));'
@@ -42,8 +44,8 @@ jobs:
           sudo unshare --net -- bash -c '
             set -euo pipefail
             ip link set lo up
-            exec runuser -u runner -- env -i PATH="$1" HOME="$2/home" ROOT="$2" CANDIDATE="$3" OFFLINE_NAMESPACE=1 PG_BIN=/usr/lib/postgresql/16/bin bash "$2/jobs/run.sh" offline
-          ' _ "$PATH" "$RUNNER_TEMP/netlify-compat-$CANDIDATE" "$CANDIDATE"
+            exec runuser -u runner -- env -i PATH="$1" HOME="$2/home" ROOT="$2" CANDIDATE="$3" DISCOVER_LOADER_VARIANT="$4" OFFLINE_NAMESPACE=1 PG_BIN=/usr/lib/postgresql/16/bin bash "$2/jobs/run.sh" offline
+          ' _ "$PATH" "$RUNNER_TEMP/netlify-compat-$CANDIDATE" "$CANDIDATE" "$DISCOVER_LOADER_VARIANT"
       - name: Report bounded result
         if: always()
         run: |

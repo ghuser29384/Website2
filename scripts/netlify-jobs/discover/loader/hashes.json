@@ -1,0 +1,18 @@
+{
+  "src/lib/app-data.ts": {
+    "before": "60d762bd4ff1f3bb53c1d50379953e3bb35c0b3acbd66cb4108a5b96b50b6d9f",
+    "after": "7729b731a4dcc6b41dc374000a33a6e601c19e335dc9fdbe5f4f69dce0d88e63"
+  },
+  "src/lib/public-offers.ts": {
+    "before": "814a7d19da3cd90098cfb3d263686b697d7fb8aada4d2767588620e943e666c5",
+    "after": "4892e5551e26f22db38ee40e566dadaedbcfa8da7cb814436181b998538f5195"
+  },
+  "src/app/api/discover/search/route.ts": {
+    "before": "d48eb05cb509ac9bb27632ca5ed888b3f31ff2f827f14f41639166d06126485c",
+    "after": "87b1926bfcbfdac444bbbdd8896b0fcef550f109ee4d4e295fd4494a2024868a"
+  },
+  "src/lib/marketplace-integrity-cleanup.test.ts": {
+    "before": "8b450dbc78750eef690ba581b663e4c179b959ac09e754c09ad26276d3c6ab0a",
+    "after": "d0ebae31c243aae83598f6ba4e93c7e9406bc9704202d28144abaed3b747ced7"
+  }
+}

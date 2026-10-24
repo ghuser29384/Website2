@@ -7,6 +7,7 @@ import {startFixtureServer} from '../fixture-server.mjs';
 export async function runDiscoverBaseline({origin}){
  const base=new URL(origin);assert.equal(base.protocol,'http:');assert.equal(base.hostname,'127.0.0.1');
  const expected=JSON.parse(await readFile(new URL('./expected-baseline.json',import.meta.url),'utf8'));
+ const variant=process.env.DISCOVER_LOADER_VARIANT;assert.ok(['baseline','narrow'].includes(variant));
  const results=[];
  for(const includeRelated of [false,true])for(const count of [100,400]){
   const fixture=createDiscoverFixture({count,includeRelated}),server=await startFixtureServer(fixture,{port:15433});
@@ -23,7 +24,7 @@ export async function runDiscoverBaseline({origin}){
     const ids=data.items.map(x=>x.id);assert.equal(new Set(ids).size,50);pageIds.push(ids);
     const after=fixture.counts(),calls=Object.fromEntries(Object.entries(after).map(([k,v])=>[k,v-(before[k]??0)]));assert.ok(calls['/rest/v1/offers']>0);
     const stable={...data};delete stable.checkedAt;const resultDigest=createHash('sha256').update(JSON.stringify(stable)).digest('hex');
-    const baseline=expected.find(x=>x.count===count&&x.page===page&&x.includeRelated===includeRelated);assert.ok(baseline);assert.equal(resultDigest,baseline.resultDigest,'API response changed');assert.equal(calls['/rest/v1/donation_offset_pools'],1);assert.equal(calls['/rest/v1/registered_charities'],1);
+    const baseline=expected.find(x=>x.count===count&&x.page===page&&x.includeRelated===includeRelated);assert.ok(baseline);assert.equal(resultDigest,baseline.resultDigest,'API response changed');for(const table of ['donation_offset_pools','registered_charities','performance_bonds','offer_comments','offer_recommendations'])assert.equal(calls['/rest/v1/'+table]??0,variant==='narrow'?0:Math.ceil(count/100));assert.equal(Object.values(calls).reduce((a,b)=>a+b,0),1+Math.ceil(count/100)*(variant==='narrow'?4:9));
     results.push({count,page,includeRelated,resultDigest,elapsedMs:performance.now()-started,responseBytes:bytes,requestCounts:calls,total:data.total});
    }
    assert.equal(new Set(pageIds.flat()).size,100,'Pages overlap');

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 case "${CANDIDATE:-}" in canonical|legacy) ;; *) exit 2;; esac
+case "${DISCOVER_LOADER_VARIANT:-}" in baseline|narrow) ;; *) exit 2;; esac
 case "${1:-}" in
 prepare)
  bash scripts/netlify-compat/run.sh prepare
  node scripts/netlify-jobs/edge-cache.mjs prepare "$RUNNER_TEMP/netlify-compat-$CANDIDATE"
  node scripts/netlify-jobs/background/prepare.mjs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/app" "$PWD/scripts/netlify-jobs/background"
- if test "$CANDIDATE" = canonical; then node scripts/netlify-jobs/discover/prepare.mjs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/app"; fi
+ if test "${DISCOVER_LOADER_VARIANT:-}" = narrow; then node scripts/netlify-jobs/discover/loader/prepare.mjs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/app"; fi
  cp -R scripts/netlify-jobs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/jobs"
  ;;
 offline)
