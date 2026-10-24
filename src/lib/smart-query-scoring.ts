@@ -56,13 +56,14 @@ function createScorer(fields: readonly WeightedSemanticField[]) {
       let best = 0;
       for (const field of prepared) {
         const { normalized, weight } = field;
-        if (!normalized) continue;
+        if (!normalized || best >= weight) continue;
         if (normalized.includes(term)) {
           best = Math.max(best, weight);
           continue;
         }
         for (const token of (field.tokens ??= smartQueryTokens(normalized))) {
           best = Math.max(best, tokenSimilarity(term, token) * weight);
+          if (best >= weight) break;
         }
       }
       total += best;

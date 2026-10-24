@@ -45,3 +45,11 @@ test("empty direct query does not prepare unused fields", () => {
   const fields = [{ get value(): string { throw new Error("Unused field read"); } }];
   assert.equal(directSemanticTextScore("", fields), 0.5);
 });
+
+
+test("field score ceilings preserve later stronger matches and independent query terms", () => {
+  assert.equal(directSemanticTextScore("animal", [{ value: "animal", weight: 0.5 }, { value: "animal", weight: 1 }]), 1);
+  assert.equal(directSemanticTextScore("animal housing", [{ value: "animal", weight: 1 }, { value: "housing", weight: 0.5 }]), 0.75);
+  assert.equal(directSemanticTextScore("animel", [{ value: "animal", weight: 0.5 }, { value: "animel", weight: 1 }]), 1);
+  assert.equal(directSemanticTextScore("animal", [{ value: "animal", weight: 0 }, { value: "animal", weight: 0.5 }]), 0.5);
+});

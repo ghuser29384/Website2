@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 1a2a407e13d3a1d3ea7727bf9e29c878c64971c5
+          test "$(git rev-parse HEAD^)" = 8205a82ee2d7cca91aed6126693c24340b3bbbff
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           python3 - <<'PY'
@@ -41,7 +41,7 @@ jobs:
           changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
           assert changed == expected, 'Unexpected change scope'
           PY
-          git show 6c35e4d20fca39d2654d3bba89ee070c25a99f66:src/lib/smart-query-scoring.ts > "$RUNNER_TEMP/baseline-scoring.ts"
+          git show 8205a82ee2d7cca91aed6126693c24340b3bbbff:src/lib/smart-query-scoring.ts > "$RUNNER_TEMP/baseline-scoring.ts"
           printf 'SEARCH_SCORER_BASELINE=%s/baseline-scoring.ts\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
