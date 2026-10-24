@@ -1,3 +1,5 @@
+import {startAuthority} from './tsa-server.mjs';
+import {verifyTimestamps} from './timestamp-probe.mjs';
 import {startDatabase} from './persistence-postgres.mjs';
 import {verifyPersistence} from './persistence-probe.mjs';
 import {spawnSync,spawn} from 'node:child_process';
@@ -10,7 +12,7 @@ const next=false;
 const report={candidate:kind,stages:[],hostedAcceptance:false,fullFeatureParity:false,externalRuntimeRequests:0,unverified:['hosted quotas and credits','complete batch elapsed-time and retry acceptance','provider and authenticated end-to-end behavior','production domain cutover'],status:'INCOMPLETE'};
 const env={...process.env,NETLIFY:'true',CONTEXT:'deploy-preview',MORAL_TRADE_DISABLE_DEP_REPAIR:'1',NETLIFY_TELEMETRY_DISABLED:'1',NEXT_TELEMETRY_DISABLED:'1',CI:'true',NODE_OPTIONS:'--max-old-space-size=6144 --import='+join(root,'harness/fetch-diagnostic.mjs'),MORAL_TRADE_DISABLE_SUPABASE:'false',CRON_SECRET:'synthetic-cron-secret',DATABASE_URL:'postgresql://postgres:synthetic@127.0.0.1:15439/synthetic'};
 Object.assign(env,{NODE_ENV:'production',ALLOW_DEVELOPMENT_AUTH_HEADERS:'false',AUTH_JWT_SECRET:'synthetic-auth-secret-for-persistence',COMMITMENT_JWS_SECRET:'synthetic-signing-secret-for-persistence',COMMITMENT_STRUCTURED_LOGS:'false',DIRECT_URL:env.DATABASE_URL});
-let database;
+let database,authority;
 async function stage(name,cmd,args,extra={}){
  const r=spawnSync(cmd,args,{cwd:app,env:{...env,...extra},encoding:'utf8',timeout:30*60*1000,maxBuffer:24*1024*1024});
  await writeFile(join(root,name+'.log'),(r.stdout||'')+(r.stderr||''));
@@ -61,7 +63,13 @@ try{
    throw Error('Runtime comparison failed');
   }
   report.persistence=await verifyPersistence({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(20000)}),sql:database.sql,restart:async()=>{await stopServer();database.restart();startServer();await readyServer();},jwtSecret:env.AUTH_JWT_SECRET,signingSecret:env.COMMITMENT_JWS_SECRET,cronSecret:env.CRON_SECRET});
+  if(!await stage('timestamp-fixtures',process.execPath,[join(root,'harness/tsa-fixtures.mjs'),join(root,'timestamp-fixtures')]))throw Error('Synthetic timestamp setup failed');
+  authority=await startAuthority(join(root,'timestamp-fixtures'));
+  env.TSA_URL=authority.url;
+  const trust=async(valid)=>{await stopServer();env.TSA_CA_PEM=await readFile(join(root,'timestamp-fixtures',valid?'root.pem':'other.pem'),'utf8');startServer();await readyServer();};
+  await trust(true);
+  report.timestamps=await verifyTimestamps({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(20000)}),sql:database.sql,authority,trust,cronSecret:env.CRON_SECRET});
  }finally{await stopServer();await log.close();}
  report.status='PACKAGING_AND_BOUNDED_RUNTIME_PASS';
 }catch(e){report.status='BLOCKED_OR_FAILED';report.reason=e.message;process.exitCode=1;}
-finally{database?.stop();await writeFile(join(root,'result.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));}
+finally{await authority?.close();database?.stop();await writeFile(join(root,'result.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));}
