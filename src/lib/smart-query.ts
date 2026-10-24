@@ -439,8 +439,8 @@ function editDistance(left: string, right: string) {
   if (left === right) return 0;
   if (!left.length) return right.length;
   if (!right.length) return left.length;
-  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-  const current = new Array<number>(right.length + 1);
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  let current = new Array<number>(right.length + 1);
   for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
     current[0] = leftIndex;
     for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
@@ -451,7 +451,9 @@ function editDistance(left: string, right: string) {
           (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
       );
     }
-    previous.splice(0, previous.length, ...current);
+    const swap = previous;
+    previous = current;
+    current = swap;
   }
   return previous[right.length];
 }
@@ -460,6 +462,7 @@ function fuzzyTokenMatch(left: string, right: string) {
   if (left === right || left.includes(right) || right.includes(left)) return true;
   const maximumDistance = Math.max(left.length, right.length) >= 8 ? 2 : 1;
   return Math.min(left.length, right.length) >= 4 &&
+    Math.abs(left.length - right.length) <= maximumDistance &&
     editDistance(left, right) <= maximumDistance;
 }
 

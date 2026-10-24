@@ -26,21 +26,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 5
+          fetch-depth: 6
           persist-credentials: false
       - name: Verify exact base and narrow change
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = dd40b49c2f28f13f66e337635d6eb2e98686eeb6
+          test "$(git rev-parse HEAD^)" = fc09e74eac8e8b88759e956569b5e1eb5c4b72d7
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           python3 - <<'PY'
           import subprocess
-          expected = {'.github/workflows/search-cpu-build.yml', 'src/lib/offers-directory-data.test.ts'}
+          expected = {'.github/workflows/search-cpu-build.yml', 'src/lib/smart-query.ts', 'src/lib/smart-query-parser-parity.test.ts'}
           changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
           assert changed == expected, 'Unexpected change scope'
           PY
+          git show 8205a82ee2d7cca91aed6126693c24340b3bbbff:src/lib/smart-query.ts > "$RUNNER_TEMP/baseline-parser.ts"
+          printf 'SEARCH_PARSER_BASELINE=%s/baseline-parser.ts\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           git show 8205a82ee2d7cca91aed6126693c24340b3bbbff:src/lib/smart-query-scoring.ts > "$RUNNER_TEMP/baseline-scoring.ts"
           printf 'SEARCH_SCORER_BASELINE=%s/baseline-scoring.ts\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
@@ -71,6 +73,10 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=6144 --import=${{ github.workspace }}/scripts/search-cpu-no-network.mjs
           MORAL_TRADE_DISABLE_SUPABASE: 'false'
         run: npm test
+      - name: Strict typecheck including test sources
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144 --import=${{ github.workspace }}/scripts/search-cpu-no-network.mjs
+        run: ./node_modules/.bin/tsc --noEmit
       - name: Lint
         env:
           NODE_OPTIONS: --max-old-space-size=6144 --import=${{ github.workspace }}/scripts/search-cpu-no-network.mjs
