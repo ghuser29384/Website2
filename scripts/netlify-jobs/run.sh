@@ -21,7 +21,7 @@ offline)
  export NETLIFY_JOB_APP="$ROOT/app"
  node "$ROOT/jobs/edge-cache.mjs" offline "$ROOT"
  node --test "$ROOT/jobs/"*.test.mjs "$ROOT/jobs/background/"*.test.mjs
- node --test "$ROOT/jobs/search/process-cpu.test.mjs"
+ node --test "$ROOT/jobs/search/process-cpu.test.mjs" "$ROOT/jobs/search/profile-hook.test.mjs"
  node "$ROOT/jobs/serve-offline.mjs"
  ;;
 *) exit 2;;
