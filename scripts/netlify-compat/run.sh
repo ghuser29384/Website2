@@ -17,7 +17,7 @@ prepare)
  baseline) ;;
  request-reuse)
    test "$CANDIDATE" = legacy
-   REF=fc09e74eac8e8b88759e956569b5e1eb5c4b72d7
+   REF=1bd3e6a6690468649416a2ce6981007d7cc1e470
    ;;
  *) exit 2;;
  esac
