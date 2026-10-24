@@ -3,10 +3,11 @@ import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 export async function startAuthority(directory) {
- let mode='valid',calls=0;
+ let mode='valid',calls=0,delayMs=0;
  const server=createServer(async(req,res)=>{
   if(req.method!=='POST'||req.url!=='/timestamp'){res.writeHead(404).end();return;}
   calls++;
+  if(delayMs)await new Promise(resolve=>setTimeout(resolve,delayMs));
   if(mode==='unavailable'){res.writeHead(503).end();return;}
   try{
    const chunks=[];let size=0;
@@ -20,5 +21,5 @@ export async function startAuthority(directory) {
   }catch{res.writeHead(500).end('synthetic authority failure');}
  });
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
- return {url:`http://127.0.0.1:${server.address().port}/timestamp`,setMode(value){if(!['valid','corrupt','unavailable'].includes(value))throw Error('unknown mode');mode=value;},get calls(){return calls;},async close(){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}};
+ return {url:`http://127.0.0.1:${server.address().port}/timestamp`,setDelay(value){if(!Number.isInteger(value)||value<0||value>10000)throw Error('invalid synthetic delay');delayMs=value;},setMode(value){if(!['valid','corrupt','unavailable'].includes(value))throw Error('unknown mode');mode=value;},get calls(){return calls;},async close(){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}};
 }
