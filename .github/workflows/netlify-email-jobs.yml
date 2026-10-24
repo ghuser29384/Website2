@@ -13,13 +13,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        candidate: [canonical]
-        variant: [baseline, narrow]
+        candidate: [legacy]
+        variant: [baseline, request-reuse]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       CANDIDATE: ${{ matrix.candidate }}
-      DISCOVER_LOADER_VARIANT: ${{ matrix.variant }}
+      DISCOVER_LOADER_VARIANT: baseline
+      SEARCH_SOURCE_VARIANT: ${{ matrix.variant }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,7 +32,7 @@ jobs:
       - name: Guard exact parent and no deployment
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 1896e473c69e0101061e77f5b46dd10839d18d12
+          test "$(git rev-parse HEAD^)" = 08ae1ccf28c7a5c2cd754f0e5453f72395576ea7
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-email-jobs.yml"||f.startsWith("scripts/netlify-jobs/")||f==="scripts/netlify-compat/run.sh"||["src/lib/public-route-smoke.test.ts","src/lib/trade-invitations.test.ts","src/app/api/jobs/email/route.ts","src/lib/email.ts","src/lib/supabase/server.ts","src/lib/email-outbox-core.ts","src/lib/email-outbox-job.ts","src/lib/email-execution-deadline.ts"].includes(f)));'
@@ -50,4 +51,5 @@ jobs:
         if: always()
         run: |
           result="$RUNNER_TEMP/netlify-compat-$CANDIDATE/jobs-result.json"
+          cat "$RUNNER_TEMP/netlify-compat-$CANDIDATE/source-ref.txt" >> "$GITHUB_STEP_SUMMARY"
           if test -f "$result"; then cat "$result" >> "$GITHUB_STEP_SUMMARY"; else echo 'NOT TESTED: prerequisite failed' >> "$GITHUB_STEP_SUMMARY"; fi

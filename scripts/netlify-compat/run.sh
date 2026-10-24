@@ -13,6 +13,15 @@ prepare)
  normativity) REPO=WebsiteBuilding2; REF=4ee214324976cf579a77bde4788551cfe32f94fb;;
  rlhf) REPO=; REF=;;
  esac
+ case "${SEARCH_SOURCE_VARIANT:-baseline}" in
+ baseline) ;;
+ request-reuse)
+   test "$CANDIDATE" = legacy
+   REF=dd40b49c2f28f13f66e337635d6eb2e98686eeb6
+   ;;
+ *) exit 2;;
+ esac
+ printf '%s\n' "$REF" > "$ROOT/source-ref.txt"
  if test -n "$REPO"; then
    curl --fail --location --proto '=https' --tlsv1.2 "https://codeload.github.com/ghuser29384/$REPO/tar.gz/$REF" -o "$ROOT/source.tar.gz"
    tar -xzf "$ROOT/source.tar.gz" --strip-components=1 -C "$ROOT/app"
