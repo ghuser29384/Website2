@@ -2,13 +2,14 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
+import {stripTypeScriptTypes} from 'node:module';
 const source=await readFile(new URL('./candidate/normativity/api.ts.template',import.meta.url),'utf8');
 function load(){
  const routes=[],uses=[],calls=[];
- const app={all:(path,handler)=>routes.push({path,handler}),use:fn=>uses.push(fn)};
+ const app={set:()=>{},all:(path,handler)=>routes.push({path,handler}),use:fn=>uses.push(fn)};
  const publicConfig=()=>{},audit=()=>{};
  const context=vm.createContext({express:()=>app,serverless:a=>a,createApp:()=>((req,res,next)=>calls.push({req,res,next})),publicConfig,audit});
- vm.runInContext(source.replace(/^import .*;\n/gm,'').replace('export const handler','const handler'),context);
+ vm.runInContext(stripTypeScriptTypes(source).replace(/^import .*;\n/gm,'').replace('export const handler','const handler'),context);
  assert.equal(uses.length,1);assert.equal(routes.length,2);
  return {routes,calls,dispatch:uses[0],publicConfig,audit};
 }

@@ -6,6 +6,10 @@ import publicConfig from '../../api/public-config';
 import audit from '../../api/cron/commitment-audit';
 
 const app = express();
+// Prisma audit sequences are BigInt; preserve their exact decimal value in JSON.
+app.set('json replacer', (_key: string, value: unknown) =>
+  typeof value === 'bigint' ? value.toString() : value,
+);
 // Preserve standalone Vercel endpoints outside the existing Express app.
 app.all('/api/public-config', publicConfig);
 app.all('/api/cron/commitment-audit', audit);
