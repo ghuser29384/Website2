@@ -1,3 +1,4 @@
+import {verifyHandoff} from './handoff-probe.mjs';
 import {verifySkip} from './skip-probe.mjs';
 import {verifyStatic} from './static-probe.mjs';
 import {verifyBackground} from './background-probe.mjs';
@@ -15,7 +16,7 @@ if(kind!=='normativity'||process.env.OFFLINE_NAMESPACE!=='1')throw Error('This p
 const next=false;
 const report={candidate:kind,stages:[],hostedAcceptance:false,fullFeatureParity:false,externalRuntimeRequests:0,unverified:['hosted quotas and credits','complete batch elapsed-time and retry acceptance','provider and authenticated end-to-end behavior','production domain cutover'],status:'INCOMPLETE'};
 const env={...process.env,NETLIFY:'true',CONTEXT:'deploy-preview',MORAL_TRADE_DISABLE_DEP_REPAIR:'1',NETLIFY_TELEMETRY_DISABLED:'1',NEXT_TELEMETRY_DISABLED:'1',CI:'true',NODE_OPTIONS:'--max-old-space-size=6144 --import='+join(root,'harness/fetch-diagnostic.mjs'),MORAL_TRADE_DISABLE_SUPABASE:'false',CRON_SECRET:'synthetic-cron-secret',DATABASE_URL:'postgresql://postgres:synthetic@127.0.0.1:15439/synthetic'};
-Object.assign(env,{NODE_ENV:'production',ALLOW_DEVELOPMENT_AUTH_HEADERS:'false',AUTH_JWT_SECRET:'synthetic-auth-secret-for-persistence',COMMITMENT_JWS_SECRET:'synthetic-signing-secret-for-persistence',COMMITMENT_STRUCTURED_LOGS:'false',DIRECT_URL:env.DATABASE_URL});
+Object.assign(env,{NETLIFY_DEV:'true',AUDIT_BACKGROUND_URL:'http://127.0.0.1:8888/.netlify/functions/timestamp-background',NODE_ENV:'production',ALLOW_DEVELOPMENT_AUTH_HEADERS:'false',AUTH_JWT_SECRET:'synthetic-auth-secret-for-persistence',COMMITMENT_JWS_SECRET:'synthetic-signing-secret-for-persistence',COMMITMENT_STRUCTURED_LOGS:'false',DIRECT_URL:env.DATABASE_URL});
 let database,authority;
 async function stage(name,cmd,args,extra={}){
  const r=spawnSync(cmd,args,{cwd:app,env:{...env,...extra},encoding:'utf8',timeout:30*60*1000,maxBuffer:24*1024*1024});
@@ -77,6 +78,7 @@ try{
   report.timestamps=await verifyTimestamps({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(20000)}),sql:database.sql,authority,trust,cronSecret:env.CRON_SECRET});
   report.scheduler=await verifyScheduler({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(35000)}),sql:database.sql,jwtSecret:env.AUTH_JWT_SECRET});
   report.background=await verifyBackground({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(35000)}),sql:database.sql,raw:database.raw,authority,secret:env.CRON_SECRET,jwtSecret:env.AUTH_JWT_SECRET});
+  report.handoff=await verifyHandoff({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(15000)}),sql:database.sql});
   await stopServer();delete env.TSA_URL;startServer();await readyServer();
   report.skip=await verifySkip({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(10000)}),sql:database.sql,raw:database.raw,secret:env.CRON_SECRET,authority});
  }finally{await stopServer();await log.close();}

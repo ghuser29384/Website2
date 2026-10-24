@@ -1,0 +1,18 @@
+// Candidate scheduled handoff; original public/manual audit route stays unchanged.
+import {prisma} from '../../server/src/db/prisma';
+import {handoffAudit} from '../lib/scheduler-handoff.mjs';
+export const config={schedule:'0 8 * * *'};
+export default async function scheduledBackground(request: Request) {
+ const {next_run}=await request.json();
+ const limit=Number(process.env.TSA_BATCH_SIZE||5);
+ if(!Number.isInteger(limit)||limit<1)throw new Error('Invalid timestamp batch configuration');
+ await handoffAudit({nextRun:next_run,secret:process.env.CRON_SECRET,target:process.env.AUDIT_BACKGROUND_URL,
+  allowLocal:process.env.NETLIFY_DEV==='true',
+  register:async(id:string,body:string)=>{
+   await prisma.$queryRaw`SELECT synthetic_audit_dispatch.register(${id},${body}::jsonb,${limit}::integer)`;
+   const rows=await prisma.$queryRaw<any[]>`SELECT finished_at FROM synthetic_audit_dispatch.batch WHERE dispatch_id=${id}`;
+   if(rows.length!==1)throw new Error('Registration not confirmed');
+   return {completed:Boolean(rows[0].finished_at)};
+  },
+ });
+}

@@ -1,6 +1,6 @@
 // Candidate only: no schedule is deployed by preparing this adapter.
 import audit from '../../api/cron/commitment-audit';
-export const config = { schedule: '0 8 * * *' };
+// Unscheduled diagnostic baseline only; scheduled-background owns the daily cron.
 export default async function scheduledAudit() {
   const secret = process.env.CRON_SECRET;
   if (!secret) throw new Error('Audit schedule requires CRON_SECRET');
