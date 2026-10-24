@@ -12,7 +12,6 @@ export default async function timestampBackground(request: Request) {
  const state=await prisma.$queryRaw<any[]>`SELECT finished_at,prepared FROM synthetic_audit_dispatch.batch WHERE dispatch_id=${id}`;
  if(state.length!==1)throw new Error('Dispatch was not admitted');
  if(state[0].finished_at)return;
- if(!process.env.TSA_URL)throw new Error('Synthetic proof test requires TSA_URL');
  const worker=randomUUID();
  const claims=await prisma.$queryRaw<any[]>`SELECT synthetic_audit_dispatch.claim(${id},${worker}) AS generation`;
  const generation=claims[0].generation;
@@ -20,8 +19,15 @@ export default async function timestampBackground(request: Request) {
  try{
   if(!state[0].prepared){
    await createMerkleCheckpoint(prisma);
+   if(!process.env.TSA_URL){
+    await timestampPendingCheckpoints(prisma);
+    const skipped=await prisma.$queryRaw<any[]>`SELECT synthetic_audit_dispatch.skip_unconfigured(${id},${worker},${generation}::bigint) AS skipped`;
+    if(!skipped[0].skipped)throw new Error('Could not record skipped timestamping');
+    return;
+   }
    await prisma.$queryRaw`SELECT synthetic_audit_dispatch.prepare(${id},${worker},${generation}::bigint)`;
   }
+  if(!process.env.TSA_URL)throw new Error('TSA configuration changed during incomplete dispatch');
   const facade={auditCheckpoint:{findMany:async (_options:unknown)=>prisma.$queryRaw<any[]>`
    SELECT c.* FROM "AuditCheckpoint" c JOIN synthetic_audit_dispatch.batch b ON c.id=ANY(b.checkpoint_ids)
    WHERE b.dispatch_id=${id} AND NOT EXISTS(SELECT 1 FROM "AuditTimestamp" t WHERE t."checkpointId"=c.id)
