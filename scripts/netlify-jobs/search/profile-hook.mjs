@@ -7,7 +7,7 @@ export function summarize(profile){
  const nodes=new Map(profile.nodes.map(n=>[n.id,n.callFrame]));const totals=new Map();
  for(let i=0;i<(profile.samples??[]).length;i++){
   const frame=nodes.get(profile.samples[i]);if(!frame)continue;
-  const key=JSON.stringify({functionName:frame.functionName,url:frame.url,line:frame.lineNumber});
+  const key=JSON.stringify({functionName:frame.functionName,url:frame.url,line:frame.lineNumber,column:frame.columnNumber});
   totals.set(key,(totals.get(key)??0)+(profile.timeDeltas?.[i]??0));
  }
  return {durationUs:profile.endTime-profile.startTime,samples:profile.samples?.length??0,top:[...totals].sort((a,b)=>b[1]-a[1]).slice(0,40).map(([key,selfUs])=>({...JSON.parse(key),selfUs}))};
