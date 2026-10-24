@@ -144,7 +144,7 @@ function harness(options: { fullRows?: boolean; rows?: Offer[]; fail?: string; c
     "@/lib/seo": { getAbsoluteUrl: (path: string) => `https://offline-fixture.invalid${path}` },
     "@/lib/site": { getPrimaryNavLinks: () => [], getTopbarActions: () => [] },
     "@/lib/smart-discovery-ranking": ranking, "@/lib/smart-query": smartQuery,
-    "@/lib/smart-query-facets": facets, "@/lib/smart-query-records": records, "@/lib/smart-query-scoring": options.scorer ?? scoring,
+    "@/lib/smart-query-facets": facets, "@/lib/smart-query-records": records, "@/lib/smart-query-scoring": { createSemanticSimilarity: scoring.createSemanticSimilarity, ...(options.scorer ?? scoring) },
     "@/lib/supabase/config": { hasSupabaseEnv: () => options.configured !== false },
     "@/lib/supabase/server": { createClient: async () => client }, "@/components/discovery/discovery-filters.module.css": css,
   }, "\nexport { listLiveOffers };\n") as {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { directSemanticTextScore } from "./smart-query-scoring";
+import { createSemanticSimilarity, directSemanticTextScore } from "./smart-query-scoring";
 
 test("semantic scoring retains exact and substring matches across length differences", () => {
   assert.equal(directSemanticTextScore("volunteer", [{ value: "volunteer" }]), 1);
@@ -61,5 +61,20 @@ test("edit-distance row reuse preserves fuzzy thresholds across different length
     assert.equal(directSemanticTextScore("abcdefgh", [{ value: "abcxefgy" }]), 0.72);
     assert.equal(directSemanticTextScore("abcdefgh", [{ value: "abcxezgy" }]), 0);
     assert.equal(directSemanticTextScore("abcdefgh", [{ value: "abcdefg" }]), 0.86);
+  }
+});
+
+
+test("request-local similarity preserves scores after cache fills and fields change", () => {
+  const similarity = createSemanticSimilarity();
+  for (let i = 0; i < 4200; i += 1) {
+    const query = `synthetic${i}`;
+    const fields = [{ value: `synthetiq${i + 1}`, weight: (i % 10) / 10 }];
+    assert.equal(directSemanticTextScore(query, fields, similarity), directSemanticTextScore(query, fields));
+  }
+  for (const weight of [0, 0.5, 1]) {
+    const fields = [{ value: "animal", weight }];
+    assert.equal(directSemanticTextScore("animel", fields, similarity), directSemanticTextScore("animel", fields));
+    assert.equal(directSemanticTextScore("animel", fields, createSemanticSimilarity()), directSemanticTextScore("animel", fields));
   }
 });

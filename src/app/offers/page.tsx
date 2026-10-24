@@ -39,6 +39,8 @@ import {
   isVerifiedEvidenceText,
 } from "@/lib/smart-query-records";
 import {
+  createSemanticSimilarity,
+  type SemanticSimilarity,
   smartCauseMatchScore,
   smartInterpretationScore,
   smartPersonalPriorityScore,
@@ -205,13 +207,14 @@ function offerMatchesHardConstraints(
   amountCents: readonly number[],
   deadline: string | null,
   verified: boolean,
+  similarity: SemanticSimilarity,
 ) {
   if (facets.actionTypes.length) {
     const modeMatches = facets.actionTypes.some((actionType) => actionType === offer.mode);
     if (!modeMatches) return false;
   }
   if (facets.causes.length) {
-    const causeScore = smartCauseMatchScore(facets.causes, offerTextFields(offer));
+    const causeScore = smartCauseMatchScore(facets.causes, offerTextFields(offer), similarity);
     if (causeScore < 0.42 && !facets.causes.some((cause) => causeIds.includes(cause))) return false;
   }
   if (!matchesSmartVerificationConstraint(facets, verified)) return false;
@@ -229,6 +232,7 @@ function rankOffer(
   interpretation: SmartQueryInterpretation,
   personalPriorities: readonly string[],
   now: Date,
+  similarity: SemanticSimilarity,
 ): RankedOffer | null {
   const fields = offerTextFields(offer);
   const amountCents = offerAmounts(offer);
@@ -239,7 +243,7 @@ function rankOffer(
   );
   const verified = isVerifiedEvidenceText(offer.verification);
   const evidenceQuality = evidenceTextQuality(offer.verification);
-  const semanticRelevance = smartInterpretationScore(interpretation, fields);
+  const semanticRelevance = smartInterpretationScore(interpretation, fields, similarity);
 
   if (
     !offerMatchesHardConstraints(
@@ -249,6 +253,7 @@ function rankOffer(
       amountCents,
       deadline,
       verified,
+      similarity,
     )
   ) {
     return null;
@@ -262,7 +267,7 @@ function rankOffer(
   const score = smartDiscoveryScore({
     semanticRelevance,
     evidenceQuality,
-    personalMoralFit: smartPersonalPriorityScore(causeIds, personalPriorities),
+    personalMoralFit: smartPersonalPriorityScore(causeIds, personalPriorities, similarity),
     deadlineUrgency: getSmartDeadlineUrgency(deadline, now),
     credit: normalizeCreditSignal(offer.trust_level),
   });
@@ -416,8 +421,9 @@ async function listLiveOffers({
       };
     }
 
+    const similarity = createSemanticSimilarity();
     const ranked = (data ?? [])
-      .map((offer) => rankOffer(offer, { ...interpretation, facets }, personalPriorities, new Date()))
+      .map((offer) => rankOffer(offer, { ...interpretation, facets }, personalPriorities, new Date(), similarity))
       .filter((entry): entry is RankedOffer => Boolean(entry));
     const sorted = sortRankedOffers(ranked, sort);
     return {
