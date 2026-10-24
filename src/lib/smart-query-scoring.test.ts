@@ -28,3 +28,14 @@ test("semantic scoring preserves empty input and weighted field behavior", () =>
   assert.equal(directSemanticTextScore("animel", [{ value: "animal", weight: 0.5 }]), 0.36);
   assert.equal(directSemanticTextScore("animal", [{ value: "animal", weight: -1 }]), 0);
 });
+
+
+test("prepared fields do not retain values or weights between calls", () => {
+  const fields = [{ value: "animal", weight: 1 }];
+  assert.equal(directSemanticTextScore("animal", fields), 1);
+  fields[0].value = "housing";
+  assert.equal(directSemanticTextScore("animal", fields), 0);
+  fields[0].value = "animal";
+  fields[0].weight = 0;
+  assert.equal(directSemanticTextScore("animal", fields), 0);
+});

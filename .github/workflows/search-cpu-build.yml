@@ -2,7 +2,7 @@ name: Search CPU isolated build only
 
 on:
   push:
-    branches: [build/search-cpu-20261019]
+    branches: [build/search-field-reuse-20261024]
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/search-cpu-20261019'
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/search-field-reuse-20261024'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
@@ -32,16 +32,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = bf0cb94a418c82ae0894c8b7a54ade36c385a2ef
+          test "$(git rev-parse HEAD^)" = 6c35e4d20fca39d2654d3bba89ee070c25a99f66
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           python3 - <<'PY'
           import subprocess
-          expected = {'.github/workflows/search-cpu-build.yml', 'scripts/search-cpu-no-network.mjs', 'src/lib/offers-directory-data.test.ts', 'src/lib/smart-query-scoring.test.ts', 'src/lib/smart-query-scoring.ts', 'vercel.ts'}
+          expected = {'.github/workflows/search-cpu-build.yml', 'src/lib/smart-query-scoring.test.ts', 'src/lib/smart-query-scoring.ts', 'vercel.ts'}
           changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
           assert changed == expected, 'Unexpected change scope'
           PY
-          git show 467ba624338b781797024b57ef4f579a688a4250:src/lib/smart-query-scoring.ts > "$RUNNER_TEMP/baseline-scoring.ts"
+          git show 6c35e4d20fca39d2654d3bba89ee070c25a99f66:src/lib/smart-query-scoring.ts > "$RUNNER_TEMP/baseline-scoring.ts"
           printf 'SEARCH_SCORER_BASELINE=%s/baseline-scoring.ts\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
@@ -60,7 +60,7 @@ jobs:
           import { buildVercelProjectConfig } from './scripts/vercel-project-config.mjs';
           const loaded = await import('./vercel.ts');
           const config = loaded.config ?? loaded.default?.config;
-          assert.deepEqual(config.git, { deploymentEnabled: { 'build/website2-legacy-query-20261019': false, 'build/search-cpu-20261019': false } });
+          assert.deepEqual(config.git, { deploymentEnabled: { 'build/website2-legacy-query-20261019': false, 'build/search-cpu-20261019': false, 'build/search-field-reuse-20261024': false } });
           const { git, ...unchanged } = config;
           assert.deepEqual(unchanged, buildVercelProjectConfig());
           for (const attempt of [() => fetch('https://blocked.invalid'), () => http.get('http://blocked.invalid'), () => https.get('https://blocked.invalid'), () => net.connect(443, 'blocked.invalid')]) assert.throws(attempt, /Network disabled/);

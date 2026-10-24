@@ -7,6 +7,7 @@ export const config = {
     deploymentEnabled: {
       "build/website2-legacy-query-20261019": false,
       "build/search-cpu-20261019": false,
+      "build/search-field-reuse-20261024": false,
     },
   },
 };

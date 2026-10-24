@@ -42,45 +42,52 @@ function tokenSimilarity(left: string, right: string) {
   return 0;
 }
 
-function scoreTerms(terms: readonly string[], fields: readonly WeightedSemanticField[]) {
-  if (!terms.length) return 0.5;
-  let total = 0;
-  for (const term of terms) {
-    let best = 0;
-    for (const field of fields) {
-      const normalized = normalizeSmartQueryText(field.value);
-      const weight = clamp(field.weight ?? 1);
-      if (!normalized) continue;
-      if (normalized.includes(term)) {
-        best = Math.max(best, weight);
-        continue;
+function createScorer(fields: readonly WeightedSemanticField[]) {
+  const prepared = fields.map((field) => ({
+    normalized: normalizeSmartQueryText(field.value),
+    weight: clamp(field.weight ?? 1),
+    tokens: null as string[] | null,
+  }));
+  return (terms: readonly string[]) => {
+    if (!terms.length) return 0.5;
+    let total = 0;
+    for (const term of terms) {
+      let best = 0;
+      for (const field of prepared) {
+        const { normalized, weight } = field;
+        if (!normalized) continue;
+        if (normalized.includes(term)) {
+          best = Math.max(best, weight);
+          continue;
+        }
+        for (const token of (field.tokens ??= smartQueryTokens(normalized))) {
+          best = Math.max(best, tokenSimilarity(term, token) * weight);
+        }
       }
-      for (const token of smartQueryTokens(normalized)) {
-        best = Math.max(best, tokenSimilarity(term, token) * weight);
-      }
+      total += best;
     }
-    total += best;
-  }
-  return clamp(total / terms.length);
+    return clamp(total / terms.length);
+  };
 }
 
 export function directSemanticTextScore(
   query: string,
   fields: readonly WeightedSemanticField[],
 ) {
-  return scoreTerms([...new Set(smartQueryTokens(query))], fields);
+  return createScorer(fields)([...new Set(smartQueryTokens(query))]);
 }
 
 export function smartInterpretationScore(
   interpretation: SmartQueryInterpretation,
   fields: readonly WeightedSemanticField[],
 ) {
+  const scoreTerms = createScorer(fields);
   const residual = interpretation.residualTerms.length
-    ? scoreTerms(interpretation.residualTerms, fields)
+    ? scoreTerms(interpretation.residualTerms)
     : null;
   const causeScores = interpretation.facets.causes.map((causeId) =>
     Math.max(
-      ...getSmartQueryCauseAliases(causeId).map((alias) => directSemanticTextScore(alias, fields)),
+      ...getSmartQueryCauseAliases(causeId).map((alias) => scoreTerms([...new Set(smartQueryTokens(alias))])),
     ),
   );
   const cause = causeScores.length
@@ -98,9 +105,10 @@ export function smartCauseMatchScore(
   fields: readonly WeightedSemanticField[],
 ) {
   if (!causeIds.length) return 1;
+  const scoreTerms = createScorer(fields);
   const scores = causeIds.map((causeId) =>
     Math.max(
-      ...getSmartQueryCauseAliases(causeId).map((alias) => directSemanticTextScore(alias, fields)),
+      ...getSmartQueryCauseAliases(causeId).map((alias) => scoreTerms([...new Set(smartQueryTokens(alias))])),
     ),
   );
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
@@ -112,10 +120,11 @@ export function smartPersonalPriorityScore(
 ) {
   if (!causeIds.length || !personalPriorities.length) return 0.5;
   const fields = personalPriorities.map((value) => ({ value, weight: 1 }));
+  const scoreTerms = createScorer(fields);
   return Math.max(
     ...causeIds.map((causeId) =>
       Math.max(
-        ...getSmartQueryCauseAliases(causeId).map((alias) => directSemanticTextScore(alias, fields)),
+        ...getSmartQueryCauseAliases(causeId).map((alias) => scoreTerms([...new Set(smartQueryTokens(alias))])),
       ),
     ),
   );
