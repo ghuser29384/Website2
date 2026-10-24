@@ -4692,7 +4692,8 @@ test("worked examples have canonical detail pages and sitemap coverage", () => {
 test("core Moral Trade email outbox copy stays generic and dashboard-directed", () => {
   const actionsSource = readRepoFile("src/app/actions.ts");
   const emailCopySource = readRepoFile("src/lib/moral-trade/email-copy.ts");
-  const emailJobRoute = readRepoFile("src/app/api/jobs/email/route.ts");
+  const emailJobRoute = readRepoFile("src/lib/email-outbox-core.ts");
+  assert.match(readRepoFile("src/app/api/jobs/email/route.ts"), /return processEmailOutbox\(request\)/);
   const invitationMigration = readRepoFile(
     "supabase/migrations/20260722223000_harden_trade_invitations.sql",
   );

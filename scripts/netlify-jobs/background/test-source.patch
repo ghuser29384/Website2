@@ -1,0 +1,29 @@
+diff --git a/src/lib/public-route-smoke.test.ts b/src/lib/public-route-smoke.test.ts
+index 87f7d53..62a4ff5 100644
+--- a/src/lib/public-route-smoke.test.ts
++++ b/src/lib/public-route-smoke.test.ts
+@@ -4692,7 +4692,8 @@ test("worked examples have canonical detail pages and sitemap coverage", () => {
+ test("core Moral Trade email outbox copy stays generic and dashboard-directed", () => {
+   const actionsSource = readRepoFile("src/app/actions.ts");
+   const emailCopySource = readRepoFile("src/lib/moral-trade/email-copy.ts");
+-  const emailJobRoute = readRepoFile("src/app/api/jobs/email/route.ts");
++  const emailJobRoute = readRepoFile("src/lib/email-outbox-core.ts");
++  assert.match(readRepoFile("src/app/api/jobs/email/route.ts"), /return processEmailOutbox\(request\)/);
+   const invitationMigration = readRepoFile(
+     "supabase/migrations/20260722223000_harden_trade_invitations.sql",
+   );
+diff --git a/src/lib/trade-invitations.test.ts b/src/lib/trade-invitations.test.ts
+index 30be618..7bfb48b 100644
+--- a/src/lib/trade-invitations.test.ts
++++ b/src/lib/trade-invitations.test.ts
+@@ -146,7 +146,9 @@ test("bearer routes are no-store, no-referrer, and excluded from analytics", ()
+ });
+
+ test("email delivery uses a lease and stable provider idempotency", () => {
+-  const route = source("src/app/api/jobs/email/route.ts");
++  const route = source("src/lib/email-outbox-core.ts");
++  assert.match(source("src/app/api/jobs/email/route.ts"), /return processEmailOutbox\(request\)/);
++  assert.match(source("src/lib/email-outbox-job.ts"), /return processEmailOutboxCore\(request,/);
+   const email = source("src/lib/email.ts");
+
+   assert.match(route, /claim_email_outbox_v2/);

@@ -146,7 +146,9 @@ test("bearer routes are no-store, no-referrer, and excluded from analytics", () 
 });
 
 test("email delivery uses a lease and stable provider idempotency", () => {
-  const route = source("src/app/api/jobs/email/route.ts");
+  const route = source("src/lib/email-outbox-core.ts");
+  assert.match(source("src/app/api/jobs/email/route.ts"), /return processEmailOutbox\(request\)/);
+  assert.match(source("src/lib/email-outbox-job.ts"), /return processEmailOutboxCore\(request,/);
   const email = source("src/lib/email.ts");
 
   assert.match(route, /claim_email_outbox_v2/);

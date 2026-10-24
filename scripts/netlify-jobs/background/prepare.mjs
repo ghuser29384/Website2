@@ -3,6 +3,8 @@ const [app,source]=process.argv.slice(2);assert.ok(app&&source);
 // Patch instead of replacing existing files: fail closed on incompatible source drift.
 execFileSync('git',['apply','--check',join(source,'existing-source.patch')],{cwd:app});
 execFileSync('git',['apply',join(source,'existing-source.patch')],{cwd:app});
+execFileSync('git',['apply','--check',join(source,'test-source.patch')],{cwd:app});
+execFileSync('git',['apply',join(source,'test-source.patch')],{cwd:app});
 for(const name of ['email-outbox-core.ts','email-outbox-job.ts','email-execution-deadline.ts'])await copyFile(join(source,'source',name),join(app,'src/lib',name));
 await mkdir(join(app,'netlify/functions'),{recursive:true});await mkdir(join(app,'netlify/lib/email-background'),{recursive:true});
 for(const name of ['handler.mjs','execute.mjs','dispatch.mjs','handler.d.mts'])await copyFile(join(source,name),join(app,'netlify/lib/email-background',name));
