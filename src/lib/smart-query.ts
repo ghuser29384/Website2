@@ -466,15 +466,22 @@ function fuzzyTokenMatch(left: string, right: string) {
     editDistance(left, right) <= maximumDistance;
 }
 
-function aliasMatches(normalizedQuery: string, alias: string) {
-  const normalizedAlias = normalizeSmartQueryText(alias);
-  const escaped = normalizedAlias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (new RegExp(`(?:^|\\s)${escaped}(?:$|\\s)`).test(normalizedQuery)) return true;
+// Only fixed public cause definitions are retained; query tokens stay local to a parse.
+const PREPARED_CAUSES = CAUSES.map((cause) => ({
+  id: cause.id,
+  aliases: [cause.label, ...cause.aliases]
+    .sort((left, right) => right.length - left.length)
+    .map((value) => {
+      const normalizedAlias = normalizeSmartQueryText(value);
+      const escaped = normalizedAlias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return { value, escaped, pattern: new RegExp(`(?:^|\\s)${escaped}(?:$|\\s)`), tokens: smartQueryTokens(normalizedAlias) };
+    }),
+}));
 
-  const aliasTokens = smartQueryTokens(normalizedAlias);
-  const queryTokens = smartQueryTokens(normalizedQuery);
-  if (!aliasTokens.length || aliasTokens.length > 3) return false;
-  return aliasTokens.every((aliasToken) =>
+function aliasMatches(normalizedQuery: string, queryTokens: readonly string[], alias: (typeof PREPARED_CAUSES)[number]["aliases"][number]) {
+  if (alias.pattern.test(normalizedQuery)) return true;
+  if (!alias.tokens.length || alias.tokens.length > 3) return false;
+  return alias.tokens.every((aliasToken) =>
     queryTokens.some((queryToken) => fuzzyTokenMatch(aliasToken, queryToken)),
   );
 }
@@ -732,14 +739,13 @@ export function parseSmartQuery(
   const reasonCodes: string[] = [];
   let working = normalizedQuery;
 
-  for (const cause of CAUSES) {
-    const matchingAlias = [cause.label, ...cause.aliases]
-      .sort((left, right) => right.length - left.length)
-      .find((alias) => aliasMatches(normalizedQuery, alias));
+  const queryTokens = smartQueryTokens(normalizedQuery);
+  for (const cause of PREPARED_CAUSES) {
+    const matchingAlias = cause.aliases.find((alias) => aliasMatches(normalizedQuery, queryTokens, alias));
     if (!matchingAlias) continue;
     pushUnique(facets.causes, cause.id);
-    recognizedPhrases.push(matchingAlias);
-    const escaped = normalizeSmartQueryText(matchingAlias).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    recognizedPhrases.push(matchingAlias.value);
+    const escaped = matchingAlias.escaped;
     working = working.replace(new RegExp(`(?:^|\\s)${escaped}(?=$|\\s)`, "g"), " ");
   }
 
