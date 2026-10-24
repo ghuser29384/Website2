@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 8205a82ee2d7cca91aed6126693c24340b3bbbff
+          test "$(git rev-parse HEAD^)" = 7bb318dfda1885d978ffad1a59f3d5cc0169cd12
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           python3 - <<'PY'

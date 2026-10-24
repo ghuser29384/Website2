@@ -53,3 +53,13 @@ test("field score ceilings preserve later stronger matches and independent query
   assert.equal(directSemanticTextScore("animel", [{ value: "animal", weight: 0.5 }, { value: "animel", weight: 1 }]), 1);
   assert.equal(directSemanticTextScore("animal", [{ value: "animal", weight: 0 }, { value: "animal", weight: 0.5 }]), 0.5);
 });
+
+
+test("edit-distance row reuse preserves fuzzy thresholds across different lengths", () => {
+  for (let repeat = 0; repeat < 3; repeat += 1) {
+    assert.equal(directSemanticTextScore("abcd", [{ value: "abce" }]), 0.72);
+    assert.equal(directSemanticTextScore("abcdefgh", [{ value: "abcxefgy" }]), 0.72);
+    assert.equal(directSemanticTextScore("abcdefgh", [{ value: "abcxezgy" }]), 0);
+    assert.equal(directSemanticTextScore("abcdefgh", [{ value: "abcdefg" }]), 0.86);
+  }
+});
