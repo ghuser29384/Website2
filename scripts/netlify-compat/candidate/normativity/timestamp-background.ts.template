@@ -2,13 +2,14 @@
 // This is not a replacement for checkpoint creation or the live scheduled route.
 import {randomUUID} from 'node:crypto';
 import {prisma} from '../../server/src/db/prisma';
+import {createMerkleCheckpoint} from '../../server/src/services/auditLog';
 import {timestampPendingCheckpoints} from '../../server/src/services/tsa';
 import {verifyDispatch} from '../lib/audit-dispatch.mjs';
 export const config={background:true};
 export default async function timestampBackground(request: Request) {
  const payload=verifyDispatch(await request.text(),request.headers.get('x-audit-signature'),process.env.CRON_SECRET);
  const id=payload.job+':'+payload.nextRun;
- const state=await prisma.$queryRaw<any[]>`SELECT finished_at FROM synthetic_audit_dispatch.batch WHERE dispatch_id=${id}`;
+ const state=await prisma.$queryRaw<any[]>`SELECT finished_at,prepared FROM synthetic_audit_dispatch.batch WHERE dispatch_id=${id}`;
  if(state.length!==1)throw new Error('Dispatch was not admitted');
  if(state[0].finished_at)return;
  if(!process.env.TSA_URL)throw new Error('Synthetic proof test requires TSA_URL');
@@ -17,6 +18,10 @@ export default async function timestampBackground(request: Request) {
  const generation=claims[0].generation;
  if(generation===null)throw new Error('Dispatch already executing');
  try{
+  if(!state[0].prepared){
+   await createMerkleCheckpoint(prisma);
+   await prisma.$queryRaw`SELECT synthetic_audit_dispatch.prepare(${id},${worker},${generation}::bigint)`;
+  }
   const facade={auditCheckpoint:{findMany:async (_options:unknown)=>prisma.$queryRaw<any[]>`
    SELECT c.* FROM "AuditCheckpoint" c JOIN synthetic_audit_dispatch.batch b ON c.id=ANY(b.checkpoint_ids)
    WHERE b.dispatch_id=${id} AND NOT EXISTS(SELECT 1 FROM "AuditTimestamp" t WHERE t."checkpointId"=c.id)

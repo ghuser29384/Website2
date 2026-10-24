@@ -41,7 +41,7 @@ try{
   env.NETLIFY_FIXTURE_ROOT=root;
  }
  database=startDatabase(process.env.PG_BIN,app,{listen:true});
- for(const name of ['dispatch-ledger.sql','dispatch-owner.sql','dispatch-proof.sql','dispatch-finish.sql'])database.raw(await readFile(join(root,'harness',name),'utf8'));
+ for(const name of ['dispatch-ledger.sql','dispatch-owner.sql','dispatch-proof.sql','dispatch-register.sql','dispatch-finish.sql'])database.raw(await readFile(join(root,'harness',name),'utf8'));
  const log=await open(join(root,'emulator.log'),'w');
  let child;
  const startServer=()=>child=spawn(join(root,'tools/node_modules/.bin/netlify'),['dev','--offline','--port','8888','--no-open'],{cwd:app,env,stdio:['ignore',log.fd,log.fd],detached:true});
@@ -75,7 +75,7 @@ try{
   await trust(true);
   report.timestamps=await verifyTimestamps({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(20000)}),sql:database.sql,authority,trust,cronSecret:env.CRON_SECRET});
   report.scheduler=await verifyScheduler({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(35000)}),sql:database.sql,jwtSecret:env.AUTH_JWT_SECRET});
-  report.background=await verifyBackground({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(35000)}),sql:database.sql,raw:database.raw,authority,secret:env.CRON_SECRET});
+  report.background=await verifyBackground({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(35000)}),sql:database.sql,raw:database.raw,authority,secret:env.CRON_SECRET,jwtSecret:env.AUTH_JWT_SECRET});
  }finally{await stopServer();await log.close();}
  report.status='PACKAGING_AND_BOUNDED_RUNTIME_PASS';
 }catch(e){report.status='BLOCKED_OR_FAILED';report.reason=e.message;process.exitCode=1;}
