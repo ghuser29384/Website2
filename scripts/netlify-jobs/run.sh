@@ -6,6 +6,7 @@ prepare)
  bash scripts/netlify-compat/run.sh prepare
  node scripts/netlify-jobs/edge-cache.mjs prepare "$RUNNER_TEMP/netlify-compat-$CANDIDATE"
  node scripts/netlify-jobs/background/prepare.mjs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/app" "$PWD/scripts/netlify-jobs/background"
+ if test "$CANDIDATE" = canonical; then node scripts/netlify-jobs/discover/prepare.mjs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/app"; fi
  cp -R scripts/netlify-jobs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/jobs"
  ;;
 offline)
