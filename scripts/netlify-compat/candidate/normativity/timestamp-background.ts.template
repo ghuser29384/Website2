@@ -17,7 +17,9 @@ export default async function timestampBackground(request: Request) {
  const generation=claims[0].generation;
  if(generation===null)throw new Error('Dispatch already executing');
  try{
-  if(!state[0].prepared){
+  const current=await prisma.$queryRaw<any[]>`SELECT prepared FROM synthetic_audit_dispatch.batch WHERE dispatch_id=${id}`;
+  if(current.length!==1)throw new Error('Dispatch disappeared');
+  if(!current[0].prepared){
    await createMerkleCheckpoint(prisma);
    if(!process.env.TSA_URL){
     await timestampPendingCheckpoints(prisma);
