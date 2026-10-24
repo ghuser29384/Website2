@@ -1,3 +1,4 @@
+import {captureFailureState} from './failure-state.mjs';
 import {scenarioStep} from './scenario-diagnostic.mjs';
 import assert from 'node:assert/strict';
 import {createFixture,FIXTURE_TOKEN} from './http-fixture.mjs';
@@ -30,7 +31,7 @@ export async function runJobCases({origin,pg,onDiagnostic=()=>{}}){
    assert.equal(repeat.status,200);assert.equal((await step('repeat-body',()=>repeat.json())).claimed,0);
    assert.equal(fixture.counts().accepted,c.failProvider?0:25);
    result.push({name:c.name,elapsedMs,within30Seconds:elapsedMs<30000,injectedRpcDelayMs:c.rpcDelayMs,injectedProviderDelayMs:c.providerDelayMs,...body,...fixture.counts()});
-  }finally{await server.close();}
+  }catch(error){onDiagnostic({scenario:c.name,phase:'failure-state',database:captureFailureState(pg)});throw error;}finally{await server.close();}
  }
  return {cases:result,hostedMeasurement:false,provesFreeFit:false,latencyAssumptions:'Synthetic injected delays; not measured provider latency'};
 }

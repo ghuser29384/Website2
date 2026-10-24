@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {captureFailureState} from './failure-state.mjs';
+test('captures only bounded aggregate values',()=>{let calls=0;const r=captureFailureState({query:s=>{calls++;assert.ok(s.startsWith('select '));return JSON.stringify({total:25,sent:24,locked:1,redacted:24,secret:'hidden'});}});assert.equal(calls,1);assert.deepEqual(r,{available:true,total:25,sent:24,locked:1,redacted:24});});
+test('invalid or failed snapshot cannot expose errors or claim success',()=>{for(const query of [()=>{throw Error('secret');},()=>JSON.stringify({total:26}),()=>'{secret'])assert.deepEqual(captureFailureState({query}),{available:false});});
