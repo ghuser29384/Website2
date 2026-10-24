@@ -39,3 +39,9 @@ test("prepared fields do not retain values or weights between calls", () => {
   fields[0].weight = 0;
   assert.equal(directSemanticTextScore("animal", fields), 0);
 });
+
+
+test("empty direct query does not prepare unused fields", () => {
+  const fields = [{ get value(): string { throw new Error("Unused field read"); } }];
+  assert.equal(directSemanticTextScore("", fields), 0.5);
+});

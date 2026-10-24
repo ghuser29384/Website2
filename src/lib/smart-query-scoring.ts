@@ -43,13 +43,14 @@ function tokenSimilarity(left: string, right: string) {
 }
 
 function createScorer(fields: readonly WeightedSemanticField[]) {
-  const prepared = fields.map((field) => ({
-    normalized: normalizeSmartQueryText(field.value),
-    weight: clamp(field.weight ?? 1),
-    tokens: null as string[] | null,
-  }));
+  let prepared: Array<{ normalized: string; weight: number; tokens: string[] | null }> | undefined;
   return (terms: readonly string[]) => {
     if (!terms.length) return 0.5;
+    prepared ??= fields.map((field) => ({
+      normalized: normalizeSmartQueryText(field.value),
+      weight: clamp(field.weight ?? 1),
+      tokens: null as string[] | null,
+    }));
     let total = 0;
     for (const term of terms) {
       let best = 0;

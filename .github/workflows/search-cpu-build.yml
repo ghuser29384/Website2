@@ -32,12 +32,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 6c35e4d20fca39d2654d3bba89ee070c25a99f66
+          test "$(git rev-parse HEAD^)" = 1a2a407e13d3a1d3ea7727bf9e29c878c64971c5
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           python3 - <<'PY'
           import subprocess
-          expected = {'.github/workflows/search-cpu-build.yml', 'src/lib/smart-query-scoring.test.ts', 'src/lib/smart-query-scoring.ts', 'vercel.ts'}
+          expected = {'.github/workflows/search-cpu-build.yml', 'src/lib/smart-query-scoring.test.ts', 'src/lib/smart-query-scoring.ts'}
           changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
           assert changed == expected, 'Unexpected change scope'
           PY
