@@ -4,16 +4,18 @@ import {registerHooks,stripTypeScriptTypes} from 'node:module';
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 const route=process.env.NETLIFY_JOB_APP?pathToFileURL(process.env.NETLIFY_JOB_APP+'/src/app/api/jobs/email/route.ts').href:new URL('../../src/app/api/jobs/email/route.ts',import.meta.url).href;
+const extracted=Object.fromEntries(['email-outbox-job','email-outbox-core'].map(n=>['@/lib/'+n,route.slice(0,route.indexOf('/src/')+5)+'lib/'+n+'.ts']));
 const state={};
 globalThis.__emailContract=state;
 const stubs={
+ 'server-only':'export {};',
  'next/server':'export const NextResponse={json:Response.json};',
  '@/lib/cron':'export const isCronRequestAuthorized=()=>globalThis.__emailContract.authorized;',
  '@/lib/email':'export const hasEmailEnv=()=>globalThis.__emailContract.configured;export const sendEmail=(x)=>globalThis.__emailContract.send(x);',
  '@/lib/moral-trade/email-copy':'export const evaluateMoralTradeEmailOutboxSafety=(x)=>globalThis.__emailContract.safety(x);',
  '@/lib/supabase/server':'export const createServiceClient=()=>({rpc:(...x)=>globalThis.__emailContract.rpc(...x)});'
 };
-registerHooks({resolve(s,c,next){return s in stubs?{url:'fixture:'+s,shortCircuit:true}:next(s,c);},load(u,c,next){if(u.startsWith('fixture:'))return {format:'module',source:stubs[u.slice(8)],shortCircuit:true};if(u===route)return {format:'module',source:stripTypeScriptTypes(readFileSync(new URL(u),'utf8')),shortCircuit:true};return next(u,c);}});
+registerHooks({resolve(s,c,next){if(s in extracted)return {url:extracted[s],shortCircuit:true};return s in stubs?{url:'fixture:'+s,shortCircuit:true}:next(s,c);},load(u,c,next){if(u.startsWith('fixture:'))return {format:'module',source:stubs[u.slice(8)],shortCircuit:true};if(u===route||Object.values(extracted).includes(u))return {format:'module',source:stripTypeScriptTypes(readFileSync(new URL(u),'utf8')),shortCircuit:true};return next(u,c);}});
 const {GET,POST}=await import(route);
 function setup({failSend=false,claimError=false}={}){
  const calls=[],sent=[];state.authorized=true;state.configured=true;state.safety=()=>({status:"allow"});
