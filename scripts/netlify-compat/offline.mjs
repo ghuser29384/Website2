@@ -1,3 +1,4 @@
+import {verifyStatic} from './static-probe.mjs';
 import {verifyBackground} from './background-probe.mjs';
 import {verifyScheduler} from './scheduler-probe.mjs';
 import {startAuthority} from './tsa-server.mjs';
@@ -65,6 +66,7 @@ try{
    console.log(JSON.stringify(report.emulator));
    throw Error('Runtime comparison failed');
   }
+  report.static=await verifyStatic({root,request:path=>fetch('http://127.0.0.1:8888'+path,{signal:AbortSignal.timeout(10000)})});
   report.persistence=await verifyPersistence({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(20000)}),sql:database.sql,restart:async()=>{await stopServer();database.restart();startServer();await readyServer();},jwtSecret:env.AUTH_JWT_SECRET,signingSecret:env.COMMITMENT_JWS_SECRET,cronSecret:env.CRON_SECRET});
   if(!await stage('timestamp-fixtures',process.execPath,[join(root,'harness/tsa-fixtures.mjs'),join(root,'timestamp-fixtures')]))throw Error('Synthetic timestamp setup failed');
   authority=await startAuthority(join(root,'timestamp-fixtures'));

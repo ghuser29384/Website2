@@ -1,6 +1,6 @@
 import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
-import {join} from 'node:path';
+import {join,dirname} from 'node:path';
 import assert from 'node:assert/strict';
 import {packagingSchema} from './prisma-schema.mjs';
 const [root,kind]=process.argv.slice(2),app=join(root,'app'),h=join(root,'harness');
@@ -24,6 +24,12 @@ if(next){
  await mkdir(join(app,'synthetic-publish'),{recursive:true});
  config='[build]\npublish = "synthetic-publish"\n[functions]\ndirectory = "netlify/functions"\nnode_bundler = "esbuild"\n';
  if(kind==='normativity'){
+  const publicFiles=JSON.parse(await readFile(join(h,'normativity-public-files.json'),'utf8'));
+  for(const file of publicFiles){
+   assert.ok(!file.startsWith('/')&&!file.split('/').includes('..'));
+   assert.ok(!file.split('/').some(part=>part.startsWith('.')));
+   const target=join(app,'synthetic-publish',file);await mkdir(dirname(target),{recursive:true});await copyFile(join(app,file),target);
+  }
   await mkdir(join(app,'.netlify-schema'),{recursive:true});
   await writeFile(join(app,'.netlify-schema/schema.prisma'),packagingSchema(await readFile(join(app,'server/prisma/schema.prisma'),'utf8')));
   await copyFile(join(h,'candidate/normativity/api.ts.template'),join(app,'netlify/functions/api.ts'));
