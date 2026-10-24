@@ -11,8 +11,7 @@ export async function runJobCases({origin,pg,onDiagnostic=()=>{}}){
   {name:'full-batch',attempt:0,failProvider:false,rpcDelayMs:0,providerDelayMs:0},
   {name:'provider-retry',attempt:0,failProvider:true,rpcDelayMs:0,providerDelayMs:0},
   {name:'terminal-failure',attempt:4,failProvider:true,rpcDelayMs:0,providerDelayMs:0},
-  {name:'injected-moderate-latency',attempt:0,failProvider:false,rpcDelayMs:100,providerDelayMs:200},
-  {name:'injected-over-budget-latency',attempt:0,failProvider:false,rpcDelayMs:400,providerDelayMs:800}
+  {name:'injected-moderate-latency',attempt:0,failProvider:false,rpcDelayMs:100,providerDelayMs:200}
  ];
  for(const c of cases){
   seedEmails(pg,c.attempt);

@@ -61,10 +61,11 @@ export async function createClient() {
   });
 }
 
-export function createServiceClient() {
+export function createServiceClient(transport?: typeof fetch) {
   const { url, serviceRoleKey } = getSupabaseServiceEnv();
 
   return createSupabaseClient<Database>(url, serviceRoleKey, {
+    ...(transport ? { global: { fetch: transport } } : {}),
     auth: {
       persistSession: false,
     },

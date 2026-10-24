@@ -1,15 +1,15 @@
 name: Netlify email jobs synthetic only
 on:
   push:
-    branches: [build/netlify-email-jobs-20261022]
+    branches: [build/netlify-email-background-20261024]
 permissions:
   contents: read
 concurrency:
-  group: netlify-email-jobs-20261022
+  group: netlify-email-background-20261024
   cancel-in-progress: false
 jobs:
   compatibility:
-    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/netlify-email-jobs-20261022'
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/netlify-email-background-20261024'
     strategy:
       fail-fast: false
       matrix:
@@ -29,10 +29,10 @@ jobs:
       - name: Guard exact parent and no deployment
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = a9fb89eafb5005e3c430a87286e5b17c88076f3a
+          test "$(git rev-parse HEAD^)" = 3d9c064ea444fc23dbb70eb98e89565f7fb421d8
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
-          node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-email-jobs.yml"||f.startsWith("scripts/netlify-jobs/")));'
+          node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-email-jobs.yml"||f.startsWith("scripts/netlify-jobs/")||f==="scripts/netlify-compat/run.sh"||["src/app/api/jobs/email/route.ts","src/lib/email.ts","src/lib/supabase/server.ts","src/lib/email-outbox-core.ts","src/lib/email-outbox-job.ts","src/lib/email-execution-deadline.ts"].includes(f)));'
       - name: Prepare approved runner dependencies
         run: bash scripts/netlify-jobs/run.sh prepare
       - name: Test built runtime with loopback only

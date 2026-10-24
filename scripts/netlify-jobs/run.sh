@@ -5,6 +5,7 @@ case "${1:-}" in
 prepare)
  bash scripts/netlify-compat/run.sh prepare
  node scripts/netlify-jobs/edge-cache.mjs prepare "$RUNNER_TEMP/netlify-compat-$CANDIDATE"
+ node scripts/netlify-jobs/background/prepare.mjs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/app" "$PWD/scripts/netlify-jobs/background"
  cp -R scripts/netlify-jobs "$RUNNER_TEMP/netlify-compat-$CANDIDATE/jobs"
  ;;
 offline)
@@ -17,7 +18,7 @@ offline)
  export PATH="$ROOT/edge-tools/bin:$PATH" DENO_DIR="$ROOT/home/deno-cache" DENO_NO_UPDATE_CHECK=1
  export NETLIFY_JOB_APP="$ROOT/app"
  node "$ROOT/jobs/edge-cache.mjs" offline "$ROOT"
- node --test "$ROOT/jobs/"*.test.mjs
+ node --test "$ROOT/jobs/"*.test.mjs "$ROOT/jobs/background/"*.test.mjs
  node "$ROOT/jobs/serve-offline.mjs"
  ;;
 *) exit 2;;

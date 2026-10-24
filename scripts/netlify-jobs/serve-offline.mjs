@@ -1,3 +1,4 @@
+import {runBackgroundCase} from './background/probe.mjs';
 import {diagnosePaths} from './path-diagnostic.mjs';
 import {probeReadiness} from './readiness.mjs';
 import {runStage,failureTail} from './process-stage.mjs';
@@ -21,7 +22,7 @@ try{
  await writeFile(join(app,'netlify.toml'),config.replace('command = "npm run build"','command = "MORAL_TRADE_DISABLE_SUPABASE=true npm run build"'));
  await stage('postgres');
  pg=startSyntheticPostgres(process.env.PG_BIN,app);
- const env={...base,MORAL_TRADE_DISABLE_SUPABASE:'false',NEXT_PUBLIC_SUPABASE_URL:'http://127.0.0.1:15433',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'synthetic-public-only',SUPABASE_SERVICE_ROLE_KEY:FIXTURE_TOKEN,CRON_SECRET:'synthetic-cron-secret',RESEND_API_KEY:FIXTURE_TOKEN,EMAIL_FROM:'test@synthetic.invalid',NEXT_PUBLIC_SITE_URL:'https://synthetic.invalid',NETLIFY_EMAIL_SYNTHETIC_TEST:'1',NETLIFY_EMAIL_FIXTURE_ORIGIN:'http://127.0.0.1:15433',NODE_OPTIONS:'--max-old-space-size=6144 --import='+join(root,'jobs/runtime-hook.mjs')};
+ const env={...base,EMAIL_DISPATCH_PROJECT:kind==='legacy'?'website2':'moraltrade-site',MORAL_TRADE_DISABLE_SUPABASE:'false',NEXT_PUBLIC_SUPABASE_URL:'http://127.0.0.1:15433',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'synthetic-public-only',SUPABASE_SERVICE_ROLE_KEY:FIXTURE_TOKEN,CRON_SECRET:'synthetic-cron-secret',RESEND_API_KEY:FIXTURE_TOKEN,EMAIL_FROM:'test@synthetic.invalid',NEXT_PUBLIC_SITE_URL:'https://synthetic.invalid',NETLIFY_EMAIL_SYNTHETIC_TEST:'1',NETLIFY_EMAIL_FIXTURE_ORIGIN:'http://127.0.0.1:15433',NODE_OPTIONS:'--max-old-space-size=6144 --import='+join(root,'jobs/runtime-hook.mjs')};
  await stage('compiled-runtime-startup');
  log=await open(join(root,'serve.log'),'w');
  child=spawn(join(root,'tools/node_modules/.bin/netlify'),['serve','--offline','--context','deploy-preview','--port','8888','--geo','mock'],{cwd:app,env,stdio:['ignore',log.fd,log.fd],detached:true});
@@ -40,7 +41,7 @@ try{
  if(!ready)console.log(await failureTail(join(root,'serve.log')));
  assert.ok(ready,'Built Netlify serve unavailable; no source fallback permitted');
  await stage('email-scenarios');
- report.results=await runJobCases({origin:'http://127.0.0.1:8888',pg,onDiagnostic:event=>console.log(JSON.stringify({candidate:kind,emailDiagnostic:event}))});report.status='SYNTHETIC_BUILT_RUNTIME_PASS';
+ report.results=await runJobCases({origin:'http://127.0.0.1:8888',pg,onDiagnostic:event=>console.log(JSON.stringify({candidate:kind,emailDiagnostic:event}))});report.background=await runBackgroundCase({origin:'http://127.0.0.1:8888',pg,project:kind==='legacy'?'website2':'moraltrade-site'});report.status='SYNTHETIC_BUILT_RUNTIME_PASS';
 }catch(e){report.status='FAILED';report.reason=e.message;process.exitCode=1;if(report.stage==='email-scenarios'&&log)try{console.log(await failureTail(join(root,'serve.log')));}catch{console.log('Synthetic server log unavailable');}}
 finally{
  if(child){

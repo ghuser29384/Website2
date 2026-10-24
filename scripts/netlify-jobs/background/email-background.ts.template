@@ -1,0 +1,23 @@
+import { createClient } from "@supabase/supabase-js";
+import { createEmailBackgroundHandler } from "../lib/email-background/handler.mjs";
+import { createExecutionDeadline } from "../../src/lib/email-execution-deadline";
+import { processEmailOutboxCore, type EmailOutboxExecution } from "../../src/lib/email-outbox-core";
+
+export const config = { background: true };
+export default async function handler(request: Request) {
+  const createService = (transport?: typeof fetch) => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) throw new Error("Explicit background database configuration required");
+    return createClient(url, key, { auth: { persistSession: false }, global: { fetch: transport } });
+  };
+  const execute = createEmailBackgroundHandler({
+    project: process.env.EMAIL_DISPATCH_PROJECT,
+    secret: process.env.CRON_SECRET,
+    createDeadline: createExecutionDeadline,
+    createClient: createService,
+    processEmailOutbox: (req: Request, execution: EmailOutboxExecution) =>
+      processEmailOutboxCore(req, { createServiceClient: createService, json: Response.json }, execution),
+  });
+  return execute(request);
+}

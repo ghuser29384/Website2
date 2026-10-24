@@ -9,7 +9,7 @@ prepare)
  cp -R scripts/netlify-compat "$ROOT/harness"
  case "$CANDIDATE" in
  canonical) REPO=Website2; REF=a4adf0cbb7029a6316a34478bd27dffad22cbca4;;
- legacy) REPO=Website2; REF=6c35e4d20fca39d2654d3bba89ee070c25a99f66;;
+ legacy) REPO=Website2; REF=8205a82ee2d7cca91aed6126693c24340b3bbbff;;
  normativity) REPO=WebsiteBuilding2; REF=4ee214324976cf579a77bde4788551cfe32f94fb;;
  rlhf) REPO=; REF=;;
  esac
