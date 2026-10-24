@@ -26,18 +26,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 4
+          fetch-depth: 5
           persist-credentials: false
       - name: Verify exact base and narrow change
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 1b8da7a288cdcb3e2b042d8c0efed0ea5f7ff8e7
+          test "$(git rev-parse HEAD^)" = dd40b49c2f28f13f66e337635d6eb2e98686eeb6
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           python3 - <<'PY'
           import subprocess
-          expected = {'.github/workflows/search-cpu-build.yml', 'src/lib/smart-query-scoring.test.ts', 'src/lib/smart-query-scoring.ts', 'src/app/offers/page.tsx', 'src/lib/offers-directory-data.test.ts'}
+          expected = {'.github/workflows/search-cpu-build.yml', 'src/lib/offers-directory-data.test.ts'}
           changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
           assert changed == expected, 'Unexpected change scope'
           PY
