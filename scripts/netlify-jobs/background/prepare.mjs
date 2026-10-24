@@ -7,8 +7,9 @@ execFileSync('git',['apply','--check',join(source,'test-source.patch')],{cwd:app
 execFileSync('git',['apply',join(source,'test-source.patch')],{cwd:app});
 for(const name of ['email-outbox-core.ts','email-outbox-job.ts','email-execution-deadline.ts'])await copyFile(join(source,'source',name),join(app,'src/lib',name));
 await mkdir(join(app,'netlify/functions'),{recursive:true});await mkdir(join(app,'netlify/lib/email-background'),{recursive:true});
-for(const name of ['handler.mjs','execute.mjs','dispatch.mjs','handler.d.mts'])await copyFile(join(source,name),join(app,'netlify/lib/email-background',name));
+for(const name of ['handler.mjs','execute.mjs','dispatch.mjs','handler.d.mts','scheduler.mjs','scheduled-handler.mjs'])await copyFile(join(source,name),join(app,'netlify/lib/email-background',name));
 await copyFile(join(source,'email-background.ts.template'),join(app,'netlify/functions/email-background.ts'));
+await copyFile(join(source,'email-scheduled.mjs.template'),join(app,'netlify/functions/email-scheduled.mjs'));
 const config=await readFile(join(app,'netlify.toml'),'utf8');assert.ok(!config.includes('[functions]'));
 await appendFile(join(app,'netlify.toml'),'\n[functions]\ndirectory = "netlify/functions"\nnode_bundler = "esbuild"\n');
-console.log('Background candidate applied with exact-context source patch; no scheduler installed');
+console.log('Background candidate applied with exact-context source patch; daily email scheduler candidate included; not deployed');

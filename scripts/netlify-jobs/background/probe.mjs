@@ -19,8 +19,8 @@ async function runOne({origin,pg,project,scenario}){
  }},{port:15433});
  try{
   const d=signEmailDispatch(project,scenario.slot,'synthetic-cron-secret');
-  const call=()=>fetch(new URL('/.netlify/functions/email-background',origin),{method:'POST',body:d.body,headers:{'x-email-dispatch-signature':d.signature},signal:AbortSignal.timeout(10000)});
-  const started=performance.now();assert.equal((await call()).status,202);
+  const call=()=>scenario.scheduled?fetch(new URL('/.netlify/functions/email-scheduled',origin),{method:'POST',body:JSON.stringify({next_run:scenario.slot}),headers:{'content-type':'application/json'},signal:AbortSignal.timeout(15000)}):fetch(new URL('/.netlify/functions/email-background',origin),{method:'POST',body:d.body,headers:{'x-email-dispatch-signature':d.signature},signal:AbortSignal.timeout(10000)});
+  const started=performance.now();assert.equal((await call()).status,scenario.scheduled?204:202);
   let finished=false;
   for(let i=0;i<90;i++){if(pg.query(`select count(*) from moral_trade_private.email_dispatch_probe where slot='${scenario.slot}' and finished_at is not null;`)==='1'){finished=true;break;}await new Promise(r=>setTimeout(r,1000));}
   assert.ok(finished,'Background never recorded completion');
@@ -31,7 +31,7 @@ async function runOne({origin,pg,project,scenario}){
   const expectedAccepted=scenario.failProvider?0:25;assert.equal(fixture.counts().accepted,expectedAccepted);
   const result=JSON.parse(pg.query(`select result from moral_trade_private.email_dispatch_probe where slot='${scenario.slot}';`));
   assert.deepEqual(result,{claimed:25,sent:expectedAccepted,failed:expectedStatus==='failed'?25:0,retrying:expectedStatus==='retry'?25:0,suppressed:0});
-  assert.equal((await call()).status,202);await new Promise(r=>setTimeout(r,2000));assert.equal(fixture.counts().accepted,expectedAccepted);
+  assert.equal((await call()).status,scenario.scheduled?204:202);await new Promise(r=>setTimeout(r,2000));assert.equal(fixture.counts().accepted,expectedAccepted);
   assert.equal(pg.query('select max(attempt_count) from public.email_outbox;'),String(scenario.attempt+1));
   return {case:scenario.name,elapsedMs,accepted:expectedAccepted,finished:true,result,duplicateAdditionalSends:0,hostedMeasurement:false,provesFreeFit:false};
  }finally{await server.close();}
@@ -44,6 +44,7 @@ export async function runBackgroundCase({origin,pg,project}){
  for(const scenario of [
   {name:'compiled-background-slow25',slot:'2026-10-24T10:00:00.000Z',attempt:0,failProvider:false,rpcDelayMs:400,providerDelayMs:800,slow:true},
   {name:'compiled-background-provider-retry25',slot:'2026-10-25T10:00:00.000Z',attempt:0,failProvider:true,rpcDelayMs:0,providerDelayMs:0},
+  {name:'compiled-scheduled-handoff25',slot:'2026-10-27T10:00:00.000Z',attempt:0,failProvider:false,rpcDelayMs:0,providerDelayMs:0,scheduled:true},
   {name:'compiled-background-terminal-failure25',slot:'2026-10-26T10:00:00.000Z',attempt:4,failProvider:true,rpcDelayMs:0,providerDelayMs:0},
  ])cases.push(await runOne({origin,pg,project,scenario}));
  return {cases,hostedMeasurement:false,provesFreeFit:false};

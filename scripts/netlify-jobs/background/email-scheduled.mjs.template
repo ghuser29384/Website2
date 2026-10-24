@@ -1,0 +1,7 @@
+import {createEmailScheduledHandler} from '../lib/email-background/scheduled-handler.mjs';
+export const config={schedule:'0 10 * * *'};
+export default async function(request){
+ const {EMAIL_DISPATCH_PROJECT:project,CRON_SECRET:secret,EMAIL_BACKGROUND_URL:url}=process.env;
+ if(!project||!secret||!url)throw Error('Missing email scheduler configuration');
+ return createEmailScheduledHandler({project,secret,url,development:process.env.NETLIFY_DEV==='true'&&process.env.NETLIFY_EMAIL_SYNTHETIC_TEST==='1'})(request);
+}
