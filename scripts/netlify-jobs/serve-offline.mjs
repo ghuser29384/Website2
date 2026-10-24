@@ -1,3 +1,4 @@
+import {runDiscoverBaseline} from './discover/probe.mjs';
 import {runSearchCases} from './search/probe.mjs';
 import {runBackgroundCase} from './background/probe.mjs';
 import {diagnosePaths} from './path-diagnostic.mjs';
@@ -42,7 +43,7 @@ try{
  if(!ready)console.log(await failureTail(join(root,'serve.log')));
  assert.ok(ready,'Built Netlify serve unavailable; no source fallback permitted');
  await stage('email-scenarios');
- report.results=await runJobCases({origin:'http://127.0.0.1:8888',pg,onDiagnostic:event=>console.log(JSON.stringify({candidate:kind,emailDiagnostic:event}))});report.background=await runBackgroundCase({origin:'http://127.0.0.1:8888',pg,project:kind==='legacy'?'website2':'moraltrade-site'});await stage('search-scenarios');report.search=await runSearchCases({origin:'http://127.0.0.1:8888',candidate:kind});report.status='SYNTHETIC_BUILT_RUNTIME_PASS';
+ report.results=await runJobCases({origin:'http://127.0.0.1:8888',pg,onDiagnostic:event=>console.log(JSON.stringify({candidate:kind,emailDiagnostic:event}))});report.background=await runBackgroundCase({origin:'http://127.0.0.1:8888',pg,project:kind==='legacy'?'website2':'moraltrade-site'});await stage('search-scenarios');report.search=await runSearchCases({origin:'http://127.0.0.1:8888',candidate:kind});if(kind==='canonical'){await stage('discover-scenarios');report.discover=await runDiscoverBaseline({origin:'http://127.0.0.1:8888'});}report.status='SYNTHETIC_BUILT_RUNTIME_PASS';
 }catch(e){report.status='FAILED';report.reason=e.message;process.exitCode=1;if(['email-scenarios','search-scenarios'].includes(report.stage)&&log)try{console.log(await failureTail(join(root,'serve.log')));}catch{console.log('Synthetic server log unavailable');}}
 finally{
  if(child){
