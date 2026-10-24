@@ -27,6 +27,7 @@ if(next){
   await mkdir(join(app,'.netlify-schema'),{recursive:true});
   await writeFile(join(app,'.netlify-schema/schema.prisma'),packagingSchema(await readFile(join(app,'server/prisma/schema.prisma'),'utf8')));
   await copyFile(join(h,'candidate/normativity/api.ts.template'),join(app,'netlify/functions/api.ts'));
+  await copyFile(join(h,'candidate/normativity/scheduled-audit.ts.template'),join(app,'netlify/functions/scheduled-audit.ts'));
   config+='external_node_modules = ["@prisma/client", "prisma"]\nincluded_files = ["node_modules/.prisma/**", "server/node_modules/.prisma/**", "server/prisma/**", "server/src/**"]\n[[redirects]]\nfrom = "/api/*"\nto = "/.netlify/functions/api/:splat"\nstatus = 200\nforce = true\n';
  }else{
   await writeFile(join(app,'package.json'),'{"private":true,"type":"module"}');

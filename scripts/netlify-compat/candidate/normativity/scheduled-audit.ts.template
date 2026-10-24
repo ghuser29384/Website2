@@ -1,0 +1,19 @@
+// Candidate only: no schedule is deployed by preparing this adapter.
+import audit from '../../api/cron/commitment-audit';
+export const config = { schedule: '0 8 * * *' };
+export default async function scheduledAudit() {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) throw new Error('Audit schedule requires CRON_SECRET');
+  let status = 200;
+  let completed = false;
+  await audit(
+    { method: 'POST', headers: { authorization: `Bearer ${secret}` } },
+    {
+      status(code: number) { status = code; return this; },
+      json(_body: unknown) { completed = true; },
+    },
+  );
+  if (!completed || status < 200 || status >= 300) {
+    throw new Error('Scheduled commitment audit failed');
+  }
+}

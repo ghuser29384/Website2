@@ -1,3 +1,4 @@
+import {verifyScheduler} from './scheduler-probe.mjs';
 import {startAuthority} from './tsa-server.mjs';
 import {verifyTimestamps} from './timestamp-probe.mjs';
 import {startDatabase} from './persistence-postgres.mjs';
@@ -69,6 +70,7 @@ try{
   const trust=async(valid)=>{await stopServer();env.TSA_CA_PEM=await readFile(join(root,'timestamp-fixtures',valid?'root.pem':'other.pem'),'utf8');startServer();await readyServer();};
   await trust(true);
   report.timestamps=await verifyTimestamps({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(20000)}),sql:database.sql,authority,trust,cronSecret:env.CRON_SECRET});
+  report.scheduler=await verifyScheduler({request:(path,options={})=>fetch('http://127.0.0.1:8888'+path,{...options,signal:AbortSignal.timeout(35000)}),sql:database.sql,jwtSecret:env.AUTH_JWT_SECRET});
  }finally{await stopServer();await log.close();}
  report.status='PACKAGING_AND_BOUNDED_RUNTIME_PASS';
 }catch(e){report.status='BLOCKED_OR_FAILED';report.reason=e.message;process.exitCode=1;}
