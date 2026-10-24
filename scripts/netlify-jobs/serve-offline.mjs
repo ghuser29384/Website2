@@ -41,7 +41,7 @@ try{
  assert.ok(ready,'Built Netlify serve unavailable; no source fallback permitted');
  await stage('email-scenarios');
  report.results=await runJobCases({origin:'http://127.0.0.1:8888',pg,onDiagnostic:event=>console.log(JSON.stringify({candidate:kind,emailDiagnostic:event}))});report.status='SYNTHETIC_BUILT_RUNTIME_PASS';
-}catch(e){report.status='FAILED';report.reason=e.message;process.exitCode=1;}
+}catch(e){report.status='FAILED';report.reason=e.message;process.exitCode=1;if(report.stage==='email-scenarios'&&log)try{console.log(await failureTail(join(root,'serve.log')));}catch{console.log('Synthetic server log unavailable');}}
 finally{
  if(child){
   try{process.kill(-child.pid,'SIGTERM');}catch{}
