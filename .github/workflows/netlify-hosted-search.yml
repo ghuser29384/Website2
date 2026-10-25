@@ -1,0 +1,62 @@
+name: One approved disposable hosted search measurement
+on:
+  push:
+    branches: [build/netlify-hosted-search-20261025]
+permissions:
+  contents: read
+concurrency:
+  group: netlify-hosted-search-20261025
+  cancel-in-progress: false
+jobs:
+  compatibility:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/netlify-hosted-search-20261025' && github.run_attempt == 1
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate: [legacy]
+        variant: [request-reuse]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CANDIDATE: ${{ matrix.candidate }}
+      DISCOVER_LOADER_VARIANT: baseline
+      SEARCH_SOURCE_VARIANT: ${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - name: Guard exact parent and block Vercel deployment
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = ca897ac41e4156943508610bc161556aa86395c3
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --check HEAD^ HEAD
+          node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-hosted-search.yml"||f.startsWith("scripts/netlify-jobs/hosted-search/")));'
+      - name: Prepare approved runner dependencies
+        run: bash scripts/netlify-jobs/run.sh prepare
+      - name: Test built runtime with loopback only
+        run: |
+          set -euo pipefail
+          test -x /usr/lib/postgresql/16/bin/postgres
+          sudo unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            exec runuser -u runner -- env -i PATH="$1" HOME="$2/home" ROOT="$2" CANDIDATE="$3" DISCOVER_LOADER_VARIANT="$4" OFFLINE_NAMESPACE=1 PG_BIN=/usr/lib/postgresql/16/bin bash "$2/jobs/run.sh" offline
+          ' _ "$PATH" "$RUNNER_TEMP/netlify-compat-$CANDIDATE" "$CANDIDATE" "$DISCOVER_LOADER_VARIANT"
+      - name: Upload one approved draft from the verified ZIP
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_SYNTHETIC_TEST_TOKEN }}
+          NETLIFY_HOSTED_TEST_APPROVAL: one-disposable-search-draft
+        run: node scripts/netlify-jobs/hosted-search/upload-runner.mjs
+      - name: Report bounded result
+        if: always()
+        run: |
+          result="$RUNNER_TEMP/netlify-compat-$CANDIDATE/jobs-result.json"
+          cat "$RUNNER_TEMP/netlify-compat-$CANDIDATE/source-ref.txt" >> "$GITHUB_STEP_SUMMARY"
+          if test -f "$result"; then cat "$result" >> "$GITHUB_STEP_SUMMARY"; else echo 'NOT TESTED: prerequisite failed' >> "$GITHUB_STEP_SUMMARY"; fi
+          deployment="$RUNNER_TEMP/netlify-hosted-search-deployment.json"
+          if test -f "$deployment"; then cat "$deployment" >> "$GITHUB_STEP_SUMMARY"; fi

@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {main} from './upload-runner.mjs';
+test('normal diagnostic and local environments cannot invoke upload',async()=>{for(const env of [{},{NETLIFY_HOSTED_TEST_APPROVAL:'one-disposable-search-draft'},{NETLIFY_HOSTED_TEST_APPROVAL:'one-disposable-search-draft',GITHUB_REPOSITORY:'ghuser29384/Website2',GITHUB_REF:'refs/heads/build/netlify-email-background-20261024',GITHUB_RUN_ATTEMPT:'1'}])await assert.rejects(main(env));});
