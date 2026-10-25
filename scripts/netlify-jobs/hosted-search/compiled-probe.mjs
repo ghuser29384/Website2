@@ -1,10 +1,11 @@
+import {packageMeasurementEntry} from './package-entry.mjs';
 import {buildMeasurementEntry} from './build-entry.mjs';
 import {prepareSyntheticEnvironment} from './runtime-environment.mjs';
 import {stageBundle} from './stage-bundle.mjs';
 import {writeSync} from 'node:fs';
 // Offline diagnostic only; no deployment code or credentials.
 import assert from 'node:assert/strict';
-import {readdir,readFile,realpath} from 'node:fs/promises';
+import {readdir,readFile,realpath,mkdir} from 'node:fs/promises';
 import {join,relative,dirname} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {resultCountDiagnostic} from '../search/result-count.mjs';
@@ -26,9 +27,12 @@ await walk(join(app,'.netlify/functions-internal'));
 assert.equal(entries.length,1,'Exactly one generated handler required');
 const entry=entries[0],source=await readFile(entry,'utf8');
 assert.ok(source.includes('serverHandler')&&source.includes('export default'),'Pinned generated handler contract');
-const staged=join(process.env.ROOT,'staged-generated-search');
+const stagedParent=join(process.env.ROOT,'staged-generated-search');
+await mkdir(stagedParent);
+const staged=join(stagedParent,'synthetic-search');
 const stagedInventory=await stageBundle(dirname(entry),staged);
 const packaging=await buildMeasurementEntry(staged,join(process.env.ROOT,'tools'));
+const providerPackage=await packageMeasurementEntry(staged,join(process.env.ROOT,'tools'),join(process.env.ROOT,'packaged-synthetic-search'));
 try{
 const module=await import(pathToFileURL(join(staged,'synthetic-search.mjs')).href);
 assert.equal(typeof module.default,'function');
@@ -50,7 +54,7 @@ for(const count of [400,2000])for(const search of ['volunter','unmatchedxyz'])fo
  const responseBytes=Buffer.byteLength(html);totalBytes+=responseBytes;assert.ok(totalBytes<=128*1024*1024);
  cases.push({count,search,sort,repetition,expected,fixtureRequests,responseBytes});
 }
-writeSync(1,JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_PASS',entry:relative(process.env.ROOT,join(staged,'synthetic-search.mjs')),packaging,count:400,fixtureRequests:cases[0].fixtureRequests,responseBytes:cases[0].responseBytes,cases,staging:{files:stagedInventory.stagedFiles,bytes:stagedInventory.bytes},hostedMeasurement:false,provesFreeFit:false})+'\n');
+writeSync(1,JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_PASS',entry:relative(process.env.ROOT,join(staged,'synthetic-search.mjs')),packaging,providerPackage,count:400,fixtureRequests:cases[0].fixtureRequests,responseBytes:cases[0].responseBytes,cases,staging:{files:stagedInventory.stagedFiles,bytes:stagedInventory.bytes},hostedMeasurement:false,provesFreeFit:false})+'\n');
 // This owns the disposable probe process and its local cache sockets.
 process.exit(0);
 }catch(error){writeSync(2,JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_FAILED',reason:String(error?.message??error).slice(0,600)})+'\n');process.exit(1);}
