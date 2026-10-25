@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 // Offline packaging only; uses dependencies already installed with pinned Netlify CLI.
-import {createRequire} from 'node:module';import {readFile,writeFile,lstat,mkdir} from 'node:fs/promises';import {join,resolve,dirname} from 'node:path';import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';import {readFile,writeFile,lstat,mkdir} from 'node:fs/promises';import {join,resolve,dirname,relative} from 'node:path';import assert from 'node:assert/strict';
 import {validateSearchManifest} from './package-policy.mjs';
 export async function packageMeasurementEntry(staged,tools,destination,inventory){
  const requireTools=createRequire(join(resolve(tools),'package.json'));
@@ -22,7 +22,10 @@ export async function packageMeasurementEntry(staged,tools,destination,inventory
  const expected=[...inventory,{path:'synthetic-search.mjs',sha256:createHash('sha256').update(entryData).digest('hex')}];
  const inventoryPath=join(destination,'expected-runtime.json');
  await writeFile(inventoryPath,JSON.stringify(expected),{flag:'wx',mode:0o600});
- const integrity=JSON.parse(execFileSync('python3',['-B',fileURLToPath(new URL('./archive-check.py',import.meta.url)),archive,inventoryPath],{encoding:'utf8',timeout:90000,maxBuffer:65536}));
+ const extracted=join(destination,'verified-runtime');
+ const integrity=JSON.parse(execFileSync('python3',['-B',fileURLToPath(new URL('./archive-check.py',import.meta.url)),archive,inventoryPath,extracted],{encoding:'utf8',timeout:90000,maxBuffer:65536}));
  assert.equal(integrity.integrityVerified,true);
- return {functions:1,archiveBytes:stat.size,manifestVerified:true,integrity,hostedMeasurement:false};
+ const archiveSha256=createHash('sha256').update(await readFile(archive)).digest('hex');
+ const extractedEntry=relative(dirname(destination),join(extracted,integrity.runtimeRoot,'synthetic-search.mjs'));
+ return {archiveSha256,extractedEntry,functions:1,archiveBytes:stat.size,manifestVerified:true,integrity,hostedMeasurement:false};
 }

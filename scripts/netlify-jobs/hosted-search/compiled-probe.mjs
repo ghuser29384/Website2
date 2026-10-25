@@ -34,7 +34,8 @@ const stagedInventory=await stageBundle(dirname(entry),staged);
 const packaging=await buildMeasurementEntry(staged,join(process.env.ROOT,'tools'));
 const providerPackage=await packageMeasurementEntry(staged,join(process.env.ROOT,'tools'),join(process.env.ROOT,'packaged-synthetic-search'),stagedInventory.inventory);
 try{
-const module=await import(pathToFileURL(join(staged,'synthetic-search.mjs')).href);
+const packagedEntry=join(process.env.ROOT,providerPackage.extractedEntry);
+const module=await import(pathToFileURL(packagedEntry).href);
 assert.equal(typeof module.default,'function');
 const measurementHandler=module.default;
 const cases=[];let totalBytes=0;
@@ -54,7 +55,7 @@ for(const count of [400,2000])for(const search of ['volunter','unmatchedxyz'])fo
  const responseBytes=Buffer.byteLength(html);totalBytes+=responseBytes;assert.ok(totalBytes<=128*1024*1024);
  cases.push({count,search,sort,repetition,expected,fixtureRequests,responseBytes});
 }
-writeSync(1,JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_PASS',entry:relative(process.env.ROOT,join(staged,'synthetic-search.mjs')),packaging,providerPackage,count:400,fixtureRequests:cases[0].fixtureRequests,responseBytes:cases[0].responseBytes,cases,staging:{files:stagedInventory.stagedFiles,bytes:stagedInventory.bytes},hostedMeasurement:false,provesFreeFit:false})+'\n');
+writeSync(1,JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_PASS',entry:relative(process.env.ROOT,packagedEntry),packaging,providerPackage,count:400,fixtureRequests:cases[0].fixtureRequests,responseBytes:cases[0].responseBytes,cases,staging:{files:stagedInventory.stagedFiles,bytes:stagedInventory.bytes},hostedMeasurement:false,provesFreeFit:false})+'\n');
 // This owns the disposable probe process and its local cache sockets.
 process.exit(0);
 }catch(error){writeSync(2,JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_FAILED',reason:String(error?.message??error).slice(0,600)})+'\n');process.exit(1);}

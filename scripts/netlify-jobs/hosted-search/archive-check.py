@@ -1,7 +1,7 @@
-"""Offline synthetic ZIP integrity inspection; never extracts files or prints contents."""
+"""Offline synthetic ZIP integrity inspection and optional verified extraction; never prints contents."""
 import hashlib, json, pathlib, stat, sys, zipfile
 
-def inspect_archive(archive, inventory):
+def inspect_archive(archive, inventory, destination=None):
     expected = {r['path']: r['sha256'] for r in inventory}
     if len(expected) != len(inventory) or not expected:
         raise ValueError('Invalid expected inventory')
@@ -12,7 +12,7 @@ def inspect_archive(archive, inventory):
         seen=set(); hashes={}
         for i in files:
             p=pathlib.PurePosixPath(i.filename)
-            if p.is_absolute() or '..' in p.parts or '\\' in i.filename or i.filename in seen or stat.S_ISLNK(i.external_attr >> 16):
+            if p.is_absolute() or any(part in ('', '.', '..') for part in i.filename.split('/')) or '\\' in i.filename or i.filename in seen or stat.S_ISLNK(i.external_attr >> 16):
                 raise ValueError('Unsafe archive entry')
             seen.add(i.filename)
             if any(s.startswith('.env') or s in ('.git','.aws','private-tmp') for s in p.parts):
@@ -38,9 +38,25 @@ def inspect_archive(archive, inventory):
         for name in seen-matched:
             if pathlib.PurePosixPath(name).suffix.lower() in ('.sql','.dump','.pem','.key','.p12','.pfx','.dmg','.sparseimage'):
                 raise ValueError('Unreviewed private archive material')
-        return {'files':len(files),'verifiedRuntimeFiles':len(matched),'uncompressedBytes':sum(i.file_size for i in files),'integrityVerified':True}
+        for name in seen:
+            if any(str(parent) in seen for parent in pathlib.PurePosixPath(name).parents):
+                raise ValueError('Archive file-directory collision')
+        if destination is not None:
+            destination=pathlib.Path(destination)
+            destination.mkdir(mode=0o700,exist_ok=False)
+            for i in files:
+                target=destination.joinpath(*pathlib.PurePosixPath(i.filename).parts)
+                target.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+                h=hashlib.sha256()
+                with z.open(i) as source, target.open('xb') as output:
+                    while chunk:=source.read(65536):
+                        h.update(chunk);output.write(chunk)
+                target.chmod(0o600)
+                if h.hexdigest()!=hashes[i.filename]:
+                    raise ValueError('Archive changed during extraction')
+        return {'runtimeRoot':prefix, 'extracted':destination is not None, 'files':len(files),'verifiedRuntimeFiles':len(matched),'uncompressedBytes':sum(i.file_size for i in files),'integrityVerified':True}
 if __name__=='__main__':
     try:
-        print(json.dumps(inspect_archive(sys.argv[1],json.loads(pathlib.Path(sys.argv[2]).read_text()))))
+        print(json.dumps(inspect_archive(sys.argv[1],json.loads(pathlib.Path(sys.argv[2]).read_text()),sys.argv[3] if len(sys.argv)==4 else None)))
     except Exception as e:
         print('Archive verification failed: '+str(e)[:150],file=sys.stderr);sys.exit(1)
