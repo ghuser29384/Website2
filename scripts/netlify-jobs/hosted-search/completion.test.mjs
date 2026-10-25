@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {validateCompletion} from './completion.mjs';
+const pass=JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_PASS',count:400,fixtureRequests:1,responseBytes:124000,hostedMeasurement:false,provesFreeFit:false});
+test('requires completion and observed fixture reads even with exit zero',()=>{for(const text of ['', 'MissingBlobsEnvironmentError\n500 !== 200',pass+'\n'+pass,pass.replace('"fixtureRequests":1','"fixtureRequests":0')])assert.throws(()=>validateCompletion(text));assert.equal(validateCompletion(pass).fixtureRequests,1);});

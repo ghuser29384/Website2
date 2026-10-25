@@ -1,8 +1,13 @@
+import {createRequire} from 'node:module';
+import {writeSync} from 'node:fs';
+import {syntheticCacheContext} from './cache-context.mjs';
+import {cacheRouting} from './cache-routing.mjs';
 // Offline diagnostic only; no deployment code or credentials.
 import assert from 'node:assert/strict';
 import {readdir,readFile,realpath} from 'node:fs/promises';
 import {join,relative} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {validateSyntheticRequest} from './request-gate.mjs';
 import {createSyntheticTransport} from './synthetic-transport.mjs';
 import {createSearchFixture} from '../search/fixture.mjs';
 import {resultCountDiagnostic} from '../search/result-count.mjs';
@@ -23,16 +28,27 @@ await walk(join(app,'.netlify/functions-internal'));
 assert.equal(entries.length,1,'Exactly one generated handler required');
 const entry=entries[0],source=await readFile(entry,'utf8');
 assert.ok(source.includes('serverHandler')&&source.includes('export default'),'Pinned generated handler contract');
-const transport=createSyntheticTransport(createSearchFixture);
-globalThis.fetch=transport.fetch; // Must precede module import; adapter captures fetch.
+const requireTools=createRequire(join(process.env.ROOT,'tools/package.json'));
+const {BlobsServer}=await import(pathToFileURL(requireTools.resolve('@netlify/blobs/server')).href);
+const cacheServer=new BlobsServer({debug:false,directory:join(process.env.ROOT,'direct-probe-cache'),token:'synthetic-local-cache-only'});
+const {port}=await cacheServer.start();
+const cacheOrigin=`http://127.0.0.1:${port}`;
+process.env.NETLIFY_BLOBS_CONTEXT=syntheticCacheContext(cacheOrigin);
+try{
+let fixture;
+const transport=createSyntheticTransport(options=>(fixture=createSearchFixture(options)));
+globalThis.fetch=cacheRouting(transport.fetch,globalThis.fetch.bind(globalThis),cacheOrigin); // Must precede module import; adapter captures fetch.
 const module=await import(pathToFileURL(entry).href);
 assert.equal(typeof module.default,'function');
 const pending=[];
 const context={account:{id:'synthetic-account'},site:{id:'synthetic-site'},deploy:{id:'synthetic-deploy'},requestId:'synthetic-request',ip:'127.0.0.1',geo:{},waitUntil(p){pending.push(Promise.resolve(p));}};
-const request=new Request('https://synthetic.invalid/offers?view=live&render=server&smart=1&search=volunter&sort=best_match');
-const response=await transport.runResponse(400,()=>module.default(request,context));
+const request=new Request('https://synthetic.invalid/offers?view=live&render=server&smart=1&search=volunter&sort=best_match',{headers:{'x-synthetic-offer-count':'400'}});
+const response=await transport.runResponse(validateSyntheticRequest(request),()=>module.default(request,context));
 assert.equal(response.status,200);const html=await response.text();
 assert.ok(resultCountDiagnostic(html,400,'legacy').matches,'Actual compiled rendered count');
 assert.ok(html.includes('Synthetic participant'));
-await Promise.race([Promise.all(pending),new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('Background work deadline')),1000);timer.unref();})]);
-console.log(JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_PASS',entry:relative(app,entry),count:400,responseBytes:Buffer.byteLength(html),hostedMeasurement:false,provesFreeFit:false}));
+await Promise.race([Promise.all(pending),new Promise((_,reject)=>{setTimeout(()=>reject(Error('Background work deadline')),1000);})]);
+writeSync(1,JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_PASS',entry:relative(app,entry),count:400,fixtureRequests:fixture.requests(),responseBytes:Buffer.byteLength(html),hostedMeasurement:false,provesFreeFit:false})+'\n');
+// This owns the disposable probe process and its local cache sockets.
+process.exit(0);
+}catch(error){writeSync(2,JSON.stringify({status:'COMPILED_SYNTHETIC_TRANSPORT_FAILED',reason:String(error?.message??error).slice(0,600)})+'\n');process.exit(1);}

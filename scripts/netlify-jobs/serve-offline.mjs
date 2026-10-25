@@ -1,3 +1,4 @@
+import {validateCompletion} from './hosted-search/completion.mjs';
 import {mapProfileLocations} from './search/profile-locations.mjs';
 import {runDiscoverSourceStates} from './discover/source-state-probe.mjs';
 import {runOffsetEvidenceSearch} from './discover/evidence-probe.mjs';
@@ -53,6 +54,7 @@ try{
  report.hostedTransport=transportResult;
  console.log(await failureTail(transportLog));
  assert.ok(transportResult.code===0&&!transportResult.timedOut,'Compiled synthetic transport failed');
+ report.hostedTransportEvidence=validateCompletion(await readFile(transportLog,'utf8'));
  report.status='SYNTHETIC_BUILT_RUNTIME_PASS';
 }catch(e){report.status='FAILED';report.reason=e.message;process.exitCode=1;if(['email-scenarios','search-scenarios'].includes(report.stage)&&log)try{console.log(await failureTail(join(root,'serve.log')));}catch{console.log('Synthetic server log unavailable');}}
 finally{
