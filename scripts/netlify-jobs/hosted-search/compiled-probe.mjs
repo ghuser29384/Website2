@@ -32,7 +32,7 @@ await mkdir(stagedParent);
 const staged=join(stagedParent,'synthetic-search');
 const stagedInventory=await stageBundle(dirname(entry),staged);
 const packaging=await buildMeasurementEntry(staged,join(process.env.ROOT,'tools'));
-const providerPackage=await packageMeasurementEntry(staged,join(process.env.ROOT,'tools'),join(process.env.ROOT,'packaged-synthetic-search'));
+const providerPackage=await packageMeasurementEntry(staged,join(process.env.ROOT,'tools'),join(process.env.ROOT,'packaged-synthetic-search'),stagedInventory.inventory);
 try{
 const module=await import(pathToFileURL(join(staged,'synthetic-search.mjs')).href);
 assert.equal(typeof module.default,'function');

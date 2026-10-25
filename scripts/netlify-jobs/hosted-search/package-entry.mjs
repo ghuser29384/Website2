@@ -1,7 +1,10 @@
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 // Offline packaging only; uses dependencies already installed with pinned Netlify CLI.
-import {createRequire} from 'node:module';import {readFile,lstat,mkdir} from 'node:fs/promises';import {join,resolve,dirname} from 'node:path';import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';import {readFile,writeFile,lstat,mkdir} from 'node:fs/promises';import {join,resolve,dirname} from 'node:path';import assert from 'node:assert/strict';
 import {validateSearchManifest} from './package-policy.mjs';
-export async function packageMeasurementEntry(staged,tools,destination){
+export async function packageMeasurementEntry(staged,tools,destination,inventory){
  const requireTools=createRequire(join(resolve(tools),'package.json'));
  const {zipFunctions}=await import(requireTools.resolve('@netlify/zip-it-and-ship-it'));
  try{await lstat(destination);throw Error('Package destination already exists');}catch(e){if(e.code!=='ENOENT')throw e;}
@@ -15,5 +18,11 @@ export async function packageMeasurementEntry(staged,tools,destination){
  assert.equal(results.length,1);assert.equal(results[0].name,'synthetic-search');
  const archive=results[0].path;assert.equal(dirname(resolve(archive)),resolve(destination));
  const stat=await lstat(archive);assert.ok(stat.isFile()&&!stat.isSymbolicLink()&&stat.size>0&&stat.size<50*1024*1024,'Bounded real archive');
- return {functions:1,archiveBytes:stat.size,manifestVerified:true,hostedMeasurement:false};
+ const entryData=await readFile(join(staged,'synthetic-search.mjs'));
+ const expected=[...inventory,{path:'synthetic-search.mjs',sha256:createHash('sha256').update(entryData).digest('hex')}];
+ const inventoryPath=join(destination,'expected-runtime.json');
+ await writeFile(inventoryPath,JSON.stringify(expected),{flag:'wx',mode:0o600});
+ const integrity=JSON.parse(execFileSync('python3',['-B',fileURLToPath(new URL('./archive-check.py',import.meta.url)),archive,inventoryPath],{encoding:'utf8',timeout:90000,maxBuffer:65536}));
+ assert.equal(integrity.integrityVerified,true);
+ return {functions:1,archiveBytes:stat.size,manifestVerified:true,integrity,hostedMeasurement:false};
 }

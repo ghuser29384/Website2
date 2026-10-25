@@ -5,9 +5,14 @@ export function validateSearchManifest(manifest){
  if(f.name!=='synthetic-search'||f.runtime!=='js'||f.buildData?.runtimeAPIVersion!==2||f.schedule||f.name.endsWith('-background'))throw Error('Unexpected function capability');
  if(!Array.isArray(f.routes)||f.routes.length!==1)throw Error('Exactly one route required');
  const route=f.routes[0];
- if(route.pattern!=='/offers'||route.methods?.length!==1||route.methods[0]!=='GET'||typeof route.expression!=='string')throw Error('Only GET offers route allowed');
- const regex=new RegExp(route.expression);
- if(!regex.test('/offers')||['/offers/123','/api/jobs/email','/api/auth/callback','/','/.netlify/functions/email-background'].some(p=>regex.test(p)))throw Error('Unexpected route coverage');
+ if(route.pattern!=='/offers'||route.methods?.length!==1||route.methods[0]!=='GET')throw Error('Only GET offers route allowed');
+ if(route.literal!==undefined){
+  if(route.literal!=='/offers'||route.expression!==undefined)throw Error('Unexpected literal route coverage');
+ }else{
+  if(typeof route.expression!=='string')throw Error('Missing route coverage');
+  const regex=new RegExp(route.expression);
+  if(!regex.test('/offers')||['/offers/123','/api/jobs/email','/api/auth/callback','/','/.netlify/functions/email-background'].some(p=>regex.test(p)))throw Error('Unexpected route coverage');
+ }
  if(f.excludedRoutes?.length)throw Error('Unexpected exclusions');
  return {name:f.name,route:'/offers',method:'GET',scheduled:false};
 }
