@@ -24,12 +24,17 @@ def inspect_archive(archive, inventory):
                     if count>i.file_size: raise ValueError('Archive size mismatch')
                     h.update(chunk)
             hashes[i.filename]=h.hexdigest()
+        anchor='compiled-entry.mjs'
+        roots=[n[:-len(anchor)] for n in hashes if n==anchor or n.endswith('/'+anchor)]
+        if len(roots)!=1 or anchor not in expected:
+            raise ValueError('Missing or ambiguous runtime root')
+        prefix=roots[0]
         matched=set()
         for path, digest in expected.items():
-            candidates=[n for n in hashes if n==path or n.endswith('/'+path)]
-            if len(candidates)!=1 or hashes[candidates[0]]!=digest:
-                raise ValueError('Runtime artifact missing, ambiguous or changed')
-            matched.add(candidates[0])
+            name=prefix+path
+            if hashes.get(name)!=digest:
+                raise ValueError('Runtime artifact '+('missing' if name not in hashes else 'changed')+': '+json.dumps(path[:180]))
+            matched.add(name)
         for name in seen-matched:
             if pathlib.PurePosixPath(name).suffix.lower() in ('.sql','.dump','.pem','.key','.p12','.pfx','.dmg','.sparseimage'):
                 raise ValueError('Unreviewed private archive material')

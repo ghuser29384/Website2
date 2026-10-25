@@ -6,6 +6,11 @@ class ArchiveTests(unittest.TestCase):
   with zipfile.ZipFile(p,'w') as z:
    for name,content in files:z.writestr(name,content)
   return p
+ def test_nested_same_basename(self):
+  content=b'fixture';digest=hashlib.sha256(content).hexdigest();paths=['compiled-entry.mjs','package.json','node_modules/example/package.json']
+  expected=[{'path':p,'sha256':digest} for p in paths]
+  result=m.inspect_archive(self.archive([('bundle/'+p,content) for p in paths]),expected)
+  self.assertEqual(result['verifiedRuntimeFiles'],3)
  def test_integrity(self):
   expected=[{'path':'compiled-entry.mjs','sha256':hashlib.sha256(b'fixture').hexdigest()}]
   self.assertTrue(m.inspect_archive(self.archive([('bundle/compiled-entry.mjs',b'fixture')]),expected)['integrityVerified'])
