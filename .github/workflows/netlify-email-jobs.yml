@@ -32,7 +32,7 @@ jobs:
       - name: Guard exact parent and no deployment
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 2a813b0a98da6cf830831628310dc1ab54f83dfb
+          test "$(git rev-parse HEAD^)" = ac36cba5ff946490286193fdd06b4613dc7be2ef
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-email-jobs.yml"||f.startsWith("scripts/netlify-jobs/")||f==="scripts/netlify-compat/run.sh"||["src/lib/public-route-smoke.test.ts","src/lib/trade-invitations.test.ts","src/app/api/jobs/email/route.ts","src/lib/email.ts","src/lib/supabase/server.ts","src/lib/email-outbox-core.ts","src/lib/email-outbox-job.ts","src/lib/email-execution-deadline.ts"].includes(f)));'

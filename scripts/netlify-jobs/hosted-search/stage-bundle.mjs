@@ -3,6 +3,7 @@ import {lstat,readdir,mkdir,readFile,writeFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {validateArchivePaths} from './package-policy.mjs';
+const reviewed=JSON.parse(await readFile(new URL('./reviewed-migrations.json',import.meta.url),'utf8'));
 const entry='___netlify-server-handler.mjs',manifest='___netlify-server-handler.json';
 export async function stageBundle(source,destination){
  source=resolve(source);destination=resolve(destination);
@@ -14,12 +15,14 @@ export async function stageBundle(source,destination){
  async function visit(dir,prefix=''){
   for(const name of (await readdir(dir)).sort()){
    const relative=prefix?prefix+'/'+name:name,path=join(dir,name),stat=await lstat(path);
-   try{validateArchivePaths([relative]);}catch(error){throw Error(String(error.message)+'; generated relative path='+JSON.stringify(relative.slice(0,300)));}
+   const reviewedHash=Object.hasOwn(reviewed.files,relative)?reviewed.files[relative]:null;
+   try{if(!reviewedHash)validateArchivePaths([relative]);}catch(error){throw Error(String(error.message)+'; generated relative path='+JSON.stringify(relative.slice(0,300)));}
    if(stat.isSymbolicLink())throw Error('Symlink in generated bundle');
    if(stat.isDirectory())await visit(path,relative);
    else if(stat.isFile()){
     if(records.length>=50000||(bytes+=stat.size)>250*1024*1024)throw Error('Staging size cap');
     const data=await readFile(path);
+    if(reviewedHash&&createHash('sha256').update(data).digest('hex')!==reviewedHash)throw Error('Reviewed migration content mismatch');
     // Fixed private-key/token signatures only; never print matching content.
     if(/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsbp_[A-Za-z0-9]{20,}|\bsk_live_[A-Za-z0-9]{20,}/.test(data.toString('utf8')))throw Error('Potential credential in generated bundle');
     records.push({path:relative,bytes:data.length,sha256:createHash('sha256').update(data).digest('hex'),data});
