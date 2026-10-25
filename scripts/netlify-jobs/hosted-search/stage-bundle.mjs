@@ -14,7 +14,7 @@ export async function stageBundle(source,destination){
  async function visit(dir,prefix=''){
   for(const name of (await readdir(dir)).sort()){
    const relative=prefix?prefix+'/'+name:name,path=join(dir,name),stat=await lstat(path);
-   validateArchivePaths([relative]);
+   try{validateArchivePaths([relative]);}catch(error){throw Error(String(error.message)+'; generated relative path='+JSON.stringify(relative.slice(0,300)));}
    if(stat.isSymbolicLink())throw Error('Symlink in generated bundle');
    if(stat.isDirectory())await visit(path,relative);
    else if(stat.isFile()){
