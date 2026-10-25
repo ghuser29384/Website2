@@ -10,7 +10,7 @@ export async function packageMeasurementEntry(staged,tools,destination,inventory
  try{await lstat(destination);throw Error('Package destination already exists');}catch(e){if(e.code!=='ENOENT')throw e;}
  await mkdir(destination);
  const manifestPath=join(destination,'manifest.json');
- const results=await zipFunctions(dirname(staged),destination,{archiveFormat:'zip',manifest:manifestPath,basePath:staged,config:{'*':{nodeVersion:'22'}},parallelLimit:1});
+ const results=await zipFunctions(dirname(staged),destination,{archiveFormat:'zip',manifest:manifestPath,basePath:staged,config:{'*':{nodeVersion:'22',nodeBundler:'none',includedFiles:['**']}},parallelLimit:1});
  const manifest=JSON.parse(await readFile(manifestPath,'utf8'));
  // Only bounded non-sensitive metadata is printed, never archive contents or environment.
  console.log(JSON.stringify({stage:'synthetic-package-manifest',functions:manifest.functions?.map(f=>({name:f.name,runtime:f.runtime,api:f.buildData?.runtimeAPIVersion,routes:f.routes,schedule:f.schedule}))}));
