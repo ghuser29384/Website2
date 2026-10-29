@@ -8,7 +8,7 @@ const dependencies={'netlify-cli':'27.14.1'};
 const next=['canonical','legacy'].includes(kind);
 if(next) dependencies['@netlify/plugin-nextjs']='5.16.4';
 if(kind==='normativity')dependencies['serverless-http']='4.0.0';
-await writeFile(join(root,'tools/package.json'),JSON.stringify({private:true,dependencies}));
+await writeFile(join(root,'tools/package.json'),JSON.stringify({private:true,dependencies,overrides:{'@netlify/edge-bundler':'16.1.3'}}));
 let config='';
 if(next){
  for(const f of ['next.config.ts','proxy.ts']){
