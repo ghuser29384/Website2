@@ -32,7 +32,7 @@ jobs:
       - name: Guard exact parent and block Vercel deployment
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = a688dfc5eef1c535cdd2126ba727b68ef8ca789d
+          test "$(git rev-parse HEAD^)" = 7e1117b553bdeef5b1747d1daef7d2b0394e1375
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-hosted-search.yml"||f.startsWith("scripts/netlify-jobs/hosted-search/")));'

@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {targetPreflight} from './target-preflight.mjs';
+import {SITE_ID,PRIOR_DRAFTS} from './upload-plan.mjs';
+function fixture(change=()=>{}){const t={site:{id:SITE_ID,name:'moraltrade-rlhf-compat-20261021',account_slug:'ghuser29384'},deploys:PRIOR_DRAFTS.map(id=>({id,site_id:SITE_ID,context:'deploy-preview',state:'ready'}))};change(t);return t;}
+test('read-only preflight makes exactly two GETs',async()=>{const t=fixture(),calls=[];const result=await targetPreflight(async(method,url)=>{calls.push({method,url});return url.includes('?')?t.deploys:t.site;});assert.equal(result.status,'TARGET_CHECKS_PASS');assert.equal(calls.length,2);assert.ok(calls.every(c=>c.method==='GET'));});
+test('rejection reports only fixed code and no private values',async()=>{const t=fixture(t=>t.site.account_slug='PRIVATE');const result=await targetPreflight(async(_,url)=>url.includes('?')?t.deploys:t.site);assert.deepEqual(result,{status:'TARGET_CHECKS_STOP',check:'site-account',remoteChanges:false});assert.ok(!JSON.stringify(result).includes('PRIVATE'));});
+test('failed read stops with no retry and no raw error',async()=>{let calls=0;const result=await targetPreflight(async()=>{calls++;throw Error('PRIVATE');});assert.equal(calls,1);assert.equal(result.check,'read-failed');assert.ok(!JSON.stringify(result).includes('PRIVATE'));});

@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';import {readFile,writeFile,lstat} from 'node:fs/promises';import {join} from 'node:path';import {pathToFileURL} from 'node:url';
 import {setTimeout as delay} from 'node:timers/promises';
 import {makeNetlifyApi} from './upload-api.mjs';import {uploadVerifiedDraft} from './upload-executor.mjs';
+import {UploadValidationError} from './upload-plan.mjs';
 let phase='entry';
 export async function main(env=process.env){
  assert.equal(env.NETLIFY_HOSTED_TEST_APPROVAL,'one-disposable-search-draft');
@@ -21,4 +22,4 @@ export async function main(env=process.env){
  const result=await uploadVerifiedDraft({approval:env.NETLIFY_HOSTED_TEST_APPROVAL,manifest,archive,evidence:report.hostedTransportEvidence,api,wait:delay,onCreated:r=>writeFile(output,JSON.stringify({...r,status:'created-not-yet-verified',sourceSha:env.GITHUB_SHA})+'\n',{flag:'wx',mode:0o600})});
  await writeFile(output,JSON.stringify({...result,status:'ready',sourceSha:env.GITHUB_SHA})+'\n',{mode:0o600});console.log(JSON.stringify(result));
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){main().catch(()=>{console.error(JSON.stringify({uploadStoppedAt:phase}));console.error('STOP: Hosted draft operation not verified; no automatic retry. Inspect the recorded deployment and dashboard.');process.exitCode=1;});}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){main().catch(error=>{console.error(JSON.stringify({uploadStoppedAt:phase,validation:error instanceof UploadValidationError?error.code:'unclassified'}));console.error('STOP: Hosted draft operation not verified; no automatic retry. Inspect the recorded deployment and dashboard.');process.exitCode=1;});}

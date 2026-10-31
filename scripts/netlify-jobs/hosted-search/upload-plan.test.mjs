@@ -8,3 +8,15 @@ test('rejects unexpected capability, runtime, override and invalid archive',()=>
 test('never uploads for another project, production, unexpected files or hashes',()=>{const p=draftUploadPlan(manifest(),digest,1000,target());for(const change of [d=>d.site_id='other',d=>d.id='../other',d=>d.context='production',d=>d.published_at='now',d=>d.required=['unknown'],d=>d.required_functions=['b'.repeat(64)],d=>d.required_edge_functions=['unknown']]){const d=created();change(d);assert.throws(()=>functionUploadRequest(p,d));}});
 
 test('refuses a changed project or deployment inventory before creation',()=>{for(const change of [t=>t.site.published_deploy={id:'live'},t=>t.site.repo={id:'linked'},t=>t.site.account_slug='other',t=>t.deploys.pop(),t=>t.deploys[0].state='error']){const t=target();change(t);assert.throws(()=>draftUploadPlan(manifest(),digest,1000,t));}});
+
+test('specific validation codes never include rejected private values',()=>{
+ for(const [field,code] of [['account_slug','site-account'],['repo','site-unlinked'],['published_deploy','site-unpublished']]){
+  const t=target();t.site[field]='private-value';
+  assert.throws(()=>draftUploadPlan(manifest(),digest,1000,t),e=>e.code===code&&!e.message.includes('private-value'));
+ }
+ const t=target();t.deploys[0].published_at='private-value';
+ assert.throws(()=>draftUploadPlan(manifest(),digest,1000,t),e=>e.code==='draft-unpublished');
+});
+
+test('accepts Netlify ordinary function priority without adding an upload override',()=>{const m=manifest();m.functions[0].priority=10;const plan=draftUploadPlan(m,digest,1000,target());assert.equal(plan.create.body.functions_config['synthetic-search'].priority,undefined);});
+test('rejects generated/custom priority and keeps resource overrides blocked',()=>{for(const priority of [0,1,20,'10',null]){const m=manifest();m.functions[0].priority=priority;assert.throws(()=>draftUploadPlan(m,digest,1000,target()),e=>e.code==='manifest-priority');}for(const key of ['memory','vcpu','region','trafficRules','timeout']){const m=manifest();m.functions[0].priority=10;m.functions[0][key]=1;assert.throws(()=>draftUploadPlan(m,digest,1000,target()));}});
