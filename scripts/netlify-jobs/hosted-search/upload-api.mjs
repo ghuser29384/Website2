@@ -1,6 +1,6 @@
 // Explicit API transport only; never reads credentials or sends a request on import.
 import assert from 'node:assert/strict';import {SITE_ID} from './upload-plan.mjs';
-export function makeNetlifyApi(token,fetchImpl){
+export function makeNetlifyApi(token,fetchImpl,observe=()=>{}){
  assert.ok(typeof token==='string'&&token.length>0);assert.equal(typeof fetchImpl,'function');
  return async(method,address,payload={})=>{
   const url=new URL(address);assert.equal(url.origin,'https://api.netlify.com');assert.ok(!url.username&&!url.password&&!url.hash);
@@ -14,7 +14,9 @@ export function makeNetlifyApi(token,fetchImpl){
    const headers={authorization:`Bearer ${token}`};let body;
    if(payload.binary){assert.ok(Buffer.isBuffer(payload.binary)&&payload.binary.length<50*1024*1024);headers['content-type']='application/octet-stream';body=payload.binary;}
    else if(payload.json){headers['content-type']='application/json';body=JSON.stringify(payload.json);}
+   observe({phase:'request',method});
    const response=await fetchImpl(url,{method,headers,body,signal:controller.signal,redirect:'error'});
+   observe({phase:'response',method,status:response.status});
    if(!response.ok)throw Error('Request failed');
    reader=response.body?.getReader();if(!reader)throw Error('Missing response');
    const chunks=[];let size=0;
