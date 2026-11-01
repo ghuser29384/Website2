@@ -79,7 +79,7 @@ function fixture(index: number): Offer {
 }
 const offers = [...Array.from({ length: 72 }, (_, i) => fixture(i)), { ...fixture(72), status: "closed" as const }];
 
-function harness(options: { fullRows?: boolean; rows?: Offer[]; fail?: string; configured?: boolean; viewerId?: string; scorer?: typeof scoring } = {}) {
+function harness(options: { fullRows?: boolean; rows?: Offer[]; fail?: string; configured?: boolean; viewerId?: string; scorer?: typeof scoring; pageSource?: string } = {}) {
   const requests: Array<{ table: string; params: URLSearchParams; prefer: string }> = [];
   let responseBytes = 0;
   // Exercise the installed Supabase query builder, with all HTTP handled in memory.
@@ -128,8 +128,8 @@ function harness(options: { fullRows?: boolean; rows?: Offer[]; fail?: string; c
     } },
   });
   // An optional separately saved deployed source provides exact-base differential proof.
-  const subjectPath = options.fullRows && process.env.LEGACY_BASELINE_PAGE
-    ? process.env.LEGACY_BASELINE_PAGE : "src/app/offers/page.tsx";
+  const subjectPath = options.pageSource ?? (options.fullRows && process.env.LEGACY_BASELINE_PAGE
+    ? process.env.LEGACY_BASELINE_PAGE : "src/app/offers/page.tsx");
   const subject = compile(subjectPath, {
     "react/jsx-runtime": jsxRuntime, "next/link": link,
     "next/navigation": { redirect: () => { throw new Error("Unexpected redirect"); } },
@@ -264,6 +264,29 @@ test("search scoring preserves exact-base results and rendered HTML for every so
   let cases = 0;
   for (const viewerId of [undefined, "owner-3"]) {
     const before = harness({ scorer: baseline, viewerId });
+    const after = harness({ viewerId });
+    for (const sort of sorts) for (const mode of ["all", "pledge", "offset", "payment"] as const) for (const page of [1, 2]) {
+      const search = queries[cases % queries.length];
+      const interpretation = smartQuery.parseSmartQuery(search, { surface: "offers", now: NOW });
+      const params = input({ interpretation, facets: interpretation.facets, sort, mode, page, personalPriorities: viewerId ? ["animal_welfare"] : [] });
+      assert.deepEqual(await after.listLiveOffers(params), await before.listLiveOffers(params));
+      const searchParams = Promise.resolve({ search, sort, mode, page: String(page) });
+      assert.equal(renderToStaticMarkup(await after.default({ searchParams })), renderToStaticMarkup(await before.default({ searchParams })));
+      cases++;
+    }
+    assert.deepEqual(after.requests.map((r) => ({ table: r.table, params: r.params.toString(), prefer: r.prefer })), before.requests.map((r) => ({ table: r.table, params: r.params.toString(), prefer: r.prefer })));
+  }
+  assert.equal(cases, 96);
+});
+
+test("cause reuse preserves exact-page results, rendered HTML and database requests", {
+  skip: process.env.SEARCH_PAGE_BASELINE ? false : "Set SEARCH_PAGE_BASELINE to the unmodified application page for differential validation",
+}, async () => {
+  const sorts: Sort[] = ["best_match", "newest", "lowest_cost", "most_verified", "soonest_deadline", "highest_credit"];
+  const queries = ["volunter", "volunteering", "verified animal welfare under $50", "unmatchedxyz"];
+  let cases = 0;
+  for (const viewerId of [undefined, "owner-3"]) {
+    const before = harness({ pageSource: process.env.SEARCH_PAGE_BASELINE!, viewerId });
     const after = harness({ viewerId });
     for (const sort of sorts) for (const mode of ["all", "pledge", "offset", "payment"] as const) for (const page of [1, 2]) {
       const search = queries[cases % queries.length];

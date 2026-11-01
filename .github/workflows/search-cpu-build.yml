@@ -2,7 +2,7 @@ name: Search CPU isolated build only
 
 on:
   push:
-    branches: [build/search-field-reuse-20261024]
+    branches: [build/search-cause-cache-20261101]
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/search-field-reuse-20261024'
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/build/search-cause-cache-20261101'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
@@ -26,25 +26,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 6
+          fetch-depth: 2
           persist-credentials: false
       - name: Verify exact base and narrow change
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = fc09e74eac8e8b88759e956569b5e1eb5c4b72d7
+          test "$(git rev-parse HEAD^)" = 1bd3e6a6690468649416a2ce6981007d7cc1e470
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
           python3 - <<'PY'
           import subprocess
-          expected = {'.github/workflows/search-cpu-build.yml', 'src/lib/smart-query.ts', 'src/lib/smart-query-parser-parity.test.ts'}
+          expected = {'.github/workflows/search-cpu-build.yml', 'src/app/offers/page.tsx', 'src/lib/offers-directory-data.test.ts', 'vercel.ts'}
           changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines())
           assert changed == expected, 'Unexpected change scope'
           PY
-          git show 8205a82ee2d7cca91aed6126693c24340b3bbbff:src/lib/smart-query.ts > "$RUNNER_TEMP/baseline-parser.ts"
-          printf 'SEARCH_PARSER_BASELINE=%s/baseline-parser.ts\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-          git show 8205a82ee2d7cca91aed6126693c24340b3bbbff:src/lib/smart-query-scoring.ts > "$RUNNER_TEMP/baseline-scoring.ts"
-          printf 'SEARCH_SCORER_BASELINE=%s/baseline-scoring.ts\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          git show HEAD^:src/app/offers/page.tsx > "$RUNNER_TEMP/baseline-page.tsx"
+          printf 'SEARCH_PAGE_BASELINE=%s/baseline-page.tsx\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 24.14.0
@@ -62,7 +60,7 @@ jobs:
           import { buildVercelProjectConfig } from './scripts/vercel-project-config.mjs';
           const loaded = await import('./vercel.ts');
           const config = loaded.config ?? loaded.default?.config;
-          assert.deepEqual(config.git, { deploymentEnabled: { 'build/website2-legacy-query-20261019': false, 'build/search-cpu-20261019': false, 'build/search-field-reuse-20261024': false } });
+          assert.deepEqual(config.git, { deploymentEnabled: false });
           const { git, ...unchanged } = config;
           assert.deepEqual(unchanged, buildVercelProjectConfig());
           for (const attempt of [() => fetch('https://blocked.invalid'), () => http.get('http://blocked.invalid'), () => https.get('https://blocked.invalid'), () => net.connect(443, 'blocked.invalid')]) assert.throws(attempt, /Network disabled/);

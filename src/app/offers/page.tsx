@@ -187,11 +187,14 @@ function offerAmounts(offer: OfferRow) {
   );
 }
 
-function offerCauseIds(offer: OfferRow) {
-  return parseSmartQuery(
-    `${offer.offered_cause} ${offer.requested_cause} ${offer.compromise_cause}`,
-    { surface: "offers" },
-  ).facets.causes;
+function offerCauseIds(offer: OfferRow, cache: Map<string, string[]>) {
+  const text = `${offer.offered_cause} ${offer.requested_cause} ${offer.compromise_cause}`;
+  const cached = cache.get(text);
+  if (cached) return cached;
+  const causes = parseSmartQuery(text, { surface: "offers" }).facets.causes;
+  // Cause recognition is independent of date parsing. Keep reuse request-local.
+  if (cache.size < SMART_OFFER_CANDIDATE_LIMIT) cache.set(text, causes);
+  return causes;
 }
 
 function strictAmountMatch(facets: SmartQueryFacets, amounts: readonly number[]) {
@@ -233,10 +236,11 @@ function rankOffer(
   personalPriorities: readonly string[],
   now: Date,
   similarity: SemanticSimilarity,
+  causeCache: Map<string, string[]>,
 ): RankedOffer | null {
   const fields = offerTextFields(offer);
   const amountCents = offerAmounts(offer);
-  const causeIds = offerCauseIds(offer);
+  const causeIds = offerCauseIds(offer, causeCache);
   const deadline = extractSmartRecordDeadline(
     [offer.duration, offer.discount_note, offer.notes, offer.request_action, offer.offer_action],
     now,
@@ -422,8 +426,9 @@ async function listLiveOffers({
     }
 
     const similarity = createSemanticSimilarity();
+    const causeCache = new Map<string, string[]>();
     const ranked = (data ?? [])
-      .map((offer) => rankOffer(offer, { ...interpretation, facets }, personalPriorities, new Date(), similarity))
+      .map((offer) => rankOffer(offer, { ...interpretation, facets }, personalPriorities, new Date(), similarity, causeCache))
       .filter((entry): entry is RankedOffer => Boolean(entry));
     const sorted = sortRankedOffers(ranked, sort);
     return {

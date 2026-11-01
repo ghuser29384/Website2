@@ -4,10 +4,6 @@ export const config = {
   ...buildVercelProjectConfig(),
   // This validation branch must never create an automatic Vercel deployment.
   git: {
-    deploymentEnabled: {
-      "build/website2-legacy-query-20261019": false,
-      "build/search-cpu-20261019": false,
-      "build/search-field-reuse-20261024": false,
-    },
+    deploymentEnabled: false,
   },
 };
