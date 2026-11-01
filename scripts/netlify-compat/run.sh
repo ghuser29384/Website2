@@ -19,6 +19,10 @@ prepare)
    test "$CANDIDATE" = legacy
    REF=1bd3e6a6690468649416a2ce6981007d7cc1e470
    ;;
+ cause-reuse)
+   test "$CANDIDATE" = legacy
+   REF=308f0799096b09b1a237044e93a9b768d0e93dcc
+   ;;
  *) exit 2;;
  esac
  printf '%s\n' "$REF" > "$ROOT/source-ref.txt"
