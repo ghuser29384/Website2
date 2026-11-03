@@ -32,10 +32,10 @@ jobs:
       - name: Guard exact parent and block Vercel deployment
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 7e1117b553bdeef5b1747d1daef7d2b0394e1375
+          test "$(git rev-parse HEAD^)" = 04ced11bf32665f0fea651ae5a8d5ed89fa44359
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --check HEAD^ HEAD
-          node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.every(f=>f===".github/workflows/netlify-hosted-search.yml"||f.startsWith("scripts/netlify-jobs/hosted-search/")));'
+          node --input-type=module -e 'import assert from "node:assert/strict"; import {execFileSync} from "node:child_process"; import {buildVercelProjectConfig} from "./scripts/vercel-project-config.mjs"; assert.equal(buildVercelProjectConfig().git.deploymentEnabled,false); const files=execFileSync("git",["diff","--name-only","HEAD^","HEAD"],{encoding:"utf8"}).trim().split("\n"); assert(files.length===2 && files.every(f=>[".github/workflows/netlify-hosted-search.yml","scripts/netlify-compat/run.sh"].includes(f)));'
       - name: Prepare approved runner dependencies
         run: bash scripts/netlify-jobs/run.sh prepare
       - name: Test built runtime with loopback only
