@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {validateSearchManifest} from './package-policy.mjs';
 export const SITE_ID='af8b1cf6-a4dd-422b-89db-56948bc8d7e4';
 const API='https://api.netlify.com/api/v1';
-export const PRIOR_DRAFTS=['6ad97f280b56b8ca68b01d40','6ada8d91eff07a88b09c52c9','6ada91ae3e191165820ee550'];
+export const PRIOR_DRAFTS=['6ad97f280b56b8ca68b01d40','6ada8d91eff07a88b09c52c9','6ada91ae3e191165820ee550','6ae58f2ab96b44d1bb80a192'];
 export class UploadValidationError extends Error {
  constructor(code){super('Upload validation rejected');this.code=code;}
 }

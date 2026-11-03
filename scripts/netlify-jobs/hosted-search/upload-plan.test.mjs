@@ -20,3 +20,13 @@ test('specific validation codes never include rejected private values',()=>{
 
 test('accepts Netlify ordinary function priority without adding an upload override',()=>{const m=manifest();m.functions[0].priority=10;const plan=draftUploadPlan(m,digest,1000,target());assert.equal(plan.create.body.functions_config['synthetic-search'].priority,undefined);});
 test('rejects generated/custom priority and keeps resource overrides blocked',()=>{for(const priority of [0,1,20,'10',null]){const m=manifest();m.functions[0].priority=priority;assert.throws(()=>draftUploadPlan(m,digest,1000,target()),e=>e.code==='manifest-priority');}for(const key of ['memory','vcpu','region','trafficRules','timeout']){const m=manifest();m.functions[0].priority=10;m.functions[0][key]=1;assert.throws(()=>draftUploadPlan(m,digest,1000,target()));}});
+
+test('accepts the independently verified four drafts and rejects substitution or duplicates',()=>{
+ const t=target();
+ t.deploys=['6ad97f280b56b8ca68b01d40','6ada8d91eff07a88b09c52c9','6ada91ae3e191165820ee550','6ae58f2ab96b44d1bb80a192'].map(id=>({id,site_id:SITE_ID,context:'deploy-preview',state:'ready'}));
+ assert.doesNotThrow(()=>draftUploadPlan(manifest(),digest,1000,t));
+ for(const id of ['unknown-draft','6ad97f280b56b8ca68b01d40']){
+  const changed=structuredClone(t);changed.deploys[3].id=id;
+  assert.throws(()=>draftUploadPlan(manifest(),digest,1000,changed),e=>e.code==='draft-id');
+ }
+});
