@@ -16,7 +16,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          py=$(find /opt/hostedtoolcache/Python/3.13.* -path '*/x64/bin/python3' -type f | sort -V | tail -1)
+          py=$(find -L /opt/hostedtoolcache/Python/3.13.* -path '*/x64/bin/python3' -type f | sort -V | tail -1)
           test -n "$py"
           "$py" -m venv "$RUNNER_TEMP/render-venv"
           "$RUNNER_TEMP/render-venv/bin/pip" install --disable-pip-version-check --no-deps psycopg==3.3.3 psycopg-binary==3.3.3
