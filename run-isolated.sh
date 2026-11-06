@@ -20,3 +20,15 @@ createdb -h 127.0.0.1 -p 55432 -U synthetic render_reconnect_synthetic
 cp "$TEST_ROOT/storage_reconnect_candidate.py" "$TEST_ROOT/source/apps/api/app/storage.py"
 PYTHONPATH="$TEST_ROOT/source/apps/api" "$TEST_PYTHON" -B -m unittest discover -s "$TEST_ROOT/source/apps/api/tests" -q
 "$TEST_PYTHON" -B "$TEST_ROOT/integration_app_restart.py"
+
+# Synthetic-only backup/restore; dump never leaves disposable runner.
+pg_dump -h 127.0.0.1 -p 55432 -U synthetic -Fc render_reconnect_synthetic > "$TEST_ROOT/synthetic.dump"
+pg_restore --list "$TEST_ROOT/synthetic.dump" >/dev/null
+psql -h 127.0.0.1 -p 55432 -U synthetic -d render_reconnect_synthetic -Atc "select row_to_json(r)::text from app_records r order by record_type,id" | sha256sum | cut -d' ' -f1 > "$TEST_ROOT/before.sha"
+dropdb -h 127.0.0.1 -p 55432 -U synthetic render_reconnect_synthetic
+createdb -h 127.0.0.1 -p 55432 -U synthetic render_reconnect_synthetic
+pg_restore -h 127.0.0.1 -p 55432 -U synthetic --exit-on-error --no-owner -d render_reconnect_synthetic "$TEST_ROOT/synthetic.dump"
+psql -h 127.0.0.1 -p 55432 -U synthetic -d render_reconnect_synthetic -Atc "select row_to_json(r)::text from app_records r order by record_type,id" | sha256sum | cut -d' ' -f1 > "$TEST_ROOT/after.sha"
+cmp "$TEST_ROOT/before.sha" "$TEST_ROOT/after.sha"
+"$TEST_PYTHON" -B "$TEST_ROOT/integration_app_restart.py" recover
+echo 'PASS: synthetic backup restored with all record hashes equal and application approval valid'
