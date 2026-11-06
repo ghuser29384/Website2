@@ -1,0 +1,38 @@
+name: Render synthetic storage recovery
+on:
+  push:
+    branches: [build/render-storage-20261106]
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Stage approved dependencies and existing server
+        shell: bash
+        run: |
+          set -euo pipefail
+          py=$(find /opt/hostedtoolcache/Python/3.13.* -path '*/x64/bin/python3' -type f | sort -V | tail -1)
+          test -n "$py"
+          "$py" -m venv "$RUNNER_TEMP/render-venv"
+          "$RUNNER_TEMP/render-venv/bin/pip" install --disable-pip-version-check --no-deps psycopg==3.3.3 psycopg-binary==3.3.3
+          pg=$(find /usr/lib/postgresql -path '*/bin/initdb' -type f | sort -V | tail -1)
+          test -n "$pg"
+          echo "TEST_PYTHON=$RUNNER_TEMP/render-venv/bin/python" >> "$GITHUB_ENV"
+          echo "PG_BIN=$(dirname "$pg")" >> "$GITHUB_ENV"
+      - name: Test only inside loopback namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          testroot=$(mktemp -d "$RUNNER_TEMP/render-synthetic.XXXXXX")
+          cp ./*.py ./run-isolated.sh "$testroot/"
+          sudo unshare --net bash -c '
+            set -euo pipefail
+            ip link set lo up
+            test "$(ls /sys/class/net | wc -l)" -eq 1
+            exec runuser -u "$1" -- env -i TEST_ROOT="$2" TEST_PYTHON="$3" PG_BIN="$4" PATH=/usr/bin:/bin bash "$2/run-isolated.sh"
+          ' bash "$(id -un)" "$testroot" "$TEST_PYTHON" "$PG_BIN"

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+: "${TEST_ROOT:?}" "${TEST_PYTHON:?}" "${PG_BIN:?}"
+export PATH="$PG_BIN:/usr/bin:/bin"
+export HOME="$TEST_ROOT"
+export PGDATA="$TEST_ROOT/pgdata"
+initdb --auth=trust --username=synthetic --no-locale >/dev/null
+pg_ctl -l "$TEST_ROOT/postgres.log" -o "-h 127.0.0.1 -p 55432 -k $TEST_ROOT" -w start >/dev/null
+trap 'pg_ctl -m fast -w stop >/dev/null' EXIT
+createdb -h 127.0.0.1 -p 55432 -U synthetic render_reconnect_synthetic
+export SYNTHETIC_DATABASE_URL='postgresql://synthetic@127.0.0.1:55432/render_reconnect_synthetic'
+"$TEST_PYTHON" -B "$TEST_ROOT/test_storage_disconnect.py"
+"$TEST_PYTHON" -B "$TEST_ROOT/test_storage_reconnect.py"
+TEST_BASELINE=1 "$TEST_PYTHON" -B "$TEST_ROOT/integration_reconnect.py"
+"$TEST_PYTHON" -B "$TEST_ROOT/integration_reconnect.py"
