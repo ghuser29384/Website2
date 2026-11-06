@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Community Notes Ops Copilot</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Primary">
+        <div class="brand">
+          <div class="brand-mark">CN</div>
+          <div>
+            <div class="brand-title">Notes Ops</div>
+            <div class="brand-subtitle">AI writer copilot</div>
+          </div>
+        </div>
+        <nav class="nav">
+          <a href="/" data-route="/">Dashboard</a>
+          <a href="/candidates" data-route="/candidates">Candidates</a>
+          <a href="/admission" data-route="/admission">Admission</a>
+          <a href="/writing-limit" data-route="/writing-limit">Writing limit</a>
+          <a href="/evals" data-route="/evals">Evals</a>
+          <a href="/settings" data-route="/settings">Settings</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1 id="page-title">Dashboard</h1>
+            <p id="page-subtitle">Fixture-mode quality and submission operations.</p>
+          </div>
+          <div class="topbar-actions">
+            <span id="provider-status" class="status-pill">fixture providers</span>
+            <button id="sync-button" class="button primary">Sync fixtures</button>
+          </div>
+        </header>
+        <section id="app" class="content" aria-live="polite"></section>
+      </main>
+    </div>
+    <template id="empty-template">
+      <div class="empty">
+        <h2>No fixture candidates synced</h2>
+        <p>Sync eligible posts to start the Track B test-mode workflow.</p>
+      </div>
+    </template>
+    <script src="/app.js"></script>
+  </body>
+</html>
+
