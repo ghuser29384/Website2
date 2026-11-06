@@ -33,6 +33,6 @@ jobs:
           sudo unshare --net bash -c '
             set -euo pipefail
             ip link set lo up
-            test "$(ls /sys/class/net | wc -l)" -eq 1
+            test "$(ip -o link show | wc -l)" -eq 1
             exec runuser -u "$1" -- env -i TEST_ROOT="$2" TEST_PYTHON="$3" PG_BIN="$4" PATH=/usr/bin:/bin bash "$2/run-isolated.sh"
           ' bash "$(id -un)" "$testroot" "$TEST_PYTHON" "$PG_BIN"
