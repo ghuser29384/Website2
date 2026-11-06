@@ -30,6 +30,7 @@ jobs:
           set -euo pipefail
           testroot=$(mktemp -d "$RUNNER_TEMP/render-synthetic.XXXXXX")
           cp ./*.py ./run-isolated.sh "$testroot/"
+          cp -R source "$testroot/source"
           sudo unshare --net bash -c '
             set -euo pipefail
             ip link set lo up

@@ -13,3 +13,10 @@ export SYNTHETIC_DATABASE_URL='postgresql://synthetic@127.0.0.1:55432/render_rec
 "$TEST_PYTHON" -B "$TEST_ROOT/test_storage_reconnect.py"
 TEST_BASELINE=1 "$TEST_PYTHON" -B "$TEST_ROOT/integration_reconnect.py"
 "$TEST_PYTHON" -B "$TEST_ROOT/integration_reconnect.py"
+
+# Separate application database contents from component fixtures.
+dropdb -h 127.0.0.1 -p 55432 -U synthetic render_reconnect_synthetic
+createdb -h 127.0.0.1 -p 55432 -U synthetic render_reconnect_synthetic
+cp "$TEST_ROOT/storage_reconnect_candidate.py" "$TEST_ROOT/source/apps/api/app/storage.py"
+PYTHONPATH="$TEST_ROOT/source/apps/api" "$TEST_PYTHON" -B -m unittest discover -s "$TEST_ROOT/source/apps/api/tests" -q
+"$TEST_PYTHON" -B "$TEST_ROOT/integration_app_restart.py"
